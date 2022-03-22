@@ -163,7 +163,7 @@ class Server(object):
                 elif cmd == 'bypassuac':
                     select(conn, ['bypassuac_fodhelper', 'bypassuac_clr'])
                 elif cmd == 'persistence':
-                    select(conn, ['persistence_registry', 'persistence_schtasks'])
+                    select(conn, ['persistence_registry', 'persistence_schtasks', 'persistence_service'])
                 elif cmd == 'stealtoken':
                     select(conn, ['stealtoken_system', 'stealtoken_ti', 'stealtoken_admin'])
                 elif cmd == 'poweroff':

