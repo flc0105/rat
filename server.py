@@ -1,6 +1,7 @@
 # coding=utf-8
 import json
 import os
+import re
 import socket
 import struct
 import subprocess
@@ -134,10 +135,8 @@ class Server(object):
                 cmd = input(recv(conn))
                 if not cmd:
                     send(conn, 'null')
-                elif cmd in self.aliases:
-                    print('[+] Sending command: ' + self.aliases[cmd])
-                    send(conn, self.aliases[cmd])
-                    print(recv_data(conn))
+                elif cmd.split(' ')[0] in self.aliases:
+                    self.send_aliases(conn, ' '.join(cmd.strip().split()))
                 elif cmd in ['quit', 'exit']:
                     send(conn, 'null')
                     break
@@ -258,6 +257,28 @@ class Server(object):
             f.close()
         except Exception as exception:
             print('[-] Save aliases error: ' + str(exception))
+
+    def send_aliases(self, conn, cmd):
+        command = cmd.split()[0]
+        args = cmd[len(command) + 1:].split(' ')
+        prototype = self.aliases[command]
+        if len(re.findall(r'<.*?>', prototype)) == 0:
+            if len(cmd.split(' ')) > 1:
+                print('[-] Command takes no argument')
+                send(conn, 'null')
+                return
+        else:
+            if len(args) is len(re.findall(r'<.*?>', prototype)):
+                regex = r'<.*?>'
+                for arg in args:
+                    prototype = re.sub(regex, arg, prototype, count=1)
+            else:
+                print('[-] Number of arguments does not match')
+                send(conn, 'null')
+                return
+        print('[+] Sending command: ' + prototype)
+        send(conn, prototype)
+        print(recv_data(conn))
 
 
 def print_help():
