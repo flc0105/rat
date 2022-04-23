@@ -1,0 +1,13 @@
+opencv-python
+pefile
+psutil
+./PyAudio-0.2.11-cp310-cp310-win_amd64.whl
+PyAutoGUI
+./pycryptodome-3.14.1-cp35-abi3-win_amd64.whl
+PyHook3
+pyinstaller
+pyperclip
+pywin32
+requests
+tabulate
+WMI
