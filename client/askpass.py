@@ -19,11 +19,16 @@ filename = os.path.join(os.environ['LOCALAPPDATA'], 'test.png')
 global handle_desktop
 
 
+def on_closing():
+    pass
+
+
 def create_background_window():
     global handle_desktop
     handle_desktop.SetThreadDesktop()
     tk = Tk()
     tk.attributes('-fullscreen', True)
+    tk.protocol('WM_DELETE_WINDOW', on_closing)
     photo_image = PhotoImage(file=filename)
     label = Label(tk, image=photo_image)
     label.pack()

