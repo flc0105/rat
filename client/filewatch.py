@@ -82,8 +82,6 @@ class FileWatch:
                 break
             except Exception as e:
                 func('[-] {} Error: {}'.format(self.get_time(), e))
-        func('[*] Exiting...')
-        eof()
 
     def start_monitor(self, path, func, eof):
         self.stop.clear()

