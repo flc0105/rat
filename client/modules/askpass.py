@@ -17,6 +17,7 @@ from PIL import Image, ImageEnhance
 filename = os.path.join(os.environ['LOCALAPPDATA'], 'test.png')
 
 global handle_desktop
+global tk
 
 
 def on_closing():
@@ -26,6 +27,7 @@ def on_closing():
 def create_background_window():
     global handle_desktop
     handle_desktop.SetThreadDesktop()
+    global tk
     tk = Tk()
     tk.attributes('-fullscreen', True)
     tk.protocol('WM_DELETE_WINDOW', on_closing)
@@ -92,7 +94,11 @@ def switch_desktop(func):
         password = create_process()
         if logon_user(username, password):
             func(password)
+            global tk
+            tk.quit()
             break
+
     handle_desktop_default = win32service.OpenDesktop('default', 0, False,
                                                       win32con.READ_CONTROL | win32con.DESKTOP_SWITCHDESKTOP)
     handle_desktop_default.SwitchDesktop()
+

