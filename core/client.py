@@ -25,10 +25,10 @@ class Client:
     def wait(self):
         while True:
             try:
-                # 向服务端发送当前工作目录的路径
-                self.server.send_result(1, os.getcwd())
                 # 接收服务端发送的命令并交给回调函数执行
                 self.server.recv_command(self.command_handler)
+                # 向服务端发送当前工作目录的路径
+                self.server.send_result(1, os.getcwd())
             # 连接断开
             except ConnectionResetError:
                 # 关闭套接字

