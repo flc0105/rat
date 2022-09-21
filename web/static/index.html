@@ -19,18 +19,18 @@
                     Connections
                     <a class="float-end" @click="list()">Refresh</a>
                 </div>
-                <div v-if="this.connections.length == 0" class="text-center">No connections</div>
+                <div v-if="connections.length == 0" class="text-center">No connections</div>
                 <div v-else class="list-group list-group-flush border-bottom overflow-scroll">
                     <a class="list-group-item list-group-item-action" v-for="connection, index in connections"
-                       data-bs-toggle="list" @click="this.target=parseInt(index); this.result=''; getcwd()">{{connection}}</a>
+                       data-bs-toggle="list" @click="target=parseInt(index); result=''; getcwd()">{{connection}}</a>
                 </div>
             </div>
         </div>
         <div class="col-9">
             <div class="card">
                 <div class="card-header">
-                    {{this.connections[this.target]==null ? 'Not connected' : this.connections[this.target]}}
-                    <a class="float-end" @click="this.result=''">Clear</a>
+                    {{connections[target]==null ? 'Not connected' : connections[target]}}
+                    <a class="float-end" @click="result=''">Clear</a>
                 </div>
                 <div id="result" class="card-body border-bottom overflow-scroll" style="height: 500px;">
                     <div style="word-break: break-all; white-space: pre-wrap">
@@ -38,8 +38,9 @@
                     </div>
                 </div>
                 <div class="input-group">
-                    <input id="command" class="form-control border-0" placeholder="Command" v-model="command" @keyup.enter="execute">
-                    <button id="execute" class="btn btn-primary" @click="execute()">Send</button>
+                    <input class="form-control border-0" placeholder="Command" v-model="command"
+                           @keyup.enter="execute" :disabled="wait">
+                    <button class="btn btn-primary" @click="execute()" :disabled="wait">Send</button>
                 </div>
             </div>
         </div>
@@ -47,5 +48,6 @@
 </div>
 </body>
 
+<script src="js/config.js"></script>
 <script src="js/index.js"></script>
 </html>

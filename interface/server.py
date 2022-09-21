@@ -7,6 +7,7 @@ import threading
 
 from core.server import Server
 from util.parser import parse
+from config.server import SERVER_ADDR
 
 
 # 接受命令输入
@@ -43,7 +44,7 @@ def accept_commands():
 # 查看已连接客户端列表
 def list_connections():
     for i, connection in enumerate(server.connections):
-        print('{}, {}:{}'.format(i, connection.address[0], connection.address[1]))
+        print('{}, {}:{} {}'.format(i, connection.address[0], connection.address[1], connection.info))
 
 
 # 给客户端发送命令
@@ -79,6 +80,6 @@ def open_connection(connection):
 
 
 if __name__ == '__main__':
-    server = Server()
+    server = Server(SERVER_ADDR)
     threading.Thread(target=server.serve, daemon=True).start()
     accept_commands()

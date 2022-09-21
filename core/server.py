@@ -1,3 +1,4 @@
+import json
 import socket
 
 from entity.client import Client
@@ -6,9 +7,9 @@ from entity.ratsocket import RATSocket
 
 class Server:
 
-    def __init__(self):
+    def __init__(self, address):
         # 服务端地址
-        self.address = ('', 9999)
+        self.address = address
         # 服务端套接字
         self.socket = RATSocket()
         # 存储已连接客户端的数组
@@ -21,8 +22,21 @@ class Server:
 
     # 接受连接后的回调函数
     def handler(self, conn, addr):
-        print('[+] Connection has been established: {}'.format(addr))
-        self.connections.append(Client(conn, addr))
+        # 设置5秒超时
+        conn.settimeout(5)
+        try:
+            # 接收验证信息
+            _, info = Client(conn, None, None).recv_result()
+            info = json.loads(info)
+            # 取消超时
+            conn.settimeout(None)
+            # 保存连接
+            self.connections.append(Client(conn, addr, info))
+            print('[+] Connection has been established: {}'.format(addr))
+        except:
+            # 关闭连接
+            conn.close()
+            print('[-] Rejected connection: {}'.format(addr))
 
     # 移除无效连接
     def test_connections(self):

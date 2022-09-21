@@ -4,8 +4,6 @@ axios.interceptors.response.use(res => {
     }
 })
 
-var url = 'http://localhost:8888'
-
 const app = Vue.createApp({
     data() {
         return {
@@ -19,13 +17,15 @@ const app = Vue.createApp({
             result: '',
             // 目标当前工作目录的路径
             cwd: '',
-            old_cwd: ''
+            old_cwd: '',
+            // 等待返回结果
+            wait: false
         }
     },
     methods: {
         // 获取客户端列表
         list() {
-            axios.post(url + '/list')
+            axios.post(URL + '/list')
                 .then((res) => {
                     this.connections = res
                 })
@@ -35,7 +35,7 @@ const app = Vue.createApp({
         },
         // 获取客户端当前工作目录的路径
         getcwd() {
-            axios.post(url + '/getcwd', { 'target': this.target })
+            axios.post(URL + '/getcwd', { 'target': this.target })
                 .then((res) => {
                     this.cwd = res
                     this.old_cwd = res
@@ -49,30 +49,28 @@ const app = Vue.createApp({
             if (this.command.trim().length == 0) {
                 return
             }
-            var input = document.getElementById('command')
-            var btn = document.getElementById('execute')
-            input.setAttribute('disabled', 'disabled')
-            btn.setAttribute('disabled', 'disabled')
-            axios.post(url + '/execute', { 'target': this.target, 'command': this.command })
+            this.wait = true
+            axios.post(URL + '/execute', { 'target': this.target, 'command': this.command })
                 .then((res) => {
                     result = res[0]
                     this.cwd = res[1]
                     this.result += (this.old_cwd == null ? '' : this.old_cwd) + '> ' + this.command + '\n' + result + '\n'
                     this.old_cwd = this.cwd
                     this.command = ''
-                    input.removeAttribute('disabled')
-                    btn.removeAttribute('disabled')
+                    this.wait = false
                 })
                 .catch((err) => {
                     alert(err.message)
+                    this.wait = false
                 })
-
         },
     },
     mounted() {
+        // 获取客户端列表
         this.list()
     },
     updated() {
+        // 滚动条始终在底部
         var result = document.getElementById('result')
         result.scrollTop = result.scrollHeight
     }
