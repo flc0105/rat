@@ -4,11 +4,27 @@ axios.interceptors.response.use(res => {
     }
 })
 
+// 接收上线提醒
+var socket = io.connect(STATIC_URL)
+socket.on('connect', function () {
+    console.log('connected')
+})
+socket.on('message', function (data) {
+    Push.create('上线提醒', {
+        body: data,
+        timeout: 10000,
+        onClick: function () {
+            window.focus()
+            this.close()
+        }
+    })
+})
+
 const app = Vue.createApp({
     data() {
         return {
             // 客户端列表
-            connections: {},
+            connections: [],
             // 命令
             command: '',
             // 目标客户端序号
@@ -25,7 +41,7 @@ const app = Vue.createApp({
     methods: {
         // 获取客户端列表
         list() {
-            axios.post(URL + '/list')
+            axios.post(API_URL + '/list')
                 .then((res) => {
                     this.connections = res
                 })
@@ -35,7 +51,7 @@ const app = Vue.createApp({
         },
         // 获取客户端当前工作目录的路径
         getcwd() {
-            axios.post(URL + '/getcwd', { 'target': this.target })
+            axios.post(API_URL + '/getcwd', { 'target': this.target })
                 .then((res) => {
                     this.cwd = res
                     this.old_cwd = res
@@ -50,7 +66,7 @@ const app = Vue.createApp({
                 return
             }
             this.wait = true
-            axios.post(URL + '/execute', { 'target': this.target, 'command': this.command })
+            axios.post(API_URL + '/execute', { 'target': this.target, 'command': this.command })
                 .then((res) => {
                     result = res[0]
                     this.cwd = res[1]
@@ -58,6 +74,7 @@ const app = Vue.createApp({
                     this.old_cwd = this.cwd
                     this.command = ''
                     this.wait = false
+                    
                 })
                 .catch((err) => {
                     alert(err.message)
@@ -73,6 +90,8 @@ const app = Vue.createApp({
         // 滚动条始终在底部
         var result = document.getElementById('result')
         result.scrollTop = result.scrollHeight
+        // 保持命令输入框获得焦点
+        document.getElementById('command').focus()
     }
 })
 

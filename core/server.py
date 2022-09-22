@@ -3,6 +3,7 @@ import socket
 
 from entity.client import Client
 from entity.ratsocket import RATSocket
+from util.notifier import notify
 
 
 class Server:
@@ -33,6 +34,8 @@ class Server:
             # 保存连接
             self.connections.append(Client(conn, addr, info))
             print('[+] Connection has been established: {}'.format(addr))
+            # 上线提醒
+            notify(info)
         except:
             # 关闭连接
             conn.close()
