@@ -9,7 +9,7 @@ import time
 from entity.server import Server
 from util import win32util
 from util.command import Command
-from util.parser import parse
+from util.common_util import parse
 
 
 class Client:

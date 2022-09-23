@@ -1,5 +1,6 @@
-SERVER_ADDR = ('', 9999)
+# 服务端套接字地址
+SOCKET_ADDR = ('', 9999)
+# API端口
 API_PORT = 8888
+# 前端端口
 STATIC_PORT = 8080
-
-STATIC_URL = 'http://localhost:{}'.format(STATIC_PORT)

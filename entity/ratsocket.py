@@ -2,6 +2,8 @@ import json
 import socket
 import struct
 
+from util.common_util import decode
+
 
 class RATSocket:
 
@@ -40,7 +42,7 @@ class RATSocket:
         # 获得请求头的长度
         head_len = struct.unpack('i', self.socket.recv(4))[0]
         # 接收请求头
-        head = json.loads(self.socket.recv(head_len).decode())
+        head = json.loads(decode(self.socket.recv(head_len)))
         # 接收主体
         body_len = head['length']
         body = b''

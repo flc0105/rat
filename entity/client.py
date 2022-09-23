@@ -2,6 +2,7 @@ import ntpath
 import os
 
 from entity.ratsocket import RATSocket
+from util.common_util import decode
 
 
 class Client(RATSocket):
@@ -35,7 +36,7 @@ class Client(RATSocket):
     def recv_result(self):
         head, body = self.recv()
         if head['type'] == 'result':
-            return head['status'], body.decode()
+            return head['status'], decode(body)
         elif head['type'] == 'file':
             try:
                 with open(head['filename'], 'wb') as file:

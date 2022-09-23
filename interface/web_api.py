@@ -1,3 +1,4 @@
+import contextlib
 import os
 import sys
 
@@ -6,15 +7,27 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.realpath(__file__))))
 import json
 import socket
 import threading
+import requests
 
 from flask import Flask, request
 from flask_cors import *
 
 from core.server import Server
-from config.server import SERVER_ADDR, API_PORT
+from config.server import SOCKET_ADDR, API_PORT, STATIC_PORT
 
 app = Flask(__name__)
 CORS(app, supports_credentials=True)
+
+
+# 服务端接受连接后的回调函数
+def handler(conn, addr):
+    # 接受连接
+    info = server.accept(conn, addr)
+    if info:
+        info['ip'] = '{}:{}'.format(addr[0], addr[1])
+        with contextlib.suppress(Exception):
+            # 向前端通知服务API发送请求
+            requests.post('http://127.0.0.1:{}/notify'.format(STATIC_PORT), json=json.dumps(info))
 
 
 @app.route('/list', methods=['POST'])
@@ -82,6 +95,6 @@ def execute():
 
 
 if __name__ == '__main__':
-    server = Server(SERVER_ADDR)
-    threading.Thread(target=server.serve, daemon=True).start()
+    server = Server(SOCKET_ADDR)
+    threading.Thread(target=server.serve, args=(handler,), daemon=True).start()
     app.run(host='0.0.0.0', port=API_PORT)

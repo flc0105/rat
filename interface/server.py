@@ -6,8 +6,13 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.realpath(__file__))))
 import threading
 
 from core.server import Server
-from util.parser import parse
-from config.server import SERVER_ADDR
+from util.common_util import parse
+from config.server import SOCKET_ADDR
+
+
+# 服务端接受连接后的回调函数
+def handler(conn, addr):
+    server.accept(conn, addr)
 
 
 # 接受命令输入
@@ -80,6 +85,6 @@ def open_connection(connection):
 
 
 if __name__ == '__main__':
-    server = Server(SERVER_ADDR)
-    threading.Thread(target=server.serve, daemon=True).start()
+    server = Server(SOCKET_ADDR)
+    threading.Thread(target=server.serve, args=(handler,), daemon=True).start()
     accept_commands()

