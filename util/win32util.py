@@ -1,18 +1,11 @@
-import ctypes
-import os.path
-from ctypes import wintypes
+from util.win32const import *
 
-from win32con import *
-
-if os.name == 'nt':
-    import win32process
-    import win32security
-    import ntsecuritycon
+kernel32 = ctypes.windll.kernel32
+advapi32 = ctypes.windll.advapi32
 
 
 def create_remote_thread(pid, dll_path):
     size = (len(dll_path) + 1) * ctypes.sizeof(wintypes.WCHAR)
-    kernel32 = ctypes.windll.kernel32
     # 获取目标进程句柄
     h_proc = kernel32.OpenProcess(PROCESS_CREATE_THREAD | PROCESS_VM_OPERATION | PROCESS_VM_WRITE, False, pid)
     if not h_proc:
@@ -54,11 +47,31 @@ def create_remote_thread(pid, dll_path):
         return 0, 'Error creating thread: {}'.format(ctypes.GetLastError())
 
 
-def get_integrity():
+def get_integrity_level(pid):
     """
-    获取当前进程权限
+    获取进程权限
     """
-    integrity_level = {
+    h_proc = kernel32.OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, False, pid)
+    h_token = ctypes.c_void_p()
+    if not advapi32.OpenProcessToken(h_proc, TOKEN_READ, ctypes.byref(h_token)):
+        raise Exception('OpenProcessToken error: {}'.format(ctypes.GetLastError()))
+    info_size = wintypes.DWORD()
+    if advapi32.GetTokenInformation(h_token, TokenIntegrityLevel, None, 0, ctypes.byref(info_size)):
+        raise Exception('GetTokenInformation error: {}'.format(ctypes.GetLastError()))
+    if ctypes.GetLastError() != ERROR_INSUFFICIENT_BUFFER:
+        raise Exception('GetTokenInformation error: {}'.format(ctypes.GetLastError()))
+    token_info = TOKEN_MANDATORY_LABEL()
+    ctypes.resize(token_info, info_size.value)
+    if not advapi32.GetTokenInformation(h_token, TokenIntegrityLevel, ctypes.byref(token_info), info_size,
+                                        ctypes.byref(info_size)):
+        raise Exception('GetTokenInformation error: {}'.format(ctypes.GetLastError()))
+    advapi32.GetSidSubAuthorityCount.argtypes = [ctypes.c_void_p]
+    advapi32.GetSidSubAuthorityCount.restype = ctypes.POINTER(ctypes.c_ubyte)
+    sid_size = advapi32.GetSidSubAuthorityCount(token_info.Label.Sid).contents.value
+    advapi32.GetSidSubAuthority.argtypes = (ctypes.c_void_p, wintypes.DWORD)
+    advapi32.GetSidSubAuthority.restype = ctypes.POINTER(wintypes.DWORD)
+    integrity_level = advapi32.GetSidSubAuthority(token_info.Label.Sid, sid_size - 1).contents.value
+    mapping = {
         0x0000: 'Untrusted',
         0x1000: 'Low',
         0x2000: 'Medium',
@@ -67,6 +80,4 @@ def get_integrity():
         0x4000: 'System',
         0x5000: 'Protected process',
     }
-    h_token = win32security.OpenProcessToken(win32process.GetCurrentProcess(), win32security.TOKEN_READ)
-    sid = win32security.GetTokenInformation(h_token, ntsecuritycon.TokenIntegrityLevel)[0]
-    return integrity_level.get(sid.GetSubAuthority(sid.GetSubAuthorityCount() - 1))
+    return mapping.get(integrity_level)

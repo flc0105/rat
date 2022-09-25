@@ -24,7 +24,7 @@ def decode(bytes: bytes) -> str:
     return str
 
 
-def parse_args(options: list, arg: str):
+def parse_args(options: list, arg: str) -> dict:
     """
     解析命令参数
     """
@@ -35,7 +35,10 @@ def parse_args(options: list, arg: str):
     if parser.message:
         raise Exception(parser.message)
     for option in args:
-        yield ' '.join(args[option])
+        if not args[option]:
+            raise Exception('Null value not accepted: {}'.format(option))
+        args[option] = ' '.join(args[option])
+    return args
 
 
 class ArgumentParser(argparse.ArgumentParser):

@@ -40,7 +40,10 @@ class RATSocket:
     # 接收
     def recv(self):
         # 获得请求头的长度
-        head_len = struct.unpack('i', self.socket.recv(4))[0]
+        head_len = self.socket.recv(4)
+        if not head_len:
+            raise Exception('Receiving failure')
+        head_len = struct.unpack('i', head_len)[0]
         # 接收请求头
         head = json.loads(decode(self.socket.recv(head_len)))
         # 接收主体
