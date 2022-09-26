@@ -7,9 +7,11 @@ import sys
 import time
 
 from entity.server import Server
-from util import win32util
 from util.command import Command
 from util.common_util import parse
+
+if os.name == 'nt':
+    from util import win32util
 
 
 class Client:

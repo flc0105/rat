@@ -41,6 +41,17 @@ def parse_args(options: list, arg: str) -> dict:
     return args
 
 
+def scan_args(arg: list) -> dict:
+    parser = ArgumentParser()
+    keys = [k for k in arg if k.startswith('--')]
+    for k in keys:
+        parser.add_argument(k, nargs='*')
+    args = vars(parser.parse_args(arg))
+    for option in args:
+        args[option] = ' '.join(args[option])
+    return args
+
+
 class ArgumentParser(argparse.ArgumentParser):
     def __init__(self):
         super().__init__()

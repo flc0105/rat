@@ -1,3 +1,4 @@
+import json
 import ntpath
 import os
 
@@ -18,6 +19,17 @@ class Client(RATSocket):
         body = command.encode()
         head = {
             'type': command_type,
+            'length': len(body)
+        }
+        self.send(head, body)
+
+    # 向客户端发送脚本
+    def send_script(self, filename: str, args: dict):
+        with open(filename, 'rb') as file:
+            body = file.read()
+        head = {
+            'type': 'script',
+            'args': json.dumps(args),
             'length': len(body)
         }
         self.send(head, body)

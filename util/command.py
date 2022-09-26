@@ -1,11 +1,15 @@
+import contextlib
 import inspect
+import io
 import locale
 import os
 import subprocess
 from functools import wraps
 
 from util.common_util import parse_args
-from util.win32util import *
+
+if os.name == 'nt':
+    from util.win32util import *
 
 
 def desc(text: str):
@@ -42,6 +46,20 @@ def params(arg_list: list):
         return wrapper
 
     return attr_decorator
+
+
+def require_admin(func):
+    """
+    被添加注解的函数执行前需要检查管理员权限
+    """
+
+    def check_admin(*args):
+        if ctypes.windll.shell32.IsUserAnAdmin():
+            return func(*args)
+        else:
+            return 0, 'Operation requires elevation'
+
+    return check_admin
 
 
 class Command:
@@ -114,3 +132,14 @@ class Command:
         if not os.path.isfile(this.dll_path):
             return 0, 'File does not exist: {}'.format(this.dll_path)
         return create_remote_thread(int(this.pid), os.path.abspath(this.dll_path))
+
+    @staticmethod
+    @desc('execute python code')
+    def pyexec(code, args: dict = None):
+        """
+        执行Python代码
+        """
+        f = io.StringIO()
+        with contextlib.redirect_stdout(f), contextlib.redirect_stderr(f):
+            exec(code, args)
+        return 1, f.getvalue()
