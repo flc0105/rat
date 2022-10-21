@@ -1,0 +1,4 @@
+pyautogui
+pillow
+pywin32
+psutil

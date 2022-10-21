@@ -17,7 +17,7 @@ class Server(RATSocket):
             'status': status,
             'length': len(body)
         }
-        self.send(head, body)
+        self.send(head, body=body)
 
     def send_file(self, filename: str):
         """ 向服务端发送文件 """
@@ -26,5 +26,5 @@ class Server(RATSocket):
             'filename': ntpath.basename(filename),
             'length': os.stat(filename).st_size
         }
-        with open(filename, 'rb') as file:
-            self.send(head, file.read())
+        with open(filename, 'rb') as f:
+            self.send(head, f=f)
