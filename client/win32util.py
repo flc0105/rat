@@ -1,4 +1,6 @@
 import ctypes
+import os
+import sys
 from ctypes import wintypes
 from ctypes.wintypes import HANDLE, DWORD, WORD, LPBYTE, LPWSTR
 
@@ -12,8 +14,27 @@ import win32security
 import win32service
 import win32ts
 
+from client.util import wrap_path
+
 kernel32 = ctypes.windll.kernel32
 advapi32 = ctypes.windll.advapi32
+
+executable = wrap_path(os.path.realpath(sys.executable))
+argv = wrap_path(os.path.realpath(''.join(sys.argv)))
+
+
+def get_exec_path():
+    if not getattr(sys, 'frozen', False):
+        return f'{executable} {argv}'
+    else:
+        return executable
+
+
+def get_exec_info():
+    if not getattr(sys, 'frozen', False):
+        return r'c:\windows\system32\cmd.exe', f'/c {executable} {argv}'
+    else:
+        return executable, None
 
 
 def get_integrity_level():
@@ -119,7 +140,7 @@ def start_service(service_name):
     win32service.CloseServiceHandle(h_service)
 
 
-def create_process_with_token(h_token, exec_path):
+def create_process_with_token(h_token, lp_application_name, lp_command_line):
     class STARTUPINFO(ctypes.Structure):
         _fields_ = (('cb', DWORD),
                     ('lpReserved', LPWSTR),
@@ -151,17 +172,19 @@ def create_process_with_token(h_token, exec_path):
     si.lpDesktop = 'winsta0\\default'
     pi = PROCESS_INFORMATION()
     creation_flags = win32con.CREATE_NEW_CONSOLE | win32con.NORMAL_PRIORITY_CLASS | win32con.CREATE_UNICODE_ENVIRONMENT
-    advapi32.CreateProcessWithTokenW(int(h_token), 1, *exec_path, creation_flags, None, None, ctypes.byref(si),
+    advapi32.CreateProcessWithTokenW(int(h_token), 1, lp_application_name, lp_command_line, creation_flags, None, None,
+                                     ctypes.byref(si),
                                      ctypes.byref(pi))
     return pi.dwProcessId
 
 
-def create_process_as_user(h_token, exec_path):
+def create_process_as_user(h_token, lp_application_name, lp_command_line):
     si = win32process.STARTUPINFO()
     si.lpDesktop = 'winsta0\\default'
     creation_flags = win32con.CREATE_NEW_CONSOLE | win32con.NORMAL_PRIORITY_CLASS | win32con.CREATE_UNICODE_ENVIRONMENT
     environment = win32profile.CreateEnvironmentBlock(h_token, False)
-    hProcess, hThread, dwProcessId, dwThreadId = win32process.CreateProcessAsUser(h_token, *exec_path, None, None,
+    hProcess, hThread, dwProcessId, dwThreadId = win32process.CreateProcessAsUser(h_token, lp_application_name,
+                                                                                  lp_command_line, None, None,
                                                                                   False,
                                                                                   creation_flags, environment, None,
                                                                                   si)

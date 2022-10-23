@@ -3,6 +3,7 @@ import socket
 import struct
 from typing import BinaryIO
 
+from common.util import logger
 
 class RATSocket:
 
@@ -81,6 +82,8 @@ class RATSocket:
             while recv_size:
                 # 接收剩余长度的数据
                 buf = self.socket.recv(recv_size)
+                if not buf:
+                    raise socket.error('Connection aborted')
                 # 更新剩余接收长度
                 recv_size -= len(buf)
                 # 更新进度条

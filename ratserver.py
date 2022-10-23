@@ -17,7 +17,7 @@ def start_cli():
                 continue
             # 清屏
             elif command in ['cls', 'clear']:
-                subprocess.call('cls', shell=True)
+                subprocess.call(command, shell=True)
             # 切换目录
             elif command.split()[0] == 'cd':
                 cd(parse(command)[1])
@@ -72,7 +72,8 @@ def open_connection(connection):
     user_type = get_user_type(connection.info['integrity'])
     while True:
         try:
-            command = colored_input(f'{cwd}{colors.BRIGHT_GREEN}({user_type}){colors.END}> ')
+            command = colored_input(
+                f'{cwd}{colors.BRIGHT_GREEN}({user_type}){colors.END}> ' if user_type else f'{cwd}> ')
             if not command:
                 continue
             name, arg = parse(command)

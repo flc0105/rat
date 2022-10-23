@@ -24,11 +24,11 @@ def get_user_type(integrity: str):
         'High': 'admin',
         'System': 'system'
     }
-    return user_type[integrity]
+    return user_type.get(integrity)
 
 
 def get_funcs():
-    return {name: func for name, func in vars(Command).items() if callable(func)}
+    return {name: getattr(Command, name) for name, func in vars(Command).items() if callable(getattr(Command, name))}
 
 
 def update_progress(count, total):

@@ -2,7 +2,7 @@ import argparse
 import logging
 
 logging.basicConfig(
-    format='[%(asctime)s] %(levelname)s: %(message)s',
+    format='[%(asctime)s] %(levelname)s: %(funcName)s -> %(message)s',
     level=logging.DEBUG,
     datefmt='%Y-%m-%d %H:%M:%S'
 )

@@ -44,31 +44,38 @@ class Client:
         """ 等待命令 """
         while True:
             try:
-                # 从服务端接收命令
+                # 接收命令
                 try:
+                    # 接收消息头
                     head = self.server.recv_head()
+                    # 消息类型
                     type = head['type']
+                    # 保存文件
                     if type == 'file':
                         filename = head['filename']
                         with open(filename, 'ab') as f:
                             f.truncate(0)
                             self.server.recv_body(head, f=f)
                             result = 1, '\nFile uploaded to: {}'.format(os.path.abspath(filename))
-                    elif type == 'command':
-                        result = self.exec_cmd(self.server.recv_body(head))
-                    elif type == 'script':
-                        result = Command.pyexec(self.server.recv_body(head), json.loads(head['args']))
                     else:
-                        self.server.recv_body(head)
-                        result = None
+                        body = self.server.recv_body(head)
+                        # 执行命令
+                        if type == 'command':
+                            result = self.exec_cmd(body)
+                        # 执行python脚本
+                        elif type == 'script':
+                            result = Command.pyexec(body, json.loads(head['args']))
+                        else:
+                            result = None
+                    # 发送结果
                     if result:
                         self.server.send_result(*result)
                 except Exception as e:
                     self.server.send_result(0, str(e))
-                # 发送当前工作目录的路径
+                # 发送当前工作路径
                 self.server.send_result(1, os.getcwd())
             except SystemExit:
-                logger.error('Server closed this connection')
+                logger.info('Server closed this connection')
                 break
             # 连接断开
             except socket.error:
@@ -85,7 +92,7 @@ class Client:
         cmd = Command()
         # 关闭连接
         if command == 'kill':
-            # self.server.close()
+            self.server.close()
             sys.exit(0)
         # 将收到的命令拆分成命令名和参数
         name, arg = parse(command)
