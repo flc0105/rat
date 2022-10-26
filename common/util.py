@@ -1,5 +1,7 @@
 import argparse
 import logging
+import shlex
+import time
 
 logging.basicConfig(
     format='[%(asctime)s] %(levelname)s: %(funcName)s -> %(message)s',
@@ -23,11 +25,16 @@ class colors:
     END = '\033[0m'
 
 
+def get_time():
+    return time.strftime('%Y%m%d-%H%M%S')
+
+
 def parse(command: str) -> (str, str):
     """
     将命令拆分为命令名和参数
     """
-    name = command.split()[0]
+    # name = command.split()[0]
+    name = shlex.split(command)[0]
     arg = command[len(name) + 1:].strip()
     return name, arg
 

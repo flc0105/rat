@@ -3,6 +3,7 @@ import json
 import os
 import platform
 import socket
+import subprocess
 import sys
 import time
 
@@ -12,7 +13,7 @@ from client.server import Server
 from common.util import parse, logger
 
 if os.name == 'nt':
-    from client.win32util import get_integrity_level
+    from client.win32util import get_integrity_level, get_exec_path
 
 
 class Client:
@@ -92,6 +93,11 @@ class Client:
         cmd = Command()
         # 关闭连接
         if command == 'kill':
+            self.server.close()
+            sys.exit(0)
+        # 重启
+        elif command == 'reset':
+            subprocess.Popen(get_exec_path())
             self.server.close()
             sys.exit(0)
         # 将收到的命令拆分成命令名和参数
