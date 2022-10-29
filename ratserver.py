@@ -2,6 +2,8 @@ import subprocess
 import sys
 import threading
 
+import tabulate
+
 from server.config import SOCKET_ADDR
 from server.core import Server
 from server.util import *
@@ -51,8 +53,12 @@ def start_cli():
 
 def list_connections():
     server.test_connections()
+    conns = []
     for i, connection in enumerate(server.connections):
-        print('{} {}'.format(i, connection.info))
+        conns.append([i, connection.info['addr'], connection.info['os'], connection.info['hostname'],
+                      connection.info['integrity']])
+    print(tabulate.tabulate(conns, headers=['ID', 'Address', 'OS', 'Hostname', 'Integrity'], tablefmt='pretty'))
+    # print('{} {}'.format(i, connection.info))
 
 
 def get_target_connection(idx):
