@@ -3,7 +3,6 @@ import socket
 import struct
 from typing import BinaryIO
 
-from common.util import logger
 
 class RATSocket:
 
@@ -16,6 +15,7 @@ class RATSocket:
 
     def bind(self, address):
         """ 绑定 """
+        self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         self.socket.bind(address)
         self.socket.listen(5)
 
@@ -90,7 +90,8 @@ class RATSocket:
                 if update_progress is not None:
                     update_progress(length - recv_size, length)
                 # 写入文件
-                f.write(buf)
+                if f:
+                    f.write(buf)
         # 接收文本
         else:
             body = b''

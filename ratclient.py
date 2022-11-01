@@ -45,29 +45,9 @@ class Client:
         """ 等待命令 """
         while True:
             try:
-                # 接收命令
                 try:
-                    # 接收消息头
-                    head = self.server.recv_head()
-                    # 消息类型
-                    type = head['type']
-                    # 保存文件
-                    if type == 'file':
-                        filename = head['filename']
-                        with open(filename, 'ab') as f:
-                            f.truncate(0)
-                            self.server.recv_body(head, f=f)
-                            result = 1, '\nFile uploaded to: {}'.format(os.path.abspath(filename))
-                    else:
-                        body = self.server.recv_body(head)
-                        # 执行命令
-                        if type == 'command':
-                            result = self.exec_cmd(body)
-                        # 执行python脚本
-                        elif type == 'script':
-                            result = Command.pyexec(body, json.loads(head['args']))
-                        else:
-                            result = None
+                    # 接收命令
+                    result = self.server.recv_command(self.exec_cmd)
                     # 发送结果
                     if result:
                         self.server.send_result(*result)
@@ -91,6 +71,7 @@ class Client:
     def exec_cmd(self, command):
         """ 执行命令 """
         cmd = Command()
+        cmd.pass_server(self.server)
         # 关闭连接
         if command == 'kill':
             self.server.close()

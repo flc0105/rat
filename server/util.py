@@ -3,8 +3,55 @@ import json
 import os
 import re
 import shlex
+import traceback
 
 from common.util import colors, get_time, parse, scan_args
+
+
+def completer(text, state):
+    options = [cmd for cmd in get_commands() if cmd.startswith(text)]
+    if state < len(options):
+        return options[state]
+    else:
+        return None
+
+
+try:
+    if os.name == 'posix':
+        import readline
+
+        readline.parse_and_bind('tab: complete')
+        readline.set_completer(completer)
+except ImportError:
+    traceback.print_exc()
+
+global state
+state = 'local'
+
+global remote_commands
+remote_commands = []
+
+preset_local_commands = ['cd', 'quit', 'exit', 'list', 'select', 'clear']
+preset_remote_commands = ['quit', 'exit', 'kill', 'reset']
+
+
+def change_state(s):
+    global state
+    state = s
+
+
+def get_commands():
+    if state == 'local':
+        return preset_local_commands
+    else:
+        return preset_remote_commands + remote_commands + list(get_internal_cmd().keys())
+
+
+def get_remote_commands(conn):
+    conn.send_command('_cmdlist')
+    global remote_commands
+    remote_commands = json.loads(conn.recv_result()[1])
+    change_state('remote')
 
 
 def cd(path: str):
@@ -106,10 +153,7 @@ class AliasUtil:
     @staticmethod
     def save():
         with open(AliasUtil.config_path, 'w') as f:
-            f.write(json.dumps(AliasUtil.aliases, indent=2))
-
-
-AliasUtil.load()
+            f.write(json.dumps(AliasUtil.aliases, sort_keys=True, indent=2))
 
 
 class Command:
@@ -120,7 +164,7 @@ class Command:
         cd(arg)
 
     @staticmethod
-    def fs(arg, conn):
+    def outfile(arg, conn):
         """ 保存命令输出到文件 """
         if not arg:
             return
@@ -186,3 +230,7 @@ class Command:
             return
         AliasUtil.remove(arg)
         print('alias unset: {}'.format(arg))
+
+
+AliasUtil.load()
+internal_cmd = get_internal_cmd()

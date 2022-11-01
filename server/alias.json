@@ -5,6 +5,7 @@
   "getclip": "pyexec import pyperclip;print(pyperclip.paste())",
   "killfw": "netsh advfirewall set allprofiles state off",
   "lockscreen": "rundll32.exe user32.dll,LockWorkStation",
+  "openport": "netsh advfirewall firewall add rule name=\"<name>\" dir=in action=allow protocol=TCP localport=<port>",
   "openurl": "pyexec import webbrowser;webbrowser.open('<url>')",
   "pkill": "wmic process where name='<process name>' call terminate",
   "resume": "pyexec import psutil;p=psutil.Process(<pid>);p.resume()",
@@ -13,9 +14,8 @@
   "setbrt": "powershell.exe (Get-WmiObject -Namespace root/WMI -Class WmiMonitorBrightnessMethods).WmiSetBrightness(1,<brightness>)",
   "setclip": "pyexec import pyperclip;pyperclip.copy('<text>')",
   "showdesktop": "powershell.exe (New-Object -ComObject shell.application).toggleDesktop()",
+  "speak": "pyexec import win32com.client;win32com.client.Dispatch('SAPI.SpVoice').Speak('<text>')",
   "suspend": "pyexec import psutil;p=psutil.Process(<pid>);p.suspend()",
   "touch": "type nul > <filename>",
-  "wget": "powershell.exe (New-Object System.Net.WebClient).DownloadFile('<url>', '<filename>')",
-  "openport": "netsh advfirewall firewall add rule name=\"<name>\" dir=in action=allow protocol=TCP localport=<port>",
-  "speak": "pyexec import win32com.client;win32com.client.Dispatch('SAPI.SpVoice').Speak('<text>')"
+  "wget": "powershell.exe (New-Object System.Net.WebClient).DownloadFile('<url>', '<filename>')"
 }

