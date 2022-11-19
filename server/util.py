@@ -5,8 +5,9 @@ import re
 import shlex
 import threading
 import traceback
+import uuid
 
-from common.util import Colors, format_dict, parse, scan_args
+from common.util import Colors, format_dict, scan_args, parse
 
 
 class Context:
@@ -33,6 +34,7 @@ try:
         readline.parse_and_bind('tab: complete')
         readline.set_completer(completer)
 except ImportError:
+    readline = None
     traceback.print_exc()
 
 
@@ -77,65 +79,48 @@ def update_progress(count, total):
     filled_len = int(round(bar_len * count / float(total)))
     percents = round(100.0 * count / float(total), 1)
     bar = '=' * filled_len + '-' * (bar_len - filled_len)
-    print('%s[%s] %s%s%s' % (Colors.DARK_YELLOW, bar, percents, '%', Colors.END), end='\r')
+    print(f'{Colors.DARK_YELLOW}[{bar}] {percents} % {Colors.END}', end='\r')
+    if count == total:
+        print()
 
 
-def send_alias(conn, cmd):
-    cmd_name, cmd_arg = parse(cmd)
-    alias = AliasUtil.get(cmd_name)
-    regex = '<.*?>'
-    args = shlex.split(cmd_arg)
-    argc = len(re.findall(regex, alias))
-    if argc > 0:
-        if argc == len(args):
+class Alias:
+    list = {}
+    config = 'server/alias.json'
+
+    @staticmethod
+    def send(conn, cmd):
+        cmd_name, cmd_arg = parse(cmd)
+        alias = Alias.list.get(cmd_name)
+        regex = '<.*?>'
+        args = shlex.split(cmd_arg)
+        argc = len(re.findall(regex, alias))
+        if argc > 0:
+            if argc != len(args):
+                print(f'[-] {cmd_name}: requires {argc} argument{"s" if argc > 1 else ""} ({len(args)} provided)')
+                return
             for cmd_arg in args:
                 alias = re.sub(regex, cmd_arg, alias, count=1)
         else:
-            raise Exception(f'{cmd_name}: requires {argc} argument{"s" if argc > 1 else ""} ({len(args)} provided)')
-    else:
-        if len(args) != 0:
-            raise Exception(f'{cmd_name}: takes no argument')
-    print('[+] Sending command: {}'.format(alias))
-    return conn.send_command(alias)
-
-
-class AliasUtil:
-    aliases = {}
-    config_path = 'server/alias.json'
+            if len(args) != 0:
+                print(f'[-] {cmd_name}: takes no argument')
+                return
+        print('[+] Sending command: {}'.format(alias))
+        return conn.send_command(alias)
 
     @staticmethod
-    def list():
-        return AliasUtil.aliases
-
-    @staticmethod
-    def get(alias):
-        return AliasUtil.aliases[alias]
-
-    @staticmethod
-    def add(alias, command):
-        AliasUtil.aliases[alias] = command
-        AliasUtil.save()
-
-    @staticmethod
-    def remove(alias):
-        if alias not in AliasUtil.aliases:
-            raise Exception('alias does not exist: {}'.format(alias))
-        del AliasUtil.aliases[alias]
-        AliasUtil.save()
-
-    @staticmethod
-    def load():
-        if os.path.isfile(AliasUtil.config_path):
-            with open(AliasUtil.config_path, 'r') as f:
+    def read():
+        if os.path.isfile(Alias.config):
+            with open(Alias.config, 'r') as f:
                 try:
-                    AliasUtil.aliases = json.load(f)
+                    Alias.list = json.load(f)
                 except json.decoder.JSONDecodeError:
-                    print('[-] Error loading configuration: {}'.format(AliasUtil.config_path))
+                    print('[-] Error loading configuration: {}'.format(Alias.config))
 
     @staticmethod
-    def save():
-        with open(AliasUtil.config_path, 'w') as f:
-            f.write(json.dumps(AliasUtil.aliases, sort_keys=True, indent=2))
+    def write():
+        with open(Alias.config, 'w') as f:
+            f.write(json.dumps(Alias.list, sort_keys=True, indent=2))
 
 
 class Command:
@@ -147,8 +132,9 @@ class Command:
     @staticmethod
     def upload(arg, conn):
         if os.path.isfile(arg):
-            cmd_id = conn.send_file(arg)
-            return cmd_id
+            command_id = str(uuid.uuid4())
+            threading.Thread(target=conn.send_file, args=(arg, command_id,), daemon=True).start()
+            return command_id
         else:
             print('[-] File does not exist')
 
@@ -165,34 +151,41 @@ class Command:
             print('[-] File does not exist: {}'.format(script_name))
             return
         print('[+] Sending script: {}'.format(script_name))
-        cmd_id = conn.send_file(script_name, type='script', args=scan_args(arg[1:]))
-        return cmd_id
+        command_id = str(uuid.uuid4())
+        threading.Thread(target=conn.send_file, args=(script_name, command_id, 'script', scan_args(arg[1:])),
+                         daemon=True).start()
+        return command_id
 
     @staticmethod
     def alias(arg, conn):
         if not arg:
-            print(format_dict(AliasUtil.list(), width=20))
+            print(format_dict(Alias.list))
             return
         equal_mark_index = arg.find('=')
         if equal_mark_index == -1:
-            print('syntax error')
+            print('[-] Syntax error')
             return
         alias = arg[0:equal_mark_index].strip()
         command = arg[equal_mark_index + 1:].strip()
         if not all([alias, command]):
-            print('null value not accepted')
+            print('[-] Null value not accepted')
             return
-        AliasUtil.add(alias, command)
-        print('alias set: {} -> {}'.format(alias, command))
+        Alias.list[alias] = command
+        Alias.write()
+        print(f'[+] Alias set: {alias} -> {command}')
 
     @staticmethod
     def unalias(arg, conn):
         if not arg:
-            print('syntax error')
+            print('[-] Syntax error')
             return
-        AliasUtil.remove(arg)
-        print('alias unset: {}'.format(arg))
+        if arg not in Alias.list:
+            print(f'[-] Alias does not exist: {arg}')
+            return
+        del Alias.list[arg]
+        Alias.write()
+        print(f'[+] Alias unset: {arg}')
 
 
-AliasUtil.load()
+Alias.read()
 internal_commands = get_internal_commands()

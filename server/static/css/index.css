@@ -1,0 +1,14 @@
+body {
+    margin: 30px 0;
+    font-family: monospace, monospace;
+    font-size: 14px;
+}
+
+a {
+    cursor: pointer;
+    text-decoration: none;
+}
+
+.card > .list-group:last-child {
+    border-radius: 0;
+}

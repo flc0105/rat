@@ -16,9 +16,9 @@ class RATSocket:
         self.socket.bind(address)
         self.socket.listen(5)
 
-    def accept(self, connection_handler):
+    def accept(self, connection_handler, recv=None):
         while True:
-            connection_handler(*self.socket.accept())
+            connection_handler(*self.socket.accept(), recv)
 
     def close(self):
         self.socket.close()

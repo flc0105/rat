@@ -15,6 +15,8 @@ class Client(RATSocket):
         self.socket = s
         self.address = address
         self.info = info
+        self.id = str(uuid.uuid4())
+        self.result = {}
 
     def send_command(self, command, type='command'):
         body = command.encode()
@@ -26,9 +28,9 @@ class Client(RATSocket):
         self.send(head, bytes=body)
         return head['id']
 
-    def send_file(self, filename, type='file', args=None):
+    def send_file(self, filename, id=str(uuid.uuid4()), type='file', args=None):
         head = {
-            'id': str(uuid.uuid4()),
+            'id': id,
             'type': type,
             'length': os.stat(filename).st_size,
             'filename': ntpath.basename(filename),
@@ -36,4 +38,3 @@ class Client(RATSocket):
         }
         self.send(head, file_stream=get_read_stream(filename),
                   update_progress=update_progress if type == 'file' else None)
-        return head['id']

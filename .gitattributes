@@ -1,1 +1,2 @@
 external/** linguist-vendored=true
+server/static/lib/** linguist-vendored=true

