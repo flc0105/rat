@@ -13,7 +13,7 @@
 <div class="container">
     <div class="row">
         <div class="col-3">
-            <div class="card" style="height: 500px;">
+            <div class="card" style="height: 545px;">
                 <div class="card-header">
                     Connections<a class="float-end" @click="list()">Refresh</a>
                 </div>
@@ -30,6 +30,13 @@
                 <div class="card-header">
                     {{target == '' ? 'Not connected' : target.address + ' (' + target.hostname + ')'}}
                     <a class="float-end" @click="output=''">Clear</a>
+                </div>
+                <form id="form" action="upload" method="post" enctype="multipart/form-data">
+                    <input type="file" name="file" id="file" class="d-none" @change="(event) => upload(event)">
+                </form>
+                <div style="padding: 0.5rem" class="border-bottom">
+                    <button class="btn btn-outline-primary btn-custom" onclick="document.getElementById('file').value=null; document.getElementById('file').click()">Upload</button>
+                    <button class="btn btn-outline-primary btn-custom" @click="screenshot()">Screenshot</button>
                 </div>
                 <div id="result" class="card-body border-bottom" style="height: 430px; overflow-y: auto">
                     <div style="word-break: break-all; white-space: pre-wrap">

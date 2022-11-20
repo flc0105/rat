@@ -60,6 +60,50 @@ const app = Vue.createApp({
                     this.wait = false
                 })
         },
+        upload(event) {
+            if (this.target == '') {
+                return
+            }
+            this.wait = true
+            const formData = new FormData()
+            formData.append('target', this.target.id)
+            formData.append('file', event.target.files[0])
+            axios.post(url + '/upload', formData, {
+                headers: {
+                    'Content-Type': 'multipart/form-data'
+                }
+            })
+                .then(res => {
+                    alert(res)
+                })
+                .catch(err => {
+                    alert(err)
+                })
+                .finally(() => {
+                    this.wait = false
+                })
+        },
+        screenshot() {
+            if (this.target == '') {
+                return
+            }
+            this.wait = true
+            axios.post(url + '/execute', { 'target': this.target.id, 'command': 'screenshot' })
+                .then((res) => {
+                    file = res['file']
+                    if (file != null) {
+                        window.open(url + '/download/' + file, '_blank')
+                    } else {
+                        alert('Screen grab failed: ' + res['result'])
+                    }
+                })
+                .catch((err) => {
+                    alert(err.message)
+                })
+                .finally(() => {
+                    this.wait = false
+                })
+        }
     },
     mounted() {
         this.list()

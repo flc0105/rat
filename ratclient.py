@@ -45,8 +45,12 @@ class Client:
                 try:
                     if command_type == 'file':
                         filename = head['filename']
-                        self.server.recv_body(head, file_stream=get_write_stream(filename))
-                        result = 1, f'File uploaded to: {os.path.abspath(filename)}'
+                        try:
+                            self.server.recv_body(head, file_stream=get_write_stream(filename))
+                            result = 1, f'File uploaded to: {os.path.abspath(filename)}'
+                        except Exception as e:
+                            self.server.recv_body(head, file_stream=get_write_stream(os.devnull))
+                            result = 0, str(e)
                     else:
                         command = self.server.recv_body(head)
                         if command_type == 'command':
@@ -71,6 +75,11 @@ class Client:
                 break
             except socket.error:
                 logger.error('Connection closed')
+                self.server.close()
+                self.server = Server()
+                self.connect()
+            except Exception as e:
+                logger.error(e)
                 self.server.close()
                 self.server = Server()
                 self.connect()

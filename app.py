@@ -2,9 +2,11 @@ import json
 import os
 import socket
 import threading
+import time
 
 from flask import Flask, jsonify, request, send_from_directory
 from flask_cors import CORS
+from werkzeug.utils import secure_filename
 
 from common.ratsocket import RATSocket
 from common.util import get_write_stream
@@ -20,7 +22,7 @@ class Server:
         self.socket = RATSocket()
         self.connections = {}
 
-    def serve(self, recv=None):
+    def serve(self, recv):
         try:
             self.socket.bind(self.address)
             logger.info('Listening on port {}'.format(self.address[1]))
@@ -88,7 +90,6 @@ def list_connections():
     connections = []
     for k, v in server.connections.items():
         connections.append({'id': k, 'hostname': v.info['hostname'], 'address': v.info['addr'], 'cwd': v.info['cwd']})
-    logger.info(f'Connections: {connections}')
     return jsonify(connections)
 
 
@@ -117,6 +118,7 @@ def execute():
                     'file': filename if filename else None,
                     'cwd': conn.info['cwd']
                 })
+            time.sleep(0.1)
     except socket.error:
         if conn.id in server.connections:
             del server.connections[conn.id]
@@ -139,8 +141,29 @@ def index():
 
 @app.route('/download/<path:filename>', methods=['GET'])
 def download(filename):
-    uploads = os.path.join(app.root_path, app.config['UPLOAD_FOLDER'])
-    return send_from_directory(uploads, filename)
+    return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
+
+
+@app.route('/upload', methods=['GET', 'POST'])
+def upload():
+    try:
+        target = request.form.get('target')
+        file = request.files['file']
+        path = os.path.join(app.config['UPLOAD_FOLDER'], secure_filename(file.filename))
+        file.save(path)
+        conn = server.connections.get(target)
+        if not conn:
+            return 'Connection does not exist'
+        import uuid
+        command_id = str(uuid.uuid4())
+        conn.send_file(path, command_id)
+        while 1:
+            result = conn.result.get(command_id)
+            if result:
+                return result[1]
+            time.sleep(0.1)
+    except Exception as e:
+        return str(e)
 
 
 if __name__ == '__main__':
