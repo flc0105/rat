@@ -5,3 +5,4 @@ psutil
 pycryptodome
 tabulate
 flask
+pyjwt

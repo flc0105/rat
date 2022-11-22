@@ -25,9 +25,13 @@ const app = Vue.createApp({
         list() {
             axios.post(url + '/list')
                 .then((res) => {
-                    this.connections = res
-                    if (res.length > 0) {
-                        this.target = res[0]
+                    if (!res.state) {
+                        this.auth(() => this.list())
+                        return
+                    }
+                    this.connections = res.details
+                    if (this.connections.length > 0) {
+                        this.target = this.connections[0]
                     }
                 })
                 .catch((err) => {
@@ -102,6 +106,21 @@ const app = Vue.createApp({
                 })
                 .finally(() => {
                     this.wait = false
+                })
+        },
+        auth(func) {
+            var result = prompt('Enter the password', '')
+            axios.post(url + '/auth', { 'password': result })
+                .then((res) => {
+                    if (res.state) {
+                        func()
+                    }
+                    else {
+                        alert(res.msg)
+                    }
+                })
+                .catch((err) => {
+                    alert(err.message)
                 })
         }
     },
