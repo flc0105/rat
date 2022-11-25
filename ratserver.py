@@ -1,7 +1,6 @@
 import socket
 import subprocess
 import sys
-import time
 import traceback
 
 try:
@@ -73,7 +72,7 @@ def cmdloop():
             elif cmd in ['cls', 'clear']:
                 subprocess.call(cmd, shell=True)
             elif cmd_name == 'cd':
-                cd(cmd_arg)
+                print(cd(cmd_arg))
             else:
                 try:
                     open_connection(get_target_connection(cmd))
@@ -149,12 +148,20 @@ def open_connection(conn):
                 open_connection(connection)
                 break
             elif cmd_name in internal_commands:
-                command_id = internal_commands[cmd_name](cmd_arg, conn)
+                command_id, result = internal_commands[cmd_name](cmd_arg, conn)
+                if not command_id:
+                    write(conn, *result)
+                    continue
             elif cmd_name in Alias.list:
-                command_id = Alias.send(conn, cmd)
+                command_id, result = Alias.send(conn, cmd)
+                if not command_id:
+                    write(conn, *result)
+                    continue
             else:
                 command_id = conn.send_command(cmd)
             if command_id:
+                conn.result[command_id] = {}
+                conn.result[command_id]['command'] = cmd
                 Context.last_command_id = command_id
                 Context.eof_event.clear()
         Context.state = 'local'
@@ -198,6 +205,9 @@ def recv(conn):
                     result = 0, f'Error receiving file: {e}'
                 eof = 1
             if result:
+                if result_id in conn.result.keys():
+                    conn.result[result_id]['result'] = result
+                    conn.result[result_id]['time'] = time.strftime('%Y-%m-%d %H:%M:%S')
                 write(conn, *result)
             if eof:
                 if result_id == Context.last_command_id:

