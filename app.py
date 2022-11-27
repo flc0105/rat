@@ -196,6 +196,17 @@ def upload():
         return str(e)
 
 
+@app.route('/upload_file', methods=['GET', 'POST'])
+def upload_file():
+    try:
+        file = request.files['file']
+        path = os.path.join(app.config['UPLOAD_FOLDER'], secure_filename(file.filename))
+        file.save(path)
+        return 'success'
+    except Exception as e:
+        return str(e)
+
+
 @app.route('/auth', methods=['POST'])
 def auth():
     password = request.get_json()['password']

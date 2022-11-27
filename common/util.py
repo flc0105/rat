@@ -68,6 +68,19 @@ def parse_args(options, arg_split):
     return arg_dict
 
 
+def parse_kwargs(kwargs, arg_split):
+    parser = ArgumentParser()
+    for kwarg in kwargs:
+        parser.add_argument(*kwarg[0], **kwarg[1])
+    arg_dict = vars(parser.parse_args(arg_split))
+    if parser.message:
+        raise Exception(parser.message)
+    for key, value in arg_dict.items():
+        if isinstance(value, list):
+            arg_dict[key] = ' '.join(value)
+    return arg_dict
+
+
 def scan_args(arg_split):
     parser = ArgumentParser()
     options = [x for x in arg_split if x.startswith('--')]
@@ -81,7 +94,7 @@ def scan_args(arg_split):
 
 class ArgumentParser(argparse.ArgumentParser):
     def __init__(self):
-        super().__init__()
+        super().__init__(add_help=False)
         self.message = None
 
     def error(self, message):

