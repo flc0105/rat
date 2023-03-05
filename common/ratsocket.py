@@ -1,6 +1,7 @@
 import json
 import socket
 import struct
+from typing import BinaryIO
 
 
 class RATSocket:
@@ -9,67 +10,92 @@ class RATSocket:
         self.socket = socket.socket()
 
     def connect(self, address):
+        """连接"""
         return self.socket.connect_ex(address) == 0
 
     def bind(self, address):
+        """绑定"""
         self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         self.socket.bind(address)
         self.socket.listen(5)
 
-    def accept(self, connection_handler, recv=None):
-        while True:
-            connection_handler(*self.socket.accept(), recv)
+    def accept(self):
+        """接受连接"""
+        return self.socket.accept()
 
     def close(self):
+        """关闭连接"""
         self.socket.close()
 
-    def send(self, head, bytes=None, file_stream=None, update_progress=None):
-        head_bytes = json.dumps(head).encode()
-        if head['type'] in ['file', 'script']:
-            self.socket.send(struct.pack('i', len(head_bytes)) + head_bytes)
-            bytes_read = 0
-            buffer_size = self.socket.getsockopt(socket.SOL_SOCKET, socket.SO_SNDBUF)
-            while 1:
-                data = file_stream.read(buffer_size)
-                if not data:
-                    break
-                self.socket.send(data)
-                bytes_read += len(data)
-                if update_progress:
-                    update_progress(bytes_read, head['length'])
-            file_stream.close()
-        else:
-            self.socket.send(struct.pack('i', len(head_bytes)) + head_bytes + bytes)
+    def send(self, data: dict):
+        """
+        发送消息
+        :param data: 消息
+        """
+        data = json.dumps(data).encode()
+        self.socket.send(struct.pack('i', len(data)) + data)
 
-    def recv_head(self):
-        head_len = self.socket.recv(4)
-        if not head_len:
+    def send_io(self, io: BinaryIO):
+        """
+        发送文件
+        :param io: 文件流
+        """
+        bytes_read = 0
+        buffer_size = self.socket.getsockopt(socket.SOL_SOCKET, socket.SO_SNDBUF)
+        while 1:
+            data = io.read(buffer_size)
+            if not data:
+                break
+            self.socket.send(data)
+            bytes_read += len(data)
+        io.close()
+
+    def recv(self) -> dict:
+        """
+        接收消息
+        :return: 消息
+        """
+        length = self.socket.recv(4)
+        if not length:
             raise socket.error('Receiving failure')
-        head_len = struct.unpack('i', head_len)[0]
-        return json.loads((self.socket.recv(head_len).decode()))
+        length = struct.unpack('i', length)[0]
+        data = b''
+        while length:
+            buf = self.socket.recv(length)
+            if not buf:
+                raise socket.error('Connection aborted')
+            length -= len(buf)
+            data += buf
+        return json.loads((data.decode()))
 
-    def recv_body(self, head, file_stream=None, update_progress=None):
-        length = head['length']
-        if head['type'] == 'file':
-            bytes_left = length
-            while bytes_left:
-                buf = self.socket.recv(bytes_left)
-                if not buf:
-                    raise socket.error('Connection aborted')
-                bytes_left -= len(buf)
-                if update_progress:
-                    update_progress(length - bytes_left, length)
-                file_stream.write(buf)
-            file_stream.close()
-        else:
-            body = b''
-            while length:
-                buf = self.socket.recv(length)
-                if not buf:
-                    raise socket.error('Connection aborted')
-                length -= len(buf)
-                body += buf
-            return body.decode()
+    def recv_io(self, length: int, io: BinaryIO):
+        """
+        接收文件
+        :param length: 接收长度
+        :param io: 文件流
+        """
+        bytes_left = length
+        while bytes_left:
+            buf = self.socket.recv(bytes_left)
+            if not buf:
+                raise socket.error('Connection aborted')
+            bytes_left -= len(buf)
+            io.write(buf)
+        io.close()
 
-    def recv(self):
-        return self.recv_body(self.recv_head())
+    def send_signal(self, status: int):
+        """
+        发送就绪信号
+        :param status: 0或1
+        """
+        self.send({
+            'type': 'rdy',
+            'status': status
+        })
+
+    def recv_signal(self) -> int:
+        """
+        接收就绪信号
+        :return: 0或1
+        """
+        return self.recv()['status']

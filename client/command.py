@@ -135,6 +135,19 @@ class Command:
     id = None
 
     @staticmethod
+    @desc('close connection')
+    def kill():
+        Command.server.close()
+        sys.exit(0)
+
+    @staticmethod
+    @desc('reset connection')
+    def reset():
+        subprocess.Popen(EXECUTABLE_PATH)
+        Command.server.close()
+        sys.exit(0)
+
+    @staticmethod
     @desc('show this help')
     def help():
         return 1, format_dict(
@@ -176,7 +189,7 @@ class Command:
     @desc('download file')
     def download(filename):
         if os.path.isfile(filename):
-            Command.server.send_file(filename, id=Command.id)
+            Command.server.send_file(Command.id, filename)
         else:
             return 0, 'File does not exist'
 

