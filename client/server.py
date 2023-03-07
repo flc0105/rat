@@ -1,9 +1,10 @@
+import inspect
 import ntpath
 import os
 
-from client.command import Command, execute_command
+from client.command import Command
 from common.ratsocket import RATSocket
-from common.util import logger, get_input_stream, get_output_stream
+from common.util import logger, get_input_stream, get_output_stream, parse
 
 
 class Server(RATSocket):
@@ -25,6 +26,7 @@ class Server(RATSocket):
             'text': result,
             'cwd': os.getcwd()
         }
+        logger.info(data)
         self.send(data)
 
     def send_file(self, id: int, filename: str):
@@ -40,9 +42,10 @@ class Server(RATSocket):
             'filename': ntpath.basename(filename),
             'cwd': os.getcwd(),
         }
+        io = get_output_stream(filename)
         self.send(data)
         if self.recv_signal():
-            self.send_io(get_output_stream(filename))
+            self.send_io(io)
 
     def recv_command(self) -> (int, int, str):
         """
@@ -56,9 +59,30 @@ class Server(RATSocket):
         try:
             # 如果是命令
             if type == 'command':
-                Command.server = self
-                Command.id = id
-                return id, *execute_command(data['text'])
+                command = data['text']
+                name, arg = parse(command)
+                if hasattr(Command, name):
+                    func = getattr(Command, name)
+                    params = inspect.getfullargspec(func).args
+                    if not len(params):
+                        result = func()
+                    else:
+                        if '_instance' in params:
+                            if len(params) == 1:
+                                result = func(_instance=(id, self))
+                            else:
+                                result = func(arg, _instance=(id, self))
+                        else:
+                            result = func(arg)
+                    if result:
+                        result = result[0], result[1] + '\n'
+                else:
+                    result = Command.shell(command)
+                if result:
+                    return id, *result
+            # 如果是Python脚本
+            if type == 'script':
+                return id, *Command.pyexec(data['text'], kwargs=data.get('extra'))
             # 如果是文件
             elif type == 'file':
                 filename = os.path.abspath(data['filename'])
@@ -74,4 +98,5 @@ class Server(RATSocket):
                 except Exception as e:
                     logger.error(f'Error receiving file from server: {e}')
         except Exception as e:
+            logger.error(e, exc_info=True)
             return id, 0, f'{e}\n'

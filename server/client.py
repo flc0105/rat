@@ -19,17 +19,21 @@ class Client(RATSocket):
         self.queue = queue.Queue()  # 存放未读消息
         self.status = False  # 是否正在交互
 
-    def send_command(self, command: str) -> int:
+    def send_command(self, command: str, type='command', extra=None) -> int:
         """
         向客户端发送命令
         :param command: 命令
+        :param type: 命令类型
+        :param extra: 额外信息
         :return: 命令id
         """
         data = {
-            'type': 'command',
+            'type': type,
             'id': int(time.time()),
-            'text': command
+            'text': command,
         }
+        if extra:
+            data['extra'] = extra
         self.send(data)
         return data['id']
 
@@ -43,12 +47,14 @@ class Client(RATSocket):
             'type': 'file',
             'id': id,
             'length': os.stat(filename).st_size,
-            'filename': ntpath.basename(filename)
+            'filename': ntpath.basename(filename),
         }
-        self.send(data)
-        status, _ = self.queue.get()
-        if status:
-            self.send_io(get_output_stream(filename))
+        io = get_output_stream(filename)
+        self.send(data)  # 发送文件请求头
+        status, _ = self.queue.get()  # 接收确认消息
+        if status:  # 如果对方就绪
+            self.send_io(io)  # 发送文件
+        return self.queue.get()
 
     def recv_result(self) -> (int, int, str):
         """

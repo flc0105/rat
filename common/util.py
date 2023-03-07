@@ -1,7 +1,10 @@
 import argparse
 import logging
+import os.path
 import shlex
+import sys
 import time
+from pathlib import Path
 
 
 class Colors:
@@ -30,12 +33,16 @@ def get_time():
     return time.strftime('%Y%m%d-%H%M%S')
 
 
-def get_read_stream(filename):
+def get_output_stream(filename):
     f = open(filename, 'rb')
     return f
 
 
-def get_write_stream(filename):
+def get_input_stream(filename):
+    # 如果文件存在重复，在文件名上加一个时间戳
+    if os.path.exists(filename):
+        path = Path(filename)
+        filename = path.with_stem(f'{path.stem}_{int(time.time())}')
     f = open(filename, 'ab')
     f.truncate(0)
     return f
@@ -102,3 +109,14 @@ class ArgumentParser(argparse.ArgumentParser):
 
     def parse_args(self, *args, **kwargs):
         return super(ArgumentParser, self).parse_args(*args, **kwargs)
+
+
+def draw_progress_bar(progress, total, bar_len=50):
+    done = int(50 * progress / total)
+    percent = round(100 * progress / total)
+    bar = '=' * done
+    spaces = '-' * (bar_len - done)
+    sys.stdout.write(f'\r[{bar}{spaces}] {percent} %')
+    sys.stdout.flush()
+    if progress == total:
+        sys.stdout.write('\n')
