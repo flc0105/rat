@@ -12,19 +12,21 @@ class Server(RATSocket):
     def __init__(self):
         super().__init__()
 
-    def send_result(self, id: int, status: int, result: str):
+    def send_result(self, id: int, status: int, result: str, eof: int = 1):
         """
         向服务端发送结果
         :param id: 与命令id对应
         :param status: 0或1
         :param result: 结果
+        :param eof: 是否结束
         """
         data = {
             'type': 'result',
             'id': id,
             'status': status,
             'text': result,
-            'cwd': os.getcwd()
+            'cwd': os.getcwd(),
+            'eof': eof,
         }
         logger.info(data)
         self.send(data)

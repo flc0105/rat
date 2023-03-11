@@ -33,6 +33,10 @@ def get_time():
     return time.strftime('%Y%m%d-%H%M%S')
 
 
+def get_readable_time():
+    return time.strftime('%Y-%m-%d %H:%M:%S')
+
+
 def get_output_stream(filename):
     f = open(filename, 'rb')
     return f
