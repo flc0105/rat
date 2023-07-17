@@ -35,6 +35,13 @@ def get_executable_path():
         return executable
 
 
+def get_working_directory():
+    if not getattr(sys, 'frozen', False):
+        return f'{os.path.dirname(argv)}'
+    else:
+        return os.path.dirname(executable)
+
+
 def get_executable_info():
     if not getattr(sys, 'frozen', False):
         return r'c:\windows\system32\cmd.exe', f'/c {executable} {argv}'

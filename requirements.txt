@@ -4,7 +4,3 @@ pywin32
 psutil
 pycryptodome
 tabulate
-flask
-flask_cors
-pyjwt
-requests

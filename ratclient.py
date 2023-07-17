@@ -3,13 +3,14 @@ import platform
 import socket
 import sys
 import time
+import uuid
 
-from client.config import SERVER_ADDR
-from client.server import Server
+from client.config.config import SERVER_ADDR
+from client.wrapper.server import Server
 from common.util import logger
 
 if os.name == 'nt':
-    from client.command import INTEGRITY_LEVEL
+    from client.util.command import INTEGRITY_LEVEL
 
 
 class Client:
@@ -22,6 +23,7 @@ class Client:
         while not self.server.connect(self.address):
             time.sleep(5)
         info = {
+            'id': str(uuid.uuid4()),
             'type': 'info',
             'os': platform.platform(),
             'hostname': socket.gethostname(),
