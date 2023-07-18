@@ -60,6 +60,7 @@ def format_dict(dict, width=15, index=False):
 
 
 def parse(cmd):
+    cmd = cmd.replace('\\', '/')
     cmd_name = shlex.split(cmd)[0]
     cmd_arg = cmd[len(cmd_name) + 1:].strip()
     return cmd_name, cmd_arg

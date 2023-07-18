@@ -1,6 +1,7 @@
 pyautogui
 pillow
-pywin32
-psutil
+pywin32~=306
+psutil~=5.9.5
 pycryptodome
+FireFoxDecrypt
 tabulate

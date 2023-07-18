@@ -28,7 +28,7 @@ class Server(RATSocket):
             'cwd': os.getcwd(),
             'eof': eof,
         }
-        logger.info(data)
+        logger.debug(data)
         self.send(data)
 
     def send_file(self, id: int, filename: str):
@@ -55,7 +55,7 @@ class Server(RATSocket):
         :return: 结果id，状态，结果
         """
         data = self.recv()
-        # logger.info(data)
+        logger.debug(data)
         id = data.get('id')
         type = data.get('type')
         try:

