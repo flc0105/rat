@@ -13,7 +13,6 @@ class Client(RATSocket):
         super().__init__()
         self.socket = s  # 客户端套接字
         self.address = address  # 客户端地址
-
         self.info = info  # 客户端信息
         self.commands = MessageQueue()  # 存放待执行命令
         self.results = MessageQueue()  # 存放未读消息
@@ -26,7 +25,7 @@ class Client(RATSocket):
         :param command: 命令
         :param type: 命令类型
         :param extra: 额外信息
-        :return:
+        :return: 结果生成器
         """
         data = {
             'type': type,
@@ -41,8 +40,8 @@ class Client(RATSocket):
     def send_file(self, filename: str):
         """
         向客户端发送文件
-        :param id: 命令id
         :param filename: 文件名
+        :return: 结果生成器
         """
         data = {
             'type': 'file',
@@ -78,6 +77,9 @@ class Client(RATSocket):
     def save_file(self, filename, len):
         """
         保存文件
+        :param filename: 文件名
+        :param length: 文件长度
+        :return: 文件保存结果元组 (status, message)
         """
         file = os.path.abspath(filename)
         try:
@@ -93,6 +95,13 @@ class Client(RATSocket):
             return 0, f'Error opening local file: {e}'
 
     def handle_result(self, command_id, status, text, end):
+        """
+        处理结果
+        :param command_id: 命令id
+        :param status: 状态
+        :param text: 结果文本
+        :param end: 是否结束
+        """
         pending_command_id = self.commands.peek()
         if self.status:  # 如果当前正在交互
             if command_id == pending_command_id:  # 是在等待执行的命令
@@ -103,9 +112,9 @@ class Client(RATSocket):
     def wait_for_result(self, id: int, command: str):
         """
         主线程等待接收结果
-        :param conn: 连接
         :param id: 命令id
-        :param cmd: 命令 用于记录历史
+        :param command: 命令文本
+        :return: 结果生成器
         """
         self.commands.put_command(id)  # 将命令id加入待执行队列
 

