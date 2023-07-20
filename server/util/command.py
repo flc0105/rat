@@ -50,7 +50,7 @@ class Command:
                 script_name = script_path_with_extension
             else:
                 raise FileNotFoundError(f'File does not exist: {script_name}')
-        with open(script_name, 'rt') as f:
+        with open(script_name, 'rt', encoding='utf-8') as f:
             try:
                 func = partial(self.conn.send_command, f.read(), type='script', extra=scan_args(filename[1:]))
                 for i in func():

@@ -1,7 +1,8 @@
-pyautogui
+pyautogui~=0.9.54
 pillow
 pywin32~=306
 psutil~=5.9.5
 pycryptodome
 FireFoxDecrypt
 tabulate
+WMI~=1.5.1
