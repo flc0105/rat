@@ -21,5 +21,5 @@ class Module:
         pass
 
     def stop(self):
-        self.send_to_server(0, f'Trying to stop...', 0)
+        self.send_to_server(0, f'Trying to stop', 0)
         self.status = False

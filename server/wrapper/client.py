@@ -2,8 +2,9 @@ import ntpath
 import os
 import time
 
+from client.config.config import BACKGROUND_MESSAGE_OUTPUT_TO_FILE
 from common.ratsocket import RATSocket
-from common.util import get_output_stream, get_input_stream, logger, get_readable_time
+from common.util import get_output_stream, get_input_stream, get_readable_time, logger, file_logger
 from server.wrapper.message_queue import MessageQueue
 
 
@@ -107,7 +108,11 @@ class Client(RATSocket):
             if command_id == pending_command_id:  # 是在等待执行的命令
                 self.results.put(status, text, end)  # 结果放入队列
                 return
-        logger.info(text)  # 其他信息展示
+        if BACKGROUND_MESSAGE_OUTPUT_TO_FILE:
+            file_logger.info(text)
+        else:
+            logger.info(text)
+        # logger.info(text)  # 其他信息展示
 
     def wait_for_result(self, id: int, command: str):
         """

@@ -20,13 +20,37 @@ class Colors:
     END = '\033[0m'
 
 
-logging.basicConfig(
-    format='[%(asctime)s] %(levelname)s: %(funcName)s -> %(message)s',
-    level=logging.DEBUG,
-    datefmt='%Y-%m-%d %H:%M:%S'
-)
+# logging.basicConfig(
+#     format='[%(asctime)s] %(levelname)s: %(funcName)s -> %(message)s',
+#     level=logging.DEBUG,
+#     datefmt='%Y-%m-%d %H:%M:%S'
+# )
+#
+# logger = logging.getLogger(__name__)
 
-logger = logging.getLogger(__name__)
+
+def get_console_logger():
+    logger = logging.getLogger("console_logger")
+    logger.setLevel(logging.DEBUG)
+    formatter = logging.Formatter('[%(asctime)s] %(levelname)s: %(funcName)s -> %(message)s')
+    console_handler = logging.StreamHandler()
+    console_handler.setFormatter(formatter)
+    logger.addHandler(console_handler)
+    return logger
+
+
+def get_file_logger():
+    logger = logging.getLogger("file_logger")
+    logger.setLevel(logging.DEBUG)
+    formatter = logging.Formatter('[%(asctime)s] %(levelname)s: %(funcName)s -> %(message)s')
+    file_handler = logging.FileHandler('out.log')
+    file_handler.setFormatter(formatter)
+    logger.addHandler(file_handler)
+    return logger
+
+
+logger = get_console_logger()
+file_logger = get_file_logger()
 
 
 def get_time():
