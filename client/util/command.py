@@ -152,7 +152,7 @@ class CommandExecutor:
         spec.loader.exec_module(module)
 
         # 获取主类
-        cls = self.get_main_class(module)
+        cls = self.get_main_class(module, module_name)
 
         # 实例化类并设置参数
         instance = cls.get_instance()
@@ -162,14 +162,19 @@ class CommandExecutor:
         self.imported_modules[module_name] = instance
         return instance
 
+    def get_camel_case_class(self, module_name):
+        class_name = "".join(word.capitalize() for word in module_name.split("_"))
+        return class_name
+
     # TODO:直接通过名字
-    def get_main_class(self, module):
-        # 使用inspect.getmembers获取模块中的所有成员
-        for name, obj in inspect.getmembers(module):
-            # 判断是否为类，并排除抽象类
-            if inspect.isclass(obj) and not inspect.isabstract(obj):
-                return obj
-        return None
+    def get_main_class(self, module, module_name):
+        return getattr(module, self.get_camel_case_class(module_name))
+        # # 使用inspect.getmembers获取模块中的所有成员
+        # for name, obj in inspect.getmembers(module):
+        #     # 判断是否为类，并排除抽象类
+        #     if inspect.isclass(obj) and not inspect.isabstract(obj):
+        #         return obj
+        # return None
 
     @desc('load module and execute in a new thread')
     def load(self, arg):
