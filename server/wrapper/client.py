@@ -61,6 +61,7 @@ class Client(RATSocket):
         从客户端接收结果（子线程接收到消息后，放入该连接的队列中）
         """
         data = self.recv()  # 接收消息
+        # print(data)
         type = data.get('type')  # 获取消息类型
         # 如果是就绪信号
         if type == 'rdy':

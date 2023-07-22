@@ -162,6 +162,7 @@ class CommandExecutor:
         self.imported_modules[module_name] = instance
         return instance
 
+    # TODO:直接通过名字
     def get_main_class(self, module):
         # 使用inspect.getmembers获取模块中的所有成员
         for name, obj in inspect.getmembers(module):

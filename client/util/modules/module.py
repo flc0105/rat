@@ -17,6 +17,9 @@ class Module:
     def send_to_server(self, status, result, end):
         self.server.send_result(self.command_id, status, result, end)
 
+    def send_io_to_server(self, io):
+        self.server.send_bytes_io(self.command_id, io)
+
     def run(self):
         pass
 

@@ -38,12 +38,15 @@ class RATSocket:
         data = json.dumps(data).encode()
         self.socket.send(struct.pack('i', len(data)) + data)
 
-    def send_io(self, io: BinaryIO):
+    def send_io(self, io: BinaryIO, total=None):
         """
         发送文件
         :param io: 文件流
         """
-        total = os.fstat(io.fileno()).st_size
+
+        if not total:
+            total = os.fstat(io.fileno()).st_size
+
         bytes_read = 0
         buffer_size = self.socket.getsockopt(socket.SOL_SOCKET, socket.SO_SNDBUF)
         while 1:
