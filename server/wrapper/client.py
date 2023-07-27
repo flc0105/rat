@@ -5,6 +5,7 @@ import time
 from client.config.config import BACKGROUND_MESSAGE_OUTPUT_TO_FILE
 from common.ratsocket import RATSocket
 from common.util import get_output_stream, get_input_stream, get_readable_time, logger, file_logger
+from server.util.util import calculate_time_interval
 from server.wrapper.message_queue import MessageQueue
 
 
@@ -18,7 +19,8 @@ class Client(RATSocket):
         self.commands = MessageQueue()  # 存放待执行命令
         self.results = MessageQueue()  # 存放未读消息
         self.status = False  # 是否正在交互
-        self.history = {}  # 存放历史记录
+        self.history = []
+        # self.history = {}  # 存放历史记录
 
     def send_command(self, command: str, type='command', extra=None):
         """
@@ -36,7 +38,8 @@ class Client(RATSocket):
         if extra:
             data['extra'] = extra
         self.send(data)
-        return self.wait_for_result(data.get('id'), command)
+
+        return self.wait_for_result(data.get('id'), command if type == 'command' else None)
 
     def send_file(self, filename: str):
         """
@@ -123,6 +126,7 @@ class Client(RATSocket):
         :return: 结果生成器
         """
         self.commands.put_command(id)  # 将命令id加入待执行队列
+        start_time = time.time()
 
         history_result = []  # 存放结果
 
@@ -134,9 +138,19 @@ class Client(RATSocket):
                 self.commands.get()  # 从待执行队列移除
                 break
 
-        self.history[id] = {  # 保存到历史记录
-            'command': command,
-            'timestamp': get_readable_time(),
-            'status': status,
-            'result': '\n'.join(history_result),
-        }
+        end_time = time.time()
+        if command:
+            self.history.append({
+                'id': id,
+                'command': command,
+                'time': get_readable_time(),
+                'exec_time': f'{calculate_time_interval(start_time, end_time):.2f} ms',
+                'status': status,
+                'result': '\n'.join(history_result),
+            })
+            # self.history[id] = {  # 保存到历史记录
+            #     'command': command,
+            #     'timestamp': get_readable_time(),
+            #     'status': status,
+            #     'result': '\n'.join(history_result),
+            # }

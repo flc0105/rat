@@ -94,15 +94,11 @@ def write(status: int, result: str):
 
 
 def find_and_highlight_keywords(text, keyword):
-    # 生成正则表达式，使用单词边界确保只匹配整个单词
-    # pattern = re.compile(r'\b(?:' + '|'.join(map(re.escape, keywords)) + r')\b')
-    # pattern = re.compile(r'\b(?:' + '|'.join(map(re.escape, keywords)) + r')\b', re.IGNORECASE)
     pattern = re.compile(re.escape(keyword), re.IGNORECASE)
-    # 将匹配的关键字用 HTML 标签包裹来高亮显示
+
     def highlight(match):
         return f'{Colors.BRIGHT_RED}{match.group()}{Colors.RESET}'
 
-    # 按行匹配关键字并高亮显示，只保留匹配的行
     highlighted_lines = []
     for line in text.splitlines():
         if pattern.search(line):
@@ -111,16 +107,22 @@ def find_and_highlight_keywords(text, keyword):
 
     return '\n'.join(highlighted_lines)
 
-def grep(cmd):
-    grep_pattern = r'\s*\|\s*grep\s+(\w+)\s*$'
-    match = re.search(grep_pattern, cmd)
-    if match:
-        keywords = match.group(1)
-        cmd = re.sub(grep_pattern, '', cmd)
-        func = self.process_command(cmd, conn, executor)
-        result = []
-        for i in func():
-            if len(i) >= 2:
-                result.append(i[1])
-        text = '\n'.join(result)
-        print(find_and_highlight_keywords(text, keywords))
+
+def secure_filename(filename):
+    # Windows 文件命名非法字符：\ / : * ? " < > |
+    illegal_chars = r'[\\/:\*\?"<>|]'
+    return re.sub(illegal_chars, '_', filename)
+
+
+def replace_spaces(input_str, replacement='_'):
+    return re.sub(r'\s+', replacement, input_str)
+
+
+def calculate_time_interval(start_time, end_time):
+    # 将时间戳转换为浮点数，以秒为单位
+    start_time_sec = float(start_time)
+    end_time_sec = float(end_time)
+
+    # 计算间隔时间，单位为毫秒
+    interval_ms = (end_time_sec - start_time_sec) * 1000
+    return interval_ms
