@@ -1,6 +1,5 @@
 import inspect
 import json
-import re
 import shlex
 import socket
 import subprocess
@@ -133,6 +132,33 @@ class Server:
         if conn:
             conn.send_command('kill')
 
+    def process_command(self, cmd, conn, executor):
+        grep_pattern = r'\s*\|\s*grep\s+(\w+)\s*$'
+        match = re.search(grep_pattern, cmd)
+        if match:
+            keywords = match.group(1)
+            cmd = re.sub(grep_pattern, '', cmd)
+            func = self.process_command(cmd, conn, executor)
+            result = []
+            for i in func():
+                if len(i) >= 2:
+                    result.append(i[1])
+            text = '\n'.join(result)
+            print(find_and_highlight_keywords(text, keywords))
+            return
+        name, arg = parse(cmd)
+        # 服务端命令
+        cmds = [name for name, method in inspect.getmembers(executor, inspect.ismethod) if not name.startswith('__')]
+        if name in cmds:
+            func = partial(getattr(executor, name), arg)
+        # 别名
+        elif name in self.aliases:
+            func = partial(self.send_alias, conn, name, arg)
+        # 发送命令
+        else:
+            func = partial(conn.send_command, cmd)
+        return func
+
     def open_connection(self, conn: Client):
         """
         与连接交互
@@ -143,15 +169,13 @@ class Server:
         while not conn.results.empty():  # 连接前判断有没有未读消息
             logger.info(conn.results.get()[1])
         executor = Command(conn, self)
-        cmds = [name for name, method in inspect.getmembers(executor, inspect.ismethod) if not name.startswith('__')]
         try:
             while 1:
                 try:
                     cmd = colored_input('{}> '.format(conn.info['cwd']))
                     if not cmd.strip():
                         continue
-                    name, arg = parse(cmd)
-                    # 关闭连接
+                        # 关闭连接
                     if cmd in ['kill', 'reset']:
                         conn.send_command(cmd)
                         break
@@ -165,17 +189,10 @@ class Server:
                             continue
                         self.open_connection(connection)
                         break
-                    # 服务端命令
-                    elif name in cmds:
-                        func = partial(getattr(executor, name), arg)
-                    # 别名
-                    elif name in self.aliases:
-                        func = partial(self.send_alias, conn, name, arg)
-                    # 发送命令
-                    else:
-                        func = partial(conn.send_command, cmd)
-                    for i in func():
-                        write(*i)
+                    func = self.process_command(cmd, conn, executor)
+                    if func:
+                        for i in func():
+                            write(*i)
                 except Exception as e:
                     print_error(f'{e.__class__.__name__}: {e}')
         except socket.error:

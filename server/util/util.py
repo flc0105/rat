@@ -1,4 +1,5 @@
 import os
+import re
 import traceback
 
 from common.util import Colors
@@ -90,3 +91,22 @@ def write(status: int, result: str):
     if not status:
         result = Colors.BRIGHT_RED + result + Colors.RESET
     print(result)
+
+
+def find_and_highlight_keywords(text, keyword):
+    # 生成正则表达式，使用单词边界确保只匹配整个单词
+    # pattern = re.compile(r'\b(?:' + '|'.join(map(re.escape, keywords)) + r')\b')
+    # pattern = re.compile(r'\b(?:' + '|'.join(map(re.escape, keywords)) + r')\b', re.IGNORECASE)
+    pattern = re.compile(re.escape(keyword), re.IGNORECASE)
+    # 将匹配的关键字用 HTML 标签包裹来高亮显示
+    def highlight(match):
+        return f'{Colors.BRIGHT_RED}{match.group()}{Colors.RESET}'
+
+    # 按行匹配关键字并高亮显示，只保留匹配的行
+    highlighted_lines = []
+    for line in text.splitlines():
+        if pattern.search(line):
+            highlighted_line = pattern.sub(highlight, line)
+            highlighted_lines.append(highlighted_line)
+
+    return '\n'.join(highlighted_lines)
