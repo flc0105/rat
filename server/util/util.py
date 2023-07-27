@@ -110,3 +110,17 @@ def find_and_highlight_keywords(text, keyword):
             highlighted_lines.append(highlighted_line)
 
     return '\n'.join(highlighted_lines)
+
+def grep(cmd):
+    grep_pattern = r'\s*\|\s*grep\s+(\w+)\s*$'
+    match = re.search(grep_pattern, cmd)
+    if match:
+        keywords = match.group(1)
+        cmd = re.sub(grep_pattern, '', cmd)
+        func = self.process_command(cmd, conn, executor)
+        result = []
+        for i in func():
+            if len(i) >= 2:
+                result.append(i[1])
+        text = '\n'.join(result)
+        print(find_and_highlight_keywords(text, keywords))

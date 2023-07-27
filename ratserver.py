@@ -133,18 +133,15 @@ class Server:
             conn.send_command('kill')
 
     def process_command(self, cmd, conn, executor):
-        grep_pattern = r'\s*\|\s*grep\s+(\w+)\s*$'
+        # grep_pattern = r'\s*\|\s*grep\s+(\w+)\s*$'
+        grep_pattern = r'\s*\|\s*grep\s+(.+)\s*$'
         match = re.search(grep_pattern, cmd)
         if match:
-            keywords = match.group(1)
+            keyword = match.group(1)
             cmd = re.sub(grep_pattern, '', cmd)
             func = self.process_command(cmd, conn, executor)
-            result = []
-            for i in func():
-                if len(i) >= 2:
-                    result.append(i[1])
-            text = '\n'.join(result)
-            print(find_and_highlight_keywords(text, keywords))
+            text = '\n'.join([i[1] for i in func() if len(i) >= 2])
+            print(find_and_highlight_keywords(text, keyword))
             return
         name, arg = parse(cmd)
         # 服务端命令
