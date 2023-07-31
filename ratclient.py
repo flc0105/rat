@@ -5,6 +5,10 @@ import sys
 import time
 import uuid
 
+# 服务端脚本依赖的库，勿删
+import tabulate
+import wmi
+
 from client.config.config import SERVER_ADDR
 from client.wrapper.server import Server
 from common.util import logger
