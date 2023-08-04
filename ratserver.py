@@ -1,6 +1,6 @@
 import inspect
 import json
-import os.path
+import os
 import shlex
 import socket
 import subprocess

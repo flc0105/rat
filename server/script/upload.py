@@ -14,5 +14,4 @@ def upload(filename):
             print(resp.text)
 
 
-filename = "c:\\windows\\system32\\cmd.exe"
 upload(filename)
