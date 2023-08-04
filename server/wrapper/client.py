@@ -120,12 +120,12 @@ class Client(RATSocket):
 
     def wait_for_result(self, id: int, command: str):
         """
-        主线程等待接收结果
+        主线程等待接收结果，并保存执行记录
         :param id: 命令id
         :param command: 命令文本
         :return: 结果生成器
         """
-        self.commands.put_command(id)  # 将命令id加入待执行队列
+        self.commands.put_command_id(id)  # 将命令id加入待执行队列
         start_time = time.time()
 
         history_result = []  # 存放结果
@@ -148,9 +148,3 @@ class Client(RATSocket):
                 'status': status,
                 'result': '\n'.join(history_result),
             })
-            # self.history[id] = {  # 保存到历史记录
-            #     'command': command,
-            #     'timestamp': get_readable_time(),
-            #     'status': status,
-            #     'result': '\n'.join(history_result),
-            # }

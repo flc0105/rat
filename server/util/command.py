@@ -4,7 +4,7 @@ import os
 import shlex
 from functools import partial
 
-from common.util import scan_args, get_time, format_dict, parse
+from common.util import scan_args, get_time, format_dict
 from server.config.config import SCRIPT_PATH
 from server.util.util import secure_filename, replace_spaces
 
@@ -71,7 +71,6 @@ class Command:
             yield 1, 'History cleared'
         else:
             yield 1, '\n'.join([cmd['command'] for cmd in self.conn.history])
-            # yield 1, '\n'.join([cmd['command'] for cmd in self.conn.history.values()])
 
     def save_result(self, command):
         """
@@ -79,7 +78,6 @@ class Command:
         """
         if not command:
             return 0, ''
-        # func = partial(self.conn.send_command, command)
         func = self.server.process_command(command, self.conn, Command(self.conn, self.server))
         filename = f'{replace_spaces(secure_filename(command))}_{self.conn.address[0]}_{get_time()}.txt'
         with open(filename, 'wt') as f:
