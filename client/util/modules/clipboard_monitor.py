@@ -6,7 +6,7 @@ import time
 from PIL import ImageGrab, Image
 
 from client.util.modules.module import Module
-from common.util import get_size
+from common.util import get_size, logger
 
 
 class ClipboardMonitor(Module):
@@ -52,7 +52,9 @@ class ClipboardMonitor(Module):
             self.send_to_server(1, 'Clipboard monitoring stopped', 0)
         except Exception as e:
             self.send_to_server(0, f'Error occurs: {e}', 0)
-        self.send_to_server(1, f'Thread ended: {threading.current_thread().name}', 1)
+        finally:
+            logger.info(f'Thread ended: {threading.current_thread().name}')
+            self.send_to_server(1, f'Thread ended: {threading.current_thread().name}', 1)
 
 
 """

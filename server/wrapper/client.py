@@ -2,11 +2,14 @@ import ntpath
 import os
 import time
 
-from client.config.config import BACKGROUND_MESSAGE_OUTPUT_TO_FILE
+from server.config.config import BACKGROUND_MESSAGE_OUTPUT_TO_FILE, SHOW_MESSAGES_FROM_OTHER_CONNECTIONS
 from common.ratsocket import RATSocket
-from common.util import get_output_stream, get_input_stream, get_readable_time, logger, file_logger
+from common.util import get_output_stream, get_input_stream, get_readable_time, logger, get_file_logger
 from server.util.util import calculate_time_interval
 from server.wrapper.message_queue import MessageQueue
+
+if BACKGROUND_MESSAGE_OUTPUT_TO_FILE:
+    file_logger = get_file_logger('background_messages.log')
 
 
 class Client(RATSocket):
@@ -111,12 +114,19 @@ class Client(RATSocket):
         if self.status:  # 如果当前正在交互
             if command_id == pending_command_id:  # 是在等待执行的命令
                 self.results.put(status, text, end)  # 结果放入队列
-                return
-        if BACKGROUND_MESSAGE_OUTPUT_TO_FILE:
-            file_logger.info(text)
-        else:
-            logger.info(text)
-        # logger.info(text)  # 其他信息展示
+            else:
+                if BACKGROUND_MESSAGE_OUTPUT_TO_FILE:
+                    file_logger.info(f'Message from {self.address}: {text}')
+                else:
+                    logger.info(text)
+        else:  # 如果目前没在交互，就放在队列
+            if SHOW_MESSAGES_FROM_OTHER_CONNECTIONS:
+                if BACKGROUND_MESSAGE_OUTPUT_TO_FILE:
+                    file_logger.info(f'Message from {self.address}: {text}')
+                else:
+                    logger.info(f'Message from {self.address}: {text}')
+            else:
+                self.results.put(status, text, end)
 
     def wait_for_result(self, id: int, command: str):
         """

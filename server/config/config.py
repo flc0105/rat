@@ -1,3 +1,6 @@
 SOCKET_ADDR = ('', 8888)
 ALIAS_PATH = 'server/config/aliases.json'
 SCRIPT_PATH = 'server/script'
+
+BACKGROUND_MESSAGE_OUTPUT_TO_FILE = False
+SHOW_MESSAGES_FROM_OTHER_CONNECTIONS = False
