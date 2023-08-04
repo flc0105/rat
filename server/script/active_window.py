@@ -1,3 +1,4 @@
+# retrieve the title and process ID of the currently active window
 import ctypes
 from ctypes import wintypes
 

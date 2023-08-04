@@ -1,3 +1,4 @@
+# retrieves a list of installed software
 import json
 import winreg
 

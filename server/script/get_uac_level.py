@@ -1,3 +1,4 @@
+# gets uac level from registry
 import winreg
 
 

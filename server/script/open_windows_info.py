@@ -1,3 +1,4 @@
+# retrieves and displays information about all visible windows
 import psutil
 import win32gui
 import win32process

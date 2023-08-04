@@ -6,7 +6,7 @@ from functools import partial
 
 from common.util import scan_args, get_time, format_dict
 from server.config.config import SCRIPT_PATH
-from server.util.util import secure_filename, replace_spaces
+from server.util.util import secure_filename, replace_spaces, read_first_line
 
 
 class Command:
@@ -35,12 +35,23 @@ class Command:
         :param filename: 文件名
         """
         # 显示脚本列表
-        scripts = []
+
         if not filename:
+            scripts = []
             for file in glob.iglob(os.path.join(SCRIPT_PATH, '**/*.py'), recursive=True):
                 scripts.append(os.path.relpath(file, SCRIPT_PATH).replace('\\', '/'))
             yield 1, '\n'.join(scripts)
             return
+
+        if filename == '--help':
+            scripts = {}
+            for file in glob.iglob(os.path.join(SCRIPT_PATH, '**/*.py'), recursive=True):
+                script_key = os.path.relpath(file, SCRIPT_PATH).replace('\\', '/')
+                script_value = read_first_line(file)
+                scripts[script_key] = script_value
+            yield 1, format_dict(scripts, 25)
+            return
+
         # 发送脚本
         filename = shlex.split(filename)  # 拆分脚本名和参数
         script_name = os.path.abspath(os.path.join(SCRIPT_PATH, filename[0]))  # 脚本名
@@ -57,7 +68,7 @@ class Command:
                 for i in func():
                     yield i
             except UnicodeDecodeError:
-                raise RuntimeError(f'Unprocessable file: {script_name}')
+                raise RuntimeError(f'Unable to process file: {script_name}')
 
     def history(self, arg):
         """

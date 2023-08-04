@@ -1,3 +1,4 @@
+# prompts for credentials, validates them, and loops until correct ones are entered
 import locale
 import subprocess
 

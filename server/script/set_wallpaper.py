@@ -1,3 +1,4 @@
+# sets the desktop wallpaper using the specified image file path
 import ctypes
 import os
 
