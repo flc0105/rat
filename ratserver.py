@@ -1,6 +1,5 @@
 import inspect
 import json
-import os
 import shlex
 import socket
 import subprocess
@@ -134,6 +133,13 @@ class Server:
             conn.send_command('kill')
 
     def process_command(self, cmd, conn, executor):
+        """
+        判断命令类型并发送执行
+        :param cmd: 命令
+        :param conn: 连接
+        :param executor: 服务端命令
+        :return: 生成器
+        """
         grep_pattern = r'\s*\|\s*grep\s+(.+)\s*$'
         match = re.search(grep_pattern, cmd)
         if match:
@@ -155,6 +161,47 @@ class Server:
         else:
             func = partial(conn.send_command, cmd)
         return func
+
+    def reverse_shell(self, cmd, conn, executor):
+        """
+        打开一个可完全交互的shell，支持stdin
+        """
+
+        # 后台接收线程，接收数据并在前台显示，如果出现异常终止线程
+        def recv():
+            try:
+                while 1:
+                    data = rev_con.recv(1024)
+                    if not data:
+                        break
+                    sys.stdout.write(data.decode('gbk'))
+                    sys.stdout.flush()
+            except socket.error as e:
+                logger.error(f'Connection aborted: {e}')
+                raise
+
+        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        addr = ('0.0.0.0', 0)
+        s.bind(addr)
+
+        # 服务端获取一个随机可用端口，并将其作为参数发送给客户端
+        cmd += f' {s.getsockname()[1]}'
+        func = self.process_command(cmd, conn, executor)
+        if func:
+            for i in func():
+                write(*i)
+
+        s.listen(5)
+        print('Listening on {}'.format(s.getsockname()))
+        rev_con, addr = s.accept()
+        print('Connection from {}'.format(addr))
+        threading.Thread(target=recv).start()
+        while 1:
+            cmd = input()
+            if cmd in ['exit', 'quit']:
+                rev_con.send(bytes('exit\r\n', encoding='gbk'))
+                break
+            rev_con.send(bytes(cmd + '\r\n', encoding='gbk'))
 
     def open_connection(self, conn: Client):
         """
@@ -186,6 +233,10 @@ class Server:
                             continue
                         self.open_connection(connection)
                         break
+                    elif cmd == 'revshell':
+                        self.reverse_shell(cmd, conn, executor)
+                        continue
+
                     func = self.process_command(cmd, conn, executor)
                     if func:
                         for i in func():
