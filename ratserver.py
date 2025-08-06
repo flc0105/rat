@@ -83,24 +83,42 @@ class Server:
         """
         显示连接列表
         """
+        if not self.connections:
+            print("当前没有活跃连接")
+            return
+
+        # 准备连接数据
         connections = []
-        for i, connection in enumerate(self.connections):
-            connections.append([i, connection.info['addr'], connection.info['os'], connection.info['hostname'],
-                                connection.info['integrity']])
+        for i, conn in enumerate(self.connections):
+            connections.append([
+                str(i),  # ID
+                conn.info.get('addr', 'N/A'),
+                conn.info.get('os_type', 'Unknown'),
+                conn.info.get('os_ver', 'Unknown'),
+                conn.info.get('hostname', 'Unknown'),
+                conn.info.get('integrity', '?')
+            ])
 
-        try:
-            import tabulate
-        except ImportError:
-            tabulate = None
-            traceback.print_exc()
+        # 计算每列最大宽度
+        headers = ['ID', 'Address', 'OS', 'OS Version', 'Hostname', 'Integrity']
+        col_widths = [len(h) for h in headers]
 
-        if tabulate:
-            if connections:
-                print(tabulate.tabulate(connections, headers=['ID', 'Address', 'OS', 'Hostname', 'Integrity'],
-                                        tablefmt='pretty'))
-        else:
-            for connection in connections:
-                print(connection)
+        for conn in connections:
+            for i, item in enumerate(conn):
+                col_widths[i] = max(col_widths[i], len(str(item)))
+
+        # 构建格式字符串
+        row_format = " | ".join([f"{{:<{w}}}" for w in col_widths])
+
+        # 打印表头
+        print("\n" + row_format.format(*headers))
+        print("-" * (sum(col_widths) + 4 * len(headers)))  # 分隔线
+
+        # 打印每行数据
+        for conn in connections:
+            print(row_format.format(*conn))
+
+        print()
 
     def get_last_connection(self) -> Client:
         """
@@ -140,15 +158,15 @@ class Server:
         :param executor: 服务端命令
         :return: 生成器
         """
-        grep_pattern = r'\s*\|\s*grep\s+(.+)\s*$'
-        match = re.search(grep_pattern, cmd)
-        if match:
-            keyword = match.group(1)
-            cmd = re.sub(grep_pattern, '', cmd)
-            func = self.process_command(cmd, conn, executor)
-            text = '\n'.join([i[1] for i in func() if len(i) >= 2])
-            print(find_and_highlight_keywords(text, keyword))
-            return
+        # grep_pattern = r'\s*\|\s*grep\s+(.+)\s*$'
+        # match = re.search(grep_pattern, cmd)
+        # if match:
+        #     keyword = match.group(1)
+        #     cmd = re.sub(grep_pattern, '', cmd)
+        #     func = self.process_command(cmd, conn, executor)
+        #     text = '\n'.join([i[1] for i in func() if len(i) >= 2])
+        #     print(find_and_highlight_keywords(text, keyword))
+        #     return
         name, arg = parse(cmd)
         # 服务端命令
         cmds = [name for name, method in inspect.getmembers(executor, inspect.ismethod) if not name.startswith('__')]
@@ -297,7 +315,7 @@ class Server:
                 server.socket.close()
                 sys.exit(0)
             except Exception as e:
-                write(0, f'[-] {e}')
+                write(0, f'[-] {type(e).__name__}: {e}')
             finally:
                 print()
 

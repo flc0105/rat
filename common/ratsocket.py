@@ -65,7 +65,7 @@ class RATSocket:
         """
         length = self.socket.recv(4)
         if not length:
-            raise socket.error('Receiving failure')
+            raise socket.error('Receiving failure: Connection closed by peer')
         length = struct.unpack('i', length)[0]
         data = b''
         while length:

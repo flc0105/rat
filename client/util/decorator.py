@@ -2,8 +2,11 @@ import ctypes
 import inspect
 import shlex
 from functools import wraps
+import os
 
-from client.util.win32util import get_integrity_level
+if os.name == 'nt':
+    from client.util.win32util import get_integrity_level
+
 from common.util import parse_args, format_dict, parse
 
 

@@ -5,17 +5,28 @@ import sys
 import time
 import uuid
 
-# 服务端脚本依赖的库，勿删
-import tabulate
-import wmi
 
 from client.config.config import SERVER_ADDR
 from client.wrapper.server import Server
 from common.util import logger
 
-if os.name == 'nt':
-    from client.util.command import INTEGRITY_LEVEL
 
+
+def check_privilege():
+    if os.name == 'nt':
+        from client.util.command import INTEGRITY_LEVEL
+        return INTEGRITY_LEVEL
+    elif os.name=='posix':
+        # 1. 检查是否为root权限
+        if os.geteuid() == 0:
+            # 2. 区分是临时sudo还是真正的root用户
+            if 'SUDO_USER' in os.environ:
+                return 'Root (via sudo)'
+            return 'Root'
+        else:
+            return 'User'
+    else:
+        return 'Unsupported os: ' + os.name
 
 class Client:
     def __init__(self, address):
@@ -29,11 +40,13 @@ class Client:
         info = {
             'id': str(uuid.uuid4()),
             'type': 'info',
-            'os': platform.platform(),
+            'os_type': platform.system(),
+            'os_ver': platform.platform(),
             'hostname': socket.gethostname(),
-            'integrity': INTEGRITY_LEVEL if os.name == 'nt' else 'N/A',
+            'integrity': check_privilege(),
             'cwd': os.getcwd(),
         }
+        # 连接到服务器后发送一个验证信息，里面包含服务端的基础信息
         self.server.send(info)
         logger.info('Connected')
 

