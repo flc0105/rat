@@ -7,7 +7,7 @@ import pyautogui
 import requests
 import schedule
 
-from client.util.modules.module import Module
+from client.modules.module import Module
 from common.util import get_time
 
 

@@ -4,7 +4,7 @@ import queue
 from io import BytesIO
 
 # from client.util.command import CommandExecutor
-from client.util import CommandExecutor
+from client.commands import CommandExecutor
 from common.ratsocket import RATSocket
 from common.util import logger, get_input_stream, get_output_stream, get_time
 

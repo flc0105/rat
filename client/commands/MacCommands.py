@@ -3,7 +3,7 @@ import subprocess
 import sys
 import time
 
-from client.util.CommonCommands import CommonCommands
+from client.commands.CommonCommands import CommonCommands
 from client.util.decorator import desc
 from common.util import get_time, get_size, format_dict, logger
 

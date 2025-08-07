@@ -10,7 +10,7 @@ import threading
 import time
 
 from client.config.config import SERVER_ADDR
-from client.util.CommandBase import CommandBase
+from client.commands.CommandBase import CommandBase
 from client.util.decorator import desc
 from common.util import format_dict, logger
 

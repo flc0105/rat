@@ -1,18 +1,15 @@
-import json
-import os
-import platform
+import ctypes
 import subprocess
 
-from client.util.CommonCommands import CommonCommands
+from client.commands.CommonCommands import CommonCommands
 from client.util.decorator import desc
 
 
 class WindowsCommands(CommonCommands):
     """Windows特有命令"""
 
-    def __init__(self, socket, command_id):
-        super().__init__(socket, command_id)
-        # Windows特有的初始化
+    def __init__(self, socket):
+        super().__init__(socket)
 
     @desc('detect user inactive time')
     def idletime(self):

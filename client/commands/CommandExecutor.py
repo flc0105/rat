@@ -1,6 +1,6 @@
 import inspect
 
-from client.util.CommandBase import *
+from client.commands.CommandBase import *
 from common.util import parse
 
 
@@ -13,12 +13,16 @@ class CommandExecutor:
         if not self.platform_commands:
             system = platform.system().lower()
             if system == 'windows':
-                from client.util.WindowsCommands import WindowsCommands  # ⚠️ 动态导入
+                from client.commands.WindowsCommands import WindowsCommands  # ⚠️ 动态导入
                 self.platform_commands = WindowsCommands(self.socket)
                 return self.platform_commands
             elif system == 'darwin':
-                from client.util.MacCommands import MacCommands
+                from client.commands.MacCommands import MacCommands
                 self.platform_commands = MacCommands(self.socket)
+                return self.platform_commands
+            elif system == 'linux':
+                from client.commands.LinuxCommands import LinuxCommands
+                self.platform_commands = LinuxCommands(self.socket)
                 return self.platform_commands
             else:
                 raise NotImplementedError(f"Unsupported OS: {system}")

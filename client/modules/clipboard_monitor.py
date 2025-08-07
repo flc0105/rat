@@ -5,7 +5,7 @@ import time
 
 from PIL import ImageGrab, Image
 
-from client.util.modules.module import Module
+from client.modules.module import Module
 from common.util import get_size, logger
 
 
