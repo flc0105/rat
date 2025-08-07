@@ -14,7 +14,9 @@ class RATSocket:
 
     def connect(self, address):
         """连接"""
-        return self.socket.connect_ex(address) == 0
+        res = self.socket.connect_ex(address)
+        print(res)
+        return res == 0
 
     def bind(self, address):
         """绑定"""

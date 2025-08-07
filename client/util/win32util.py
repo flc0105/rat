@@ -24,11 +24,12 @@ def wrap_path(path):
     return f'"{path}"' if ' ' in path else path
 
 
-executable = wrap_path(os.path.realpath(sys.executable))
-argv = wrap_path(os.path.realpath(''.join(sys.argv)))
+
 
 
 def get_executable_path():
+    executable = wrap_path(os.path.realpath(sys.executable))
+    argv = wrap_path(os.path.realpath(''.join(sys.argv)))
     if not getattr(sys, 'frozen', False):
         return f'{executable} {argv}'
     else:
@@ -36,6 +37,8 @@ def get_executable_path():
 
 
 def get_working_directory():
+    executable = wrap_path(os.path.realpath(sys.executable))
+    argv = wrap_path(os.path.realpath(''.join(sys.argv)))
     if not getattr(sys, 'frozen', False):
         return f'{os.path.dirname(argv)}'
     else:
@@ -43,6 +46,8 @@ def get_working_directory():
 
 
 def get_executable_info():
+    executable = wrap_path(os.path.realpath(sys.executable))
+    argv = wrap_path(os.path.realpath(''.join(sys.argv)))
     if not getattr(sys, 'frozen', False):
         return r'c:\windows\system32\cmd.exe', f'/c {executable} {argv}'
     else:

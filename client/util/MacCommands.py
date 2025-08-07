@@ -53,16 +53,15 @@ class MacCommands(CommonCommands):
         finally:
             return 1, format_dict(info)
 
-
     @desc('detect user inactive time')
     def idletime(self):
-        from Quartz import CGEventSourceSecondsSinceLastEventType, kCGEventSourceStateHIDSystemState, kCGAnyInputEventType
+        from Quartz import CGEventSourceSecondsSinceLastEventType, kCGEventSourceStateHIDSystemState, \
+            kCGAnyInputEventType
         idle_time = CGEventSourceSecondsSinceLastEventType(
             kCGEventSourceStateHIDSystemState,
             kCGAnyInputEventType
         )
         return 1, 'User has been idle for: {} seconds'.format(idle_time)
-
 
     # @desc("获取macOS系统信息")
     # def get_mac_info(self):

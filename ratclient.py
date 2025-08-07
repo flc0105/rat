@@ -5,18 +5,16 @@ import sys
 import time
 import uuid
 
-
 from client.config.config import SERVER_ADDR
 from client.wrapper.server import Server
 from common.util import logger
 
 
-
 def check_privilege():
     if os.name == 'nt':
-        from client.util.command import INTEGRITY_LEVEL
-        return INTEGRITY_LEVEL
-    elif os.name=='posix':
+        from client.util.win32util import get_integrity_level
+        return get_integrity_level()
+    elif os.name == 'posix':
         # 1. 检查是否为root权限
         if os.geteuid() == 0:
             # 2. 区分是临时sudo还是真正的root用户
@@ -26,7 +24,8 @@ def check_privilege():
         else:
             return 'User'
     else:
-        return 'Unsupported os: ' + os.name
+        return 'N/A'
+
 
 class Client:
     def __init__(self, address):
@@ -35,8 +34,11 @@ class Client:
 
     def connect(self):
         logger.info(f'Connecting to {self.address}')
+
         while not self.server.connect(self.address):
             time.sleep(5)
+            print('正在尝试重新连接')
+            self.server = Server()
         info = {
             'id': str(uuid.uuid4()),
             'type': 'info',

