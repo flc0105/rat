@@ -3,11 +3,14 @@ import inspect
 import json
 import os
 import shlex
+import socket
+import sys
+import threading
 from functools import partial
 
-from common.util import scan_args, get_time, format_dict, parse
+from common.util import scan_args, get_time, format_dict, parse, logger
 from server.config.config import SCRIPT_PATH
-from server.util.util import secure_filename, replace_spaces, read_first_line
+from server.util.util import secure_filename, replace_spaces, read_first_line, write
 
 
 class CommandExecutor:
@@ -113,7 +116,8 @@ class CommandExecutor:
         """
         if not command:
             return 0, ''
-        func = self.server.process_command(command, self.conn, CommandExecutor(self.conn, self.server))
+        # func = self.server.process_command(command, self.conn, CommandExecutor(self.conn, self.server))
+        func = self.process_command(command)
         filename = f'{replace_spaces(secure_filename(command))}_{self.conn.address[0]}_{get_time()}.txt'
         with open(filename, 'wt') as f:
             for i in func():
@@ -176,56 +180,58 @@ class CommandExecutor:
     #     self.server.save_aliases()
     #     yield 1, f'Alias removed: {arg}'
 
+    def revshell(self, cmd):
+        """
+        打开一个可完全交互的shell，支持stdin
+        """
+
+        # 后台接收线程，接收数据并在前台显示，如果出现异常终止线程
+        def recv():
+            try:
+                while 1:
+                    data = rev_con.recv(1024)
+                    if not data:
+                        break
+                    sys.stdout.write(data.decode('gbk'))
+                    sys.stdout.flush()
+            except socket.error as e:
+                logger.error(f'Connection aborted: {e}')
+                raise
+
+        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        addr = ('0.0.0.0', 0)
+        s.bind(addr)
+
+        # 服务端获取一个随机可用端口，并将其作为参数发送给客户端
+        cmd += f'revshell {s.getsockname()[1]}'
+
+        func = partial(self.conn.send_command, cmd)
 
 
+        if func:
+            for i in func():
+                write(*i)
 
-    # def revshell(self, cmd, conn, executor):
-    #     """
-    #     打开一个可完全交互的shell，支持stdin
-    #     """
-    #
-    #     # 后台接收线程，接收数据并在前台显示，如果出现异常终止线程
-    #     def recv():
-    #         try:
-    #             while 1:
-    #                 data = rev_con.recv(1024)
-    #                 if not data:
-    #                     break
-    #                 sys.stdout.write(data.decode('gbk'))
-    #                 sys.stdout.flush()
-    #         except socket.error as e:
-    #             logger.error(f'Connection aborted: {e}')
-    #             raise
-    #
-    #     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    #     addr = ('0.0.0.0', 0)
-    #     s.bind(addr)
-    #
-    #     # 服务端获取一个随机可用端口，并将其作为参数发送给客户端
-    #     cmd += f' {s.getsockname()[1]}'
-    #     func = self.process_command(cmd, conn, executor)
-    #     if func:
-    #         for i in func():
-    #             write(*i)
-    #
-    #     s.listen(5)
-    #     print('Listening on {}'.format(s.getsockname()))
-    #     rev_con, addr = s.accept()
-    #     print('Connection from {}'.format(addr))
-    #     threading.Thread(target=recv).start()
-    #     # line_sep = None
-    #     if os.name == 'nt':
-    #         line_sep = '\r\n'
-    #     else:
-    #         line_sep = '\n'
-    #
-    #     while 1:
-    #         try:
-    #             cmd = input('>')  # 使用自定义提示符
-    #             if cmd.lower() in ['exit', 'quit']:
-    #                 rev_con.send(bytes('exit' + line_sep, encoding='gbk'))
-    #                 break
-    #             rev_con.send(bytes(cmd + line_sep, encoding='gbk'))
-    #         except (EOFError, KeyboardInterrupt):  # 处理 Ctrl+C / Ctrl+D
-    #             rev_con.send(bytes('exit' + line_sep, encoding='gbk'))
-    #             break
+        s.listen(5)
+        print('Listening on {}'.format(s.getsockname()))
+        rev_con, addr = s.accept()
+        print('Connection from {}'.format(addr))
+        threading.Thread(target=recv).start()
+        # line_sep = None
+        if os.name == 'nt':
+            line_sep = '\r\n'
+        else:
+            line_sep = '\n'
+
+        while 1:
+            try:
+                cmd = input('>')  # 使用自定义提示符
+                if cmd.lower() in ['exit', 'quit']:
+                    rev_con.send(bytes('exit' + line_sep, encoding='gbk'))
+                    break
+                rev_con.send(bytes(cmd + line_sep, encoding='gbk'))
+            except (EOFError, KeyboardInterrupt):  # 处理 Ctrl+C / Ctrl+D
+                rev_con.send(bytes('exit' + line_sep, encoding='gbk'))
+                break
+
+        yield 1, 'Done'

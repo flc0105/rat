@@ -7,9 +7,9 @@ import time
 
 from common.ratsocket import RATSocket
 from common.util import logger, parse
-from server.config.config import SOCKET_ADDR, ALIAS_PATH
-from server.util.AliasManager import AliasManager
-from server.util.CommandExecutor import CommandExecutor
+from server.config.config import SOCKET_ADDR
+from server.commands.AliasManager import AliasManager
+from server.commands.CommandExecutor import CommandExecutor
 from server.util.util import *
 from server.wrapper.client import Client
 
