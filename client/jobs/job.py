@@ -19,10 +19,9 @@ class Job:
 
     def send_to_server(self, status, result, end):
         result = f'Message from {threading.current_thread().name}: ' + result
-        # self.server.send_result(self.command_id, status, result, end)
         self.server.send_result(self.command_id, status, result, end)
 
-    def send_io_to_server(self, io):
+    def send_io_to_server(self, io): #TODO
         self.server.send_bytes_io(self.command_id, io)
 
     def run(self):
