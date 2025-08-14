@@ -32,7 +32,9 @@ class Colors:
 def get_console_logger():
     logger = logging.getLogger("console_logger")
     logger.setLevel(logging.DEBUG)
-    formatter = logging.Formatter('[%(asctime)s] %(levelname)s: %(funcName)s -> %(message)s',
+    # formatter = logging.Formatter('[%(asctime)s] %(levelname)s: %(funcName)s -> %(message)s',
+    #                               datefmt='%Y-%m-%d %H:%M:%S')
+    formatter = logging.Formatter('[%(asctime)s] %(levelname)s: %(message)s',
                                   datefmt='%Y-%m-%d %H:%M:%S')
     console_handler = logging.StreamHandler()
     console_handler.setFormatter(formatter)
@@ -164,3 +166,42 @@ def get_size(bytes, suffix="B"):
         if bytes < factor:
             return f"{bytes:.2f}{unit}{suffix}"
         bytes /= factor
+
+
+
+def print_table( headers, data):
+    """
+    通用表格打印方法
+    :param headers: 表头列表，如 ['ID', 'Name', 'Age']
+    :param data: 二维数据列表，每行对应一行的数据，如 [['1', 'Alice', '20'], ['2', 'Bob', '25']]
+    """
+    if not headers or not data:
+        print("No data to display")
+        return
+
+    # 确保数据行数与列数匹配
+    col_count = len(headers)
+    data = [row for row in data if len(row) == col_count]
+    if not data:
+        print("Data format does not match headers")
+        return
+
+    # 计算每列最大宽度（考虑表头和数据）
+    col_widths = [
+        max(len(str(headers[i])), *(len(str(row[i])) for row in data))
+        for i in range(col_count)
+    ]
+
+    # 构建格式字符串
+    row_format = " | ".join([f"{{:<{w}}}" for w in col_widths])
+
+    # 打印表头
+    print("\n" + row_format.format(*headers))
+    print("-" * (sum(col_widths) + 3 * (len(headers) - 1)))  # 分隔线
+
+    # 打印数据行
+    for row in data:
+        print(row_format.format(*row))
+
+    print()  # 结尾空行
+

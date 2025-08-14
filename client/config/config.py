@@ -17,3 +17,5 @@ if os.path.isfile(filename):
     ip = config.get('default', 'ip')
     port = config.getint('default', 'port')
     SERVER_ADDR = (ip, port)
+
+JOB_PATH = 'client/jobs'

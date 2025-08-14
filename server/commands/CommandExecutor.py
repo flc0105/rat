@@ -103,12 +103,12 @@ class CommandExecutor:
         :param arg: -f 显示详细信息 -c 清除记录
         """
         if arg in ['-f', '--full']:
-            yield 1, json.dumps(self.conn.history, ensure_ascii=False, indent=2)
+            yield 1, json.dumps(self.conn.command_history, ensure_ascii=False, indent=2)
         elif arg in ['-c', '--clear']:
-            self.conn.history.clear()
+            self.conn.command_history.clear()
             yield 1, 'History cleared'
         else:
-            yield 1, '\n'.join([cmd['command'] for cmd in self.conn.history])
+            yield 1, '\n'.join([cmd['command'] for cmd in self.conn.command_history])
 
     def save_result(self, command):
         """
