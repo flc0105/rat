@@ -5,7 +5,7 @@ import time
 
 from client.commands.CommonCommands import CommonCommands
 from client.util.decorator import desc
-from common.util import get_time, get_size, format_dict, logger
+from common.util import get_time, get_size, format_dict, logger, validate_required_args
 
 
 class MacCommands(CommonCommands):
@@ -63,6 +63,10 @@ class MacCommands(CommonCommands):
         )
         return 1, 'User has been idle for: {} seconds'.format(idle_time)
 
+
+
+
+
     # @desc("获取macOS系统信息")
     # def get_mac_info(self):
     #     """获取macOS系统信息"""
@@ -87,3 +91,5 @@ class MacCommands(CommonCommands):
     #         return 1, "\n".join(apps)
     #     except Exception as e:
     #         return 0, str(e)
+
+

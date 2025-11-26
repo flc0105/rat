@@ -10,10 +10,11 @@ import sys
 import threading
 import time
 
+from client.commands.RatCmdHelp import RatCmdHelp
 from client.config.config import SERVER_ADDR, JOB_PATH
 from client.commands.CommandBase import CommandBase
 from client.util.decorator import desc
-from common.util import format_dict, logger
+from common.util import format_dict, logger, validate_required_args
 
 
 class CommonCommands(CommandBase):
@@ -265,3 +266,71 @@ class CommonCommands(CommandBase):
 
         self.jobs.pop(job_name)
         return 1, f'Successfully stopped job: {job_name}'
+
+    def ratcmd(self, command_name, args_dict):
+        """
+        处理ratcmd命令的统一入口 - 动态调用 _ratcmd_<command_name> 方法
+        """
+        try:
+            method_name = f'_ratcmd_{command_name}'
+            if hasattr(self, method_name) and callable(getattr(self, method_name)):
+                method = getattr(self, method_name)
+                return method(args_dict)
+            else:
+                return 0, f"Unknown ratcmd command: {command_name}"
+        except Exception as e:
+            return 0, f"RATCMD {command_name} Error: {str(e)}"
+
+    @desc('show message box')
+    def _ratcmd_msgbox(self, args_dict):
+        """
+        显示消息框 - ratcmd实现
+        必需参数: title, text
+        可选参数: timeout (仅支持部分平台)
+        """
+        try:
+
+            required_args = ['text']
+            optional_args = {
+                'title': {
+                    'default': '无',
+                    'description': '标题'
+                },
+                'timeout': {
+                    'default': '无',
+                    'description': '自动关闭时间(秒)，仅部分平台支持'
+                }
+            }
+            description = "显示系统消息框"
+
+            # 检查是否需要显示帮助
+            show_help, help_text = RatCmdHelp.show_help(
+                args_dict, 'msgbox', required_args, optional_args, description
+            )
+            if show_help:
+                return 1, help_text
+
+
+
+            validate_required_args(args_dict, ['text'])
+
+            print(args_dict)
+            title = args_dict.get('title', '')
+            text = args_dict['text']
+            timeout = args_dict.get('timeout')
+
+            if os.name == 'nt':
+                import ctypes
+                ctypes.windll.user32.MessageBoxW(0, text, title, 0)
+            elif sys.platform == 'darwin':
+                cmd = f'osascript -e \'display dialog "{text}" with title "{title}"\''
+                os.system(cmd)
+            else:
+                # Linux
+                cmd = f'zenity --info --title="{title}" --text="{text}"'
+                os.system(cmd)
+
+            return 1, f"Message box displayed: {title}"
+
+        except Exception as e:
+            return 0, f"Failed to show message box: {str(e)}"

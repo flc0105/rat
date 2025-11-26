@@ -205,3 +205,94 @@ def print_table( headers, data):
 
     print()  # 结尾空行
 
+
+def parse_ratcmd(cmd_text):
+    """
+    解析ratcmd命令格式
+    格式: ratcmd <command> [--arg1 value1] [--arg2 value2] [--flag]
+    返回: (command_name, args_dict)
+    """
+    if not cmd_text.startswith('ratcmd '):
+        raise ValueError("Not a ratcmd format")
+
+    # 移除开头的'ratcmd '，然后按空格分割
+    remaining = cmd_text[len('ratcmd '):].strip()
+    parts = []
+
+    # 手动解析，处理带引号的参数
+    i = 0
+    while i < len(remaining):
+        if remaining[i] in ['"', "'"]:
+            # 找到引号内的内容
+            quote_char = remaining[i]
+            end_quote = remaining.find(quote_char, i + 1)
+            if end_quote == -1:
+                # 没有结束引号，将剩余部分作为整个参数
+                parts.append(remaining[i:])
+                break
+            parts.append(remaining[i + 1:end_quote])
+            i = end_quote + 1
+        elif remaining[i] == ' ':
+            # 跳过空格
+            i += 1
+        else:
+            # 找到下一个空格
+            next_space = remaining.find(' ', i)
+            if next_space == -1:
+                parts.append(remaining[i:])
+                break
+            parts.append(remaining[i:next_space])
+            i = next_space + 1
+
+    if not parts:
+        raise ValueError("Invalid ratcmd format: missing command name")
+
+    command_name = parts[0]
+    args_dict = {}
+    i = 1
+
+    while i < len(parts):
+        part = parts[i]
+        if part.startswith('--'):
+            key = part[2:]  # 移除 '--'
+            # 检查下一个部分是否是值（不以--开头）
+            if i + 1 < len(parts) and not parts[i + 1].startswith('--'):
+                args_dict[key] = parts[i + 1]
+                i += 2  # 跳过值
+            else:
+                args_dict[key] = True  # 开关参数，设置为True
+                i += 1
+        else:
+            # 对于没有--前缀的参数，作为位置参数处理
+            args_dict[f'arg{len([k for k in args_dict if k.startswith("arg")]) + 1}'] = part
+            i += 1
+
+    return command_name, args_dict
+
+    # while i < len(parts):
+    #     part = parts[i]
+    #     if part.startswith('--'):
+    #         key = part[2:]  # 移除 '--'
+    #         # 检查是否有对应的值
+    #         if i + 1 < len(parts) and not parts[i + 1].startswith('--'):
+    #             args_dict[key] = parts[i + 1]
+    #             i += 2
+    #         else:
+    #             args_dict[key] = True  # 标志参数
+    #             i += 1
+    #     else:
+    #         # 位置参数
+    #         args_dict[f'arg{len([k for k in args_dict if k.startswith("arg")]) + 1}'] = part
+    #         i += 1
+    #
+    # return command_name, args_dict
+
+
+def validate_required_args(args_dict, required_args):
+    """
+    验证必需参数是否存在
+    """
+    missing = [arg for arg in required_args if arg not in args_dict]
+    if missing:
+        raise ValueError(f"Missing required arguments: {', '.join(missing)}")
+    return True

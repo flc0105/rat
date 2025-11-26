@@ -24,6 +24,12 @@ class CommandExecutor:
         :param cmd: 要处理的命令
         :return: 可执行函数
         """
+
+        # 检查是否是ratcmd命令
+        if cmd.startswith('ratcmd '):
+            return partial(self._handle_ratcmd, cmd)
+
+
         name, arg = parse(cmd)
 
         # 检查是否是Command类的方法
@@ -235,3 +241,20 @@ class CommandExecutor:
                 break
 
         yield 1, 'Done'
+
+    def _handle_ratcmd(self, cmd_text):
+        """
+        处理ratcmd命令 - 仅转发，不解析具体内容
+        """
+        try:
+            # 简单验证是否是ratcmd格式
+            if not cmd_text.strip().startswith('ratcmd '):
+                yield 0, "Invalid ratcmd format"
+                return
+
+            # 直接转发给客户端，类型标记为'ratcmd'
+            for result in self.conn.send_command(cmd_text, type='ratcmd'):
+                yield result
+
+        except Exception as e:
+            yield 0, f"RATCMD Error: {str(e)}"

