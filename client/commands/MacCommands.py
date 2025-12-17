@@ -63,33 +63,3 @@ class MacCommands(CommonCommands):
         )
         return 1, 'User has been idle for: {} seconds'.format(idle_time)
 
-
-
-
-
-    # @desc("获取macOS系统信息")
-    # def get_mac_info(self):
-    #     """获取macOS系统信息"""
-    #     try:
-    #         result = subprocess.run(
-    #             ['system_profiler', 'SPHardwareDataType'],
-    #             capture_output=True,
-    #             text=True
-    #         )
-    #         return 1, result.stdout
-    #     except Exception as e:
-    #         return 0, str(e)
-    #
-    # @desc("获取macOS系统信息")
-    # def list_applications(self):
-    #     """列出已安装应用（macOS方式）"""
-    #     try:
-    #         apps = []
-    #         for dir in ['/Applications', os.path.expanduser('~/Applications')]:
-    #             if os.path.exists(dir):
-    #                 apps.extend(os.listdir(dir))
-    #         return 1, "\n".join(apps)
-    #     except Exception as e:
-    #         return 0, str(e)
-
-

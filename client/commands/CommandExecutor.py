@@ -1,4 +1,5 @@
 import inspect
+import platform
 
 from client.commands.CommandBase import *
 from common.util import parse, parse_ratcmd, validate_required_args

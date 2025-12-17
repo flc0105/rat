@@ -1,7 +1,6 @@
 import importlib.util
 import os
-import platform
-from abc import ABC, abstractmethod
+from abc import ABC
 
 from client.config.config import JOB_PATH
 from client.util.reflection_util import get_main_class
@@ -23,19 +22,6 @@ class CommandBase(ABC):
         self.socket.send_result(self.command_id, status, result, eof)
 
     def _dynamic_import(self, module):
-        """
-        Dynamically import a job module and return its instance.
-
-        Args:
-            module_path: Relative path to the module
-
-        Returns:
-            The instantiated job class
-
-        Raises:
-            FileNotFoundError: If module doesn't exist
-            ImportError: If module cannot be imported
-        """
         # 获取模块路径
         full_path = os.path.abspath(os.path.join(JOB_PATH, module))
 
