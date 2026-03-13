@@ -13,30 +13,59 @@ class CommandExecutor:
         self.conn = conn
         self.server = server
 
+    # ------------------ 通用结果工具 ------------------ #
+    def _yield_error(self, error):
+        """
+        返回单条错误结果
+        """
+        yield 0, str(error)
+
     # ------------------ 主命令入口 ------------------ #
+    def _resolve_builtin_command(self, name, arg):
+        """
+        解析内置命令方法
+        """
+        if hasattr(self, name) and callable(getattr(self, name)):
+            return partial(getattr(self, name), arg)
+        return None
+
+    def _resolve_alias_command(self, name, arg):
+        """
+        解析别名命令
+        """
+        alias_cmd = self.server.alias_manager.aliases.get(name)
+        if not alias_cmd:
+            return None
+
+        try:
+            expanded_cmd = self.server.alias_manager.get_alias_command(name, arg)
+            return partial(self.conn.send_command, expanded_cmd)
+        except Exception as e:
+            return partial(self._yield_error, e)
+
+    def _resolve_default_command(self, raw_command):
+        """
+        默认透传原始命令到客户端
+        """
+        return partial(self.conn.send_command, raw_command)
+
     def process_command(self, cmd):
         """
         处理命令，返回可执行的生成器函数
         """
-
         name, arg = parse(cmd)
 
-        # 检查是否是方法
-        if hasattr(self, name) and callable(getattr(self, name)):
-            return partial(getattr(self, name), arg)
+        builtin_handler = self._resolve_builtin_command(name, arg)
+        if builtin_handler:
+            return builtin_handler
 
-        # 检查是否是别名
-        alias_cmd = self.server.alias_manager.aliases.get(name)
-        if alias_cmd:
-            try:
-                expanded_cmd = self.server.alias_manager.get_alias_command(name, arg)
-                return partial(self.conn.send_command, expanded_cmd)
-            except Exception as e:
-                return partial(lambda e: [(0, str(e))], e)
+        alias_handler = self._resolve_alias_command(name, arg)
+        if alias_handler:
+            return alias_handler
 
-        # 默认发送原始命令
-        return partial(self.conn.send_command, cmd)
+        return self._resolve_default_command(cmd)
 
+    # ------------------ upload ------------------ #
     def upload(self, filename):
         """
         上传文件到客户端
@@ -51,44 +80,85 @@ class CommandExecutor:
             self.conn.pending_command_ids.clear()
             raise
 
+    # ------------------ exec ------------------ #
+    def _iter_script_files(self):
+        """
+        遍历脚本目录下的所有 Python 脚本
+        """
+        return glob.iglob(os.path.join(SCRIPT_PATH, '**/*.py'), recursive=True)
+
+    def _list_scripts(self):
+        """
+        获取脚本列表
+        """
+        return [
+            os.path.relpath(file_path, SCRIPT_PATH).replace('\\', '/')
+            for file_path in self._iter_script_files()
+        ]
+
+    def _get_script_help_map(self):
+        """
+        获取脚本帮助信息映射
+        """
+        scripts = {}
+        for file_path in self._iter_script_files():
+            key = os.path.relpath(file_path, SCRIPT_PATH).replace('\\', '/')
+            scripts[key] = read_first_line(file_path)
+        return scripts
+
+    def _resolve_script_path(self, script_name: str) -> str:
+        """
+        解析脚本绝对路径；若缺少 .py 后缀则自动补全尝试
+        """
+        script_path = os.path.abspath(os.path.join(SCRIPT_PATH, script_name))
+        if os.path.isfile(script_path):
+            return script_path
+
+        if os.path.isfile(script_path + '.py'):
+            return script_path + '.py'
+
+        raise FileNotFoundError(f"Script not found: {script_path}")
+
+    def _build_script_command(self, script_text: str, script_args: list):
+        """
+        构造脚本执行命令
+        """
+        return partial(
+            self.conn.send_command,
+            script_text,
+            type='script',
+            extra=scan_args(script_args)
+        )
+
+    def _execute_script_file(self, filename: str):
+        """
+        执行指定 Python 脚本
+        """
+        parts = shlex.split(filename)
+        script_path = self._resolve_script_path(parts[0])
+
+        with open(script_path, 'rt', encoding='utf-8') as file_obj:
+            try:
+                func = self._build_script_command(file_obj.read(), parts[1:])
+                for item in func():
+                    yield item
+            except UnicodeDecodeError:
+                raise RuntimeError(f"Unable to read file: {script_path}")
+
     def exec(self, filename):
         """
         执行 Python 脚本
         """
-        # 不传 filename → 列出脚本
         if not filename:
-            scripts = [os.path.relpath(f, SCRIPT_PATH).replace('\\', '/')
-                       for f in glob.iglob(os.path.join(SCRIPT_PATH, '**/*.py'), recursive=True)]
-            yield 1, '\n'.join(scripts)
+            yield 1, '\n'.join(self._list_scripts())
             return
 
-        # --help 显示脚本注释
         if filename == '--help':
-            scripts = {}
-            for f in glob.iglob(os.path.join(SCRIPT_PATH, '**/*.py'), recursive=True):
-                key = os.path.relpath(f, SCRIPT_PATH).replace('\\', '/')
-                scripts[key] = read_first_line(f)
-            yield 1, format_dict(scripts, 25)
+            yield 1, format_dict(self._get_script_help_map(), 25)
             return
 
-        # 发送脚本
-        parts = shlex.split(filename)
-        script_path = os.path.abspath(os.path.join(SCRIPT_PATH, parts[0]))
-        if not os.path.isfile(script_path):
-            # 尝试加 .py 后缀
-            if os.path.isfile(script_path + '.py'):
-                script_path += '.py'
-            else:
-                raise FileNotFoundError(f"Script not found: {script_path}")
-
-        with open(script_path, 'rt', encoding='utf-8') as f:
-            try:
-                func = partial(self.conn.send_command, f.read(), type='script', extra=scan_args(parts[1:]))
-                for i in func():
-                    yield i
-            except UnicodeDecodeError:
-                raise RuntimeError(f"Unable to read file: {script_path}")
-
+        for item in self._execute_script_file(filename):
+            yield item
 
     # ------------------ 别名管理 ------------------ #
     def alias(self, arg):
@@ -101,7 +171,6 @@ class CommandExecutor:
 
         try:
             if '=' in arg:
-                # 添加或更新别名
                 alias, cmd = [part.strip() for part in arg.split('=', 1)]
                 self.server.alias_manager.add_alias(alias, cmd)
                 yield 1, f'Alias added: {alias} -> {cmd}'

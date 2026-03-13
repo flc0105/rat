@@ -1,6 +1,6 @@
 SOCKET_ADDR = ('', 8888)
 ALIAS_PATH = 'server/config/aliases_mac.json'
-SCRIPT_PATH = 'server/script'
+SCRIPT_PATH = 'server/scripts'
 
 BACKGROUND_MESSAGE_OUTPUT_TO_FILE = True
 SHOW_MESSAGES_FROM_OTHER_CONNECTIONS = False
