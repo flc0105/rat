@@ -68,11 +68,10 @@ class Server:
         """
         while 1:
             try:
-                conn.recv_result()
+                conn.recv_message()
             except socket.error:
                 logger.error(f'Connection closed: {conn.address}')
-                conn._results_queue.put_status(0)  # 用put_status替代直接put
-                # conn._results_queue.put(status=0, message='Receiving aborted')
+                conn.message_queue.put_status(0)
                 self.connections.remove(conn)
                 break
             except:
@@ -140,9 +139,9 @@ class Server:
         :param conn: 连接
         """
         print('[+] Connected to {}'.format(conn.address))
-        conn._is_interactive = True  # 设置连接为交互中
-        while not conn._results_queue.empty():  # 连接前判断有没有未读消息
-            logger.info('[UNREAD] ' + conn._results_queue.get()[1])
+        conn.is_interactive = True  # 设置连接为交互中
+        while not conn.message_queue.empty():  # 连接前判断有没有未读消息
+            logger.info('[UNREAD] ' + conn.message_queue.get()[1])
         command_executor = CommandExecutor(conn, self)
         try:
             while 1:
@@ -177,7 +176,7 @@ class Server:
             time.sleep(0.1)
         except Exception as e:
             print_error(f'{e.__class__.__name__}: {e}')
-        conn._is_interactive = False
+        conn.is_interactive = False
 
     def cmdloop(self):
         """
@@ -228,7 +227,7 @@ class Server:
 
 
 if __name__ == '__main__':
-    os.system('')
+    os.system('')  # 初始化颜色显示
     server = Server(SOCKET_ADDR)
     threading.Thread(target=server.serve, daemon=True).start()
     server.cmdloop()
