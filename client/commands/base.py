@@ -3,7 +3,7 @@ import os
 from abc import ABC
 
 from client.config.config import JOB_PATH
-from client.util.reflection_util import get_main_class
+from core.utils.client_util.reflection_util import get_main_class
 
 
 class CommandBase(ABC):

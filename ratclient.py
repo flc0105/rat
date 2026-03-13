@@ -6,15 +6,15 @@ import time
 import uuid
 
 from client.config.config import SERVER_ADDR
-from client.util.common_util import check_privilege
-from client.wrapper.server import Server
-from common.util import logger
+from core.utils.client_util.common_util import check_privilege
+from client.connection.server_connection import ServerConnection
+from core.utils.logger import logger
 
 
 class Client:
     def __init__(self, address):
         self.address = address
-        self.server = Server()
+        self.server = ServerConnection()
 
     def connect(self):
         logger.info(f'Connecting to {self.address}')
@@ -22,7 +22,7 @@ class Client:
         while not self.server.connect(self.address):
             time.sleep(5)
             print('Attempting to reconnect...')
-            self.server = Server()
+            self.server = ServerConnection()
         info = {
             'id': str(uuid.uuid4()),
             'type': 'info',
@@ -48,12 +48,12 @@ class Client:
             except socket.error:
                 logger.error('Connection closed')
                 self.server.close()
-                self.server = Server()
+                self.server = ServerConnection()
                 self.connect()
             except Exception as e:
                 logger.error(e)
                 self.server.close()
-                self.server = Server()
+                self.server = ServerConnection()
                 self.connect()
 
 

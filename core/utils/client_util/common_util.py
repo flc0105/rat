@@ -5,7 +5,7 @@ import os
 
 def check_privilege():
     if os.name == 'nt':
-        from client.util.win32util import get_integrity_level
+        from core.utils.client_util.win32util import get_integrity_level
         return get_integrity_level()
     elif os.name == 'posix':
         # 1. 检查是否为root权限

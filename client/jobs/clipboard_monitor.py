@@ -4,7 +4,7 @@ import threading
 import time
 
 from client.jobs.job import Job
-from common.util import get_size, logger
+from core.utils.common_util import get_size, logger
 
 
 class ClipboardMonitor(Job):

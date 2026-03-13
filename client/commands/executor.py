@@ -1,8 +1,7 @@
 import inspect
 import platform
 
-from client.commands.CommandBase import *
-from common.util import parse, parse_ratcmd, validate_required_args
+from core.utils.common_util import parse, parse_ratcmd, validate_required_args
 
 
 class CommandExecutor:
@@ -19,15 +18,15 @@ class CommandExecutor:
         if not self.platform_commands:
             system = platform.system().lower()
             if system == 'windows':
-                from client.commands.WindowsCommands import WindowsCommands  # ⚠️ 动态导入
+                from client.commands.platform.windows import WindowsCommands  # ⚠️ 动态导入
                 self.platform_commands = WindowsCommands(self.socket)
                 return self.platform_commands
             elif system == 'darwin':
-                from client.commands.MacCommands import MacCommands
+                from client.commands.platform.mac import MacCommands
                 self.platform_commands = MacCommands(self.socket)
                 return self.platform_commands
             elif system == 'linux':
-                from client.commands.LinuxCommands import LinuxCommands
+                from client.commands.platform.linux import LinuxCommands
                 self.platform_commands = LinuxCommands(self.socket)
                 return self.platform_commands
             else:

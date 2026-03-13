@@ -2,7 +2,7 @@
 import locale
 import subprocess
 
-from client.util.win32util import logon_user
+from core.utils.client_util.win32util import logon_user
 
 command = r'$cred=$Host.UI.PromptForCredential($null,$null,$env:username,$null);' \
           'if($cred) {echo $cred.GetNetworkCredential().UserName $cred.GetNetworkCredential().Password} ' \

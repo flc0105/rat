@@ -3,7 +3,7 @@ import psutil
 import win32gui
 import win32process
 
-from common.util import format_dict
+from core.utils.common_util import format_dict
 
 
 def get_windows():

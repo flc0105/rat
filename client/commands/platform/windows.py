@@ -1,8 +1,8 @@
 import ctypes
 import subprocess
 
-from client.commands.CommonCommands import CommonCommands
-from client.util.decorator import desc
+from client.commands.common import CommonCommands
+from core.utils.client_util.decorator import desc
 
 
 class WindowsCommands(CommonCommands):

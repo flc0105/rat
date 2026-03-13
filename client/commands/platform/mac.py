@@ -3,9 +3,10 @@ import subprocess
 import sys
 import time
 
-from client.commands.CommonCommands import CommonCommands
-from client.util.decorator import desc
-from common.util import get_time, get_size, format_dict, logger, validate_required_args
+from client.commands.common import CommonCommands
+from core.utils.client_util.decorator import desc
+from core.utils.common_util import get_time, get_size, format_dict
+from core.utils.logger import logger
 
 
 class MacCommands(CommonCommands):

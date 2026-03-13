@@ -5,9 +5,9 @@ from functools import wraps
 import os
 
 if os.name == 'nt':
-    from client.util.win32util import get_integrity_level
+    from core.utils.client_util.win32util import get_integrity_level
 
-from common.util import parse_args, format_dict, parse
+from core.utils.common_util import parse_args, format_dict, parse
 
 
 def desc(text):

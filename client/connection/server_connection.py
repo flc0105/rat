@@ -4,17 +4,18 @@ import queue
 from io import BytesIO
 
 # from client.util.command import CommandExecutor
-from client.commands import CommandExecutor
-from client.commands.CommonCommands import CommonCommands
-from common.ratsocket import RATSocket
-from common.util import logger, get_input_stream, get_output_stream, get_time
+from client.commands import executor
+from client.commands.common import CommonCommands
+from core.protocol.ratsocket import RATSocket
+from core.utils.logger import logger
+from core.utils.common_util import get_input_stream, get_output_stream, get_time
 
 
-class Server(RATSocket):
+class ServerConnection(RATSocket):
 
     def __init__(self):
         super().__init__()
-        self.command_executor = CommandExecutor.CommandExecutor(self) #把服务器的链接传给commandExecutor
+        self.command_executor = executor.CommandExecutor(self) #把服务器的链接传给commandExecutor
         #初始化的时候只给链接，为什么不给命令ID呢，因为每次执行id都会变，所以要在方法里传
 
         self.command_queue = queue.Queue()

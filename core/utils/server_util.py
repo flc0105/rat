@@ -2,7 +2,7 @@ import os
 import re
 import traceback
 
-from common.util import Colors
+from core.utils.common_util import Colors
 
 
 def completer(text, state):

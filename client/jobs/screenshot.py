@@ -8,7 +8,7 @@ import requests
 
 
 from client.jobs.job import Job
-from common.util import get_time
+from core.utils.common_util import get_time
 
 
 class Screenshot(Job):

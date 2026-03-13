@@ -4,16 +4,17 @@ import time
 from typing import Generator
 
 from server.config.config import BACKGROUND_MESSAGE_OUTPUT_TO_FILE, SHOW_MESSAGES_FROM_OTHER_CONNECTIONS
-from common.ratsocket import RATSocket
-from common.util import get_output_stream, get_input_stream, get_readable_time, logger, get_file_logger
-from server.util.util import calculate_time_interval
-from server.wrapper.message_queue import MessageQueue
+from core.protocol.ratsocket import RATSocket
+from core.utils.common_util import get_output_stream, get_input_stream, get_readable_time
+from core.utils.logger import logger, get_file_logger
+from core.utils.server_util import calculate_time_interval
+from core.protocol.message_queue import MessageQueue
 
 if BACKGROUND_MESSAGE_OUTPUT_TO_FILE:
     file_logger = get_file_logger('background_messages.log')
 
 
-class Client(RATSocket):
+class ClientConnection(RATSocket):
 
     def __init__(self, s, address=None, info=None):
         """

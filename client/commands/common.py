@@ -4,7 +4,6 @@ import inspect
 import io
 import locale
 import os
-import shlex
 import socket
 import subprocess
 import sys
@@ -13,9 +12,10 @@ import time
 
 from client.commands.RatCmdHelp import RatCmdHelp
 from client.config.config import SERVER_ADDR, JOB_PATH
-from client.commands.CommandBase import CommandBase
-from client.util.decorator import desc
-from common.util import format_dict, logger, validate_required_args, scan_args
+from client.commands.base import CommandBase
+from core.utils.client_util.decorator import desc
+from core.utils.common_util import format_dict, validate_required_args
+from core.utils.logger import logger
 
 
 class CommonCommands(CommandBase):
@@ -132,7 +132,7 @@ class CommonCommands(CommandBase):
     @desc('reset connection')
     def reset(self):
         if os.name == 'nt':
-            from client.util.win32util import get_executable_path
+            from core.utils.client_util.win32util import get_executable_path
             exec_path = get_executable_path()
             subprocess.Popen(exec_path)
         elif os.name == 'posix':

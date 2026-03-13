@@ -7,7 +7,7 @@ import tabulate
 import win32com.client
 import wmi
 
-from common.util import format_dict, get_size
+from core.utils.common_util import format_dict, get_size
 
 computer = wmi.WMI()
 

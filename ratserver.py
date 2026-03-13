@@ -5,13 +5,14 @@ import sys
 import threading
 import time
 
-from common.ratsocket import RATSocket
-from common.util import logger, parse, print_table
-from server.commands.AliasManager import AliasManager
-from server.commands.CommandExecutor import CommandExecutor
+from core.protocol.ratsocket import RATSocket
+from core.utils.logger import logger
+from core.utils.common_util import parse, print_table
+from server.commands.alias_manager import AliasManager
+from server.commands.executor import CommandExecutor
 from server.config.config import SOCKET_ADDR
-from server.util.util import *
-from server.wrapper.client import Client
+from core.utils.server_util import *
+from server.connection.client_connection import ClientConnection
 
 
 class Server:
@@ -41,7 +42,7 @@ class Server:
                 conn, addr = self.socket.accept()  # 接受新连接
                 conn.settimeout(5)  # 设置超时时间
                 try:
-                    connection = Client(conn)  # 创建客户端实例
+                    connection = ClientConnection(conn)  # 创建客户端实例
                     info = connection.recv()  # 接收客户端信息
                 except json.JSONDecodeError:
                     conn.close()
@@ -52,7 +53,7 @@ class Server:
                     continue
                 conn.settimeout(None)
                 info = {**{'addr': f'{addr[0]}:{addr[1]}'}, **info}  # 更新客户端信息
-                connection = Client(conn, addr, info)
+                connection = ClientConnection(conn, addr, info)
                 self.connections.append(connection)  # 将连接添加到连接列表
                 logger.info('Connection has been established: {}'.format(addr))
                 threading.Thread(target=self.connection_handler, args=(connection,), daemon=True).start()  # 启动新线程处理连接
@@ -101,7 +102,7 @@ class Server:
         # 使用通用方法打印表格
         print_table(headers, data)
         
-    def get_last_connection(self) -> Client:
+    def get_last_connection(self) -> ClientConnection:
         """
         获取最新连接
         :return: 连接
@@ -111,7 +112,7 @@ class Server:
         except IndexError:
             raise Exception('No connection at this time')
 
-    def get_target_connection(self, id) -> Client:
+    def get_target_connection(self, id) -> ClientConnection:
         """
         根据id获取连接
         :param id: 连接id
@@ -131,7 +132,7 @@ class Server:
         if conn:
             conn.send_command('kill')
 
-    def open_connection(self, conn: Client):
+    def open_connection(self, conn: ClientConnection):
         """
         与连接交互
         :param conn: 连接

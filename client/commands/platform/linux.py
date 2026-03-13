@@ -1,4 +1,4 @@
-from client.commands.CommonCommands import CommonCommands
+from client.commands.common import CommonCommands
 
 
 class LinuxCommands(CommonCommands):
