@@ -64,7 +64,7 @@ class ClientConnection(RATSocket):
         io = get_output_stream(filename)
         self.send(data)  # 发送文件请求头
         # if self._results_queue.get_status():  # 如果对方就绪
-        if self.message_queue.peek_first():  # 如果对方就绪
+        if self.message_queue.get_status():  # 如果对方就绪
             self.send_io(io)  # 发送文件
         return self.wait_for_result(data.get('id'), 'upload ' + filename)
 
@@ -170,24 +170,10 @@ class ClientConnection(RATSocket):
         :return: 结果生成器
         """
         self.pending_command_ids.put_command_id(id)  # 将命令id加入待执行队列
-        # start_time = time.time()
-        # history_result = []  # 存放结果
 
         while 1:
             status, result, eof = self.message_queue.get()  # 获取结果
             yield status, result  # 返回状态和结果
-            # history_result.append(result)  # 添加到结果列表
             if eof:  # 判断是否结束
                 self.pending_command_ids.get()  # 从待执行队列移除
                 break
-
-        # end_time = time.time()
-        # if command:
-        #     self.command_history.append({
-        #         'id': id,
-        #         'command': command,
-        #         'time': get_readable_time(),
-        #         'exec_time': f'{calculate_time_interval(start_time, end_time):.2f} ms',
-        #         'status': status,
-        #         'result': '\n'.join(history_result),
-        #     })

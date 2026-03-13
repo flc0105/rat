@@ -19,10 +19,6 @@ class CommandExecutor:
         处理命令，返回可执行的生成器函数
         """
 
-        # # 检查是否是ratcmd命令
-        # if cmd.startswith('ratcmd '):
-        #     return partial(self._handle_ratcmd, cmd)
-
         name, arg = parse(cmd)
 
         # 检查是否是方法
@@ -93,33 +89,6 @@ class CommandExecutor:
             except UnicodeDecodeError:
                 raise RuntimeError(f"Unable to read file: {script_path}")
 
-    #
-    # def history(self, arg):
-    #     """
-    #     显示历史记录
-    #     :param arg: -f 显示详细信息 -c 清除记录
-    #     """
-    #     if arg in ['-f', '--full']:
-    #         yield 1, json.dumps(self.conn.command_history, ensure_ascii=False, indent=2)
-    #     elif arg in ['-c', '--clear']:
-    #         self.conn.command_history.clear()
-    #         yield 1, 'History cleared'
-    #     else:
-    #         yield 1, '\n'.join([cmd['command'] for cmd in self.conn.command_history])
-
-    # def save_result(self, command):
-    #     """
-    #     将命令结果写入本地文件
-    #     """
-    #     if not command:
-    #         return 0, ''
-    #
-    #     func = self.process_command(command)
-    #     filename = f'{replace_spaces(secure_filename(command))}_{self.conn.address[0]}_{get_time()}.txt'
-    #     with open(filename, 'wt') as f:
-    #         for i in func():
-    #             f.write(i[1] + '\n')
-    #     yield 1, 'Result saved to {}'.format(filename)
 
     # ------------------ 别名管理 ------------------ #
     def alias(self, arg):
@@ -151,77 +120,3 @@ class CommandExecutor:
             yield 1, f'Alias removed: {arg}'
         except KeyError as e:
             raise ValueError(f"Alias not found: {arg}")
-
-    # def revshell(self, cmd):
-    #     """
-    #     打开一个可完全交互的shell，支持stdin
-    #     """
-    #
-    #     # 后台接收线程，接收数据并在前台显示，如果出现异常终止线程
-    #     def recv():
-    #         try:
-    #             while 1:
-    #                 data = rev_con.recv(1024)
-    #                 if not data:
-    #                     break
-    #                 sys.stdout.write(data.decode('gbk'))
-    #                 sys.stdout.flush()
-    #         except socket.error as e:
-    #             logger.error(f'Connection aborted: {e}')
-    #             raise
-    #
-    #     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    #     addr = ('0.0.0.0', 0)
-    #     s.bind(addr)
-    #
-    #     # 服务端获取一个随机可用端口，并将其作为参数发送给客户端
-    #     cmd += f'revshell {s.getsockname()[1]}'
-    #
-    #     func = partial(self.conn.send_command, cmd)
-    #
-    #
-    #     if func:
-    #         for i in func():
-    #             write(*i)
-    #
-    #     s.listen(5)
-    #     print('Listening on {}'.format(s.getsockname()))
-    #     rev_con, addr = s.accept()
-    #     print('Connection from {}'.format(addr))
-    #     threading.Thread(target=recv).start()
-    #     # line_sep = None
-    #     if os.name == 'nt':
-    #         line_sep = '\r\n'
-    #     else:
-    #         line_sep = '\n'
-    #
-    #     while 1:
-    #         try:
-    #             cmd = input('>')  # 使用自定义提示符
-    #             if cmd.lower() in ['exit', 'quit']:
-    #                 rev_con.send(bytes('exit' + line_sep, encoding='gbk'))
-    #                 break
-    #             rev_con.send(bytes(cmd + line_sep, encoding='gbk'))
-    #         except (EOFError, KeyboardInterrupt):  # 处理 Ctrl+C / Ctrl+D
-    #             rev_con.send(bytes('exit' + line_sep, encoding='gbk'))
-    #             break
-    #
-    #     yield 1, 'Done'
-    #
-    # def _handle_ratcmd(self, cmd_text):
-    #     """
-    #     处理ratcmd命令 - 仅转发，不解析具体内容
-    #     """
-    #     try:
-    #         # 简单验证是否是ratcmd格式
-    #         if not cmd_text.strip().startswith('ratcmd '):
-    #             yield 0, "Invalid ratcmd format"
-    #             return
-    #
-    #         # 直接转发给客户端，类型标记为'ratcmd'
-    #         for result in self.conn.send_command(cmd_text, type='ratcmd'):
-    #             yield result
-    #
-    #     except Exception as e:
-    #         yield 0, f"RATCMD Error: {str(e)}"
-    #

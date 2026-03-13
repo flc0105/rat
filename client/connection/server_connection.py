@@ -1,9 +1,8 @@
 import ntpath
 import os
 
-# from client.util.command import CommandExecutor
-from client.commands import executor
 from client.commands.common import CommonCommands
+from client.commands.executor import CommandExecutor
 from core.protocol.message_queue import MessageQueue
 from core.protocol.ratsocket import RATSocket
 from core.utils.common_util import get_input_stream, get_output_stream
@@ -18,19 +17,14 @@ class ServerConnection(RATSocket):
 
     def __init__(self):
         super().__init__()
-        self.command_executor = executor.CommandExecutor(self)
-        # 把服务器的链接传给commandExecutor
-        # 初始化的时候只给链接，为什么不给命令ID呢，因为每次执行id都会变，所以要在方法里传
-
+        self.command_executor = CommandExecutor(self)
         self.command_queue = MessageQueue()
+
+        self.common_commands = CommonCommands(self)
 
     def send_result(self, id: int, status: int, result: str, eof: int = 1):
         """
         向服务端发送结果
-        :param id: 与命令id对应
-        :param status: 0或1
-        :param result: 结果
-        :param eof: 是否结束
         """
         data = {
             'type': 'result',
@@ -46,10 +40,8 @@ class ServerConnection(RATSocket):
     def send_file(self, id: int, filename: str):
         """
         向服务端发送文件
-        :param id: 与命令id对应
-        :param filename: 文件名
         """
-        data = {
+        header = {
             'type': 'file',
             'id': id,
             'length': os.stat(filename).st_size,
@@ -57,40 +49,16 @@ class ServerConnection(RATSocket):
             'cwd': os.getcwd(),
         }
         io = get_output_stream(filename)
-        self.send(data)
-        if self.recv_signal():  # TODO
+        self.send(header)
+        if self.recv_signal():
             self.send_io(io)
 
-    # def send_bytes_io(self, id: int, io):
-    #     # length = len(io.getbuffer())
-    #     length = io.getbuffer().nbytes
-    #     io = BytesIO(io.getvalue())
-    #     print(length)
-    #     data = {
-    #         'type': 'file',
-    #         'id': id,
-    #         'length': length,
-    #         'filename': 'clipboard_{}.png'.format(get_time()),
-    #         'cwd': os.getcwd(),
-    #     }
-    #     self.send(data)
-    #     if self.command_queue.get():
-    #         self.send_io(io, total=length)
-
     def recv_command(self) -> (int, int, str):
-        """
-        从服务端接收命令并在本地执行
-        :return: 结果id，状态，结果
-        """
         data = self.recv()
         logger.debug(data)
         command_id = data.get('id')
         command_type = data.get('type')
         try:
-
-            # if command_type == 'ratcmd':
-            #     # 直接将整个命令字典传给executor
-            #     return command_id, *self.command_executor.execute_command(command_id, data)
 
             # 如果是命令
             if command_type == 'command':
@@ -100,16 +68,18 @@ class ServerConnection(RATSocket):
 
             # 如果是Python脚本
             if command_type == 'script':
-                return command_id, *CommonCommands(self).pyexec(data['text'], kwargs=data.get('extra'))
+                result = self.common_commands.pyexec(data['text'], kwargs=data.get('extra'))
+                return command_id, *result
 
             # 如果是文件
             if command_type == 'file':
-                return command_id, *self.save_file(data.get('filename'), data.get('length'))
+                result = self.save_file(data.get('filename'), data.get('length'))
+                return command_id, *result
 
-            # 发送文件的时候阻塞了 所以主线程是收不到rdy信号的
-            # 解决方法：接收线程只用来接收，接受完放队列等待执行。
+            # 如果是就绪信号
             if command_type == 'rdy':
                 self.command_queue.put(data.get('status'))
+
 
         except Exception as e:
             logger.error(e, exc_info=True)

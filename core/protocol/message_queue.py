@@ -32,6 +32,13 @@ class MessageQueue:
                 return None
             return self._queue.queue[0]
 
+    def get_status(self):
+        """
+        获取并删除队列中的元素，返回 status
+        :return: 队列中的元素的 status
+        """
+        return self._queue.get()[0]
+
     def put(self, status: int, message: Any, end: int = 1):
         """
         向队列中添加元素
