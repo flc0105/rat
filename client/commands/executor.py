@@ -9,10 +9,10 @@ class CommandExecutor:
         self.socket = socket
         self.platform_commands = None
 
-        self.ratcmd_handlers = {
-            'msgbox': self._handle_msgbox,
-            # 在这里注册更多ratcmd命令
-        }
+        # self.ratcmd_handlers = {
+        #     'msgbox': self._handle_msgbox,
+        #     # 在这里注册更多ratcmd命令
+        # }
 
     def get_commands(self):
         if not self.platform_commands:
@@ -70,34 +70,34 @@ class CommandExecutor:
             # 如果不存在与解析出的名字相对应的方法，则执行 'shell' 方法并将原始命令作为参数
             return commands.shell(command)
 
-    def _execute_ratcmd(self, command_id, cmd_text):
-        """
-        执行ratcmd命令 - 客户端负责具体解析
-        """
-        try:
-            command_name, args_dict = parse_ratcmd(cmd_text)
-            commands = self.get_commands()
-            commands.command_id = command_id
-
-            # 直接调用平台命令类的ratcmd方法
-            if hasattr(commands, 'ratcmd') and callable(commands.ratcmd):
-                return commands.ratcmd(command_name, args_dict)
-            else:
-                return 0, f"RATCMD not supported on this platform"
-
-        except Exception as e:
-            return 0, f"RATCMD Error: {str(e)}"
-
-    def _handle_msgbox(self, command_id, args_dict):
-        """
-        处理消息框命令
-        """
-        try:
-            validate_required_args(args_dict, ['title', 'text'])
-
-            commands = self.get_commands()
-            commands.command_id = command_id
-            return commands.msgbox(args_dict)
-
-        except Exception as e:
-            return 0, f"MsgBox Error: {str(e)}"
+    # def _execute_ratcmd(self, command_id, cmd_text):
+    #     """
+    #     执行ratcmd命令 - 客户端负责具体解析
+    #     """
+    #     try:
+    #         command_name, args_dict = parse_ratcmd(cmd_text)
+    #         commands = self.get_commands()
+    #         commands.command_id = command_id
+    #
+    #         # 直接调用平台命令类的ratcmd方法
+    #         if hasattr(commands, 'ratcmd') and callable(commands.ratcmd):
+    #             return commands.ratcmd(command_name, args_dict)
+    #         else:
+    #             return 0, f"RATCMD not supported on this platform"
+    #
+    #     except Exception as e:
+    #         return 0, f"RATCMD Error: {str(e)}"
+    #
+    # def _handle_msgbox(self, command_id, args_dict):
+    #     """
+    #     处理消息框命令
+    #     """
+    #     try:
+    #         validate_required_args(args_dict, ['title', 'text'])
+    #
+    #         commands = self.get_commands()
+    #         commands.command_id = command_id
+    #         return commands.msgbox(args_dict)
+    #
+    #     except Exception as e:
+    #         return 0, f"MsgBox Error: {str(e)}"

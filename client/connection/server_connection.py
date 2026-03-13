@@ -1,26 +1,28 @@
 import ntpath
 import os
-import queue
-from io import BytesIO
 
 # from client.util.command import CommandExecutor
 from client.commands import executor
 from client.commands.common import CommonCommands
+from core.protocol.message_queue import MessageQueue
 from core.protocol.ratsocket import RATSocket
+from core.utils.common_util import get_input_stream, get_output_stream
 from core.utils.logger import logger
-from core.utils.common_util import get_input_stream, get_output_stream, get_time
 
 
 class ServerConnection(RATSocket):
+    """
+    客户端与服务器的连接类
+    负责接收命令、发送结果/文件、执行命令
+    """
 
     def __init__(self):
         super().__init__()
-        self.command_executor = executor.CommandExecutor(self) #把服务器的链接传给commandExecutor
-        #初始化的时候只给链接，为什么不给命令ID呢，因为每次执行id都会变，所以要在方法里传
+        self.command_executor = executor.CommandExecutor(self)
+        # 把服务器的链接传给commandExecutor
+        # 初始化的时候只给链接，为什么不给命令ID呢，因为每次执行id都会变，所以要在方法里传
 
-        self.command_queue = queue.Queue()
-
-
+        self.command_queue = MessageQueue()
 
     def send_result(self, id: int, status: int, result: str, eof: int = 1):
         """
@@ -59,21 +61,21 @@ class ServerConnection(RATSocket):
         if self.recv_signal():  # TODO
             self.send_io(io)
 
-    def send_bytes_io(self, id: int, io):
-        # length = len(io.getbuffer())
-        length = io.getbuffer().nbytes
-        io = BytesIO(io.getvalue())
-        print(length)
-        data = {
-            'type': 'file',
-            'id': id,
-            'length': length,
-            'filename': 'clipboard_{}.png'.format(get_time()),
-            'cwd': os.getcwd(),
-        }
-        self.send(data)
-        if self.command_queue.get():
-            self.send_io(io, total=length)
+    # def send_bytes_io(self, id: int, io):
+    #     # length = len(io.getbuffer())
+    #     length = io.getbuffer().nbytes
+    #     io = BytesIO(io.getvalue())
+    #     print(length)
+    #     data = {
+    #         'type': 'file',
+    #         'id': id,
+    #         'length': length,
+    #         'filename': 'clipboard_{}.png'.format(get_time()),
+    #         'cwd': os.getcwd(),
+    #     }
+    #     self.send(data)
+    #     if self.command_queue.get():
+    #         self.send_io(io, total=length)
 
     def recv_command(self) -> (int, int, str):
         """
@@ -82,37 +84,36 @@ class ServerConnection(RATSocket):
         """
         data = self.recv()
         logger.debug(data)
-        id = data.get('id')
-        type = data.get('type')
+        command_id = data.get('id')
+        command_type = data.get('type')
         try:
 
-            if type == 'ratcmd':
-                # 直接将整个命令字典传给executor
-                return id, *self.command_executor.execute_command(id, data)
-
+            # if command_type == 'ratcmd':
+            #     # 直接将整个命令字典传给executor
+            #     return command_id, *self.command_executor.execute_command(command_id, data)
 
             # 如果是命令
-            if type == 'command':
-                result = self.command_executor.execute_command(id, data.get('text')) #在这里把收到的命令id传过去
+            if command_type == 'command':
+                result = self.command_executor.execute_command(command_id, data.get('text'))  # 在这里把收到的命令id传过去
                 if result:
-                    return id, *result
+                    return command_id, *result
 
             # 如果是Python脚本
-            if type == 'script':
-                return id, *CommonCommands(self).pyexec(data['text'], kwargs=data.get('extra'))
+            if command_type == 'script':
+                return command_id, *CommonCommands(self).pyexec(data['text'], kwargs=data.get('extra'))
 
             # 如果是文件
-            if type == 'file':
-                return id, *self.save_file(data.get('filename'), data.get('length'))
+            if command_type == 'file':
+                return command_id, *self.save_file(data.get('filename'), data.get('length'))
 
             # 发送文件的时候阻塞了 所以主线程是收不到rdy信号的
             # 解决方法：接收线程只用来接收，接受完放队列等待执行。
-            if type == 'rdy':
+            if command_type == 'rdy':
                 self.command_queue.put(data.get('status'))
 
         except Exception as e:
             logger.error(e, exc_info=True)
-            return id, 0, f'{e}\n'
+            return command_id, 0, f'{e}\n'
 
     def save_file(self, filename, length):
         file = os.path.abspath(filename)
