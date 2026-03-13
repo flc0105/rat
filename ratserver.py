@@ -128,7 +128,7 @@ class Server:
         """
         显示连接列表
         """
-        connection_list = self.connections.list()
+        connection_list = self.connections.all()
         if not connection_list:
             print("No active connections at present")
             return
@@ -164,7 +164,8 @@ class Server:
         :return: 连接
         """
         try:
-            return self.connections.list()[int(id)]
+            # return self.connections.list()[int(id)]
+            return self.connections.get(int(id))
         except (ValueError, IndexError):
             raise Exception('Not a valid selection')
 

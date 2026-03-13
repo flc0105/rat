@@ -1,7 +1,7 @@
 import threading
 
-class ConnectionManager:
 
+class ConnectionManager:
     def __init__(self):
         self._connections = []
         self._lock = threading.RLock()
@@ -15,9 +15,18 @@ class ConnectionManager:
             if conn in self._connections:
                 self._connections.remove(conn)
 
-    def list(self):
+    def all(self):
+        """
+        返回当前连接列表快照
+        """
         with self._lock:
             return list(self._connections)
+
+    def list(self):
+        """
+        兼容旧接口，返回当前连接列表快照
+        """
+        return self.all()
 
     def get(self, index):
         with self._lock:
@@ -26,3 +35,17 @@ class ConnectionManager:
     def last(self):
         with self._lock:
             return self._connections[-1]
+
+    def __getitem__(self, index):
+        return self.get(index)
+
+    def __len__(self):
+        with self._lock:
+            return len(self._connections)
+
+    def __iter__(self):
+        return iter(self.all())
+
+    def __contains__(self, item):
+        with self._lock:
+            return item in self._connections
