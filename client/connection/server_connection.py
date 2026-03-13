@@ -5,7 +5,7 @@ from client.commands.common import CommonCommands
 from client.commands.executor import CommandExecutor
 from core.protocol.message_queue import MessageQueue
 from core.protocol.ratsocket import RATSocket
-from core.utils.common_util import get_input_stream, get_output_stream
+from core.utils.files import get_input_stream, get_output_stream
 from core.utils.logger import logger
 
 

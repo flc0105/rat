@@ -7,7 +7,9 @@ import time
 
 from core.protocol.ratsocket import RATSocket
 from core.utils.logger import logger
-from core.utils.common_util import parse, print_table
+from core.utils.parsing import parse
+from core.utils.formatting import print_table
+from core.utils.terminal import Colors
 from server.commands.alias_manager import AliasManager
 from server.commands.executor import CommandExecutor
 from server.config.config import SOCKET_ADDR

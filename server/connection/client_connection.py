@@ -4,7 +4,7 @@ from typing import Generator, Optional
 
 from core.protocol.message_queue import MessageQueue, PendingCommandQueue, ReadySignalQueue
 from core.protocol.ratsocket import RATSocket
-from core.utils.common_util import get_output_stream, get_input_stream
+from core.utils.files import get_output_stream, get_input_stream
 from core.utils.logger import logger, get_file_logger
 from server.config.config import BACKGROUND_MESSAGE_OUTPUT_TO_FILE, SHOW_MESSAGES_FROM_OTHER_CONNECTIONS
 

@@ -1,8 +1,7 @@
 import os
-import re
 import traceback
 
-from core.utils.common_util import Colors
+from core.utils.terminal import Colors
 
 
 def completer(text, state):
@@ -68,20 +67,6 @@ def print_error(text):
     print(f'{Colors.BRIGHT_RED}{text}{Colors.RESET}')
 
 
-def get_user_type(integrity: str):
-    """
-    获取用户类型
-    :param integrity: 安全完整性级别
-    :return: 用户类型
-    """
-    user_type = {
-        'Medium': 'user',
-        'High': 'admin',
-        'System': 'system'
-    }
-    return user_type.get(integrity)
-
-
 def write(status: int, result: str):
     """
     在控制台输出结果
@@ -91,41 +76,6 @@ def write(status: int, result: str):
     if not status:
         result = Colors.BRIGHT_RED + result + Colors.RESET
     print(result)
-
-
-def find_and_highlight_keywords(text, keyword):
-    pattern = re.compile(re.escape(keyword), re.IGNORECASE)
-
-    def highlight(match):
-        return f'{Colors.BRIGHT_RED}{match.group()}{Colors.RESET}'
-
-    highlighted_lines = []
-    for line in text.splitlines():
-        if pattern.search(line):
-            highlighted_line = pattern.sub(highlight, line)
-            highlighted_lines.append(highlighted_line)
-
-    return '\n'.join(highlighted_lines)
-
-
-def secure_filename(filename):
-    # Windows 文件命名非法字符：\ / : * ? " < > |
-    illegal_chars = r'[\\/:\*\?"<>|]'
-    return re.sub(illegal_chars, '_', filename)
-
-
-def replace_spaces(input_str, replacement='_'):
-    return re.sub(r'\s+', replacement, input_str)
-
-
-def calculate_time_interval(start_time, end_time):
-    # 将时间戳转换为浮点数，以秒为单位
-    start_time_sec = float(start_time)
-    end_time_sec = float(end_time)
-
-    # 计算间隔时间，单位为毫秒
-    interval_ms = (end_time_sec - start_time_sec) * 1000
-    return interval_ms
 
 
 def read_first_line(file_path):

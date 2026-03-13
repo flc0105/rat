@@ -6,7 +6,7 @@ import time
 import uuid
 
 from client.config.config import SERVER_ADDR
-from core.utils.client_util.common_util import check_privilege
+from core.utils.client_util import check_privilege
 from client.connection.server_connection import ServerConnection
 from core.utils.logger import logger
 

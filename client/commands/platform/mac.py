@@ -5,7 +5,7 @@ import time
 
 from client.commands.common import CommonCommands
 from core.utils.decorator import desc
-from core.utils.common_util import get_time, get_size, format_dict
+from core.utils.formatting import get_time, get_size, format_dict
 from core.utils.logger import logger
 
 

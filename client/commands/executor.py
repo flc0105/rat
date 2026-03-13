@@ -1,7 +1,7 @@
 import inspect
 import platform
 
-from core.utils.common_util import parse
+from core.utils.parsing import parse
 
 
 class CommandExecutor:

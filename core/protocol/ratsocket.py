@@ -4,7 +4,7 @@ import socket
 import struct
 from typing import BinaryIO, Optional
 
-from core.utils.common_util import draw_progress_bar
+from core.utils.formatting import draw_progress_bar
 
 
 class RATSocket:

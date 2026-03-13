@@ -37,3 +37,4 @@ def secure_filename(filename: str) -> str:
 
 def replace_spaces(text: str, replacement: str = '_') -> str:
     return re.sub(r'\s+', replacement, text)
+
