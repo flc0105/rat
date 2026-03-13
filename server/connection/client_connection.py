@@ -68,7 +68,8 @@ class ClientConnection(RATSocket):
         }
         io = get_output_stream(filename)
         self.send(data)  # 发送文件请求头
-        if self._results_queue.get_status():  # 如果对方就绪
+        # if self._results_queue.get_status():  # 如果对方就绪
+        if self._results_queue.peek_first():  # 如果对方就绪
             self.send_io(io)  # 发送文件
         return self.wait_for_result(data.get('id'), 'upload ' + filename)
 
@@ -96,7 +97,7 @@ class ClientConnection(RATSocket):
         """
         保存文件
         :param filename: 文件名
-        :param length: 文件长度
+        :param len: 文件长度
         :return: 文件保存结果元组 (status, message)
         """
         file = os.path.abspath(filename)
@@ -121,7 +122,7 @@ class ClientConnection(RATSocket):
         :param end: 是否结束
         """
 
-        pending_command_id = self._pending_commands.peek()
+        pending_command_id = self._pending_commands.peek_first()
 
         is_expected_command = (command_id == pending_command_id)
 
