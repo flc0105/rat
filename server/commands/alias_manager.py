@@ -94,11 +94,11 @@ class AliasManager:
         """
         if required_args:
             if len(required_args) != len(provided_args):
-                raise ValueError(f"Expected {len(required_args)} arguments, got {len(provided_args)}")
+                raise ValueError(f"Expected {len(required_args)} argument(s), got {len(provided_args)}")
             return
 
         if provided_args:
-            raise ValueError("No arguments expected for this alias")
+            raise ValueError('This alias does not accept arguments')
 
     def get_alias_command(self, alias, args=""):
         """获取别名对应的命令，并替换参数"""

@@ -9,7 +9,7 @@ import threading
 import time
 
 from client.commands.base import CommandBase
-from core.utils.client_util.decorator import desc
+from core.utils.decorator import desc
 from core.utils.common_util import format_dict
 
 

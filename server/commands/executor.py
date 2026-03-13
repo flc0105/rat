@@ -171,13 +171,13 @@ class CommandExecutor:
 
         try:
             if '=' in arg:
-                alias, cmd = [part.strip() for part in arg.split('=', 1)]
-                self.server.alias_manager.add_alias(alias, cmd)
-                yield 1, f'Alias added: {alias} -> {cmd}'
+                alias_name, command_text = [part.strip() for part in arg.split('=', 1)]
+                self.server.alias_manager.add_alias(alias_name, command_text)
+                yield 1, f'Alias saved: {alias_name} -> {command_text}'
             else:
-                raise ValueError("Missing '=' in alias definition")
+                raise ValueError("Expected format: alias name = command")
         except Exception as e:
-            raise ValueError(f"Invalid alias: {e}")
+            raise ValueError(f'Failed to save alias: {e}')
 
     def unalias(self, arg):
         """移除命令别名"""

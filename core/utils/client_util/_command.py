@@ -7,8 +7,8 @@ import subprocess
 import threading
 import time
 
-from core.utils.client_util.decorator import desc, params, enclosing, require_admin, require_integrity
-from core.utils.client_util.reflection_util import get_main_class
+from core.utils.decorator import desc, params, enclosing, require_admin, require_integrity
+from core.utils.reflection_util import get_main_class
 from core.utils.common_util import logger, get_time, format_dict, parse
 
 if os.name == 'nt':

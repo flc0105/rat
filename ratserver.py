@@ -71,7 +71,8 @@ class Server:
             info = self._receive_client_info(conn)
         except json.JSONDecodeError:
             conn.close()
-            logger.error('Connection timed out: {}'.format(addr))
+            logger.error('Failed to establish session: invalid client handshake from {}'.format(addr))
+            # logger.error('Connection timed out: {}'.format(addr))
             return None
         except Exception as e:
             conn.close()
@@ -160,7 +161,9 @@ class Server:
         """
         connection_list = self.connections.all()
         if not connection_list:
-            print("No active connections at present")
+            # print("No active connections at present")
+            print("No active sessions")
+
             return
 
         headers = ['ID', 'Address', 'OS', 'OS Version', 'Hostname', 'Integrity']
@@ -185,7 +188,9 @@ class Server:
         try:
             return self.connections.last()
         except IndexError:
-            raise Exception('No connection at this time')
+            raise Exception('No active session available')
+
+            # raise Exception('No connection at this time')
 
     def get_target_connection(self, id) -> ClientConnection:
         """
