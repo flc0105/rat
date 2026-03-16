@@ -1,4 +1,5 @@
 import json
+import shutil
 import socket
 import subprocess
 import sys
@@ -47,7 +48,111 @@ class Server:
 
     #web files start
 
+    def _prepare_web_dirs(self):
+        os.makedirs(self.received_files_dir, exist_ok=True)
+        os.makedirs(self.upload_tmp_dir, exist_ok=True)
 
+    def _build_unique_file_path(self, directory: str, filename: str) -> str:
+        safe_name = os.path.basename(filename) or 'file.bin'
+        base, ext = os.path.splitext(safe_name)
+        candidate = os.path.join(directory, safe_name)
+        index = 1
+        while os.path.exists(candidate):
+            candidate = os.path.join(directory, f'{base}_{index}{ext}')
+            index += 1
+        return candidate
+
+    def register_received_file(self, client_id: str, original_name: str, saved_path: str, size: int):
+        item = {
+            'client_id': client_id,
+            'original_name': original_name,
+            'saved_name': os.path.basename(saved_path),
+            'saved_path': saved_path,
+            'size': size,
+            'created_at': datetime.now().isoformat()
+        }
+        with self._received_files_lock:
+            self._received_files.insert(0, item)
+            self._received_files = self._received_files[:200]
+
+        self.event_bus.publish('file_received', item)
+
+    def list_recent_received_files(self, limit: int = 100):
+        with self._received_files_lock:
+            return list(self._received_files[:limit])
+
+    def get_received_file_item(self, saved_name: str):
+        with self._received_files_lock:
+            for item in self._received_files:
+                if item['saved_name'] == saved_name:
+                    return item
+        return None
+
+    def submit_web_upload(self, client_id: str, local_path: str, display_name: str):
+        conn = self.get_target_connection_by_client_id(client_id)
+        task = self._create_task(client_id, f'upload {display_name}')
+
+        threading.Thread(
+            target=self._run_web_upload,
+            args=(conn, task['task_id'], local_path, display_name),
+            daemon=True
+        ).start()
+
+        return {
+            'task_id': task['task_id'],
+            'client_id': client_id,
+            'command': f'upload {display_name}'
+        }
+
+    def _run_web_upload(self, conn: ClientConnection, task_id: str, local_path: str, display_name: str):
+        ok = True
+        try:
+            for status, result in conn.send_file(local_path):
+                text = '' if result is None else str(result)
+                self._append_task_chunk(task_id, status, text)
+
+                self.event_bus.publish('command_result', {
+                    'task_id': task_id,
+                    'client_id': conn.info.get('id'),
+                    'command': f'upload {display_name}',
+                    'status': status,
+                    'text': text,
+                    'time': datetime.now().isoformat()
+                })
+
+                if status == 0:
+                    ok = False
+        except Exception as e:
+            ok = False
+            text = str(e)
+            self._append_task_chunk(task_id, 0, text)
+
+            self.event_bus.publish('command_result', {
+                'task_id': task_id,
+                'client_id': conn.info.get('id'),
+                'command': f'upload {display_name}',
+                'status': 0,
+                'text': text,
+                'time': datetime.now().isoformat()
+            })
+        finally:
+            self._finish_task(task_id, ok)
+            self.event_bus.publish('command_complete', {
+                'task_id': task_id,
+                'client_id': conn.info.get('id'),
+                'command': f'upload {display_name}',
+                'success': ok,
+                'time': datetime.now().isoformat()
+            })
+
+            try:
+                if os.path.exists(local_path):
+                    os.remove(local_path)
+                parent_dir = os.path.dirname(local_path)
+                if parent_dir.startswith(self.upload_tmp_dir) and os.path.isdir(parent_dir):
+                    shutil.rmtree(parent_dir, ignore_errors=True)
+            except Exception:
+                pass
     #web files end
 
     #web start
@@ -213,7 +318,22 @@ class Server:
 
     #web
     def _register_connection(self, conn, addr, info: dict) -> ClientConnection:
-        connection = ClientConnection(conn, addr, info)
+        # connection = ClientConnection(conn, addr, info)
+
+        #web files
+        connection = ClientConnection(
+            conn,
+            addr,
+            info,
+            file_save_dir=self.received_files_dir,
+            on_file_saved=lambda original_name, saved_path, size: self.register_received_file(
+                info.get('id'),
+                original_name,
+                saved_path,
+                size
+            )
+        )
+        #web files end
 
         def _unexpected_message_callback(status, text, end):
             self.event_bus.publish('background_message', {

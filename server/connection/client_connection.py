@@ -17,7 +17,9 @@ class ClientConnection(RATSocket):
     封装每个客户端连接的对象
     """
 
-    def __init__(self, sock, address=None, info=None):
+    # def __init__(self, sock, address=None, info=None):
+    def __init__(self, sock, address=None, info=None, file_save_dir=None, on_file_saved=None):
+
         super().__init__()
         self.socket = sock  # 客户端套接字
         self.address = address  # 客户端地址
@@ -31,6 +33,23 @@ class ClientConnection(RATSocket):
         # web
         self.on_unexpected_message = None
 
+        #web files
+        # 文件接收保存位置（服务端 web 下载区）
+        self.file_save_dir = file_save_dir
+        self.on_file_saved = on_file_saved
+
+
+    #web files
+    def _build_unique_file_path(self, directory: str, filename: str) -> str:
+        safe_name = ntpath.basename(filename) or 'file.bin'
+        base, ext = os.path.splitext(safe_name)
+        candidate = os.path.join(directory, safe_name)
+        index = 1
+        while os.path.exists(candidate):
+            candidate = os.path.join(directory, f'{base}_{index}{ext}')
+            index += 1
+        return candidate
+    #web files end
 
     # ------------------ ID/构包 ------------------ #
     def _generate_message_id(self) -> int:
@@ -147,6 +166,27 @@ class ClientConnection(RATSocket):
         data = self.recv()
         self._dispatch_received_message(data)
 
+    # def save_file(self, filename, length):
+    #     """
+    #     保存文件
+    #     :param filename: 文件名
+    #     :param length: 文件长度
+    #     :return: 文件保存结果元组 (status, message)
+    #     """
+    #     file = os.path.abspath(filename)
+    #     try:
+    #         io = get_input_stream(file)
+    #         try:
+    #             self.send_signal(1)
+    #             self.recv_io(length, io)
+    #             return 1, f'File saved to: {file}'
+    #         except Exception as e:
+    #             return 0, f'Error receiving file from {self.address}: {e}'
+    #     except Exception as e:
+    #         self.send_signal(0)
+    #         return 0, f'Error opening local file: {e}'
+
+    #web files
     def save_file(self, filename, length):
         """
         保存文件
@@ -154,18 +194,33 @@ class ClientConnection(RATSocket):
         :param length: 文件长度
         :return: 文件保存结果元组 (status, message)
         """
-        file = os.path.abspath(filename)
+        target_dir = self.file_save_dir or os.getcwd()
+        os.makedirs(target_dir, exist_ok=True)
+
+        original_name = ntpath.basename(filename) or os.path.basename(filename)
+        file_path = self._build_unique_file_path(target_dir, original_name)
+
         try:
-            io = get_input_stream(file)
+            io = get_input_stream(file_path)
             try:
                 self.send_signal(1)
                 self.recv_io(length, io)
-                return 1, f'File saved to: {file}'
+
+                if callable(self.on_file_saved):
+                    try:
+                        self.on_file_saved(original_name, file_path, length)
+                    except Exception:
+                        pass
+
+                return 1, f'File saved to: {file_path}'
             except Exception as e:
                 return 0, f'Error receiving file from {self.address}: {e}'
         except Exception as e:
             self.send_signal(0)
             return 0, f'Error opening local file: {e}'
+    #web files end
+
+
 
     # ------------------ 处理结果 ------------------ #
     def _enqueue_expected_result(self, status, text, end) -> None:

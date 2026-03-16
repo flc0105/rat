@@ -1,0 +1,191 @@
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  background: #f5f7fa;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+}
+
+#app {
+  height: 100vh;
+  padding: 16px;
+}
+
+.layout {
+  display: grid;
+  grid-template-columns: 320px 1fr;
+  gap: 16px;
+  height: 100%;
+}
+
+.panel {
+  background: #fff;
+  border-radius: 12px;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
+  overflow: hidden;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.panel-header {
+  padding: 14px 16px;
+  border-bottom: 1px solid #ebeef5;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-weight: 600;
+}
+
+.device-list {
+  padding: 12px;
+  overflow-y: auto;
+  min-height: 0;
+}
+
+.device-item {
+  border: 1px solid #ebeef5;
+  border-radius: 10px;
+  padding: 12px;
+  margin-bottom: 10px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.device-item:hover {
+  border-color: #409eff;
+  background: #f5faff;
+}
+
+.device-item.active {
+  border-color: #409eff;
+  background: #ecf5ff;
+}
+
+.device-title {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+  gap: 8px;
+}
+
+.device-name {
+  font-weight: 600;
+  word-break: break-all;
+}
+
+.device-meta {
+  font-size: 12px;
+  color: #606266;
+  line-height: 1.7;
+  word-break: break-all;
+}
+
+.main-area {
+  display: grid;
+  grid-template-rows: auto auto 1fr;
+  min-height: 0;
+}
+
+.section {
+  padding: 16px;
+  border-bottom: 1px solid #ebeef5;
+}
+
+.output-wrap {
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.output-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+  gap: 12px;
+}
+
+.toolbar-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.terminal {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  background: #111827;
+  color: #e5e7eb;
+  border-radius: 10px;
+  padding: 14px;
+  white-space: pre-wrap;
+  word-break: break-word;
+  line-height: 1.5;
+  font-family: Consolas, Monaco, monospace;
+  font-size: 13px;
+}
+
+.empty-box {
+  margin: auto;
+  color: #909399;
+  text-align: center;
+  padding: 24px;
+}
+
+.status-tip {
+  font-size: 12px;
+  color: #909399;
+  margin-top: 8px;
+}
+
+.action-row {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.hidden-file-input {
+  display: none;
+}
+
+.file-link {
+  color: #409eff;
+  text-decoration: none;
+}
+
+.file-link:hover {
+  text-decoration: underline;
+}
+
+.recent-files-dialog .el-dialog__body {
+  padding-top: 12px;
+}
+
+.recent-files-table-wrap {
+  width: 100%;
+  overflow-x: auto;
+}
+
+.table-cell-text {
+  width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.recent-files-dialog .el-table {
+  width: 100%;
+}
+
+.recent-files-dialog .el-table th,
+.recent-files-dialog .el-table td {
+  vertical-align: middle;
+}
