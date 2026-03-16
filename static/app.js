@@ -14,9 +14,27 @@ createApp({
 
       recentFilesDialogVisible: false,
       recentFilesLoading: false,
-      recentFiles: []
+      recentFiles: [],
+
+      //prev
+            previewDialogVisible: false,
+      previewLoading: false,
+      previewType: '',
+      previewTitle: '',
+      previewUrl: '',
+      previewText: ''
     };
   },
+
+  //preview
+  watch: {
+    previewDialogVisible(val) {
+      if (!val) {
+        this.resetPreviewState();
+      }
+    }
+  },
+
 
   computed: {
     currentConnection() {
@@ -39,6 +57,92 @@ createApp({
   },
 
   methods: {
+
+    //preview
+
+        resetPreviewState() {
+      this.previewType = '';
+      this.previewTitle = '';
+      this.previewUrl = '';
+      this.previewText = '';
+    },
+    async previewRecentFile(row) {
+      if (!row || !row.saved_name) {
+        ElementPlus.ElMessage.warning('无效文件');
+        return;
+      }
+
+      this.previewDialogVisible = true;
+      this.previewLoading = true;
+      this.resetPreviewState();
+
+      try {
+        const res = await fetch(`/api/files/recent/${encodeURIComponent(row.saved_name)}/preview`);
+        const json = await res.json();
+
+        if (!res.ok || json.code !== 0) {
+          throw new Error(json.message || '预览失败');
+        }
+
+        const data = json.data || {};
+        this.previewType = data.type || 'unsupported';
+        this.previewTitle = data.name || row.original_name || '文件预览';
+
+        if (this.previewType === 'image') {
+          this.previewUrl = data.url || '';
+        } else if (this.previewType === 'text') {
+          this.previewText = data.content || '';
+        }
+      } catch (e) {
+        this.previewDialogVisible = false;
+        ElementPlus.ElMessage.error(e.message || '预览失败');
+      } finally {
+        this.previewLoading = false;
+      }
+    },
+    async deleteRecentFile(row) {
+      if (!row || !row.saved_name) {
+        ElementPlus.ElMessage.warning('无效文件');
+        return;
+      }
+
+      try {
+        await ElementPlus.ElMessageBox.confirm(
+          `确定删除文件「${row.original_name || row.saved_name}」吗？`,
+          '删除确认',
+          {
+            type: 'warning',
+            confirmButtonText: '删除',
+            cancelButtonText: '取消'
+          }
+        );
+
+        const res = await fetch(`/api/files/recent/${encodeURIComponent(row.saved_name)}`, {
+          method: 'DELETE'
+        });
+
+        const json = await res.json();
+        if (!res.ok || json.code !== 0) {
+          throw new Error(json.message || '删除失败');
+        }
+
+        ElementPlus.ElMessage.success('删除成功');
+
+        if (this.previewDialogVisible && this.previewTitle === (row.original_name || row.saved_name)) {
+          this.previewDialogVisible = false;
+          this.resetPreviewState();
+        }
+
+        await this.openRecentFilesDialog();
+      } catch (e) {
+        if (e === 'cancel' || e === 'close' || e?.toString?.().includes('cancel')) {
+          return;
+        }
+        ElementPlus.ElMessage.error(e.message || '删除失败');
+      }
+    },
+
+
     async loadConnections() {
       try {
         const res = await fetch('/api/connections');

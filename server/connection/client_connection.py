@@ -1,5 +1,7 @@
+import json
 import ntpath
 import os
+from datetime import datetime
 from typing import Generator, Optional
 
 from core.protocol.message_queue import MessageQueue, PendingCommandQueue, ReadySignalQueue
@@ -49,6 +51,22 @@ class ClientConnection(RATSocket):
             candidate = os.path.join(directory, f'{base}_{index}{ext}')
             index += 1
         return candidate
+
+    def _write_file_meta(self, file_path: str, original_name: str, size: int):
+        meta_path = file_path + '.meta.json'
+        meta = {
+            'client_id': self.info.get('id'),
+            'hostname': self.info.get('hostname'),
+            'addr': self.info.get('addr'),
+            'original_name': original_name,
+            'saved_name': os.path.basename(file_path),
+            'saved_path': file_path,
+            'size': size,
+            'created_at': datetime.now().isoformat()
+        }
+        with open(meta_path, 'w', encoding='utf-8') as f:
+            json.dump(meta, f, ensure_ascii=False, indent=2)
+
     #web files end
 
     # ------------------ ID/构包 ------------------ #
@@ -206,6 +224,8 @@ class ClientConnection(RATSocket):
                 self.send_signal(1)
                 self.recv_io(length, io)
 
+                #web files
+                self._write_file_meta(file_path, original_name, length)
                 if callable(self.on_file_saved):
                     try:
                         self.on_file_saved(original_name, file_path, length)

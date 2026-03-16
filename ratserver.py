@@ -41,12 +41,20 @@ class Server:
         self.web_root_dir = os.path.abspath(os.path.join('runtime', 'web_files'))
         self.received_files_dir = os.path.join(self.web_root_dir, 'received')
         self.upload_tmp_dir = os.path.join(self.web_root_dir, 'upload_tmp')
-        self._received_files = []
-        self._received_files_lock = threading.RLock()
         self._prepare_web_dirs()
 
 
     #web files start
+
+    def notify_file_received(self, client_id: str, original_name: str, saved_path: str, size: int):
+        self.event_bus.publish('file_received', {
+            'client_id': client_id,
+            'original_name': original_name,
+            'saved_name': os.path.basename(saved_path),
+            'saved_path': saved_path,
+            'size': size,
+            'created_at': datetime.now().isoformat()
+        })
 
     def _prepare_web_dirs(self):
         os.makedirs(self.received_files_dir, exist_ok=True)
@@ -62,31 +70,6 @@ class Server:
             index += 1
         return candidate
 
-    def register_received_file(self, client_id: str, original_name: str, saved_path: str, size: int):
-        item = {
-            'client_id': client_id,
-            'original_name': original_name,
-            'saved_name': os.path.basename(saved_path),
-            'saved_path': saved_path,
-            'size': size,
-            'created_at': datetime.now().isoformat()
-        }
-        with self._received_files_lock:
-            self._received_files.insert(0, item)
-            self._received_files = self._received_files[:200]
-
-        self.event_bus.publish('file_received', item)
-
-    def list_recent_received_files(self, limit: int = 100):
-        with self._received_files_lock:
-            return list(self._received_files[:limit])
-
-    def get_received_file_item(self, saved_name: str):
-        with self._received_files_lock:
-            for item in self._received_files:
-                if item['saved_name'] == saved_name:
-                    return item
-        return None
 
     def submit_web_upload(self, client_id: str, local_path: str, display_name: str):
         conn = self.get_target_connection_by_client_id(client_id)
@@ -326,7 +309,7 @@ class Server:
             addr,
             info,
             file_save_dir=self.received_files_dir,
-            on_file_saved=lambda original_name, saved_path, size: self.register_received_file(
+            on_file_saved=lambda original_name, saved_path, size: self.notify_file_received(
                 info.get('id'),
                 original_name,
                 saved_path,
