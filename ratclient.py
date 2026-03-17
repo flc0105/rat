@@ -41,7 +41,9 @@ class Client:
         关闭当前连接并重建连接对象
         """
         self._close_current_connection()
+        self._handle_connection_lost()
         self._create_connection()
+
 
     def _build_client_info(self):
         """
@@ -104,6 +106,24 @@ class Client:
                 self._recover_from_connection_error(e)
             except Exception as e:
                 self._recover_from_connection_error(e)
+
+    def _handle_connection_lost(self):
+        """
+        连接断开时的统一清理逻辑：
+        - 停掉所有后台任务
+        - 清掉旧连接运行态
+        """
+        try:
+            stopped_jobs = self.server.job_manager.handle_connection_lost()
+            if stopped_jobs:
+                logger.info(f'Stopped background jobs after connection loss: {stopped_jobs}')
+        except Exception as e:
+            logger.error(f'Failed to stop background jobs after connection loss: {e}', exc_info=True)
+
+        try:
+            self.server.reset_runtime_state()
+        except Exception as e:
+            logger.error(f'Failed to reset runtime state after connection loss: {e}', exc_info=True)
 
 
 if __name__ == '__main__':

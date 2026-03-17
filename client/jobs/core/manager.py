@@ -156,3 +156,51 @@ class JobManager:
             stopped.append(runtime.display_name)
 
         return stopped
+
+    # def handle_connection_lost(self) -> list[str]:
+    #     """
+    #     连接断开时统一停止所有后台任务
+    #     """
+    #     return self.stop_all_jobs()
+
+    def handle_connection_lost(self) -> list[str]:
+        """
+        连接断开时统一停止所有后台任务。
+        注意：此时不要再向服务端发送任何消息。
+        """
+        stopped = []
+
+        with self._lock:
+            runtimes = list(self._runtimes.values())
+
+        for runtime in runtimes:
+            try:
+                runtime.job_instance.stop(notify=False)
+                runtime.mark_stopped()
+                stopped.append(runtime.display_name)
+            except Exception:
+                pass
+
+        return stopped
+
+    def get_job_status(self, job_name: str) -> dict:
+        self.cleanup_finished_jobs()
+
+        runtime = self.get_runtime(job_name)
+        if runtime is None:
+            return {
+                'job_name': self.get_job_key(job_name),
+                'status': 'not_running',
+            }
+
+        return {
+            'job_name': runtime.job_key,
+            'job_id': runtime.job_instance.job_id,
+            'display_name': runtime.display_name,
+            'thread_name': runtime.thread.name,
+            'is_alive': runtime.is_alive,
+            'is_running': runtime.job_instance.is_running,
+            'created_at': runtime.created_at.strftime('%Y-%m-%d %H:%M:%S'),
+            'stopped_at': runtime.stopped_at.strftime('%Y-%m-%d %H:%M:%S') if runtime.stopped_at else '',
+            'status': 'running' if runtime.is_alive and runtime.job_instance.is_running else 'stopping',
+        }

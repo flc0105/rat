@@ -77,7 +77,6 @@ class Screenshot(Job):
             logger.info(f'Thread ended: {threading.current_thread().name}')
             self.send_to_server(1, f'Task ended: {threading.current_thread().name}', 1)
 
-    def stop(self):
-        self.send_to_server(1, 'Stop requested', 0)
+    def stop(self, notify: bool = True):
         schedule.clear()
-        self.request_stop()
+        self.request_stop(notify=notify)

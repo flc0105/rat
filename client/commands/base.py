@@ -9,7 +9,7 @@ class CommandBase(ABC):
     def __init__(self, socket):
         self.socket = socket
         self.command_id = None
-        self.job_manager = JobManager(socket)
+        # self.job_manager = JobManager(socket)
 
     def _send_result(self, status, result, eof=1):
         """

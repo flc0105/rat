@@ -66,13 +66,7 @@ class Job(ABC):
         self.is_running = False
         self.stop_event.set()
 
-    def request_stop(self):
-        """
-        请求任务停止
-        """
-        if self.is_running:
-            self.send_to_server(1, 'Stop requested', 0)
-        self.mark_stopped()
+
 
     @abstractmethod
     def run(self):
@@ -81,8 +75,26 @@ class Job(ABC):
         """
         raise NotImplementedError
 
-    def stop(self):
+
+    def request_stop(self, notify: bool = True):
+        """
+        请求任务停止。
+
+        Args:
+            notify: 是否向服务端发送停止通知。
+                    在连接已断开时应设为 False。
+        """
+        if self.is_running and notify:
+            try:
+                self.send_to_server(1, 'Stop requested', 0)
+            except Exception:
+                pass
+
+        self.mark_stopped()
+
+
+    def stop(self, notify: bool = True):
         """
         默认停止逻辑；子类可覆盖扩展
         """
-        self.request_stop()
+        self.request_stop(notify=notify)

@@ -59,8 +59,8 @@ class ClipboardMonitor(Job):
             logger.info(f'Thread ended: {threading.current_thread().name}')
             self.send_to_server(1, f'Task ended: {threading.current_thread().name}', 1)
 
-    def stop(self):
-        self.request_stop()
+    def stop(self, notify: bool = True):
+        self.request_stop(notify=notify)
 
     def _handle_text_change(self, text: str):
         if text and text != self.recent_text:

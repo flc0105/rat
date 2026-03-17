@@ -233,16 +233,17 @@ class CommonCommands(CommandBase):
         不传任务名时，列出可用任务。
         """
         job_name = job_name.strip()
+        job_manager = self.socket.job_manager
 
         if not job_name:
-            available_jobs = self.job_manager.list_available_jobs()
+            available_jobs = job_manager.list_available_jobs()
             if not available_jobs:
                 return 1, 'No job modules available'
             return 1, '\n'.join(available_jobs)
 
         try:
             self._send_interim_result(1, f'Preparing background job: {job_name}')
-            runtime = self.job_manager.start_job(job_name, self.command_id)
+            runtime = job_manager.start_job(job_name, self.command_id)
 
             self._send_final_result(
                 1,
@@ -260,15 +261,16 @@ class CommonCommands(CommandBase):
         不传任务名时，列出当前运行中的任务。
         """
         job_name = job_name.strip()
+        job_manager = self.socket.job_manager
 
         if not job_name:
-            running_jobs = self.job_manager.list_running_jobs()
+            running_jobs = job_manager.list_running_jobs()
             if not running_jobs:
                 return 1, 'No background jobs are currently running'
             return 1, '\n'.join(running_jobs)
 
         try:
-            runtime = self.job_manager.stop_job(job_name)
+            runtime = job_manager.stop_job(job_name)
             return 1, f'Stop request sent: {runtime.display_name}'
         except Exception as e:
             return 0, f'Failed to stop background job: {e}'
@@ -278,7 +280,8 @@ class CommonCommands(CommandBase):
         """
         列出当前运行中的后台任务。
         """
-        running_jobs = self.job_manager.list_running_jobs()
+        job_manager = self.socket.job_manager
+        running_jobs = job_manager.list_running_jobs()
         if not running_jobs:
             return 1, 'No background jobs are currently running'
         return 1, '\n'.join(running_jobs)
@@ -289,11 +292,12 @@ class CommonCommands(CommandBase):
         查看指定后台任务状态。
         """
         job_name = job_name.strip()
+        job_manager = self.socket.job_manager
         if not job_name:
             return 0, 'Usage: job_status <job_name>'
 
         try:
-            status_info = self.job_manager.get_job_status(job_name)
+            status_info =job_manager.get_job_status(job_name)
             return 1, format_dict(status_info)
         except Exception as e:
             return 0, f'Failed to query background job status: {e}'
@@ -304,7 +308,8 @@ class CommonCommands(CommandBase):
         停止所有后台任务。
         """
         try:
-            stopped_jobs = self.job_manager.stop_all_jobs()
+            job_manager = self.socket.job_manager
+            stopped_jobs = job_manager.stop_all_jobs()
             if not stopped_jobs:
                 return 1, 'No background jobs are currently running'
             return 1, 'Stop request sent for:\n' + '\n'.join(stopped_jobs)

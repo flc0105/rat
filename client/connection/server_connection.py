@@ -4,6 +4,7 @@ import queue
 
 from client.commands.common import CommonCommands
 from client.commands.executor import CommandExecutor
+from client.jobs.core.manager import JobManager
 from core.protocol.message_queue import MessageQueue, ReadySignalQueue
 from core.protocol.ratsocket import RATSocket
 from core.utils.files import get_input_stream, get_output_stream
@@ -24,9 +25,16 @@ class ServerConnection(RATSocket):
         self.command_queue = ReadySignalQueue()
         self.common_commands = CommonCommands(self)
 
+        self.job_manager = JobManager(self)
 
-
-
+    def reset_runtime_state(self):
+        """
+        清理当前连接相关运行态
+        """
+        try:
+            self.command_queue.clear()
+        except Exception:
+            pass
 
     def send_result(self, id: int, status: int, result: str, eof: int = 1):
         """
