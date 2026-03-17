@@ -36,13 +36,39 @@ class Job(ABC):
         self.client_id=client_id
 
     # todo: job线程改成不允许操作socket对象，只能通过http汇报
+    # def send_to_server(self, status, message, eof=0):
+    #     """
+    #     向服务端发送任务输出
+    #     """
+    #     thread_name = threading.current_thread().name
+    #     formatted_message = f'[{self.job_name}#{self.job_id[:8]} @ {thread_name}] {message}'
+    #     self.server.send_result(self.command_id, status, formatted_message, eof)
+
     def send_to_server(self, status, message, eof=0):
         """
-        向服务端发送任务输出
+        向服务端发送任务输出。
+        如果连接已经失效，则静默丢弃，避免后台任务在线程退出阶段继续写坏 socket。
         """
+        if self.server is None:
+            return
+
+        if not getattr(self.server, 'is_connected', True):
+            return
+
         thread_name = threading.current_thread().name
-        formatted_message = f'[{self.job_name}#{self.job_id[:8]} @ {thread_name}] {message}'
-        self.server.send_result(self.command_id, status, formatted_message, eof)
+        formatted_message = (
+            f'[{self.job_name}#{self.job_id[:8]} @ {thread_name} '
+            f'client={self.client_id}] {message}'
+        )
+
+        try:
+            self.server.send_result(self.command_id, status, formatted_message, eof)
+        except OSError:
+            # 连接刚好在发送过程中断开时，静默丢弃
+            pass
+        except Exception:
+            # 这里也不要让后台任务因为退出日志再次把线程打崩
+            pass
 
     def upload_file_via_http(self, file_path,  category=None):
         print("client_Id:" + self.client_id)

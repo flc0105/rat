@@ -157,12 +157,6 @@ class JobManager:
 
         return stopped
 
-    # def handle_connection_lost(self) -> list[str]:
-    #     """
-    #     连接断开时统一停止所有后台任务
-    #     """
-    #     return self.stop_all_jobs()
-
     def handle_connection_lost(self) -> list[str]:
         """
         连接断开时统一停止所有后台任务。

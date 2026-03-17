@@ -26,6 +26,13 @@ class ServerConnection(RATSocket):
         self.common_commands = CommonCommands(self)
 
         self.job_manager = JobManager(self)
+        self.is_connected = False
+
+    def mark_connected(self):
+        self.is_connected = True
+
+    def mark_disconnected(self):
+        self.is_connected = False
 
     def reset_runtime_state(self):
         """

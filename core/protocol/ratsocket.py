@@ -2,6 +2,7 @@ import json
 import os
 import socket
 import struct
+import threading
 from typing import BinaryIO, Optional
 
 from core.utils.formatting import draw_progress_bar
@@ -12,8 +13,12 @@ class RATSocket:
     HEADER_SIZE = struct.calcsize(HEADER_FORMAT)
     DEFAULT_RECV_IO_BUFFER_SIZE = 4096
 
+
+
     def __init__(self, family=socket.AF_INET, type=socket.SOCK_STREAM, proto=0):
         self.socket = socket.socket(family, type, proto)
+
+        self._send_lock = threading.RLock()
 
     # ------------------ 基础连接操作 ------------------ #
     def connect(self, address: tuple) -> bool:
@@ -36,10 +41,17 @@ class RATSocket:
         self.socket.close()
 
     # ------------------ 消息发送接收 ------------------ #
+    # def send(self, data: dict) -> None:
+    #     """发送字典消息"""
+    #     encoded = json.dumps(data).encode()
+    #     self._send_packet(encoded)
+
     def send(self, data: dict) -> None:
         """发送字典消息"""
         encoded = json.dumps(data).encode()
-        self._send_packet(encoded)
+        with self._send_lock:
+            self._send_packet(encoded)
+
 
     def recv(self) -> dict:
         """接收字典消息"""
@@ -53,7 +65,8 @@ class RATSocket:
         buffer_size = self._resolve_send_buffer_size(buffer_size)
 
         bytes_sent = 0
-        while True:
+        # while True:
+        while self._send_lock:
             chunk = io.read(buffer_size)
             if not chunk:
                 break

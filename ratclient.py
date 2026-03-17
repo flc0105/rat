@@ -16,9 +16,11 @@ class Client:
 
     def __init__(self, address):
         self.address = address
-        self.server = ServerConnection()
-
         self.client_id = str(uuid.uuid4())
+        self.server = None
+        self._create_connection()
+
+
 
     def _create_connection(self):
         """
@@ -76,6 +78,7 @@ class Client:
         """
         info = self._build_client_info()
         self.server.send(info)
+        self.server.mark_connected()
         logger.info('Connected')
 
     def connect(self):
@@ -110,9 +113,15 @@ class Client:
     def _handle_connection_lost(self):
         """
         连接断开时的统一清理逻辑：
+        - 先标记连接失效
         - 停掉所有后台任务
         - 清掉旧连接运行态
         """
+        try:
+            self.server.mark_disconnected()
+        except Exception:
+            pass
+
         try:
             stopped_jobs = self.server.job_manager.handle_connection_lost()
             if stopped_jobs:

