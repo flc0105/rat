@@ -44,12 +44,64 @@ def create_app(server_instance):
             raise ValueError('file is required')
         return upload
 
-    def _handle_common_file_error(error):
+    # ------------------ error mapping ------------------ #
+    def _map_common_error(error):
         if isinstance(error, ValueError):
             return _fail(str(error), 400)
         if isinstance(error, FileNotFoundError):
             return _fail('file not found', 404)
         return _fail(str(error), 500)
+
+    def _json_endpoint(func, *, default_error_status=400):
+        """
+        统一 JSON 接口包装：
+        - 正常返回值自动包装为 _ok(...)
+        - ValueError 按 400 返回
+        - 其他异常按 default_error_status 返回
+        """
+        try:
+            result = func()
+            return _ok(result)
+        except ValueError as e:
+            return _fail(e, 400)
+        except Exception as e:
+            return _fail(e, default_error_status)
+
+    def _file_endpoint(func):
+        """
+        统一文件相关 JSON 接口包装：
+        - 正常返回值自动包装为 _ok(...)
+        - 文件路径/不存在等异常自动映射
+        """
+        try:
+            result = func()
+            return _ok(result)
+        except Exception as e:
+            return _map_common_error(e)
+
+    # ------------------ file send helpers ------------------ #
+    def _send_download_file(saved_name: str):
+        file_path = file_service.get_received_file_download_path(saved_name)
+
+        if not os.path.isfile(file_path):
+            raise FileNotFoundError('file not found')
+
+        return send_from_directory(
+            file_service.received_files_dir,
+            saved_name,
+            as_attachment=True,
+            download_name=saved_name
+        )
+
+    def _send_raw_file(saved_name: str):
+        file_path = file_service.get_safe_received_file_path(saved_name)
+
+        if not os.path.isfile(file_path):
+            raise FileNotFoundError('file not found')
+
+        directory = os.path.dirname(file_path)
+        filename = os.path.basename(file_path)
+        return send_from_directory(directory, filename, as_attachment=False)
 
     # ------------------ pages ------------------ #
     @app.get('/')
@@ -63,34 +115,26 @@ def create_app(server_instance):
 
     @app.post('/api/connections/<client_id>/command')
     def send_command(client_id):
-        try:
-            command = _get_required_command()
-            result = web_service.submit_command(client_id, command)
-            return _ok(result)
-        except ValueError as e:
-            return _fail(e, 400)
-        except Exception as e:
-            return _fail(e, 400)
+        return _json_endpoint(
+            lambda: web_service.submit_command(client_id, _get_required_command())
+        )
 
     @app.post('/api/connections/<client_id>/kill')
     def kill_connection(client_id):
-        try:
+        def _execute():
             server_instance.kill_connection_by_client_id(client_id)
-            return _ok()
-        except Exception as e:
-            return _fail(e, 400)
+            return None
+
+        return _json_endpoint(_execute)
 
     @app.post('/api/connections/<client_id>/upload')
     def upload_file_to_client(client_id):
-        try:
+        def _execute():
             upload = _get_required_upload()
             temp_path, safe_name = file_service.create_upload_temp_file(upload)
-            result = web_service.submit_upload(client_id, temp_path, safe_name)
-            return _ok(result)
-        except ValueError as e:
-            return _fail(e, 400)
-        except Exception as e:
-            return _fail(e, 400)
+            return web_service.submit_upload(client_id, temp_path, safe_name)
+
+        return _json_endpoint(_execute)
 
     # ------------------ event stream ------------------ #
     @app.get('/api/stream')
@@ -123,74 +167,56 @@ def create_app(server_instance):
     # ------------------ received files ------------------ #
     @app.get('/api/files/recent')
     def get_recent_files():
-        try:
-            return _ok(file_service.list_received_files())
-        except Exception as e:
-            return _fail(e, 500)
+        return _json_endpoint(
+            lambda: file_service.list_received_files(),
+            default_error_status=500
+        )
 
     @app.get('/api/files/recent/<path:saved_name>')
     def download_recent_file(saved_name):
-        file_path = file_service.get_received_file_download_path(saved_name)
-
-        if not os.path.isfile(file_path):
-            return _fail('file not found', 404)
-
-        return send_from_directory(
-            file_service.received_files_dir,
-            saved_name,
-            as_attachment=True,
-            download_name=saved_name
-        )
+        try:
+            return _send_download_file(saved_name)
+        except Exception as e:
+            return _map_common_error(e)
 
     @app.get('/api/files/recent/<path:saved_name>/raw')
     def get_recent_file_raw(saved_name):
         try:
-            file_path = file_service.get_safe_received_file_path(saved_name)
-            if not os.path.isfile(file_path):
-                raise FileNotFoundError('file not found')
-
-            directory = os.path.dirname(file_path)
-            filename = os.path.basename(file_path)
-            return send_from_directory(directory, filename, as_attachment=False)
+            return _send_raw_file(saved_name)
         except Exception as e:
-            return _handle_common_file_error(e)
+            return _map_common_error(e)
 
     @app.get('/api/files/recent/<path:saved_name>/preview')
     def preview_recent_file(saved_name):
-        try:
-            payload = file_service.build_file_preview_payload(saved_name)
-            return _ok(payload)
-        except Exception as e:
-            return _handle_common_file_error(e)
+        return _file_endpoint(
+            lambda: file_service.build_file_preview_payload(saved_name)
+        )
 
     @app.delete('/api/files/recent/<path:saved_name>')
     def delete_recent_file(saved_name):
-        try:
+        def _execute():
             file_service.delete_received_file(saved_name)
-            return _ok()
-        except Exception as e:
-            return _handle_common_file_error(e)
+            return None
+
+        return _file_endpoint(_execute)
 
     # ------------------ http uploads ------------------ #
     app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024  # 50 MB
 
     @app.route('/api/files/upload', methods=['POST'])
     def upload_file():
-        try:
+        def _execute():
             upload = _get_required_upload()
             category = request.form.get('category', '').strip()
             client_id = request.form.get('client_id', '').strip()
 
-            result = file_service.save_http_uploaded_file(
+            return file_service.save_http_uploaded_file(
                 upload,
                 category=category,
                 client_id=client_id
             )
-            return _ok(result)
-        except ValueError as e:
-            return _fail(e, 400)
-        except Exception as e:
-            return _fail(e, 500)
+
+        return _json_endpoint(_execute, default_error_status=500)
 
     @app.errorhandler(413)
     def file_too_large(_):
