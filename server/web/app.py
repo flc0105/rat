@@ -1,18 +1,15 @@
 import json
-import mimetypes
 import os
 import queue
-import uuid
 from datetime import datetime
-from pathlib import Path
 
 from flask import Flask, Response, jsonify, request, send_from_directory, stream_with_context
-from werkzeug.utils import secure_filename
 
 
 def create_app(server_instance):
     app = Flask(__name__, static_folder='../../static', static_url_path='')
     web_service = server_instance.web_service
+    file_service = web_service.file_service
 
     @app.get('/')
     def index():
@@ -90,7 +87,6 @@ def create_app(server_instance):
             }
         )
 
-    #web files
     @app.post('/api/connections/<client_id>/upload')
     def upload_file_to_client(client_id):
         upload = request.files.get('file')
@@ -101,13 +97,7 @@ def create_app(server_instance):
             }), 400
 
         try:
-            safe_name = secure_filename(upload.filename) or 'upload.bin'
-            temp_dir = os.path.join(web_service.upload_tmp_dir, uuid.uuid4().hex)
-            os.makedirs(temp_dir, exist_ok=True)
-
-            temp_path = os.path.join(temp_dir, safe_name)
-            upload.save(temp_path)
-
+            temp_path, safe_name = file_service.create_upload_temp_file(upload)
             result = web_service.submit_upload(client_id, temp_path, safe_name)
             return jsonify({
                 'code': 0,
@@ -120,57 +110,16 @@ def create_app(server_instance):
                 'message': str(e)
             }), 400
 
-    def _list_received_files():
-        items = []
-        directory = web_service.received_files_dir
-
-        if not os.path.isdir(directory):
-            return items
-
-        for name in os.listdir(directory):
-            path = os.path.join(directory, name)
-
-            if not os.path.isfile(path):
-                continue
-
-            if name.endswith('.meta.json'):
-                continue
-
-            stat = os.stat(path)
-            meta_path = path + '.meta.json'
-            meta = {}
-
-            if os.path.isfile(meta_path):
-                try:
-                    with open(meta_path, 'r', encoding='utf-8') as f:
-                        meta = json.load(f) or {}
-                except Exception:
-                    meta = {}
-
-            items.append({
-                'client_id': meta.get('client_id', ''),
-                'hostname': meta.get('hostname', ''),
-                'addr': meta.get('addr', ''),
-                'original_name': meta.get('original_name', name),
-                'saved_name': name,
-                'size': meta.get('size', stat.st_size),
-                'created_at': meta.get('created_at') or datetime.fromtimestamp(stat.st_mtime).isoformat(),
-                'download_url': f"/api/files/recent/{name}"
-            })
-
-        items.sort(key=lambda x: x['created_at'], reverse=True)
-        return items
-
     @app.get('/api/files/recent')
     def get_recent_files():
         return jsonify({
             'code': 0,
-            'data': _list_received_files()
+            'data': file_service.list_received_files()
         })
 
     @app.get('/api/files/recent/<path:saved_name>')
     def download_recent_file(saved_name):
-        file_path = os.path.join(web_service.received_files_dir, saved_name)
+        file_path = file_service.get_received_file_download_path(saved_name)
 
         if not os.path.isfile(file_path):
             return jsonify({
@@ -179,46 +128,16 @@ def create_app(server_instance):
             }), 404
 
         return send_from_directory(
-            web_service.received_files_dir,
+            file_service.received_files_dir,
             saved_name,
             as_attachment=True,
             download_name=saved_name
         )
 
-    def _safe_received_file_path(saved_name: str) -> str:
-        base_dir = os.path.abspath(web_service.received_files_dir)
-        file_path = os.path.abspath(os.path.join(base_dir, saved_name))
-        if not file_path.startswith(base_dir + os.sep) and file_path != base_dir:
-            raise ValueError('invalid file path')
-        return file_path
-
-    def _guess_preview_type(filename: str) -> str:
-        ext = os.path.splitext(filename)[1].lower()
-
-        image_exts = {'.png', '.jpg', '.jpeg', '.gif', '.webp', '.bmp'}
-        text_exts = {
-            '.txt', '.log', '.py', '.js', '.ts', '.json', '.xml', '.yaml', '.yml',
-            '.ini', '.cfg', '.conf', '.md', '.csv', '.sql', '.bat', '.sh'
-        }
-
-        if ext in image_exts:
-            return 'image'
-        if ext in text_exts:
-            return 'text'
-
-        mime_type, _ = mimetypes.guess_type(filename)
-        if mime_type:
-            if mime_type.startswith('image/'):
-                return 'image'
-            if mime_type.startswith('text/'):
-                return 'text'
-
-        return 'unsupported'
-
     @app.get('/api/files/recent/<path:saved_name>/raw')
     def get_recent_file_raw(saved_name):
         try:
-            file_path = _safe_received_file_path(saved_name)
+            file_path = file_service.get_safe_received_file_path(saved_name)
         except ValueError:
             return jsonify({
                 'code': 1,
@@ -238,86 +157,36 @@ def create_app(server_instance):
     @app.get('/api/files/recent/<path:saved_name>/preview')
     def preview_recent_file(saved_name):
         try:
-            file_path = _safe_received_file_path(saved_name)
+            payload = file_service.build_file_preview_payload(saved_name)
+            return jsonify({
+                'code': 0,
+                'data': payload
+            })
         except ValueError:
             return jsonify({
                 'code': 1,
                 'message': 'invalid file path'
             }), 400
-
-        if not os.path.isfile(file_path):
+        except FileNotFoundError:
             return jsonify({
                 'code': 1,
                 'message': 'file not found'
             }), 404
-
-        preview_type = _guess_preview_type(saved_name)
-
-        if preview_type == 'image':
-            return jsonify({
-                'code': 0,
-                'data': {
-                    'type': 'image',
-                    'name': os.path.basename(file_path),
-                    'url': f'/api/files/recent/{saved_name}/raw'
-                }
-            })
-
-        if preview_type == 'text':
-            max_bytes = 200 * 1024
-            truncated = False
-
-            with open(file_path, 'rb') as f:
-                raw = f.read(max_bytes + 1)
-
-            if len(raw) > max_bytes:
-                raw = raw[:max_bytes]
-                truncated = True
-
-            text = raw.decode('utf-8', errors='replace')
-            if truncated:
-                text += '\n\n...(已截断)'
-
-            return jsonify({
-                'code': 0,
-                'data': {
-                    'type': 'text',
-                    'name': os.path.basename(file_path),
-                    'content': text,
-                    'truncated': truncated
-                }
-            })
-
-        return jsonify({
-            'code': 0,
-            'data': {
-                'type': 'unsupported',
-                'name': os.path.basename(file_path)
-            }
-        })
 
     @app.delete('/api/files/recent/<path:saved_name>')
     def delete_recent_file(saved_name):
         try:
-            file_path = _safe_received_file_path(saved_name)
+            file_service.delete_received_file(saved_name)
         except ValueError:
             return jsonify({
                 'code': 1,
                 'message': 'invalid file path'
             }), 400
-
-        if not os.path.isfile(file_path):
+        except FileNotFoundError:
             return jsonify({
                 'code': 1,
                 'message': 'file not found'
             }), 404
-
-        meta_path = file_path + '.meta.json'
-
-        try:
-            os.remove(file_path)
-            if os.path.isfile(meta_path):
-                os.remove(meta_path)
         except Exception as e:
             return jsonify({
                 'code': 1,
@@ -329,67 +198,40 @@ def create_app(server_instance):
             'message': 'ok'
         })
 
-    # 可选：限制最大上传体积，单位字节
-    app.config["MAX_CONTENT_LENGTH"] = 50 * 1024 * 1024  # 50 MB
-    BASE_DIR = Path(__file__).resolve().parent
+    app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024  # 50 MB
 
-    def build_stored_filename(original_name: str) -> str:
-        safe_name = secure_filename(original_name)
-        if not safe_name:
-            safe_name = "unnamed_file"
-
-        ext = Path(safe_name).suffix
-        stem = Path(safe_name).stem
-        unique_suffix = uuid.uuid4().hex[:8]
-        return f"{stem}_{unique_suffix}{ext}"
-
-    @app.route("/api/files/upload", methods=["POST"])
+    @app.route('/api/files/upload', methods=['POST'])
     def upload_file():
-        if "file" not in request.files:
+        if 'file' not in request.files:
             return jsonify({
-                "ok": False,
-                "error": "Missing file field: file"
+                'ok': False,
+                'error': 'Missing file field: file'
             }), 400
 
-        file = request.files["file"]
-        if not file or file.filename == "":
+        file = request.files['file']
+        if not file or file.filename == '':
             return jsonify({
-                "ok": False,
-                "error": "No file selected"
+                'ok': False,
+                'error': 'No file selected'
             }), 400
 
-        category = request.form.get("category", "").strip()
-        client_id = request.form.get("client_id", "").strip()
+        category = request.form.get('category', '').strip()
+        client_id = request.form.get('client_id', '').strip()
 
-        target_dir = Path(web_service.http_uploads_dir)
-        if category:
-            target_dir = target_dir / secure_filename(category)
-        if client_id:
-            target_dir = target_dir / secure_filename(client_id)
-
-        target_dir.mkdir(parents=True, exist_ok=True)
-
-        stored_name = build_stored_filename(file.filename)
-        stored_path = target_dir / stored_name
-        file.save(stored_path)
-
-        file_size = stored_path.stat().st_size
-
-        return jsonify({
-            "ok": True,
-            "original_name": file.filename,
-            "stored_name": stored_name,
-            # "stored_path": str(stored_path.relative_to(BASE_DIR)).replace("\\", "/"),
-            "size": file_size,
-            "category": category,
-            "client_id": client_id,
-        })
+        try:
+            result = file_service.save_http_uploaded_file(file, category=category, client_id=client_id)
+            return jsonify(result)
+        except Exception as e:
+            return jsonify({
+                'ok': False,
+                'error': str(e)
+            }), 500
 
     @app.errorhandler(413)
     def file_too_large(_):
         return jsonify({
-            "ok": False,
-            "error": "File is too large"
+            'ok': False,
+            'error': 'File is too large'
         }), 413
 
     return app

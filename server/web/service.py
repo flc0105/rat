@@ -6,6 +6,7 @@ from datetime import datetime
 from server.commands.executor import CommandExecutor
 from server.connection.client_connection import ClientConnection
 from server.web.event_bus import WebEventBus
+from server.web.file_service import WebFileService
 from server.web.task_store import WebTaskStore
 
 
@@ -18,28 +19,17 @@ class ServerWebService:
     - 提交并执行 Web 命令 / 上传任务
     - 管理 Web 任务状态
     - 发布 SSE 事件
-    - 管理 Web 文件目录
     - 为连接安装 Web 侧回调
+    - 协调文件服务
     """
 
     def __init__(self, server):
         self.server = server
         self.event_bus = WebEventBus()
         self.task_store = WebTaskStore()
+        self.file_service = WebFileService()
 
-        # web 文件区
-        self.web_root_dir = os.path.abspath(os.path.join('runtime', 'web_files'))
-        self.received_files_dir = os.path.join(self.web_root_dir, 'received')
-        self.upload_tmp_dir = os.path.join(self.web_root_dir, 'upload_tmp')
-        self.http_uploads_dir = os.path.join(self.web_root_dir, 'http_uploads')
-        self._prepare_web_dirs()
-
-    # ------------------ web files ------------------ #
-    def _prepare_web_dirs(self):
-        os.makedirs(self.received_files_dir, exist_ok=True)
-        os.makedirs(self.upload_tmp_dir, exist_ok=True)
-        os.makedirs(self.http_uploads_dir, exist_ok=True)
-
+    # ------------------ file notifications ------------------ #
     def notify_file_received(self, client_id: str, original_name: str, saved_path: str, size: int):
         self.event_bus.publish('file_received', {
             'client_id': client_id,
@@ -75,7 +65,7 @@ class ServerWebService:
             conn,
             addr,
             info,
-            file_save_dir=self.received_files_dir,
+            file_save_dir=self.file_service.received_files_dir,
             on_file_saved=lambda original_name, saved_path, size: self.notify_file_received(
                 info.get('id'),
                 original_name,
@@ -239,7 +229,7 @@ class ServerWebService:
                 if os.path.exists(local_path):
                     os.remove(local_path)
                 parent_dir = os.path.dirname(local_path)
-                if parent_dir.startswith(self.upload_tmp_dir) and os.path.isdir(parent_dir):
+                if parent_dir.startswith(self.file_service.upload_tmp_dir) and os.path.isdir(parent_dir):
                     shutil.rmtree(parent_dir, ignore_errors=True)
             except Exception:
                 pass
