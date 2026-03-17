@@ -1,5 +1,5 @@
-import os.path
 from datetime import datetime
+import os
 
 from server.connection.client_connection import ClientConnection
 
@@ -10,7 +10,7 @@ class WebConnectionService:
 
     职责：
     - 序列化连接信息
-    - 构建带 Web 能力的连接对象
+    - 创建带 Web 能力的连接对象
     - 处理连接上线/下线/背景消息事件
     """
 
@@ -35,8 +35,8 @@ class WebConnectionService:
     def get_connections_payload(self):
         return [self.serialize_connection(conn) for conn in self.server.connections.all()]
 
-    # ------------------ connection hooks ------------------ #
-    def build_connection(self, conn, addr, info: dict) -> ClientConnection:
+    # ------------------ connection lifecycle ------------------ #
+    def create_web_connection(self, conn, addr, info: dict) -> ClientConnection:
         """
         创建并配置带 Web 能力的客户端连接对象
         """
@@ -45,7 +45,7 @@ class WebConnectionService:
             addr,
             info,
             file_save_dir=self.file_service.received_files_dir,
-            on_file_saved=lambda original_name, saved_path, size: self.notify_file_received(
+            on_file_saved=lambda original_name, saved_path, size: self.publish_file_received(
                 info.get('id'),
                 original_name,
                 saved_path,
@@ -58,13 +58,13 @@ class WebConnectionService:
         )
         return connection
 
-    def on_connection_registered(self, connection: ClientConnection):
+    def handle_connection_registered(self, connection: ClientConnection):
         """
         连接注册成功后的 Web 通知
         """
         self.publish_connection_online(connection)
 
-    def on_connection_closed(self, conn: ClientConnection):
+    def handle_connection_closed(self, conn: ClientConnection):
         """
         连接关闭后的 Web 通知
         """
@@ -92,7 +92,7 @@ class WebConnectionService:
             'time': datetime.now().isoformat()
         })
 
-    def notify_file_received(self, client_id: str, original_name: str, saved_path: str, size: int):
+    def publish_file_received(self, client_id: str, original_name: str, saved_path: str, size: int):
         self.event_bus.publish('file_received', {
             'client_id': client_id,
             'original_name': original_name,

