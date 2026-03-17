@@ -22,7 +22,6 @@ createApp({
       recentFilesLoading: false,
       recentFiles: [],
 
-      //prev
       previewDialogVisible: false,
       previewLoading: false,
       previewType: '',
@@ -32,17 +31,12 @@ createApp({
     };
   },
 
-  //preview
   watch: {
     previewDialogVisible(val) {
-      if (!val) {
-        this.resetPreviewState();
-      }
+      if (!val) this.resetPreviewState();
     },
     remoteFilesDialogVisible(val) {
-      if (!val) {
-        this.resetRemoteFilesState();
-      }
+      if (!val) this.resetRemoteFilesState();
     }
   },
 
@@ -50,8 +44,8 @@ createApp({
     currentConnection() {
       return this.connections.find(item => item.client_id === this.selectedId) || null;
     },
-    currentOutput() {
-      return this.outputs[this.selectedId] || '';
+    currentOutputLines() {
+      return this.outputs[this.selectedId] || [];
     }
   },
 
@@ -61,13 +55,10 @@ createApp({
   },
 
   beforeUnmount() {
-    if (this.eventSource) {
-      this.eventSource.close();
-    }
+    if (this.eventSource) this.eventSource.close();
   },
 
   methods: {
-    //preview
     resetPreviewState() {
       this.previewType = '';
       this.previewTitle = '';
@@ -81,9 +72,65 @@ createApp({
       this.remoteFilesEntries = [];
     },
 
+    formatOsLabel(osType, osVer) {
+      const type = osType || 'Unknown';
+      return osVer ? `${type}` : type;
+    },
+
+    formatAddress(addr) {
+      if (!addr) return '-';
+      const raw = String(addr);
+      const parts = raw.split(':');
+      if (parts.length >= 2) return parts.slice(0, -1).join(':') || raw;
+      return raw;
+    },
+
+    buildPromptLabel(conn) {
+      if (!conn) return '$';
+      return conn.hostname || 'host';
+    },
+
+    ensureOutputBucket(clientId) {
+      if (!clientId) return;
+      if (!this.outputs[clientId]) this.outputs[clientId] = [];
+    },
+
+    inferLineKind(text) {
+      const value = String(text ?? '');
+      if (value.startsWith('> ')) return 'command';
+      if (value.startsWith('[发送失败]') || value.startsWith('[上传失败]')) return 'error';
+      if (value.startsWith('[异步消息]') || value.startsWith('[Background]')) return 'info';
+      if (value.startsWith('[命令结束]') || value.startsWith('[Command finished]')) {
+        return /成功|Success/i.test(value) ? 'success' : 'error';
+      }
+      if (/failed|error|not found|denied|unable/i.test(value)) return 'error';
+      if (/completed|success|saved|started|uploaded|downloaded/i.test(value)) return 'success';
+      if (/preparing|loading|refresh|connected|disconnected|warning/i.test(value)) return 'info';
+      return 'default';
+    },
+
+    appendOutput(clientId, text, kind = '') {
+      if (!clientId) return;
+      this.ensureOutputBucket(clientId);
+
+      const raw = String(text ?? '');
+      const normalized = raw.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+      const segments = normalized.split('\n');
+
+      segments.forEach((segment) => {
+        this.outputs[clientId].push({
+          text: segment === '' ? ' ' : segment,
+          kind: kind || this.inferLineKind(segment),
+          isMultiline: segments.length > 1
+        });
+      });
+
+      this.scrollToBottom();
+    },
+
     async previewRecentFile(row) {
       if (!row || !row.saved_name) {
-        ElementPlus.ElMessage.warning('无效文件');
+        ElementPlus.ElMessage.warning('Invalid file');
         return;
       }
 
@@ -96,12 +143,12 @@ createApp({
         const json = await res.json();
 
         if (!res.ok || json.code !== 0) {
-          throw new Error(json.message || '预览失败');
+          throw new Error(json.message || 'Preview failed');
         }
 
         const data = json.data || {};
         this.previewType = data.type || 'unsupported';
-        this.previewTitle = data.name || row.original_name || '文件预览';
+        this.previewTitle = data.name || row.original_name || 'File Preview';
 
         if (this.previewType === 'image') {
           this.previewUrl = data.url || '';
@@ -110,7 +157,7 @@ createApp({
         }
       } catch (e) {
         this.previewDialogVisible = false;
-        ElementPlus.ElMessage.error(e.message || '预览失败');
+        ElementPlus.ElMessage.error(e.message || 'Preview failed');
       } finally {
         this.previewLoading = false;
       }
@@ -118,18 +165,18 @@ createApp({
 
     async deleteRecentFile(row) {
       if (!row || !row.saved_name) {
-        ElementPlus.ElMessage.warning('无效文件');
+        ElementPlus.ElMessage.warning('Invalid file');
         return;
       }
 
       try {
         await ElementPlus.ElMessageBox.confirm(
-          `确定删除文件「${row.original_name || row.saved_name}」吗？`,
-          '删除确认',
+          `Delete "${row.original_name || row.saved_name}"?`,
+          'Delete Confirmation',
           {
             type: 'warning',
-            confirmButtonText: '删除',
-            cancelButtonText: '取消'
+            confirmButtonText: 'Delete',
+            cancelButtonText: 'Cancel'
           }
         );
 
@@ -139,10 +186,10 @@ createApp({
 
         const json = await res.json();
         if (!res.ok || json.code !== 0) {
-          throw new Error(json.message || '删除失败');
+          throw new Error(json.message || 'Delete failed');
         }
 
-        ElementPlus.ElMessage.success('删除成功');
+        ElementPlus.ElMessage.success('Deleted');
 
         if (this.previewDialogVisible && this.previewTitle === (row.original_name || row.saved_name)) {
           this.previewDialogVisible = false;
@@ -151,10 +198,8 @@ createApp({
 
         await this.openRecentFilesDialog();
       } catch (e) {
-        if (e === 'cancel' || e === 'close' || e?.toString?.().includes('cancel')) {
-          return;
-        }
-        ElementPlus.ElMessage.error(e.message || '删除失败');
+        if (e === 'cancel' || e === 'close' || e?.toString?.().includes('cancel')) return;
+        ElementPlus.ElMessage.error(e.message || 'Delete failed');
       }
     },
 
@@ -172,31 +217,13 @@ createApp({
           this.selectedId = this.connections.length > 0 ? this.connections[0].client_id : '';
         }
       } catch (e) {
-        ElementPlus.ElMessage.error('加载设备列表失败');
+        ElementPlus.ElMessage.error('Failed to load devices');
       }
     },
 
     selectConnection(clientId) {
       this.selectedId = clientId;
-      if (!this.outputs[clientId]) {
-        this.outputs[clientId] = '';
-      }
-      this.scrollToBottom();
-    },
-
-    appendOutput(clientId, text) {
-      if (!clientId) return;
-
-      if (!this.outputs[clientId]) {
-        this.outputs[clientId] = '';
-      }
-
-      this.outputs[clientId] += String(text ?? '');
-
-      if (!this.outputs[clientId].endsWith('\n')) {
-        this.outputs[clientId] += '\n';
-      }
-
+      this.ensureOutputBucket(clientId);
       this.scrollToBottom();
     },
 
@@ -204,36 +231,34 @@ createApp({
       const command = (this.commandText || '').trim();
 
       if (!this.selectedId) {
-        ElementPlus.ElMessage.warning('请先选择设备');
+        ElementPlus.ElMessage.warning('Please select a device');
         return;
       }
 
       if (!command) {
-        ElementPlus.ElMessage.warning('请输入命令');
+        ElementPlus.ElMessage.warning('Please enter a command');
         return;
       }
 
       this.sending = true;
-      this.appendOutput(this.selectedId, '> ' + command);
+      this.appendOutput(this.selectedId, '> ' + command, 'command');
 
       try {
         const res = await fetch(`/api/connections/${encodeURIComponent(this.selectedId)}/command`, {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json'
-          },
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ command })
         });
 
         const json = await res.json();
         if (!res.ok || json.code !== 0) {
-          throw new Error(json.message || '发送命令失败');
+          throw new Error(json.message || 'Command failed');
         }
 
         this.commandText = '';
       } catch (e) {
-        this.appendOutput(this.selectedId, '[发送失败] ' + (e.message || 'unknown error'));
-        ElementPlus.ElMessage.error(e.message || '发送命令失败');
+        this.appendOutput(this.selectedId, '[发送失败] ' + (e.message || 'unknown error'), 'error');
+        ElementPlus.ElMessage.error(e.message || 'Command failed');
       } finally {
         this.sending = false;
       }
@@ -241,7 +266,7 @@ createApp({
 
     async killConnection() {
       if (!this.selectedId) {
-        ElementPlus.ElMessage.warning('请先选择设备');
+        ElementPlus.ElMessage.warning('Please select a device');
         return;
       }
 
@@ -252,18 +277,18 @@ createApp({
 
         const json = await res.json();
         if (!res.ok || json.code !== 0) {
-          throw new Error(json.message || '断开失败');
+          throw new Error(json.message || 'Disconnect failed');
         }
 
-        ElementPlus.ElMessage.success('断开命令已发送');
+        ElementPlus.ElMessage.success('Disconnect command sent');
       } catch (e) {
-        ElementPlus.ElMessage.error(e.message || '断开失败');
+        ElementPlus.ElMessage.error(e.message || 'Disconnect failed');
       }
     },
 
     triggerUpload() {
       if (!this.selectedId) {
-        ElementPlus.ElMessage.warning('请先选择设备');
+        ElementPlus.ElMessage.warning('Please select a device');
         return;
       }
 
@@ -279,7 +304,7 @@ createApp({
       if (!file) return;
 
       if (!this.selectedId) {
-        ElementPlus.ElMessage.warning('请先选择设备');
+        ElementPlus.ElMessage.warning('Please select a device');
         return;
       }
 
@@ -287,7 +312,7 @@ createApp({
       formData.append('file', file);
 
       this.uploading = true;
-      this.appendOutput(this.selectedId, `> [上传文件] ${file.name}`);
+      this.appendOutput(this.selectedId, `> [Upload] ${file.name}`, 'command');
 
       try {
         const res = await fetch(`/api/connections/${encodeURIComponent(this.selectedId)}/upload`, {
@@ -297,13 +322,13 @@ createApp({
 
         const json = await res.json();
         if (!res.ok || json.code !== 0) {
-          throw new Error(json.message || '上传失败');
+          throw new Error(json.message || 'Upload failed');
         }
 
-        ElementPlus.ElMessage.success(`已开始上传：${file.name}`);
+        ElementPlus.ElMessage.success(`Upload started: ${file.name}`);
       } catch (e) {
-        this.appendOutput(this.selectedId, `[上传失败] ${e.message || 'unknown error'}`);
-        ElementPlus.ElMessage.error(e.message || '上传失败');
+        this.appendOutput(this.selectedId, `[上传失败] ${e.message || 'unknown error'}`, 'error');
+        ElementPlus.ElMessage.error(e.message || 'Upload failed');
       } finally {
         this.uploading = false;
       }
@@ -311,7 +336,7 @@ createApp({
 
     async openRemoteFilesDialog() {
       if (!this.selectedId) {
-        ElementPlus.ElMessage.warning('请先选择设备');
+        ElementPlus.ElMessage.warning('Please select a device');
         return;
       }
 
@@ -321,7 +346,7 @@ createApp({
 
     async loadRemoteDirectory(path = '') {
       if (!this.selectedId) {
-        ElementPlus.ElMessage.warning('请先选择设备');
+        ElementPlus.ElMessage.warning('Please select a device');
         return;
       }
 
@@ -329,15 +354,13 @@ createApp({
 
       try {
         const url = new URL(`/api/connections/${encodeURIComponent(this.selectedId)}/remote-files`, window.location.origin);
-        if (path) {
-          url.searchParams.set('path', path);
-        }
+        if (path) url.searchParams.set('path', path);
 
         const res = await fetch(url.pathname + url.search);
         const json = await res.json();
 
         if (!res.ok || json.code !== 0) {
-          throw new Error(json.message || '加载远程目录失败');
+          throw new Error(json.message || 'Failed to load remote directory');
         }
 
         const data = json.data || {};
@@ -345,7 +368,7 @@ createApp({
         this.remoteFilesParentPath = data.parent_path || '';
         this.remoteFilesEntries = data.entries || [];
       } catch (e) {
-        ElementPlus.ElMessage.error(e.message || '加载远程目录失败');
+        ElementPlus.ElMessage.error(e.message || 'Failed to load remote directory');
       } finally {
         this.remoteFilesLoading = false;
       }
@@ -356,16 +379,12 @@ createApp({
     },
 
     async goToRemoteParent() {
-      if (!this.remoteFilesParentPath) {
-        return;
-      }
+      if (!this.remoteFilesParentPath) return;
       await this.loadRemoteDirectory(this.remoteFilesParentPath);
     },
 
     async enterRemoteDirectory(row) {
-      if (!row || !row.is_dir) {
-        return;
-      }
+      if (!row || !row.is_dir) return;
       await this.loadRemoteDirectory(row.path);
     },
 
@@ -377,7 +396,7 @@ createApp({
 
     async downloadRemoteEntry(row) {
       if (!row || !row.path || row.is_dir) {
-        ElementPlus.ElMessage.warning('请选择文件');
+        ElementPlus.ElMessage.warning('Please select a file');
         return;
       }
 
@@ -385,69 +404,63 @@ createApp({
         const url = new URL(`/api/connections/${encodeURIComponent(this.selectedId)}/remote-files/download`, window.location.origin);
         url.searchParams.set('path', row.path);
 
-        const res = await fetch(url.pathname + url.search, {
-          method: 'POST'
-        });
-
+        const res = await fetch(url.pathname + url.search, { method: 'POST' });
         const json = await res.json();
+
         if (!res.ok || json.code !== 0) {
-          throw new Error(json.message || '下载失败');
+          throw new Error(json.message || 'Download failed');
         }
 
         const file = json.data && json.data.file;
         if (!file || !file.saved_name) {
-          throw new Error('下载完成，但未找到保存文件');
+          throw new Error('Download finished, but saved file was not found');
         }
 
         const downloadUrl = `/api/files/recent/${encodeURIComponent(file.saved_name)}`;
         window.open(downloadUrl, '_blank');
 
-        ElementPlus.ElMessage.success(`下载成功：${row.name}`);
+        ElementPlus.ElMessage.success(`Downloaded: ${row.name}`);
 
         if (this.recentFilesDialogVisible) {
           await this.openRecentFilesDialog();
         }
       } catch (e) {
-        ElementPlus.ElMessage.error(e.message || '下载失败');
+        ElementPlus.ElMessage.error(e.message || 'Download failed');
       }
     },
 
     async deleteRemoteEntry(row) {
       if (!row || !row.path) {
-        ElementPlus.ElMessage.warning('无效路径');
+        ElementPlus.ElMessage.warning('Invalid path');
         return;
       }
 
       try {
         await ElementPlus.ElMessageBox.confirm(
-          `确定删除「${row.name}」吗？${row.is_dir ? '该目录下的内容也会一起删除。' : ''}`,
-          '删除确认',
+          `Delete "${row.name}"?${row.is_dir ? ' All nested contents will be removed as well.' : ''}`,
+          'Delete Confirmation',
           {
             type: 'warning',
-            confirmButtonText: '删除',
-            cancelButtonText: '取消'
+            confirmButtonText: 'Delete',
+            cancelButtonText: 'Cancel'
           }
         );
 
         const url = new URL(`/api/connections/${encodeURIComponent(this.selectedId)}/remote-files`, window.location.origin);
         url.searchParams.set('path', row.path);
 
-        const res = await fetch(url.pathname + url.search, {
-          method: 'DELETE'
-        });
-
+        const res = await fetch(url.pathname + url.search, { method: 'DELETE' });
         const json = await res.json();
+
         if (!res.ok || json.code !== 0) {
-          throw new Error(json.message || '删除失败');
+          throw new Error(json.message || 'Delete failed');
         }
 
-        ElementPlus.ElMessage.success('删除成功');
+        ElementPlus.ElMessage.success('Deleted');
         await this.refreshRemoteDirectory();
       } catch (e) {
-        if (e === 'cancel' || e === 'close' || e?.toString?.().includes('cancel')) {
-          return;
-        }
-        ElementPlus.ElMessage.error(e.message || '删除失败');
+        if (e === 'cancel' || e === 'close' || e?.toString?.().includes('cancel')) return;
+        ElementPlus.ElMessage.error(e.message || 'Delete failed');
       }
     },
 
@@ -460,29 +473,25 @@ createApp({
         const json = await res.json();
 
         if (!res.ok || json.code !== 0) {
-          throw new Error(json.message || '加载最近文件失败');
+          throw new Error(json.message || 'Failed to load files');
         }
 
         this.recentFiles = json.data || [];
       } catch (e) {
-        ElementPlus.ElMessage.error(e.message || '加载最近文件失败');
+        ElementPlus.ElMessage.error(e.message || 'Failed to load files');
       } finally {
         this.recentFilesLoading = false;
       }
     },
 
     clearOutput() {
-      if (this.selectedId) {
-        this.outputs[this.selectedId] = '';
-      }
+      if (this.selectedId) this.outputs[this.selectedId] = [];
     },
 
     scrollToBottom() {
       nextTick(() => {
         const el = this.$refs.terminalRef;
-        if (el) {
-          el.scrollTop = el.scrollHeight;
-        }
+        if (el) el.scrollTop = el.scrollHeight;
       });
     },
 
@@ -494,9 +503,7 @@ createApp({
         this.connections[idx] = conn;
       }
 
-      if (!this.selectedId) {
-        this.selectedId = conn.client_id;
-      }
+      if (!this.selectedId) this.selectedId = conn.client_id;
     },
 
     removeConnection(clientId) {
@@ -515,17 +522,13 @@ createApp({
     },
 
     initSSE() {
-      if (this.eventSource) {
-        this.eventSource.close();
-      }
+      if (this.eventSource) this.eventSource.close();
 
       const es = new EventSource('/api/stream');
       this.eventSource = es;
 
       es.addEventListener('open', () => {
-        if (!this.sseReady) {
-          this.sseReady = true;
-        }
+        if (!this.sseReady) this.sseReady = true;
       });
 
       es.addEventListener('connection_online', (event) => {
@@ -534,8 +537,8 @@ createApp({
         this.upsertConnection(conn);
 
         ElementPlus.ElNotification({
-          title: '设备上线',
-          message: `${conn.hostname || conn.client_id} 已上线`,
+          title: 'Device Online',
+          message: `${conn.hostname || conn.client_id} is now available`,
           type: 'success'
         });
       });
@@ -548,8 +551,8 @@ createApp({
         this.removeConnection(clientId);
 
         ElementPlus.ElNotification({
-          title: '设备下线',
-          message: `${(oldConn && oldConn.hostname) || clientId} 已下线`,
+          title: 'Device Offline',
+          message: `${(oldConn && oldConn.hostname) || clientId} went offline`,
           type: 'warning'
         });
       });
@@ -559,17 +562,20 @@ createApp({
         this.appendOutput(payload.client_id, payload.text || '');
       });
 
-      es.addEventListener('command_complete', (event) => {
+      es.addEventListener('command_complete', async (event) => {
         const payload = JSON.parse(event.data);
         this.appendOutput(
           payload.client_id,
-          `[命令结束] ${payload.command} (${payload.success ? '成功' : '失败'})`
+          `[Command finished] ${payload.command} (${payload.success ? 'Success' : 'Failed'})`,
+          payload.success ? 'success' : 'error'
         );
+        await this.loadConnections();
       });
 
-      es.addEventListener('background_message', (event) => {
+      es.addEventListener('background_message', async (event) => {
         const payload = JSON.parse(event.data);
-        this.appendOutput(payload.client_id, `[异步消息] ${payload.text || ''}`);
+        this.appendOutput(payload.client_id, `[Background] ${payload.text || ''}`, 'info');
+        await this.loadConnections();
       });
 
       es.addEventListener('file_received', (event) => {
@@ -578,14 +584,14 @@ createApp({
         const downloadUrl = `/api/files/recent/${encodeURIComponent(fileName)}`;
 
         ElementPlus.ElNotification({
-          title: '收到文件',
+          title: 'File Received',
           dangerouslyUseHTMLString: true,
           message: `
             <div>
-              <div>${payload.original_name || fileName} 已保存到服务器文件区</div>
+              <div>${payload.original_name || fileName} has been saved to the server file area</div>
               <div style="margin-top:6px;">
                 <a href="${downloadUrl}" target="_blank" style="color:#409eff;text-decoration:none;">
-                  点此下载
+                  Download now
                 </a>
               </div>
             </div>
@@ -600,7 +606,7 @@ createApp({
       });
 
       es.onerror = () => {
-        // EventSource 会自动重连
+        // EventSource reconnects automatically
       };
     }
   }
