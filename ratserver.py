@@ -34,16 +34,6 @@ class Server:
         # web
         self.web_service = ServerWebService(self)
 
-    # ------------------ web bridge ------------------ #
-    def get_connections_payload(self):
-        return self.web_service.get_connections_payload()
-
-    def submit_web_command(self, client_id: str, command: str):
-        return self.web_service.submit_command(client_id, command)
-
-    def submit_web_upload(self, client_id: str, local_path: str, display_name: str):
-        return self.web_service.submit_upload(client_id, local_path, display_name)
-
     # ------------------ connection lookup ------------------ #
     def get_target_connection_by_client_id(self, client_id) -> ClientConnection:
         try:
