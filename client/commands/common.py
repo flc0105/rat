@@ -43,11 +43,13 @@ class CommonCommands(CommandBase):
         return subprocess.run(
             command,
             shell=True,
+            stdin=subprocess.DEVNULL,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,
             encoding='utf-8',
-            errors='replace'
+            errors='replace',
+            timeout=30
         )
 
     def _start_stream_process(self, command):
@@ -178,6 +180,8 @@ class CommonCommands(CommandBase):
             if result.returncode == 0:
                 return 1, result.stdout
             return 0, result.stderr or f'Command exited with code {result.returncode}'
+        except subprocess.TimeoutExpired:
+            return 0, 'Command timed out'
         except Exception as e:
             return 0, f'Failed to execute command: {e}'
 

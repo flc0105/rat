@@ -68,7 +68,7 @@ class ClientFileReceiver:
             'saved_name': os.path.basename(file_path),
             'saved_path': file_path,
             'size': size,
-            'created_at': datetime.now().isoformat()
+            'created_at': datetime.now().strftime('%Y-%m-%d %H:%M')
         }
         with open(meta_path, 'w', encoding='utf-8') as f:
             json.dump(meta, f, ensure_ascii=False, indent=2)
