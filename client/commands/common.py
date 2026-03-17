@@ -1,8 +1,10 @@
 import contextlib
 import inspect
 import io
+import json
 import locale
 import os
+import shutil
 import subprocess
 import sys
 import threading
@@ -118,6 +120,48 @@ class CommonCommands(CommandBase):
 
         raise RuntimeError(f'Unsupported platform: {os.name}')
 
+    def _resolve_target_path(self, path: str) -> str:
+        """
+        将传入路径解析为当前客户端上的绝对路径
+        - 空路径默认当前工作目录
+        - 相对路径基于当前 cwd
+        """
+        raw_path = (path or '').strip()
+        if not raw_path:
+            raw_path = '.'
+
+        if os.path.isabs(raw_path):
+            return os.path.abspath(raw_path)
+
+        return os.path.abspath(os.path.join(os.getcwd(), raw_path))
+
+    def _build_parent_path(self, path: str):
+        """
+        获取上级目录；如果已经到根目录，则返回 None
+        """
+        current = os.path.abspath(path)
+        parent = os.path.dirname(current)
+        if parent == current:
+            return None
+        return parent
+
+    def _build_directory_entry(self, entry):
+        """
+        构造目录项描述
+        """
+        stat = entry.stat(follow_symlinks=False)
+        is_dir = entry.is_dir(follow_symlinks=True)
+        is_symlink = entry.is_symlink()
+
+        return {
+            'name': entry.name,
+            'path': os.path.abspath(entry.path),
+            'is_dir': is_dir,
+            'is_symlink': is_symlink,
+            'size': 0 if is_dir else stat.st_size,
+            'modified_at': time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(stat.st_mtime))
+        }
+
     # ------------------ 基础命令 ------------------ #
     @desc('Change working directory')
     def cd(self, path):
@@ -176,11 +220,64 @@ class CommonCommands(CommandBase):
         methods = self._get_exported_command_methods()
         return 1, format_dict({name: method.help for name, method in methods.items()})
 
+    @desc('Browse directory as JSON payload')
+    def browse_dir(self, path=''):
+        """
+        浏览目录，返回 JSON 结构，供 Web 端可视化文件浏览使用。
+        """
+        try:
+            directory = self._resolve_target_path(path)
+
+            if not os.path.exists(directory):
+                return 0, f'Directory not found: {directory}'
+
+            if not os.path.isdir(directory):
+                return 0, f'Not a directory: {directory}'
+
+            entries = []
+            with os.scandir(directory) as iterator:
+                for entry in iterator:
+                    try:
+                        entries.append(self._build_directory_entry(entry))
+                    except Exception:
+                        # 某些文件可能无权限读取 stat，跳过即可，避免整个目录浏览失败
+                        continue
+
+            entries.sort(key=lambda item: (not item['is_dir'], item['name'].lower()))
+
+            payload = {
+                'current_path': directory,
+                'parent_path': self._build_parent_path(directory),
+                'entries': entries
+            }
+            return 1, json.dumps(payload, ensure_ascii=False)
+        except Exception as e:
+            return 0, f'Failed to browse directory: {e}'
+
+    @desc('Delete a file or directory')
+    def delete_path(self, path=''):
+        """
+        删除文件或目录。
+        """
+        try:
+            target_path = self._resolve_target_path(path)
+
+            if not os.path.exists(target_path):
+                return 0, f'Path not found: {target_path}'
+
+            if os.path.isdir(target_path):
+                shutil.rmtree(target_path)
+                return 1, f'Directory deleted: {target_path}'
+
+            os.remove(target_path)
+            return 1, f'File deleted: {target_path}'
+        except Exception as e:
+            return 0, f'Failed to delete path: {e}'
+
     # ------------------ 压缩文件 ------------------ #
     @desc('Create a ZIP archive')
     def zip(self, dir_name):
         import pathlib
-        import shutil
         import tempfile
 
         try:
@@ -201,8 +298,6 @@ class CommonCommands(CommandBase):
 
     @desc('Extract a ZIP archive')
     def unzip(self, zip_name):
-        import shutil
-
         try:
             archive_path = self._validate_file_exists(zip_name)
             shutil.unpack_archive(archive_path, os.getcwd())
@@ -297,7 +392,7 @@ class CommonCommands(CommandBase):
             return 0, 'Usage: job_status <job_name>'
 
         try:
-            status_info =job_manager.get_job_status(job_name)
+            status_info = job_manager.get_job_status(job_name)
             return 1, format_dict(status_info)
         except Exception as e:
             return 0, f'Failed to query background job status: {e}'

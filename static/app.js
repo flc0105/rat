@@ -12,12 +12,18 @@ createApp({
       eventSource: null,
       sseReady: false,
 
+      remoteFilesDialogVisible: false,
+      remoteFilesLoading: false,
+      remoteFilesCurrentPath: '',
+      remoteFilesParentPath: '',
+      remoteFilesEntries: [],
+
       recentFilesDialogVisible: false,
       recentFilesLoading: false,
       recentFiles: [],
 
       //prev
-            previewDialogVisible: false,
+      previewDialogVisible: false,
       previewLoading: false,
       previewType: '',
       previewTitle: '',
@@ -32,9 +38,13 @@ createApp({
       if (!val) {
         this.resetPreviewState();
       }
+    },
+    remoteFilesDialogVisible(val) {
+      if (!val) {
+        this.resetRemoteFilesState();
+      }
     }
   },
-
 
   computed: {
     currentConnection() {
@@ -57,15 +67,20 @@ createApp({
   },
 
   methods: {
-
     //preview
-
-        resetPreviewState() {
+    resetPreviewState() {
       this.previewType = '';
       this.previewTitle = '';
       this.previewUrl = '';
       this.previewText = '';
     },
+
+    resetRemoteFilesState() {
+      this.remoteFilesCurrentPath = '';
+      this.remoteFilesParentPath = '';
+      this.remoteFilesEntries = [];
+    },
+
     async previewRecentFile(row) {
       if (!row || !row.saved_name) {
         ElementPlus.ElMessage.warning('无效文件');
@@ -100,6 +115,7 @@ createApp({
         this.previewLoading = false;
       }
     },
+
     async deleteRecentFile(row) {
       if (!row || !row.saved_name) {
         ElementPlus.ElMessage.warning('无效文件');
@@ -141,7 +157,6 @@ createApp({
         ElementPlus.ElMessage.error(e.message || '删除失败');
       }
     },
-
 
     async loadConnections() {
       try {
@@ -294,6 +309,111 @@ createApp({
       }
     },
 
+    async openRemoteFilesDialog() {
+      if (!this.selectedId) {
+        ElementPlus.ElMessage.warning('请先选择设备');
+        return;
+      }
+
+      this.remoteFilesDialogVisible = true;
+      await this.loadRemoteDirectory('');
+    },
+
+    async loadRemoteDirectory(path = '') {
+      if (!this.selectedId) {
+        ElementPlus.ElMessage.warning('请先选择设备');
+        return;
+      }
+
+      this.remoteFilesLoading = true;
+
+      try {
+        const url = new URL(`/api/connections/${encodeURIComponent(this.selectedId)}/remote-files`, window.location.origin);
+        if (path) {
+          url.searchParams.set('path', path);
+        }
+
+        const res = await fetch(url.pathname + url.search);
+        const json = await res.json();
+
+        if (!res.ok || json.code !== 0) {
+          throw new Error(json.message || '加载远程目录失败');
+        }
+
+        const data = json.data || {};
+        this.remoteFilesCurrentPath = data.current_path || '';
+        this.remoteFilesParentPath = data.parent_path || '';
+        this.remoteFilesEntries = data.entries || [];
+      } catch (e) {
+        ElementPlus.ElMessage.error(e.message || '加载远程目录失败');
+      } finally {
+        this.remoteFilesLoading = false;
+      }
+    },
+
+    async refreshRemoteDirectory() {
+      await this.loadRemoteDirectory(this.remoteFilesCurrentPath || '');
+    },
+
+    async goToRemoteParent() {
+      if (!this.remoteFilesParentPath) {
+        return;
+      }
+      await this.loadRemoteDirectory(this.remoteFilesParentPath);
+    },
+
+    async enterRemoteDirectory(row) {
+      if (!row || !row.is_dir) {
+        return;
+      }
+      await this.loadRemoteDirectory(row.path);
+    },
+
+    handleRemoteRowDblClick(row) {
+      if (row && row.is_dir) {
+        this.enterRemoteDirectory(row);
+      }
+    },
+
+    async deleteRemoteEntry(row) {
+      if (!row || !row.path) {
+        ElementPlus.ElMessage.warning('无效路径');
+        return;
+      }
+
+      try {
+        await ElementPlus.ElMessageBox.confirm(
+          `确定删除「${row.name}」吗？${row.is_dir ? '该目录下的内容也会一起删除。' : ''}`,
+          '删除确认',
+          {
+            type: 'warning',
+            confirmButtonText: '删除',
+            cancelButtonText: '取消'
+          }
+        );
+
+        const url = new URL(`/api/connections/${encodeURIComponent(this.selectedId)}/remote-files`, window.location.origin);
+        url.searchParams.set('path', row.path);
+
+        const res = await fetch(url.pathname + url.search, {
+          method: 'DELETE'
+        });
+
+        const json = await res.json();
+        if (!res.ok || json.code !== 0) {
+          throw new Error(json.message || '删除失败');
+        }
+
+        ElementPlus.ElMessage.success('删除成功');
+        await this.refreshRemoteDirectory();
+      } catch (e) {
+        if (e === 'cancel' || e === 'close' || e?.toString?.().includes('cancel')) {
+          return;
+        }
+        ElementPlus.ElMessage.error(e.message || '删除失败');
+      }
+    },
+
     async openRecentFilesDialog() {
       this.recentFilesDialogVisible = true;
       this.recentFilesLoading = true;
@@ -430,31 +550,31 @@ createApp({
       // });
 
       es.addEventListener('file_received', (event) => {
-  const payload = JSON.parse(event.data);
-  const fileName = payload.saved_name || payload.original_name;
-  const downloadUrl = `/api/files/recent/${encodeURIComponent(fileName)}`;
+        const payload = JSON.parse(event.data);
+        const fileName = payload.saved_name || payload.original_name;
+        const downloadUrl = `/api/files/recent/${encodeURIComponent(fileName)}`;
 
-  ElementPlus.ElNotification({
-    title: '收到文件',
-    dangerouslyUseHTMLString: true,
-    message: `
-      <div>
-        <div>${payload.original_name || fileName} 已保存到服务器文件区</div>
-        <div style="margin-top:6px;">
-          <a href="${downloadUrl}" target="_blank" style="color:#409eff;text-decoration:none;">
-            点此下载
-          </a>
-        </div>
-      </div>
-    `,
-    type: 'success',
-    duration: 6000
-  });
+        ElementPlus.ElNotification({
+          title: '收到文件',
+          dangerouslyUseHTMLString: true,
+          message: `
+            <div>
+              <div>${payload.original_name || fileName} 已保存到服务器文件区</div>
+              <div style="margin-top:6px;">
+                <a href="${downloadUrl}" target="_blank" style="color:#409eff;text-decoration:none;">
+                  点此下载
+                </a>
+              </div>
+            </div>
+          `,
+          type: 'success',
+          duration: 6000
+        });
 
-  if (this.recentFilesDialogVisible) {
-    this.openRecentFilesDialog();
-  }
-});
+        if (this.recentFilesDialogVisible) {
+          this.openRecentFilesDialog();
+        }
+      });
 
       es.onerror = () => {
         // EventSource 会自动重连

@@ -44,6 +44,9 @@ def create_app(server_instance):
             raise ValueError('file is required')
         return upload
 
+    def _get_optional_remote_path():
+        return (request.args.get('path') or '').strip()
+
     # ------------------ error mapping ------------------ #
     def _map_common_error(error):
         if isinstance(error, ValueError):
@@ -135,6 +138,24 @@ def create_app(server_instance):
             return web_service.submit_upload(client_id, temp_path, safe_name)
 
         return _json_endpoint(_execute)
+
+    # ------------------ remote files ------------------ #
+    @app.get('/api/connections/<client_id>/remote-files')
+    def browse_remote_files(client_id):
+        return _json_endpoint(
+            lambda: web_service.browse_remote_directory(client_id, _get_optional_remote_path()),
+            default_error_status=500
+        )
+
+    @app.delete('/api/connections/<client_id>/remote-files')
+    def delete_remote_file_or_directory(client_id):
+        def _execute():
+            path = _get_optional_remote_path()
+            if not path:
+                raise ValueError('path is required')
+            return web_service.delete_remote_path(client_id, path)
+
+        return _json_endpoint(_execute, default_error_status=500)
 
     # ------------------ event stream ------------------ #
     @app.get('/api/stream')

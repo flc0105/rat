@@ -190,6 +190,61 @@ body {
   vertical-align: middle;
 }
 
+/* remote files */
+.remote-files-dialog .el-dialog__body {
+  padding-top: 12px;
+}
+
+.remote-files-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.remote-files-toolbar-actions {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.remote-path-box {
+  min-width: 0;
+  flex: 1;
+  background: #f5f7fa;
+  border: 1px solid #ebeef5;
+  border-radius: 8px;
+  padding: 10px 12px;
+  overflow: hidden;
+}
+
+.remote-path-label {
+  color: #606266;
+  margin-right: 6px;
+}
+
+.remote-path-value {
+  color: #303133;
+  word-break: break-all;
+}
+
+.remote-files-table-wrap {
+  width: 100%;
+  overflow-x: auto;
+}
+
+.remote-file-name {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.remote-file-icon {
+  flex-shrink: 0;
+}
+
 /*prev*/
 .table-actions {
   display: flex;

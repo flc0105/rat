@@ -1,6 +1,7 @@
 from server.web.connection_service import WebConnectionService
 from server.web.event_bus import WebEventBus
 from server.web.file_service import WebFileService
+from server.web.remote_file_service import WebRemoteFileService
 from server.web.task_service import WebTaskService
 from server.web.task_store import WebTaskStore
 
@@ -19,6 +20,7 @@ class ServerWebService:
         self.event_bus = WebEventBus()
         self.task_store = WebTaskStore()
         self.file_service = WebFileService()
+        self.remote_file_service = WebRemoteFileService(server=self.server)
 
         self.connection_service = WebConnectionService(
             server=self.server,
@@ -52,6 +54,13 @@ class ServerWebService:
 
     def submit_web_upload(self, client_id: str, local_path: str, display_name: str):
         return self.task_service.submit_web_upload(client_id, local_path, display_name)
+
+    # ------------------ remote file facade ------------------ #
+    def browse_remote_directory(self, client_id: str, path: str = ''):
+        return self.remote_file_service.browse_directory(client_id, path)
+
+    def delete_remote_path(self, client_id: str, path: str):
+        return self.remote_file_service.delete_path(client_id, path)
 
     # ------------------ compatibility facade ------------------ #
     def build_connection(self, conn, addr, info: dict):
