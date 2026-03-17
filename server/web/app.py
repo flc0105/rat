@@ -157,6 +157,16 @@ def create_app(server_instance):
 
         return _json_endpoint(_execute, default_error_status=500)
 
+    @app.post('/api/connections/<client_id>/remote-files/download')
+    def download_remote_file(client_id):
+        def _execute():
+            path = _get_optional_remote_path()
+            if not path:
+                raise ValueError('path is required')
+            return web_service.download_remote_file(client_id, path)
+
+        return _json_endpoint(_execute, default_error_status=500)
+
     # ------------------ event stream ------------------ #
     @app.get('/api/stream')
     def stream():

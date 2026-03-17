@@ -206,6 +206,25 @@ class CommonCommands(CommandBase):
         else:
             return 0, f'File not found: {os.path.abspath(filename)}'
 
+    @desc('Download a file by path')
+    def download_path(self, path=''):
+        """
+        按路径下载文件，供 Web 远程文件浏览使用。
+        """
+        try:
+            file_path = self._resolve_target_path(path)
+            if not os.path.exists(file_path):
+                return 0, f'Path not found: {file_path}'
+            if not os.path.isfile(file_path):
+                return 0, f'Not a file: {file_path}'
+
+            file_size = os.path.getsize(file_path)
+            self.socket.send_result(self.command_id, 1, 'Preparing file transfer...', eof=0)
+            self.socket.send_result(self.command_id, 1, f'File size: {file_size} bytes', eof=0)
+            self.socket.send_file(self.command_id, file_path)
+        except Exception as e:
+            return 0, f'Failed to download file: {e}'
+
     @desc('Execute Python code')
     def pyexec(self, code, kwargs=None):
         if kwargs is None:

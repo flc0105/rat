@@ -62,6 +62,9 @@ class ServerWebService:
     def delete_remote_path(self, client_id: str, path: str):
         return self.remote_file_service.delete_path(client_id, path)
 
+    def download_remote_file(self, client_id: str, path: str):
+        return self.remote_file_service.download_file(client_id, path)
+
     # ------------------ compatibility facade ------------------ #
     def build_connection(self, conn, addr, info: dict):
         return self.create_web_connection(conn, addr, info)

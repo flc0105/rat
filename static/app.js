@@ -375,6 +375,43 @@ createApp({
       }
     },
 
+    async downloadRemoteEntry(row) {
+      if (!row || !row.path || row.is_dir) {
+        ElementPlus.ElMessage.warning('请选择文件');
+        return;
+      }
+
+      try {
+        const url = new URL(`/api/connections/${encodeURIComponent(this.selectedId)}/remote-files/download`, window.location.origin);
+        url.searchParams.set('path', row.path);
+
+        const res = await fetch(url.pathname + url.search, {
+          method: 'POST'
+        });
+
+        const json = await res.json();
+        if (!res.ok || json.code !== 0) {
+          throw new Error(json.message || '下载失败');
+        }
+
+        const file = json.data && json.data.file;
+        if (!file || !file.saved_name) {
+          throw new Error('下载完成，但未找到保存文件');
+        }
+
+        const downloadUrl = `/api/files/recent/${encodeURIComponent(file.saved_name)}`;
+        window.open(downloadUrl, '_blank');
+
+        ElementPlus.ElMessage.success(`下载成功：${row.name}`);
+
+        if (this.recentFilesDialogVisible) {
+          await this.openRecentFilesDialog();
+        }
+      } catch (e) {
+        ElementPlus.ElMessage.error(e.message || '下载失败');
+      }
+    },
+
     async deleteRemoteEntry(row) {
       if (!row || !row.path) {
         ElementPlus.ElMessage.warning('无效路径');
@@ -534,20 +571,6 @@ createApp({
         const payload = JSON.parse(event.data);
         this.appendOutput(payload.client_id, `[异步消息] ${payload.text || ''}`);
       });
-
-      // es.addEventListener('file_received', (event) => {
-      //   const payload = JSON.parse(event.data);
-      //
-      //   ElementPlus.ElNotification({
-      //     title: '收到文件',
-      //     message: `${payload.original_name} 已保存到服务器文件区`,
-      //     type: 'success'
-      //   });
-      //
-      //   if (this.recentFilesDialogVisible) {
-      //     this.openRecentFilesDialog();
-      //   }
-      // });
 
       es.addEventListener('file_received', (event) => {
         const payload = JSON.parse(event.data);
