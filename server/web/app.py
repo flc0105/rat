@@ -4,9 +4,11 @@ import os
 import queue
 import uuid
 from datetime import datetime
+from pathlib import Path
 
 from flask import Flask, Response, jsonify, request, send_from_directory, stream_with_context
 from werkzeug.utils import secure_filename
+
 
 
 def create_app(server_instance):
@@ -328,6 +330,70 @@ def create_app(server_instance):
             'code': 0,
             'message': 'ok'
         })
+
+
+    # 可选：限制最大上传体积，单位字节
+    app.config["MAX_CONTENT_LENGTH"] = 50 * 1024 * 1024  # 50 MB
+    BASE_DIR = Path(__file__).resolve().parent
+
+    def build_stored_filename(original_name: str) -> str:
+        safe_name = secure_filename(original_name)
+        if not safe_name:
+            safe_name = "unnamed_file"
+
+        ext = Path(safe_name).suffix
+        stem = Path(safe_name).stem
+        unique_suffix = uuid.uuid4().hex[:8]
+        return f"{stem}_{unique_suffix}{ext}"
+
+    @app.route("/api/files/upload", methods=["POST"])
+    def upload_file():
+        if "file" not in request.files:
+            return jsonify({
+                "ok": False,
+                "error": "Missing file field: file"
+            }), 400
+
+        file = request.files["file"]
+        if not file or file.filename == "":
+            return jsonify({
+                "ok": False,
+                "error": "No file selected"
+            }), 400
+
+        category = request.form.get("category", "").strip()
+        client_id = request.form.get("client_id", "").strip()
+
+        target_dir = Path(server_instance.http_uploads_dir)
+        if category:
+            target_dir = target_dir / secure_filename(category)
+        if client_id:
+            target_dir = target_dir / secure_filename(client_id)
+
+        target_dir.mkdir(parents=True, exist_ok=True)
+
+        stored_name = build_stored_filename(file.filename)
+        stored_path = target_dir / stored_name
+        file.save(stored_path)
+
+        file_size = stored_path.stat().st_size
+
+        return jsonify({
+            "ok": True,
+            "original_name": file.filename,
+            "stored_name": stored_name,
+            # "stored_path": str(stored_path.relative_to(BASE_DIR)).replace("\\", "/"),
+            "size": file_size,
+            "category": category,
+            "client_id": client_id,
+        })
+
+    @app.errorhandler(413)
+    def file_too_large(_):
+        return jsonify({
+            "ok": False,
+            "error": "File is too large"
+        }), 413
 
 
 

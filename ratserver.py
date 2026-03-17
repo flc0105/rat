@@ -41,24 +41,32 @@ class Server:
         self.web_root_dir = os.path.abspath(os.path.join('runtime', 'web_files'))
         self.received_files_dir = os.path.join(self.web_root_dir, 'received')
         self.upload_tmp_dir = os.path.join(self.web_root_dir, 'upload_tmp')
+        self.http_uploads_dir = os.path.join(self.web_root_dir, 'http_uploads')
         self._prepare_web_dirs()
 
 
     #web files start
 
     def notify_file_received(self, client_id: str, original_name: str, saved_path: str, size: int):
+        # saved_name = os.path.basename(saved_path)
+
         self.event_bus.publish('file_received', {
             'client_id': client_id,
             'original_name': original_name,
             'saved_name': os.path.basename(saved_path),
             'saved_path': saved_path,
             'size': size,
-            'created_at': datetime.now().isoformat()
+            'created_at': datetime.now().isoformat(),
+            # 'download_url': f'/api/files/recent/{saved_name}',
         })
+
+
 
     def _prepare_web_dirs(self):
         os.makedirs(self.received_files_dir, exist_ok=True)
         os.makedirs(self.upload_tmp_dir, exist_ok=True)
+        os.makedirs(self.http_uploads_dir, exist_ok=True)
+
 
     def _build_unique_file_path(self, directory: str, filename: str) -> str:
         safe_name = os.path.basename(filename) or 'file.bin'

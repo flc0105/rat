@@ -18,11 +18,14 @@ class Client:
         self.address = address
         self.server = ServerConnection()
 
+        self.client_id = str(uuid.uuid4())
+
     def _create_connection(self):
         """
         创建一个新的服务端连接对象
         """
         self.server = ServerConnection()
+        self.server.client_id = self.client_id
 
     def _close_current_connection(self):
         """
@@ -45,7 +48,7 @@ class Client:
         构造客户端基础信息
         """
         return {
-            'id': str(uuid.uuid4()),
+            'id': self.client_id,
             'type': 'info',
             'os_type': platform.system(),
             'os_ver': platform.platform(),

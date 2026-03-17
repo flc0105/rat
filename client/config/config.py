@@ -3,6 +3,11 @@ import os
 import sys
 
 DEFAULT_SERVER_ADDR = ('127.0.0.1', 9999)
+UPLOAD_BASE_URL = 'http://127.0.0.1:5001'
+
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+CLIENT_DIR = os.path.dirname(BASE_DIR)
+JOB_PATH = os.path.join(CLIENT_DIR, 'jobs/builtins')
 
 
 def _get_runtime_dir():

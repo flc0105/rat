@@ -415,19 +415,46 @@ createApp({
         this.appendOutput(payload.client_id, `[异步消息] ${payload.text || ''}`);
       });
 
+      // es.addEventListener('file_received', (event) => {
+      //   const payload = JSON.parse(event.data);
+      //
+      //   ElementPlus.ElNotification({
+      //     title: '收到文件',
+      //     message: `${payload.original_name} 已保存到服务器文件区`,
+      //     type: 'success'
+      //   });
+      //
+      //   if (this.recentFilesDialogVisible) {
+      //     this.openRecentFilesDialog();
+      //   }
+      // });
+
       es.addEventListener('file_received', (event) => {
-        const payload = JSON.parse(event.data);
+  const payload = JSON.parse(event.data);
+  const fileName = payload.saved_name || payload.original_name;
+  const downloadUrl = `/api/files/recent/${encodeURIComponent(fileName)}`;
 
-        ElementPlus.ElNotification({
-          title: '收到文件',
-          message: `${payload.original_name} 已保存到服务器文件区`,
-          type: 'success'
-        });
+  ElementPlus.ElNotification({
+    title: '收到文件',
+    dangerouslyUseHTMLString: true,
+    message: `
+      <div>
+        <div>${payload.original_name || fileName} 已保存到服务器文件区</div>
+        <div style="margin-top:6px;">
+          <a href="${downloadUrl}" target="_blank" style="color:#409eff;text-decoration:none;">
+            点此下载
+          </a>
+        </div>
+      </div>
+    `,
+    type: 'success',
+    duration: 6000
+  });
 
-        if (this.recentFilesDialogVisible) {
-          this.openRecentFilesDialog();
-        }
-      });
+  if (this.recentFilesDialogVisible) {
+    this.openRecentFilesDialog();
+  }
+});
 
       es.onerror = () => {
         // EventSource 会自动重连

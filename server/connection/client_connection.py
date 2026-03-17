@@ -8,7 +8,7 @@ from core.protocol.message_queue import MessageQueue, PendingCommandQueue, Ready
 from core.protocol.ratsocket import RATSocket
 from core.utils.files import get_output_stream, get_input_stream
 from core.utils.logger import logger, get_file_logger
-from server.config.config import BACKGROUND_MESSAGE_OUTPUT_TO_FILE, SHOW_MESSAGES_FROM_OTHER_CONNECTIONS
+from server.config.config import BACKGROUND_MESSAGE_OUTPUT_TO_FILE# SHOW_MESSAGES_FROM_OTHER_CONNECTIONS
 
 if BACKGROUND_MESSAGE_OUTPUT_TO_FILE:
     file_logger = get_file_logger('background_messages.log')
@@ -282,6 +282,7 @@ class ClientConnection(RATSocket):
                 pass
         #web end
 
+        #如果交互态 且开启了背景消息写文件
         if self.is_interactive:
             if BACKGROUND_MESSAGE_OUTPUT_TO_FILE:
                 file_logger.info(f'Message from {self.address}: {text}')
@@ -289,14 +290,18 @@ class ClientConnection(RATSocket):
                 logger.info(text)
             return
 
+        #非交互态开了背景消息写文件 就只记录到文件 不存未读消息
         if BACKGROUND_MESSAGE_OUTPUT_TO_FILE:
             file_logger.info(f'Message from {self.address}: {text}')
             return
 
-        if SHOW_MESSAGES_FROM_OTHER_CONNECTIONS:
-            logger.info(f'Message from {self.address}: {text}')
-        else:
-            self.message_queue.put(status, text, end)
+        #如果非交互态 没开背景消息 收到消息 直接存储到未读消息
+        self.message_queue.put(status, text, end)
+
+        # if SHOW_MESSAGES_FROM_OTHER_CONNECTIONS:
+        #     logger.info(f'Message from {self.address}: {text}')
+        # else:
+        #     self.message_queue.put(status, text, end)
 
     # ------------------ 等待结果 ------------------ #
     def wait_for_result(self, id: int, command: Optional[str]):
