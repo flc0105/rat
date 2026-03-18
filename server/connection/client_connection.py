@@ -2,6 +2,7 @@ import ntpath
 import os
 from typing import Generator, Optional
 
+from core.protocol.connection_mixins import ReadyFileTransferMixin, ReceiverDispatchMixin
 from core.protocol.message_queue import MessageQueue, PendingCommandQueue, ReadySignalQueue
 from core.protocol.ratsocket import RATSocket
 from core.utils.files import get_output_stream
@@ -10,12 +11,12 @@ from server.connection.message_router import ClientMessageRouter
 from server.connection.result_dispatcher import ClientResultDispatcher
 
 
-class ClientConnection(RATSocket):
+class ClientConnection(ReceiverDispatchMixin, ReadyFileTransferMixin, RATSocket):
     """
     封装每个客户端连接的对象
     """
 
-    FILE_READY_TIMEOUT = 15.0
+    FILE_TRANSFER_REJECTED_MESSAGE = 'Client rejected file transfer'
 
     def __init__(self, sock, address=None, info=None, file_save_dir=None, on_file_saved=None):
         super().__init__()
@@ -78,40 +79,6 @@ class ClientConnection(RATSocket):
             data['save_dir'] = save_dir
         return data
 
-    def _wait_for_ready_signal(self, command_id: int, timeout: float | None = None) -> int:
-        """
-        等待指定命令对应的文件传输 ready 信号
-        """
-        effective_timeout = self.FILE_READY_TIMEOUT if timeout is None else timeout
-        try:
-            return self.ready_queue.get_for_command(command_id, timeout=effective_timeout)
-        except Exception:
-            raise TimeoutError(f'Timed out waiting for ready signal: command_id={command_id}')
-
-    def _send_file_with_ready(self, header: dict, io):
-        """
-        统一的文件发送流程：
-        - 发送文件头
-        - 等待对应 command_id 的 ready
-        - 发送文件流
-        """
-        command_id = header.get('id')
-
-        try:
-            self.send(header)
-            if self._wait_for_ready_signal(command_id):
-                self.send_io(io)
-            else:
-                io.close()
-                raise RuntimeError(f'Client rejected file transfer: command_id={command_id}')
-        except Exception:
-            try:
-                io.close()
-            except Exception:
-                pass
-            raise
-
-    # ------------------ 发送命令/文件 ------------------ #
     def send_command(self, command: str, type='command', extra=None) -> Generator:
         """
         向客户端发送命令
@@ -137,13 +104,12 @@ class ClientConnection(RATSocket):
 
         return self.wait_for_result(data.get('id'), 'upload ' + filename)
 
-    # ------------------ 接收消息 ------------------ #
-    def recv_message(self):
+    def handle_received_message(self, data: dict):
         """
-        子线程接收消息并处理
+        处理接收线程收到的消息
         """
-        data = self.recv()
         self.message_router.dispatch(data)
+        return None
 
     def set_file_receive_context(self, command_id: int, **context):
         """
@@ -166,7 +132,6 @@ class ClientConnection(RATSocket):
         """
         return self.file_receiver.save_file(command_id, filename, length)
 
-    # ------------------ 等待结果 ------------------ #
     def wait_for_result(self, id: int, command: Optional[str]):
         """
         主线程等待接收结果，并保存执行记录

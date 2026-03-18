@@ -7,19 +7,20 @@ from client.commands.executor import CommandExecutor
 from client.connection.file_receiver import ServerFileReceiver
 from client.connection.message_router import ServerMessageRouter
 from client.jobs.core.manager import JobManager
+from core.protocol.connection_mixins import ReadyFileTransferMixin, ReceiverDispatchMixin
 from core.protocol.message_queue import ReadySignalQueue
 from core.protocol.ratsocket import RATSocket
 from core.utils.files import get_output_stream
 from core.utils.logger import logger
 
 
-class ServerConnection(RATSocket):
+class ServerConnection(ReceiverDispatchMixin, ReadyFileTransferMixin, RATSocket):
     """
     客户端与服务端的连接类
     负责接收命令、发送结果/文件、执行命令
     """
 
-    FILE_READY_TIMEOUT = 15.0
+    FILE_TRANSFER_REJECTED_MESSAGE = 'Server rejected file transfer'
 
     def __init__(self):
         super().__init__()
@@ -74,39 +75,6 @@ class ServerConnection(RATSocket):
         logger.debug(data)
         self.send(data)
 
-    def _wait_for_ready_signal(self, command_id: int, timeout: float | None = None) -> int:
-        """
-        等待指定命令对应的文件传输 ready 信号
-        """
-        effective_timeout = self.FILE_READY_TIMEOUT if timeout is None else timeout
-        try:
-            return self.ready_queue.get_for_command(command_id, timeout=effective_timeout)
-        except Exception:
-            raise TimeoutError(f'Timed out waiting for ready signal: command_id={command_id}')
-
-    def _send_file_with_ready(self, header: dict, io):
-        """
-        统一的文件发送流程：
-        - 发送文件头
-        - 等待对应 command_id 的 ready
-        - 发送文件流
-        """
-        command_id = header.get('id')
-
-        try:
-            self.send(header)
-            if self._wait_for_ready_signal(command_id):
-                self.send_io(io)
-            else:
-                io.close()
-                raise RuntimeError(f'Server rejected file transfer: command_id={command_id}')
-        except Exception:
-            try:
-                io.close()
-            except Exception:
-                pass
-            raise
-
     def _build_outbound_file_header(self, command_id: int, filename: str) -> dict:
         """
         构造发送到服务端的文件头
@@ -154,18 +122,6 @@ class ServerConnection(RATSocket):
 
         self.enqueue_pending_message(data)
         return None
-
-    def recv_message(self):
-        """
-        接收线程统一入口：
-        - 接收一条消息
-        - 由连接对象决定如何处理
-        - 如需立即回传结果，则在此处直接发送
-        """
-        data = self.recv()
-        result = self.handle_received_message(data)
-        if result:
-            self.send_result(*result)
 
     def recv_command(self, timeout: float | None = None) -> (int, int, str):
         """
