@@ -7,14 +7,11 @@ from client.commands.executor import CommandExecutor
 from client.connection.file_receiver import ServerFileReceiver
 from client.connection.message_router import ServerMessageRouter
 from client.jobs.core.manager import JobManager
-from core.protocol.connection_mixins import ReadyFileTransferMixin, ReceiverDispatchMixin
-from core.protocol.message_queue import ReadySignalQueue
-from core.protocol.ratsocket import RATSocket
-from core.utils.files import get_output_stream
+from core.protocol.base_connection import BaseSessionConnection
 from core.utils.logger import logger
 
 
-class ServerConnection(ReceiverDispatchMixin, ReadyFileTransferMixin, RATSocket):
+class ServerConnection(BaseSessionConnection):
     """
     客户端与服务端的连接类
     负责接收命令、发送结果/文件、执行命令
@@ -27,7 +24,6 @@ class ServerConnection(ReceiverDispatchMixin, ReadyFileTransferMixin, RATSocket)
         self.client_id = None
 
         self.command_executor = CommandExecutor(self)
-        self.ready_queue = ReadySignalQueue()
         self.pending_message_queue = queue.Queue()
         self.common_commands = CommonCommands(self)
 
@@ -47,10 +43,7 @@ class ServerConnection(ReceiverDispatchMixin, ReadyFileTransferMixin, RATSocket)
         """
         清理当前连接相关运行态
         """
-        try:
-            self.ready_queue.clear()
-        except Exception:
-            pass
+        self.reset_transfer_runtime()
 
         try:
             while True:
@@ -92,8 +85,7 @@ class ServerConnection(ReceiverDispatchMixin, ReadyFileTransferMixin, RATSocket)
         向服务端发送文件
         """
         header = self._build_outbound_file_header(id, filename)
-        io = get_output_stream(filename)
-        self._send_file_with_ready(header, io)
+        self.send_file_by_header(header, filename)
 
     def enqueue_pending_message(self, data: dict):
         """

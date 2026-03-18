@@ -2,16 +2,14 @@ import ntpath
 import os
 from typing import Generator, Optional
 
-from core.protocol.connection_mixins import ReadyFileTransferMixin, ReceiverDispatchMixin
-from core.protocol.message_queue import MessageQueue, PendingCommandQueue, ReadySignalQueue
-from core.protocol.ratsocket import RATSocket
-from core.utils.files import get_output_stream
+from core.protocol.base_connection import BaseSessionConnection
+from core.protocol.message_queue import MessageQueue, PendingCommandQueue
 from server.connection.file_receiver import ClientFileReceiver
 from server.connection.message_router import ClientMessageRouter
 from server.connection.result_dispatcher import ClientResultDispatcher
 
 
-class ClientConnection(ReceiverDispatchMixin, ReadyFileTransferMixin, RATSocket):
+class ClientConnection(BaseSessionConnection):
     """
     封装每个客户端连接的对象
     """
@@ -26,7 +24,6 @@ class ClientConnection(ReceiverDispatchMixin, ReadyFileTransferMixin, RATSocket)
 
         self.pending_command_ids = PendingCommandQueue()
         self.message_queue = MessageQueue()
-        self.ready_queue = ReadySignalQueue()
         self.is_interactive = False
         self._message_id_counter = 0
 
@@ -98,10 +95,7 @@ class ClientConnection(ReceiverDispatchMixin, ReadyFileTransferMixin, RATSocket)
         :return: 结果生成器
         """
         data = self._build_file_payload(filename, save_dir)
-        io = get_output_stream(filename)
-
-        self._send_file_with_ready(data, io)
-
+        self.send_file_by_header(data, filename)
         return self.wait_for_result(data.get('id'), 'upload ' + filename)
 
     def handle_received_message(self, data: dict):
