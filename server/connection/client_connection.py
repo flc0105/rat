@@ -15,6 +15,8 @@ class ClientConnection(RATSocket):
     封装每个客户端连接的对象
     """
 
+    FILE_READY_TIMEOUT = 15.0
+
     def __init__(self, sock, address=None, info=None, file_save_dir=None, on_file_saved=None):
         super().__init__()
         self.socket = sock
@@ -76,14 +78,38 @@ class ClientConnection(RATSocket):
             data['save_dir'] = save_dir
         return data
 
-    def _wait_for_ready_signal(self, command_id: int, timeout: float = 15.0) -> int:
+    def _wait_for_ready_signal(self, command_id: int, timeout: float | None = None) -> int:
         """
         等待指定命令对应的文件传输 ready 信号
         """
+        effective_timeout = self.FILE_READY_TIMEOUT if timeout is None else timeout
         try:
-            return self.ready_queue.get_for_command(command_id, timeout=timeout)
+            return self.ready_queue.get_for_command(command_id, timeout=effective_timeout)
         except Exception:
             raise TimeoutError(f'Timed out waiting for ready signal: command_id={command_id}')
+
+    def _send_file_with_ready(self, header: dict, io):
+        """
+        统一的文件发送流程：
+        - 发送文件头
+        - 等待对应 command_id 的 ready
+        - 发送文件流
+        """
+        command_id = header.get('id')
+
+        try:
+            self.send(header)
+            if self._wait_for_ready_signal(command_id):
+                self.send_io(io)
+            else:
+                io.close()
+                raise RuntimeError(f'Client rejected file transfer: command_id={command_id}')
+        except Exception:
+            try:
+                io.close()
+            except Exception:
+                pass
+            raise
 
     # ------------------ 发送命令/文件 ------------------ #
     def send_command(self, command: str, type='command', extra=None) -> Generator:
@@ -107,19 +133,7 @@ class ClientConnection(RATSocket):
         data = self._build_file_payload(filename, save_dir)
         io = get_output_stream(filename)
 
-        try:
-            self.send(data)
-            if self._wait_for_ready_signal(data.get('id')):
-                self.send_io(io)
-            else:
-                io.close()
-                raise RuntimeError('Client rejected file transfer')
-        except Exception:
-            try:
-                io.close()
-            except Exception:
-                pass
-            raise
+        self._send_file_with_ready(data, io)
 
         return self.wait_for_result(data.get('id'), 'upload ' + filename)
 

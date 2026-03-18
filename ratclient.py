@@ -134,10 +134,7 @@ class Client:
         """
         while not self._receiver_stop_event.is_set():
             try:
-                data = self.server.recv()
-                result = self.server.handle_received_message(data)
-                if result:
-                    self.server.send_result(*result)
+                self.server.recv_message()
             except socket.error as e:
                 if not self._receiver_stop_event.is_set():
                     self._set_receiver_error(e)

