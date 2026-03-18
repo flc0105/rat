@@ -2,6 +2,7 @@ from client.commands.base import CommandBase
 from client.commands.mixins.execution_ops import CommandExecutionMixin
 from client.commands.mixins.file_cli_ops import CommandFileCliMixin
 from client.commands.mixins.file_path_ops import CommandFilePathMixin
+# from client.commands.mixins.file_path_http_ops import CommandFilePathHttpMixin
 from client.commands.mixins.introspection_ops import CommandIntrospectionMixin
 from client.commands.mixins.job_ops import CommandJobMixin
 from client.commands.mixins.path_ops import CommandPathMixin
@@ -10,6 +11,7 @@ from client.commands.mixins.path_ops import CommandPathMixin
 class CommonCommands(
     CommandExecutionMixin,
     CommandFileCliMixin,
+    # CommandFilePathHttpMixin,
     CommandFilePathMixin,
     CommandPathMixin,
     CommandIntrospectionMixin,

@@ -6,16 +6,11 @@
   <title>Remote Control Hub</title>
   <link rel="stylesheet" href="https://unpkg.com/element-plus/dist/index.css" />
   <link rel="stylesheet" href="/app.css" />
-      <!-- 原有内容 -->
-
-    <!-- 添加noscript警告（在body显示） -->
     <noscript>
         <div style="position:fixed; top:0; left:0; right:0; background:#e53e3e; color:white; text-align:center; padding:15px; z-index:9999; font-weight:bold;">
             ⚠️ 请启用JavaScript以继续访问
         </div>
     </noscript>
-
-    <!-- 引入auth.js -->
     <script src="/auth.js"></script>
 </head>
 <body>
@@ -109,7 +104,7 @@
                   </div>
                 </div>
 
-                                <div class="command-row">
+                <div class="command-row">
                   <div class="command-box command-box-full">
                     <input
                       ref="commandInputRef"
@@ -117,6 +112,7 @@
                       list="commandCandidatesList"
                       class="command-input-native"
                       type="text"
+                      autocomplete="off"
                       placeholder="Enter a command..."
                       @keyup.enter="sendCommand"
                     />
@@ -187,7 +183,7 @@
     @change="handleRemoteUploadChange"
   />
 
-    <el-dialog
+  <el-dialog
     v-model="remoteFilesDialogVisible"
     title="Remote File Browser"
     width="1180px"
@@ -197,25 +193,33 @@
     <div class="fixed-dialog-body">
       <div class="dialog-head">
         <div class="dialog-head-left">
-          <el-button size="small" @click="goToRemoteParent" :disabled="!remoteFilesParentPath">Up</el-button>
-          <el-button size="small" @click="refreshRemoteDirectory">Refresh</el-button>
-          <el-button size="small" @click="createRemoteDirectory">New Folder</el-button>
-          <el-button size="small" :loading="remoteUploadLoading" @click="triggerRemoteUpload">Upload Here</el-button>
-          <el-switch
-            v-model="showHiddenFiles"
-            inline-prompt
-            active-text="Hidden"
-            inactive-text="Hidden"
-          />
-        </div>
-        <div style="display:flex; gap:8px; min-width:0;">
-          <el-input
-            v-model="remoteFilesPathInput"
-            placeholder="Enter a path and jump"
-            @keyup.enter="goToRemotePathInput"
-          />
-          <el-button size="small" @click="goToRemotePathInput">Go</el-button>
-        </div>
+  <div class="dialog-action-group">
+    <el-button size="small" @click="goToRemoteParent" :disabled="!remoteFilesParentPath">Up</el-button>
+    <el-button size="small" @click="refreshRemoteDirectory">Refresh</el-button>
+    <el-button size="small" @click="createRemoteDirectory">New Folder</el-button>
+    <el-button size="small" :loading="remoteUploadLoading" @click="triggerRemoteUpload">Upload Here</el-button>
+  </div>
+
+  <div class="dialog-filter-box">
+    <span class="dialog-filter-label">Hidden</span>
+    <el-switch
+      v-model="showHiddenFiles"
+      inline-prompt
+      active-text="On"
+      inactive-text="Off"
+    />
+  </div>
+</div>
+ <div class="dialog-head-right">
+    <div class="dialog-path-box">
+      <el-input
+        v-model="remoteFilesPathInput"
+        placeholder="Enter a path and jump"
+        @keyup.enter="goToRemotePathInput"
+      />
+      <el-button size="small" @click="goToRemotePathInput">Go</el-button>12345
+    </div>
+  </div>
       </div>
 
       <div class="dialog-table-shell">
@@ -294,7 +298,7 @@
                   trigger="click"
                   @command="(command) => handleRemoteMoreAction(command, row)"
                 >
-                                <el-button
+                  <el-button
                     size="small"
                     link
                     type="primary"
@@ -314,6 +318,108 @@
           </el-table-column>
         </el-table>
       </div>
+
+      <div class="mobile-file-list-shell">
+        <div class="mobile-file-list" v-loading="remoteFilesLoading">
+
+          <div v-if="!filteredRemoteFilesEntries.length && !remoteFilesLoading" class="empty-state">
+            This folder is empty
+          </div>
+
+          <div v-else class="mobile-file-grid">
+            <div
+              v-for="row in filteredRemoteFilesEntries"
+              :key="row.path"
+              class="mobile-file-card"
+            >
+              <div class="mobile-file-card-top">
+                <div class="mobile-file-icon">{{ row.is_dir ? '📁' : '📄' }}</div>
+                <div class="mobile-file-main">
+                  <div class="mobile-file-name">{{ row.name }}</div>
+
+                  <div class="mobile-file-tags">
+                    <el-tag size="small" type="info">{{ row.is_dir ? 'Folder' : 'File' }}</el-tag>
+                    <el-tag v-if="row.is_symlink" size="small" type="info">Link</el-tag>
+                    <el-tag v-if="row.is_hidden" size="small" type="warning">Hidden</el-tag>
+                  </div>
+
+                  <div class="mobile-file-meta">
+                    <div class="mobile-file-meta-item">
+                      <div class="mobile-file-meta-label">Size</div>
+                      <div class="mobile-file-meta-value">{{ row.is_dir ? '-' : formatBytes(row.size) }}</div>
+                    </div>
+                    <div class="mobile-file-meta-item">
+                      <div class="mobile-file-meta-label">Modified</div>
+                      <div class="mobile-file-meta-value">{{ row.modified_at || '-' }}</div>
+                    </div>
+<!--                    <div class="mobile-file-meta-item" style="grid-column: 1 / -1;">-->
+<!--                      <div class="mobile-file-meta-label">Path</div>-->
+<!--                      <div class="mobile-file-meta-value">{{ row.path }}</div>-->
+<!--                    </div>-->
+                  </div>
+
+                  <div class="mobile-file-actions">
+                    <el-button
+                      v-if="row.is_dir"
+                      size="small"
+                      type="primary"
+                      plain
+                      @click="enterRemoteDirectory(row)"
+                    >
+                      Open
+                    </el-button>
+
+                    <template v-if="!row.is_dir">
+                      <el-button
+                        size="small"
+                        type="primary"
+                        plain
+                        @click="previewRemoteEntry(row)"
+                      >
+                        Preview
+                      </el-button>
+                      <el-button
+                        size="small"
+                        type="primary"
+                        plain
+                        @click="downloadRemoteEntry(row)"
+                      >
+                        Download
+                      </el-button>
+                    </template>
+
+                    <el-button
+                      size="small"
+                      plain
+                      @click="renameRemoteEntry(row)"
+                    >
+                      Rename
+                    </el-button>
+
+                    <el-button
+                      size="small"
+                      plain
+                      @click="copyRemotePath(row)"
+                    >
+                      Copy Path
+                    </el-button>
+
+                    <el-button
+                      size="small"
+                      type="danger"
+                      plain
+                      @click="deleteRemoteEntry(row)"
+                    >
+                      Delete
+                    </el-button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
     </div>
   </el-dialog>
 
@@ -350,7 +456,7 @@
           <el-table-column prop="client_id" label="Source" min-width="160" show-overflow-tooltip>
             <template #default="{ row }">
               <div class="ellipsis">
-                {{ row.hostname || row.client_id || '-'}}
+                {{ row.hostname || row.client_id || '-' }}
               </div>
             </template>
           </el-table-column>
@@ -372,10 +478,73 @@
           </el-table-column>
         </el-table>
       </div>
+
+      <div class="mobile-file-list-shell">
+        <div class="mobile-file-list" v-loading="recentFilesLoading">
+          <div v-if="!recentFiles.length && !recentFilesLoading" class="empty-state">
+            No files available
+          </div>
+
+          <div v-else class="mobile-file-grid">
+            <div
+              v-for="row in recentFiles"
+              :key="row.saved_name"
+              class="mobile-file-card"
+            >
+              <div class="mobile-file-card-top">
+                <div class="mobile-file-icon">📄</div>
+                <div class="mobile-file-main">
+                  <div class="mobile-file-name">{{ row.original_name }}</div>
+
+                  <div class="mobile-file-meta">
+                    <div class="mobile-file-meta-item">
+                      <div class="mobile-file-meta-label">Size</div>
+                      <div class="mobile-file-meta-value">{{ formatBytes(row.size) }}</div>
+                    </div>
+                    <div class="mobile-file-meta-item">
+                      <div class="mobile-file-meta-label">Source</div>
+                      <div class="mobile-file-meta-value">{{ row.hostname || row.client_id || '-' }}</div>
+                    </div>
+                    <div class="mobile-file-meta-item">
+                      <div class="mobile-file-meta-label">Received</div>
+                      <div class="mobile-file-meta-value">{{ row.created_at }}</div>
+                    </div>
+<!--                    <div class="mobile-file-meta-item" style="grid-column: 1 / -1;">-->
+<!--                      <div class="mobile-file-meta-label">Saved Name</div>-->
+<!--                      <div class="mobile-file-meta-value">{{ row.saved_name }}</div>-->
+<!--                    </div>-->
+                  </div>
+
+                  <div class="mobile-file-actions">
+                    <el-button
+                      size="small"
+                      type="primary"
+                      plain
+                      @click="previewRecentFile(row)"
+                    >
+                      Preview
+                    </el-button>
+                    <a class="table-action-link" :href="row.download_url" target="_blank">Download</a>
+                    <el-button
+                      size="small"
+                      type="danger"
+                      plain
+                      @click="deleteRecentFile(row)"
+                    >
+                      Delete
+                    </el-button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
     </div>
   </el-dialog>
 
-    <el-dialog
+  <el-dialog
     v-model="previewDialogVisible"
     :title="previewTitle || 'File Preview'"
     width="1080px"
