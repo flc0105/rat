@@ -65,14 +65,14 @@ class RATSocket:
         buffer_size = self._resolve_send_buffer_size(buffer_size)
 
         bytes_sent = 0
-        # while True:
-        while self._send_lock:
-            chunk = io.read(buffer_size)
-            if not chunk:
-                break
-            self._send_raw(chunk)
-            bytes_sent += len(chunk)
-            draw_progress_bar(bytes_sent, total)
+        with self._send_lock:
+            while True:
+                chunk = io.read(buffer_size)
+                if not chunk:
+                    break
+                self._send_raw(chunk)
+                bytes_sent += len(chunk)
+                draw_progress_bar(bytes_sent, total)
         io.close()
 
     def recv_io(self, length: int, io: BinaryIO, buffer_size: Optional[int] = None) -> None:
@@ -97,6 +97,7 @@ class RATSocket:
     def recv_signal(self) -> int:
         """接收就绪信号"""
         return self.recv()['status']
+
 
     # ------------------ 包级发送接收 ------------------ #
     def _send_packet(self, data: bytes) -> None:

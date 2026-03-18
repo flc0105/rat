@@ -1,3 +1,4 @@
+import json
 import ntpath
 import os
 from typing import Generator, Optional
@@ -98,21 +99,49 @@ class ClientConnection(RATSocket):
         self.send(data)
         return self.wait_for_result(data.get('id'), command if type == 'command' else None)
 
+    # def send_file(self, filename: str, save_dir: str = '') -> Generator:
+    #     """
+    #     向客户端发送文件
+    #     :param filename: 文件名
+    #     :return: 结果生成器
+    #     """
+    #     data = self._build_file_payload(filename, save_dir)
+    #     io = get_output_stream(filename)
+    #
+    #     self.send(data)  # 发送文件请求头
+    #     # if self.ready_queue.get():  # 如果对方就绪
+    #     if self._wait_for_file_ready():  # 如果对方就绪
+    #
+    #         self.send_io(io)  # 发送文件
+    #
+    #     return self.wait_for_result(data.get('id'), 'upload ' + filename)
+
+
     def send_file(self, filename: str, save_dir: str = '') -> Generator:
         """
         向客户端发送文件
         :param filename: 文件名
         :return: 结果生成器
         """
-        # data = self._build_file_payload(filename)
         data = self._build_file_payload(filename, save_dir)
         io = get_output_stream(filename)
 
-        self.send(data)  # 发送文件请求头
-        if self.ready_queue.get():  # 如果对方就绪
-            self.send_io(io)  # 发送文件
+        try:
+            self.send(data)  # 发送文件请求头
+            if self._wait_for_file_ready():  # 如果对方就绪
+                self.send_io(io)  # 发送文件
+            else:
+                io.close()
+                raise RuntimeError('Client rejected file transfer')
+        except Exception:
+            try:
+                io.close()
+            except Exception:
+                pass
+            raise
 
         return self.wait_for_result(data.get('id'), 'upload ' + filename)
+
 
     # ------------------ 接收消息 ------------------ #
     def recv_message(self):
@@ -133,6 +162,15 @@ class ClientConnection(RATSocket):
         取出并删除指定命令的文件接收上下文
         """
         return self._file_receive_contexts.pop(command_id, None)
+
+    def _wait_for_file_ready(self, timeout: float = 15.0) -> int:
+        """
+        等待客户端文件接收就绪信号，避免无限阻塞
+        """
+        try:
+            return self.ready_queue.get(timeout=timeout)
+        except Exception:
+            raise TimeoutError('Timed out waiting for client file transfer ready signal')
 
     def save_file(self, command_id, filename, length):
         """
