@@ -33,7 +33,7 @@ class ClientMessageRouter:
         """
         处理文件传输就绪信号
         """
-        self.connection.ready_queue.put(data.get('status'))
+        self.connection.ready_queue.put(data.get('id'), data.get('status'))
 
     def _handle_result_message(self, data: dict) -> None:
         """

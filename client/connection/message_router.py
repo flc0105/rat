@@ -52,9 +52,10 @@ class ServerMessageRouter:
         处理文件消息
         """
         result = self.connection.file_receiver.save_file(
+            command_id,
             data.get('filename'),
             data.get('length'),
-            data.get('save_dir', '')  # add 20260318
+            data.get('save_dir', '')
         )
         if result:
             return command_id, *result
@@ -64,5 +65,5 @@ class ServerMessageRouter:
         """
         处理就绪信号
         """
-        self.connection.command_queue.put(data.get('status'))
+        self.connection.ready_queue.put(data.get('id'), data.get('status'))
         return None

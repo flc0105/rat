@@ -13,8 +13,6 @@ class RATSocket:
     HEADER_SIZE = struct.calcsize(HEADER_FORMAT)
     DEFAULT_RECV_IO_BUFFER_SIZE = 4096
 
-
-
     def __init__(self, family=socket.AF_INET, type=socket.SOCK_STREAM, proto=0):
         self.socket = socket.socket(family, type, proto)
 
@@ -41,17 +39,11 @@ class RATSocket:
         self.socket.close()
 
     # ------------------ 消息发送接收 ------------------ #
-    # def send(self, data: dict) -> None:
-    #     """发送字典消息"""
-    #     encoded = json.dumps(data).encode()
-    #     self._send_packet(encoded)
-
     def send(self, data: dict) -> None:
         """发送字典消息"""
         encoded = json.dumps(data).encode()
         with self._send_lock:
             self._send_packet(encoded)
-
 
     def recv(self) -> dict:
         """接收字典消息"""
@@ -90,14 +82,19 @@ class RATSocket:
         io.close()
 
     # ------------------ 信号 ------------------ #
-    def send_signal(self, status: int) -> None:
+    def send_signal(self, status: int, command_id: Optional[int] = None) -> None:
         """发送就绪信号"""
-        self.send({'type': 'rdy', 'status': status})
+        data = {
+            'type': 'rdy',
+            'status': status,
+        }
+        if command_id is not None:
+            data['id'] = command_id
+        self.send(data)
 
     def recv_signal(self) -> int:
         """接收就绪信号"""
         return self.recv()['status']
-
 
     # ------------------ 包级发送接收 ------------------ #
     def _send_packet(self, data: bytes) -> None:

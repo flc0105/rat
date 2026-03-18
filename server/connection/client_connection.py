@@ -1,4 +1,3 @@
-import json
 import ntpath
 import os
 from typing import Generator, Optional
@@ -16,27 +15,24 @@ class ClientConnection(RATSocket):
     封装每个客户端连接的对象
     """
 
-    # def __init__(self, sock, address=None, info=None):
     def __init__(self, sock, address=None, info=None, file_save_dir=None, on_file_saved=None):
-
         super().__init__()
-        self.socket = sock  # 客户端套接字
-        self.address = address  # 客户端地址
-        self.info = info or {}  # 客户端信息
+        self.socket = sock
+        self.address = address
+        self.info = info or {}
 
-        self.pending_command_ids = PendingCommandQueue()  # 等待结果的命令ID队列
-        self.message_queue = MessageQueue()  # 命令结果/未读消息队列
-        self.ready_queue = ReadySignalQueue()  # 文件传输就绪信号队列
-        self.is_interactive = False  # 是否处于交互会话中
-        self._message_id_counter = 0  # 连接内消息自增 ID
+        self.pending_command_ids = PendingCommandQueue()
+        self.message_queue = MessageQueue()
+        self.ready_queue = ReadySignalQueue()
+        self.is_interactive = False
+        self._message_id_counter = 0
 
-        self._file_receive_contexts = {}  # 按 command_id 保存文件接收上下文
+        self._file_receive_contexts = {}
 
         # web
         self.on_unexpected_message = None
 
         # web files
-        # 文件接收保存位置（服务端 web 下载区）
         self.file_save_dir = file_save_dir
         self.on_file_saved = on_file_saved
 
@@ -66,16 +62,10 @@ class ClientConnection(RATSocket):
             data['extra'] = extra
         return data
 
-    def _build_file_payload(self, filename: str, save_dir:str='') -> dict:
+    def _build_file_payload(self, filename: str, save_dir: str = '') -> dict:
         """
         构造文件消息头
         """
-        # return {
-        #     'type': 'file',
-        #     'id': self._generate_message_id(),
-        #     'length': os.stat(filename).st_size,
-        #     'filename': ntpath.basename(filename),
-        # }
         data = {
             'type': 'file',
             'id': self._generate_message_id(),
@@ -85,6 +75,15 @@ class ClientConnection(RATSocket):
         if save_dir:
             data['save_dir'] = save_dir
         return data
+
+    def _wait_for_ready_signal(self, command_id: int, timeout: float = 15.0) -> int:
+        """
+        等待指定命令对应的文件传输 ready 信号
+        """
+        try:
+            return self.ready_queue.get_for_command(command_id, timeout=timeout)
+        except Exception:
+            raise TimeoutError(f'Timed out waiting for ready signal: command_id={command_id}')
 
     # ------------------ 发送命令/文件 ------------------ #
     def send_command(self, command: str, type='command', extra=None) -> Generator:
@@ -99,24 +98,6 @@ class ClientConnection(RATSocket):
         self.send(data)
         return self.wait_for_result(data.get('id'), command if type == 'command' else None)
 
-    # def send_file(self, filename: str, save_dir: str = '') -> Generator:
-    #     """
-    #     向客户端发送文件
-    #     :param filename: 文件名
-    #     :return: 结果生成器
-    #     """
-    #     data = self._build_file_payload(filename, save_dir)
-    #     io = get_output_stream(filename)
-    #
-    #     self.send(data)  # 发送文件请求头
-    #     # if self.ready_queue.get():  # 如果对方就绪
-    #     if self._wait_for_file_ready():  # 如果对方就绪
-    #
-    #         self.send_io(io)  # 发送文件
-    #
-    #     return self.wait_for_result(data.get('id'), 'upload ' + filename)
-
-
     def send_file(self, filename: str, save_dir: str = '') -> Generator:
         """
         向客户端发送文件
@@ -127,9 +108,9 @@ class ClientConnection(RATSocket):
         io = get_output_stream(filename)
 
         try:
-            self.send(data)  # 发送文件请求头
-            if self._wait_for_file_ready():  # 如果对方就绪
-                self.send_io(io)  # 发送文件
+            self.send(data)
+            if self._wait_for_ready_signal(data.get('id')):
+                self.send_io(io)
             else:
                 io.close()
                 raise RuntimeError('Client rejected file transfer')
@@ -141,7 +122,6 @@ class ClientConnection(RATSocket):
             raise
 
         return self.wait_for_result(data.get('id'), 'upload ' + filename)
-
 
     # ------------------ 接收消息 ------------------ #
     def recv_message(self):
@@ -163,15 +143,6 @@ class ClientConnection(RATSocket):
         """
         return self._file_receive_contexts.pop(command_id, None)
 
-    def _wait_for_file_ready(self, timeout: float = 15.0) -> int:
-        """
-        等待客户端文件接收就绪信号，避免无限阻塞
-        """
-        try:
-            return self.ready_queue.get(timeout=timeout)
-        except Exception:
-            raise TimeoutError('Timed out waiting for client file transfer ready signal')
-
     def save_file(self, command_id, filename, length):
         """
         保存文件
@@ -189,7 +160,7 @@ class ClientConnection(RATSocket):
         :param command: 命令文本
         :return: 结果生成器
         """
-        self.pending_command_ids.put(id)  # 将命令id加入待执行队列
+        self.pending_command_ids.put(id)
 
         while 1:
             status, result, eof = self.message_queue.get()

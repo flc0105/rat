@@ -1,4 +1,3 @@
-import json
 import ntpath
 import os
 
@@ -24,7 +23,7 @@ class ServerConnection(RATSocket):
         self.client_id = None
 
         self.command_executor = CommandExecutor(self)
-        self.command_queue = ReadySignalQueue()
+        self.ready_queue = ReadySignalQueue()
         self.common_commands = CommonCommands(self)
 
         self.job_manager = JobManager(self)
@@ -44,7 +43,7 @@ class ServerConnection(RATSocket):
         清理当前连接相关运行态
         """
         try:
-            self.command_queue.clear()
+            self.ready_queue.clear()
         except Exception:
             pass
 

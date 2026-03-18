@@ -1,9 +1,11 @@
 import queue
 import threading
+import time
 from typing import Any, Optional, Tuple
 
 
 MessageItem = Tuple[int, Any, int]
+ReadySignalItem = Tuple[Optional[int], int]
 
 
 class BaseThreadSafeQueue:
@@ -120,23 +122,44 @@ class PendingCommandQueue(BaseThreadSafeQueue):
 
 class ReadySignalQueue(BaseThreadSafeQueue):
     """
-    文件传输就绪信号队列，只存储 status
+    文件传输就绪信号队列，只存储:
+    (command_id, status)
     """
 
-    def get(self, block: bool = True, timeout: Optional[float] = None) -> int:
+    def get(self, block: bool = True, timeout: Optional[float] = None) -> ReadySignalItem:
         """
         获取并删除就绪状态
         """
         return self._queue.get(block=block, timeout=timeout)
 
-    def peek_first(self) -> Optional[int]:
+    def peek_first(self) -> Optional[ReadySignalItem]:
         """
         获取队列中第一个就绪状态，不删除
         """
         return self._peek()
 
-    def put(self, status: int) -> None:
+    def put(self, command_id: Optional[int], status: int) -> None:
         """
         向队列中添加就绪状态
         """
-        self._queue.put(status)
+        self._queue.put((command_id, status))
+
+    def get_for_command(self, command_id: int, timeout: Optional[float] = None) -> int:
+        """
+        获取指定命令 ID 对应的就绪状态
+        """
+        deadline = None if timeout is None else time.monotonic() + timeout
+
+        while True:
+            with self._lock:
+                internal_queue = self._queue.queue
+                for index, item in enumerate(internal_queue):
+                    queued_command_id, status = item
+                    if queued_command_id == command_id:
+                        del internal_queue[index]
+                        return status
+
+            if deadline is not None and time.monotonic() >= deadline:
+                raise queue.Empty(f'Ready signal not found for command_id={command_id}')
+
+            time.sleep(0.05)
