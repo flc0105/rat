@@ -5,19 +5,14 @@ createApp({
     return {
       connections: [],
       selectedId: '',
-
-            outputs: {},
-
+      outputs: {},
       commandText: '',
       commandCandidates: [],
       commandCandidatesLoadedFor: '',
-
-            commandHistoryDialogVisible: false,
+      commandHistoryDialogVisible: false,
       commandHistoryLoading: false,
-      commandHistoryUniqueOnly: false,
       commandHistoryItems: [],
       sending: false,
-
       uploading: false,
       eventSource: null,
       sseReady: false,
@@ -141,7 +136,7 @@ createApp({
       this.scrollToBottom();
     },
 
-        async loadPreviewPayload(fetcher, fallbackTitle = 'File Preview') {
+    async loadPreviewPayload(fetcher, fallbackTitle = 'File Preview') {
       this.previewDialogVisible = true;
       this.previewLoading = true;
       this.resetPreviewState();
@@ -171,9 +166,7 @@ createApp({
       }
     },
 
-
-
-        async previewRecentFile(row) {
+    async previewRecentFile(row) {
       if (!row || !row.saved_name) {
         ElementPlus.ElMessage.warning('Invalid file');
         return;
@@ -185,7 +178,7 @@ createApp({
       );
     },
 
-        async previewRemoteEntry(row) {
+    async previewRemoteEntry(row) {
       if (!row || !row.path || row.is_dir) {
         ElementPlus.ElMessage.warning('Please select a file');
         return;
@@ -255,12 +248,12 @@ createApp({
           this.selectedId = this.connections[0].client_id;
         }
 
-                if (this.selectedId) {
-          this.loadCommandCandidates(this.selectedId);
-        }
-
         if (this.selectedId && !this.connections.find(item => item.client_id === this.selectedId)) {
           this.selectedId = this.connections.length > 0 ? this.connections[0].client_id : '';
+        }
+
+        if (this.selectedId) {
+          this.loadCommandCandidates(this.selectedId);
         }
       } catch (e) {
         ElementPlus.ElMessage.error('Failed to load devices');
@@ -271,12 +264,11 @@ createApp({
       this.selectedId = clientId;
       this.ensureOutputBucket(clientId);
       this.commandHistoryItems = [];
-      this.commandHistoryUniqueOnly = false;
       this.loadCommandCandidates(clientId);
       this.scrollToBottom();
     },
 
-        async loadCommandCandidates(clientId) {
+    async loadCommandCandidates(clientId) {
       if (!clientId) return;
       if (this.commandCandidatesLoadedFor === clientId && this.commandCandidates.length) return;
 
@@ -293,98 +285,6 @@ createApp({
       } catch (e) {
         this.commandCandidates = [];
         this.commandCandidatesLoadedFor = '';
-      }
-    },
-
-            async openCommandHistoryDialog() {
-      if (!this.selectedId) {
-        ElementPlus.ElMessage.warning('Please select a device');
-        return;
-      }
-
-      this.commandHistoryDialogVisible = true;
-      this.commandHistoryLoading = true;
-
-      try {
-        const url = new URL(`/api/connections/${encodeURIComponent(this.selectedId)}/command-history`, window.location.origin);
-        url.searchParams.set('limit', '100');
-        if (this.commandHistoryUniqueOnly) {
-          url.searchParams.set('unique', '1');
-        }
-
-        const res = await fetch(url.pathname + url.search);
-        const json = await res.json();
-
-        if (!res.ok || json.code !== 0) {
-          throw new Error(json.message || 'Failed to load command history');
-        }
-
-        this.commandHistoryItems = Array.isArray(json.data) ? json.data : [];
-      } catch (e) {
-        this.commandHistoryItems = [];
-        ElementPlus.ElMessage.error(e.message || 'Failed to load command history');
-      } finally {
-        this.commandHistoryLoading = false;
-      }
-    },
-
-    //     applyHistoryCommand(row) {
-    //   if (!row || !row.command) return;
-    //   this.commandText = row.command;
-    //   this.commandHistoryDialogVisible = false;
-    // },
-
-        applyHistoryCommand(row) {
-      if (!row || !row.command) return;
-      this.commandText = row.command;
-      this.commandHistoryDialogVisible = false;
-
-      nextTick(() => {
-        const input = this.$refs.commandInputRef;
-        if (input && typeof input.focus === 'function') {
-          input.focus();
-        }
-      });
-    },
-
-    async toggleCommandHistoryUnique() {
-      this.commandHistoryUniqueOnly = !this.commandHistoryUniqueOnly;
-      if (this.commandHistoryDialogVisible) {
-        await this.openCommandHistoryDialog();
-      }
-    },
-
-    async clearCommandHistory() {
-      if (!this.selectedId) {
-        ElementPlus.ElMessage.warning('Please select a device');
-        return;
-      }
-
-      try {
-        await ElementPlus.ElMessageBox.confirm(
-          'Clear command history for the current host?',
-          'Clear History',
-          {
-            type: 'warning',
-            confirmButtonText: 'Clear',
-            cancelButtonText: 'Cancel'
-          }
-        );
-
-        const res = await fetch(`/api/connections/${encodeURIComponent(this.selectedId)}/command-history`, {
-          method: 'DELETE'
-        });
-
-        const json = await res.json();
-        if (!res.ok || json.code !== 0) {
-          throw new Error(json.message || 'Failed to clear command history');
-        }
-
-        this.commandHistoryItems = [];
-        ElementPlus.ElMessage.success('Command history cleared');
-      } catch (e) {
-        if (e === 'cancel' || e === 'close' || e?.toString?.().includes('cancel')) return;
-        ElementPlus.ElMessage.error(e.message || 'Failed to clear command history');
       }
     },
 
@@ -808,6 +708,79 @@ createApp({
         ElementPlus.ElMessage.error(e.message || 'Failed to load files');
       } finally {
         this.recentFilesLoading = false;
+      }
+    },
+
+    async openCommandHistoryDialog() {
+      if (!this.selectedId) {
+        ElementPlus.ElMessage.warning('Please select a device');
+        return;
+      }
+
+      this.commandHistoryDialogVisible = true;
+      this.commandHistoryLoading = true;
+
+      try {
+        const res = await fetch(`/api/connections/${encodeURIComponent(this.selectedId)}/command-history`);
+        const json = await res.json();
+
+        if (!res.ok || json.code !== 0) {
+          throw new Error(json.message || 'Failed to load command history');
+        }
+
+        this.commandHistoryItems = Array.isArray(json.data) ? json.data : [];
+      } catch (e) {
+        this.commandHistoryItems = [];
+        ElementPlus.ElMessage.error(e.message || 'Failed to load command history');
+      } finally {
+        this.commandHistoryLoading = false;
+      }
+    },
+
+    applyHistoryCommand(row) {
+      if (!row || !row.command) return;
+      this.commandText = row.command;
+      this.commandHistoryDialogVisible = false;
+
+      nextTick(() => {
+        const input = this.$refs.commandInputRef;
+        if (input && typeof input.focus === 'function') {
+          input.focus();
+        }
+      });
+    },
+
+    async clearCommandHistory() {
+      if (!this.selectedId) {
+        ElementPlus.ElMessage.warning('Please select a device');
+        return;
+      }
+
+      try {
+        await ElementPlus.ElMessageBox.confirm(
+          'Clear command history for the current host?',
+          'Clear History',
+          {
+            type: 'warning',
+            confirmButtonText: 'Clear',
+            cancelButtonText: 'Cancel'
+          }
+        );
+
+        const res = await fetch(`/api/connections/${encodeURIComponent(this.selectedId)}/command-history`, {
+          method: 'DELETE'
+        });
+
+        const json = await res.json();
+        if (!res.ok || json.code !== 0) {
+          throw new Error(json.message || 'Failed to clear command history');
+        }
+
+        this.commandHistoryItems = [];
+        ElementPlus.ElMessage.success('Command history cleared');
+      } catch (e) {
+        if (e === 'cancel' || e === 'close' || e?.toString?.().includes('cancel')) return;
+        ElementPlus.ElMessage.error(e.message || 'Failed to clear command history');
       }
     },
 

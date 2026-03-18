@@ -37,26 +37,14 @@ class CommandExecutor:
         },
         {
             'name': 'history',
-            'template': 'history [limit]',
-            'help': 'Show command history for the current host',
-            'source': 'server'
-        },
-        {
-            'name': 'history',
-            'template': 'history unique [limit]',
-            'help': 'Show de-duplicated command history',
+            'template': 'history',
+            'help': 'Show de-duplicated command history for the current host',
             'source': 'server'
         },
         {
             'name': 'history',
             'template': 'history clear',
             'help': 'Clear command history for the current host',
-            'source': 'server'
-        },
-        {
-            'name': 'history',
-            'template': 'history run <index>',
-            'help': 'Run a command from history by index',
             'source': 'server'
         },
     ]
@@ -272,82 +260,36 @@ class CommandExecutor:
 
     def history(self, arg):
         """
-        查看 / 清理 / 重跑当前连接的命令历史
+        查看 / 清空当前连接的命令历史
         用法：
-        - history [limit]
-        - history unique [limit]
+        - history
         - history clear
-        - history run <index>
         """
         arg_text = (arg or '').strip()
 
         if not arg_text:
-            yield from self._yield_history_entries(unique=False, limit=50)
+            entries = self.server.command_history.get_history_for_connection(self.conn)
+            if not entries:
+                yield 1, 'No command history available'
+                return
+
+            lines = []
+            for item in entries:
+                lines.append(
+                    f'{item.get("index", 0):>3}  '
+                    f'{item.get("command", "")}'
+                    # f'{item.get("index", 0):>3}. '
+                    # f'{item.get("time", "")} '
+                    # f'[{item.get("source", "")}/{item.get("status", "")}] '
+                    # f'{item.get("command", "")}'
+                )
+
+            yield 1, '\n'.join(lines)
             return
 
-        parts = arg_text.split()
-        first = parts[0].lower()
-
-        if first.isdigit():
-            yield from self._yield_history_entries(unique=False, limit=int(first))
-            return
-
-        if first == 'unique':
-            limit = 50
-            if len(parts) >= 2:
-                if not parts[1].isdigit():
-                    raise ValueError('Usage: history unique [limit]')
-                limit = int(parts[1])
-            yield from self._yield_history_entries(unique=True, limit=limit)
-            return
-
-        if first == 'clear':
+        if arg_text == 'clear':
             self.server.command_history.clear_history_for_connection(self.conn)
             yield 1, 'Command history cleared'
             return
 
-        if first == 'run':
-            if len(parts) != 2 or not parts[1].isdigit():
-                raise ValueError('Usage: history run <index>')
-
-            index = int(parts[1])
-            entry = self.server.command_history.get_history_entry_by_index(self.conn, index)
-            if not entry:
-                raise ValueError(f'History entry not found: {index}')
-
-            command_text = entry.get('command') or ''
-            if not command_text.strip():
-                raise ValueError(f'History entry is empty: {index}')
-
-            yield 1, f'[history] Running #{index}: {command_text}'
-            func = self.process_command(command_text)
-            if func:
-                for item in func():
-                    yield item
-            return
-
-        raise ValueError('Usage: history [limit] | history unique [limit] | history clear | history run <index>')
-
-    def _yield_history_entries(self, unique: bool, limit: int):
-        if limit <= 0:
-            raise ValueError('limit must be a positive integer')
-
-        if unique:
-            entries = self.server.command_history.get_unique_history_for_connection(self.conn, limit=limit)
-        else:
-            entries = self.server.command_history.get_history_for_connection(self.conn, limit=limit)
-
-        if not entries:
-            yield 1, 'No command history available'
-            return
-
-        lines = []
-        for item in entries:
-            lines.append(
-                f'{item.get("index", 0):>3}. '
-                f'{item.get("time", "")} '
-                f'[{item.get("source", "")}/{item.get("status", "")}] '
-                f'{item.get("command", "")}'
-            )
-
-        yield 1, '\n'.join(lines)
+        raise ValueError('Usage: history | history clear')

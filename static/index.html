@@ -403,9 +403,6 @@
       <div class="dialog-head">
         <div class="dialog-head-left">
           <el-button size="small" @click="openCommandHistoryDialog">Refresh</el-button>
-          <el-button size="small" @click="toggleCommandHistoryUnique">
-            {{ commandHistoryUniqueOnly ? 'Show All' : 'Show Unique' }}
-          </el-button>
           <el-button size="small" type="danger" @click="clearCommandHistory">Clear History</el-button>
         </div>
       </div>
@@ -427,42 +424,42 @@
             </template>
           </el-table-column>
 
-          <el-table-column prop="command" label="Command" min-width="240" show-overflow-tooltip>
+          <el-table-column prop="command" label="Command" min-width="280" show-overflow-tooltip>
             <template #default="{ row }">
               <div class="ellipsis mono">{{ row.command || '-' }}</div>
             </template>
           </el-table-column>
 
-          <el-table-column prop="status" label="Status" width="100" align="center">
-            <template #default="{ row }">
-              <el-tag
-                size="small"
-                :type="row.status === 'success' ? 'success' : (row.status === 'error' ? 'danger' : 'info')"
-              >
-                {{ row.status || '-' }}
-              </el-tag>
-            </template>
-          </el-table-column>
+<!--          <el-table-column prop="status" label="Status" width="110" align="center">-->
+<!--            <template #default="{ row }">-->
+<!--              <el-tag-->
+<!--                size="small"-->
+<!--                :type="row.status === 'success' ? 'success' : (row.status === 'error' ? 'danger' : 'info')"-->
+<!--              >-->
+<!--                {{ row.status || '-' }}-->
+<!--              </el-tag>-->
+<!--            </template>-->
+<!--          </el-table-column>-->
 
-          <el-table-column prop="source" label="Source" width="100" align="center">
-            <template #default="{ row }">
-              <div class="ellipsis">{{ row.source || '-' }}</div>
-            </template>
-          </el-table-column>
+<!--          <el-table-column prop="source" label="Source" width="110" align="center">-->
+<!--            <template #default="{ row }">-->
+<!--              <div class="ellipsis">{{ row.source || '-' }}</div>-->
+<!--            </template>-->
+<!--          </el-table-column>-->
 
-          <el-table-column prop="cwd" label="Directory" min-width="220" show-overflow-tooltip>
-            <template #default="{ row }">
-              <div class="ellipsis">{{ row.cwd || '-' }}</div>
-            </template>
-          </el-table-column>
+<!--          <el-table-column prop="cwd" label="Directory" min-width="220" show-overflow-tooltip>-->
+<!--            <template #default="{ row }">-->
+<!--              <div class="ellipsis">{{ row.cwd || '-' }}</div>-->
+<!--            </template>-->
+<!--          </el-table-column>-->
 
-          <el-table-column prop="time" label="Time" width="190" show-overflow-tooltip>
+          <el-table-column prop="time" label="Last Used" width="220" show-overflow-tooltip>
             <template #default="{ row }">
               <div class="ellipsis">{{ row.time || '-' }}</div>
             </template>
           </el-table-column>
 
-          <el-table-column label="Actions" width="100" align="center" fixed="right">
+          <el-table-column label="Actions" width="150" align="center" fixed="right">
             <template #default="{ row }">
               <div class="table-actions table-actions-links">
                 <a href="#" class="table-action-link" @click.prevent="applyHistoryCommand(row)">Use</a>

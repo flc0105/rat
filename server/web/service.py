@@ -111,17 +111,15 @@ class ServerWebService:
         merged.sort(key=lambda item: (item.get('source', ''), item.get('template', '').lower()))
         return merged
 
-
-    def get_command_history(self, client_id: str, limit: int = 50, unique: bool = False):
+    def get_command_history(self, client_id: str):
         conn = self.server.get_target_connection_by_client_id(client_id)
-        if unique:
-            return self.server.command_history.get_unique_history_for_connection(conn, limit=limit)
-        return self.server.command_history.get_history_for_connection(conn, limit=limit)
+        return self.server.command_history.get_history_for_connection(conn)
 
     def clear_command_history(self, client_id: str):
         conn = self.server.get_target_connection_by_client_id(client_id)
         self.server.command_history.clear_history_for_connection(conn)
         return None
+
     # ------------------ task facade ------------------ #
     def submit_web_command(self, client_id: str, command: str):
         return self.task_service.submit_web_command(client_id, command)

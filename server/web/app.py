@@ -125,6 +125,7 @@ def create_app(server_instance):
             lambda: web_service.submit_command(client_id, _get_required_command())
         )
 
+
     @app.get('/api/connections/<client_id>/command-candidates')
     def get_command_candidates(client_id):
         return _json_endpoint(
@@ -134,20 +135,10 @@ def create_app(server_instance):
 
     @app.get('/api/connections/<client_id>/command-history')
     def get_command_history(client_id):
-        def _execute():
-            limit_text = (request.args.get('limit') or '50').strip()
-            unique_text = (request.args.get('unique') or '').strip().lower()
-
-            if limit_text and not limit_text.isdigit():
-                raise ValueError('limit must be a positive integer')
-
-            limit = int(limit_text or '50')
-            unique = unique_text in {'1', 'true', 'yes', 'on'}
-
-            return web_service.get_command_history(client_id, limit=limit, unique=unique)
-
-        return _json_endpoint(_execute, default_error_status=500)
-
+        return _json_endpoint(
+            lambda: web_service.get_command_history(client_id),
+            default_error_status=500
+        )
 
     @app.delete('/api/connections/<client_id>/command-history')
     def clear_command_history(client_id):

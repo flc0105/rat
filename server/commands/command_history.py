@@ -15,6 +15,7 @@ class CommandHistoryStore:
     - 按 hostname 持久化命令历史
     - 同时供 CLI / Web 读取
     - 控制最大保留条数
+    - 保存所有命令，但默认展示去重后的最新记录
     """
 
     MAX_ENTRIES_PER_HOST = 300
@@ -128,90 +129,53 @@ class CommandHistoryStore:
         with self._lock:
             self._write_entries(hostname, [])
 
-    def _build_result_view(self, entries: list) -> list:
+    def _build_deduplicated_latest_view(self, entries: list) -> list:
         """
-        构造对外展示用视图，并补充 index
+        构造默认展示视图：
+        - 保留所有原始记录
+        - 展示时按时间倒序去重
+        - 相同 command 只保留最新一条
         """
-        result = []
-        for index, item in enumerate(reversed(entries), start=1):
-            copied = dict(item)
-            copied['index'] = index
-            result.append(copied)
-        return result
-
-    def get_history_for_connection(self, conn, limit: int = 50) -> list:
-        """
-        获取指定连接的命令历史，按时间倒序返回
-        """
-        if conn is None:
-            return []
-
-        info = getattr(conn, 'info', {}) or {}
-        hostname = info.get('hostname') or 'unknown_host'
-
-        with self._lock:
-            entries = self._read_entries(hostname)
-
-        if limit > 0:
-            entries = entries[-limit:]
-
-        return self._build_result_view(entries)
-
-    def get_unique_history_for_connection(self, conn, limit: int = 50) -> list:
-        """
-        获取指定连接的去重命令历史：
-        - 按时间倒序
-        - 相同 command 只保留最近一条
-        """
-        if conn is None:
-            return []
-
-        info = getattr(conn, 'info', {}) or {}
-        hostname = info.get('hostname') or 'unknown_host'
-
-        with self._lock:
-            entries = self._read_entries(hostname)
-
-        if limit > 0:
-            entries = entries[-limit:]
-
         seen = set()
-        unique_entries = []
+        result = []
 
         for item in reversed(entries):
             command_text = item.get('command') or ''
             if command_text in seen:
                 continue
             seen.add(command_text)
-            unique_entries.append(dict(item))
 
-        for index, item in enumerate(unique_entries, start=1):
+            copied = dict(item)
+            result.append(copied)
+
+        for index, item in enumerate(result, start=1):
             item['index'] = index
 
-        return unique_entries
+        return result
 
-    def get_history_entry_by_index(self, conn, index: int):
+    def get_history_for_connection(self, conn) -> list:
         """
-        按当前展示顺序（倒序）获取历史记录
+        获取指定连接的默认历史视图：
+        去重，只保留每条命令的最新记录
         """
-        if conn is None or index <= 0:
-            return None
+        if conn is None:
+            return []
 
-        entries = self.get_history_for_connection(conn, limit=self.MAX_ENTRIES_PER_HOST)
-        if index > len(entries):
-            return None
-        return entries[index - 1]
+        info = getattr(conn, 'info', {}) or {}
+        hostname = info.get('hostname') or 'unknown_host'
 
-    def get_history_by_hostname(self, hostname: str, limit: int = 50) -> list:
+        with self._lock:
+            entries = self._read_entries(hostname)
+
+        return self._build_deduplicated_latest_view(entries)
+
+    def get_history_by_hostname(self, hostname: str) -> list:
         """
-        按 hostname 读取命令历史，按时间倒序返回
+        按 hostname 读取默认历史视图
         """
         hostname_text = (hostname or '').strip() or 'unknown_host'
 
         with self._lock:
             entries = self._read_entries(hostname_text)
 
-        if limit > 0:
-            entries = entries[-limit:]
-
-        return self._build_result_view(entries)
+        return self._build_deduplicated_latest_view(entries)
