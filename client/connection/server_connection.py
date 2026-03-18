@@ -108,19 +108,33 @@ class ServerConnection(RATSocket):
                 pass
             raise
 
-    def enqueue_received_message(self, data: dict):
+    def enqueue_pending_message(self, data: dict):
         """
-        接收线程将消息交给连接对象分流：
-        - rdy 直接进入 ready_queue
-        - 其他消息进入待处理队列，由主线程执行
+        将需由主线程执行的消息放入待处理队列
+        """
+        self.pending_message_queue.put(data)
+
+    def handle_received_message(self, data: dict):
+        """
+        处理接收线程收到的消息。
+
+        返回值：
+        - None: 该消息已处理完成，调用方无需额外动作
+        - tuple: 需要由接收线程立即 send_result(*result)
         """
         logger.debug(data)
 
-        if data.get('type') == 'rdy':
-            self.message_router.dispatch(data)
-            return
+        message_type = data.get('type')
 
-        self.pending_message_queue.put(data)
+        if message_type == 'rdy':
+            self.message_router.dispatch(data)
+            return None
+
+        if message_type == 'file':
+            return self.message_router.dispatch(data)
+
+        self.enqueue_pending_message(data)
+        return None
 
     def recv_command(self, timeout: float | None = None) -> (int, int, str):
         """

@@ -126,40 +126,18 @@ class Client:
         self.server.mark_connected()
         logger.info('Connected')
 
-    def _handle_receiver_message(self, data: dict):
-        """
-        后台接收线程处理消息：
-        - rdy: 直接分发到 ready_queue
-        - file: 由接收线程完整处理（必须由同一线程继续 recv_io）
-        - command/script: 交给主线程执行
-        """
-        message_type = data.get('type')
-
-        if message_type == 'rdy':
-            self.server.enqueue_received_message(data)
-            return
-
-        if message_type == 'file':
-            result = self.server.message_router.dispatch(data)
-            if result:
-                self.server.send_result(*result)
-            return
-
-        self.server.enqueue_received_message(data)
-
     def _receiver_loop(self):
         """
         后台接收线程：
         - 持续 recv 收包
-        - rdy 直接进入 ready_queue
-        - file 由本线程完整接收文件体，避免与主线程抢读 socket
-        - command/script 进入待处理队列，由主线程执行
+        - 由 ServerConnection 统一决定如何处理消息
         """
         while not self._receiver_stop_event.is_set():
             try:
                 data = self.server.recv()
-                logger.debug(data)
-                self._handle_receiver_message(data)
+                result = self.server.handle_received_message(data)
+                if result:
+                    self.server.send_result(*result)
             except socket.error as e:
                 if not self._receiver_stop_event.is_set():
                     self._set_receiver_error(e)
