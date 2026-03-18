@@ -1,7 +1,9 @@
 import os
 import platform
+import queue
 import socket
 import sys
+import threading
 import time
 import uuid
 
@@ -18,9 +20,13 @@ class Client:
         self.address = address
         self.client_id = str(uuid.uuid4())
         self.server = None
+
+        self._receiver_thread = None
+        self._receiver_stop_event = threading.Event()
+        self._receiver_error = None
+        self._receiver_error_lock = threading.Lock()
+
         self._create_connection()
-
-
 
     def _create_connection(self):
         """
@@ -38,28 +44,44 @@ class Client:
         except Exception:
             pass
 
+    def _clear_receiver_error(self):
+        with self._receiver_error_lock:
+            self._receiver_error = None
+
+    def _set_receiver_error(self, error):
+        with self._receiver_error_lock:
+            if self._receiver_error is None:
+                self._receiver_error = error
+
+    def _pop_receiver_error(self):
+        with self._receiver_error_lock:
+            error = self._receiver_error
+            self._receiver_error = None
+            return error
+
+    def _stop_receiver_thread(self):
+        """
+        停止接收线程
+        """
+        self._receiver_stop_event.set()
+
+    def _reset_receiver_runtime(self):
+        """
+        重置接收线程运行态
+        """
+        self._receiver_stop_event = threading.Event()
+        self._clear_receiver_error()
+        self._receiver_thread = None
+
     def _reset_connection(self):
         """
         关闭当前连接并重建连接对象
         """
+        self._stop_receiver_thread()
         self._close_current_connection()
         self._handle_connection_lost()
+        self._reset_receiver_runtime()
         self._create_connection()
-
-
-    # def _build_client_info(self):
-    #     """
-    #     构造客户端基础信息
-    #     """
-    #     return {
-    #         'id': self.client_id,
-    #         'type': 'info',
-    #         'os_type': platform.system(),
-    #         'os_ver': platform.platform(),
-    #         'hostname': socket.gethostname(),
-    #         'integrity': check_privilege(),
-    #         'cwd': os.getcwd(),
-    #     }
 
     def _build_client_info(self):
         """
@@ -104,12 +126,70 @@ class Client:
         self.server.mark_connected()
         logger.info('Connected')
 
+    def _handle_receiver_message(self, data: dict):
+        """
+        后台接收线程处理消息：
+        - rdy: 直接分发到 ready_queue
+        - file: 由接收线程完整处理（必须由同一线程继续 recv_io）
+        - command/script: 交给主线程执行
+        """
+        message_type = data.get('type')
+
+        if message_type == 'rdy':
+            self.server.enqueue_received_message(data)
+            return
+
+        if message_type == 'file':
+            result = self.server.message_router.dispatch(data)
+            if result:
+                self.server.send_result(*result)
+            return
+
+        self.server.enqueue_received_message(data)
+
+    def _receiver_loop(self):
+        """
+        后台接收线程：
+        - 持续 recv 收包
+        - rdy 直接进入 ready_queue
+        - file 由本线程完整接收文件体，避免与主线程抢读 socket
+        - command/script 进入待处理队列，由主线程执行
+        """
+        while not self._receiver_stop_event.is_set():
+            try:
+                data = self.server.recv()
+                logger.debug(data)
+                self._handle_receiver_message(data)
+            except socket.error as e:
+                if not self._receiver_stop_event.is_set():
+                    self._set_receiver_error(e)
+                break
+            except Exception as e:
+                if not self._receiver_stop_event.is_set():
+                    self._set_receiver_error(e)
+                break
+
+    def _start_receiver_thread(self):
+        """
+        启动后台接收线程
+        """
+        self._receiver_stop_event.clear()
+        self._clear_receiver_error()
+
+        self._receiver_thread = threading.Thread(
+            target=self._receiver_loop,
+            name='ClientReceiver',
+            daemon=True
+        )
+        self._receiver_thread.start()
+
     def connect(self):
         """
         建立连接并完成握手
         """
         self._connect_socket()
         self._handshake()
+        self._start_receiver_thread()
 
     def _recover_from_connection_error(self, error):
         """
@@ -122,9 +202,15 @@ class Client:
     def wait(self):
         while True:
             try:
-                result = self.server.recv_command()
+                receiver_error = self._pop_receiver_error()
+                if receiver_error is not None:
+                    raise receiver_error
+
+                result = self.server.recv_command(timeout=0.5)
                 if result:
                     self.server.send_result(*result)
+            except queue.Empty:
+                continue
             except SystemExit:
                 logger.info('Server closed this connection')
                 break

