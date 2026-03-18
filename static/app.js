@@ -328,10 +328,23 @@ createApp({
       }
     },
 
+    //     applyHistoryCommand(row) {
+    //   if (!row || !row.command) return;
+    //   this.commandText = row.command;
+    //   this.commandHistoryDialogVisible = false;
+    // },
+
         applyHistoryCommand(row) {
       if (!row || !row.command) return;
       this.commandText = row.command;
       this.commandHistoryDialogVisible = false;
+
+      nextTick(() => {
+        const input = this.$refs.commandInputRef;
+        if (input && typeof input.focus === 'function') {
+          input.focus();
+        }
+      });
     },
 
     async toggleCommandHistoryUnique() {

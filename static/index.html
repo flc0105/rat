@@ -112,6 +112,8 @@
                 <div class="command-row">
                   <div class="command-box command-box-full">
                     <input
+                       ref="commandInputRef"
+
                       v-model="commandText"
                       list="commandCandidatesList"
                       class="command-input-native"
@@ -425,19 +427,24 @@
             </template>
           </el-table-column>
 
-          <el-table-column prop="command" label="Command" min-width="300" show-overflow-tooltip>
+          <el-table-column prop="command" label="Command" min-width="240" show-overflow-tooltip>
             <template #default="{ row }">
               <div class="ellipsis mono">{{ row.command || '-' }}</div>
             </template>
           </el-table-column>
 
-          <el-table-column prop="status" label="Status" width="110" align="center">
+          <el-table-column prop="status" label="Status" width="100" align="center">
             <template #default="{ row }">
-              <div class="ellipsis">{{ row.status || '-' }}</div>
+              <el-tag
+                size="small"
+                :type="row.status === 'success' ? 'success' : (row.status === 'error' ? 'danger' : 'info')"
+              >
+                {{ row.status || '-' }}
+              </el-tag>
             </template>
           </el-table-column>
 
-          <el-table-column prop="source" label="Source" width="110" align="center">
+          <el-table-column prop="source" label="Source" width="100" align="center">
             <template #default="{ row }">
               <div class="ellipsis">{{ row.source || '-' }}</div>
             </template>
@@ -455,7 +462,7 @@
             </template>
           </el-table-column>
 
-          <el-table-column label="Actions" width="130" align="center" fixed="right">
+          <el-table-column label="Actions" width="100" align="center" fixed="right">
             <template #default="{ row }">
               <div class="table-actions table-actions-links">
                 <a href="#" class="table-action-link" @click.prevent="applyHistoryCommand(row)">Use</a>

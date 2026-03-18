@@ -103,8 +103,7 @@ class WebTaskService:
         command_text = (command or '').strip()
         should_record = (
                 bool(command_text)
-                and command_text != 'history clear'
-                and not command_text.startswith('history run ')
+                and not command_text.startswith('history')
         )
 
         entry_id = ''
