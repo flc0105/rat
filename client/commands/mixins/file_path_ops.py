@@ -1,11 +1,11 @@
 import json
 import os
 
-from core.utils.decorator import desc
+from core.utils.decorator import web_desc
 
 
 class CommandFilePathMixin:
-    @desc('Download a file by path')
+    @web_desc('Download a file by path')
     def download_path(self, path=''):
         """
         按路径下载文件，供 Web 远程文件浏览使用。
@@ -16,7 +16,7 @@ class CommandFilePathMixin:
         except Exception as e:
             return 0, f'Failed to download file: {e}'
 
-    @desc('Browse directory as JSON payload')
+    @web_desc('Browse directory as JSON payload')
     def browse_dir(self, path=''):
         """
         浏览目录，返回 JSON 结构，供 Web 端可视化文件浏览使用。
@@ -44,7 +44,7 @@ class CommandFilePathMixin:
         except Exception as e:
             return 0, f'Failed to browse directory: {e}'
 
-    @desc('Delete a file or directory')
+    @web_desc('Delete a file or directory')
     def delete_path(self, path=''):
         """
         删除文件或目录。
@@ -55,7 +55,7 @@ class CommandFilePathMixin:
         except Exception as e:
             return 0, f'Failed to delete path: {e}'
 
-    @desc('Create a directory')
+    @web_desc('Create a directory')
     def mkdir_path(self, path=''):
         """
         创建目录。
@@ -70,7 +70,7 @@ class CommandFilePathMixin:
         except Exception as e:
             return 0, f'Failed to create directory: {e}'
 
-    @desc('Rename a file or directory')
+    @web_desc('Rename a file or directory')
     def rename_path(self, arg=''):
         """
         重命名文件或目录。

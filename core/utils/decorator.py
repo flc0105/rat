@@ -15,7 +15,23 @@ def desc(text):
     """
 
     def attr_decorator(func):
-        setattr(func, 'help', text)  # 添加帮助文档属性到函数或方法对象
+        setattr(func, 'help', text)
+        setattr(func, 'hide_from_help', False)
+        return func
+
+    return attr_decorator
+
+
+def web_desc(text):
+    """
+    Web/结构化调用专用命令装饰器：
+    - 仍然导出到 command manifest
+    - 默认不显示在 help 列表中
+    """
+
+    def attr_decorator(func):
+        setattr(func, 'help', text)
+        setattr(func, 'hide_from_help', True)
         return func
 
     return attr_decorator
