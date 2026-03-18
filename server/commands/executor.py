@@ -5,7 +5,6 @@ from functools import partial
 
 from core.utils.parsing import scan_args, parse
 from core.utils.formatting import format_dict
-from core.utils.server_util import read_first_line
 from server.config.config import SCRIPT_PATH
 
 
@@ -13,26 +12,26 @@ class CommandExecutor:
     WEB_COMMAND_TEMPLATES = [
         {
             'name': 'upload',
-            'template': 'upload <local_file>',
-            'help': 'Upload a local file to the client',
+            'template': 'upload ',
+            'help': 'upload <local_file> | Upload a local file to the client',
             'source': 'server'
         },
         {
             'name': 'exec',
-            'template': 'exec <script.py>',
-            'help': 'Execute a server-side Python script on the client',
+            'template': 'exec ',
+            'help': 'exec <script.py> | Execute a server-side Python script on the client',
             'source': 'server'
         },
         {
             'name': 'alias',
-            'template': 'alias <name> = <command>',
-            'help': 'Save a command alias',
+            'template': 'alias ',
+            'help': 'alias <name> = <command> | Save a command alias',
             'source': 'server'
         },
         {
             'name': 'unalias',
-            'template': 'unalias <name>',
-            'help': 'Remove a command alias',
+            'template': 'unalias ',
+            'help': 'unalias <name> | Remove a command alias',
             'source': 'server'
         },
         {
@@ -164,15 +163,6 @@ class CommandExecutor:
             for file_path in self._iter_script_files()
         ]
 
-    def _get_script_help_map(self):
-        """
-        获取脚本帮助信息映射
-        """
-        scripts = {}
-        for file_path in self._iter_script_files():
-            key = os.path.relpath(file_path, SCRIPT_PATH).replace('\\', '/')
-            scripts[key] = read_first_line(file_path)
-        return scripts
 
     def _resolve_script_path(self, script_name: str) -> str:
         """
@@ -219,10 +209,6 @@ class CommandExecutor:
         """
         if not filename:
             yield 1, '\n'.join(self._list_scripts())
-            return
-
-        if filename == '--help':
-            yield 1, format_dict(self._get_script_help_map(), 25)
             return
 
         for item in self._execute_script_file(filename):
@@ -278,10 +264,6 @@ class CommandExecutor:
                 lines.append(
                     f'{item.get("index", 0):>3}  '
                     f'{item.get("command", "")}'
-                    # f'{item.get("index", 0):>3}. '
-                    # f'{item.get("time", "")} '
-                    # f'[{item.get("source", "")}/{item.get("status", "")}] '
-                    # f'{item.get("command", "")}'
                 )
 
             yield 1, '\n'.join(lines)
