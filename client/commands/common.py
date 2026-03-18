@@ -522,3 +522,16 @@ class CommonCommands(CommandBase):
             return 1, 'Stop request sent for:\n' + '\n'.join(stopped_jobs)
         except Exception as e:
             return 0, f'Failed to stop background jobs: {e}'
+
+    @desc('Show command manifest as JSON payload')
+    def command_manifest(self):
+        methods = self._get_exported_command_methods()
+        payload = [
+            {
+                'name': name,
+                'help': method.help,
+            }
+            for name, method in methods.items()
+        ]
+        payload.sort(key=lambda item: item['name'].lower())
+        return 1, json.dumps(payload, ensure_ascii=False)

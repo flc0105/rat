@@ -5,9 +5,13 @@ createApp({
     return {
       connections: [],
       selectedId: '',
-      outputs: {},
+
+            outputs: {},
       commandText: '',
+      commandCandidates: [],
+      commandCandidatesLoadedFor: '',
       sending: false,
+
       uploading: false,
       eventSource: null,
       sseReady: false,
@@ -245,6 +249,10 @@ createApp({
           this.selectedId = this.connections[0].client_id;
         }
 
+                if (this.selectedId) {
+          this.loadCommandCandidates(this.selectedId);
+        }
+
         if (this.selectedId && !this.connections.find(item => item.client_id === this.selectedId)) {
           this.selectedId = this.connections.length > 0 ? this.connections[0].client_id : '';
         }
@@ -256,7 +264,28 @@ createApp({
     selectConnection(clientId) {
       this.selectedId = clientId;
       this.ensureOutputBucket(clientId);
+      this.loadCommandCandidates(clientId);
       this.scrollToBottom();
+    },
+
+        async loadCommandCandidates(clientId) {
+      if (!clientId) return;
+      if (this.commandCandidatesLoadedFor === clientId && this.commandCandidates.length) return;
+
+      try {
+        const res = await fetch(`/api/connections/${encodeURIComponent(clientId)}/command-candidates`);
+        const json = await res.json();
+
+        if (!res.ok || json.code !== 0) {
+          throw new Error(json.message || 'Failed to load command candidates');
+        }
+
+        this.commandCandidates = Array.isArray(json.data) ? json.data : [];
+        this.commandCandidatesLoadedFor = clientId;
+      } catch (e) {
+        this.commandCandidates = [];
+        this.commandCandidatesLoadedFor = '';
+      }
     },
 
     async sendCommand() {

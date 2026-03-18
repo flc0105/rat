@@ -10,6 +10,33 @@ from server.config.config import SCRIPT_PATH
 
 
 class CommandExecutor:
+    WEB_COMMAND_TEMPLATES = [
+        {
+            'name': 'upload',
+            'template': 'upload <local_file>',
+            'help': 'Upload a local file to the client',
+            'source': 'server'
+        },
+        {
+            'name': 'exec',
+            'template': 'exec <script.py>',
+            'help': 'Execute a server-side Python script on the client',
+            'source': 'server'
+        },
+        {
+            'name': 'alias',
+            'template': 'alias <name> = <command>',
+            'help': 'Save a command alias',
+            'source': 'server'
+        },
+        {
+            'name': 'unalias',
+            'template': 'unalias <name>',
+            'help': 'Remove a command alias',
+            'source': 'server'
+        },
+    ]
+
     def __init__(self, conn, server):
         self.conn = conn
         self.server = server
@@ -20,6 +47,34 @@ class CommandExecutor:
         返回单条错误结果
         """
         yield 0, str(error)
+
+    # ------------------ 补全候选 ------------------ #
+    def get_command_candidates(self):
+        """
+        获取服务端可提供的命令候选：
+        - server 内建命令模板
+        - exec 脚本
+        - alias
+        """
+        candidates = [dict(item) for item in self.WEB_COMMAND_TEMPLATES]
+
+        for script in self._list_scripts():
+            candidates.append({
+                'name': 'exec',
+                'template': f'exec {script}',
+                'help': f'Execute script: {script}',
+                'source': 'script'
+            })
+
+        for alias_name, alias_command in self.server.alias_manager.list_aliases().items():
+            candidates.append({
+                'name': alias_name,
+                'template': alias_name,
+                'help': f'Alias -> {alias_command}',
+                'source': 'alias'
+            })
+
+        return candidates
 
     # ------------------ 主命令入口 ------------------ #
     def _resolve_builtin_command(self, name, arg):

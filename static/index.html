@@ -110,11 +110,21 @@
                   <div class="command-box command-box-full">
                     <input
                       v-model="commandText"
+                      list="commandCandidatesList"
                       class="command-input-native"
                       type="text"
                       placeholder="Enter a command..."
                       @keyup.enter="sendCommand"
                     />
+                                        <datalist id="commandCandidatesList">
+                      <option
+                        v-for="item in commandCandidates"
+                        :key="item.template"
+                        :value="item.template"
+                      >
+                        {{ item.help }}
+                      </option>
+                    </datalist>
                     <button
                       class="run-button"
                       :disabled="sending"

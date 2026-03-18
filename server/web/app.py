@@ -125,6 +125,13 @@ def create_app(server_instance):
             lambda: web_service.submit_command(client_id, _get_required_command())
         )
 
+    @app.get('/api/connections/<client_id>/command-candidates')
+    def get_command_candidates(client_id):
+        return _json_endpoint(
+            lambda: web_service.get_command_candidates(client_id),
+            default_error_status=500
+        )
+
     @app.post('/api/connections/<client_id>/kill')
     def kill_connection(client_id):
         def _execute():
