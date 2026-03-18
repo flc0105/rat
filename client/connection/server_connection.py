@@ -5,8 +5,8 @@ import queue
 from client.commands.common import CommonCommands
 from client.commands.executor import CommandExecutor
 from client.connection.file_receiver import ServerFileReceiver
-from client.connection.message_dispatcher import ClientMessageDispatcher
-from client.connection.message_router import ServerMessageRouter
+from client.connection.message_dispatcher import ClientInboundMessageDispatcher
+from client.connection.message_router import ClientInboundMessageRouter
 from client.jobs.core.manager import JobManager
 from core.protocol.base_connection import BaseSessionConnection
 from core.utils.logger import logger
@@ -31,8 +31,8 @@ class ServerConnection(BaseSessionConnection):
         self.job_manager = JobManager(self)
         self.is_connected = False
 
-        self.message_router = ServerMessageRouter(self)
-        self.message_dispatcher = ClientMessageDispatcher(self)
+        self.message_router = ClientInboundMessageRouter(self)
+        self.message_dispatcher = ClientInboundMessageDispatcher(self)
         self.file_receiver = ServerFileReceiver(self)
 
     def mark_connected(self):

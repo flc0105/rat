@@ -5,9 +5,9 @@ if BACKGROUND_MESSAGE_OUTPUT_TO_FILE:
     file_logger = get_file_logger(BACKGROUND_MESSAGE_LOG_FILE)
 
 
-class ClientResultDispatcher:
+class ServerResultDispatcher:
     """
-    ClientConnection 结果分发器。
+    Server 侧结果分发器。
 
     职责：
     - 判断结果是否属于当前等待中的命令

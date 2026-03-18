@@ -1,9 +1,9 @@
 from core.protocol.message_router_base import BaseMessageRouter
 
 
-class ClientMessageRouter(BaseMessageRouter):
+class ServerInboundMessageRouter(BaseMessageRouter):
     """
-    ClientConnection 收到消息后的分发器。
+    Server 侧入站消息路由器。
 
     职责：
     - 按消息 type 分发到对应处理逻辑

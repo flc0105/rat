@@ -5,9 +5,9 @@ from typing import Generator, Optional
 from core.protocol.base_connection import BaseSessionConnection
 from core.protocol.message_queue import MessageQueue, PendingCommandQueue
 from server.connection.file_receiver import ClientFileReceiver
-from server.connection.message_dispatcher import ServerMessageDispatcher
-from server.connection.message_router import ClientMessageRouter
-from server.connection.result_dispatcher import ClientResultDispatcher
+from server.connection.message_dispatcher import ServerInboundMessageDispatcher
+from server.connection.message_router import ServerInboundMessageRouter
+from server.connection.result_dispatcher import ServerResultDispatcher
 
 
 class ClientConnection(BaseSessionConnection):
@@ -38,9 +38,9 @@ class ClientConnection(BaseSessionConnection):
         self.on_file_saved = on_file_saved
 
         # helpers
-        self.result_dispatcher = ClientResultDispatcher(self)
-        self.message_router = ClientMessageRouter(self)
-        self.message_dispatcher = ServerMessageDispatcher(self)
+        self.result_dispatcher = ServerResultDispatcher(self)
+        self.message_router = ServerInboundMessageRouter(self)
+        self.message_dispatcher = ServerInboundMessageDispatcher(self)
         self.file_receiver = ClientFileReceiver(self)
 
     # ------------------ ID/构包 ------------------ #

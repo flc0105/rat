@@ -1,6 +1,6 @@
-class ServerMessageDispatcher:
+class ServerInboundMessageDispatcher:
     """
-    ClientConnection 收到消息后的调度器。
+    Server 侧入站消息调度器。
 
     职责：
     - 决定消息如何进入后续处理流程
