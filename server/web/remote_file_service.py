@@ -1,3 +1,4 @@
+import base64
 import json
 import os
 
@@ -16,11 +17,15 @@ class WebRemoteFileService:
     def __init__(self, server):
         self.server = server
 
-    def _build_command(self, name: str, arg: str = '') -> str:
-        value = (arg or '').strip()
-        if not value:
+    def _encode_payload_arg(self, payload: dict) -> str:
+        raw = json.dumps(payload, ensure_ascii=False).encode('utf-8')
+        encoded = base64.urlsafe_b64encode(raw).decode('utf-8')
+        return f'__json__:{encoded}'
+
+    def _build_command(self, name: str, payload: dict | None = None) -> str:
+        if not payload:
             return name
-        return f'{name} {value}'
+        return f'{name} {self._encode_payload_arg(payload)}'
 
     def _collect_result(self, result_iter):
         """
@@ -57,7 +62,7 @@ class WebRemoteFileService:
         """
         浏览远程目录
         """
-        command = self._build_command('browse_dir', path)
+        command = self._build_command('browse_dir', {'path': path})
         payload = self._run_json_command(client_id, command)
 
         return {
@@ -73,11 +78,47 @@ class WebRemoteFileService:
         if not (path or '').strip():
             raise ValueError('path is required')
 
-        command = self._build_command('delete_path', path)
+        command = self._build_command('delete_path', {'path': path})
         result_text = self._run_text_command(client_id, command)
 
         return {
             'path': path,
+            'message': result_text
+        }
+
+    def create_directory(self, client_id: str, path: str) -> dict:
+        """
+        创建远程目录
+        """
+        if not (path or '').strip():
+            raise ValueError('path is required')
+
+        command = self._build_command('mkdir_path', {'path': path})
+        result_text = self._run_text_command(client_id, command)
+
+        return {
+            'path': path,
+            'message': result_text
+        }
+
+    def rename_path(self, client_id: str, old_path: str, new_name: str) -> dict:
+        """
+        重命名远程文件或目录
+        """
+        if not (old_path or '').strip():
+            raise ValueError('old_path is required')
+        if not (new_name or '').strip():
+            raise ValueError('new_name is required')
+
+        command = self._build_command('rename_path', {
+            'old_path': old_path,
+            'new_name': new_name
+        })
+        result_text = self._run_text_command(client_id, command)
+
+        return {
+            'old_path': old_path,
+            'new_name': new_name,
             'message': result_text
         }
 
@@ -89,7 +130,7 @@ class WebRemoteFileService:
             raise ValueError('path is required')
 
         normalized_path = path.strip()
-        command = self._build_command('download_path', normalized_path)
+        command = self._build_command('download_path', {'path': normalized_path})
 
         conn = self.server.get_target_connection_by_client_id(client_id)
         before_files = {item['saved_name'] for item in self.server.web_service.file_service.list_received_files()}

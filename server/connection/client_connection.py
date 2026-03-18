@@ -63,16 +63,25 @@ class ClientConnection(RATSocket):
             data['extra'] = extra
         return data
 
-    def _build_file_payload(self, filename: str) -> dict:
+    def _build_file_payload(self, filename: str, save_dir:str='') -> dict:
         """
         构造文件消息头
         """
-        return {
+        # return {
+        #     'type': 'file',
+        #     'id': self._generate_message_id(),
+        #     'length': os.stat(filename).st_size,
+        #     'filename': ntpath.basename(filename),
+        # }
+        data = {
             'type': 'file',
             'id': self._generate_message_id(),
             'length': os.stat(filename).st_size,
             'filename': ntpath.basename(filename),
         }
+        if save_dir:
+            data['save_dir'] = save_dir
+        return data
 
     # ------------------ 发送命令/文件 ------------------ #
     def send_command(self, command: str, type='command', extra=None) -> Generator:
@@ -87,13 +96,14 @@ class ClientConnection(RATSocket):
         self.send(data)
         return self.wait_for_result(data.get('id'), command if type == 'command' else None)
 
-    def send_file(self, filename: str) -> Generator:
+    def send_file(self, filename: str, save_dir: str = '') -> Generator:
         """
         向客户端发送文件
         :param filename: 文件名
         :return: 结果生成器
         """
-        data = self._build_file_payload(filename)
+        # data = self._build_file_payload(filename)
+        data = self._build_file_payload(filename, save_dir)
         io = get_output_stream(filename)
 
         self.send(data)  # 发送文件请求头

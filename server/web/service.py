@@ -52,8 +52,11 @@ class ServerWebService:
     def submit_web_command(self, client_id: str, command: str):
         return self.task_service.submit_web_command(client_id, command)
 
-    def submit_web_upload(self, client_id: str, local_path: str, display_name: str):
-        return self.task_service.submit_web_upload(client_id, local_path, display_name)
+    def submit_web_upload(self, client_id: str, local_path: str, display_name: str, remote_path: str = ''):
+        return self.task_service.submit_web_upload(client_id, local_path, display_name, remote_path)
+
+    # def submit_web_upload(self, client_id: str, local_path: str, display_name: str):
+    #     return self.task_service.submit_web_upload(client_id, local_path, display_name)
 
     # ------------------ remote file facade ------------------ #
     def browse_remote_directory(self, client_id: str, path: str = ''):
@@ -64,6 +67,12 @@ class ServerWebService:
 
     def download_remote_file(self, client_id: str, path: str):
         return self.remote_file_service.download_file(client_id, path)
+
+    def create_remote_directory(self, client_id: str, path: str):
+        return self.remote_file_service.create_directory(client_id, path)
+
+    def rename_remote_path(self, client_id: str, old_path: str, new_name: str):
+        return self.remote_file_service.rename_path(client_id, old_path, new_name)
 
     # ------------------ compatibility facade ------------------ #
     def build_connection(self, conn, addr, info: dict):
@@ -78,5 +87,8 @@ class ServerWebService:
     def submit_command(self, client_id: str, command: str):
         return self.submit_web_command(client_id, command)
 
-    def submit_upload(self, client_id: str, local_path: str, display_name: str):
-        return self.submit_web_upload(client_id, local_path, display_name)
+    # def submit_upload(self, client_id: str, local_path: str, display_name: str):
+    #     return self.submit_web_upload(client_id, local_path, display_name)
+
+    def submit_upload(self, client_id: str, local_path: str, display_name: str, remote_path: str = ''):
+        return self.submit_web_upload(client_id, local_path, display_name, remote_path)

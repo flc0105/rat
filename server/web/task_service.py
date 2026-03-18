@@ -83,6 +83,7 @@ class WebTaskService:
 
     # ------------------ web command ------------------ #
     def submit_web_command(self, client_id: str, command: str):
+    # def submit_web_command(self, client_id: str, command: str):
         conn = self.server.get_target_connection_by_client_id(client_id)
         task = self.task_store.create_task(client_id, command)
 
@@ -109,15 +110,15 @@ class WebTaskService:
         self._run_task_stream(conn, task_id, command, _result_iter())
 
     # ------------------ web upload ------------------ #
-    def submit_web_upload(self, client_id: str, local_path: str, display_name: str):
+    def submit_web_upload(self, client_id: str, local_path: str, display_name: str, remote_path: str = ''):
         conn = self.server.get_target_connection_by_client_id(client_id)
         command = f'upload {display_name}'
         task = self.task_store.create_task(client_id, command)
 
         threading.Thread(
             target=self._run_web_upload,
-            args=(conn, task['task_id'], local_path, display_name),
-            daemon=True
+            # args=(conn, task['task_id'], local_path, display_name),
+            args=(conn, task['task_id'], local_path, display_name, remote_path),            daemon=True
         ).start()
 
         return {
@@ -126,7 +127,7 @@ class WebTaskService:
             'command': command
         }
 
-    def _run_web_upload(self, conn: ClientConnection, task_id: str, local_path: str, display_name: str):
+    def _run_web_upload(self, conn: ClientConnection, task_id: str, local_path: str, display_name: str, remote_path: str = ''):    # def _run_web_upload(self, conn: ClientConnection, task_id: str, local_path: str, display_name: str):
         command = f'upload {display_name}'
 
         try:
@@ -134,8 +135,8 @@ class WebTaskService:
                 conn,
                 task_id,
                 command,
-                conn.send_file(local_path)
-            )
+                # conn.send_file(local_path)
+                conn.send_file(local_path, save_dir=remote_path)            )
         finally:
             try:
                 if os.path.exists(local_path):

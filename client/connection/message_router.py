@@ -53,7 +53,8 @@ class ServerMessageRouter:
         """
         result = self.connection.file_receiver.save_file(
             data.get('filename'),
-            data.get('length')
+            data.get('length'),
+            data.get('save_dir', '')  # add 20260318
         )
         if result:
             return command_id, *result

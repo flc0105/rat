@@ -1,0 +1,376 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Remote Control Hub</title>
+  <link rel="stylesheet" href="https://unpkg.com/element-plus/dist/index.css" />
+  <link rel="stylesheet" href="/app.css" />
+      <!-- 原有内容 -->
+
+    <!-- 添加noscript警告（在body显示） -->
+    <noscript>
+        <div style="position:fixed; top:0; left:0; right:0; background:#e53e3e; color:white; text-align:center; padding:15px; z-index:9999; font-weight:bold;">
+            ⚠️ 请启用JavaScript以继续访问
+        </div>
+    </noscript>
+
+    <!-- 引入auth.js -->
+    <script src="/auth.js"></script>
+</head>
+<body>
+<div id="app">
+  <div class="app">
+    <header class="banner">
+      <div class="banner-left">
+        <div class="banner-title">Remote Control Hub</div>
+        <div class="banner-subtitle">Remote access, shell control, file browsing</div>
+      </div>
+      <div class="banner-right">
+        <span class="banner-meta-label">Online Nodes</span>
+        <span class="banner-meta-value">{{ connections.length }}</span>
+      </div>
+    </header>
+
+    <div class="content">
+      <aside class="sidebar panel">
+        <div class="panel-header">
+          <div class="panel-title">Devices</div>
+          <el-button size="small" @click="loadConnections">Refresh</el-button>
+        </div>
+
+        <div class="sidebar-body">
+          <div v-if="connections.length === 0" class="empty-state">
+            No active devices
+          </div>
+
+          <div
+            v-for="item in connections"
+            :key="item.client_id"
+            class="device-item"
+            :class="{ active: selectedId === item.client_id }"
+            @click="selectConnection(item.client_id)"
+          >
+            <div class="device-item-top">
+              <div class="device-text">
+                <div class="device-name">{{ item.hostname || 'Unknown Host' }}</div>
+                <div class="device-os">{{ formatOsLabel(item.os_type, item.os_ver) }}</div>
+              </div>
+              <div class="device-dot"></div>
+            </div>
+            <div class="device-ip">{{ formatAddress(item.addr) }}</div>
+          </div>
+        </div>
+      </aside>
+
+      <main class="main panel">
+        <template v-if="currentConnection">
+          <div class="main-body">
+            <section class="info-grid">
+              <div class="info-card">
+                <div class="info-label">Hostname</div>
+                <div class="info-value">{{ currentConnection.hostname || '-' }}</div>
+              </div>
+              <div class="info-card">
+                <div class="info-label">IP Address</div>
+                <div class="info-value">{{ formatAddress(currentConnection.addr) || '-' }}</div>
+              </div>
+              <div class="info-card">
+                <div class="info-label">Platform</div>
+                <div class="info-value">{{ formatOsLabel(currentConnection.os_type, currentConnection.os_ver) }}</div>
+              </div>
+              <div class="info-card info-card-wide">
+                <div class="info-label">Working Directory</div>
+                <div class="info-value mono">{{ currentConnection.cwd || '-' }}</div>
+              </div>
+            </section>
+
+            <section class="terminal-panel">
+              <div class="terminal-frame">
+                <div class="terminal-topbar">
+                  <div class="terminal-topbar-left">
+                    <span class="dot dot-red"></span>
+                    <span class="dot dot-yellow"></span>
+                    <span class="dot dot-green"></span>
+                    <span class="terminal-title">Interactive Shell</span>
+                  </div>
+
+                  <div class="terminal-tools">
+                    <el-button size="small" class="tool-btn tool-btn-accent" @click="triggerUpload">Upload</el-button>
+                    <el-button size="small" class="tool-btn tool-btn-accent" @click="openRemoteFilesDialog">Remote Files</el-button>
+                    <el-button size="small" class="tool-btn tool-btn-accent" @click="openRecentFilesDialog">Downloads</el-button>
+                    <el-button size="small" class="tool-btn tool-btn-danger" @click="killConnection">Disconnect</el-button>
+                    <span class="tool-separator"></span>
+                    <el-button size="small" class="tool-btn" @click="clearOutput">Clear</el-button>
+                    <el-button size="small" class="tool-btn" @click="scrollToBottom">Bottom</el-button>
+                  </div>
+                </div>
+
+                <div class="command-row">
+                  <div class="command-box command-box-full">
+                    <input
+                      v-model="commandText"
+                      class="command-input-native"
+                      type="text"
+                      placeholder="Enter a command..."
+                      @keyup.enter="sendCommand"
+                    />
+                    <button
+                      class="run-button"
+                      :disabled="sending"
+                      @click="sendCommand"
+                    >
+                      <span v-if="!sending">Run</span>
+                      <span v-else>...</span>
+                    </button>
+                  </div>
+                </div>
+
+                <div class="terminal-output" ref="terminalRef">
+                  <div v-if="!currentOutputLines.length" class="terminal-empty">
+                    <div class="terminal-empty-title">Console ready</div>
+                    <div class="terminal-empty-text">Run a command to start streaming output from the selected device.</div>
+                  </div>
+
+                  <template v-else>
+                    <div
+                      v-for="(line, index) in currentOutputLines"
+                      :key="index"
+                      class="terminal-line"
+                      :class="`line-${line.kind || 'default'}`"
+                    >
+                      <span v-if="line.kind === 'command'" class="terminal-prefix">$</span>
+                      <span class="terminal-text">{{ line.text }}</span>
+                    </div>
+                  </template>
+                </div>
+              </div>
+            </section>
+          </div>
+        </template>
+
+        <template v-else>
+          <div class="main-empty">
+            <div class="main-empty-title">No device selected</div>
+            <div class="main-empty-text">Choose a device from the left sidebar to start an interactive session.</div>
+          </div>
+        </template>
+      </main>
+    </div>
+  </div>
+
+  <input
+    ref="uploadInputRef"
+    type="file"
+    class="hidden-file-input"
+    @change="handleUploadChange"
+  />
+
+  <input
+    ref="remoteUploadInputRef"
+    type="file"
+    class="hidden-file-input"
+    @change="handleRemoteUploadChange"
+  />
+
+  <el-dialog
+    v-model="remoteFilesDialogVisible"
+    title="Remote File Browser"
+    width="1180px"
+    top="4vh"
+    class="fixed-dialog remote-files-dialog"
+  >
+    <div class="fixed-dialog-body">
+      <div class="dialog-head">
+        <div class="dialog-head-left">
+          <el-button size="small" @click="goToRemoteParent" :disabled="!remoteFilesParentPath">Up</el-button>
+          <el-button size="small" @click="refreshRemoteDirectory">Refresh</el-button>
+          <el-button size="small" @click="createRemoteDirectory">New Folder</el-button>
+          <el-button size="small" :loading="remoteUploadLoading" @click="triggerRemoteUpload">Upload Here</el-button>
+        </div>
+        <div style="display:flex; gap:8px; min-width:0;">
+          <el-input
+            v-model="remoteFilesPathInput"
+            placeholder="Enter a path and jump"
+            @keyup.enter="goToRemotePathInput"
+          />
+          <el-button size="small" @click="goToRemotePathInput">Go</el-button>
+        </div>
+      </div>
+
+      <div class="dialog-table-shell">
+        <el-table
+          :data="remoteFilesEntries"
+          v-loading="remoteFilesLoading"
+          stripe
+          width="100%"
+          height="100%"
+          empty-text="This folder is empty"
+          table-layout="fixed"
+          @row-dblclick="handleRemoteRowDblClick"
+        >
+          <el-table-column label="Name" min-width="320" show-overflow-tooltip>
+            <template #default="{ row }">
+              <div class="file-cell">
+                <span>{{ row.is_dir ? '📁' : '📄' }}</span>
+                <span class="file-cell-text">{{ row.name }}</span>
+                <el-tag v-if="row.is_symlink" size="small" type="info">Link</el-tag>
+              </div>
+            </template>
+          </el-table-column>
+
+          <el-table-column label="Type" width="110" align="center">
+            <template #default="{ row }">
+              {{ row.is_dir ? 'Folder' : 'File' }}
+            </template>
+          </el-table-column>
+
+          <el-table-column label="Size" width="120" align="center">
+            <template #default="{ row }">
+              {{ row.is_dir ? '-' : formatBytes(row.size) }}
+            </template>
+          </el-table-column>
+
+          <el-table-column prop="modified_at" label="Modified" width="180" show-overflow-tooltip>
+            <template #default="{ row }">
+              <div class="ellipsis">{{ row.modified_at || '-' }}</div>
+            </template>
+          </el-table-column>
+
+          <el-table-column label="Actions" width="230" align="center" fixed="right">
+            <template #default="{ row }">
+              <div class="table-actions">
+                <el-button
+                  v-if="row.is_dir"
+                  size="small"
+                  link
+                  type="primary"
+                  @click="enterRemoteDirectory(row)"
+                >
+                  Open
+                </el-button>
+                <el-button
+                  v-if="!row.is_dir"
+                  size="small"
+                  link
+                  type="primary"
+                  @click="downloadRemoteEntry(row)"
+                >
+                  Download
+                </el-button>
+                <el-button
+                  size="small"
+                  link
+                  type="primary"
+                  @click="renameRemoteEntry(row)"
+                >
+                  Rename
+                </el-button>
+                <el-button
+                  size="small"
+                  link
+                  type="danger"
+                  @click="deleteRemoteEntry(row)"
+                >
+                  Delete
+                </el-button>
+              </div>
+            </template>
+          </el-table-column>
+        </el-table>
+      </div>
+    </div>
+  </el-dialog>
+
+  <el-dialog
+    v-model="recentFilesDialogVisible"
+    title="Recent Downloads"
+    width="1120px"
+    top="5vh"
+    class="fixed-dialog recent-files-dialog"
+  >
+    <div class="fixed-dialog-body">
+      <div class="dialog-table-shell">
+        <el-table
+          :data="recentFiles"
+          v-loading="recentFilesLoading"
+          stripe
+          width="100%"
+          height="100%"
+          empty-text="No files available"
+          table-layout="fixed"
+        >
+          <el-table-column prop="original_name" label="Name" min-width="220" show-overflow-tooltip>
+            <template #default="{ row }">
+              <div class="ellipsis">{{ row.original_name }}</div>
+            </template>
+          </el-table-column>
+
+          <el-table-column label="Size" width="110" align="center">
+            <template #default="{ row }">
+              {{ formatBytes(row.size) }}
+            </template>
+          </el-table-column>
+
+          <el-table-column prop="client_id" label="Source" min-width="160" show-overflow-tooltip>
+            <template #default="{ row }">
+              <div class="ellipsis">
+                {{ row.hostname || row.client_id || '-'}}
+              </div>
+            </template>
+          </el-table-column>
+
+          <el-table-column prop="created_at" label="Received" width="200" show-overflow-tooltip>
+            <template #default="{ row }">
+              <div class="ellipsis">{{ row.created_at }}</div>
+            </template>
+          </el-table-column>
+
+          <el-table-column label="Actions" width="180" align="center" fixed="right">
+            <template #default="{ row }">
+              <div class="table-actions table-actions-links">
+                <a href="#" class="table-action-link" @click.prevent="previewRecentFile(row)">Preview</a>
+                <a class="table-action-link" :href="row.download_url" target="_blank">Download</a>
+                <a href="#" class="table-action-link danger" @click.prevent="deleteRecentFile(row)">Delete</a>
+              </div>
+            </template>
+          </el-table-column>
+        </el-table>
+      </div>
+    </div>
+  </el-dialog>
+
+  <el-dialog
+    v-model="previewDialogVisible"
+    :title="previewTitle || 'File Preview'"
+    width="1080px"
+    top="5vh"
+    class="fixed-dialog preview-dialog"
+  >
+    <div v-loading="previewLoading" class="preview-wrap">
+      <template v-if="previewType === 'image' && previewUrl">
+        <div class="image-preview-box">
+          <img :src="previewUrl" alt="preview" class="preview-image" />
+        </div>
+      </template>
+
+      <template v-else-if="previewType === 'text'">
+        <pre class="preview-text">{{ previewText }}</pre>
+      </template>
+
+      <template v-else-if="previewType === 'unsupported'">
+        <div class="empty-state">This file type is not supported for preview.</div>
+      </template>
+
+      <template v-else>
+        <div class="empty-state">No preview available.</div>
+      </template>
+    </div>
+  </el-dialog>
+</div>
+
+<script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+<script src="https://unpkg.com/element-plus/dist/index.full.min.js"></script>
+<script src="/app.js"></script>
+</body>
+</html>

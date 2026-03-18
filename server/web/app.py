@@ -47,6 +47,9 @@ def create_app(server_instance):
     def _get_optional_remote_path():
         return (request.args.get('path') or '').strip()
 
+    def _get_json_payload():
+        return request.get_json(silent=True) or {}
+
     # ------------------ error mapping ------------------ #
     def _map_common_error(error):
         if isinstance(error, ValueError):
@@ -135,7 +138,8 @@ def create_app(server_instance):
         def _execute():
             upload = _get_required_upload()
             temp_path, safe_name = file_service.create_upload_temp_file(upload)
-            return web_service.submit_upload(client_id, temp_path, safe_name)
+            target_path = (request.form.get('target_path') or '').strip()
+            return web_service.submit_upload(client_id, temp_path, safe_name, target_path)
 
         return _json_endpoint(_execute)
 
@@ -146,6 +150,33 @@ def create_app(server_instance):
             lambda: web_service.browse_remote_directory(client_id, _get_optional_remote_path()),
             default_error_status=500
         )
+
+    @app.post('/api/connections/<client_id>/remote-files/mkdir')
+    def create_remote_directory(client_id):
+        def _execute():
+            payload = _get_json_payload()
+            path = (payload.get('path') or '').strip()
+            if not path:
+                raise ValueError('path is required')
+            return web_service.create_remote_directory(client_id, path)
+
+        return _json_endpoint(_execute, default_error_status=500)
+
+    @app.post('/api/connections/<client_id>/remote-files/rename')
+    def rename_remote_path(client_id):
+        def _execute():
+            payload = _get_json_payload()
+            old_path = (payload.get('old_path') or '').strip()
+            new_name = (payload.get('new_name') or '').strip()
+
+            if not old_path:
+                raise ValueError('old_path is required')
+            if not new_name:
+                raise ValueError('new_name is required')
+
+            return web_service.rename_remote_path(client_id, old_path, new_name)
+
+        return _json_endpoint(_execute, default_error_status=500)
 
     @app.delete('/api/connections/<client_id>/remote-files')
     def delete_remote_file_or_directory(client_id):

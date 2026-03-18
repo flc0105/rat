@@ -17,6 +17,8 @@ createApp({
       remoteFilesCurrentPath: '',
       remoteFilesParentPath: '',
       remoteFilesEntries: [],
+      remoteFilesPathInput: '',
+      remoteUploadLoading: false,
 
       recentFilesDialogVisible: false,
       recentFilesLoading: false,
@@ -70,6 +72,7 @@ createApp({
       this.remoteFilesCurrentPath = '';
       this.remoteFilesParentPath = '';
       this.remoteFilesEntries = [];
+      this.remoteFilesPathInput = '';
     },
 
     formatOsLabel(osType, osVer) {
@@ -104,7 +107,7 @@ createApp({
         return /成功|Success/i.test(value) ? 'success' : 'error';
       }
       if (/failed|error|not found|denied|unable/i.test(value)) return 'error';
-      if (/completed|success|saved|started|uploaded|downloaded/i.test(value)) return 'success';
+      if (/completed|success|saved|started|uploaded|downloaded|created|renamed/i.test(value)) return 'success';
       if (/preparing|loading|refresh|connected|disconnected|warning/i.test(value)) return 'info';
       return 'default';
     },
@@ -334,6 +337,70 @@ createApp({
       }
     },
 
+    triggerRemoteUpload() {
+      if (!this.selectedId) {
+        ElementPlus.ElMessage.warning('Please select a device');
+        return;
+      }
+
+      if (!this.remoteFilesCurrentPath) {
+        ElementPlus.ElMessage.warning('Current directory is empty');
+        return;
+      }
+
+      const input = this.$refs.remoteUploadInputRef;
+      if (input) {
+        input.value = '';
+        input.click();
+      }
+    },
+
+    async handleRemoteUploadChange(event) {
+      const file = event.target.files && event.target.files[0];
+      if (!file) return;
+
+      if (!this.selectedId) {
+        ElementPlus.ElMessage.warning('Please select a device');
+        return;
+      }
+
+      if (!this.remoteFilesCurrentPath) {
+        ElementPlus.ElMessage.warning('Current directory is empty');
+        return;
+      }
+
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('target_path', this.remoteFilesCurrentPath);
+
+      this.remoteUploadLoading = true;
+      this.appendOutput(
+        this.selectedId,
+        `> [Remote Upload] ${file.name} -> ${this.remoteFilesCurrentPath}`,
+        'command'
+      );
+
+      try {
+        const res = await fetch(`/api/connections/${encodeURIComponent(this.selectedId)}/upload`, {
+          method: 'POST',
+          body: formData
+        });
+
+        const json = await res.json();
+        if (!res.ok || json.code !== 0) {
+          throw new Error(json.message || 'Upload failed');
+        }
+
+        ElementPlus.ElMessage.success(`Upload started: ${file.name}`);
+        await this.refreshRemoteDirectory();
+      } catch (e) {
+        this.appendOutput(this.selectedId, `[上传失败] ${e.message || 'unknown error'}`, 'error');
+        ElementPlus.ElMessage.error(e.message || 'Upload failed');
+      } finally {
+        this.remoteUploadLoading = false;
+      }
+    },
+
     async openRemoteFilesDialog() {
       if (!this.selectedId) {
         ElementPlus.ElMessage.warning('Please select a device');
@@ -367,6 +434,7 @@ createApp({
         this.remoteFilesCurrentPath = data.current_path || '';
         this.remoteFilesParentPath = data.parent_path || '';
         this.remoteFilesEntries = data.entries || [];
+        this.remoteFilesPathInput = this.remoteFilesCurrentPath || '';
       } catch (e) {
         ElementPlus.ElMessage.error(e.message || 'Failed to load remote directory');
       } finally {
@@ -383,6 +451,15 @@ createApp({
       await this.loadRemoteDirectory(this.remoteFilesParentPath);
     },
 
+    async goToRemotePathInput() {
+      const path = (this.remoteFilesPathInput || '').trim();
+      if (!path) {
+        ElementPlus.ElMessage.warning('Please enter a path');
+        return;
+      }
+      await this.loadRemoteDirectory(path);
+    },
+
     async enterRemoteDirectory(row) {
       if (!row || !row.is_dir) return;
       await this.loadRemoteDirectory(row.path);
@@ -391,6 +468,98 @@ createApp({
     handleRemoteRowDblClick(row) {
       if (row && row.is_dir) {
         this.enterRemoteDirectory(row);
+      }
+    },
+
+    async createRemoteDirectory() {
+      if (!this.selectedId) {
+        ElementPlus.ElMessage.warning('Please select a device');
+        return;
+      }
+
+      if (!this.remoteFilesCurrentPath) {
+        ElementPlus.ElMessage.warning('Current directory is empty');
+        return;
+      }
+
+      try {
+        const { value } = await ElementPlus.ElMessageBox.prompt(
+          'Enter the new folder name',
+          'Create Directory',
+          {
+            confirmButtonText: 'Create',
+            cancelButtonText: 'Cancel',
+            inputPattern: /.+/,
+            inputErrorMessage: 'Folder name is required'
+          }
+        );
+
+        const folderName = String(value || '').trim();
+        if (!folderName) return;
+
+        const base = this.remoteFilesCurrentPath.replace(/[\\/]+$/, '');
+        const fullPath = `${base}${base ? '/' : ''}${folderName}`;
+
+        const res = await fetch(`/api/connections/${encodeURIComponent(this.selectedId)}/remote-files/mkdir`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ path: fullPath })
+        });
+
+        const json = await res.json();
+        if (!res.ok || json.code !== 0) {
+          throw new Error(json.message || 'Create directory failed');
+        }
+
+        ElementPlus.ElMessage.success('Directory created');
+        await this.refreshRemoteDirectory();
+      } catch (e) {
+        if (e === 'cancel' || e === 'close' || e?.toString?.().includes('cancel')) return;
+        ElementPlus.ElMessage.error(e.message || 'Create directory failed');
+      }
+    },
+
+    async renameRemoteEntry(row) {
+      if (!row || !row.path) {
+        ElementPlus.ElMessage.warning('Invalid path');
+        return;
+      }
+
+      try {
+        const { value } = await ElementPlus.ElMessageBox.prompt(
+          'Enter the new name',
+          'Rename',
+          {
+            confirmButtonText: 'Rename',
+            cancelButtonText: 'Cancel',
+            inputValue: row.name || '',
+            inputPattern: /.+/,
+            inputErrorMessage: 'New name is required'
+          }
+        );
+
+        const newName = String(value || '').trim();
+        if (!newName || newName === row.name) return;
+
+        const res = await fetch(`/api/connections/${encodeURIComponent(this.selectedId)}/remote-files/rename`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            old_path: row.path,
+            new_name: newName
+          })
+        });
+
+        const json = await res.json();
+        if (!res.ok || json.code !== 0) {
+          throw new Error(json.message || 'Rename failed');
+        }
+
+        ElementPlus.ElMessage.success('Renamed');
+        await this.refreshRemoteDirectory();
+      } catch (e) {
+        if (e === 'cancel' || e === 'close' || e?.toString?.().includes('cancel')) return;
+        ElementPlus.ElMessage.error(e.message || 'Rename failed');
       }
     },
 

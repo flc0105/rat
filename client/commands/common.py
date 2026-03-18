@@ -1,3 +1,4 @@
+import base64
 import contextlib
 import inspect
 import io
@@ -164,6 +165,42 @@ class CommonCommands(CommandBase):
             'modified_at': time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(stat.st_mtime))
         }
 
+    def _strip_wrapped_quotes(self, value: str) -> str:
+        """
+        去掉参数最外层成对引号
+        """
+        text = (value or '').strip()
+        if len(text) >= 2 and text[0] == text[-1] and text[0] in ('"', "'"):
+            return text[1:-1]
+        return text
+
+    def _decode_structured_arg(self, raw):
+        """
+        解码结构化参数：
+        - __json__:<base64(json)>
+        - 普通字符串
+        """
+        text = self._strip_wrapped_quotes(raw)
+        if not text:
+            return ''
+
+        prefix = '__json__:'
+        if text.startswith(prefix):
+            encoded = text[len(prefix):]
+            decoded = base64.urlsafe_b64decode(encoded.encode()).decode('utf-8')
+            return json.loads(decoded)
+
+        return text
+
+    def _extract_path_arg(self, raw) -> str:
+        """
+        提取路径参数，兼容普通字符串和结构化参数
+        """
+        value = self._decode_structured_arg(raw)
+        if isinstance(value, dict):
+            return (value.get('path') or '').strip()
+        return (value or '').strip()
+
     # ------------------ 基础命令 ------------------ #
     @desc('Change working directory')
     def cd(self, path):
@@ -216,7 +253,7 @@ class CommonCommands(CommandBase):
         按路径下载文件，供 Web 远程文件浏览使用。
         """
         try:
-            file_path = self._resolve_target_path(path)
+            file_path = self._resolve_target_path(self._extract_path_arg(path))
             if not os.path.exists(file_path):
                 return 0, f'Path not found: {file_path}'
             if not os.path.isfile(file_path):
@@ -249,7 +286,7 @@ class CommonCommands(CommandBase):
         浏览目录，返回 JSON 结构，供 Web 端可视化文件浏览使用。
         """
         try:
-            directory = self._resolve_target_path(path)
+            directory = self._resolve_target_path(self._extract_path_arg(path))
 
             if not os.path.exists(directory):
                 return 0, f'Directory not found: {directory}'
@@ -283,7 +320,7 @@ class CommonCommands(CommandBase):
         删除文件或目录。
         """
         try:
-            target_path = self._resolve_target_path(path)
+            target_path = self._resolve_target_path(self._extract_path_arg(path))
 
             if not os.path.exists(target_path):
                 return 0, f'Path not found: {target_path}'
@@ -296,6 +333,58 @@ class CommonCommands(CommandBase):
             return 1, f'File deleted: {target_path}'
         except Exception as e:
             return 0, f'Failed to delete path: {e}'
+
+    @desc('Create a directory')
+    def mkdir_path(self, path=''):
+        """
+        创建目录。
+        """
+        try:
+            target_path = self._resolve_target_path(self._extract_path_arg(path))
+            if not target_path:
+                return 0, 'Path is required'
+
+            if os.path.exists(target_path):
+                return 0, f'Path already exists: {target_path}'
+
+            os.makedirs(target_path, exist_ok=False)
+            return 1, f'Directory created: {target_path}'
+        except Exception as e:
+            return 0, f'Failed to create directory: {e}'
+
+    @desc('Rename a file or directory')
+    def rename_path(self, arg=''):
+        """
+        重命名文件或目录。
+        兼容：
+        - 结构化参数：old_path + new_name / new_path
+        """
+        try:
+            payload = self._decode_structured_arg(arg)
+            if not isinstance(payload, dict):
+                return 0, 'Invalid rename payload'
+
+            old_path = self._resolve_target_path(payload.get('old_path', ''))
+            new_name = (payload.get('new_name') or '').strip()
+            new_path = (payload.get('new_path') or '').strip()
+
+            if not os.path.exists(old_path):
+                return 0, f'Path not found: {old_path}'
+
+            if new_path:
+                target_path = self._resolve_target_path(new_path)
+            else:
+                if not new_name:
+                    return 0, 'New name is required'
+                target_path = os.path.join(os.path.dirname(old_path), new_name)
+
+            if os.path.exists(target_path):
+                return 0, f'Target already exists: {target_path}'
+
+            os.rename(old_path, target_path)
+            return 1, f'Renamed to: {target_path}'
+        except Exception as e:
+            return 0, f'Failed to rename path: {e}'
 
     # ------------------ 压缩文件 ------------------ #
     @desc('Create a ZIP archive')
