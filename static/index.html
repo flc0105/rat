@@ -96,10 +96,13 @@
                   </div>
 
                   <div class="terminal-tools">
-                    <el-button size="small" class="tool-btn tool-btn-accent" @click="triggerUpload">Upload</el-button>
+<!--                    <el-button size="small" class="tool-btn tool-btn-accent" @click="triggerUpload">Upload</el-button>-->
                     <el-button size="small" class="tool-btn tool-btn-accent" @click="openRemoteFilesDialog">Remote Files</el-button>
                     <el-button size="small" class="tool-btn tool-btn-accent" @click="openRecentFilesDialog">Downloads</el-button>
+                    <el-button size="small" class="tool-btn" @click="openCommandHistoryDialog">History</el-button>
+
                     <el-button size="small" class="tool-btn tool-btn-danger" @click="killConnection">Disconnect</el-button>
+
                     <span class="tool-separator"></span>
                     <el-button size="small" class="tool-btn" @click="clearOutput">Clear</el-button>
                     <el-button size="small" class="tool-btn" @click="scrollToBottom">Bottom</el-button>
@@ -384,6 +387,52 @@
       <template v-else>
         <div class="empty-state">No preview available.</div>
       </template>
+    </div>
+  </el-dialog>
+
+  <el-dialog
+    v-model="commandHistoryDialogVisible"
+    title="Command History"
+    width="1120px"
+    top="5vh"
+    class="fixed-dialog recent-files-dialog"
+  >
+    <div class="fixed-dialog-body">
+      <div class="dialog-table-shell">
+        <el-table
+          :data="commandHistoryItems"
+          v-loading="commandHistoryLoading"
+          stripe
+          width="100%"
+          height="100%"
+          empty-text="No command history available"
+          table-layout="fixed"
+        >
+          <el-table-column prop="command" label="Command" min-width="320" show-overflow-tooltip>
+            <template #default="{ row }">
+              <div class="ellipsis mono">{{ row.command || '-' }}</div>
+            </template>
+          </el-table-column>
+
+          <el-table-column prop="cwd" label="Directory" min-width="260" show-overflow-tooltip>
+            <template #default="{ row }">
+              <div class="ellipsis">{{ row.cwd || '-' }}</div>
+            </template>
+          </el-table-column>
+
+          <el-table-column prop="source" label="Source" width="110" align="center">
+            <template #default="{ row }">
+              <div class="ellipsis">{{ row.source || '-' }}</div>
+            </template>
+          </el-table-column>
+
+          <el-table-column prop="time" label="Time" width="190" show-overflow-tooltip>
+            <template #default="{ row }">
+              <div class="ellipsis">{{ row.time || '-' }}</div>
+            </template>
+          </el-table-column>
+        </el-table>
+      </div>
     </div>
   </el-dialog>
 </div>

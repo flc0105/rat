@@ -7,9 +7,13 @@ createApp({
       selectedId: '',
 
             outputs: {},
+
       commandText: '',
       commandCandidates: [],
       commandCandidatesLoadedFor: '',
+      commandHistoryDialogVisible: false,
+      commandHistoryLoading: false,
+      commandHistoryItems: [],
       sending: false,
 
       uploading: false,
@@ -264,6 +268,7 @@ createApp({
     selectConnection(clientId) {
       this.selectedId = clientId;
       this.ensureOutputBucket(clientId);
+      this.commandHistoryItems = [];
       this.loadCommandCandidates(clientId);
       this.scrollToBottom();
     },
@@ -285,6 +290,35 @@ createApp({
       } catch (e) {
         this.commandCandidates = [];
         this.commandCandidatesLoadedFor = '';
+      }
+    },
+
+        async openCommandHistoryDialog() {
+      if (!this.selectedId) {
+        ElementPlus.ElMessage.warning('Please select a device');
+        return;
+      }
+
+      this.commandHistoryDialogVisible = true;
+      this.commandHistoryLoading = true;
+
+      try {
+        const url = new URL(`/api/connections/${encodeURIComponent(this.selectedId)}/command-history`, window.location.origin);
+        url.searchParams.set('limit', '100');
+
+        const res = await fetch(url.pathname + url.search);
+        const json = await res.json();
+
+        if (!res.ok || json.code !== 0) {
+          throw new Error(json.message || 'Failed to load command history');
+        }
+
+        this.commandHistoryItems = Array.isArray(json.data) ? json.data : [];
+      } catch (e) {
+        this.commandHistoryItems = [];
+        ElementPlus.ElMessage.error(e.message || 'Failed to load command history');
+      } finally {
+        this.commandHistoryLoading = false;
       }
     },
 

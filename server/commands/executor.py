@@ -245,3 +245,29 @@ class CommandExecutor:
             yield 1, f'Alias removed: {arg}'
         except KeyError as e:
             raise ValueError(f"Alias not found: {arg}")
+
+    def history(self, arg):
+        """
+        查看当前连接的命令历史
+        用法：history [limit]
+        """
+        limit_text = (arg or '').strip()
+        limit = 50
+
+        if limit_text:
+            if not limit_text.isdigit():
+                raise ValueError('Usage: history [limit]')
+            limit = int(limit_text)
+
+        entries = self.server.command_history.get_history_for_connection(self.conn, limit=limit)
+        if not entries:
+            yield 1, 'No command history available'
+            return
+
+        lines = []
+        for index, item in enumerate(entries, start=1):
+            lines.append(
+                f'{index:>3}. {item.get("time", "")} [{item.get("source", "")}] {item.get("command", "")}'
+            )
+
+        yield 1, '\n'.join(lines)

@@ -83,8 +83,8 @@ class WebTaskService:
 
     # ------------------ web command ------------------ #
     def submit_web_command(self, client_id: str, command: str):
-    # def submit_web_command(self, client_id: str, command: str):
         conn = self.server.get_target_connection_by_client_id(client_id)
+        self.server.command_history.record_for_connection(conn, command, source='web')
         task = self.task_store.create_task(client_id, command)
 
         threading.Thread(
@@ -113,6 +113,7 @@ class WebTaskService:
     def submit_web_upload(self, client_id: str, local_path: str, display_name: str, remote_path: str = ''):
         conn = self.server.get_target_connection_by_client_id(client_id)
         command = f'upload {display_name}'
+        self.server.command_history.record_for_connection(conn, command, source='web')
         task = self.task_store.create_task(client_id, command)
 
         threading.Thread(
