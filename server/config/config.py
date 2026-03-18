@@ -9,7 +9,7 @@ SOCKET_PORT = 9999
 SOCKET_ADDR = (SOCKET_HOST, SOCKET_PORT)
 
 WEB_HOST = '0.0.0.0'
-WEB_PORT = 5001
+WEB_PORT = 8085
 
 # ------------------ command / alias ------------------ #
 ALIAS_PATH = os.path.join(BASE_DIR, 'aliases.json')
