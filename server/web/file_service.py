@@ -1,6 +1,7 @@
 import json
 import mimetypes
 import os
+import shutil
 import uuid
 from datetime import datetime
 from pathlib import Path
@@ -31,6 +32,7 @@ class WebFileService:
         self.upload_tmp_dir = os.path.join(self.web_root_dir, 'upload_tmp')
         self.http_uploads_dir = os.path.join(self.web_root_dir, 'http_uploads')
         self._prepare_dirs()
+        self._clear_preview_cache_on_startup()
 
     # ------------------ dirs ------------------ #
     def _prepare_dirs(self):
@@ -38,6 +40,17 @@ class WebFileService:
         os.makedirs(self.preview_files_dir, exist_ok=True)
         os.makedirs(self.upload_tmp_dir, exist_ok=True)
         os.makedirs(self.http_uploads_dir, exist_ok=True)
+
+    def _clear_preview_cache_on_startup(self):
+        """
+        服务端启动时清空 preview 缓存目录，避免预览文件无限堆积
+        """
+        try:
+            if os.path.isdir(self.preview_files_dir):
+                shutil.rmtree(self.preview_files_dir, ignore_errors=True)
+            os.makedirs(self.preview_files_dir, exist_ok=True)
+        except Exception:
+            pass
 
     # ------------------ received files ------------------ #
     def list_received_files(self):

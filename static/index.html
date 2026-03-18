@@ -109,19 +109,20 @@
                   </div>
                 </div>
 
-                <div class="command-row">
+                                <div class="command-row">
                   <div class="command-box command-box-full">
                     <input
-                       ref="commandInputRef"
-
+                      ref="commandInputRef"
                       v-model="commandText"
                       list="commandCandidatesList"
                       class="command-input-native"
                       type="text"
                       placeholder="Enter a command..."
+                      @input="onCommandInput"
+                      @keydown="handleCommandInputKeydown"
                       @keyup.enter="sendCommand"
                     />
-                                        <datalist id="commandCandidatesList">
+                    <datalist id="commandCandidatesList">
                       <option
                         v-for="item in commandCandidates"
                         :key="item.template"
@@ -188,7 +189,7 @@
     @change="handleRemoteUploadChange"
   />
 
-  <el-dialog
+    <el-dialog
     v-model="remoteFilesDialogVisible"
     title="Remote File Browser"
     width="1180px"
@@ -202,6 +203,12 @@
           <el-button size="small" @click="refreshRemoteDirectory">Refresh</el-button>
           <el-button size="small" @click="createRemoteDirectory">New Folder</el-button>
           <el-button size="small" :loading="remoteUploadLoading" @click="triggerRemoteUpload">Upload Here</el-button>
+          <el-switch
+            v-model="showHiddenFiles"
+            inline-prompt
+            active-text="Hidden"
+            inactive-text="Hidden"
+          />
         </div>
         <div style="display:flex; gap:8px; min-width:0;">
           <el-input
@@ -215,7 +222,7 @@
 
       <div class="dialog-table-shell">
         <el-table
-          :data="remoteFilesEntries"
+          :data="filteredRemoteFilesEntries"
           v-loading="remoteFilesLoading"
           stripe
           width="100%"
@@ -230,6 +237,7 @@
                 <span>{{ row.is_dir ? '📁' : '📄' }}</span>
                 <span class="file-cell-text">{{ row.name }}</span>
                 <el-tag v-if="row.is_symlink" size="small" type="info">Link</el-tag>
+                <el-tag v-if="row.is_hidden" size="small" type="warning">Hidden</el-tag>
               </div>
             </template>
           </el-table-column>
@@ -252,9 +260,9 @@
             </template>
           </el-table-column>
 
-          <el-table-column label="Actions" width="280" align="center" fixed="right">
+          <el-table-column label="Actions" width="220" align="center" fixed="right">
             <template #default="{ row }">
-              <div class="table-actions">
+              <div class="table-actions table-actions-links">
                 <el-button
                   v-if="row.is_dir"
                   size="small"
@@ -264,40 +272,45 @@
                 >
                   Open
                 </el-button>
-                <el-button
-                  v-if="!row.is_dir"
-                  size="small"
-                  link
-                  type="primary"
-                  @click="downloadRemoteEntry(row)"
+
+                <template v-if="!row.is_dir">
+                  <el-button
+                    size="small"
+                    link
+                    type="primary"
+                    @click="previewRemoteEntry(row)"
+                  >
+                    Preview
+                  </el-button>
+                  <el-button
+                    size="small"
+                    link
+                    type="primary"
+                    @click="downloadRemoteEntry(row)"
+                  >
+                    Download
+                  </el-button>
+                </template>
+
+                <el-dropdown
+                  trigger="click"
+                  @command="(command) => handleRemoteMoreAction(command, row)"
                 >
-                  Download
-                </el-button>
                                 <el-button
-                  v-if="!row.is_dir"
-                  size="small"
-                  link
-                  type="primary"
-                  @click="previewRemoteEntry(row)"
-                >
-                  Preview
-                </el-button>
-                <el-button
-                  size="small"
-                  link
-                  type="primary"
-                  @click="renameRemoteEntry(row)"
-                >
-                  Rename
-                </el-button>
-                <el-button
-                  size="small"
-                  link
-                  type="danger"
-                  @click="deleteRemoteEntry(row)"
-                >
-                  Delete
-                </el-button>
+                    size="small"
+                    link
+                    type="primary"
+                  >
+                    More
+                  </el-button>
+                  <template #dropdown>
+                    <el-dropdown-menu>
+                      <el-dropdown-item command="rename">Rename</el-dropdown-item>
+                      <el-dropdown-item command="copy_path">Copy Path</el-dropdown-item>
+                      <el-dropdown-item command="delete">Delete</el-dropdown-item>
+                    </el-dropdown-menu>
+                  </template>
+                </el-dropdown>
               </div>
             </template>
           </el-table-column>
@@ -364,7 +377,7 @@
     </div>
   </el-dialog>
 
-  <el-dialog
+    <el-dialog
     v-model="previewDialogVisible"
     :title="previewTitle || 'File Preview'"
     width="1080px"
@@ -372,6 +385,27 @@
     class="fixed-dialog preview-dialog"
   >
     <div v-loading="previewLoading" class="preview-wrap">
+      <div
+        v-if="(previewType === 'image' && previewUrl) || previewType === 'text'"
+        style="display:flex; justify-content:flex-end; gap:8px; margin-bottom:12px;"
+      >
+        <el-button
+          v-if="previewType === 'text'"
+          size="small"
+          @click="copyPreviewText"
+        >
+          Copy Content
+        </el-button>
+
+        <el-button
+          v-if="previewType === 'image' && previewUrl"
+          size="small"
+          @click="openPreviewOriginal"
+        >
+          Open Original
+        </el-button>
+      </div>
+
       <template v-if="previewType === 'image' && previewUrl">
         <div class="image-preview-box">
           <img :src="previewUrl" alt="preview" class="preview-image" />
@@ -429,29 +463,6 @@
               <div class="ellipsis mono">{{ row.command || '-' }}</div>
             </template>
           </el-table-column>
-
-<!--          <el-table-column prop="status" label="Status" width="110" align="center">-->
-<!--            <template #default="{ row }">-->
-<!--              <el-tag-->
-<!--                size="small"-->
-<!--                :type="row.status === 'success' ? 'success' : (row.status === 'error' ? 'danger' : 'info')"-->
-<!--              >-->
-<!--                {{ row.status || '-' }}-->
-<!--              </el-tag>-->
-<!--            </template>-->
-<!--          </el-table-column>-->
-
-<!--          <el-table-column prop="source" label="Source" width="110" align="center">-->
-<!--            <template #default="{ row }">-->
-<!--              <div class="ellipsis">{{ row.source || '-' }}</div>-->
-<!--            </template>-->
-<!--          </el-table-column>-->
-
-<!--          <el-table-column prop="cwd" label="Directory" min-width="220" show-overflow-tooltip>-->
-<!--            <template #default="{ row }">-->
-<!--              <div class="ellipsis">{{ row.cwd || '-' }}</div>-->
-<!--            </template>-->
-<!--          </el-table-column>-->
 
           <el-table-column prop="time" label="Last Used" width="220" show-overflow-tooltip>
             <template #default="{ row }">

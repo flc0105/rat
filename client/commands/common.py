@@ -14,6 +14,7 @@ import time
 from client.commands.base import CommandBase
 from core.utils.decorator import desc
 from core.utils.formatting import format_dict
+import stat as stat_module
 
 
 class CommonCommands(CommandBase):
@@ -152,18 +153,36 @@ class CommonCommands(CommandBase):
         """
         构造目录项描述
         """
-        stat = entry.stat(follow_symlinks=False)
+        stat_result = entry.stat(follow_symlinks=False)
         is_dir = entry.is_dir(follow_symlinks=True)
         is_symlink = entry.is_symlink()
+        is_hidden = self._is_hidden_entry(entry, stat_result)
 
         return {
             'name': entry.name,
             'path': os.path.abspath(entry.path),
             'is_dir': is_dir,
             'is_symlink': is_symlink,
-            'size': 0 if is_dir else stat.st_size,
-            'modified_at': time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(stat.st_mtime))
+            'is_hidden': is_hidden,
+            'size': 0 if is_dir else stat_result.st_size,
+            'modified_at': time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(stat_result.st_mtime))
         }
+
+    def _is_hidden_entry(self, entry, stat_result):
+        """
+        判断目录项是否为隐藏文件
+        - Unix/macOS: 以 . 开头
+        - Windows: 支持文件属性隐藏位
+        """
+        if entry.name.startswith('.'):
+            return True
+
+        if os.name == 'nt':
+            file_attrs = getattr(stat_result, 'st_file_attributes', 0)
+            if file_attrs & getattr(stat_module, 'FILE_ATTRIBUTE_HIDDEN', 0):
+                return True
+
+        return False
 
     def _strip_wrapped_quotes(self, value: str) -> str:
         """

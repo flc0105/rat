@@ -12,6 +12,11 @@ createApp({
       commandHistoryDialogVisible: false,
       commandHistoryLoading: false,
       commandHistoryItems: [],
+      commandShortcutHistoryCommands: [],
+      commandShortcutHistoryLoadedFor: '',
+      commandShortcutHistoryIndex: -1,
+      commandShortcutDraft: '',
+      commandShortcutApplying: false,
       sending: false,
       uploading: false,
       eventSource: null,
@@ -24,6 +29,7 @@ createApp({
       remoteFilesEntries: [],
       remoteFilesPathInput: '',
       remoteUploadLoading: false,
+      showHiddenFiles: false,
 
       recentFilesDialogVisible: false,
       recentFilesLoading: false,
@@ -53,6 +59,10 @@ createApp({
     },
     currentOutputLines() {
       return this.outputs[this.selectedId] || [];
+    },
+    filteredRemoteFilesEntries() {
+      if (this.showHiddenFiles) return this.remoteFilesEntries;
+      return this.remoteFilesEntries.filter(item => !item.is_hidden);
     }
   },
 
@@ -78,6 +88,20 @@ createApp({
       this.remoteFilesParentPath = '';
       this.remoteFilesEntries = [];
       this.remoteFilesPathInput = '';
+      this.showHiddenFiles = false;
+    },
+
+    resetCommandShortcutNavigation() {
+      this.commandShortcutHistoryIndex = -1;
+      this.commandShortcutDraft = '';
+    },
+
+    onCommandInput() {
+      if (this.commandShortcutApplying) {
+        this.commandShortcutApplying = false;
+        return;
+      }
+      this.resetCommandShortcutNavigation();
     },
 
     formatOsLabel(osType, osVer) {
@@ -112,7 +136,7 @@ createApp({
         return /成功|Success/i.test(value) ? 'success' : 'error';
       }
       if (/failed|error|not found|denied|unable/i.test(value)) return 'error';
-      if (/completed|success|saved|started|uploaded|downloaded|created|renamed/i.test(value)) return 'success';
+      if (/completed|success|saved|started|uploaded|downloaded|created|renamed|copied/i.test(value)) return 'success';
       if (/preparing|loading|refresh|connected|disconnected|warning/i.test(value)) return 'info';
       return 'default';
     },
@@ -134,6 +158,74 @@ createApp({
       });
 
       this.scrollToBottom();
+    },
+
+    async ensureCommandShortcutHistory(clientId) {
+      if (!clientId) return;
+      if (this.commandShortcutHistoryLoadedFor === clientId && this.commandShortcutHistoryCommands.length) return;
+
+      try {
+        const res = await fetch(`/api/connections/${encodeURIComponent(clientId)}/command-history`);
+        const json = await res.json();
+
+        if (!res.ok || json.code !== 0) {
+          throw new Error(json.message || 'Failed to load command history');
+        }
+
+        const items = Array.isArray(json.data) ? json.data : [];
+        this.commandShortcutHistoryCommands = items
+          .map(item => String(item.command || '').trim())
+          .filter(Boolean);
+
+        this.commandShortcutHistoryLoadedFor = clientId;
+      } catch (e) {
+        this.commandShortcutHistoryCommands = [];
+        this.commandShortcutHistoryLoadedFor = '';
+      }
+    },
+
+async handleCommandInputKeydown(event) {
+  const isHistoryShortcut = event.ctrlKey || event.metaKey || event.altKey;
+  if (!isHistoryShortcut) return;
+  if (event.key !== 'ArrowUp' && event.key !== 'ArrowDown') return;
+
+      event.preventDefault();
+
+      if (!this.selectedId) return;
+
+      await this.ensureCommandShortcutHistory(this.selectedId);
+
+      const items = this.commandShortcutHistoryCommands;
+      if (!items.length) return;
+
+      if (event.key === 'ArrowUp') {
+        if (this.commandShortcutHistoryIndex === -1) {
+          this.commandShortcutDraft = this.commandText;
+          this.commandShortcutHistoryIndex = 0;
+        } else if (this.commandShortcutHistoryIndex < items.length - 1) {
+          this.commandShortcutHistoryIndex += 1;
+        } else {
+          return;
+        }
+      }
+
+      if (event.key === 'ArrowDown') {
+        if (this.commandShortcutHistoryIndex === -1) {
+          return;
+        }
+
+        if (this.commandShortcutHistoryIndex === 0) {
+          this.commandShortcutHistoryIndex = -1;
+          this.commandShortcutApplying = true;
+          this.commandText = this.commandShortcutDraft;
+          return;
+        }
+
+        this.commandShortcutHistoryIndex -= 1;
+      }
+
+      this.commandShortcutApplying = true;
+      this.commandText = items[this.commandShortcutHistoryIndex] || '';
     },
 
     async loadPreviewPayload(fetcher, fallbackTitle = 'File Preview') {
@@ -166,6 +258,28 @@ createApp({
       }
     },
 
+    async copyPreviewText() {
+      if (!this.previewText) {
+        ElementPlus.ElMessage.warning('No preview text available');
+        return;
+      }
+
+      try {
+        await navigator.clipboard.writeText(this.previewText);
+        ElementPlus.ElMessage.success('Content copied');
+      } catch (e) {
+        ElementPlus.ElMessage.error('Failed to copy content');
+      }
+    },
+
+    openPreviewOriginal() {
+      if (!this.previewUrl) {
+        ElementPlus.ElMessage.warning('No image available');
+        return;
+      }
+      window.open(this.previewUrl, '_blank');
+    },
+
     async previewRecentFile(row) {
       if (!row || !row.saved_name) {
         ElementPlus.ElMessage.warning('Invalid file');
@@ -192,10 +306,6 @@ createApp({
         }),
         row.name || 'File Preview'
       );
-
-      if (this.recentFilesDialogVisible) {
-        await this.openRecentFilesDialog();
-      }
     },
 
     async deleteRecentFile(row) {
@@ -254,6 +364,9 @@ createApp({
 
         if (this.selectedId) {
           this.loadCommandCandidates(this.selectedId);
+          this.commandShortcutHistoryLoadedFor = '';
+          this.commandShortcutHistoryCommands = [];
+          this.ensureCommandShortcutHistory(this.selectedId);
         }
       } catch (e) {
         ElementPlus.ElMessage.error('Failed to load devices');
@@ -264,7 +377,11 @@ createApp({
       this.selectedId = clientId;
       this.ensureOutputBucket(clientId);
       this.commandHistoryItems = [];
+      this.commandShortcutHistoryLoadedFor = '';
+      this.commandShortcutHistoryCommands = [];
+      this.resetCommandShortcutNavigation();
       this.loadCommandCandidates(clientId);
+      this.ensureCommandShortcutHistory(clientId);
       this.scrollToBottom();
     },
 
@@ -317,6 +434,8 @@ createApp({
         }
 
         this.commandText = '';
+        this.resetCommandShortcutNavigation();
+        this.commandShortcutHistoryLoadedFor = '';
       } catch (e) {
         this.appendOutput(this.selectedId, '[发送失败] ' + (e.message || 'unknown error'), 'error');
         ElementPlus.ElMessage.error(e.message || 'Command failed');
@@ -529,6 +648,34 @@ createApp({
       }
     },
 
+    async copyRemotePath(row) {
+      if (!row || !row.path) {
+        ElementPlus.ElMessage.warning('Invalid path');
+        return;
+      }
+
+      try {
+        await navigator.clipboard.writeText(row.path);
+        ElementPlus.ElMessage.success('Path copied');
+      } catch (e) {
+        ElementPlus.ElMessage.error('Failed to copy path');
+      }
+    },
+
+    handleRemoteMoreAction(command, row) {
+      if (command === 'rename') {
+        this.renameRemoteEntry(row);
+        return;
+      }
+      if (command === 'copy_path') {
+        this.copyRemotePath(row);
+        return;
+      }
+      if (command === 'delete') {
+        this.deleteRemoteEntry(row);
+      }
+    },
+
     async createRemoteDirectory() {
       if (!this.selectedId) {
         ElementPlus.ElMessage.warning('Please select a device');
@@ -556,7 +703,8 @@ createApp({
         if (!folderName) return;
 
         const base = this.remoteFilesCurrentPath.replace(/[\\/]+$/, '');
-        const fullPath = `${base}${base ? '/' : ''}${folderName}`;
+        const separator = base.includes('\\') ? '\\' : '/';
+        const fullPath = `${base}${base ? separator : ''}${folderName}`;
 
         const res = await fetch(`/api/connections/${encodeURIComponent(this.selectedId)}/remote-files/mkdir`, {
           method: 'POST',
@@ -777,6 +925,9 @@ createApp({
         }
 
         this.commandHistoryItems = [];
+        this.commandShortcutHistoryCommands = [];
+        this.commandShortcutHistoryLoadedFor = '';
+        this.resetCommandShortcutNavigation();
         ElementPlus.ElMessage.success('Command history cleared');
       } catch (e) {
         if (e === 'cancel' || e === 'close' || e?.toString?.().includes('cancel')) return;
@@ -869,6 +1020,7 @@ createApp({
           `[Command finished] ${payload.command} (${payload.success ? 'Success' : 'Failed'})`,
           payload.success ? 'success' : 'error'
         );
+        this.commandShortcutHistoryLoadedFor = '';
         await this.loadConnections();
       });
 
