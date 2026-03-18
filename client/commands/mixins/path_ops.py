@@ -1,6 +1,7 @@
 import base64
 import json
 import os
+import shutil
 import stat as stat_module
 import time
 
@@ -119,3 +120,125 @@ class CommandPathMixin:
         if isinstance(value, dict):
             return (value.get('path') or '').strip()
         return (value or '').strip()
+
+    # ------------------ 共用 helper ------------------ #
+    def _to_abs_path(self, path: str) -> str:
+        """
+        转为绝对路径
+        """
+        return os.path.abspath(path)
+
+    def _is_file_path(self, path: str) -> bool:
+        """
+        判断是否为现有文件
+        """
+        return os.path.isfile(path)
+
+    def _get_current_directory(self) -> str:
+        """
+        获取当前工作目录
+        """
+        return os.getcwd()
+
+    def _send_file_download(self, file_path: str):
+        """
+        发送文件下载（共用底层逻辑）
+        """
+        file_size = os.path.getsize(file_path)
+        self.socket.send_result(self.command_id, 1, 'Preparing file transfer...', eof=0)
+        self.socket.send_result(self.command_id, 1, f'File size: {file_size} bytes', eof=0)
+        self.socket.send_file(self.command_id, file_path)
+
+    def _require_existing_path_from_arg(self, raw) -> str:
+        """
+        从结构化/普通参数中提取并校验路径存在
+        """
+        target_path = self._resolve_target_path(self._extract_path_arg(raw))
+        if not os.path.exists(target_path):
+            raise FileNotFoundError(f'Path not found: {target_path}')
+        return target_path
+
+    def _require_existing_file_from_arg(self, raw) -> str:
+        """
+        从结构化/普通参数中提取并校验文件存在
+        """
+        file_path = self._require_existing_path_from_arg(raw)
+        if not os.path.isfile(file_path):
+            raise IsADirectoryError(f'Not a file: {file_path}')
+        return file_path
+
+    def _require_existing_directory_from_arg(self, raw) -> str:
+        """
+        从结构化/普通参数中提取并校验目录存在
+        """
+        directory = self._resolve_target_path(self._extract_path_arg(raw))
+        if not os.path.exists(directory):
+            raise FileNotFoundError(f'Directory not found: {directory}')
+        if not os.path.isdir(directory):
+            raise NotADirectoryError(f'Not a directory: {directory}')
+        return directory
+
+    def _delete_target_path(self, target_path: str):
+        """
+        删除文件或目录
+        """
+        if os.path.isdir(target_path):
+            shutil.rmtree(target_path)
+            return 1, f'Directory deleted: {target_path}'
+
+        os.remove(target_path)
+        return 1, f'File deleted: {target_path}'
+
+    def _create_directory(self, target_path: str):
+        """
+        创建目录
+        """
+        if os.path.exists(target_path):
+            raise FileExistsError(f'Path already exists: {target_path}')
+
+        os.makedirs(target_path, exist_ok=False)
+
+    def _rename_target_path(self, old_path: str, new_name: str = '', new_path: str = '') -> str:
+        """
+        重命名文件或目录
+        """
+        if not os.path.exists(old_path):
+            raise FileNotFoundError(f'Path not found: {old_path}')
+
+        if new_path:
+            target_path = self._resolve_target_path(new_path)
+        else:
+            if not new_name:
+                raise ValueError('New name is required')
+            target_path = os.path.join(os.path.dirname(old_path), new_name)
+
+        if os.path.exists(target_path):
+            raise FileExistsError(f'Target already exists: {target_path}')
+
+        os.rename(old_path, target_path)
+        return target_path
+
+    def _create_zip_archive(self, dir_name: str) -> str:
+        """
+        创建 ZIP 压缩包并返回压缩包路径
+        """
+        import pathlib
+        import tempfile
+
+        temp_dir = tempfile.mkdtemp()
+        directory = self._validate_directory_exists(dir_name)
+        archive_name = os.path.basename(directory)
+        parent_dir = pathlib.Path(directory).resolve().parent
+
+        return shutil.make_archive(
+            os.path.join(temp_dir, archive_name),
+            format='zip',
+            root_dir=parent_dir,
+            base_dir=os.path.basename(directory)
+        )
+
+    def _extract_archive_to_cwd(self, archive_path: str):
+        """
+        解压压缩包到当前工作目录
+        """
+        shutil.unpack_archive(archive_path, os.getcwd())
