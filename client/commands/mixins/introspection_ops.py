@@ -1,17 +1,14 @@
-from core.utils.decorator import desc
-from core.utils.formatting import format_dict
 import inspect
+
+from core.utils.decorator import desc
 
 
 class CommandIntrospectionMixin:
-    def _get_exported_command_methods(self, include_hidden: bool = True):
+    def _get_exported_command_methods(self):
         """
         获取所有可导出的命令方法
-
-        Args:
-            include_hidden: 是否包含 hide_from_help=True 的命令
         """
-        methods = {
+        return {
             name: method
             for name, method in inspect.getmembers(
                 self,
@@ -20,32 +17,77 @@ class CommandIntrospectionMixin:
             if hasattr(method, 'help')
         }
 
-        if include_hidden:
-            return methods
-
-        return {
-            name: method
-            for name, method in methods.items()
-            if not getattr(method, 'hide_from_help', False)
-        }
-
     def get_command_manifest_payload(self):
         """
         获取命令清单数据（本地方法，不通过 socket 返回）
-        Web 端仍可看到隐藏于 help 的命令。
         """
-        methods = self._get_exported_command_methods(include_hidden=True)
+        methods = self._get_exported_command_methods()
         payload = [
             {
                 'name': name,
                 'help': method.help,
+                'group': getattr(method, 'group', 'general'),
+                'suggest': getattr(method, 'suggest', True),
             }
             for name, method in methods.items()
         ]
-        payload.sort(key=lambda item: item['name'].lower())
+        payload.sort(key=lambda item: (item['group'], item['name'].lower()))
         return payload
 
-    @desc('Show available commands')
+    def _group_command_help_payload(self):
+        """
+        将命令按 group 分组，生成 help 文本结构
+        """
+        methods = self._get_exported_command_methods()
+        grouped = {}
+
+        for name, method in methods.items():
+            group = getattr(method, 'group', 'general')
+            grouped.setdefault(group, []).append((name, method.help))
+
+        for group_name in grouped:
+            grouped[group_name].sort(key=lambda item: item[0].lower())
+
+        return grouped
+
+    @desc('Show available commands', group='session')
     def help(self):
-        methods = self._get_exported_command_methods(include_hidden=False)
-        return 1, format_dict({name: method.help for name, method in methods.items()})
+        grouped = self._group_command_help_payload()
+        if not grouped:
+            return 1, ''
+
+        title_map = {
+            'shell': 'Shell / Execution',
+            'file': 'File',
+            'file_path': 'File Path / Web',
+            'job': 'Job',
+            'session': 'Session',
+            'platform': 'Platform',
+            'general': 'General',
+        }
+
+        lines = []
+        ordered_groups = ['shell', 'file', 'file_path', 'job', 'session', 'platform', 'general']
+        seen = set()
+
+        for group_name in ordered_groups:
+            items = grouped.get(group_name)
+            if not items:
+                continue
+
+            seen.add(group_name)
+            lines.append(f'[{title_map.get(group_name, group_name)}]')
+            for name, help_text in items:
+                lines.append(f'{name:<16}{help_text}')
+            lines.append('')
+
+        for group_name, items in grouped.items():
+            if group_name in seen:
+                continue
+
+            lines.append(f'[{title_map.get(group_name, group_name)}]')
+            for name, help_text in items:
+                lines.append(f'{name:<16}{help_text}')
+            lines.append('')
+
+        return 1, '\n'.join(lines).rstrip()

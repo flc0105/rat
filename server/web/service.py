@@ -68,6 +68,8 @@ class ServerWebService:
                 'name': name,
                 'template': name,
                 'help': item.get('help', ''),
+                'group': item.get('group', 'general'),
+                'suggest': item.get('suggest', True),
                 'source': 'client'
             })
 

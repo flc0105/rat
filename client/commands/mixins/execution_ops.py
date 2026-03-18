@@ -115,7 +115,7 @@ class CommandExecutionMixin:
         return process
 
     # ------------------ 基础命令 ------------------ #
-    @desc('Change working directory')
+    @desc('Change working directory', group='shell')
     def cd(self, path):
         try:
             os.chdir(path)
@@ -123,7 +123,7 @@ class CommandExecutionMixin:
         except Exception as e:
             return 0, f'Failed to change directory: {e}'
 
-    @desc('Run a shell command')
+    @desc('Run a shell command', group='shell')
     def shell(self, command):
         try:
             result = self._run_shell_command(command)
@@ -135,7 +135,7 @@ class CommandExecutionMixin:
         except Exception as e:
             return 0, f'Failed to execute command: {e}'
 
-    @desc('Run a program in background')
+    @desc('Run a program in background', group='shell')
     def spawn(self, command):
         """
         后台启动指定程序/命令，不等待其执行结束。
@@ -154,7 +154,7 @@ class CommandExecutionMixin:
         except Exception as e:
             return 0, f'Failed to start background process: {e}'
 
-    @desc('Run a command with live output')
+    @desc('Run a command with live output', group='shell')
     def read(self, command):
         try:
             process = self._start_stream_process(command)
@@ -169,7 +169,7 @@ class CommandExecutionMixin:
         except Exception as e:
             self._send_final_result(0, f'Failed to execute command: {e}')
 
-    @desc('Execute Python code')
+    @desc('Execute Python code', group='shell')
     def pyexec(self, code, kwargs=None):
         if kwargs is None:
             kwargs = {}
@@ -179,12 +179,12 @@ class CommandExecutionMixin:
         return 1, output.getvalue()
 
     # ------------------ 连接控制 ------------------ #
-    @desc('Terminate current session')
+    @desc('Terminate current session', group='session')
     def kill(self):
         self.socket.close()
         sys.exit(0)
 
-    @desc('Restart client process and reconnect')
+    @desc('Restart client process and reconnect', group='session')
     def reset(self):
         restart_command = self._build_restart_command()
         if os.name == 'nt':

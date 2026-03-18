@@ -37,27 +37,6 @@ class MacCommands(CommonCommands):
         except Exception:
             return ''
 
-    def _run_readonly_command(self, command: str):
-        """
-        执行只读系统命令并返回标准结果格式
-        """
-        try:
-            result = subprocess.run(
-                command,
-                shell=True,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                stdin=subprocess.DEVNULL,
-                text=True,
-                encoding='utf-8',
-                errors='replace'
-            )
-            if result.returncode == 0:
-                return 1, result.stdout
-            return 0, result.stderr or f'Command exited with code {result.returncode}'
-        except Exception as e:
-            return 0, f'Failed to execute command: {e}'
-
     def _run_command_success(self, command: str) -> bool:
         """
         执行命令并返回是否成功
@@ -120,7 +99,7 @@ class MacCommands(CommonCommands):
         }
 
     # ------------------ 已有命令优化 ------------------ #
-    @desc("Capture a screenshot")
+    @desc("Capture a screenshot", group='platform')
     def screenshot(self):
         screenshot_path = f'screenshot_{get_time()}.png'
         capture_command = f'screencapture -x {screenshot_path}'
@@ -143,7 +122,7 @@ class MacCommands(CommonCommands):
                 except Exception:
                     pass
 
-    @desc('Show system information')
+    @desc('Show system information', group='platform')
     def getinfo(self):
         try:
             system_info = self._build_process_info()
@@ -152,7 +131,7 @@ class MacCommands(CommonCommands):
             logger.error(e, exc_info=True)
             return 0, f'Failed to collect system information: {e}'
 
-    @desc('Show user idle time')
+    @desc('Show user idle time', group='platform')
     def idletime(self):
         try:
             from Quartz import (

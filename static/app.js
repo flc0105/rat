@@ -329,7 +329,6 @@ createApp({
                 const merged = [];
                 const seen = new Set();
 
-
                 const pushUniqueCandidate = (item) => {
                     const template = String(item.template || '').trim();
                     if (!template || seen.has(template)) return;
@@ -337,10 +336,12 @@ createApp({
                     merged.push(item);
                 };
 
-                const clientCandidates = systemCandidates.filter(item => item.source === 'client');
-                const serverCandidates = systemCandidates.filter(item => item.source === 'server');
-                const aliasCandidates = systemCandidates.filter(item => item.source === 'alias');
-                const scriptCandidates = systemCandidates.filter(item => item.source === 'script');
+                const visibleSystemCandidates = systemCandidates.filter(item => item.suggest !== false);
+
+                const clientCandidates = visibleSystemCandidates.filter(item => item.source === 'client');
+                const serverCandidates = visibleSystemCandidates.filter(item => item.source === 'server');
+                const aliasCandidates = visibleSystemCandidates.filter(item => item.source === 'alias');
+                const scriptCandidates = visibleSystemCandidates.filter(item => item.source === 'script');
                 const commonOpsCandidates = this.buildCommonOpsCandidates();
 
                 clientCandidates.forEach(pushUniqueCandidate);
@@ -360,9 +361,6 @@ createApp({
                         source: 'history'
                     });
                 });
-
-                this.commandCandidates = merged;
-                this.commandCandidatesLoadedFor = clientId;
 
                 this.commandCandidates = merged;
                 this.commandCandidatesLoadedFor = clientId;
@@ -529,14 +527,6 @@ createApp({
                     method: 'POST',
                     body: formData
                 });
-
-                // const json = await res.json();
-                // if (!res.ok || json.code !== 0) {
-                //     throw new Error(json.message || 'Upload failed');
-                // }
-                //
-                // ElementPlus.ElMessage.success(`Upload started: ${file.name}`);
-                // await this.refreshRemoteDirectory();
 
                 const json = await res.json();
                 if (!res.ok || json.code !== 0) {
@@ -993,53 +983,41 @@ createApp({
                 this.appendOutput(payload.client_id, payload.text || '');
             });
 
-            // es.addEventListener('command_complete', async (event) => {
-            //     const payload = JSON.parse(event.data);
-            //     this.appendOutput(
-            //         payload.client_id,
-            //         `[Command finished] ${payload.command} (${payload.success ? 'Success' : 'Failed'})`,
-            //         payload.success ? 'success' : 'error'
-            //     );
-            //     this.commandCandidatesLoadedFor = '';
-            //     await this.loadConnections();
-            // });
-
-
             es.addEventListener('command_complete', async (event) => {
-    const payload = JSON.parse(event.data);
+                const payload = JSON.parse(event.data);
 
-    this.appendOutput(
-        payload.client_id,
-        `[Command finished] ${payload.command} (${payload.success ? 'Success' : 'Failed'})`,
-        payload.success ? 'success' : 'error'
-    );
+                this.appendOutput(
+                    payload.client_id,
+                    `[Command finished] ${payload.command} (${payload.success ? 'Success' : 'Failed'})`,
+                    payload.success ? 'success' : 'error'
+                );
 
-    const pendingRefresh = this.pendingRemoteUploadRefresh;
-    if (
-        pendingRefresh &&
-        pendingRefresh.taskId &&
-        payload.task_id === pendingRefresh.taskId
-    ) {
-        const refreshClientId = pendingRefresh.clientId;
-        const refreshPath = pendingRefresh.path || '';
+                const pendingRefresh = this.pendingRemoteUploadRefresh;
+                if (
+                    pendingRefresh &&
+                    pendingRefresh.taskId &&
+                    payload.task_id === pendingRefresh.taskId
+                ) {
+                    const refreshClientId = pendingRefresh.clientId;
+                    const refreshPath = pendingRefresh.path || '';
 
-        this.pendingRemoteUploadRefresh = null;
+                    this.pendingRemoteUploadRefresh = null;
 
-        if (
-            payload.success &&
-            this.remoteFilesDialogVisible &&
-            this.selectedId === refreshClientId
-        ) {
-            try {
-                await this.loadRemoteDirectory(refreshPath);
-            } catch (e) {
-            }
-        }
-    }
+                    if (
+                        payload.success &&
+                        this.remoteFilesDialogVisible &&
+                        this.selectedId === refreshClientId
+                    ) {
+                        try {
+                            await this.loadRemoteDirectory(refreshPath);
+                        } catch (e) {
+                        }
+                    }
+                }
 
-    this.commandCandidatesLoadedFor = '';
-    await this.loadConnections();
-});
+                this.commandCandidatesLoadedFor = '';
+                await this.loadConnections();
+            });
 
             es.addEventListener('background_message', async (event) => {
                 const payload = JSON.parse(event.data);

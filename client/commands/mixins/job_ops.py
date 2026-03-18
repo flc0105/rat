@@ -3,7 +3,7 @@ from core.utils.formatting import format_dict
 
 
 class CommandJobMixin:
-    @desc('Start a background job')
+    @desc('Start a background job', group='job')
     def start_job(self, job_name: str):
         """
         启动后台任务。
@@ -31,7 +31,7 @@ class CommandJobMixin:
         except Exception as e:
             return 0, f'Failed to start background job: {e}'
 
-    @desc('Stop a background job')
+    @desc('Stop a background job', group='job')
     def stop_job(self, job_name: str):
         """
         停止后台任务。
@@ -52,7 +52,7 @@ class CommandJobMixin:
         except Exception as e:
             return 0, f'Failed to stop background job: {e}'
 
-    @desc('List running background jobs')
+    @desc('List running background jobs', group='job')
     def jobs(self):
         """
         列出当前运行中的后台任务。
@@ -63,7 +63,7 @@ class CommandJobMixin:
             return 1, 'No background jobs are currently running'
         return 1, '\n'.join(running_jobs)
 
-    @desc('Show background job status')
+    @desc('Show background job status', group='job')
     def job_status(self, job_name: str):
         """
         查看指定后台任务状态。
@@ -79,7 +79,7 @@ class CommandJobMixin:
         except Exception as e:
             return 0, f'Failed to query background job status: {e}'
 
-    @desc('Stop all background jobs')
+    @desc('Stop all background jobs', group='job')
     def stop_all_jobs(self):
         """
         停止所有后台任务。
