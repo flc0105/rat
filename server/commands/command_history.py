@@ -5,6 +5,10 @@ import uuid
 from datetime import datetime
 
 from core.utils.files import secure_filename
+from server.config.config import (
+    COMMAND_HISTORY_MAX_ENTRIES_PER_HOST,
+    COMMAND_HISTORY_ROOT_DIR,
+)
 
 
 class CommandHistoryStore:
@@ -18,10 +22,9 @@ class CommandHistoryStore:
     - 保存所有命令，但默认展示去重后的最新记录
     """
 
-    MAX_ENTRIES_PER_HOST = 300
-
     def __init__(self):
-        self.history_root_dir = os.path.abspath(os.path.join('runtime', 'command_history'))
+        self.history_root_dir = COMMAND_HISTORY_ROOT_DIR
+        self.max_entries_per_host = COMMAND_HISTORY_MAX_ENTRIES_PER_HOST
         self._lock = threading.RLock()
         self._prepare_dirs()
 
@@ -88,8 +91,8 @@ class CommandHistoryStore:
             entries = self._read_entries(hostname)
             entry = self._build_entry(conn, command_text, source)
             entries.append(entry)
-            if len(entries) > self.MAX_ENTRIES_PER_HOST:
-                entries = entries[-self.MAX_ENTRIES_PER_HOST:]
+            if len(entries) > self.max_entries_per_host:
+                entries = entries[-self.max_entries_per_host:]
             self._write_entries(hostname, entries)
             return entry['entry_id']
 

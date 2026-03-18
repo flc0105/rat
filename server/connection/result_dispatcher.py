@@ -1,8 +1,8 @@
-from server.config.config import BACKGROUND_MESSAGE_OUTPUT_TO_FILE
+from server.config.config import BACKGROUND_MESSAGE_OUTPUT_TO_FILE, BACKGROUND_MESSAGE_LOG_FILE
 from core.utils.logger import logger, get_file_logger
 
 if BACKGROUND_MESSAGE_OUTPUT_TO_FILE:
-    file_logger = get_file_logger('background_messages.log')
+    file_logger = get_file_logger(BACKGROUND_MESSAGE_LOG_FILE)
 
 
 class ClientResultDispatcher:

@@ -7,6 +7,11 @@ from datetime import datetime
 from pathlib import Path
 
 from werkzeug.utils import secure_filename
+from server.config.config import (
+    WEB_CLEAR_PREVIEW_CACHE_ON_STARTUP,
+    WEB_FILES_ROOT_DIR,
+    WEB_PREVIEW_TEXT_MAX_BYTES,
+)
 
 
 class WebFileService:
@@ -23,16 +28,18 @@ class WebFileService:
     - 处理 HTTP 上传文件的正式落盘
     """
 
-    MAX_PREVIEW_TEXT_BYTES = 200 * 1024
+    MAX_PREVIEW_TEXT_BYTES = WEB_PREVIEW_TEXT_MAX_BYTES
 
     def __init__(self):
-        self.web_root_dir = os.path.abspath(os.path.join('runtime', 'web_files'))
+        self.web_root_dir = WEB_FILES_ROOT_DIR
         self.received_files_dir = os.path.join(self.web_root_dir, 'received')
         self.preview_files_dir = os.path.join(self.web_root_dir, 'preview')
         self.upload_tmp_dir = os.path.join(self.web_root_dir, 'upload_tmp')
         self.http_uploads_dir = os.path.join(self.web_root_dir, 'http_uploads')
         self._prepare_dirs()
-        self._clear_preview_cache_on_startup()
+
+        if WEB_CLEAR_PREVIEW_CACHE_ON_STARTUP:
+            self._clear_preview_cache_on_startup()
 
     # ------------------ dirs ------------------ #
     def _prepare_dirs(self):
@@ -238,7 +245,7 @@ class WebFileService:
         unique_suffix = uuid.uuid4().hex[:8]
         return f'{stem}_{unique_suffix}{ext}'
 
-    def save_http_uploaded_file(self, file, category: str = '', client_id: str = '') -> dict:
+    def save_http_uploaded_file(self, file, category: str = '', client_id: str = '', hostname: str = '') -> dict:
         target_dir = Path(self.http_uploads_dir)
         if category:
             target_dir = target_dir / secure_filename(category)

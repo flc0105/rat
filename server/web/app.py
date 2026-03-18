@@ -5,6 +5,8 @@ from datetime import datetime
 
 from flask import Flask, Response, jsonify, request, send_from_directory, stream_with_context
 
+from server.config.config import WEB_HTTP_UPLOAD_MAX_BYTES
+
 
 def create_app(server_instance):
     app = Flask(__name__, static_folder='../../static', static_url_path='')
@@ -310,7 +312,7 @@ def create_app(server_instance):
         return _file_endpoint(_execute)
 
     # ------------------ http uploads ------------------ #
-    app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024  # 50 MB
+    app.config['MAX_CONTENT_LENGTH'] = WEB_HTTP_UPLOAD_MAX_BYTES
 
     @app.route('/api/files/upload', methods=['POST'])
     def upload_file():

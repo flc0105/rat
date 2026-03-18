@@ -5,14 +5,14 @@ import sys
 import time
 import uuid
 
-from client.config.config import SERVER_ADDR
+from client.config.config import SERVER_ADDR, RECONNECT_INTERVAL_SECONDS
 from core.utils.client_util import check_privilege
 from client.connection.server_connection import ServerConnection
 from core.utils.logger import logger
 
 
 class Client:
-    RECONNECT_INTERVAL = 5
+    RECONNECT_INTERVAL = RECONNECT_INTERVAL_SECONDS
 
     def __init__(self, address):
         self.address = address
