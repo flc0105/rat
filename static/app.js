@@ -12,11 +12,6 @@ createApp({
       commandHistoryDialogVisible: false,
       commandHistoryLoading: false,
       commandHistoryItems: [],
-      commandShortcutHistoryCommands: [],
-      commandShortcutHistoryLoadedFor: '',
-      commandShortcutHistoryIndex: -1,
-      commandShortcutDraft: '',
-      commandShortcutApplying: false,
       sending: false,
       uploading: false,
       eventSource: null,
@@ -91,19 +86,6 @@ createApp({
       this.showHiddenFiles = false;
     },
 
-    resetCommandShortcutNavigation() {
-      this.commandShortcutHistoryIndex = -1;
-      this.commandShortcutDraft = '';
-    },
-
-    onCommandInput() {
-      if (this.commandShortcutApplying) {
-        this.commandShortcutApplying = false;
-        return;
-      }
-      this.resetCommandShortcutNavigation();
-    },
-
     formatOsLabel(osType, osVer) {
       const type = osType || 'Unknown';
       return osVer ? `${type}` : type;
@@ -158,74 +140,6 @@ createApp({
       });
 
       this.scrollToBottom();
-    },
-
-    async ensureCommandShortcutHistory(clientId) {
-      if (!clientId) return;
-      if (this.commandShortcutHistoryLoadedFor === clientId && this.commandShortcutHistoryCommands.length) return;
-
-      try {
-        const res = await fetch(`/api/connections/${encodeURIComponent(clientId)}/command-history`);
-        const json = await res.json();
-
-        if (!res.ok || json.code !== 0) {
-          throw new Error(json.message || 'Failed to load command history');
-        }
-
-        const items = Array.isArray(json.data) ? json.data : [];
-        this.commandShortcutHistoryCommands = items
-          .map(item => String(item.command || '').trim())
-          .filter(Boolean);
-
-        this.commandShortcutHistoryLoadedFor = clientId;
-      } catch (e) {
-        this.commandShortcutHistoryCommands = [];
-        this.commandShortcutHistoryLoadedFor = '';
-      }
-    },
-
-async handleCommandInputKeydown(event) {
-  const isHistoryShortcut = event.ctrlKey || event.metaKey || event.altKey;
-  if (!isHistoryShortcut) return;
-  if (event.key !== 'ArrowUp' && event.key !== 'ArrowDown') return;
-
-      event.preventDefault();
-
-      if (!this.selectedId) return;
-
-      await this.ensureCommandShortcutHistory(this.selectedId);
-
-      const items = this.commandShortcutHistoryCommands;
-      if (!items.length) return;
-
-      if (event.key === 'ArrowUp') {
-        if (this.commandShortcutHistoryIndex === -1) {
-          this.commandShortcutDraft = this.commandText;
-          this.commandShortcutHistoryIndex = 0;
-        } else if (this.commandShortcutHistoryIndex < items.length - 1) {
-          this.commandShortcutHistoryIndex += 1;
-        } else {
-          return;
-        }
-      }
-
-      if (event.key === 'ArrowDown') {
-        if (this.commandShortcutHistoryIndex === -1) {
-          return;
-        }
-
-        if (this.commandShortcutHistoryIndex === 0) {
-          this.commandShortcutHistoryIndex = -1;
-          this.commandShortcutApplying = true;
-          this.commandText = this.commandShortcutDraft;
-          return;
-        }
-
-        this.commandShortcutHistoryIndex -= 1;
-      }
-
-      this.commandShortcutApplying = true;
-      this.commandText = items[this.commandShortcutHistoryIndex] || '';
     },
 
     async loadPreviewPayload(fetcher, fallbackTitle = 'File Preview') {
@@ -363,10 +277,7 @@ async handleCommandInputKeydown(event) {
         }
 
         if (this.selectedId) {
-          this.loadCommandCandidates(this.selectedId);
-          this.commandShortcutHistoryLoadedFor = '';
-          this.commandShortcutHistoryCommands = [];
-          this.ensureCommandShortcutHistory(this.selectedId);
+          await this.loadCommandCandidates(this.selectedId);
         }
       } catch (e) {
         ElementPlus.ElMessage.error('Failed to load devices');
@@ -377,27 +288,56 @@ async handleCommandInputKeydown(event) {
       this.selectedId = clientId;
       this.ensureOutputBucket(clientId);
       this.commandHistoryItems = [];
-      this.commandShortcutHistoryLoadedFor = '';
-      this.commandShortcutHistoryCommands = [];
-      this.resetCommandShortcutNavigation();
       this.loadCommandCandidates(clientId);
-      this.ensureCommandShortcutHistory(clientId);
       this.scrollToBottom();
     },
 
     async loadCommandCandidates(clientId) {
       if (!clientId) return;
-      if (this.commandCandidatesLoadedFor === clientId && this.commandCandidates.length) return;
 
       try {
-        const res = await fetch(`/api/connections/${encodeURIComponent(clientId)}/command-candidates`);
-        const json = await res.json();
+        const [candidateRes, historyRes] = await Promise.all([
+          fetch(`/api/connections/${encodeURIComponent(clientId)}/command-candidates`),
+          fetch(`/api/connections/${encodeURIComponent(clientId)}/command-history`)
+        ]);
 
-        if (!res.ok || json.code !== 0) {
-          throw new Error(json.message || 'Failed to load command candidates');
+        const candidateJson = await candidateRes.json();
+        const historyJson = await historyRes.json();
+
+        if (!candidateRes.ok || candidateJson.code !== 0) {
+          throw new Error(candidateJson.message || 'Failed to load command candidates');
         }
 
-        this.commandCandidates = Array.isArray(json.data) ? json.data : [];
+        if (!historyRes.ok || historyJson.code !== 0) {
+          throw new Error(historyJson.message || 'Failed to load command history');
+        }
+
+        const systemCandidates = Array.isArray(candidateJson.data) ? candidateJson.data : [];
+        const historyItems = Array.isArray(historyJson.data) ? historyJson.data : [];
+
+        const merged = [];
+        const seen = new Set();
+
+        historyItems.forEach((item) => {
+          const command = String(item.command || '').trim();
+          if (!command || seen.has(command)) return;
+          seen.add(command);
+          merged.push({
+            name: 'history',
+            template: command,
+            help: item.time ? `Recent command · ${item.time}` : 'Recent command',
+            source: 'history'
+          });
+        });
+
+        systemCandidates.forEach((item) => {
+          const template = String(item.template || '').trim();
+          if (!template || seen.has(template)) return;
+          seen.add(template);
+          merged.push(item);
+        });
+
+        this.commandCandidates = merged;
         this.commandCandidatesLoadedFor = clientId;
       } catch (e) {
         this.commandCandidates = [];
@@ -434,8 +374,8 @@ async handleCommandInputKeydown(event) {
         }
 
         this.commandText = '';
-        this.resetCommandShortcutNavigation();
-        this.commandShortcutHistoryLoadedFor = '';
+        this.commandCandidatesLoadedFor = '';
+        await this.loadCommandCandidates(this.selectedId);
       } catch (e) {
         this.appendOutput(this.selectedId, '[发送失败] ' + (e.message || 'unknown error'), 'error');
         ElementPlus.ElMessage.error(e.message || 'Command failed');
@@ -925,9 +865,8 @@ async handleCommandInputKeydown(event) {
         }
 
         this.commandHistoryItems = [];
-        this.commandShortcutHistoryCommands = [];
-        this.commandShortcutHistoryLoadedFor = '';
-        this.resetCommandShortcutNavigation();
+        this.commandCandidatesLoadedFor = '';
+        await this.loadCommandCandidates(this.selectedId);
         ElementPlus.ElMessage.success('Command history cleared');
       } catch (e) {
         if (e === 'cancel' || e === 'close' || e?.toString?.().includes('cancel')) return;
@@ -1020,7 +959,7 @@ async handleCommandInputKeydown(event) {
           `[Command finished] ${payload.command} (${payload.success ? 'Success' : 'Failed'})`,
           payload.success ? 'success' : 'error'
         );
-        this.commandShortcutHistoryLoadedFor = '';
+        this.commandCandidatesLoadedFor = '';
         await this.loadConnections();
       });
 

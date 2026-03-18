@@ -118,8 +118,6 @@
                       class="command-input-native"
                       type="text"
                       placeholder="Enter a command..."
-                      @input="onCommandInput"
-                      @keydown="handleCommandInputKeydown"
                       @keyup.enter="sendCommand"
                     />
                     <datalist id="commandCandidatesList">

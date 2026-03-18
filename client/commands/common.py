@@ -42,6 +42,7 @@ class CommonCommands(CommandBase):
         """
         执行一次性 shell 命令
         """
+        encoding = self._get_default_encoding()
         return subprocess.run(
             command,
             shell=True,
@@ -49,7 +50,7 @@ class CommonCommands(CommandBase):
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,
-            encoding='utf-8',
+            encoding=encoding,
             errors='replace',
             timeout=30
         )
