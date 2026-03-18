@@ -35,7 +35,9 @@ createApp({
             previewType: '',
             previewTitle: '',
             previewUrl: '',
-            previewText: ''
+            previewText: '',
+
+            pendingRemoteUploadRefresh: null,
         };
     },
 
@@ -528,13 +530,27 @@ createApp({
                     body: formData
                 });
 
+                // const json = await res.json();
+                // if (!res.ok || json.code !== 0) {
+                //     throw new Error(json.message || 'Upload failed');
+                // }
+                //
+                // ElementPlus.ElMessage.success(`Upload started: ${file.name}`);
+                // await this.refreshRemoteDirectory();
+
                 const json = await res.json();
                 if (!res.ok || json.code !== 0) {
                     throw new Error(json.message || 'Upload failed');
                 }
 
+                const taskId = json.data && json.data.task_id;
+                this.pendingRemoteUploadRefresh = {
+                    taskId: taskId || '',
+                    clientId: this.selectedId,
+                    path: this.remoteFilesCurrentPath || ''
+                };
+
                 ElementPlus.ElMessage.success(`Upload started: ${file.name}`);
-                await this.refreshRemoteDirectory();
             } catch (e) {
                 this.appendOutput(this.selectedId, `[上传失败] ${e.message || 'unknown error'}`, 'error');
                 ElementPlus.ElMessage.error(e.message || 'Upload failed');
@@ -977,16 +993,53 @@ createApp({
                 this.appendOutput(payload.client_id, payload.text || '');
             });
 
+            // es.addEventListener('command_complete', async (event) => {
+            //     const payload = JSON.parse(event.data);
+            //     this.appendOutput(
+            //         payload.client_id,
+            //         `[Command finished] ${payload.command} (${payload.success ? 'Success' : 'Failed'})`,
+            //         payload.success ? 'success' : 'error'
+            //     );
+            //     this.commandCandidatesLoadedFor = '';
+            //     await this.loadConnections();
+            // });
+
+
             es.addEventListener('command_complete', async (event) => {
-                const payload = JSON.parse(event.data);
-                this.appendOutput(
-                    payload.client_id,
-                    `[Command finished] ${payload.command} (${payload.success ? 'Success' : 'Failed'})`,
-                    payload.success ? 'success' : 'error'
-                );
-                this.commandCandidatesLoadedFor = '';
-                await this.loadConnections();
-            });
+    const payload = JSON.parse(event.data);
+
+    this.appendOutput(
+        payload.client_id,
+        `[Command finished] ${payload.command} (${payload.success ? 'Success' : 'Failed'})`,
+        payload.success ? 'success' : 'error'
+    );
+
+    const pendingRefresh = this.pendingRemoteUploadRefresh;
+    if (
+        pendingRefresh &&
+        pendingRefresh.taskId &&
+        payload.task_id === pendingRefresh.taskId
+    ) {
+        const refreshClientId = pendingRefresh.clientId;
+        const refreshPath = pendingRefresh.path || '';
+
+        this.pendingRemoteUploadRefresh = null;
+
+        if (
+            payload.success &&
+            this.remoteFilesDialogVisible &&
+            this.selectedId === refreshClientId
+        ) {
+            try {
+                await this.loadRemoteDirectory(refreshPath);
+            } catch (e) {
+            }
+        }
+    }
+
+    this.commandCandidatesLoadedFor = '';
+    await this.loadConnections();
+});
 
             es.addEventListener('background_message', async (event) => {
                 const payload = JSON.parse(event.data);

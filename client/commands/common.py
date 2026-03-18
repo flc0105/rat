@@ -92,6 +92,21 @@ class CommonCommands(CommandBase):
             if hasattr(method, 'help')
         }
 
+    def get_command_manifest_payload(self):
+        """
+        获取命令清单数据（本地方法，不通过 socket 返回）
+        """
+        methods = self._get_exported_command_methods()
+        payload = [
+            {
+                'name': name,
+                'help': method.help,
+            }
+            for name, method in methods.items()
+        ]
+        payload.sort(key=lambda item: item['name'].lower())
+        return payload
+
     def _validate_directory_exists(self, path):
         """
         校验目录是否存在，并返回绝对路径
@@ -543,15 +558,15 @@ class CommonCommands(CommandBase):
         except Exception as e:
             return 0, f'Failed to stop background jobs: {e}'
 
-    @desc('Show command manifest as JSON payload')
-    def command_manifest(self):
-        methods = self._get_exported_command_methods()
-        payload = [
-            {
-                'name': name,
-                'help': method.help,
-            }
-            for name, method in methods.items()
-        ]
-        payload.sort(key=lambda item: item['name'].lower())
-        return 1, json.dumps(payload, ensure_ascii=False)
+    # @desc('Show command manifest as JSON payload')
+    # def command_manifest(self):
+    #     methods = self._get_exported_command_methods()
+    #     payload = [
+    #         {
+    #             'name': name,
+    #             'help': method.help,
+    #         }
+    #         for name, method in methods.items()
+    #     ]
+    #     payload.sort(key=lambda item: item['name'].lower())
+    #     return 1, json.dumps(payload, ensure_ascii=False)

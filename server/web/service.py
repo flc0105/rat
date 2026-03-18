@@ -51,31 +51,26 @@ class ServerWebService:
         return final_status, '\n'.join(part for part in parts if part).strip()
 
     def _get_client_command_candidates(self, conn):
-        status, text = self._collect_result(conn.send_command('command_manifest'))
-        if status != 1:
-            raise RuntimeError(text or 'Failed to load client command manifest')
-
-        try:
-            payload = json.loads(text or '[]')
-        except Exception as e:
-            raise RuntimeError(f'Invalid client command manifest: {e}')
-
+        payload = conn.info.get('command_manifest') or []
         if not isinstance(payload, list):
-            raise RuntimeError('Invalid client command manifest payload')
+            return []
 
         result = []
         for item in payload:
             if not isinstance(item, dict):
                 continue
+
             name = (item.get('name') or '').strip()
             if not name:
                 continue
+
             result.append({
                 'name': name,
                 'template': name,
                 'help': item.get('help', ''),
                 'source': 'client'
             })
+
         return result
 
     # ------------------ connection facade ------------------ #

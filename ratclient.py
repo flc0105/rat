@@ -47,10 +47,32 @@ class Client:
         self._create_connection()
 
 
+    # def _build_client_info(self):
+    #     """
+    #     构造客户端基础信息
+    #     """
+    #     return {
+    #         'id': self.client_id,
+    #         'type': 'info',
+    #         'os_type': platform.system(),
+    #         'os_ver': platform.platform(),
+    #         'hostname': socket.gethostname(),
+    #         'integrity': check_privilege(),
+    #         'cwd': os.getcwd(),
+    #     }
+
     def _build_client_info(self):
         """
         构造客户端基础信息
         """
+        command_manifest = []
+        try:
+            commands = self.server.command_executor.get_commands()
+            if hasattr(commands, 'get_command_manifest_payload'):
+                command_manifest = commands.get_command_manifest_payload()
+        except Exception:
+            command_manifest = []
+
         return {
             'id': self.client_id,
             'type': 'info',
@@ -59,6 +81,7 @@ class Client:
             'hostname': socket.gethostname(),
             'integrity': check_privilege(),
             'cwd': os.getcwd(),
+            'command_manifest': command_manifest,
         }
 
     def _connect_socket(self):
