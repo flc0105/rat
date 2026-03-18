@@ -25,6 +25,8 @@ createApp({
             remoteFilesPathInput: '',
             remoteUploadLoading: false,
             showHiddenFiles: false,
+            remoteSelectedPaths: [],
+            remoteZipDownloading: false,
 
             recentFilesDialogVisible: false,
             recentFilesLoading: false,
@@ -60,6 +62,13 @@ createApp({
         filteredRemoteFilesEntries() {
             if (this.showHiddenFiles) return this.remoteFilesEntries;
             return this.remoteFilesEntries.filter(item => !item.is_hidden);
+        },
+        selectedRemoteEntries() {
+            const selectedSet = new Set(this.remoteSelectedPaths);
+            return this.remoteFilesEntries.filter(item => selectedSet.has(item.path));
+        },
+        hasRemoteSelection() {
+            return this.remoteSelectedPaths.length > 0;
         }
     },
 
@@ -86,6 +95,8 @@ createApp({
             this.remoteFilesEntries = [];
             this.remoteFilesPathInput = '';
             this.showHiddenFiles = false;
+            this.remoteSelectedPaths = [];
+            this.remoteZipDownloading = false;
         },
 
         formatOsLabel(osType, osVer) {
@@ -583,6 +594,7 @@ createApp({
                 this.remoteFilesParentPath = data.parent_path || '';
                 this.remoteFilesEntries = data.entries || [];
                 this.remoteFilesPathInput = this.remoteFilesCurrentPath || '';
+                this.remoteSelectedPaths = [];
             } catch (e) {
                 ElementPlus.ElMessage.error(e.message || 'Failed to load remote directory');
             } finally {
@@ -616,6 +628,33 @@ createApp({
         handleRemoteRowDblClick(row) {
             if (row && row.is_dir) {
                 this.enterRemoteDirectory(row);
+            }
+        },
+
+        handleRemoteSelectionChange(rows) {
+            this.remoteSelectedPaths = Array.isArray(rows) ? rows.map(item => item.path).filter(Boolean) : [];
+        },
+
+        isRemoteEntrySelected(row) {
+            return !!(row && row.path && this.remoteSelectedPaths.includes(row.path));
+        },
+
+        toggleRemoteSelection(row) {
+            if (!row || !row.path) return;
+
+            const exists = this.remoteSelectedPaths.includes(row.path);
+            if (exists) {
+                this.remoteSelectedPaths = this.remoteSelectedPaths.filter(item => item !== row.path);
+            } else {
+                this.remoteSelectedPaths = [...this.remoteSelectedPaths, row.path];
+            }
+        },
+
+        clearRemoteSelection() {
+            this.remoteSelectedPaths = [];
+            const tableRef = this.$refs.remoteFilesTableRef;
+            if (tableRef && typeof tableRef.clearSelection === 'function') {
+                tableRef.clearSelection();
             }
         },
 
@@ -772,6 +811,55 @@ createApp({
                 }
             } catch (e) {
                 ElementPlus.ElMessage.error(e.message || 'Download failed');
+            }
+        },
+
+        async downloadSelectedRemoteEntries() {
+            if (!this.selectedId) {
+                ElementPlus.ElMessage.warning('Please select a device');
+                return;
+            }
+
+            const paths = [...this.remoteSelectedPaths];
+            if (!paths.length) {
+                ElementPlus.ElMessage.warning('Please select at least one file or folder');
+                return;
+            }
+
+            this.remoteZipDownloading = true;
+
+            try {
+                const res = await fetch(`/api/connections/${encodeURIComponent(this.selectedId)}/remote-files/download-zip`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        paths,
+                        archive_name: ''
+                    })
+                });
+
+                const json = await res.json();
+                if (!res.ok || json.code !== 0) {
+                    throw new Error(json.message || 'ZIP download failed');
+                }
+
+                const file = json.data && json.data.file;
+                if (!file || !file.saved_name) {
+                    throw new Error('ZIP download finished, but saved file was not found');
+                }
+
+                const downloadUrl = `/api/files/recent/${encodeURIComponent(file.saved_name)}`;
+                window.open(downloadUrl, '_blank');
+
+                ElementPlus.ElMessage.success(`ZIP ready: ${file.original_name || file.saved_name}`);
+
+                if (this.recentFilesDialogVisible) {
+                    await this.openRecentFilesDialog();
+                }
+            } catch (e) {
+                ElementPlus.ElMessage.error(e.message || 'ZIP download failed');
+            } finally {
+                this.remoteZipDownloading = false;
             }
         },
 

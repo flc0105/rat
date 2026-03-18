@@ -16,6 +16,39 @@ class CommandFilePathMixin:
         except Exception as e:
             return 0, f'Failed to download file: {e}'
 
+    @desc('Download multiple paths as ZIP archive', group='file_path', suggest=False)
+    def download_paths(self, arg=''):
+        """
+        按路径列表打包下载，支持文件和目录混合。
+        结构化参数：
+        - paths: 路径数组
+        - archive_name: 可选，自定义压缩包名称（不带 .zip 也可）
+        """
+        temp_archive_path = ''
+        try:
+            payload = self._decode_structured_arg(arg)
+            if not isinstance(payload, dict):
+                return 0, 'Invalid download payload'
+
+            raw_paths = payload.get('paths') or []
+            archive_name = (payload.get('archive_name') or '').strip()
+
+            if not isinstance(raw_paths, list) or not raw_paths:
+                return 0, 'paths is required'
+
+            resolved_paths = self._require_existing_paths_from_list(raw_paths)
+            temp_archive_path = self._create_zip_from_paths(resolved_paths, archive_name=archive_name)
+
+            self._send_file_download(temp_archive_path)
+        except Exception as e:
+            return 0, f'Failed to download paths: {e}'
+        finally:
+            if temp_archive_path and os.path.isfile(temp_archive_path):
+                try:
+                    os.remove(temp_archive_path)
+                except Exception:
+                    pass
+
     @desc('Browse directory as JSON payload', group='file_path', suggest=False)
     def browse_dir(self, path=''):
         """

@@ -140,6 +140,9 @@ class ServerWebService:
     def download_remote_file(self, client_id: str, path: str):
         return self.remote_file_service.download_file(client_id, path)
 
+    def download_remote_paths_as_zip(self, client_id: str, paths: list[str], archive_name: str = ''):
+        return self.remote_file_service.download_paths_as_zip(client_id, paths, archive_name)
+
     def preview_remote_file(self, client_id: str, path: str):
         return self.remote_file_service.preview_file(client_id, path)
 

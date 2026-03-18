@@ -127,7 +127,6 @@ def create_app(server_instance):
             lambda: web_service.submit_command(client_id, _get_required_command())
         )
 
-
     @app.get('/api/connections/<client_id>/command-candidates')
     def get_command_candidates(client_id):
         return _json_endpoint(
@@ -219,6 +218,20 @@ def create_app(server_instance):
             if not path:
                 raise ValueError('path is required')
             return web_service.download_remote_file(client_id, path)
+
+        return _json_endpoint(_execute, default_error_status=500)
+
+    @app.post('/api/connections/<client_id>/remote-files/download-zip')
+    def download_remote_paths_as_zip(client_id):
+        def _execute():
+            payload = _get_json_payload()
+            paths = payload.get('paths') or []
+            archive_name = (payload.get('archive_name') or '').strip()
+
+            if not isinstance(paths, list) or not paths:
+                raise ValueError('paths is required')
+
+            return web_service.download_remote_paths_as_zip(client_id, paths, archive_name)
 
         return _json_endpoint(_execute, default_error_status=500)
 

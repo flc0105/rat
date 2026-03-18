@@ -3,7 +3,9 @@ import json
 import os
 import shutil
 import stat as stat_module
+import tempfile
 import time
+import zipfile
 
 
 class CommandPathMixin:
@@ -178,6 +180,33 @@ class CommandPathMixin:
             raise NotADirectoryError(f'Not a directory: {directory}')
         return directory
 
+    def _require_existing_paths_from_list(self, paths) -> list[str]:
+        """
+        从路径列表中提取并校验所有路径存在
+        """
+        resolved_paths = []
+
+        for item in paths:
+            raw_path = ''
+            if isinstance(item, dict):
+                raw_path = (item.get('path') or '').strip()
+            else:
+                raw_path = str(item or '').strip()
+
+            if not raw_path:
+                continue
+
+            target_path = self._resolve_target_path(raw_path)
+            if not os.path.exists(target_path):
+                raise FileNotFoundError(f'Path not found: {target_path}')
+
+            resolved_paths.append(target_path)
+
+        if not resolved_paths:
+            raise ValueError('No valid paths provided')
+
+        return resolved_paths
+
     def _delete_target_path(self, target_path: str):
         """
         删除文件或目录
@@ -223,7 +252,6 @@ class CommandPathMixin:
         创建 ZIP 压缩包并返回压缩包路径
         """
         import pathlib
-        import tempfile
 
         temp_dir = tempfile.mkdtemp()
         directory = self._validate_directory_exists(dir_name)
@@ -236,6 +264,80 @@ class CommandPathMixin:
             root_dir=parent_dir,
             base_dir=os.path.basename(directory)
         )
+
+    def _build_download_archive_name(self, paths: list[str], archive_name: str = '') -> str:
+        """
+        生成下载压缩包文件名
+        """
+        custom_name = (archive_name or '').strip()
+        if custom_name:
+            if not custom_name.lower().endswith('.zip'):
+                custom_name += '.zip'
+            return custom_name
+
+        if len(paths) == 1:
+            base_name = os.path.basename(paths[0].rstrip('/\\')) or 'download'
+            return f'{base_name}.zip'
+
+        timestamp = time.strftime('%Y%m%d-%H%M%S')
+        return f'bundle_{timestamp}.zip'
+
+    def _iter_directory_files(self, directory: str):
+        """
+        遍历目录内所有文件（递归）
+        """
+        for root, _, files in os.walk(directory):
+            for filename in files:
+                yield os.path.join(root, filename)
+
+    def _write_path_to_zip(self, archive: zipfile.ZipFile, path: str, used_names: set[str]):
+        """
+        将单个文件或目录写入 zip，避免顶层重名冲突
+        """
+        normalized_path = os.path.abspath(path)
+        top_name = os.path.basename(normalized_path.rstrip('/\\')) or 'item'
+        archive_root = top_name
+        suffix_index = 1
+
+        while archive_root in used_names:
+            archive_root = f'{top_name}_{suffix_index}'
+            suffix_index += 1
+
+        used_names.add(archive_root)
+
+        if os.path.isfile(normalized_path):
+            archive.write(normalized_path, arcname=archive_root)
+            return
+
+        if os.path.isdir(normalized_path):
+            has_content = False
+
+            for file_path in self._iter_directory_files(normalized_path):
+                has_content = True
+                relative_path = os.path.relpath(file_path, normalized_path)
+                archive.write(file_path, arcname=os.path.join(archive_root, relative_path))
+
+            if not has_content:
+                directory_entry = archive_root.rstrip('/\\') + '/'
+                archive.writestr(directory_entry, '')
+            return
+
+        raise FileNotFoundError(f'Path not found: {normalized_path}')
+
+    def _create_zip_from_paths(self, paths: list[str], archive_name: str = '') -> str:
+        """
+        将多个文件/目录打包到 tempfile 生成的 zip 中
+        """
+        final_name = self._build_download_archive_name(paths, archive_name=archive_name)
+        temp_dir = tempfile.mkdtemp()
+        archive_path = os.path.join(temp_dir, final_name)
+
+        used_names = set()
+        with zipfile.ZipFile(archive_path, mode='w', compression=zipfile.ZIP_DEFLATED) as archive:
+            for path in paths:
+                self._write_path_to_zip(archive, path, used_names)
+
+        return archive_path
 
     def _extract_archive_to_cwd(self, archive_path: str):
         """

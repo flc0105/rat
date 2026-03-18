@@ -90,6 +90,39 @@ class WebRemoteFileService:
 
         return text
 
+    def _download_to_received_area(self, client_id: str, command: str, expected_saved_name: str | None = None) -> dict:
+        """
+        执行一次远程下载，并从 received files 中定位新文件
+        """
+        conn = self.server.get_target_connection_by_client_id(client_id)
+        before_files = {item['saved_name'] for item in self.server.web_service.file_service.list_received_files()}
+
+        status, text = self._collect_result(conn.send_command(command))
+        if status != 1:
+            raise RuntimeError(text or 'Remote download failed')
+
+        after_items = self.server.web_service.file_service.list_received_files()
+        target_item = None
+
+        for item in after_items:
+            if item['saved_name'] not in before_files and item.get('client_id') == client_id:
+                target_item = item
+                break
+
+        if not target_item and expected_saved_name:
+            for item in after_items:
+                if item.get('client_id') == client_id and item.get('saved_name') == expected_saved_name:
+                    target_item = item
+                    break
+
+        if not target_item:
+            raise RuntimeError('Remote file download completed, but saved file was not found')
+
+        return {
+            'message': text,
+            'file': target_item
+        }
+
     def browse_directory(self, client_id: str, path: str = '') -> dict:
         """
         浏览远程目录
@@ -164,37 +197,56 @@ class WebRemoteFileService:
         normalized_path = path.strip()
         command = self._build_command('download_path', {'path': normalized_path})
 
-        conn = self.server.get_target_connection_by_client_id(client_id)
-        before_files = {item['saved_name'] for item in self.server.web_service.file_service.list_received_files()}
-
-        status, text = self._collect_result(conn.send_command(command))
-        if status != 1:
-            raise RuntimeError(text or 'Remote download failed')
-
-        after_items = self.server.web_service.file_service.list_received_files()
-        target_item = None
-
-        for item in after_items:
-            if item['saved_name'] not in before_files and item.get('client_id') == client_id:
-                target_item = item
-                break
-
-        if not target_item:
-            base_name = os.path.basename(normalized_path)
-            for item in after_items:
-                if item.get('client_id') == client_id and (
-                    item.get('original_name') == base_name or item.get('saved_name') == base_name
-                ):
-                    target_item = item
-                    break
-
-        if not target_item:
-            raise RuntimeError('Remote file download completed, but saved file was not found')
+        result = self._download_to_received_area(
+            client_id=client_id,
+            command=command,
+            expected_saved_name=os.path.basename(normalized_path)
+        )
 
         return {
             'path': normalized_path,
-            'message': text,
-            'file': target_item
+            'message': result['message'],
+            'file': result['file']
+        }
+
+    def download_paths_as_zip(self, client_id: str, paths: list[str], archive_name: str = '') -> dict:
+        """
+        将多个远程路径打包为 zip 下载到服务端接收区
+        """
+        if not isinstance(paths, list) or not paths:
+            raise ValueError('paths is required')
+
+        normalized_paths = [
+            str(item or '').strip()
+            for item in paths
+            if str(item or '').strip()
+        ]
+        if not normalized_paths:
+            raise ValueError('paths is required')
+
+        if archive_name:
+            expected_name = archive_name if archive_name.lower().endswith('.zip') else f'{archive_name}.zip'
+        elif len(normalized_paths) == 1:
+            splitter = "/\\"
+            expected_name = f'{os.path.basename(normalized_paths[0].rstrip(splitter)) or "download"}.zip'
+        else:
+            expected_name = None
+
+        command = self._build_command('download_paths', {
+            'paths': normalized_paths,
+            'archive_name': archive_name,
+        })
+
+        result = self._download_to_received_area(
+            client_id=client_id,
+            command=command,
+            expected_saved_name=expected_name
+        )
+
+        return {
+            'paths': normalized_paths,
+            'message': result['message'],
+            'file': result['file']
         }
 
     def preview_file(self, client_id: str, path: str) -> dict:
