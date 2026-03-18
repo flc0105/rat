@@ -79,13 +79,40 @@ class WebTaskService:
 
         finally:
             self.task_store.finish_task(task_id, ok)
+
+            task = self.task_store.get_task(task_id) or {}
+            history_entry_id = task.get('history_entry_id') or ''
+            if history_entry_id:
+                self.server.command_history.update_entry_status_for_connection(
+                    conn,
+                    history_entry_id,
+                    'success' if ok else 'error'
+                )
+
             self._publish_task_complete(task_id, client_id, command, ok)
+            # self.task_store.finish_task(task_id, ok)
+            # self._publish_task_complete(task_id, client_id, command, ok)
 
     # ------------------ web command ------------------ #
     def submit_web_command(self, client_id: str, command: str):
+        # conn = self.server.get_target_connection_by_client_id(client_id)
+        # self.server.command_history.record_for_connection(conn, command, source='web')
+        # task = self.task_store.create_task(client_id, command)
         conn = self.server.get_target_connection_by_client_id(client_id)
-        self.server.command_history.record_for_connection(conn, command, source='web')
+
+        command_text = (command or '').strip()
+        should_record = (
+                bool(command_text)
+                and command_text != 'history clear'
+                and not command_text.startswith('history run ')
+        )
+
+        entry_id = ''
+        if should_record:
+            entry_id = self.server.command_history.create_entry_for_connection(conn, command, source='web')
+
         task = self.task_store.create_task(client_id, command)
+        task['history_entry_id'] = entry_id
 
         threading.Thread(
             target=self._run_web_command,
@@ -111,10 +138,16 @@ class WebTaskService:
 
     # ------------------ web upload ------------------ #
     def submit_web_upload(self, client_id: str, local_path: str, display_name: str, remote_path: str = ''):
+        # conn = self.server.get_target_connection_by_client_id(client_id)
+        # command = f'upload {display_name}'
+        # self.server.command_history.record_for_connection(conn, command, source='web')
+        # task = self.task_store.create_task(client_id, command)
+
         conn = self.server.get_target_connection_by_client_id(client_id)
         command = f'upload {display_name}'
-        self.server.command_history.record_for_connection(conn, command, source='web')
+        entry_id = self.server.command_history.create_entry_for_connection(conn, command, source='web')
         task = self.task_store.create_task(client_id, command)
+        task['history_entry_id'] = entry_id
 
         threading.Thread(
             target=self._run_web_upload,

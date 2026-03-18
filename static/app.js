@@ -11,8 +11,10 @@ createApp({
       commandText: '',
       commandCandidates: [],
       commandCandidatesLoadedFor: '',
-      commandHistoryDialogVisible: false,
+
+            commandHistoryDialogVisible: false,
       commandHistoryLoading: false,
+      commandHistoryUniqueOnly: false,
       commandHistoryItems: [],
       sending: false,
 
@@ -269,6 +271,7 @@ createApp({
       this.selectedId = clientId;
       this.ensureOutputBucket(clientId);
       this.commandHistoryItems = [];
+      this.commandHistoryUniqueOnly = false;
       this.loadCommandCandidates(clientId);
       this.scrollToBottom();
     },
@@ -293,7 +296,7 @@ createApp({
       }
     },
 
-        async openCommandHistoryDialog() {
+            async openCommandHistoryDialog() {
       if (!this.selectedId) {
         ElementPlus.ElMessage.warning('Please select a device');
         return;
@@ -305,6 +308,9 @@ createApp({
       try {
         const url = new URL(`/api/connections/${encodeURIComponent(this.selectedId)}/command-history`, window.location.origin);
         url.searchParams.set('limit', '100');
+        if (this.commandHistoryUniqueOnly) {
+          url.searchParams.set('unique', '1');
+        }
 
         const res = await fetch(url.pathname + url.search);
         const json = await res.json();
@@ -319,6 +325,53 @@ createApp({
         ElementPlus.ElMessage.error(e.message || 'Failed to load command history');
       } finally {
         this.commandHistoryLoading = false;
+      }
+    },
+
+        applyHistoryCommand(row) {
+      if (!row || !row.command) return;
+      this.commandText = row.command;
+      this.commandHistoryDialogVisible = false;
+    },
+
+    async toggleCommandHistoryUnique() {
+      this.commandHistoryUniqueOnly = !this.commandHistoryUniqueOnly;
+      if (this.commandHistoryDialogVisible) {
+        await this.openCommandHistoryDialog();
+      }
+    },
+
+    async clearCommandHistory() {
+      if (!this.selectedId) {
+        ElementPlus.ElMessage.warning('Please select a device');
+        return;
+      }
+
+      try {
+        await ElementPlus.ElMessageBox.confirm(
+          'Clear command history for the current host?',
+          'Clear History',
+          {
+            type: 'warning',
+            confirmButtonText: 'Clear',
+            cancelButtonText: 'Cancel'
+          }
+        );
+
+        const res = await fetch(`/api/connections/${encodeURIComponent(this.selectedId)}/command-history`, {
+          method: 'DELETE'
+        });
+
+        const json = await res.json();
+        if (!res.ok || json.code !== 0) {
+          throw new Error(json.message || 'Failed to clear command history');
+        }
+
+        this.commandHistoryItems = [];
+        ElementPlus.ElMessage.success('Command history cleared');
+      } catch (e) {
+        if (e === 'cancel' || e === 'close' || e?.toString?.().includes('cancel')) return;
+        ElementPlus.ElMessage.error(e.message || 'Failed to clear command history');
       }
     },
 

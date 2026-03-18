@@ -281,18 +281,54 @@ class Server:
 
         return False
 
+    # def _execute_interactive_command(self, conn: ClientConnection, command_executor: CommandExecutor, cmd: str):
+    #     """
+    #     执行交互模式命令
+    #     """
+    #
+    #     if cmd.strip() and not cmd.strip().startswith('history'):
+    #         self.command_history.record_for_connection(conn, cmd, source='cli')
+    #
+    #     func = command_executor.process_command(cmd)
+    #     if func:
+    #         for item in func():
+    #             write(*item)
+
     def _execute_interactive_command(self, conn: ClientConnection, command_executor: CommandExecutor, cmd: str):
         """
         执行交互模式命令
         """
+        command_text = cmd.strip()
+        should_record = (
+            bool(command_text)
+            and command_text != 'history clear'
+            and not command_text.startswith('history run ')
+        )
 
-        if cmd.strip() and not cmd.strip().startswith('history'):
-            self.command_history.record_for_connection(conn, cmd, source='cli')
+        entry_id = ''
+        if should_record:
+            entry_id = self.command_history.create_entry_for_connection(conn, cmd, source='cli')
 
-        func = command_executor.process_command(cmd)
-        if func:
-            for item in func():
-                write(*item)
+        final_ok = True
+
+        try:
+            func = command_executor.process_command(cmd)
+            if func:
+                for item in func():
+                    status = item[0]
+                    if status == 0:
+                        final_ok = False
+                    write(*item)
+        except Exception:
+            final_ok = False
+            raise
+        finally:
+            if entry_id:
+                self.command_history.update_entry_status_for_connection(
+                    conn,
+                    entry_id,
+                    'success' if final_ok else 'error'
+                )
 
     def open_connection(self, conn: ClientConnection):
         """

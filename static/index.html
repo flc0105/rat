@@ -398,6 +398,16 @@
     class="fixed-dialog recent-files-dialog"
   >
     <div class="fixed-dialog-body">
+      <div class="dialog-head">
+        <div class="dialog-head-left">
+          <el-button size="small" @click="openCommandHistoryDialog">Refresh</el-button>
+          <el-button size="small" @click="toggleCommandHistoryUnique">
+            {{ commandHistoryUniqueOnly ? 'Show All' : 'Show Unique' }}
+          </el-button>
+          <el-button size="small" type="danger" @click="clearCommandHistory">Clear History</el-button>
+        </div>
+      </div>
+
       <div class="dialog-table-shell">
         <el-table
           :data="commandHistoryItems"
@@ -407,16 +417,23 @@
           height="100%"
           empty-text="No command history available"
           table-layout="fixed"
+          @row-dblclick="applyHistoryCommand"
         >
-          <el-table-column prop="command" label="Command" min-width="320" show-overflow-tooltip>
+          <el-table-column prop="index" label="#" width="70" align="center">
+            <template #default="{ row }">
+              <div class="ellipsis">{{ row.index || '-' }}</div>
+            </template>
+          </el-table-column>
+
+          <el-table-column prop="command" label="Command" min-width="300" show-overflow-tooltip>
             <template #default="{ row }">
               <div class="ellipsis mono">{{ row.command || '-' }}</div>
             </template>
           </el-table-column>
 
-          <el-table-column prop="cwd" label="Directory" min-width="260" show-overflow-tooltip>
+          <el-table-column prop="status" label="Status" width="110" align="center">
             <template #default="{ row }">
-              <div class="ellipsis">{{ row.cwd || '-' }}</div>
+              <div class="ellipsis">{{ row.status || '-' }}</div>
             </template>
           </el-table-column>
 
@@ -426,9 +443,23 @@
             </template>
           </el-table-column>
 
+          <el-table-column prop="cwd" label="Directory" min-width="220" show-overflow-tooltip>
+            <template #default="{ row }">
+              <div class="ellipsis">{{ row.cwd || '-' }}</div>
+            </template>
+          </el-table-column>
+
           <el-table-column prop="time" label="Time" width="190" show-overflow-tooltip>
             <template #default="{ row }">
               <div class="ellipsis">{{ row.time || '-' }}</div>
+            </template>
+          </el-table-column>
+
+          <el-table-column label="Actions" width="130" align="center" fixed="right">
+            <template #default="{ row }">
+              <div class="table-actions table-actions-links">
+                <a href="#" class="table-action-link" @click.prevent="applyHistoryCommand(row)">Use</a>
+              </div>
             </template>
           </el-table-column>
         </el-table>

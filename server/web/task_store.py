@@ -30,6 +30,7 @@ class WebTaskStore:
             'status': 'running',
             'created_at': datetime.now().isoformat(),
             'finished_at': None,
+            'history_entry_id': '',
             'chunks': []
         }
         with self._lock:
