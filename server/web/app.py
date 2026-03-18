@@ -198,6 +198,17 @@ def create_app(server_instance):
 
         return _json_endpoint(_execute, default_error_status=500)
 
+    @app.post('/api/connections/<client_id>/remote-files/preview')
+    def preview_remote_file(client_id):
+        def _execute():
+            payload = _get_json_payload()
+            path = (payload.get('path') or '').strip()
+            if not path:
+                raise ValueError('path is required')
+            return web_service.preview_remote_file(client_id, path)
+
+        return _json_endpoint(_execute, default_error_status=500)
+
     # ------------------ event stream ------------------ #
     @app.get('/api/stream')
     def stream():
@@ -253,6 +264,20 @@ def create_app(server_instance):
         return _file_endpoint(
             lambda: file_service.build_file_preview_payload(saved_name)
         )
+
+    @app.get('/api/files/preview/<path:relative_path>/raw')
+    def get_preview_file_raw(relative_path):
+        try:
+            file_path = file_service.get_safe_preview_file_path(relative_path)
+
+            if not os.path.isfile(file_path):
+                raise FileNotFoundError('file not found')
+
+            directory = os.path.dirname(file_path)
+            filename = os.path.basename(file_path)
+            return send_from_directory(directory, filename, as_attachment=False)
+        except Exception as e:
+            return _map_common_error(e)
 
     @app.delete('/api/files/recent/<path:saved_name>')
     def delete_recent_file(saved_name):

@@ -131,18 +131,13 @@ createApp({
       this.scrollToBottom();
     },
 
-    async previewRecentFile(row) {
-      if (!row || !row.saved_name) {
-        ElementPlus.ElMessage.warning('Invalid file');
-        return;
-      }
-
+        async loadPreviewPayload(fetcher, fallbackTitle = 'File Preview') {
       this.previewDialogVisible = true;
       this.previewLoading = true;
       this.resetPreviewState();
 
       try {
-        const res = await fetch(`/api/files/recent/${encodeURIComponent(row.saved_name)}/preview`);
+        const res = await fetcher();
         const json = await res.json();
 
         if (!res.ok || json.code !== 0) {
@@ -151,7 +146,7 @@ createApp({
 
         const data = json.data || {};
         this.previewType = data.type || 'unsupported';
-        this.previewTitle = data.name || row.original_name || 'File Preview';
+        this.previewTitle = data.name || fallbackTitle;
 
         if (this.previewType === 'image') {
           this.previewUrl = data.url || '';
@@ -163,6 +158,40 @@ createApp({
         ElementPlus.ElMessage.error(e.message || 'Preview failed');
       } finally {
         this.previewLoading = false;
+      }
+    },
+
+
+
+        async previewRecentFile(row) {
+      if (!row || !row.saved_name) {
+        ElementPlus.ElMessage.warning('Invalid file');
+        return;
+      }
+
+      await this.loadPreviewPayload(
+        () => fetch(`/api/files/recent/${encodeURIComponent(row.saved_name)}/preview`),
+        row.original_name || row.saved_name || 'File Preview'
+      );
+    },
+
+        async previewRemoteEntry(row) {
+      if (!row || !row.path || row.is_dir) {
+        ElementPlus.ElMessage.warning('Please select a file');
+        return;
+      }
+
+      await this.loadPreviewPayload(
+        () => fetch(`/api/connections/${encodeURIComponent(this.selectedId)}/remote-files/preview`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ path: row.path })
+        }),
+        row.name || 'File Preview'
+      );
+
+      if (this.recentFilesDialogVisible) {
+        await this.openRecentFilesDialog();
       }
     },
 

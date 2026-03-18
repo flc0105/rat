@@ -237,7 +237,7 @@
             </template>
           </el-table-column>
 
-          <el-table-column label="Actions" width="230" align="center" fixed="right">
+          <el-table-column label="Actions" width="280" align="center" fixed="right">
             <template #default="{ row }">
               <div class="table-actions">
                 <el-button
@@ -257,6 +257,15 @@
                   @click="downloadRemoteEntry(row)"
                 >
                   Download
+                </el-button>
+                                <el-button
+                  v-if="!row.is_dir"
+                  size="small"
+                  link
+                  type="primary"
+                  @click="previewRemoteEntry(row)"
+                >
+                  Preview
                 </el-button>
                 <el-button
                   size="small"

@@ -27,6 +27,7 @@ class WebFileService:
     def __init__(self):
         self.web_root_dir = os.path.abspath(os.path.join('runtime', 'web_files'))
         self.received_files_dir = os.path.join(self.web_root_dir, 'received')
+        self.preview_files_dir = os.path.join(self.web_root_dir, 'preview')
         self.upload_tmp_dir = os.path.join(self.web_root_dir, 'upload_tmp')
         self.http_uploads_dir = os.path.join(self.web_root_dir, 'http_uploads')
         self._prepare_dirs()
@@ -34,6 +35,7 @@ class WebFileService:
     # ------------------ dirs ------------------ #
     def _prepare_dirs(self):
         os.makedirs(self.received_files_dir, exist_ok=True)
+        os.makedirs(self.preview_files_dir, exist_ok=True)
         os.makedirs(self.upload_tmp_dir, exist_ok=True)
         os.makedirs(self.http_uploads_dir, exist_ok=True)
 
@@ -89,6 +91,26 @@ class WebFileService:
             raise ValueError('invalid file path')
         return file_path
 
+    # ------------------ preview files ------------------ #
+    def get_preview_dir_for_hostname(self, hostname: str = '') -> str:
+        safe_host = secure_filename(hostname or 'unknown_host') or 'unknown_host'
+        target_dir = os.path.join(self.preview_files_dir, safe_host)
+        os.makedirs(target_dir, exist_ok=True)
+        return target_dir
+
+    def get_safe_preview_file_path(self, relative_path: str) -> str:
+        base_dir = os.path.abspath(self.preview_files_dir)
+        file_path = os.path.abspath(os.path.join(base_dir, relative_path))
+        if not file_path.startswith(base_dir + os.sep) and file_path != base_dir:
+            raise ValueError('invalid preview file path')
+        return file_path
+
+    def build_preview_relative_path(self, hostname: str, saved_name: str) -> str:
+        safe_host = secure_filename(hostname or 'unknown_host') or 'unknown_host'
+        safe_name = os.path.basename(saved_name)
+        return os.path.join(safe_host, safe_name).replace('\\', '/')
+
+    # ------------------ preview helpers ------------------ #
     def guess_preview_type(self, filename: str) -> str:
         ext = os.path.splitext(filename)[1].lower()
 
@@ -112,19 +134,17 @@ class WebFileService:
 
         return 'unsupported'
 
-    def build_file_preview_payload(self, saved_name: str) -> dict:
-        file_path = self.get_safe_received_file_path(saved_name)
-
+    def _build_preview_payload_from_path(self, file_path: str, display_name: str, raw_url: str) -> dict:
         if not os.path.isfile(file_path):
             raise FileNotFoundError('file not found')
 
-        preview_type = self.guess_preview_type(saved_name)
+        preview_type = self.guess_preview_type(display_name)
 
         if preview_type == 'image':
             return {
                 'type': 'image',
-                'name': os.path.basename(file_path),
-                'url': f'/api/files/recent/{saved_name}/raw'
+                'name': os.path.basename(display_name),
+                'url': raw_url
             }
 
         if preview_type == 'text':
@@ -143,15 +163,31 @@ class WebFileService:
 
             return {
                 'type': 'text',
-                'name': os.path.basename(file_path),
+                'name': os.path.basename(display_name),
                 'content': text,
                 'truncated': truncated
             }
 
         return {
             'type': 'unsupported',
-            'name': os.path.basename(file_path)
+            'name': os.path.basename(display_name)
         }
+
+    def build_file_preview_payload(self, saved_name: str) -> dict:
+        file_path = self.get_safe_received_file_path(saved_name)
+        return self._build_preview_payload_from_path(
+            file_path=file_path,
+            display_name=saved_name,
+            raw_url=f'/api/files/recent/{saved_name}/raw'
+        )
+
+    def build_preview_file_payload(self, relative_path: str) -> dict:
+        file_path = self.get_safe_preview_file_path(relative_path)
+        return self._build_preview_payload_from_path(
+            file_path=file_path,
+            display_name=os.path.basename(relative_path),
+            raw_url=f'/api/files/preview/{relative_path}/raw'
+        )
 
     def delete_received_file(self, saved_name: str) -> None:
         file_path = self.get_safe_received_file_path(saved_name)

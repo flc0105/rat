@@ -688,14 +688,14 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 10px;
+
   flex-wrap: nowrap;
   min-height: 28px;
   white-space: nowrap;
 }
 
 .table-actions-links {
-  gap: 12px;
+  gap: 10px;
 }
 
 .table-action-link,

@@ -58,6 +58,38 @@ class WebRemoteFileService:
         except Exception as e:
             raise RuntimeError(f'Invalid remote JSON payload: {e}')
 
+    def _fetch_file_to_custom_dir(self, client_id: str, path: str, target_dir: str, write_meta: bool = False):
+        """
+        将远程文件拉取到指定服务端目录，不进入 recent downloads
+        """
+        if not (path or '').strip():
+            raise ValueError('path is required')
+
+        normalized_path = path.strip()
+        command = self._build_command('download_path', {'path': normalized_path})
+
+        conn = self.server.get_target_connection_by_client_id(client_id)
+        command_id = conn._generate_message_id()
+        conn.set_file_receive_context(
+            command_id,
+            target_dir=target_dir,
+            write_meta=write_meta,
+            on_file_saved=None,
+        )
+
+        data = {
+            'type': 'command',
+            'id': command_id,
+            'text': command,
+        }
+        conn.send(data)
+
+        status, text = self._collect_result(conn.wait_for_result(command_id, command))
+        if status != 1:
+            raise RuntimeError(text or 'Remote file fetch failed')
+
+        return text
+
     def browse_directory(self, client_id: str, path: str = '') -> dict:
         """
         浏览远程目录
@@ -164,3 +196,56 @@ class WebRemoteFileService:
             'message': text,
             'file': target_item
         }
+
+    def preview_file(self, client_id: str, path: str) -> dict:
+        """
+        预览远程文件：
+        - 拉取到 preview 目录
+        - 不进入 recent downloads
+        - 复用现有图片/文本预览逻辑
+        """
+        if not (path or '').strip():
+            raise ValueError('path is required')
+
+        conn = self.server.get_target_connection_by_client_id(client_id)
+        hostname = conn.info.get('hostname') or 'unknown_host'
+        target_dir = self.server.web_service.file_service.get_preview_dir_for_hostname(hostname)
+
+        normalized_path = path.strip()
+        base_name = os.path.basename(normalized_path)
+
+        before_names = set(os.listdir(target_dir)) if os.path.isdir(target_dir) else set()
+
+        self._fetch_file_to_custom_dir(
+            client_id=client_id,
+            path=normalized_path,
+            target_dir=target_dir,
+            write_meta=False,
+        )
+
+        after_names = set(os.listdir(target_dir)) if os.path.isdir(target_dir) else set()
+        new_names = [name for name in (after_names - before_names) if os.path.isfile(os.path.join(target_dir, name))]
+
+        saved_name = None
+        if new_names:
+            new_names.sort()
+            saved_name = new_names[0]
+        else:
+            candidate = os.path.join(target_dir, base_name)
+            if os.path.isfile(candidate):
+                saved_name = base_name
+            else:
+                prefix, ext = os.path.splitext(base_name)
+                matches = [
+                    name for name in after_names
+                    if name == base_name or (name.startswith(prefix + '_') and name.endswith(ext))
+                ]
+                matches.sort()
+                if matches:
+                    saved_name = matches[-1]
+
+        if not saved_name:
+            raise RuntimeError('Preview file was received, but saved file was not found')
+
+        relative_path = self.server.web_service.file_service.build_preview_relative_path(hostname, saved_name)
+        return self.server.web_service.file_service.build_preview_file_payload(relative_path)

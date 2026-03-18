@@ -53,6 +53,7 @@ class ClientMessageRouter:
         """
         self.connection.info['cwd'] = data.get('cwd')
         status, text = self.connection.save_file(
+            data.get('id'),
             data.get('filename'),
             data.get('length')
         )

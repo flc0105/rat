@@ -29,6 +29,8 @@ class ClientConnection(RATSocket):
         self.is_interactive = False  # 是否处于交互会话中
         self._message_id_counter = 0  # 连接内消息自增 ID
 
+        self._file_receive_contexts = {}  # 按 command_id 保存文件接收上下文
+
         # web
         self.on_unexpected_message = None
 
@@ -120,14 +122,26 @@ class ClientConnection(RATSocket):
         data = self.recv()
         self.message_router.dispatch(data)
 
-    def save_file(self, filename, length):
+    def set_file_receive_context(self, command_id: int, **context):
+        """
+        为指定命令设置文件接收上下文
+        """
+        self._file_receive_contexts[command_id] = context
+
+    def pop_file_receive_context(self, command_id: int):
+        """
+        取出并删除指定命令的文件接收上下文
+        """
+        return self._file_receive_contexts.pop(command_id, None)
+
+    def save_file(self, command_id, filename, length):
         """
         保存文件
         :param filename: 文件名
         :param length: 文件长度
         :return: 文件保存结果元组 (status, message)
         """
-        return self.file_receiver.save_file(filename, length)
+        return self.file_receiver.save_file(command_id, filename, length)
 
     # ------------------ 等待结果 ------------------ #
     def wait_for_result(self, id: int, command: Optional[str]):
