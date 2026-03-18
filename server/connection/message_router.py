@@ -1,4 +1,7 @@
-class ClientMessageRouter:
+from core.protocol.message_router_base import BaseMessageRouter
+
+
+class ClientMessageRouter(BaseMessageRouter):
     """
     ClientConnection 收到消息后的分发器。
 
@@ -8,34 +11,13 @@ class ClientMessageRouter:
     - 只关心“收到什么消息，就调用什么处理器”
     """
 
-    def __init__(self, connection):
-        self.connection = connection
-
-    def dispatch(self, data: dict) -> None:
-        """
-        根据消息类型分发处理
-        """
-        msg_type = data.get('type')
-
-        if msg_type == 'rdy':
-            self._handle_ready_message(data)
-            return
-
-        if msg_type == 'result':
-            self._handle_result_message(data)
-            return
-
-        if msg_type == 'file':
-            self._handle_file_message(data)
-            return
-
-    def _handle_ready_message(self, data: dict) -> None:
+    def handle_ready_message(self, data: dict) -> None:
         """
         处理文件传输就绪信号
         """
         self.connection.ready_queue.put(data.get('id'), data.get('status'))
 
-    def _handle_result_message(self, data: dict) -> None:
+    def handle_result_message(self, data: dict) -> None:
         """
         处理命令执行结果消息
         """
@@ -47,7 +29,7 @@ class ClientMessageRouter:
             data.get('eof')
         )
 
-    def _handle_file_message(self, data: dict) -> None:
+    def handle_file_message(self, data: dict) -> None:
         """
         处理客户端上传的文件消息
         """

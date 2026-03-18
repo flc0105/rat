@@ -5,6 +5,7 @@ from typing import Generator, Optional
 from core.protocol.base_connection import BaseSessionConnection
 from core.protocol.message_queue import MessageQueue, PendingCommandQueue
 from server.connection.file_receiver import ClientFileReceiver
+from server.connection.message_dispatcher import ServerMessageDispatcher
 from server.connection.message_router import ClientMessageRouter
 from server.connection.result_dispatcher import ClientResultDispatcher
 
@@ -39,6 +40,7 @@ class ClientConnection(BaseSessionConnection):
         # helpers
         self.result_dispatcher = ClientResultDispatcher(self)
         self.message_router = ClientMessageRouter(self)
+        self.message_dispatcher = ServerMessageDispatcher(self)
         self.file_receiver = ClientFileReceiver(self)
 
     # ------------------ ID/构包 ------------------ #
@@ -102,8 +104,7 @@ class ClientConnection(BaseSessionConnection):
         """
         处理接收线程收到的消息
         """
-        self.message_router.dispatch(data)
-        return None
+        return self.message_dispatcher.dispatch(data)
 
     def set_file_receive_context(self, command_id: int, **context):
         """

@@ -5,6 +5,7 @@ import queue
 from client.commands.common import CommonCommands
 from client.commands.executor import CommandExecutor
 from client.connection.file_receiver import ServerFileReceiver
+from client.connection.message_dispatcher import ClientMessageDispatcher
 from client.connection.message_router import ServerMessageRouter
 from client.jobs.core.manager import JobManager
 from core.protocol.base_connection import BaseSessionConnection
@@ -31,6 +32,7 @@ class ServerConnection(BaseSessionConnection):
         self.is_connected = False
 
         self.message_router = ServerMessageRouter(self)
+        self.message_dispatcher = ClientMessageDispatcher(self)
         self.file_receiver = ServerFileReceiver(self)
 
     def mark_connected(self):
@@ -102,18 +104,7 @@ class ServerConnection(BaseSessionConnection):
         - tuple: 需要由接收线程立即 send_result(*result)
         """
         logger.debug(data)
-
-        message_type = data.get('type')
-
-        if message_type == 'rdy':
-            self.message_router.dispatch(data)
-            return None
-
-        if message_type == 'file':
-            return self.message_router.dispatch(data)
-
-        self.enqueue_pending_message(data)
-        return None
+        return self.message_dispatcher.dispatch(data)
 
     def recv_command(self, timeout: float | None = None) -> (int, int, str):
         """
