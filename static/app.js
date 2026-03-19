@@ -41,14 +41,14 @@ createApp({
 
             pendingRemoteUploadRefresh: null,
 
-
             backgroundJobsDialogVisible: false,
             backgroundJobsLoading: false,
             backgroundJobModulesLoading: false,
             backgroundJobModules: [],
             backgroundJobs: [],
             backgroundJobsRefreshTimer: null,
-
+            backgroundJobDetailDialogVisible: false,
+            selectedBackgroundJobId: '',
         };
     },
 
@@ -58,6 +58,19 @@ createApp({
         },
         remoteFilesDialogVisible(val) {
             if (!val) this.resetRemoteFilesState();
+        },
+        backgroundJobsDialogVisible(val) {
+            if (!val) {
+                if (this.backgroundJobsRefreshTimer) {
+                    clearTimeout(this.backgroundJobsRefreshTimer);
+                    this.backgroundJobsRefreshTimer = null;
+                }
+            }
+        },
+        backgroundJobDetailDialogVisible(val) {
+            if (!val) {
+                this.selectedBackgroundJobId = '';
+            }
         }
     },
 
@@ -78,6 +91,9 @@ createApp({
         },
         hasRemoteSelection() {
             return this.remoteSelectedPaths.length > 0;
+        },
+        selectedBackgroundJob() {
+            return this.backgroundJobs.find(item => item.job_id === this.selectedBackgroundJobId) || null;
         }
     },
 
@@ -88,6 +104,10 @@ createApp({
 
     beforeUnmount() {
         if (this.eventSource) this.eventSource.close();
+        if (this.backgroundJobsRefreshTimer) {
+            clearTimeout(this.backgroundJobsRefreshTimer);
+            this.backgroundJobsRefreshTimer = null;
+        }
     },
 
     methods: {
@@ -313,7 +333,7 @@ createApp({
             this.loadCommandCandidates(clientId);
             this.scrollToBottom();
 
-                        if (this.backgroundJobsDialogVisible) {
+            if (this.backgroundJobsDialogVisible) {
                 this.loadBackgroundJobModules();
                 this.loadBackgroundJobs();
             }
@@ -380,20 +400,6 @@ createApp({
                 commonOpsCandidates.forEach(pushUniqueCandidate);
                 aliasCandidates.forEach(pushUniqueCandidate);
                 scriptCandidates.forEach(pushUniqueCandidate);
-
-                // const visibleSystemCandidates = systemCandidates.filter(item => item.suggest !== false);
-                //
-                // const clientCandidates = visibleSystemCandidates.filter(item => item.source === 'client');
-                // const serverCandidates = visibleSystemCandidates.filter(item => item.source === 'server');
-                // const aliasCandidates = visibleSystemCandidates.filter(item => item.source === 'alias');
-                // const scriptCandidates = visibleSystemCandidates.filter(item => item.source === 'script');
-                // const commonOpsCandidates = this.buildCommonOpsCandidates();
-                //
-                // clientCandidates.forEach(pushUniqueCandidate);
-                // serverCandidates.forEach(pushUniqueCandidate);
-                // commonOpsCandidates.forEach(pushUniqueCandidate);
-                // aliasCandidates.forEach(pushUniqueCandidate);
-                // scriptCandidates.forEach(pushUniqueCandidate);
 
                 historyItems.forEach((item) => {
                     const command = String(item.command || '').trim();
@@ -998,7 +1004,16 @@ createApp({
                     throw new Error(json.message || 'Failed to load background jobs');
                 }
 
-                this.backgroundJobs = Array.isArray(json.data) ? json.data : [];
+                const jobs = Array.isArray(json.data) ? json.data : [];
+                this.backgroundJobs = jobs;
+
+                if (this.selectedBackgroundJobId) {
+                    const exists = jobs.some(item => item.job_id === this.selectedBackgroundJobId);
+                    if (!exists) {
+                        this.backgroundJobDetailDialogVisible = false;
+                        this.selectedBackgroundJobId = '';
+                    }
+                }
             } catch (e) {
                 this.backgroundJobs = [];
                 ElementPlus.ElMessage.error(e.message || 'Failed to load background jobs');
@@ -1088,6 +1103,12 @@ createApp({
             }
         },
 
+        openBackgroundJobDetail(job) {
+            if (!job || !job.job_id) return;
+            this.selectedBackgroundJobId = job.job_id;
+            this.backgroundJobDetailDialogVisible = true;
+        },
+
         buildBackgroundJobStateTagType(state) {
             const value = String(state || '').toLowerCase();
             if (value === 'running') return 'success';
@@ -1112,6 +1133,17 @@ createApp({
             return parts.join(' ');
         },
 
+        formatBackgroundJobMessageText(text) {
+            const raw = String(text || '').trim();
+            return raw.replace(/^\[[^\]]*?client=[^\]]*?\]\s*/, '');
+        },
+
+        getBackgroundJobSummaryText(job) {
+            const text = this.formatBackgroundJobMessageText(job && job.last_message || '');
+            if (text) return text;
+            return 'No messages yet';
+        },
+
         async previewBackgroundJobFile(file) {
             if (!file || !file.preview_url) {
                 ElementPlus.ElMessage.warning('No preview available');
@@ -1123,9 +1155,6 @@ createApp({
                 file.original_name || file.stored_name || 'Job File Preview'
             );
         },
-
-
-
 
         async openCommandHistoryDialog() {
             if (!this.selectedId) {
@@ -1322,9 +1351,7 @@ createApp({
                 await this.loadConnections();
             });
 
-
-
-                        es.addEventListener('background_job_status', async (event) => {
+            es.addEventListener('background_job_status', async (event) => {
                 const payload = JSON.parse(event.data);
                 this.scheduleBackgroundJobsRefresh(payload.client_id);
             });
@@ -1346,8 +1373,6 @@ createApp({
                     });
                 }
             });
-
-
 
             es.addEventListener('file_received', (event) => {
                 const payload = JSON.parse(event.data);

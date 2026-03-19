@@ -94,8 +94,9 @@
                     <el-button size="small" class="tool-btn tool-btn-accent" @click="triggerUpload">Upload</el-button>
                     <el-button size="small" class="tool-btn tool-btn-accent" @click="openRemoteFilesDialog">Remote Files</el-button>
                     <el-button size="small" class="tool-btn tool-btn-accent" @click="openRecentFilesDialog">Downloads</el-button>
-                    <el-button size="small" class="tool-btn" @click="openCommandHistoryDialog">History</el-button>
                     <el-button size="small" class="tool-btn" @click="openBackgroundJobsDialog">Background Jobs</el-button>
+                    <el-button size="small" class="tool-btn" @click="openCommandHistoryDialog">History</el-button>
+
                     <el-button size="small" class="tool-btn tool-btn-danger" @click="killConnection">Disconnect</el-button>
 
                     <span class="tool-separator"></span>
@@ -566,6 +567,241 @@
   </el-dialog>
 
   <el-dialog
+    v-model="backgroundJobsDialogVisible"
+    title="Background Jobs"
+    width="1180px"
+    top="5vh"
+    class="fixed-dialog background-jobs-dialog"
+  >
+    <div class="fixed-dialog-body background-jobs-body">
+      <div class="background-jobs-toolbar">
+        <el-button size="small" @click="loadBackgroundJobModules" :loading="backgroundJobModulesLoading">Refresh Modules</el-button>
+        <el-button size="small" @click="loadBackgroundJobs" :loading="backgroundJobsLoading">Refresh Jobs</el-button>
+      </div>
+
+      <div class="background-jobs-modules panel-lite">
+        <div class="background-jobs-section-title">Available Modules</div>
+
+        <div v-if="!backgroundJobModules.length && !backgroundJobModulesLoading" class="empty-state">
+          No job modules available
+        </div>
+
+        <div class="background-job-module-list" v-else>
+          <div
+            v-for="item in backgroundJobModules"
+            :key="item.job_name"
+            class="background-job-module-card"
+          >
+            <div class="background-job-module-name">{{ item.job_name }}</div>
+            <div class="background-job-module-key mono">{{ item.job_key || '-' }}</div>
+            <el-button
+              size="small"
+              type="primary"
+              plain
+              @click="startBackgroundJob(item.job_name)"
+            >
+              Start
+            </el-button>
+          </div>
+        </div>
+      </div>
+
+      <div class="background-jobs-list-shell panel-lite" v-loading="backgroundJobsLoading">
+        <div class="background-jobs-section-title">Reported Jobs</div>
+
+        <div v-if="!backgroundJobs.length && !backgroundJobsLoading" class="empty-state">
+          No background jobs reported for this connection
+        </div>
+
+        <div v-else class="background-jobs-list">
+          <div
+            v-for="job in backgroundJobs"
+            :key="job.job_id"
+            class="background-job-summary-card"
+          >
+            <div class="background-job-summary-main" @click="openBackgroundJobDetail(job)">
+              <div class="background-job-summary-top">
+                <div class="background-job-summary-title-wrap">
+                  <div class="background-job-summary-title">{{ job.display_name || job.job_name }}</div>
+                  <div class="background-job-summary-subtitle mono">{{ job.job_name }} / {{ job.job_key || '-' }}</div>
+                </div>
+
+                <el-tag :type="buildBackgroundJobStateTagType(job.state)" size="small">
+                  {{ job.state || 'unknown' }}
+                </el-tag>
+              </div>
+
+              <div class="background-job-summary-stats">
+                <span>{{ formatBackgroundJobDuration(job.duration_seconds) }}</span>
+                <span>{{ job.message_count || 0 }} msgs</span>
+                <span>{{ job.file_count || 0 }} files</span>
+                <span>{{ job.thread_name || '-' }}</span>
+              </div>
+
+              <div class="background-job-summary-last">
+                {{ getBackgroundJobSummaryText(job) }}
+              </div>
+            </div>
+
+            <div class="background-job-summary-actions">
+              <el-button
+                size="small"
+                plain
+                @click="openBackgroundJobDetail(job)"
+              >
+                Details
+              </el-button>
+              <el-button
+                size="small"
+                type="danger"
+                plain
+                @click="stopBackgroundJob(job)"
+                :disabled="!job.job_key || job.state === 'stopped'"
+              >
+                Stop
+              </el-button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </el-dialog>
+
+  <el-dialog
+    v-model="backgroundJobDetailDialogVisible"
+    :title="selectedBackgroundJob ? (selectedBackgroundJob.display_name || selectedBackgroundJob.job_name || 'Background Job') : 'Background Job Detail'"
+    width="1080px"
+    top="5vh"
+    class="fixed-dialog background-job-detail-dialog"
+  >
+    <div class="fixed-dialog-body" v-if="selectedBackgroundJob">
+      <div class="background-job-detail-head">
+        <div class="background-job-detail-head-left">
+          <div class="background-job-title">{{ selectedBackgroundJob.display_name || selectedBackgroundJob.job_name }}</div>
+          <div class="background-job-subtitle mono">
+            {{ selectedBackgroundJob.job_name }} / {{ selectedBackgroundJob.job_key || '-' }}
+          </div>
+        </div>
+
+        <div class="background-job-card-head-right">
+          <el-tag :type="buildBackgroundJobStateTagType(selectedBackgroundJob.state)" size="small">
+            {{ selectedBackgroundJob.state || 'unknown' }}
+          </el-tag>
+          <el-button
+            size="small"
+            type="danger"
+            plain
+            @click="stopBackgroundJob(selectedBackgroundJob)"
+            :disabled="!selectedBackgroundJob.job_key || selectedBackgroundJob.state === 'stopped'"
+          >
+            Stop
+          </el-button>
+        </div>
+      </div>
+
+      <div class="background-job-stats">
+        <div class="background-job-stat">
+          <div class="background-job-stat-label">Duration</div>
+          <div class="background-job-stat-value">{{ formatBackgroundJobDuration(selectedBackgroundJob.duration_seconds) }}</div>
+        </div>
+        <div class="background-job-stat">
+          <div class="background-job-stat-label">Messages</div>
+          <div class="background-job-stat-value">{{ selectedBackgroundJob.message_count || 0 }}</div>
+        </div>
+        <div class="background-job-stat">
+          <div class="background-job-stat-label">Files</div>
+          <div class="background-job-stat-value">{{ selectedBackgroundJob.file_count || 0 }}</div>
+        </div>
+        <div class="background-job-stat">
+          <div class="background-job-stat-label">Started</div>
+          <div class="background-job-stat-value">{{ selectedBackgroundJob.started_at || '-' }}</div>
+        </div>
+        <div class="background-job-stat">
+          <div class="background-job-stat-label">Stopped</div>
+          <div class="background-job-stat-value">{{ selectedBackgroundJob.stopped_at || '-' }}</div>
+        </div>
+        <div class="background-job-stat">
+          <div class="background-job-stat-label">Thread</div>
+          <div class="background-job-stat-value mono">{{ selectedBackgroundJob.thread_name || '-' }}</div>
+        </div>
+      </div>
+
+      <div class="background-job-last-message" v-if="selectedBackgroundJob.last_message">
+        <span class="background-job-last-message-label">Last Message</span>
+        <div class="background-job-last-message-text">{{ formatBackgroundJobMessageText(selectedBackgroundJob.last_message) }}</div>
+      </div>
+
+      <div class="background-job-panels">
+        <div class="background-job-panel">
+          <div class="background-job-panel-title">Messages</div>
+          <div class="background-job-message-list">
+            <div
+              v-for="(message, index) in selectedBackgroundJob.messages"
+              :key="`${selectedBackgroundJob.job_id}-msg-${index}`"
+              class="background-job-message-item"
+            >
+              <div class="background-job-message-time">{{ message.time || '-' }}</div>
+              <div
+                class="background-job-message-text"
+                :class="{
+                  'is-error': message.status === 0,
+                  'is-success': message.status === 1
+                }"
+              >
+                {{ formatBackgroundJobMessageText(message.text || '') }}
+              </div>
+            </div>
+
+            <div v-if="!selectedBackgroundJob.messages || !selectedBackgroundJob.messages.length" class="empty-state compact">
+              No messages
+            </div>
+          </div>
+        </div>
+
+        <div class="background-job-panel">
+          <div class="background-job-panel-title">Files</div>
+          <div class="background-job-file-list">
+            <div
+              v-for="(file, index) in selectedBackgroundJob.files"
+              :key="`${selectedBackgroundJob.job_id}-file-${index}`"
+              class="background-job-file-item"
+            >
+              <div class="background-job-file-main">
+                <div class="background-job-file-name">{{ file.original_name || file.stored_name || '-' }}</div>
+                <div class="background-job-file-meta">
+                  <span>{{ formatBytes(file.size || 0) }}</span>
+                  <span>{{ file.time || '-' }}</span>
+                </div>
+              </div>
+
+              <div class="background-job-file-actions">
+                <el-button
+                  size="small"
+                  plain
+                  @click="previewBackgroundJobFile(file)"
+                >
+                  Preview
+                </el-button>
+                <a
+                  class="table-action-link"
+                  :href="file.download_url"
+                  target="_blank"
+                >
+                  Download
+                </a>
+              </div>
+            </div>
+
+            <div v-if="!selectedBackgroundJob.files || !selectedBackgroundJob.files.length" class="empty-state compact">
+              No files
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </el-dialog>
+
+  <el-dialog
     v-model="previewDialogVisible"
     :title="previewTitle || 'File Preview'"
     width="1080px"
@@ -613,189 +849,6 @@
       </template>
     </div>
   </el-dialog>
-
-    <el-dialog
-    v-model="backgroundJobsDialogVisible"
-    title="Background Jobs"
-    width="1180px"
-    top="5vh"
-    class="fixed-dialog background-jobs-dialog"
-  >
-    <div class="fixed-dialog-body background-jobs-body">
-      <div class="background-jobs-toolbar">
-        <el-button size="small" @click="loadBackgroundJobModules" :loading="backgroundJobModulesLoading">Refresh Modules</el-button>
-        <el-button size="small" @click="loadBackgroundJobs" :loading="backgroundJobsLoading">Refresh Jobs</el-button>
-      </div>
-
-      <div class="background-jobs-modules panel-lite">
-        <div class="background-jobs-section-title">Available Jobs</div>
-
-        <div v-if="!backgroundJobModules.length && !backgroundJobModulesLoading" class="empty-state">
-          No job modules available
-        </div>
-
-        <div class="background-job-module-list" v-else>
-          <div
-            v-for="item in backgroundJobModules"
-            :key="item.job_name"
-            class="background-job-module-card"
-          >
-            <div class="background-job-module-name">{{ item.job_name }}</div>
-            <div class="background-job-module-key mono">{{ item.job_key || '-' }}</div>
-            <el-button
-              size="small"
-              type="primary"
-              plain
-              @click="startBackgroundJob(item.job_name)"
-            >
-              Start
-            </el-button>
-          </div>
-        </div>
-      </div>
-
-      <div class="background-jobs-list-shell panel-lite" v-loading="backgroundJobsLoading">
-        <div class="background-jobs-section-title">Reported Jobs</div>
-
-        <div v-if="!backgroundJobs.length && !backgroundJobsLoading" class="empty-state">
-          No background jobs reported for this connection
-        </div>
-
-        <div v-else class="background-jobs-list">
-          <div
-            v-for="job in backgroundJobs"
-            :key="job.job_id"
-            class="background-job-card"
-          >
-            <div class="background-job-card-head">
-              <div class="background-job-card-head-left">
-                <div class="background-job-title">{{ job.display_name || job.job_name }}</div>
-                <div class="background-job-subtitle mono">{{ job.job_name }} / {{ job.job_key || '-' }}</div>
-              </div>
-
-              <div class="background-job-card-head-right">
-                <el-tag :type="buildBackgroundJobStateTagType(job.state)" size="small">
-                  {{ job.state || 'unknown' }}
-                </el-tag>
-                <el-button
-                  size="small"
-                  type="danger"
-                  plain
-                  @click="stopBackgroundJob(job)"
-                  :disabled="!job.job_key || job.state === 'stopped'"
-                >
-                  Stop
-                </el-button>
-              </div>
-            </div>
-
-            <div class="background-job-stats">
-              <div class="background-job-stat">
-                <div class="background-job-stat-label">Duration</div>
-                <div class="background-job-stat-value">{{ formatBackgroundJobDuration(job.duration_seconds) }}</div>
-              </div>
-              <div class="background-job-stat">
-                <div class="background-job-stat-label">Messages</div>
-                <div class="background-job-stat-value">{{ job.message_count || 0 }}</div>
-              </div>
-              <div class="background-job-stat">
-                <div class="background-job-stat-label">Files</div>
-                <div class="background-job-stat-value">{{ job.file_count || 0 }}</div>
-              </div>
-              <div class="background-job-stat">
-                <div class="background-job-stat-label">Started</div>
-                <div class="background-job-stat-value">{{ job.started_at || '-' }}</div>
-              </div>
-              <div class="background-job-stat">
-                <div class="background-job-stat-label">Stopped</div>
-                <div class="background-job-stat-value">{{ job.stopped_at || '-' }}</div>
-              </div>
-              <div class="background-job-stat">
-                <div class="background-job-stat-label">Thread</div>
-                <div class="background-job-stat-value mono">{{ job.thread_name || '-' }}</div>
-              </div>
-            </div>
-
-            <div class="background-job-last-message" v-if="job.last_message">
-              <span class="background-job-last-message-label">Last Message</span>
-              <div class="background-job-last-message-text">{{ job.last_message }}</div>
-            </div>
-
-            <div class="background-job-panels">
-              <div class="background-job-panel">
-                <div class="background-job-panel-title">Messages</div>
-                <div class="background-job-message-list">
-                  <div
-                    v-for="(message, index) in job.messages"
-                    :key="`${job.job_id}-msg-${index}`"
-                    class="background-job-message-item"
-                  >
-                    <div class="background-job-message-time">{{ message.time || '-' }}</div>
-                    <div
-                      class="background-job-message-text"
-                      :class="{
-                        'is-error': message.status === 0,
-                        'is-success': message.status === 1
-                      }"
-                    >
-                      {{ message.text || '' }}
-                    </div>
-                  </div>
-
-                  <div v-if="!job.messages || !job.messages.length" class="empty-state compact">
-                    No messages
-                  </div>
-                </div>
-              </div>
-
-              <div class="background-job-panel">
-                <div class="background-job-panel-title">Files</div>
-                <div class="background-job-file-list">
-                  <div
-                    v-for="(file, index) in job.files"
-                    :key="`${job.job_id}-file-${index}`"
-                    class="background-job-file-item"
-                  >
-                    <div class="background-job-file-main">
-                      <div class="background-job-file-name">{{ file.original_name || file.stored_name || '-' }}</div>
-                      <div class="background-job-file-meta">
-                        <span>{{ formatBytes(file.size || 0) }}</span>
-                        <span>{{ file.time || '-' }}</span>
-                      </div>
-                    </div>
-
-                    <div class="background-job-file-actions">
-                      <el-button
-                        size="small"
-                        plain
-                        @click="previewBackgroundJobFile(file)"
-                      >
-                        Preview
-                      </el-button>
-                      <a
-                        class="table-action-link"
-                        :href="file.download_url"
-                        target="_blank"
-                      >
-                        Download
-                      </a>
-                    </div>
-                  </div>
-
-                  <div v-if="!job.files || !job.files.length" class="empty-state compact">
-                    No files
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-      </div>
-    </div>
-  </el-dialog>
-
-
 
   <el-dialog
     v-model="commandHistoryDialogVisible"
