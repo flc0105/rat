@@ -49,6 +49,10 @@ createApp({
             backgroundJobsRefreshTimer: null,
             backgroundJobDetailDialogVisible: false,
             selectedBackgroundJobId: '',
+
+            backgroundJobsActiveTab: 'modules',
+backgroundJobMessageDialogVisible: false,
+selectedBackgroundJobMessage: {},
         };
     },
 
@@ -71,7 +75,12 @@ createApp({
             if (!val) {
                 this.selectedBackgroundJobId = '';
             }
-        }
+        },
+                backgroundJobMessageDialogVisible(val) {
+            if (!val) {
+                this.selectedBackgroundJobMessage = {};
+            }
+        },
     },
 
     computed: {
@@ -94,6 +103,13 @@ createApp({
         },
         selectedBackgroundJob() {
             return this.backgroundJobs.find(item => item.job_id === this.selectedBackgroundJobId) || null;
+        },
+                sortedBackgroundJobs() {
+            return [...this.backgroundJobs].sort((a, b) => {
+                const ta = String(a.updated_at || a.started_at || a.created_at || '');
+                const tb = String(b.updated_at || b.started_at || b.created_at || '');
+                return tb.localeCompare(ta);
+            });
         }
     },
 
@@ -111,6 +127,10 @@ createApp({
     },
 
     methods: {
+                openBackgroundJobMessageDialog(message) {
+            this.selectedBackgroundJobMessage = message || {};
+            this.backgroundJobMessageDialogVisible = true;
+        },
         resetPreviewState() {
             this.previewType = '';
             this.previewTitle = '';
