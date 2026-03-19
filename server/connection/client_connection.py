@@ -9,6 +9,7 @@ from server.connection.file_receiver import ClientFileReceiver
 from server.connection.message_dispatcher import ServerInboundMessageDispatcher
 from server.connection.message_router import ServerInboundMessageRouter
 from server.connection.result_dispatcher import ServerResultDispatcher
+from server.models.artifact import FileReceiveContext
 
 
 class ClientConnection(BaseSessionConnection):
@@ -169,13 +170,16 @@ class ClientConnection(BaseSessionConnection):
         """
         为指定命令设置文件接收上下文
         """
-        self._file_receive_contexts[command_id] = context
+        self._file_receive_contexts[command_id] = FileReceiveContext.from_dict(context)
 
     def pop_file_receive_context(self, command_id: int):
         """
         取出并删除指定命令的文件接收上下文
         """
-        return self._file_receive_contexts.pop(command_id, None)
+        context = self._file_receive_contexts.pop(command_id, None)
+        if isinstance(context, FileReceiveContext):
+            return context
+        return FileReceiveContext.from_dict(context)
 
     def save_file(self, command_id, filename, length):
         """

@@ -10,6 +10,7 @@ from pathlib import Path
 from werkzeug.utils import secure_filename
 
 from server.config.config import WEB_CLEAR_PREVIEW_CACHE_ON_STARTUP, WEB_FILES_ROOT_DIR, WEB_PREVIEW_TEXT_MAX_BYTES
+from server.models.artifact import ArtifactRecord
 
 
 class WebArtifactService:
@@ -186,7 +187,7 @@ class WebArtifactService:
             'preview_url': f'/api/artifacts/{artifact_id}/preview',
         }
 
-    def _build_meta_payload(
+    def _build_artifact_record(
         self,
         *,
         artifact_id: str,
@@ -206,30 +207,31 @@ class WebArtifactService:
         job_key: str = '',
         related_path: str = '',
         extra: dict | None = None,
-    ) -> dict:
-        payload = {
-            'artifact_id': artifact_id,
-            'artifact_type': artifact_type,
-            'category': category,
-            'hostname': hostname,
-            'client_id': client_id,
-            'addr': addr,
-            'original_name': original_name,
-            'stored_name': stored_name,
-            'saved_path': file_path,
-            'size': int(size or 0),
-            'created_at': self._now_text(),
-            'source_type': source_type,
-            'source_command_id': source_command_id,
-            'job_id': job_id,
-            'job_name': job_name,
-            'job_key': job_key,
-            'related_path': related_path,
-        }
-        payload.update(self._build_artifact_urls(artifact_id))
-        if isinstance(extra, dict):
-            payload['extra'] = extra
-        return payload
+    ) -> ArtifactRecord:
+        urls = self._build_artifact_urls(artifact_id)
+        return ArtifactRecord(
+            artifact_id=artifact_id,
+            artifact_type=artifact_type,
+            category=category,
+            hostname=hostname,
+            client_id=client_id,
+            addr=addr,
+            original_name=original_name,
+            stored_name=stored_name,
+            saved_path=file_path,
+            size=int(size or 0),
+            created_at=self._now_text(),
+            source_type=source_type,
+            source_command_id=source_command_id,
+            job_id=job_id,
+            job_name=job_name,
+            job_key=job_key,
+            related_path=related_path,
+            download_url=urls['download_url'],
+            raw_url=urls['raw_url'],
+            preview_url=urls['preview_url'],
+            extra=extra or {},
+        )
 
     def _write_meta(self, meta_path: str, payload: dict):
         with open(meta_path, 'w', encoding='utf-8') as file_obj:
@@ -248,6 +250,13 @@ class WebArtifactService:
                 os.remove(path)
         except Exception:
             pass
+
+    def _build_artifact_view(self, record: ArtifactRecord) -> dict:
+        is_available = bool(record.saved_path) and os.path.isfile(record.saved_path)
+        return record.to_view_dict(
+            is_available=is_available,
+            status_text='' if is_available else 'File removed'
+        )
 
     def _finalize_registered_artifact(
         self,
@@ -271,7 +280,7 @@ class WebArtifactService:
     ) -> dict:
         artifact_id = uuid.uuid4().hex
         file_size = os.path.getsize(file_path) if os.path.isfile(file_path) else 0
-        meta = self._build_meta_payload(
+        record = self._build_artifact_record(
             artifact_id=artifact_id,
             artifact_type=artifact_type,
             category=category,
@@ -290,8 +299,8 @@ class WebArtifactService:
             related_path=related_path,
             extra=extra,
         )
-        self._write_meta(meta_path, meta)
-        return meta
+        self._write_meta(meta_path, record.to_meta_dict())
+        return self._build_artifact_view(record)
 
     def register_existing_artifact(
         self,
@@ -378,13 +387,6 @@ class WebArtifactService:
                 if filename.endswith('.meta.json'):
                     yield os.path.join(root, filename)
 
-    def _normalize_meta_for_view(self, payload: dict) -> dict:
-        item = dict(payload)
-        saved_path = item.get('saved_path', '')
-        item['is_available'] = bool(saved_path) and os.path.isfile(saved_path)
-        item['status_text'] = '' if item['is_available'] else 'File removed'
-        return item
-
     def list_artifacts(self, artifact_type: str = '', hostname: str = '') -> list[dict]:
         normalized_type = (artifact_type or '').strip()
         normalized_hostname = self._normalize_hostname(hostname) if hostname else ''
@@ -400,13 +402,15 @@ class WebArtifactService:
                 if not payload:
                     continue
 
-                if normalized_type and payload.get('artifact_type') != normalized_type:
+                record = ArtifactRecord.from_dict(payload)
+
+                if normalized_type and record.artifact_type != normalized_type:
                     continue
 
-                if normalized_hostname and payload.get('hostname') != normalized_hostname:
+                if normalized_hostname and record.hostname != normalized_hostname:
                     continue
 
-                items.append(self._normalize_meta_for_view(payload))
+                items.append(self._build_artifact_view(record))
 
         items.sort(key=lambda item: item.get('created_at', ''), reverse=True)
         return items
@@ -419,9 +423,12 @@ class WebArtifactService:
                     payload = self._read_meta_file(meta_path)
                 except Exception:
                     continue
-                hostname = (payload.get('hostname') or '').strip()
+
+                record = ArtifactRecord.from_dict(payload)
+                hostname = (record.hostname or '').strip()
                 if hostname:
                     names.add(hostname)
+
         return sorted(names)
 
     def get_artifact_by_id(self, artifact_id: str) -> dict:
@@ -436,43 +443,39 @@ class WebArtifactService:
                 except Exception:
                     continue
 
-                if payload.get('artifact_id') == target_id:
-                    return self._normalize_meta_for_view(payload)
+                record = ArtifactRecord.from_dict(payload)
+                if record.artifact_id == target_id:
+                    return self._build_artifact_view(record)
 
         raise FileNotFoundError('artifact not found')
 
     def get_artifact_file_path(self, artifact_id: str) -> str:
         artifact = self.get_artifact_by_id(artifact_id)
-        file_path = artifact.get('saved_path', '')
-        if not os.path.isfile(file_path):
+        record = ArtifactRecord.from_dict(artifact)
+        if not os.path.isfile(record.saved_path):
             raise FileNotFoundError('file not found')
-        return file_path
+        return record.saved_path
 
     def delete_artifact(self, artifact_id: str) -> dict:
         artifact = self.get_artifact_by_id(artifact_id)
-        self._safe_remove_file(artifact.get('saved_path', ''))
+        record = ArtifactRecord.from_dict(artifact)
+        self._safe_remove_file(record.saved_path)
 
-        saved_path = artifact.get('saved_path', '')
-        artifact_type = artifact.get('artifact_type', '')
-        hostname = artifact.get('hostname', '')
-        stored_name = artifact.get('stored_name', '')
-        category = artifact.get('category', '')
-
-        if artifact_type == self.CATEGORY_DOWNLOADS:
-            meta_path = os.path.join(self._get_download_meta_dir(hostname), f'{stored_name}.meta.json')
-        elif artifact_type == self.CATEGORY_PREVIEWS:
-            meta_path = os.path.join(self._get_preview_meta_dir(hostname), f'{stored_name}.meta.json')
-        elif artifact_type == self.CATEGORY_HTTP_UPLOADS:
-            meta_path = os.path.join(self._get_http_upload_meta_dir(category, hostname), f'{stored_name}.meta.json')
+        if record.artifact_type == self.CATEGORY_DOWNLOADS:
+            meta_path = os.path.join(self._get_download_meta_dir(record.hostname), f'{record.stored_name}.meta.json')
+        elif record.artifact_type == self.CATEGORY_PREVIEWS:
+            meta_path = os.path.join(self._get_preview_meta_dir(record.hostname), f'{record.stored_name}.meta.json')
+        elif record.artifact_type == self.CATEGORY_HTTP_UPLOADS:
+            meta_path = os.path.join(self._get_http_upload_meta_dir(record.category, record.hostname), f'{record.stored_name}.meta.json')
         else:
             meta_path = ''
 
         self._safe_remove_file(meta_path)
 
         return {
-            'artifact_id': artifact.get('artifact_id', ''),
-            'stored_name': stored_name,
-            'saved_path': saved_path,
+            'artifact_id': record.artifact_id,
+            'stored_name': record.stored_name,
+            'saved_path': record.saved_path,
         }
 
     def clear_artifacts(self, artifact_type: str, hostname: str = '') -> dict:
@@ -522,10 +525,10 @@ class WebArtifactService:
 
     def build_preview_payload(self, artifact_id: str) -> dict:
         artifact = self.get_artifact_by_id(artifact_id)
-        file_path = artifact.get('saved_path', '')
-        display_name = artifact.get('original_name') or artifact.get('stored_name') or 'artifact'
+        record = ArtifactRecord.from_dict(artifact)
+        display_name = record.original_name or record.stored_name or 'artifact'
 
-        if not os.path.isfile(file_path):
+        if not os.path.isfile(record.saved_path):
             raise FileNotFoundError('file not found')
 
         preview_type = self.guess_preview_type(display_name)
@@ -534,14 +537,14 @@ class WebArtifactService:
             return {
                 'type': 'image',
                 'name': os.path.basename(display_name),
-                'url': artifact.get('raw_url', ''),
-                'artifact_id': artifact.get('artifact_id', ''),
+                'url': record.raw_url,
+                'artifact_id': record.artifact_id,
             }
 
         if preview_type == 'text':
             truncated = False
 
-            with open(file_path, 'rb') as file_obj:
+            with open(record.saved_path, 'rb') as file_obj:
                 raw = file_obj.read(self.MAX_PREVIEW_TEXT_BYTES + 1)
 
             if len(raw) > self.MAX_PREVIEW_TEXT_BYTES:
@@ -557,11 +560,11 @@ class WebArtifactService:
                 'name': os.path.basename(display_name),
                 'content': text,
                 'truncated': truncated,
-                'artifact_id': artifact.get('artifact_id', ''),
+                'artifact_id': record.artifact_id,
             }
 
         return {
             'type': 'unsupported',
             'name': os.path.basename(display_name),
-            'artifact_id': artifact.get('artifact_id', ''),
+            'artifact_id': record.artifact_id,
         }

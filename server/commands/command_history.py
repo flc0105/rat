@@ -9,6 +9,8 @@ from server.config.config import (
     COMMAND_HISTORY_MAX_ENTRIES_PER_HOST,
     COMMAND_HISTORY_ROOT_DIR,
 )
+from server.models.artifact import ArtifactRecord
+from server.models.history import HistoryEntry, HistoryFileRef, HistoryOutputRecord
 
 
 class CommandHistoryStore:
@@ -82,38 +84,34 @@ class CommandHistoryStore:
         info = getattr(conn, 'info', {}) or {}
         started_text = self._now_text()
 
-        return {
-            'entry_id': uuid.uuid4().hex,
-            'time': started_text,
-            'started_at': started_text,
-            'finished_at': '',
-            'duration_ms': 0,
-
-            'command': command,
-            'source': source,
-            'status': 'running',
-            'final_status': '',
-
-            'hostname': info.get('hostname') or 'unknown_host',
-            'client_id': info.get('id') or '',
-            'addr': info.get('addr') or '',
-            'cwd_start': info.get('cwd') or '',
-            'cwd_end': '',
-
-            'has_output': False,
-            'output_summary': '',
-            'output_line_count': 0,
-            'output_chunk_count': 0,
-            'output_char_count': 0,
-            'output_stored_char_count': 0,
-            'output_truncated': False,
-            'output_record_seq': 0,
-            'output_records': [],
-
-            'has_files': False,
-            'file_count': 0,
-            'files': [],
-        }
+        return HistoryEntry(
+            entry_id=uuid.uuid4().hex,
+            time=started_text,
+            started_at=started_text,
+            finished_at='',
+            duration_ms=0,
+            command=command,
+            source=source,
+            status='running',
+            final_status='',
+            hostname=info.get('hostname') or 'unknown_host',
+            client_id=info.get('id') or '',
+            addr=info.get('addr') or '',
+            cwd_start=info.get('cwd') or '',
+            cwd_end='',
+            has_output=False,
+            output_summary='',
+            output_line_count=0,
+            output_chunk_count=0,
+            output_char_count=0,
+            output_stored_char_count=0,
+            output_truncated=False,
+            output_record_seq=0,
+            output_records=[],
+            has_files=False,
+            file_count=0,
+            files=[],
+        ).to_dict()
 
     def _trim_entries(self, entries: list) -> list:
         if len(entries) > self.max_entries_per_host:
@@ -172,28 +170,28 @@ class CommandHistoryStore:
         entry['duration_ms'] = max(int((end_dt - start_dt).total_seconds() * 1000), 0)
 
     def _build_file_record(self, file_info: dict) -> dict:
-        saved_path = file_info.get('saved_path', '')
-        is_available = bool(saved_path) and os.path.isfile(saved_path)
+        artifact = ArtifactRecord.from_dict(file_info)
+        is_available = bool(artifact.saved_path) and os.path.isfile(artifact.saved_path)
 
-        return {
-            'artifact_id': file_info.get('artifact_id', ''),
-            'artifact_type': file_info.get('artifact_type', ''),
-            'category': file_info.get('category', ''),
-            'hostname': file_info.get('hostname', ''),
-            'client_id': file_info.get('client_id', ''),
-            'original_name': file_info.get('original_name', ''),
-            'stored_name': file_info.get('stored_name', ''),
-            'saved_path': saved_path,
-            'size': file_info.get('size', 0),
-            'created_at': file_info.get('created_at', self._now_text()),
-            'download_url': file_info.get('download_url', ''),
-            'raw_url': file_info.get('raw_url', ''),
-            'preview_url': file_info.get('preview_url', ''),
-            'source_type': file_info.get('source_type', ''),
-            'related_path': file_info.get('related_path', ''),
-            'is_available': is_available,
-            'status_text': '' if is_available else 'File removed',
-        }
+        return HistoryFileRef(
+            artifact_id=artifact.artifact_id,
+            artifact_type=artifact.artifact_type,
+            category=artifact.category,
+            hostname=artifact.hostname,
+            client_id=artifact.client_id,
+            original_name=artifact.original_name,
+            stored_name=artifact.stored_name,
+            saved_path=artifact.saved_path,
+            size=artifact.size,
+            created_at=artifact.created_at or self._now_text(),
+            download_url=artifact.download_url,
+            raw_url=artifact.raw_url,
+            preview_url=artifact.preview_url,
+            source_type=artifact.source_type,
+            related_path=artifact.related_path,
+            is_available=is_available,
+            status_text='' if is_available else 'File removed',
+        ).to_dict()
 
     def _refresh_file_status_for_view(self, item: dict) -> dict:
         copied = dict(item)
@@ -213,26 +211,28 @@ class CommandHistoryStore:
 
         if artifact_id and self.artifact_service is not None:
             try:
-                artifact = self.artifact_service.get_artifact_by_id(artifact_id)
-                copied.update({
-                    'artifact_type': artifact.get('artifact_type', copied.get('artifact_type', '')),
-                    'category': artifact.get('category', copied.get('category', '')),
-                    'hostname': artifact.get('hostname', copied.get('hostname', '')),
-                    'client_id': artifact.get('client_id', copied.get('client_id', '')),
-                    'original_name': artifact.get('original_name', copied.get('original_name', '')),
-                    'stored_name': artifact.get('stored_name', copied.get('stored_name', '')),
-                    'saved_path': artifact.get('saved_path', copied.get('saved_path', '')),
-                    'size': artifact.get('size', copied.get('size', 0)),
-                    'created_at': artifact.get('created_at', copied.get('created_at', '')),
-                    'download_url': artifact.get('download_url', copied.get('download_url', '')),
-                    'raw_url': artifact.get('raw_url', copied.get('raw_url', '')),
-                    'preview_url': artifact.get('preview_url', copied.get('preview_url', '')),
-                    'source_type': artifact.get('source_type', copied.get('source_type', '')),
-                    'related_path': artifact.get('related_path', copied.get('related_path', '')),
-                    'is_available': artifact.get('is_available', True),
-                    'status_text': artifact.get('status_text', ''),
-                })
-                return copied
+                artifact = ArtifactRecord.from_dict(
+                    self.artifact_service.get_artifact_by_id(artifact_id)
+                )
+                return HistoryFileRef(
+                    artifact_id=artifact.artifact_id,
+                    artifact_type=artifact.artifact_type,
+                    category=artifact.category,
+                    hostname=artifact.hostname,
+                    client_id=artifact.client_id,
+                    original_name=artifact.original_name,
+                    stored_name=artifact.stored_name,
+                    saved_path=artifact.saved_path,
+                    size=artifact.size,
+                    created_at=artifact.created_at,
+                    download_url=artifact.download_url,
+                    raw_url=artifact.raw_url,
+                    preview_url=artifact.preview_url,
+                    source_type=artifact.source_type,
+                    related_path=artifact.related_path,
+                    is_available=bool((self.artifact_service.get_artifact_by_id(artifact_id) or {}).get('is_available', True)),
+                    status_text=(self.artifact_service.get_artifact_by_id(artifact_id) or {}).get('status_text', ''),
+                ).to_dict()
             except Exception:
                 copied['is_available'] = False
                 copied['status_text'] = copied.get('status_text') or 'Artifact removed'
@@ -281,34 +281,47 @@ class CommandHistoryStore:
             if entry is None:
                 return
 
-            entry['has_output'] = entry.get('has_output', False) or bool(output_text)
-            entry['output_chunk_count'] = int(entry.get('output_chunk_count', 0)) + 1
-            entry['output_line_count'] = int(entry.get('output_line_count', 0)) + self._count_output_lines(output_text)
-            entry['output_char_count'] = int(entry.get('output_char_count', 0)) + len(output_text)
+            model = HistoryEntry.from_dict(entry)
 
-            records = entry.setdefault('output_records', [])
-            stored_char_count = int(entry.get('output_stored_char_count', 0))
+            model.has_output = model.has_output or bool(output_text)
+            model.output_chunk_count += 1
+            model.output_line_count += self._count_output_lines(output_text)
+            model.output_char_count += len(output_text)
+
+            records = list(model.output_records or [])
+            stored_char_count = int(model.output_stored_char_count or 0)
             remaining_chars = max(self.MAX_OUTPUT_RECORD_CHARS - stored_char_count, 0)
 
-            next_seq = int(entry.get('output_record_seq', 0)) + 1
-            entry['output_record_seq'] = next_seq
+            next_seq = int(model.output_record_seq or 0) + 1
+            model.output_record_seq = next_seq
 
             if output_text and remaining_chars > 0 and len(records) < self.MAX_OUTPUT_RECORDS:
                 stored_text = output_text[:remaining_chars]
                 if len(stored_text) < len(output_text):
-                    entry['output_truncated'] = True
-                records.append({
-                    'seq': next_seq,
-                    'status': status,
-                    'text': stored_text,
-                    'time': self._now_text(),
-                    'eof': eof,
-                })
-                entry['output_stored_char_count'] = stored_char_count + len(stored_text)
-            elif output_text:
-                entry['output_truncated'] = True
+                    model.output_truncated = True
 
+                records.append(
+                    HistoryOutputRecord(
+                        seq=next_seq,
+                        status=status,
+                        text=stored_text,
+                        time=self._now_text(),
+                        eof=eof,
+                    ).to_dict()
+                )
+                model.output_stored_char_count = stored_char_count + len(stored_text)
+            elif output_text:
+                model.output_truncated = True
+
+            model.output_records = records
+            entry = model.to_dict()
             entry['output_summary'] = self._build_output_summary(entry)
+
+            for index, item in enumerate(entries):
+                if item.get('entry_id') == entry_id:
+                    entries[index] = entry
+                    break
+
             self._write_entries(hostname, entries)
 
     def append_file_for_connection(self, conn, entry_id: str, file_info: dict):
@@ -326,11 +339,22 @@ class CommandHistoryStore:
             if entry is None:
                 return
 
-            files = entry.setdefault('files', [])
+            model = HistoryEntry.from_dict(entry)
+            files = list(model.files or [])
             files.append(self._build_file_record(file_info))
-            entry['has_files'] = True
-            entry['file_count'] = len(files)
+
+            model.files = files
+            model.has_files = True
+            model.file_count = len(files)
+
+            entry = model.to_dict()
             entry['output_summary'] = self._build_output_summary(entry)
+
+            for index, item in enumerate(entries):
+                if item.get('entry_id') == entry_id:
+                    entries[index] = entry
+                    break
+
             self._write_entries(hostname, entries)
 
     def update_entry_status_for_connection(self, conn, entry_id: str, status: str, cwd_end: str = ''):
@@ -346,15 +370,20 @@ class CommandHistoryStore:
             entries = self._read_entries(hostname)
             changed = False
 
-            for item in reversed(entries):
+            for index, item in enumerate(entries):
                 if item.get('entry_id') == entry_id:
-                    item['status'] = status
-                    item['final_status'] = status
-                    item['finished_at'] = self._now_text()
-                    item['cwd_end'] = cwd_end or (getattr(conn, 'info', {}) or {}).get('cwd', '') or item.get('cwd_end', '')
-                    item['time'] = item.get('time') or self._now_text()
-                    self._update_duration(item)
-                    item['output_summary'] = self._build_output_summary(item)
+                    model = HistoryEntry.from_dict(item)
+                    model.status = status
+                    model.final_status = status
+                    model.finished_at = self._now_text()
+                    model.cwd_end = cwd_end or (getattr(conn, 'info', {}) or {}).get('cwd', '') or model.cwd_end
+                    model.time = model.time or self._now_text()
+
+                    updated_item = model.to_dict()
+                    self._update_duration(updated_item)
+                    updated_item['output_summary'] = self._build_output_summary(updated_item)
+
+                    entries[index] = updated_item
                     changed = True
                     break
 

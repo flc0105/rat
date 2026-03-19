@@ -2,6 +2,9 @@ import copy
 import threading
 from datetime import datetime
 
+from server.models.artifact import ArtifactRecord
+from server.models.jobs import BackgroundJobFileRef, BackgroundJobMessage, BackgroundJobState
+
 
 class BackgroundJobStore:
     """
@@ -33,25 +36,25 @@ class BackgroundJobStore:
         display_base = job_key or job_name or 'job'
         display_name = payload.get('display_name') or f'{display_base}#{job_id[:8]}' if job_id else display_base
 
-        return {
-            'job_id': job_id,
-            'client_id': payload.get('client_id', ''),
-            'job_name': job_name,
-            'job_key': job_key,
-            'display_name': display_name,
-            'thread_name': payload.get('thread_name', ''),
-            'command_id': payload.get('command_id'),
-            'state': 'unknown',
-            'created_at': created_at,
-            'started_at': '',
-            'stopped_at': '',
-            'updated_at': created_at,
-            'last_message': '',
-            'message_count': 0,
-            'file_count': 0,
-            'messages': [],
-            'files': [],
-        }
+        return BackgroundJobState(
+            job_id=job_id,
+            client_id=payload.get('client_id', ''),
+            job_name=job_name,
+            job_key=job_key,
+            display_name=display_name,
+            thread_name=payload.get('thread_name', ''),
+            command_id=payload.get('command_id'),
+            state='unknown',
+            created_at=created_at,
+            started_at='',
+            stopped_at='',
+            updated_at=created_at,
+            last_message='',
+            message_count=0,
+            file_count=0,
+            messages=[],
+            files=[],
+        ).to_dict()
 
     def _get_or_create_job(self, payload: dict) -> dict:
         client_id = payload.get('client_id', '')
@@ -73,19 +76,24 @@ class BackgroundJobStore:
         return job
 
     def _sync_job_metadata(self, job: dict, payload: dict):
-        job['job_name'] = payload.get('job_name') or job.get('job_name') or ''
-        job['job_key'] = payload.get('job_key') or job.get('job_key') or ''
-        job['thread_name'] = payload.get('thread_name') or job.get('thread_name') or ''
-        job['command_id'] = payload.get('command_id', job.get('command_id'))
-        job['client_id'] = payload.get('client_id') or job.get('client_id') or ''
-        job['updated_at'] = payload.get('time') or self._now_iso()
+        model = BackgroundJobState.from_dict(job)
+
+        model.job_name = payload.get('job_name') or model.job_name or ''
+        model.job_key = payload.get('job_key') or model.job_key or ''
+        model.thread_name = payload.get('thread_name') or model.thread_name or ''
+        model.command_id = payload.get('command_id', model.command_id)
+        model.client_id = payload.get('client_id') or model.client_id or ''
+        model.updated_at = payload.get('time') or self._now_iso()
 
         display_name = payload.get('display_name')
         if display_name:
-            job['display_name'] = display_name
-        elif not job.get('display_name'):
-            display_base = job.get('job_key') or job.get('job_name') or 'job'
-            job['display_name'] = f'{display_base}#{job.get("job_id", "")[:8]}'
+            model.display_name = display_name
+        elif not model.display_name:
+            display_base = model.job_key or model.job_name or 'job'
+            model.display_name = f'{display_base}#{model.job_id[:8]}'
+
+        job.clear()
+        job.update(model.to_dict())
 
     def _resolve_job_file_view(self, file_item: dict) -> dict:
         copied = dict(file_item)
@@ -93,24 +101,25 @@ class BackgroundJobStore:
 
         if artifact_id and self.artifact_service is not None:
             try:
-                artifact = self.artifact_service.get_artifact_by_id(artifact_id)
-                copied.update({
-                    'artifact_type': artifact.get('artifact_type', copied.get('artifact_type', '')),
-                    'category': artifact.get('category', copied.get('category', '')),
-                    'hostname': artifact.get('hostname', copied.get('hostname', '')),
-                    'client_id': artifact.get('client_id', copied.get('client_id', '')),
-                    'original_name': artifact.get('original_name', copied.get('original_name', '')),
-                    'stored_name': artifact.get('stored_name', copied.get('stored_name', '')),
-                    'size': artifact.get('size', copied.get('size', 0)),
-                    'created_at': artifact.get('created_at', copied.get('created_at', '')),
-                    'source_type': artifact.get('source_type', copied.get('source_type', '')),
-                    'download_url': artifact.get('download_url', copied.get('download_url', '')),
-                    'raw_url': artifact.get('raw_url', copied.get('raw_url', '')),
-                    'preview_url': artifact.get('preview_url', copied.get('preview_url', '')),
-                    'is_available': artifact.get('is_available', True),
-                    'status_text': artifact.get('status_text', ''),
-                })
-                return copied
+                artifact_payload = self.artifact_service.get_artifact_by_id(artifact_id)
+                artifact = ArtifactRecord.from_dict(artifact_payload)
+                return BackgroundJobFileRef(
+                    artifact_id=artifact.artifact_id,
+                    artifact_type=artifact.artifact_type,
+                    category=artifact.category,
+                    hostname=artifact.hostname,
+                    client_id=artifact.client_id,
+                    original_name=artifact.original_name,
+                    stored_name=artifact.stored_name,
+                    size=artifact.size,
+                    created_at=artifact.created_at,
+                    source_type=artifact.source_type,
+                    download_url=artifact.download_url,
+                    raw_url=artifact.raw_url,
+                    preview_url=artifact.preview_url,
+                    is_available=bool(artifact_payload.get('is_available', True)),
+                    status_text=artifact_payload.get('status_text', ''),
+                ).to_dict()
             except Exception:
                 copied['is_available'] = False
                 copied['status_text'] = copied.get('status_text') or 'Artifact removed'
@@ -123,71 +132,86 @@ class BackgroundJobStore:
     def apply_status_report(self, payload: dict) -> dict:
         with self._lock:
             job = self._get_or_create_job(payload)
-            state = (payload.get('state') or '').strip() or job.get('state') or 'unknown'
+            model = BackgroundJobState.from_dict(job)
+
+            state = (payload.get('state') or '').strip() or model.state or 'unknown'
             event_time = payload.get('time') or self._now_iso()
 
-            job['state'] = state
-            job['updated_at'] = event_time
+            model.state = state
+            model.updated_at = event_time
 
-            if state == 'running' and not job.get('started_at'):
-                job['started_at'] = event_time
+            if state == 'running' and not model.started_at:
+                model.started_at = event_time
 
-            if state in ('stopped', 'error') and not job.get('stopped_at'):
-                job['stopped_at'] = event_time
+            if state in ('stopped', 'error') and not model.stopped_at:
+                model.stopped_at = event_time
 
             status_text = str(payload.get('text') or '').strip()
             if status_text:
-                job['last_message'] = status_text
+                model.last_message = status_text
 
-            return copy.deepcopy(job)
+            updated = model.to_dict()
+            self._get_client_bucket(model.client_id)[model.job_id] = updated
+            return copy.deepcopy(updated)
 
     def append_message_report(self, payload: dict) -> dict:
         with self._lock:
             job = self._get_or_create_job(payload)
+            model = BackgroundJobState.from_dict(job)
 
-            message = {
-                'status': payload.get('status', 1),
-                'text': str(payload.get('text') or ''),
-                'eof': payload.get('eof', 0),
-                'time': payload.get('time') or self._now_iso(),
-            }
+            message = BackgroundJobMessage(
+                status=payload.get('status', 1),
+                text=str(payload.get('text') or ''),
+                eof=payload.get('eof', 0),
+                time=payload.get('time') or self._now_iso(),
+            )
 
-            job['messages'].append(message)
-            job['message_count'] += 1
-            job['last_message'] = message['text']
-            job['updated_at'] = message['time']
+            messages = list(model.messages or [])
+            messages.append(message.to_dict())
 
-            return copy.deepcopy(job)
+            model.messages = messages
+            model.message_count += 1
+            model.last_message = message.text
+            model.updated_at = message.time
+
+            updated = model.to_dict()
+            self._get_client_bucket(model.client_id)[model.job_id] = updated
+            return copy.deepcopy(updated)
 
     def append_file_report(self, payload: dict) -> dict:
         with self._lock:
             job = self._get_or_create_job(payload)
+            model = BackgroundJobState.from_dict(job)
 
-            file_info = payload.get('file') or {}
-            if not isinstance(file_info, dict):
-                file_info = {}
+            artifact = ArtifactRecord.from_dict(payload.get('file') or {})
+            file_ref = BackgroundJobFileRef(
+                artifact_id=artifact.artifact_id,
+                artifact_type=artifact.artifact_type,
+                category=artifact.category,
+                hostname=artifact.hostname,
+                client_id=artifact.client_id,
+                original_name=artifact.original_name,
+                stored_name=artifact.stored_name,
+                size=artifact.size,
+                created_at=artifact.created_at or payload.get('time') or self._now_iso(),
+                source_type=artifact.source_type,
+                download_url=artifact.download_url,
+                raw_url=artifact.raw_url,
+                preview_url=artifact.preview_url,
+                is_available=True,
+                status_text='',
+            )
 
-            saved_file = {
-                'artifact_id': file_info.get('artifact_id', ''),
-                'artifact_type': file_info.get('artifact_type', ''),
-                'category': file_info.get('category', ''),
-                'hostname': file_info.get('hostname', ''),
-                'client_id': file_info.get('client_id', ''),
-                'original_name': file_info.get('original_name', ''),
-                'stored_name': file_info.get('stored_name', ''),
-                'size': file_info.get('size', 0),
-                'created_at': file_info.get('created_at') or payload.get('time') or self._now_iso(),
-                'source_type': file_info.get('source_type', ''),
-                'download_url': file_info.get('download_url', ''),
-                'raw_url': file_info.get('raw_url', ''),
-                'preview_url': file_info.get('preview_url', ''),
-            }
+            files = list(model.files or [])
+            files.append(file_ref.to_dict())
 
-            job['files'].append(saved_file)
-            job['file_count'] += 1
-            job['updated_at'] = saved_file['created_at']
+            model.files = files
+            model.file_count += 1
+            model.updated_at = file_ref.created_at
 
-            return copy.deepcopy(job)
+            updated = model.to_dict()
+            self._get_client_bucket(model.client_id)[model.job_id] = updated
+            return copy.deepcopy(updated)
 
     def get_jobs_for_client(self, client_id: str) -> list[dict]:
         with self._lock:
@@ -195,9 +219,11 @@ class BackgroundJobStore:
             items = [copy.deepcopy(item) for item in bucket.values()]
 
         for item in items:
-            files = [self._resolve_job_file_view(file_item) for file_item in item.get('files') or []]
-            item['files'] = files
-            item['file_count'] = len(files)
+            model = BackgroundJobState.from_dict(item)
+            files = [self._resolve_job_file_view(file_item) for file_item in model.files or []]
+            model.files = files
+            model.file_count = len(files)
+            item.update(model.to_dict())
 
         items.sort(key=lambda item: item.get('updated_at', ''), reverse=True)
         return items
