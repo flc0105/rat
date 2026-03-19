@@ -5,12 +5,12 @@ import uuid
 from datetime import datetime
 
 from core.utils.files import secure_filename
+from server.application.history.history_view_service import HistoryViewService
+from server.application.history.history_write_service import HistoryWriteService
 from server.config.config import (
     COMMAND_HISTORY_MAX_ENTRIES_PER_HOST,
     COMMAND_HISTORY_ROOT_DIR,
 )
-from server.models.artifact import ArtifactRecord
-from server.models.history import HistoryEntry, HistoryFileRef, HistoryOutputRecord
 
 
 class CommandHistoryStore:
@@ -19,9 +19,8 @@ class CommandHistoryStore:
 
     职责：
     - 按 hostname 持久化命令历史
-    - 同时供 CLI / Web 读取
-    - 控制最大保留条数
-    - 保存所有命令，但默认展示去重后的最新记录
+    - 提供底层 entry 读写能力
+    - 将写入 / 展示逻辑委托给 write_service / view_service
     """
 
     MAX_OUTPUT_RECORD_CHARS = 64 * 1024
@@ -34,6 +33,10 @@ class CommandHistoryStore:
         self.max_entries_per_host = COMMAND_HISTORY_MAX_ENTRIES_PER_HOST
         self._lock = threading.RLock()
         self.artifact_service = None
+
+        self.write_service = HistoryWriteService(self)
+        self.view_service = HistoryViewService(self)
+
         self._prepare_dirs()
 
     def _prepare_dirs(self):
@@ -84,34 +87,38 @@ class CommandHistoryStore:
         info = getattr(conn, 'info', {}) or {}
         started_text = self._now_text()
 
-        return HistoryEntry(
-            entry_id=uuid.uuid4().hex,
-            time=started_text,
-            started_at=started_text,
-            finished_at='',
-            duration_ms=0,
-            command=command,
-            source=source,
-            status='running',
-            final_status='',
-            hostname=info.get('hostname') or 'unknown_host',
-            client_id=info.get('id') or '',
-            addr=info.get('addr') or '',
-            cwd_start=info.get('cwd') or '',
-            cwd_end='',
-            has_output=False,
-            output_summary='',
-            output_line_count=0,
-            output_chunk_count=0,
-            output_char_count=0,
-            output_stored_char_count=0,
-            output_truncated=False,
-            output_record_seq=0,
-            output_records=[],
-            has_files=False,
-            file_count=0,
-            files=[],
-        ).to_dict()
+        return {
+            'entry_id': uuid.uuid4().hex,
+            'time': started_text,
+            'started_at': started_text,
+            'finished_at': '',
+            'duration_ms': 0,
+
+            'command': command,
+            'source': source,
+            'status': 'running',
+            'final_status': '',
+
+            'hostname': info.get('hostname') or 'unknown_host',
+            'client_id': info.get('id') or '',
+            'addr': info.get('addr') or '',
+            'cwd_start': info.get('cwd') or '',
+            'cwd_end': '',
+
+            'has_output': False,
+            'output_summary': '',
+            'output_line_count': 0,
+            'output_chunk_count': 0,
+            'output_char_count': 0,
+            'output_stored_char_count': 0,
+            'output_truncated': False,
+            'output_record_seq': 0,
+            'output_records': [],
+
+            'has_files': False,
+            'file_count': 0,
+            'files': [],
+        }
 
     def _trim_entries(self, entries: list) -> list:
         if len(entries) > self.max_entries_per_host:
@@ -169,318 +176,28 @@ class CommandHistoryStore:
 
         entry['duration_ms'] = max(int((end_dt - start_dt).total_seconds() * 1000), 0)
 
-    def _build_file_record(self, file_info: dict) -> dict:
-        artifact = ArtifactRecord.from_dict(file_info)
-        is_available = bool(artifact.saved_path) and os.path.isfile(artifact.saved_path)
-
-        return HistoryFileRef(
-            artifact_id=artifact.artifact_id,
-            artifact_type=artifact.artifact_type,
-            category=artifact.category,
-            hostname=artifact.hostname,
-            client_id=artifact.client_id,
-            original_name=artifact.original_name,
-            stored_name=artifact.stored_name,
-            saved_path=artifact.saved_path,
-            size=artifact.size,
-            created_at=artifact.created_at or self._now_text(),
-            download_url=artifact.download_url,
-            raw_url=artifact.raw_url,
-            preview_url=artifact.preview_url,
-            source_type=artifact.source_type,
-            related_path=artifact.related_path,
-            is_available=is_available,
-            status_text='' if is_available else 'File removed',
-        ).to_dict()
-
-    def _refresh_file_status_for_view(self, item: dict) -> dict:
-        copied = dict(item)
-        files = []
-
-        for file_item in item.get('files') or []:
-            files.append(self._resolve_artifact_file_view(file_item))
-
-        copied['files'] = files
-        copied['file_count'] = len(files)
-        copied['has_files'] = len(files) > 0
-        return copied
-
-    def _resolve_artifact_file_view(self, file_item: dict) -> dict:
-        copied = dict(file_item)
-        artifact_id = (copied.get('artifact_id') or '').strip()
-
-        if artifact_id and self.artifact_service is not None:
-            try:
-                artifact = ArtifactRecord.from_dict(
-                    self.artifact_service.get_artifact_by_id(artifact_id)
-                )
-                return HistoryFileRef(
-                    artifact_id=artifact.artifact_id,
-                    artifact_type=artifact.artifact_type,
-                    category=artifact.category,
-                    hostname=artifact.hostname,
-                    client_id=artifact.client_id,
-                    original_name=artifact.original_name,
-                    stored_name=artifact.stored_name,
-                    saved_path=artifact.saved_path,
-                    size=artifact.size,
-                    created_at=artifact.created_at,
-                    download_url=artifact.download_url,
-                    raw_url=artifact.raw_url,
-                    preview_url=artifact.preview_url,
-                    source_type=artifact.source_type,
-                    related_path=artifact.related_path,
-                    is_available=bool((self.artifact_service.get_artifact_by_id(artifact_id) or {}).get('is_available', True)),
-                    status_text=(self.artifact_service.get_artifact_by_id(artifact_id) or {}).get('status_text', ''),
-                ).to_dict()
-            except Exception:
-                copied['is_available'] = False
-                copied['status_text'] = copied.get('status_text') or 'Artifact removed'
-                return copied
-
-        saved_path = copied.get('saved_path', '')
-        is_available = bool(saved_path) and os.path.isfile(saved_path)
-        copied['is_available'] = is_available
-        copied['status_text'] = '' if is_available else 'File removed'
-        return copied
-
+    # ------------------ public write api ------------------ #
     def create_entry_for_connection(self, conn, command: str, source: str = 'cli'):
-        """
-        为指定连接创建一条命令历史，并返回 entry_id
-        """
-        if conn is None:
-            return ''
-
-        command_text = (command or '').strip()
-        if not command_text:
-            return ''
-
-        hostname = self._get_hostname_from_conn(conn)
-
-        with self._lock:
-            entries = self._read_entries(hostname)
-            entry = self._build_entry(conn, command_text, source)
-            entries.append(entry)
-            entries = self._trim_entries(entries)
-            self._write_entries(hostname, entries)
-            return entry['entry_id']
+        return self.write_service.create_entry_for_connection(conn, command, source=source)
 
     def append_output_for_connection(self, conn, entry_id: str, status: int, text: str, eof: int = 0):
-        """
-        为指定执行记录追加输出分片
-        """
-        if conn is None or not entry_id:
-            return
-
-        hostname = self._get_hostname_from_conn(conn)
-        output_text = self._safe_text(text)
-
-        with self._lock:
-            entries = self._read_entries(hostname)
-            entry = self._find_entry(entries, entry_id)
-            if entry is None:
-                return
-
-            model = HistoryEntry.from_dict(entry)
-
-            model.has_output = model.has_output or bool(output_text)
-            model.output_chunk_count += 1
-            model.output_line_count += self._count_output_lines(output_text)
-            model.output_char_count += len(output_text)
-
-            records = list(model.output_records or [])
-            stored_char_count = int(model.output_stored_char_count or 0)
-            remaining_chars = max(self.MAX_OUTPUT_RECORD_CHARS - stored_char_count, 0)
-
-            next_seq = int(model.output_record_seq or 0) + 1
-            model.output_record_seq = next_seq
-
-            if output_text and remaining_chars > 0 and len(records) < self.MAX_OUTPUT_RECORDS:
-                stored_text = output_text[:remaining_chars]
-                if len(stored_text) < len(output_text):
-                    model.output_truncated = True
-
-                records.append(
-                    HistoryOutputRecord(
-                        seq=next_seq,
-                        status=status,
-                        text=stored_text,
-                        time=self._now_text(),
-                        eof=eof,
-                    ).to_dict()
-                )
-                model.output_stored_char_count = stored_char_count + len(stored_text)
-            elif output_text:
-                model.output_truncated = True
-
-            model.output_records = records
-            entry = model.to_dict()
-            entry['output_summary'] = self._build_output_summary(entry)
-
-            for index, item in enumerate(entries):
-                if item.get('entry_id') == entry_id:
-                    entries[index] = entry
-                    break
-
-            self._write_entries(hostname, entries)
+        return self.write_service.append_output_for_connection(conn, entry_id, status, text, eof=eof)
 
     def append_file_for_connection(self, conn, entry_id: str, file_info: dict):
-        """
-        为指定执行记录追加产出文件信息
-        """
-        if conn is None or not entry_id or not isinstance(file_info, dict):
-            return
-
-        hostname = self._get_hostname_from_conn(conn)
-
-        with self._lock:
-            entries = self._read_entries(hostname)
-            entry = self._find_entry(entries, entry_id)
-            if entry is None:
-                return
-
-            model = HistoryEntry.from_dict(entry)
-            files = list(model.files or [])
-            files.append(self._build_file_record(file_info))
-
-            model.files = files
-            model.has_files = True
-            model.file_count = len(files)
-
-            entry = model.to_dict()
-            entry['output_summary'] = self._build_output_summary(entry)
-
-            for index, item in enumerate(entries):
-                if item.get('entry_id') == entry_id:
-                    entries[index] = entry
-                    break
-
-            self._write_entries(hostname, entries)
+        return self.write_service.append_file_for_connection(conn, entry_id, file_info)
 
     def update_entry_status_for_connection(self, conn, entry_id: str, status: str, cwd_end: str = ''):
-        """
-        更新指定历史记录的状态，并补全结束时间 / 耗时 / cwd_end
-        """
-        if conn is None or not entry_id:
-            return
-
-        hostname = self._get_hostname_from_conn(conn)
-
-        with self._lock:
-            entries = self._read_entries(hostname)
-            changed = False
-
-            for index, item in enumerate(entries):
-                if item.get('entry_id') == entry_id:
-                    model = HistoryEntry.from_dict(item)
-                    model.status = status
-                    model.final_status = status
-                    model.finished_at = self._now_text()
-                    model.cwd_end = cwd_end or (getattr(conn, 'info', {}) or {}).get('cwd', '') or model.cwd_end
-                    model.time = model.time or self._now_text()
-
-                    updated_item = model.to_dict()
-                    self._update_duration(updated_item)
-                    updated_item['output_summary'] = self._build_output_summary(updated_item)
-
-                    entries[index] = updated_item
-                    changed = True
-                    break
-
-            if changed:
-                self._write_entries(hostname, entries)
+        return self.write_service.update_entry_status_for_connection(conn, entry_id, status, cwd_end=cwd_end)
 
     def clear_history_for_connection(self, conn):
-        """
-        清空指定连接的命令历史
-        """
-        if conn is None:
-            return
+        return self.write_service.clear_history_for_connection(conn)
 
-        hostname = self._get_hostname_from_conn(conn)
-
-        with self._lock:
-            self._write_entries(hostname, [])
-
-    def _build_deduplicated_latest_view(self, entries: list) -> list:
-        """
-        构造默认展示视图：
-        - 保留所有原始记录
-        - 展示时按时间倒序去重
-        - 相同 command 只保留最新一条
-        """
-        seen = set()
-        result = []
-
-        for item in reversed(entries):
-            command_text = item.get('command') or ''
-            if command_text in seen:
-                continue
-            seen.add(command_text)
-
-            copied = dict(item)
-            result.append(copied)
-
-        for index, item in enumerate(result, start=1):
-            item['index'] = index
-
-        return result
-
-    def _build_execution_history_view(self, entries: list) -> list:
-        """
-        构造完整执行历史视图：
-        - 不去重
-        - 按最新优先
-        - 保留完整执行元数据
-        """
-        result = []
-
-        for item in reversed(entries):
-            copied = self._refresh_file_status_for_view(item)
-            copied['output_records'] = list(item.get('output_records') or [])
-            result.append(copied)
-
-        for index, item in enumerate(result, start=1):
-            item['index'] = index
-
-        return result
-
+    # ------------------ public view api ------------------ #
     def get_history_for_connection(self, conn) -> list:
-        """
-        获取指定连接的默认历史视图：
-        去重，只保留每条命令的最新记录
-        """
-        if conn is None:
-            return []
-
-        hostname = self._get_hostname_from_conn(conn)
-
-        with self._lock:
-            entries = self._read_entries(hostname)
-
-        return self._build_deduplicated_latest_view(entries)
+        return self.view_service.get_history_for_connection(conn)
 
     def get_execution_history_for_connection(self, conn) -> list:
-        """
-        获取指定连接的完整执行历史视图
-        """
-        if conn is None:
-            return []
-
-        hostname = self._get_hostname_from_conn(conn)
-
-        with self._lock:
-            entries = self._read_entries(hostname)
-
-        return self._build_execution_history_view(entries)
+        return self.view_service.get_execution_history_for_connection(conn)
 
     def get_history_by_hostname(self, hostname: str) -> list:
-        """
-        按 hostname 读取默认历史视图
-        """
-        hostname_text = (hostname or '').strip() or 'unknown_host'
-
-        with self._lock:
-            entries = self._read_entries(hostname_text)
-
-        return self._build_deduplicated_latest_view(entries)
+        return self.view_service.get_history_by_hostname(hostname)
