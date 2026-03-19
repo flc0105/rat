@@ -1,5 +1,6 @@
 import ntpath
 import os
+import threading
 from typing import Generator, Optional
 
 from core.protocol.base_connection import BaseSessionConnection
@@ -29,6 +30,9 @@ class ClientConnection(BaseSessionConnection):
         self._message_id_counter = 0
 
         self._file_receive_contexts = {}
+
+        self._foreground_lock = threading.RLock()
+        self._foreground_task = None
 
         # web
         self.on_unexpected_message = None
@@ -126,6 +130,77 @@ class ClientConnection(BaseSessionConnection):
         :return: 文件保存结果元组 (status, message)
         """
         return self.file_receiver.save_file(command_id, filename, length)
+
+    # client is busy start
+
+    def acquire_foreground_task(self, task_type: str, command: str, source: str = '', task_id: str = '') -> dict:
+        """
+        尝试占用当前连接的前台执行槽。
+
+        Args:
+            task_type: 任务类型，如 command / upload
+            command: 展示用命令文本
+            source: 来源，如 cli / web
+            task_id: 可选的 web task_id
+
+        Returns:
+            当前占用信息 dict
+
+        Raises:
+            RuntimeError: 当前连接已被其他前台任务占用
+        """
+        task_info = {
+            'task_type': task_type,
+            'command': (command or '').strip(),
+            'source': (source or '').strip(),
+            'task_id': (task_id or '').strip(),
+        }
+
+        with self._foreground_lock:
+            if self._foreground_task is not None:
+                current = self._foreground_task
+                raise RuntimeError(
+                    'Client is busy: '
+                    f'{current.get("command") or current.get("task_type") or "running task"}'
+                )
+
+            self._foreground_task = task_info
+            return dict(task_info)
+
+    def release_foreground_task(self, task_id: str = '', command: str = '') -> None:
+        """
+        释放当前连接的前台执行槽。
+
+        可按 task_id 或 command 做保护性匹配，避免误释放别人的占用。
+        若未传匹配条件，则直接释放当前占用。
+        """
+        task_id = (task_id or '').strip()
+        command = (command or '').strip()
+
+        with self._foreground_lock:
+            if self._foreground_task is None:
+                return
+
+            current = self._foreground_task
+
+            if task_id and current.get('task_id') and current.get('task_id') != task_id:
+                return
+
+            if command and current.get('command') and current.get('command') != command:
+                return
+
+            self._foreground_task = None
+
+    def get_foreground_task(self):
+        """
+        获取当前连接的前台占用信息快照
+        """
+        with self._foreground_lock:
+            if self._foreground_task is None:
+                return None
+            return dict(self._foreground_task)
+
+    # client is busy end
 
     def wait_for_result(self, id: int, command: Optional[str]):
         """

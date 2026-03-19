@@ -116,6 +116,23 @@ class CommandExecutor:
         """
         return partial(self.conn.send_command, raw_command)
 
+    # def _resolve_default_command(self, raw_command):
+    #     """
+    #     默认透传原始命令到客户端
+    #     """
+    #     def _runner():
+    #         self.conn.acquire_foreground_task(
+    #             task_type='command',
+    #             command=raw_command,
+    #             source='cli',
+    #         )
+    #         try:
+    #             yield from self.conn.send_command(raw_command)
+    #         finally:
+    #             self.conn.release_foreground_task(command=raw_command)
+    #
+    #     return _runner
+
     def process_command(self, cmd):
         """
         处理命令，返回可执行的生成器函数
@@ -146,6 +163,29 @@ class CommandExecutor:
         except Exception:
             self.conn.pending_command_ids.clear()
             raise
+
+    # def upload(self, filename):
+    #     """
+    #     上传文件到客户端
+    #     """
+    #     if not os.path.isfile(filename):
+    #         raise FileNotFoundError(f"File does not exist: {filename}")
+    #
+    #     command = f'upload {filename}'
+    #     self.conn.acquire_foreground_task(
+    #         task_type='upload',
+    #         command=command,
+    #         source='cli',
+    #     )
+    #
+    #     try:
+    #         for status, result in self.conn.send_file(filename):
+    #             yield status, result
+    #     except Exception:
+    #         self.conn.pending_command_ids.clear()
+    #         raise
+    #     finally:
+    #         self.conn.release_foreground_task(command=command)
 
     # ------------------ exec ------------------ #
     def _iter_script_files(self):

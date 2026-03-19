@@ -113,6 +113,15 @@ class WebTaskService:
         task = self.task_store.create_task(client_id, command)
         task['history_entry_id'] = entry_id
 
+        # client is busy start
+        conn.acquire_foreground_task(
+            task_type='command',
+            command=command,
+            source='web',
+            task_id=task['task_id']
+        )
+        # client is busy end
+
         threading.Thread(
             target=self._run_web_command,
             args=(conn, task['task_id'], command),
@@ -126,14 +135,27 @@ class WebTaskService:
         }
 
     def _run_web_command(self, conn: ClientConnection, task_id: str, command: str):
-        def _result_iter():
-            executor = CommandExecutor(conn, self.server)
-            func = executor.process_command(command)
-            if not func:
-                raise RuntimeError('Unable to resolve command')
-            yield from func()
+        try:
+            def _result_iter():
+                executor = CommandExecutor(conn, self.server)
+                func = executor.process_command(command)
+                if not func:
+                    raise RuntimeError('Unable to resolve command')
+                yield from func()
 
-        self._run_task_stream(conn, task_id, command, _result_iter())
+            self._run_task_stream(conn, task_id, command, _result_iter())
+        finally:
+            conn.release_foreground_task(task_id=task_id, command=command)
+
+    # def _run_web_command(self, conn: ClientConnection, task_id: str, command: str):
+    #     def _result_iter():
+    #         executor = CommandExecutor(conn, self.server)
+    #         func = executor.process_command(command)
+    #         if not func:
+    #             raise RuntimeError('Unable to resolve command')
+    #         yield from func()
+    #
+    #     self._run_task_stream(conn, task_id, command, _result_iter())
 
     # ------------------ web upload ------------------ #
     def submit_web_upload(self, client_id: str, local_path: str, display_name: str, remote_path: str = ''):
@@ -148,10 +170,19 @@ class WebTaskService:
         task = self.task_store.create_task(client_id, command)
         task['history_entry_id'] = entry_id
 
+        # client is busy start
+        conn.acquire_foreground_task(
+            task_type='upload',
+            command=command,
+            source='web',
+            task_id=task['task_id']
+        )
+        # client is busy end
+
         threading.Thread(
             target=self._run_web_upload,
             # args=(conn, task['task_id'], local_path, display_name),
-            args=(conn, task['task_id'], local_path, display_name, remote_path),            daemon=True
+            args=(conn, task['task_id'], local_path, display_name, remote_path), daemon=True
         ).start()
 
         return {
@@ -160,7 +191,8 @@ class WebTaskService:
             'command': command
         }
 
-    def _run_web_upload(self, conn: ClientConnection, task_id: str, local_path: str, display_name: str, remote_path: str = ''):    # def _run_web_upload(self, conn: ClientConnection, task_id: str, local_path: str, display_name: str):
+    def _run_web_upload(self, conn: ClientConnection, task_id: str, local_path: str, display_name: str,
+                        remote_path: str = ''):  # def _run_web_upload(self, conn: ClientConnection, task_id: str, local_path: str, display_name: str):
         command = f'upload {display_name}'
 
         try:
@@ -169,8 +201,10 @@ class WebTaskService:
                 task_id,
                 command,
                 # conn.send_file(local_path)
-                conn.send_file(local_path, save_dir=remote_path)            )
+                conn.send_file(local_path, save_dir=remote_path))
         finally:
+            conn.release_foreground_task(task_id=task_id, command=command)  # client is busy
+
             try:
                 if os.path.exists(local_path):
                     os.remove(local_path)
