@@ -253,7 +253,7 @@
           @row-dblclick="handleRemoteRowDblClick"
           @selection-change="handleRemoteSelectionChange"
         >
-<el-table-column type="selection" width="52" align="center"></el-table-column>
+          <el-table-column type="selection" width="52" align="center"></el-table-column>
           <el-table-column label="Name" min-width="320" show-overflow-tooltip>
             <template #default="{ row }">
               <div class="file-cell">
@@ -341,110 +341,109 @@
       </div>
 
       <div class="mobile-file-list-shell">
-  <div class="mobile-file-list" v-loading="remoteFilesLoading">
+        <div class="mobile-file-list" v-loading="remoteFilesLoading">
+          <div v-if="!filteredRemoteFilesEntries.length && !remoteFilesLoading" class="empty-state">
+            This folder is empty
+          </div>
 
-    <div v-if="!filteredRemoteFilesEntries.length && !remoteFilesLoading" class="empty-state">
-      This folder is empty
-    </div>
-
-    <div v-else class="mobile-file-grid">
-      <div
-        v-for="row in filteredRemoteFilesEntries"
-        :key="row.path"
-        class="mobile-file-card"
-        style="position: relative;"
-      >
-        <div style="position:absolute; top:6px; right:12px; z-index:1;">
-          <el-checkbox
-            :model-value="isRemoteEntrySelected(row)"
-            @change="toggleRemoteSelection(row)"
-          />
-        </div>
-
-        <div class="mobile-file-card-top">
-          <div class="mobile-file-icon">{{ row.is_dir ? '📁' : '📄' }}</div>
-          <div class="mobile-file-main">
-            <div class="mobile-file-name" style="padding-right: 42px;">{{ row.name }}</div>
-
-            <div class="mobile-file-tags">
-              <el-tag size="small" type="info">{{ row.is_dir ? 'Folder' : 'File' }}</el-tag>
-              <el-tag v-if="row.is_symlink" size="small" type="info">Link</el-tag>
-              <el-tag v-if="row.is_hidden" size="small" type="warning">Hidden</el-tag>
-            </div>
-
-            <div class="mobile-file-meta">
-              <div class="mobile-file-meta-item">
-                <div class="mobile-file-meta-label">Size</div>
-                <div class="mobile-file-meta-value">{{ row.is_dir ? '-' : formatBytes(row.size) }}</div>
+          <div v-else class="mobile-file-grid">
+            <div
+              v-for="row in filteredRemoteFilesEntries"
+              :key="row.path"
+              class="mobile-file-card"
+              style="position: relative;"
+            >
+              <div style="position:absolute; top:6px; right:12px; z-index:1;">
+                <el-checkbox
+                  :model-value="isRemoteEntrySelected(row)"
+                  @change="toggleRemoteSelection(row)"
+                />
               </div>
-              <div class="mobile-file-meta-item">
-                <div class="mobile-file-meta-label">Modified</div>
-                <div class="mobile-file-meta-value">{{ row.modified_at || '-' }}</div>
+
+              <div class="mobile-file-card-top">
+                <div class="mobile-file-icon">{{ row.is_dir ? '📁' : '📄' }}</div>
+                <div class="mobile-file-main">
+                  <div class="mobile-file-name" style="padding-right: 42px;">{{ row.name }}</div>
+
+                  <div class="mobile-file-tags">
+                    <el-tag size="small" type="info">{{ row.is_dir ? 'Folder' : 'File' }}</el-tag>
+                    <el-tag v-if="row.is_symlink" size="small" type="info">Link</el-tag>
+                    <el-tag v-if="row.is_hidden" size="small" type="warning">Hidden</el-tag>
+                  </div>
+
+                  <div class="mobile-file-meta">
+                    <div class="mobile-file-meta-item">
+                      <div class="mobile-file-meta-label">Size</div>
+                      <div class="mobile-file-meta-value">{{ row.is_dir ? '-' : formatBytes(row.size) }}</div>
+                    </div>
+                    <div class="mobile-file-meta-item">
+                      <div class="mobile-file-meta-label">Modified</div>
+                      <div class="mobile-file-meta-value">{{ row.modified_at || '-' }}</div>
+                    </div>
+                  </div>
+
+                  <div class="mobile-file-actions">
+                    <el-button
+                      v-if="row.is_dir"
+                      size="small"
+                      type="primary"
+                      plain
+                      @click="enterRemoteDirectory(row)"
+                    >
+                      Open
+                    </el-button>
+
+                    <template v-if="!row.is_dir">
+                      <el-button
+                        size="small"
+                        type="primary"
+                        plain
+                        @click="previewRemoteEntry(row)"
+                      >
+                        Preview
+                      </el-button>
+                      <el-button
+                        size="small"
+                        type="primary"
+                        plain
+                        @click="downloadRemoteEntry(row)"
+                      >
+                        Download
+                      </el-button>
+                    </template>
+
+                    <el-button
+                      size="small"
+                      plain
+                      @click="renameRemoteEntry(row)"
+                    >
+                      Rename
+                    </el-button>
+
+                    <el-button
+                      size="small"
+                      plain
+                      @click="copyRemotePath(row)"
+                    >
+                      Copy Path
+                    </el-button>
+
+                    <el-button
+                      size="small"
+                      type="danger"
+                      plain
+                      @click="deleteRemoteEntry(row)"
+                    >
+                      Delete
+                    </el-button>
+                  </div>
+                </div>
               </div>
-            </div>
-
-            <div class="mobile-file-actions">
-              <el-button
-                v-if="row.is_dir"
-                size="small"
-                type="primary"
-                plain
-                @click="enterRemoteDirectory(row)"
-              >
-                Open
-              </el-button>
-
-              <template v-if="!row.is_dir">
-                <el-button
-                  size="small"
-                  type="primary"
-                  plain
-                  @click="previewRemoteEntry(row)"
-                >
-                  Preview
-                </el-button>
-                <el-button
-                  size="small"
-                  type="primary"
-                  plain
-                  @click="downloadRemoteEntry(row)"
-                >
-                  Download
-                </el-button>
-              </template>
-
-              <el-button
-                size="small"
-                plain
-                @click="renameRemoteEntry(row)"
-              >
-                Rename
-              </el-button>
-
-              <el-button
-                size="small"
-                plain
-                @click="copyRemotePath(row)"
-              >
-                Copy Path
-              </el-button>
-
-              <el-button
-                size="small"
-                type="danger"
-                plain
-                @click="deleteRemoteEntry(row)"
-              >
-                Delete
-              </el-button>
             </div>
           </div>
+
         </div>
       </div>
-    </div>
-
-  </div>
-</div>
 
     </div>
   </el-dialog>
@@ -566,7 +565,7 @@
     </div>
   </el-dialog>
 
-    <el-dialog
+  <el-dialog
     v-model="backgroundJobsDialogVisible"
     title="Background Jobs"
     width="1180px"
@@ -673,7 +672,6 @@
       </el-tabs>
     </div>
   </el-dialog>
-
 
   <el-dialog
     v-model="backgroundJobDetailDialogVisible"
@@ -807,8 +805,7 @@
     </div>
   </el-dialog>
 
-
-    <el-dialog
+  <el-dialog
     v-model="backgroundJobMessageDialogVisible"
     title="Message"
     width="760px"
@@ -826,7 +823,6 @@
       >{{ formatBackgroundJobMessageText(selectedBackgroundJobMessage.text || '') }}</pre>
     </div>
   </el-dialog>
-
 
   <el-dialog
     v-model="previewDialogVisible"
@@ -936,6 +932,13 @@
 
 <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
 <script src="https://unpkg.com/element-plus/dist/index.full.min.js"></script>
+
+<script src="/js/core/state.js"></script>
+<script src="/js/modules/utils.js"></script>
+<script src="/js/modules/commands.js"></script>
+<script src="/js/modules/files.js"></script>
+<script src="/js/modules/jobs.js"></script>
+<script src="/js/modules/sse.js"></script>
 <script src="/app.js"></script>
 </body>
 </html>

@@ -1,0 +1,124 @@
+window.AppUtilsModule = {
+    methods: {
+        resetPreviewState() {
+            this.previewType = '';
+            this.previewTitle = '';
+            this.previewUrl = '';
+            this.previewText = '';
+        },
+
+        resetRemoteFilesState() {
+            this.remoteFilesCurrentPath = '';
+            this.remoteFilesParentPath = '';
+            this.remoteFilesEntries = [];
+            this.remoteFilesPathInput = '';
+            this.showHiddenFiles = false;
+            this.remoteSelectedPaths = [];
+            this.remoteZipDownloading = false;
+        },
+
+        formatOsLabel(osType, osVer) {
+            const type = osType || 'Unknown';
+            return osVer ? `${type}` : type;
+        },
+
+        formatAddress(addr) {
+            if (!addr) return '-';
+            const raw = String(addr);
+            const parts = raw.split(':');
+            if (parts.length >= 2) return parts.slice(0, -1).join(':') || raw;
+            return raw;
+        },
+
+        buildPromptLabel(conn) {
+            if (!conn) return '$';
+            return conn.hostname || 'host';
+        },
+
+        ensureOutputBucket(clientId) {
+            if (!clientId) return;
+            if (!this.outputs[clientId]) this.outputs[clientId] = [];
+        },
+
+        inferLineKind(text) {
+            const value = String(text ?? '');
+            if (value.startsWith('> ')) return 'command';
+            if (value.startsWith('[发送失败]') || value.startsWith('[上传失败]')) return 'error';
+            if (value.startsWith('[异步消息]') || value.startsWith('[Background]')) return 'info';
+            if (value.startsWith('[命令结束]') || value.startsWith('[Command finished]')) {
+                return /成功|Success/i.test(value) ? 'success' : 'error';
+            }
+            if (/failed|error|not found|denied|unable/i.test(value)) return 'error';
+            if (/completed|success|saved|started|uploaded|downloaded|created|renamed|copied/i.test(value)) return 'success';
+            if (/preparing|loading|refresh|connected|disconnected|warning/i.test(value)) return 'info';
+            return 'default';
+        },
+
+        appendOutput(clientId, text, kind = '') {
+            if (!clientId) return;
+            this.ensureOutputBucket(clientId);
+
+            const raw = String(text ?? '');
+            const normalized = raw.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+            const segments = normalized.split('\n');
+
+            segments.forEach((segment) => {
+                this.outputs[clientId].push({
+                    text: segment === '' ? ' ' : segment,
+                    kind: kind || this.inferLineKind(segment),
+                    isMultiline: segments.length > 1
+                });
+            });
+
+            this.scrollToBottom();
+        },
+
+        clearOutput() {
+            if (this.selectedId) this.outputs[this.selectedId] = [];
+        },
+
+        scrollToBottom() {
+            Vue.nextTick(() => {
+                const el = this.$refs.terminalRef;
+                if (el) el.scrollTop = el.scrollHeight;
+            });
+        },
+
+        formatBytes(size) {
+            const value = Number(size || 0);
+            if (value < 1024) return `${value} B`;
+            if (value < 1024 * 1024) return `${(value / 1024).toFixed(2)} KB`;
+            if (value < 1024 * 1024 * 1024) return `${(value / 1024 / 1024).toFixed(2)} MB`;
+            return `${(value / 1024 / 1024 / 1024).toFixed(2)} GB`;
+        },
+
+        buildBackgroundJobStateTagType(state) {
+            const value = String(state || '').toLowerCase();
+            if (value === 'running') return 'success';
+            if (value === 'stopping') return 'warning';
+            if (value === 'error') return 'danger';
+            return 'info';
+        },
+
+        formatBackgroundJobDuration(totalSeconds) {
+            const seconds = Number(totalSeconds || 0);
+            if (!seconds) return '0s';
+
+            const hours = Math.floor(seconds / 3600);
+            const minutes = Math.floor((seconds % 3600) / 60);
+            const remain = seconds % 60;
+
+            const parts = [];
+            if (hours) parts.push(`${hours}h`);
+            if (minutes) parts.push(`${minutes}m`);
+            if (remain || !parts.length) parts.push(`${remain}s`);
+
+            return parts.join(' ');
+        },
+
+        formatBackgroundJobMessageText(text) {
+            const raw = String(text || '').trim();
+            return raw.replace(/^\[[^\]]*?client=[^\]]*?\]\s*/, '');
+        }
+    }
+};
