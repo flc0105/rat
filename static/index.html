@@ -94,6 +94,8 @@
                     <el-button size="small" class="tool-btn tool-btn-accent" @click="triggerUpload">Upload</el-button>
                     <el-button size="small" class="tool-btn tool-btn-accent" @click="openRemoteFilesDialog">Remote Files</el-button>
                     <el-button size="small" class="tool-btn tool-btn-accent" @click="openRecentFilesDialog">Downloads</el-button>
+                     <el-button size="small" class="tool-btn" @click="openConnectionInfoDialog">Connection Info</el-button>
+
                     <el-button size="small" class="tool-btn" @click="openBackgroundJobsDialog">Background Jobs</el-button>
                     <el-button size="small" class="tool-btn" @click="openCommandHistoryDialog">History</el-button>
 
@@ -928,6 +930,81 @@
       </div>
     </div>
   </el-dialog>
+
+
+<el-dialog
+  v-model="connectionInfoDialogVisible"
+  title="Connection Info"
+  width="980px"
+  top="6vh"
+  class="fixed-dialog connection-info-dialog"
+>
+  <div class="fixed-dialog-body" v-loading="connectionInfoLoading">
+    <div class="background-job-stats">
+      <div class="background-job-stat">
+        <div class="background-job-stat-label">Status</div>
+        <div class="background-job-stat-value">online</div>
+      </div>
+      <div class="background-job-stat">
+        <div class="background-job-stat-label">Hostname</div>
+        <div class="background-job-stat-value">{{ currentConnection?.hostname || '-' }}</div>
+      </div>
+      <div class="background-job-stat">
+        <div class="background-job-stat-label">Client ID</div>
+        <div class="background-job-stat-value mono">{{ currentConnection?.client_id || '-' }}</div>
+      </div>
+      <div class="background-job-stat">
+        <div class="background-job-stat-label">Address</div>
+        <div class="background-job-stat-value mono">{{ currentConnection?.addr || '-' }}</div>
+      </div>
+      <div class="background-job-stat">
+        <div class="background-job-stat-label">Platform</div>
+        <div class="background-job-stat-value">{{ formatOsLabel(currentConnection?.os_type, currentConnection?.os_ver) }}</div>
+      </div>
+      <div class="background-job-stat">
+        <div class="background-job-stat-label">Integrity</div>
+        <div class="background-job-stat-value">{{ currentConnection?.integrity || '-' }}</div>
+      </div>
+      <div class="background-job-stat">
+        <div class="background-job-stat-label">Working Directory</div>
+        <div class="background-job-stat-value mono">{{ currentConnection?.cwd || '-' }}</div>
+      </div>
+      <div class="background-job-stat">
+        <div class="background-job-stat-label">Reported Jobs</div>
+        <div class="background-job-stat-value">{{ connectionInfoJobCount }}</div>
+      </div>
+      <div class="background-job-stat">
+        <div class="background-job-stat-label">Command Count</div>
+        <div class="background-job-stat-value">{{ commandCandidates.length }}</div>
+      </div>
+    </div>
+
+    <div class="background-job-panel" style="margin-top:14px;">
+      <div class="background-job-panel-title">Command List</div>
+      <div class="background-job-message-list">
+        <div
+          v-for="(item, index) in commandCandidates"
+          :key="`${item.template}-${index}`"
+          class="background-job-message-item"
+        >
+          <div class="background-job-message-time">
+            {{ item.source || '-' }}<span v-if="item.group"> / {{ item.group }}</span>
+          </div>
+          <div class="background-job-message-text">
+            <span class="mono">{{ item.template }}</span>
+            <span v-if="item.help"> — {{ item.help }}</span>
+          </div>
+        </div>
+
+        <div v-if="!commandCandidates.length" class="empty-state compact">
+          No commands available
+        </div>
+      </div>
+    </div>
+  </div>
+</el-dialog>
+
+
 </div>
 
 <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>

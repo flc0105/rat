@@ -50,6 +50,10 @@ window.AppStateModule = {
             backgroundJobsActiveTab: 'modules',
             backgroundJobMessageDialogVisible: false,
             selectedBackgroundJobMessage: {},
+
+            connectionInfoDialogVisible: false,
+connectionInfoLoading: false,
+connectionInfoJobCount: 0,
         };
     },
 

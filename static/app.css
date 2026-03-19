@@ -1655,3 +1655,12 @@ body {
 .background-job-full-message-text.is-success {
   color: #166534;
 }
+
+.connection-info-dialog .background-job-message-list {
+  max-height: 360px;
+}
+
+.connection-info-dialog .background-job-message-text {
+  white-space: pre-wrap;
+  word-break: break-word;
+}

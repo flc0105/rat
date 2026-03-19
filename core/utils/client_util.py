@@ -8,5 +8,8 @@ def check_privilege():
                 return 'Root (via sudo)'
             return 'Root'
         return 'User'
+    if os.name == 'nt':
+        from client.commands.platform.utils.win_util import get_integrity_level
+        return get_integrity_level()
 
     return 'N/A'
