@@ -10,6 +10,7 @@ from server.connection.message_dispatcher import ServerInboundMessageDispatcher
 from server.connection.message_router import ServerInboundMessageRouter
 from server.connection.result_dispatcher import ServerResultDispatcher
 from server.models.artifact import FileReceiveContext
+from server.services.artifact_ingest_service import ArtifactIngestService
 
 
 class ClientConnection(BaseSessionConnection):
@@ -51,6 +52,7 @@ class ClientConnection(BaseSessionConnection):
         self.message_router = ServerInboundMessageRouter(self)
         self.message_dispatcher = ServerInboundMessageDispatcher(self)
         self.file_receiver = ClientFileReceiver(self)
+        self.artifact_ingest_service = ArtifactIngestService(self)
 
     # ------------------ ID/构包 ------------------ #
     def _generate_message_id(self) -> int:
