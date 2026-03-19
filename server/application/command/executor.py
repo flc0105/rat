@@ -5,6 +5,7 @@ from functools import partial
 
 from core.utils.formatting import format_dict
 from core.utils.parsing import parse, scan_args
+from server.application.command.command_plan_builder import CommandPlanBuilder
 from server.application.execution.remote_execution_service import RemoteExecutionService
 from server.config.config import SCRIPT_PATH
 
@@ -49,13 +50,12 @@ class CommandExecutor:
         },
     ]
 
-    ACMD_PREFIX = 'acmd'
-
     def __init__(self, conn, server):
         self.conn = conn
         self.server = server
         self.current_history_entry_id = ''
         self.remote_execution_service = RemoteExecutionService(server)
+        self.plan_builder = CommandPlanBuilder(server.alias_manager)
 
     # ------------------ 通用结果工具 ------------------ #
     def _yield_error(self, error):
@@ -63,6 +63,16 @@ class CommandExecutor:
         返回单条错误结果
         """
         yield 0, str(error)
+
+    def _execute_remote_plan(self, plan: dict):
+        return partial(
+            self.remote_execution_service.stream_command,
+            self.conn,
+            plan.get('command', ''),
+            command_type=plan.get('command_type', 'command'),
+            extra=plan.get('extra'),
+            history_entry_id=self.current_history_entry_id
+        )
 
     # ------------------ 补全候选 ------------------ #
     def get_command_candidates(self):
@@ -105,20 +115,11 @@ class CommandExecutor:
         """
         解析别名命令
         """
-        alias_cmd = self.server.alias_manager.aliases.get(name)
-        if not alias_cmd:
-            return None
-
         try:
-            expanded_cmd = self.server.alias_manager.get_alias_command(name, arg)
-            return partial(
-                self.remote_execution_service.stream_command,
-                self.conn,
-                expanded_cmd,
-                command_type='command',
-                extra=None,
-                history_entry_id=self.current_history_entry_id
-            )
+            plan = self.plan_builder.build_alias_plan(name, arg)
+            if not plan:
+                return None
+            return self._execute_remote_plan(plan)
         except Exception as e:
             return partial(self._yield_error, e)
 
@@ -126,109 +127,15 @@ class CommandExecutor:
         """
         默认透传原始命令到客户端
         """
-        return partial(
-            self.remote_execution_service.stream_command,
-            self.conn,
-            raw_command,
-            command_type='command',
-            extra=None,
-            history_entry_id=self.current_history_entry_id
-        )
-
-    def _is_argument_command(self, cmd: str) -> bool:
-        """
-        判断是否为 acmd 实验命令
-        """
-        name, _ = parse(cmd)
-        return name == self.ACMD_PREFIX
-
-    def _parse_argument_command(self, cmd: str) -> dict:
-        """
-        解析 acmd 命令格式
-        格式：
-        acmd <command> [--arg1 value1] [--arg2 value2] [--flag] [--key=value]
-        返回：
-        {
-            'name': 'msgbox',
-            'args': {...},
-            'raw': 'acmd ...'
-        }
-        """
-        parts = shlex.split(cmd)
-
-        if len(parts) < 2:
-            raise ValueError('Usage: acmd <command> [--key value] [--flag]')
-
-        if parts[0] != self.ACMD_PREFIX:
-            raise ValueError('Invalid acmd format')
-
-        command_name = (parts[1] or '').strip()
-        if not command_name:
-            raise ValueError('Missing acmd command name')
-
-        args_dict = {}
-        positional_args = []
-        index = 2
-
-        while index < len(parts):
-            token = parts[index]
-
-            if token == '--':
-                positional_args.extend(parts[index + 1:])
-                break
-
-            if token.startswith('--'):
-                option_text = token[2:]
-                if not option_text:
-                    raise ValueError('Empty option name is not allowed')
-
-                if '=' in option_text:
-                    key, value = option_text.split('=', 1)
-                    key = key.strip()
-                    if not key:
-                        raise ValueError('Empty option name is not allowed')
-                    args_dict[key] = value
-                    index += 1
-                    continue
-
-                key = option_text.strip()
-                if not key:
-                    raise ValueError('Empty option name is not allowed')
-
-                if index + 1 < len(parts) and not parts[index + 1].startswith('--'):
-                    args_dict[key] = parts[index + 1]
-                    index += 2
-                    continue
-
-                args_dict[key] = True
-                index += 1
-                continue
-
-            positional_args.append(token)
-            index += 1
-
-        if positional_args:
-            args_dict['_args'] = positional_args
-
-        return {
-            'name': command_name,
-            'args': args_dict,
-            'raw': cmd,
-        }
+        plan = self.plan_builder.build_default_plan(raw_command)
+        return self._execute_remote_plan(plan)
 
     def _resolve_argument_command(self, raw_command):
         """
         解析并发送 acmd 实验命令
         """
-        payload = self._parse_argument_command(raw_command)
-        return partial(
-            self.remote_execution_service.stream_structured_command,
-            self.conn,
-            raw_command,
-            command_type='acmd',
-            extra=payload,
-            history_entry_id=self.current_history_entry_id
-        )
+        plan = self.plan_builder.build_argument_command_plan(raw_command)
+        return self._execute_remote_plan(plan)
 
     def process_command(self, cmd, history_entry_id: str = ''):
         """
@@ -237,7 +144,7 @@ class CommandExecutor:
         self.current_history_entry_id = (history_entry_id or '').strip()
         name, arg = parse(cmd)
 
-        if self._is_argument_command(cmd):
+        if self.plan_builder.is_argument_command(cmd):
             return self._resolve_argument_command(cmd)
 
         builtin_handler = self._resolve_builtin_command(name, arg)
@@ -298,18 +205,8 @@ class CommandExecutor:
 
         raise FileNotFoundError(f"Script not found: {script_path}")
 
-    def _build_script_command(self, script_text: str, script_args: list):
-        """
-        构造脚本执行命令
-        """
-        return partial(
-            self.remote_execution_service.stream_structured_command,
-            self.conn,
-            script_text,
-            command_type='script',
-            extra=scan_args(script_args),
-            history_entry_id=self.current_history_entry_id
-        )
+    def _build_script_plan(self, script_text: str, script_args: list):
+        return self.plan_builder.build_script_plan(script_text, scan_args(script_args))
 
     def _execute_script_file(self, filename: str):
         """
@@ -320,7 +217,8 @@ class CommandExecutor:
 
         with open(script_path, 'rt', encoding='utf-8') as file_obj:
             try:
-                func = self._build_script_command(file_obj.read(), parts[1:])
+                plan = self._build_script_plan(file_obj.read(), parts[1:])
+                func = self._execute_remote_plan(plan)
                 for item in func():
                     yield item
             except UnicodeDecodeError:
