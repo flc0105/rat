@@ -547,8 +547,7 @@ window.AppFilesModule = {
                     throw new Error(json.message || 'Download failed');
                 }
 
-                const file = json.data && json.data.file;
-                if (!file || !file.artifact_id) {
+const file = json.data && json.data.artifact;                if (!file || !file.artifact_id) {
                     throw new Error('Download finished, but artifact was not found');
                 }
 
@@ -594,8 +593,7 @@ window.AppFilesModule = {
                     throw new Error(json.message || 'ZIP download failed');
                 }
 
-                const file = json.data && json.data.file;
-                if (!file || !file.artifact_id) {
+const file = json.data && json.data.artifact;                if (!file || !file.artifact_id) {
                     throw new Error('ZIP download finished, but artifact was not found');
                 }
 

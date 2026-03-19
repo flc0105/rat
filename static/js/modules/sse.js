@@ -131,22 +131,21 @@ window.AppSseModule = {
                 const sourceText = this.formatArtifactSourceLabel(payload);
 
                 ElementPlus.ElNotification({
-                    title: 'File Received',
-                    dangerouslyUseHTMLString: true,
-                    message: `
-            <div>
-              <div>${payload.original_name || fileName} has been saved</div>
-              <div style="margin-top:4px; color:#64748b;">${payload.hostname || '-'} / ${sourceText}</div>
-              <div style="margin-top:6px;">
-                <a href="${downloadUrl}" target="_blank" style="color:#409eff;text-decoration:none;">
-                  Download now
-                </a>
-              </div>
-            </div>
-          `,
-                    type: 'success',
-                    duration: 6000
-                });
+    title: 'File Received',
+    dangerouslyUseHTMLString: true,
+    message: `
+        <div>
+          <div>${payload.original_name || fileName} has been saved</div>
+          <div style="margin-top:6px;">
+            <a href="${downloadUrl}" target="_blank" style="color:#409eff;text-decoration:none;">
+              Download now
+            </a>
+          </div>
+        </div>
+    `,
+    type: 'success',
+    duration: 6000
+});
 
                 if (this.artifactDialogVisible) {
                     await this.loadArtifacts();
