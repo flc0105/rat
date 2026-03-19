@@ -2,6 +2,7 @@ import json
 import ntpath
 import os
 from datetime import datetime
+
 from core.utils.files import get_input_stream
 
 
@@ -38,7 +39,6 @@ class ClientFileReceiver:
         file_path = self._build_unique_file_path(target_dir, original_name)
 
         try:
-
             io = get_input_stream(file_path)
 
             try:
@@ -50,25 +50,28 @@ class ClientFileReceiver:
                     self._write_file_meta(file_path, original_name, length)
 
                 self._notify_file_saved(on_file_saved, original_name, file_path, length)
+                self._append_file_history(command_id, original_name, file_path, length)
 
                 return 1, f'File saved to: {file_path}'
             except Exception as e:
                 return 0, f'Error receiving file from {self.connection.address}: {e}'
-            # try:
-            #     self.connection.send_signal(1, command_id)
-            #     self.connection.recv_io(length, io)
-            #
-            #     if write_meta:
-            #         self._write_file_meta(file_path, original_name, length)
-            #
-            #     self._notify_file_saved(on_file_saved, original_name, file_path, length)
-            #
-            #     return 1, f'File saved to: {file_path}'
-            # except Exception as e:
-            #     return 0, f'Error receiving file from {self.connection.address}: {e}'
         except Exception as e:
             self.connection.send_signal(0, command_id)
             return 0, f'Error opening local file: {e}'
+
+    def _append_file_history(self, command_id: int, original_name: str, file_path: str, length: int):
+        """
+        将收到的文件挂到对应执行记录上
+        """
+        saved_name = os.path.basename(file_path)
+        self.connection.append_file_to_history(command_id, {
+            'original_name': original_name,
+            'saved_name': saved_name,
+            'saved_path': file_path,
+            'size': length,
+            'created_at': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+            'download_url': f'/api/files/recent/{saved_name}',
+        })
 
     def _build_unique_file_path(self, directory: str, filename: str) -> str:
         safe_name = ntpath.basename(filename) or 'file.bin'

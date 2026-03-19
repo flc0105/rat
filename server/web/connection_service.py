@@ -52,6 +52,7 @@ class WebConnectionService:
                 size
             )
         )
+        connection.command_history = self.server.command_history
 
         connection.on_unexpected_message = (
             lambda status, text, end: self.publish_background_message(connection, status, text, end)

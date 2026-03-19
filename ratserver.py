@@ -36,8 +36,6 @@ class Server:
         # web
         self.web_service = ServerWebService(self)
 
-
-
     # ------------------ connection lookup ------------------ #
     def get_target_connection_by_client_id(self, client_id) -> ClientConnection:
         try:
@@ -74,19 +72,8 @@ class Server:
         """
         return {**{'addr': f'{addr[0]}:{addr[1]}'}, **info}
 
-    # def _register_connection(self, conn, addr, info: dict) -> ClientConnection:
-    #     """
-    #     创建并注册客户端连接对象
-    #     """
-    #     connection = ClientConnection(conn, addr, info)
-    #     self.connections.add(connection)
-    #     logger.info('Connection has been established: {}'.format(addr))
-    #     return connection
-
     #web
     def _register_connection(self, conn, addr, info: dict) -> ClientConnection:
-        # connection = ClientConnection(conn, addr, info)
-
         connection = self.web_service.build_connection(conn, addr, info)
 
         self.connections.add(connection)
@@ -108,7 +95,6 @@ class Server:
         except json.JSONDecodeError:
             conn.close()
             logger.error('Failed to establish session: invalid client handshake from {}'.format(addr))
-            # logger.error('Connection timed out: {}'.format(addr))
             return None
         except Exception as e:
             conn.close()
@@ -201,9 +187,7 @@ class Server:
         """
         connection_list = self.connections.all()
         if not connection_list:
-            # print("No active connections at present")
             print("No active sessions")
-
             return
 
         headers = ['ID', 'Address', 'OS', 'OS Version', 'Hostname', 'Integrity']
@@ -229,8 +213,6 @@ class Server:
             return self.connections.last()
         except IndexError:
             raise Exception('No active session available')
-
-            # raise Exception('No connection at this time')
 
     def get_target_connection(self, id) -> ClientConnection:
         """
@@ -281,19 +263,6 @@ class Server:
 
         return False
 
-    # def _execute_interactive_command(self, conn: ClientConnection, command_executor: CommandExecutor, cmd: str):
-    #     """
-    #     执行交互模式命令
-    #     """
-    #
-    #     if cmd.strip() and not cmd.strip().startswith('history'):
-    #         self.command_history.record_for_connection(conn, cmd, source='cli')
-    #
-    #     func = command_executor.process_command(cmd)
-    #     if func:
-    #         for item in func():
-    #             write(*item)
-
     def _execute_interactive_command(self, conn: ClientConnection, command_executor: CommandExecutor, cmd: str):
         """
         执行交互模式命令
@@ -311,10 +280,21 @@ class Server:
         final_ok = True
 
         try:
-            func = command_executor.process_command(cmd)
+            func = command_executor.process_command(cmd, history_entry_id=entry_id)
             if func:
                 for item in func():
                     status = item[0]
+                    text = item[1] if len(item) > 1 else ''
+
+                    if entry_id:
+                        self.command_history.append_output_for_connection(
+                            conn,
+                            entry_id,
+                            status,
+                            text,
+                            0
+                        )
+
                     if status == 0:
                         final_ok = False
                     write(*item)
@@ -326,7 +306,8 @@ class Server:
                 self.command_history.update_entry_status_for_connection(
                     conn,
                     entry_id,
-                    'success' if final_ok else 'error'
+                    'success' if final_ok else 'error',
+                    cwd_end=conn.info.get('cwd', '')
                 )
 
     def open_connection(self, conn: ClientConnection):

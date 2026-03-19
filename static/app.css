@@ -1664,3 +1664,151 @@ body {
   white-space: pre-wrap;
   word-break: break-word;
 }
+
+.command-history-tabs {
+  min-height: 0;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.command-history-tabs .el-tabs__content {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.command-history-tabs .el-tab-pane {
+  height: 100%;
+  min-height: 0;
+}
+
+.command-execution-list-shell {
+  height: calc(78vh - 170px);
+  min-height: 320px;
+  overflow: hidden;
+}
+
+.command-execution-list {
+  height: 100%;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding-right: 2px;
+}
+
+.command-execution-card {
+  border: 1px solid rgba(15, 23, 42, 0.06);
+  border-radius: 14px;
+  padding: 14px;
+  background: #fff;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+}
+
+.command-execution-card-main {
+  min-width: 0;
+}
+
+.command-execution-card-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.command-execution-title-wrap {
+  min-width: 0;
+}
+
+.command-execution-title-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.command-execution-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text);
+  word-break: break-word;
+}
+
+.command-execution-subtitle {
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.command-execution-stats {
+  margin-top: 10px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.command-execution-summary {
+  margin-top: 10px;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--text);
+  word-break: break-word;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.command-execution-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  flex-shrink: 0;
+}
+
+.command-execution-detail-section {
+  margin-top: 14px;
+}
+
+.command-execution-detail-label {
+  display: block;
+  font-size: 11px;
+  color: var(--muted-2);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: 6px;
+}
+
+.command-execution-detail-summary {
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--text);
+  word-break: break-word;
+}
+
+.command-execution-detail-panels {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-top: 14px;
+}
+
+@media (max-width: 960px) {
+  .command-execution-list-shell {
+    height: calc(84vh - 170px);
+    max-height: calc(84vh - 170px);
+  }
+}
+
+@media (max-width: 768px), (max-height: 720px) {
+  .command-execution-detail-panels {
+    grid-template-columns: 1fr;
+  }
+}

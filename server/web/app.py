@@ -143,6 +143,13 @@ def create_app(server_instance):
             default_error_status=500
         )
 
+    @app.get('/api/connections/<client_id>/command-history/full')
+    def get_full_command_history(client_id):
+        return _json_endpoint(
+            lambda: web_service.get_command_execution_history(client_id),
+            default_error_status=500
+        )
+
     @app.delete('/api/connections/<client_id>/command-history')
     def clear_command_history(client_id):
         return _json_endpoint(

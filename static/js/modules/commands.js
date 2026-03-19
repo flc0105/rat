@@ -1,34 +1,31 @@
 window.AppCommandsModule = {
     methods: {
-
         async openConnectionInfoDialog() {
-    if (!this.selectedId) {
-        ElementPlus.ElMessage.warning('Please select a device');
-        return;
-    }
+            if (!this.selectedId) {
+                ElementPlus.ElMessage.warning('Please select a device');
+                return;
+            }
 
-    this.connectionInfoDialogVisible = true;
-    this.connectionInfoLoading = true;
-    this.connectionInfoJobCount = 0;
+            this.connectionInfoDialogVisible = true;
+            this.connectionInfoLoading = true;
+            this.connectionInfoJobCount = 0;
 
-    try {
-        if (this.commandCandidatesLoadedFor !== this.selectedId || !this.commandCandidates.length) {
-            await this.loadCommandCandidates(this.selectedId);
-        }
+            try {
+                if (this.commandCandidatesLoadedFor !== this.selectedId || !this.commandCandidates.length) {
+                    await this.loadCommandCandidates(this.selectedId);
+                }
 
-        const res = await fetch(`/api/connections/${encodeURIComponent(this.selectedId)}/background-jobs`);
-        const json = await res.json();
+                const res = await fetch(`/api/connections/${encodeURIComponent(this.selectedId)}/background-jobs`);
+                const json = await res.json();
 
-        if (res.ok && json.code === 0 && Array.isArray(json.data)) {
-            this.connectionInfoJobCount = json.data.length;
-        }
-    } catch (e) {
-    } finally {
-        this.connectionInfoLoading = false;
-    }
-},
-
-
+                if (res.ok && json.code === 0 && Array.isArray(json.data)) {
+                    this.connectionInfoJobCount = json.data.length;
+                }
+            } catch (e) {
+            } finally {
+                this.connectionInfoLoading = false;
+            }
+        },
 
         async loadConnections() {
             try {
@@ -56,6 +53,7 @@ window.AppCommandsModule = {
             this.selectedId = clientId;
             this.ensureOutputBucket(clientId);
             this.commandHistoryItems = [];
+            this.commandExecutionItems = [];
             this.loadCommandCandidates(clientId);
             this.scrollToBottom();
 
@@ -216,21 +214,34 @@ window.AppCommandsModule = {
 
             this.commandHistoryDialogVisible = true;
             this.commandHistoryLoading = true;
+            this.commandExecutionHistoryLoading = true;
 
             try {
-                const res = await fetch(`/api/connections/${encodeURIComponent(this.selectedId)}/command-history`);
-                const json = await res.json();
+                const [quickRes, fullRes] = await Promise.all([
+                    fetch(`/api/connections/${encodeURIComponent(this.selectedId)}/command-history`),
+                    fetch(`/api/connections/${encodeURIComponent(this.selectedId)}/command-history/full`)
+                ]);
 
-                if (!res.ok || json.code !== 0) {
-                    throw new Error(json.message || 'Failed to load command history');
+                const quickJson = await quickRes.json();
+                const fullJson = await fullRes.json();
+
+                if (!quickRes.ok || quickJson.code !== 0) {
+                    throw new Error(quickJson.message || 'Failed to load command history');
                 }
 
-                this.commandHistoryItems = Array.isArray(json.data) ? json.data : [];
+                if (!fullRes.ok || fullJson.code !== 0) {
+                    throw new Error(fullJson.message || 'Failed to load full command history');
+                }
+
+                this.commandHistoryItems = Array.isArray(quickJson.data) ? quickJson.data : [];
+                this.commandExecutionItems = Array.isArray(fullJson.data) ? fullJson.data : [];
             } catch (e) {
                 this.commandHistoryItems = [];
+                this.commandExecutionItems = [];
                 ElementPlus.ElMessage.error(e.message || 'Failed to load command history');
             } finally {
                 this.commandHistoryLoading = false;
+                this.commandExecutionHistoryLoading = false;
             }
         },
 
@@ -245,6 +256,12 @@ window.AppCommandsModule = {
                     input.focus();
                 }
             });
+        },
+
+        openCommandExecutionDetail(row) {
+            if (!row || !row.entry_id) return;
+            this.selectedCommandExecutionEntryId = row.entry_id;
+            this.commandExecutionDetailDialogVisible = true;
         },
 
         async clearCommandHistory() {
@@ -274,6 +291,7 @@ window.AppCommandsModule = {
                 }
 
                 this.commandHistoryItems = [];
+                this.commandExecutionItems = [];
                 this.commandCandidatesLoadedFor = '';
                 await this.loadCommandCandidates(this.selectedId);
                 ElementPlus.ElMessage.success('Command history cleared');

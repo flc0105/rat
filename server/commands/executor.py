@@ -54,6 +54,7 @@ class CommandExecutor:
     def __init__(self, conn, server):
         self.conn = conn
         self.server = server
+        self.current_history_entry_id = ''
 
     # ------------------ 通用结果工具 ------------------ #
     def _yield_error(self, error):
@@ -109,7 +110,11 @@ class CommandExecutor:
 
         try:
             expanded_cmd = self.server.alias_manager.get_alias_command(name, arg)
-            return partial(self.conn.send_command, expanded_cmd)
+            return partial(
+                self.conn.send_command,
+                expanded_cmd,
+                history_entry_id=self.current_history_entry_id
+            )
         except Exception as e:
             return partial(self._yield_error, e)
 
@@ -117,24 +122,11 @@ class CommandExecutor:
         """
         默认透传原始命令到客户端
         """
-        return partial(self.conn.send_command, raw_command)
-
-    # def _resolve_default_command(self, raw_command):
-    #     """
-    #     默认透传原始命令到客户端
-    #     """
-    #     def _runner():
-    #         self.conn.acquire_foreground_task(
-    #             task_type='command',
-    #             command=raw_command,
-    #             source='cli',
-    #         )
-    #         try:
-    #             yield from self.conn.send_command(raw_command)
-    #         finally:
-    #             self.conn.release_foreground_task(command=raw_command)
-    #
-    #     return _runner
+        return partial(
+            self.conn.send_command,
+            raw_command,
+            history_entry_id=self.current_history_entry_id
+        )
 
     def _is_argument_command(self, cmd: str) -> bool:
         """
@@ -226,13 +218,15 @@ class CommandExecutor:
             self.conn.send_command,
             raw_command,
             type='acmd',
-            extra=payload
+            extra=payload,
+            history_entry_id=self.current_history_entry_id
         )
 
-    def process_command(self, cmd):
+    def process_command(self, cmd, history_entry_id: str = ''):
         """
         处理命令，返回可执行的生成器函数
         """
+        self.current_history_entry_id = (history_entry_id or '').strip()
         name, arg = parse(cmd)
 
         if self._is_argument_command(cmd):
@@ -257,34 +251,14 @@ class CommandExecutor:
             raise FileNotFoundError(f"File does not exist: {filename}")
 
         try:
-            for status, result in self.conn.send_file(filename):
+            for status, result in self.conn.send_file(
+                filename,
+                history_entry_id=self.current_history_entry_id
+            ):
                 yield status, result
         except Exception:
             self.conn.pending_command_ids.clear()
             raise
-
-    # def upload(self, filename):
-    #     """
-    #     上传文件到客户端
-    #     """
-    #     if not os.path.isfile(filename):
-    #         raise FileNotFoundError(f"File does not exist: {filename}")
-    #
-    #     command = f'upload {filename}'
-    #     self.conn.acquire_foreground_task(
-    #         task_type='upload',
-    #         command=command,
-    #         source='cli',
-    #     )
-    #
-    #     try:
-    #         for status, result in self.conn.send_file(filename):
-    #             yield status, result
-    #     except Exception:
-    #         self.conn.pending_command_ids.clear()
-    #         raise
-    #     finally:
-    #         self.conn.release_foreground_task(command=command)
 
     # ------------------ exec ------------------ #
     def _iter_script_files(self):
@@ -301,7 +275,6 @@ class CommandExecutor:
             os.path.relpath(file_path, SCRIPT_PATH).replace('\\', '/')
             for file_path in self._iter_script_files()
         ]
-
 
     def _resolve_script_path(self, script_name: str) -> str:
         """
@@ -324,7 +297,8 @@ class CommandExecutor:
             self.conn.send_command,
             script_text,
             type='script',
-            extra=scan_args(script_args)
+            extra=scan_args(script_args),
+            history_entry_id=self.current_history_entry_id
         )
 
     def _execute_script_file(self, filename: str):

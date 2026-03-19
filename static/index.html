@@ -875,12 +875,12 @@
     </div>
   </el-dialog>
 
-  <el-dialog
+   <el-dialog
     v-model="commandHistoryDialogVisible"
     title="Command History"
     width="1120px"
     top="5vh"
-    class="fixed-dialog recent-files-dialog"
+    class="fixed-dialog recent-files-dialog command-history-dialog"
   >
     <div class="fixed-dialog-body">
       <div class="dialog-head">
@@ -890,47 +890,232 @@
         </div>
       </div>
 
-      <div class="dialog-table-shell">
-        <el-table
-          :data="commandHistoryItems"
-          v-loading="commandHistoryLoading"
-          stripe
-          width="100%"
-          height="100%"
-          empty-text="No command history available"
-          table-layout="fixed"
-          @row-dblclick="applyHistoryCommand"
-        >
-          <el-table-column prop="index" label="#" width="70" align="center">
-            <template #default="{ row }">
-              <div class="ellipsis">{{ row.index || '-' }}</div>
-            </template>
-          </el-table-column>
+      <el-tabs v-model="commandHistoryActiveTab" class="command-history-tabs">
+        <el-tab-pane label="Quick History" name="quick">
+          <div class="dialog-table-shell">
+            <el-table
+              :data="commandHistoryItems"
+              v-loading="commandHistoryLoading"
+              stripe
+              width="100%"
+              height="100%"
+              empty-text="No command history available"
+              table-layout="fixed"
+              @row-dblclick="applyHistoryCommand"
+            >
+              <el-table-column prop="index" label="#" width="70" align="center">
+                <template #default="{ row }">
+                  <div class="ellipsis">{{ row.index || '-' }}</div>
+                </template>
+              </el-table-column>
 
-          <el-table-column prop="command" label="Command" min-width="280" show-overflow-tooltip>
-            <template #default="{ row }">
-              <div class="ellipsis mono">{{ row.command || '-' }}</div>
-            </template>
-          </el-table-column>
+              <el-table-column prop="command" label="Command" min-width="280" show-overflow-tooltip>
+                <template #default="{ row }">
+                  <div class="ellipsis mono">{{ row.command || '-' }}</div>
+                </template>
+              </el-table-column>
 
-          <el-table-column prop="time" label="Last Used" width="220" show-overflow-tooltip>
-            <template #default="{ row }">
-              <div class="ellipsis">{{ row.time || '-' }}</div>
-            </template>
-          </el-table-column>
+              <el-table-column prop="time" label="Last Used" width="220" show-overflow-tooltip>
+                <template #default="{ row }">
+                  <div class="ellipsis">{{ row.time || '-' }}</div>
+                </template>
+              </el-table-column>
 
-          <el-table-column label="Actions" width="150" align="center" fixed="right">
-            <template #default="{ row }">
-              <div class="table-actions table-actions-links">
-                <a href="#" class="table-action-link" @click.prevent="applyHistoryCommand(row)">Use</a>
+              <el-table-column label="Actions" width="150" align="center" fixed="right">
+                <template #default="{ row }">
+                  <div class="table-actions table-actions-links">
+                    <a href="#" class="table-action-link" @click.prevent="applyHistoryCommand(row)">Use</a>
+                  </div>
+                </template>
+              </el-table-column>
+            </el-table>
+          </div>
+        </el-tab-pane>
+
+        <el-tab-pane label="Execution History" name="full">
+          <div class="command-execution-list-shell" v-loading="commandExecutionHistoryLoading">
+            <div v-if="!commandExecutionItems.length && !commandExecutionHistoryLoading" class="empty-state">
+              No execution history available
+            </div>
+
+            <div v-else class="command-execution-list">
+              <div
+                v-for="item in commandExecutionItems"
+                :key="item.entry_id"
+                class="command-execution-card"
+              >
+                <div class="command-execution-card-main">
+                  <div class="command-execution-card-top">
+                    <div class="command-execution-title-wrap">
+                      <div class="command-execution-title-line">
+                        <div class="command-execution-title mono">{{ item.command || '-' }}</div>
+                        <el-tag :type="buildCommandExecutionStatusTagType(item.status)" size="small">
+                          {{ item.status || 'unknown' }}
+                        </el-tag>
+                        <el-tag v-if="item.has_files" type="success" size="small">
+                          {{ item.file_count || 0 }} file(s)
+                        </el-tag>
+                        <el-tag v-if="item.output_truncated" type="warning" size="small">
+                          output truncated
+                        </el-tag>
+                      </div>
+                      <div class="command-execution-subtitle">
+                        {{ item.source || '-' }} / {{ item.started_at || '-' }}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div class="command-execution-stats">
+                    <span>Duration: {{ formatCommandExecutionDuration(item.duration_ms) }}</span>
+                    <span>Start CWD: {{ item.cwd_start || '-' }}</span>
+                    <span>End CWD: {{ item.cwd_end || '-' }}</span>
+                    <span>Chunks: {{ item.output_chunk_count || 0 }}</span>
+                    <span>Lines: {{ item.output_line_count || 0 }}</span>
+                  </div>
+
+                  <div class="command-execution-summary">
+                    {{ buildCommandExecutionSummary(item) }}
+                  </div>
+                </div>
+
+                <div class="command-execution-actions">
+                  <el-button
+                    size="small"
+                    plain
+                    @click="applyHistoryCommand(item)"
+                  >
+                    Use
+                  </el-button>
+                  <el-button
+                    size="small"
+                    type="primary"
+                    plain
+                    @click="openCommandExecutionDetail(item)"
+                  >
+                    Details
+                  </el-button>
+                </div>
               </div>
-            </template>
-          </el-table-column>
-        </el-table>
-      </div>
+            </div>
+          </div>
+        </el-tab-pane>
+      </el-tabs>
     </div>
   </el-dialog>
 
+    <el-dialog
+    v-model="commandExecutionDetailDialogVisible"
+    :title="selectedCommandExecutionEntry ? (selectedCommandExecutionEntry.command || 'Execution Detail') : 'Execution Detail'"
+    width="1000px"
+    top="5vh"
+    class="fixed-dialog command-execution-detail-dialog"
+  >
+    <div class="fixed-dialog-body" v-if="selectedCommandExecutionEntry">
+      <div class="background-job-stats">
+        <div class="background-job-stat">
+          <div class="background-job-stat-label">Status</div>
+          <div class="background-job-stat-value">
+            <el-tag :type="buildCommandExecutionStatusTagType(selectedCommandExecutionEntry.status)" size="small">
+              {{ selectedCommandExecutionEntry.status || 'unknown' }}
+            </el-tag>
+          </div>
+        </div>
+        <div class="background-job-stat">
+          <div class="background-job-stat-label">Source</div>
+          <div class="background-job-stat-value">{{ selectedCommandExecutionEntry.source || '-' }}</div>
+        </div>
+        <div class="background-job-stat">
+          <div class="background-job-stat-label">Duration</div>
+          <div class="background-job-stat-value">{{ formatCommandExecutionDuration(selectedCommandExecutionEntry.duration_ms) }}</div>
+        </div>
+        <div class="background-job-stat">
+          <div class="background-job-stat-label">Started</div>
+          <div class="background-job-stat-value">{{ selectedCommandExecutionEntry.started_at || '-' }}</div>
+        </div>
+        <div class="background-job-stat">
+          <div class="background-job-stat-label">Finished</div>
+          <div class="background-job-stat-value">{{ selectedCommandExecutionEntry.finished_at || '-' }}</div>
+        </div>
+        <div class="background-job-stat">
+          <div class="background-job-stat-label">Files</div>
+          <div class="background-job-stat-value">{{ selectedCommandExecutionEntry.file_count || 0 }}</div>
+        </div>
+      </div>
+
+      <div class="command-execution-detail-section">
+        <div class="command-execution-detail-label">Summary</div>
+        <div class="command-execution-detail-summary">
+          {{ buildCommandExecutionSummary(selectedCommandExecutionEntry) }}
+        </div>
+      </div>
+
+      <div class="command-execution-detail-panels">
+        <div class="background-job-panel">
+          <div class="background-job-panel-title">Output Records</div>
+          <div class="background-job-message-list">
+            <div
+              v-for="(record, index) in selectedCommandExecutionEntry.output_records"
+              :key="`${selectedCommandExecutionEntry.entry_id}-output-${index}`"
+              class="background-job-message-item"
+            >
+              <div class="background-job-message-time">{{ record.time || '-' }}</div>
+              <div
+                class="background-job-message-text"
+                :class="{
+                  'is-error': record.status === 0,
+                  'is-success': record.status === 1
+                }"
+              >
+                {{ formatCommandExecutionRecordText(record.text || '') }}
+              </div>
+            </div>
+
+            <div v-if="selectedCommandExecutionEntry.output_truncated" class="empty-state compact">
+              Output was truncated for storage safety
+            </div>
+
+            <div v-if="!selectedCommandExecutionEntry.output_records || !selectedCommandExecutionEntry.output_records.length" class="empty-state compact">
+              No output records
+            </div>
+          </div>
+        </div>
+
+        <div class="background-job-panel">
+          <div class="background-job-panel-title">Produced Files</div>
+          <div class="background-job-file-list">
+            <div
+              v-for="(file, index) in selectedCommandExecutionEntry.files"
+              :key="`${selectedCommandExecutionEntry.entry_id}-file-${index}`"
+              class="background-job-file-item"
+            >
+              <div class="background-job-file-main">
+                <div class="background-job-file-name">{{ file.original_name || file.saved_name || '-' }}</div>
+                <div class="background-job-file-meta">
+                  <span>{{ formatBytes(file.size || 0) }}</span>
+                  <span>{{ file.created_at || '-' }}</span>
+                </div>
+              </div>
+
+              <div class="background-job-file-actions">
+                <a
+                  v-if="file.download_url"
+                  class="table-action-link"
+                  :href="file.download_url"
+                  target="_blank"
+                >
+                  Download
+                </a>
+              </div>
+            </div>
+
+            <div v-if="!selectedCommandExecutionEntry.files || !selectedCommandExecutionEntry.files.length" class="empty-state compact">
+              No files produced
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </el-dialog>
 
 <el-dialog
   v-model="connectionInfoDialogVisible"

@@ -10,6 +10,11 @@ window.AppStateModule = {
             commandHistoryDialogVisible: false,
             commandHistoryLoading: false,
             commandHistoryItems: [],
+            commandExecutionHistoryLoading: false,
+            commandExecutionItems: [],
+            commandHistoryActiveTab: 'quick',
+            commandExecutionDetailDialogVisible: false,
+            selectedCommandExecutionEntryId: '',
             sending: false,
             uploading: false,
             eventSource: null,
@@ -52,8 +57,8 @@ window.AppStateModule = {
             selectedBackgroundJobMessage: {},
 
             connectionInfoDialogVisible: false,
-connectionInfoLoading: false,
-connectionInfoJobCount: 0,
+            connectionInfoLoading: false,
+            connectionInfoJobCount: 0,
         };
     },
 
@@ -103,6 +108,10 @@ connectionInfoJobCount: 0,
                 return tb.localeCompare(ta);
             });
         },
+
+        selectedCommandExecutionEntry() {
+            return this.commandExecutionItems.find(item => item.entry_id === this.selectedCommandExecutionEntryId) || null;
+        },
     },
 
     watch: {
@@ -132,6 +141,12 @@ connectionInfoJobCount: 0,
         backgroundJobMessageDialogVisible(val) {
             if (!val) {
                 this.selectedBackgroundJobMessage = {};
+            }
+        },
+
+        commandExecutionDetailDialogVisible(val) {
+            if (!val) {
+                this.selectedCommandExecutionEntryId = '';
             }
         },
     }

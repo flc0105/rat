@@ -34,6 +34,10 @@ class ClientConnection(BaseSessionConnection):
         self._foreground_lock = threading.RLock()
         self._foreground_task = None
 
+        self._history_binding_lock = threading.RLock()
+        self._history_entry_ids_by_command_id = {}
+        self.command_history = None
+
         # web
         self.on_unexpected_message = None
 
@@ -82,25 +86,76 @@ class ClientConnection(BaseSessionConnection):
             data['save_dir'] = save_dir
         return data
 
-    def send_command(self, command: str, type='command', extra=None) -> Generator:
+    # ------------------ history binding ------------------ #
+    def bind_history_entry(self, command_id: int, entry_id: str):
+        """
+        绑定 command_id -> history entry_id
+        """
+        if not command_id or not entry_id:
+            return
+
+        with self._history_binding_lock:
+            self._history_entry_ids_by_command_id[command_id] = entry_id
+
+    def get_history_entry_id(self, command_id: int) -> str:
+        """
+        获取指定 command_id 绑定的 history entry_id
+        """
+        with self._history_binding_lock:
+            return self._history_entry_ids_by_command_id.get(command_id, '')
+
+    def clear_history_entry(self, command_id: int):
+        """
+        清理指定 command_id 的历史绑定
+        """
+        with self._history_binding_lock:
+            self._history_entry_ids_by_command_id.pop(command_id, None)
+
+    def append_file_to_history(self, command_id: int, file_info: dict):
+        """
+        将接收到的文件挂到对应执行记录上
+        """
+        if self.command_history is None:
+            return
+
+        entry_id = self.get_history_entry_id(command_id)
+        if not entry_id:
+            return
+
+        try:
+            self.command_history.append_file_for_connection(self, entry_id, file_info)
+        except Exception:
+            pass
+
+    def send_command(self, command: str, type='command', extra=None, history_entry_id: str = '') -> Generator:
         """
         向客户端发送命令
         :param command: 命令
         :param type: 命令类型
         :param extra: 额外信息
+        :param history_entry_id: 执行记录 entry_id
         :return: 结果生成器
         """
         data = self._build_command_payload(command, type, extra)
+
+        if history_entry_id:
+            self.bind_history_entry(data.get('id'), history_entry_id)
+
         self.send(data)
         return self.wait_for_result(data.get('id'), command if type == 'command' else None)
 
-    def send_file(self, filename: str, save_dir: str = '') -> Generator:
+    def send_file(self, filename: str, save_dir: str = '', history_entry_id: str = '') -> Generator:
         """
         向客户端发送文件
         :param filename: 文件名
+        :param history_entry_id: 执行记录 entry_id
         :return: 结果生成器
         """
         data = self._build_file_payload(filename, save_dir)
+
+        if history_entry_id:
+            self.bind_history_entry(data.get('id'), history_entry_id)
+
         self.send_file_by_header(data, filename)
         return self.wait_for_result(data.get('id'), 'upload ' + filename)
 
@@ -211,9 +266,12 @@ class ClientConnection(BaseSessionConnection):
         """
         self.pending_command_ids.put(id)
 
-        while 1:
-            status, result, eof = self.message_queue.get()
-            yield status, result
-            if eof:
-                self.pending_command_ids.get()
-                break
+        try:
+            while 1:
+                status, result, eof = self.message_queue.get()
+                yield status, result
+                if eof:
+                    self.pending_command_ids.get()
+                    break
+        finally:
+            self.clear_history_entry(id)

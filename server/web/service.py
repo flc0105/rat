@@ -124,6 +124,10 @@ class ServerWebService:
         conn = self.server.get_target_connection_by_client_id(client_id)
         return self.server.command_history.get_history_for_connection(conn)
 
+    def get_command_execution_history(self, client_id: str):
+        conn = self.server.get_target_connection_by_client_id(client_id)
+        return self.server.command_history.get_execution_history_for_connection(conn)
+
     def clear_command_history(self, client_id: str):
         conn = self.server.get_target_connection_by_client_id(client_id)
         self.server.command_history.clear_history_for_connection(conn)
@@ -151,8 +155,6 @@ class ServerWebService:
 
     def ingest_background_job_report(self, payload: dict):
         return self.background_job_service.ingest_report(payload)
-
-
 
     # ------------------ remote file facade ------------------ #
     def browse_remote_directory(self, client_id: str, path: str = ''):
