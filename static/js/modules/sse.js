@@ -122,6 +122,10 @@ window.AppSseModule = {
                         type: 'success'
                     });
                 }
+
+                if(this.artifactDialogVisible) {
+                    await this.loadArtifacts()
+                }
             });
 
             es.addEventListener('file_received', async (event) => {
