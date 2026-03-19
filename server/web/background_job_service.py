@@ -15,11 +15,10 @@ class BackgroundJobService:
     - 对外提供任务监控数据
     """
 
-    def __init__(self, server, event_bus, job_store, file_service):
+    def __init__(self, server, event_bus, job_store):
         self.server = server
         self.event_bus = event_bus
         self.job_store = job_store
-        self.file_service = file_service
 
     def _collect_result(self, result_iter):
         final_status = 1

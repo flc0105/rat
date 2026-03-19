@@ -47,6 +47,9 @@ class ClientFileReceiver:
         source_command_id = file_context.get('source_command_id', command_id)
         extra = file_context.get('extra') if isinstance(file_context.get('extra'), dict) else {}
 
+        file_path = ''
+        meta_path = ''
+
         try:
             allocated = artifact_service.allocate_artifact_path(
                 artifact_type=artifact_type,
@@ -55,6 +58,7 @@ class ClientFileReceiver:
                 category=category,
             )
             file_path = allocated['file_path']
+            meta_path = allocated['meta_path']
 
             io = get_input_stream(file_path)
         except Exception as e:
@@ -64,6 +68,7 @@ class ClientFileReceiver:
         try:
             status, error = self.connection.recv_file_packet(command_id, length, io)
             if status != 1:
+                self._rollback_artifact_files(file_path, meta_path)
                 return 0, f'Error receiving file from {self.connection.address}: {error}'
 
             artifact_info = artifact_service.register_existing_artifact(
@@ -72,7 +77,7 @@ class ClientFileReceiver:
                 hostname=allocated['hostname'],
                 original_name=original_name,
                 file_path=file_path,
-                meta_path=allocated['meta_path'],
+                meta_path=meta_path,
                 stored_name=allocated['stored_name'],
                 source_type=source_type,
                 source_command_id=source_command_id,
@@ -90,7 +95,19 @@ class ClientFileReceiver:
 
             return 1, f'File saved to: {artifact_info.get("saved_path", file_path)}'
         except Exception as e:
+            self._rollback_artifact_files(file_path, meta_path)
             return 0, f'Error receiving file from {self.connection.address}: {e}'
+
+    def _rollback_artifact_files(self, file_path: str, meta_path: str):
+        """
+        文件接收 / artifact 注册失败时回滚落盘文件，避免孤儿文件残留。
+        """
+        for path in (file_path, meta_path):
+            try:
+                if path and os.path.isfile(path):
+                    os.remove(path)
+            except Exception:
+                pass
 
     def _append_file_history(self, command_id: int, artifact_info: dict):
         """

@@ -312,14 +312,6 @@ def create_app(server_instance):
 
         return _json_endpoint(_execute, default_error_status=500)
 
-    # ------------------ old recent endpoints compatibility ------------------ #
-    @app.get('/api/files/recent')
-    def get_recent_files():
-        return _json_endpoint(
-            lambda: web_service.list_artifacts(artifact_type='downloads').get('items', []),
-            default_error_status=500
-        )
-
     # ------------------ http uploads ------------------ #
     app.config['MAX_CONTENT_LENGTH'] = WEB_HTTP_UPLOAD_MAX_BYTES
 

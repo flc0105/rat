@@ -1,12 +1,9 @@
-import os
-
-from flask import Blueprint, jsonify, request, send_from_directory
+from flask import Blueprint, jsonify, request
 
 
 def create_background_job_blueprint(server_instance):
     blueprint = Blueprint('background_jobs', __name__)
     web_service = server_instance.web_service
-    file_service = web_service.file_service
     background_job_service = web_service.background_job_service
 
     def _ok(data=None, message='ok', code=0, http_status=200):
@@ -81,48 +78,5 @@ def create_background_job_blueprint(server_instance):
             return background_job_service.ingest_report(payload)
 
         return _json_endpoint(_execute, default_error_status=500)
-
-    @blueprint.get('/api/background-job-files/<path:relative_path>')
-    def download_background_job_file(relative_path):
-        def _execute():
-            file_path = file_service.get_safe_http_upload_file_path(relative_path)
-            if not os.path.isfile(file_path):
-                raise FileNotFoundError('file not found')
-
-            directory = os.path.dirname(file_path)
-            filename = os.path.basename(file_path)
-            return send_from_directory(directory, filename, as_attachment=True, download_name=filename)
-
-        try:
-            return _execute()
-        except FileNotFoundError as e:
-            return _fail(e, 404)
-        except Exception as e:
-            return _fail(e, 500)
-
-    @blueprint.get('/api/background-job-files/<path:relative_path>/raw')
-    def get_background_job_file_raw(relative_path):
-        def _execute():
-            file_path = file_service.get_safe_http_upload_file_path(relative_path)
-            if not os.path.isfile(file_path):
-                raise FileNotFoundError('file not found')
-
-            directory = os.path.dirname(file_path)
-            filename = os.path.basename(file_path)
-            return send_from_directory(directory, filename, as_attachment=False)
-
-        try:
-            return _execute()
-        except FileNotFoundError as e:
-            return _fail(e, 404)
-        except Exception as e:
-            return _fail(e, 500)
-
-    @blueprint.get('/api/background-job-files/<path:relative_path>/preview')
-    def preview_background_job_file(relative_path):
-        return _json_endpoint(
-            lambda: file_service.build_http_upload_preview_payload(relative_path),
-            default_error_status=500
-        )
 
     return blueprint

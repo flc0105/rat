@@ -650,28 +650,15 @@ window.AppFilesModule = {
         },
 
         async previewBackgroundJobFile(file) {
-            if (!file) {
-                ElementPlus.ElMessage.warning('No preview available');
-                return;
-            }
+    if (!file || !file.artifact_id) {
+        ElementPlus.ElMessage.warning('No preview available');
+        return;
+    }
 
-            if (file.artifact_id) {
-                await this.loadPreviewPayload(
-                    () => fetch(`/api/artifacts/${encodeURIComponent(file.artifact_id)}/preview`),
-                    file.original_name || file.stored_name || 'Job File Preview'
-                );
-                return;
-            }
-
-            if (!file.preview_url) {
-                ElementPlus.ElMessage.warning('No preview available');
-                return;
-            }
-
-            await this.loadPreviewPayload(
-                () => fetch(file.preview_url),
-                file.original_name || file.stored_name || 'Job File Preview'
-            );
-        }
+    await this.loadPreviewPayload(
+        () => fetch(`/api/artifacts/${encodeURIComponent(file.artifact_id)}/preview`),
+        file.original_name || file.stored_name || 'Job File Preview'
+    );
+}
     }
 };

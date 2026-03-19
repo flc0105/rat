@@ -51,7 +51,6 @@ class ServerWebService:
             server=self.server,
             event_bus=self.event_bus,
             job_store=self.background_job_store,
-            file_service=self.file_service,
         )
 
     # ------------------ helpers ------------------ #

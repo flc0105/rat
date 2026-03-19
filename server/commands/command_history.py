@@ -182,7 +182,7 @@ class CommandHistoryStore:
             'hostname': file_info.get('hostname', ''),
             'client_id': file_info.get('client_id', ''),
             'original_name': file_info.get('original_name', ''),
-            'saved_name': file_info.get('stored_name') or file_info.get('saved_name', ''),
+            'stored_name': file_info.get('stored_name', ''),
             'saved_path': saved_path,
             'size': file_info.get('size', 0),
             'created_at': file_info.get('created_at', self._now_text()),
@@ -207,7 +207,6 @@ class CommandHistoryStore:
         copied['has_files'] = len(files) > 0
         return copied
 
-
     def _resolve_artifact_file_view(self, file_item: dict) -> dict:
         copied = dict(file_item)
         artifact_id = (copied.get('artifact_id') or '').strip()
@@ -221,7 +220,7 @@ class CommandHistoryStore:
                     'hostname': artifact.get('hostname', copied.get('hostname', '')),
                     'client_id': artifact.get('client_id', copied.get('client_id', '')),
                     'original_name': artifact.get('original_name', copied.get('original_name', '')),
-                    'saved_name': artifact.get('stored_name', copied.get('saved_name', '')),
+                    'stored_name': artifact.get('stored_name', copied.get('stored_name', '')),
                     'saved_path': artifact.get('saved_path', copied.get('saved_path', '')),
                     'size': artifact.get('size', copied.get('size', 0)),
                     'created_at': artifact.get('created_at', copied.get('created_at', '')),

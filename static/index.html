@@ -579,7 +579,7 @@
           <div class="background-job-file-list">
             <div v-for="(file, index) in selectedCommandExecutionEntry.files" :key="`${selectedCommandExecutionEntry.entry_id}-file-${index}`" class="background-job-file-item">
               <div class="background-job-file-main">
-                <div class="background-job-file-name">{{ file.original_name || file.saved_name || '-' }}</div>
+                <div class="background-job-file-name">{{ file.original_name || file.stored_name || '-' }}</div>
                 <div class="background-job-file-meta"><span>{{ formatBytes(file.size || 0) }}</span><span>{{ file.created_at || '-' }}</span><span v-if="getCommandExecutionFileStatusText(file)">[{{ getCommandExecutionFileStatusText(file) }}]</span></div>
               </div>
               <div class="background-job-file-actions"><a v-if="file.download_url && file.is_available" class="table-action-link" :href="file.download_url" target="_blank">Download</a></div>
