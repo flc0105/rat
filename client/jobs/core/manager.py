@@ -75,7 +75,6 @@ class JobManager:
                 client_id=getattr(self.socket, 'client_id', None),
                 job_key=self.get_job_key(job_name)
             )
-            # job_instance.bind_context(self.socket, command_id, client_id=getattr(self.socket, 'client_id', None))
             return job_instance
         except Exception as e:
             raise ImportError(f'Failed to load job module "{module_name}": {e}')

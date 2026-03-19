@@ -32,7 +32,6 @@ class ConnectionManager:
         with self._lock:
             return self._connections[index]
 
-    #web
     def get_by_client_id(self, client_id):
         with self._lock:
             for conn in self._connections:

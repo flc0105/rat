@@ -192,7 +192,7 @@ class ClientConnection(BaseSessionConnection):
         """
         return self.file_receiver.save_file(command_id, filename, length)
 
-    # client is busy start
+    # ------------------ foreground lock ------------------ #
 
     def acquire_foreground_task(self, task_type: str, command: str, source: str = '', task_id: str = '') -> dict:
         """
@@ -260,8 +260,6 @@ class ClientConnection(BaseSessionConnection):
             if self._foreground_task is None:
                 return None
             return dict(self._foreground_task)
-
-    # client is busy end
 
     def wait_for_result(self, id: int, command: Optional[str]):
         """

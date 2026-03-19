@@ -1,5 +1,5 @@
 from server.application.artifact.artifact_service import WebArtifactService
-from server.application.artifact.remote_files_service import WebRemoteFileService
+from server.application.artifact.remote_file_service import WebRemoteFileService
 from server.application.command.executor import CommandExecutor
 from server.application.connection.connection_service import WebConnectionService
 from server.application.execution.remote_execution_service import RemoteExecutionService

@@ -1,19 +1,8 @@
-# logging.basicConfig(
-#     format='[%(asctime)s] %(levelname)s: %(funcName)s -> %(message)s',
-#     level=logging.DEBUG,
-#     datefmt='%Y-%m-%d %H:%M:%S'
-# )
-#
-# logger = logging.getLogger(__name__)
-
-
 import logging
 
 def get_console_logger():
     logger = logging.getLogger("console_logger")
     logger.setLevel(logging.DEBUG)
-    # formatter = logging.Formatter('[%(asctime)s] %(levelname)s: %(funcName)s -> %(message)s',
-    #                               datefmt='%Y-%m-%d %H:%M:%S')
     formatter = logging.Formatter('[%(asctime)s] %(levelname)s: %(message)s',
                                   datefmt='%Y-%m-%d %H:%M:%S')
     console_handler = logging.StreamHandler()

@@ -123,7 +123,7 @@ window.AppSseModule = {
                     });
                 }
 
-                if(this.artifactDialogVisible) {
+                if (this.artifactDialogVisible) {
                     await this.loadArtifacts()
                 }
             });
@@ -135,9 +135,9 @@ window.AppSseModule = {
                 const sourceText = this.formatArtifactSourceLabel(payload);
 
                 ElementPlus.ElNotification({
-    title: 'File Received',
-    dangerouslyUseHTMLString: true,
-    message: `
+                    title: 'File Received',
+                    dangerouslyUseHTMLString: true,
+                    message: `
         <div>
           <div>${payload.original_name || fileName} has been saved</div>
           <div style="margin-top:6px;">
@@ -147,9 +147,9 @@ window.AppSseModule = {
           </div>
         </div>
     `,
-    type: 'success',
-    duration: 6000
-});
+                    type: 'success',
+                    duration: 6000
+                });
 
                 if (this.artifactDialogVisible) {
                     await this.loadArtifacts();
