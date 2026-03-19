@@ -90,6 +90,17 @@ window.AppStateModule = {
             return this.remoteSelectedPaths.length > 0;
         },
 
+        filteredArtifactItems() {
+            const activeType = String(this.artifactActiveTab || '').trim();
+            const hostname = String(this.artifactHostnameFilter || '').trim();
+
+            return (this.artifactItems || []).filter(item => {
+                if (activeType && item.artifact_type !== activeType) return false;
+                if (hostname && item.hostname !== hostname) return false;
+                return true;
+            });
+        },
+
         selectedBackgroundJob() {
             return this.backgroundJobs.find(item => item.job_id === this.selectedBackgroundJobId) || null;
         },
@@ -137,16 +148,6 @@ window.AppStateModule = {
 
             return sorted;
         },
-
-        filteredArtifactItems() {
-            const activeType = String(this.artifactActiveTab || '').trim();
-            const hostname = String(this.artifactHostnameFilter || '').trim();
-            return (this.artifactItems || []).filter(item => {
-                if (activeType && item.artifact_type !== activeType) return false;
-                if (hostname && item.hostname !== hostname) return false;
-                return true;
-            });
-        },
     },
 
     watch: {
@@ -156,6 +157,12 @@ window.AppStateModule = {
 
         remoteFilesDialogVisible(val) {
             if (!val) this.resetRemoteFilesState();
+        },
+
+        artifactDialogVisible(val) {
+            if (!val) {
+                this.artifactHostnameFilter = '';
+            }
         },
 
         backgroundJobsDialogVisible(val) {
@@ -182,12 +189,6 @@ window.AppStateModule = {
         commandExecutionDetailDialogVisible(val) {
             if (!val) {
                 this.selectedCommandExecutionEntryId = '';
-            }
-        },
-
-        artifactDialogVisible(val) {
-            if (!val) {
-                this.artifactHostnameFilter = '';
             }
         },
     }

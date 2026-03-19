@@ -45,6 +45,8 @@ class ServerWebService:
         )
 
         self.background_job_store = BackgroundJobStore()
+        self.background_job_store.artifact_service = self.artifact_service
+        self.server.command_history.artifact_service = self.artifact_service
         self.background_job_service = BackgroundJobService(
             server=self.server,
             event_bus=self.event_bus,

@@ -64,22 +64,6 @@ window.AppFilesModule = {
             );
         },
 
-        async previewRemoteEntry(row) {
-            if (!row || !row.path || row.is_dir) {
-                ElementPlus.ElMessage.warning('Please select a file');
-                return;
-            }
-
-            await this.loadPreviewPayload(
-                () => fetch(`/api/connections/${encodeURIComponent(this.selectedId)}/remote-files/preview`, {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({path: row.path})
-                }),
-                row.name || 'File Preview'
-            );
-        },
-
         async deleteArtifact(row) {
             if (!row || !row.artifact_id) {
                 ElementPlus.ElMessage.warning('Invalid artifact');
@@ -107,12 +91,6 @@ window.AppFilesModule = {
                 }
 
                 ElementPlus.ElMessage.success('Deleted');
-
-                if (this.previewDialogVisible && this.previewTitle === (row.original_name || row.stored_name)) {
-                    this.previewDialogVisible = false;
-                    this.resetPreviewState();
-                }
-
                 await this.loadArtifacts();
             } catch (e) {
                 if (e === 'cancel' || e === 'close' || e?.toString?.().includes('cancel')) return;
@@ -132,6 +110,7 @@ window.AppFilesModule = {
                 const url = new URL('/api/artifacts', window.location.origin);
                 const activeType = String(this.artifactActiveTab || '').trim();
                 const hostname = String(this.artifactHostnameFilter || '').trim();
+
                 if (activeType) url.searchParams.set('type', activeType);
                 if (hostname) url.searchParams.set('hostname', hostname);
 
@@ -196,6 +175,22 @@ window.AppFilesModule = {
             } finally {
                 this.artifactClearing = false;
             }
+        },
+
+        async previewRemoteEntry(row) {
+            if (!row || !row.path || row.is_dir) {
+                ElementPlus.ElMessage.warning('Please select a file');
+                return;
+            }
+
+            await this.loadPreviewPayload(
+                () => fetch(`/api/connections/${encodeURIComponent(this.selectedId)}/remote-files/preview`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({path: row.path})
+                }),
+                row.name || 'File Preview'
+            );
         },
 
         triggerUpload() {
@@ -552,12 +547,14 @@ window.AppFilesModule = {
                     throw new Error(json.message || 'Download failed');
                 }
 
-                const artifact = json.data && json.data.artifact;
-                if (!artifact || !artifact.artifact_id) {
+                const file = json.data && json.data.file;
+                if (!file || !file.artifact_id) {
                     throw new Error('Download finished, but artifact was not found');
                 }
 
-                window.open(artifact.download_url, '_blank');
+                const downloadUrl = file.download_url || `/api/artifacts/${encodeURIComponent(file.artifact_id)}/download`;
+                window.open(downloadUrl, '_blank');
+
                 ElementPlus.ElMessage.success(`Downloaded: ${row.name}`);
 
                 if (this.artifactDialogVisible) {
@@ -597,13 +594,15 @@ window.AppFilesModule = {
                     throw new Error(json.message || 'ZIP download failed');
                 }
 
-                const artifact = json.data && json.data.artifact;
-                if (!artifact || !artifact.artifact_id) {
+                const file = json.data && json.data.file;
+                if (!file || !file.artifact_id) {
                     throw new Error('ZIP download finished, but artifact was not found');
                 }
 
-                window.open(artifact.download_url, '_blank');
-                ElementPlus.ElMessage.success(`ZIP ready: ${artifact.original_name || artifact.stored_name}`);
+                const downloadUrl = file.download_url || `/api/artifacts/${encodeURIComponent(file.artifact_id)}/download`;
+                window.open(downloadUrl, '_blank');
+
+                ElementPlus.ElMessage.success(`ZIP ready: ${file.original_name || file.stored_name}`);
 
                 if (this.artifactDialogVisible) {
                     await this.loadArtifacts();
@@ -651,7 +650,20 @@ window.AppFilesModule = {
         },
 
         async previewBackgroundJobFile(file) {
-            if (!file || !file.preview_url) {
+            if (!file) {
+                ElementPlus.ElMessage.warning('No preview available');
+                return;
+            }
+
+            if (file.artifact_id) {
+                await this.loadPreviewPayload(
+                    () => fetch(`/api/artifacts/${encodeURIComponent(file.artifact_id)}/preview`),
+                    file.original_name || file.stored_name || 'Job File Preview'
+                );
+                return;
+            }
+
+            if (!file.preview_url) {
                 ElementPlus.ElMessage.warning('No preview available');
                 return;
             }

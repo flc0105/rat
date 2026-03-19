@@ -27,6 +27,7 @@ class Job(ABC):
         self.upload_url = UPLOAD_BASE_URL + '/api/files/upload'
         self.report_url = UPLOAD_BASE_URL + '/api/background-jobs/report'
         self.client_id = None
+        self.hostname = ''
 
     def bind_context(self, server, command_id, client_id=None, job_key=''):
         """
@@ -36,6 +37,11 @@ class Job(ABC):
         self.command_id = command_id
         self.client_id = client_id
         self.job_key = (job_key or '').strip()
+        self.hostname = ''
+        try:
+            self.hostname = (getattr(server, 'info', {}) or {}).get('hostname', '') or ''
+        except Exception:
+            self.hostname = ''
 
     def _build_display_name(self) -> str:
         display_base = self.job_key or self.job_name or 'job'
@@ -72,40 +78,11 @@ class Job(ABC):
             # 后台任务不应因为上报失败而崩溃
             pass
 
-    # todo: job线程改成不允许操作socket对象，只能通过http汇报
-    # def send_to_server(self, status, message, eof=0):
-    #     """
-    #     向服务端发送任务输出
-    #     """
-    #     thread_name = threading.current_thread().name
-    #     formatted_message = f'[{self.job_name}#{self.job_id[:8]} @ {thread_name}] {message}'
-    #     self.server.send_result(self.command_id, status, formatted_message, eof)
-
     def send_to_server(self, status, message, eof=0):
         """
         向服务端发送任务输出。
         当前实现改为 HTTP 上报。
         """
-
-        # 旧 socket 发送逻辑保留，先注释掉，方便之后回退
-        # if self.server is None:
-        #     return
-        #
-        # if not getattr(self.server, 'is_connected', True):
-        #     return
-        #
-        # thread_name = threading.current_thread().name
-        # formatted_message = (
-        #     f'[{self.job_name}#{self.job_id[:8]} @ {thread_name} '
-        #     f'client={self.client_id}] {message}'
-        # )
-        #
-        # try:
-        #     self.server.send_result(self.command_id, status, formatted_message, eof)
-        # except OSError:
-        #     pass
-        # except Exception:
-        #     pass
 
         thread_name = threading.current_thread().name
         formatted_message = (
@@ -137,7 +114,8 @@ class Job(ABC):
             return
 
         artifact_id = (file_info.get('artifact_id') or '').strip()
-        if not artifact_id:
+        relative_path = (file_info.get('relative_path') or '').strip()
+        if not artifact_id and not relative_path:
             return
 
         self._post_job_report(
@@ -148,9 +126,12 @@ class Job(ABC):
                     'artifact_type': file_info.get('artifact_type', ''),
                     'original_name': file_info.get('original_name', ''),
                     'stored_name': file_info.get('stored_name', ''),
-                    'relative_path': file_info.get('relative_path', ''),
+                    'relative_path': relative_path,
                     'size': file_info.get('size', 0),
                     'category': file_info.get('category', ''),
+                    'hostname': file_info.get('hostname', ''),
+                    'client_id': file_info.get('client_id', ''),
+                    'source_type': file_info.get('source_type', ''),
                     'download_url': file_info.get('download_url', ''),
                     'raw_url': file_info.get('raw_url', ''),
                     'preview_url': file_info.get('preview_url', ''),
@@ -164,12 +145,12 @@ class Job(ABC):
                 self.upload_url,
                 files={'file': file_obj},
                 data={
-                    'category': category,
-                    'client_id': self.client_id,
-                    'hostname': getattr(self.server, 'info', {}).get('hostname', '') if self.server else '',
-                    'job_id': self.job_id,
-                    'job_name': self.job_name,
-                    'job_key': self.job_key,
+                    "category": category,
+                    "client_id": self.client_id,
+                    "hostname": self.hostname,
+                    "job_id": self.job_id,
+                    "job_name": self.job_name,
+                    "job_key": self.job_key,
                 },
                 timeout=30,
             )

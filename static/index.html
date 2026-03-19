@@ -310,12 +310,27 @@
 
       <div class="dialog-table-shell">
         <el-table :data="filteredArtifactItems" v-loading="artifactLoading" stripe width="100%" height="100%" empty-text="No artifacts available" table-layout="fixed">
-          <el-table-column prop="original_name" label="Name" min-width="240" show-overflow-tooltip><template #default="{ row }"><div class="ellipsis">{{ row.original_name || row.stored_name }}</div></template></el-table-column>
-          <el-table-column label="Type" width="120" align="center"><template #default="{ row }">{{ row.artifact_type || '-' }}</template></el-table-column>
-          <el-table-column label="Hostname" min-width="140" show-overflow-tooltip><template #default="{ row }"><div class="ellipsis">{{ row.hostname || '-' }}</div></template></el-table-column>
-          <el-table-column label="Source" min-width="140" show-overflow-tooltip><template #default="{ row }"><div class="ellipsis">{{ row.source_type || '-' }}</div></template></el-table-column>
-          <el-table-column label="Size" width="110" align="center"><template #default="{ row }">{{ formatBytes(row.size) }}</template></el-table-column>
-          <el-table-column label="Created" width="170" show-overflow-tooltip><template #default="{ row }"><div class="ellipsis">{{ row.created_at || '-' }}</div></template></el-table-column>
+          <el-table-column prop="original_name" label="Name" min-width="220" show-overflow-tooltip>
+            <template #default="{ row }"><div class="ellipsis">{{ row.original_name || row.stored_name }}</div></template>
+          </el-table-column>
+          <el-table-column label="Type" width="120" align="center">
+            <template #default="{ row }">{{ buildArtifactTypeLabel(row) }}</template>
+          </el-table-column>
+          <el-table-column label="Hostname" min-width="140" show-overflow-tooltip>
+            <template #default="{ row }"><div class="ellipsis">{{ row.hostname || '-' }}</div></template>
+          </el-table-column>
+          <el-table-column label="Source / Category" min-width="190" show-overflow-tooltip>
+            <template #default="{ row }"><div class="ellipsis">{{ formatArtifactSourceLabel(row) }}</div></template>
+          </el-table-column>
+          <el-table-column label="Artifact ID" min-width="180" show-overflow-tooltip>
+            <template #default="{ row }"><div class="ellipsis mono">{{ row.artifact_id || '-' }}</div></template>
+          </el-table-column>
+          <el-table-column label="Size" width="110" align="center">
+            <template #default="{ row }">{{ formatBytes(row.size) }}</template>
+          </el-table-column>
+          <el-table-column label="Created" width="170" show-overflow-tooltip>
+            <template #default="{ row }"><div class="ellipsis">{{ row.created_at || '-' }}</div></template>
+          </el-table-column>
           <el-table-column label="Actions" width="220" align="center" fixed="right">
             <template #default="{ row }">
               <div class="table-actions table-actions-links">
@@ -338,11 +353,12 @@
                 <div class="mobile-file-main">
                   <div class="mobile-file-name">{{ row.original_name || row.stored_name }}</div>
                   <div class="mobile-file-tags">
-                    <el-tag size="small" type="info">{{ row.artifact_type || '-' }}</el-tag>
+                    <el-tag size="small" type="info">{{ buildArtifactTypeLabel(row) }}</el-tag>
                     <el-tag v-if="row.hostname" size="small">{{ row.hostname }}</el-tag>
                   </div>
                   <div class="mobile-file-meta">
-                    <div class="mobile-file-meta-item"><div class="mobile-file-meta-label">Source</div><div class="mobile-file-meta-value">{{ row.source_type || '-' }}</div></div>
+                    <div class="mobile-file-meta-item"><div class="mobile-file-meta-label">Source / Category</div><div class="mobile-file-meta-value">{{ formatArtifactSourceLabel(row) }}</div></div>
+                    <div class="mobile-file-meta-item"><div class="mobile-file-meta-label">Artifact ID</div><div class="mobile-file-meta-value mono">{{ row.artifact_id || '-' }}</div></div>
                     <div class="mobile-file-meta-item"><div class="mobile-file-meta-label">Size</div><div class="mobile-file-meta-value">{{ formatBytes(row.size) }}</div></div>
                     <div class="mobile-file-meta-item"><div class="mobile-file-meta-label">Created</div><div class="mobile-file-meta-value">{{ row.created_at || '-' }}</div></div>
                   </div>
@@ -357,6 +373,7 @@
           </div>
         </div>
       </div>
+
     </div>
   </el-dialog>
 

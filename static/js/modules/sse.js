@@ -122,22 +122,21 @@ window.AppSseModule = {
                         type: 'success'
                     });
                 }
-
-                if (this.artifactDialogVisible) {
-                    await this.loadArtifacts();
-                }
             });
 
             es.addEventListener('file_received', async (event) => {
                 const payload = JSON.parse(event.data);
-                const downloadUrl = payload.download_url || '#';
+                const fileName = payload.stored_name || payload.original_name || 'file';
+                const downloadUrl = payload.download_url || (payload.artifact_id ? `/api/artifacts/${encodeURIComponent(payload.artifact_id)}/download` : '#');
+                const sourceText = this.formatArtifactSourceLabel(payload);
 
                 ElementPlus.ElNotification({
-                    title: 'Artifact Received',
+                    title: 'File Received',
                     dangerouslyUseHTMLString: true,
                     message: `
             <div>
-              <div>${payload.original_name || payload.stored_name || 'artifact'} has been saved to the artifact area</div>
+              <div>${payload.original_name || fileName} has been saved</div>
+              <div style="margin-top:4px; color:#64748b;">${payload.hostname || '-'} / ${sourceText}</div>
               <div style="margin-top:6px;">
                 <a href="${downloadUrl}" target="_blank" style="color:#409eff;text-decoration:none;">
                   Download now

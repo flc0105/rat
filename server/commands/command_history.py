@@ -31,6 +31,7 @@ class CommandHistoryStore:
         self.history_root_dir = COMMAND_HISTORY_ROOT_DIR
         self.max_entries_per_host = COMMAND_HISTORY_MAX_ENTRIES_PER_HOST
         self._lock = threading.RLock()
+        self.artifact_service = None
         self._prepare_dirs()
 
     def _prepare_dirs(self):
@@ -199,16 +200,49 @@ class CommandHistoryStore:
         files = []
 
         for file_item in item.get('files') or []:
-            file_copied = dict(file_item)
-            saved_path = file_copied.get('saved_path', '')
-            is_available = bool(saved_path) and os.path.isfile(saved_path)
-            file_copied['is_available'] = is_available
-            file_copied['status_text'] = '' if is_available else 'File removed'
-            files.append(file_copied)
+            files.append(self._resolve_artifact_file_view(file_item))
 
         copied['files'] = files
         copied['file_count'] = len(files)
         copied['has_files'] = len(files) > 0
+        return copied
+
+
+    def _resolve_artifact_file_view(self, file_item: dict) -> dict:
+        copied = dict(file_item)
+        artifact_id = (copied.get('artifact_id') or '').strip()
+
+        if artifact_id and self.artifact_service is not None:
+            try:
+                artifact = self.artifact_service.get_artifact_by_id(artifact_id)
+                copied.update({
+                    'artifact_type': artifact.get('artifact_type', copied.get('artifact_type', '')),
+                    'category': artifact.get('category', copied.get('category', '')),
+                    'hostname': artifact.get('hostname', copied.get('hostname', '')),
+                    'client_id': artifact.get('client_id', copied.get('client_id', '')),
+                    'original_name': artifact.get('original_name', copied.get('original_name', '')),
+                    'saved_name': artifact.get('stored_name', copied.get('saved_name', '')),
+                    'saved_path': artifact.get('saved_path', copied.get('saved_path', '')),
+                    'size': artifact.get('size', copied.get('size', 0)),
+                    'created_at': artifact.get('created_at', copied.get('created_at', '')),
+                    'download_url': artifact.get('download_url', copied.get('download_url', '')),
+                    'raw_url': artifact.get('raw_url', copied.get('raw_url', '')),
+                    'preview_url': artifact.get('preview_url', copied.get('preview_url', '')),
+                    'source_type': artifact.get('source_type', copied.get('source_type', '')),
+                    'related_path': artifact.get('related_path', copied.get('related_path', '')),
+                    'is_available': artifact.get('is_available', True),
+                    'status_text': artifact.get('status_text', ''),
+                })
+                return copied
+            except Exception:
+                copied['is_available'] = False
+                copied['status_text'] = copied.get('status_text') or 'Artifact removed'
+                return copied
+
+        saved_path = copied.get('saved_path', '')
+        is_available = bool(saved_path) and os.path.isfile(saved_path)
+        copied['is_available'] = is_available
+        copied['status_text'] = '' if is_available else 'File removed'
         return copied
 
     def create_entry_for_connection(self, conn, command: str, source: str = 'cli'):

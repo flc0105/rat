@@ -2,8 +2,8 @@ window.AppUtilsModule = {
     methods: {
 
         toggleCommandExecutionOutputSort() {
-    this.commandExecutionOutputSortOrder = this.commandExecutionOutputSortOrder === 'asc' ? 'desc' : 'asc';
-},
+            this.commandExecutionOutputSortOrder = this.commandExecutionOutputSortOrder === 'asc' ? 'desc' : 'asc';
+        },
 
         resetPreviewState() {
             this.previewType = '';
@@ -164,17 +164,46 @@ window.AppUtilsModule = {
         },
 
         getCommandExecutionDisplayCwd(item) {
-    if (!item) return '-';
-    return item.cwd_end || item.cwd_start || '-';
-},
+            if (!item) return '-';
+            return item.cwd_end || item.cwd_start || '-';
+        },
 
         buildCommandExecutionSingleLineSummary(item) {
-    return this.buildCommandExecutionSummary(item);
-},
+            return this.buildCommandExecutionSummary(item);
+        },
 
-getCommandExecutionFileStatusText(file) {
-    if (!file) return '';
-    return file.is_available ? '' : (file.status_text || 'File removed');
-},
+        getCommandExecutionFileStatusText(file) {
+            if (!file) return '';
+            return file.is_available ? '' : (file.status_text || 'File removed');
+        },
+
+        buildArtifactTypeLabel(item) {
+            const artifactType = String(item && item.artifact_type || '').trim();
+            if (artifactType === 'http_uploads') return 'http_uploads';
+            if (artifactType === 'downloads') return 'downloads';
+            if (artifactType === 'previews') return 'previews';
+            return artifactType || '-';
+        },
+
+        formatArtifactSourceLabel(item) {
+            if (!item) return '-';
+
+            const sourceType = String(item.source_type || '').trim();
+            const category = String(item.category || '').trim();
+
+            if (sourceType === 'http_upload' && category) {
+                return `http_upload / ${category}`;
+            }
+
+            if (category && item.artifact_type === 'http_uploads') {
+                return `${sourceType || 'http_upload'} / ${category}`;
+            }
+
+            if (category) {
+                return `${sourceType || 'artifact'} / ${category}`;
+            }
+
+            return sourceType || '-';
+        },
     }
 };
