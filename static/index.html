@@ -91,11 +91,10 @@
                   </div>
 
                   <div class="terminal-tools">
-                    <el-button size="small" class="tool-btn tool-btn-accent" @click="triggerUpload">Upload</el-button>
                     <el-button size="small" class="tool-btn tool-btn-accent" @click="openRemoteFilesDialog">Remote Files</el-button>
                     <el-button size="small" class="tool-btn tool-btn-accent" @click="openArtifactDialog">Artifacts</el-button>
-                    <el-button size="small" class="tool-btn" @click="openConnectionInfoDialog">Connection Info</el-button>
-                    <el-button size="small" class="tool-btn" @click="openBackgroundJobsDialog">Background Jobs</el-button>
+                    <el-button size="small" class="tool-btn" @click="openConnectionInfoDialog">Info</el-button>
+                    <el-button size="small" class="tool-btn" @click="openBackgroundJobsDialog">Jobs</el-button>
                     <el-button size="small" class="tool-btn" @click="openCommandHistoryDialog">History</el-button>
                     <el-button size="small" class="tool-btn tool-btn-danger" @click="killConnection">Disconnect</el-button>
 
@@ -170,7 +169,6 @@
     </div>
   </div>
 
-  <input ref="uploadInputRef" type="file" class="hidden-file-input" @change="handleUploadChange" />
   <input ref="remoteUploadInputRef" type="file" class="hidden-file-input" @change="handleRemoteUploadChange" />
 
   <el-dialog v-model="remoteFilesDialogVisible" title="Remote File Browser" width="1180px" top="4vh" class="fixed-dialog remote-files-dialog">
@@ -181,7 +179,7 @@
             <el-button size="small" @click="goToRemoteParent" :disabled="!remoteFilesParentPath">Up</el-button>
             <el-button size="small" @click="refreshRemoteDirectory">Refresh</el-button>
             <el-button size="small" @click="createRemoteDirectory">New Folder</el-button>
-            <el-button size="small" :loading="remoteUploadLoading" @click="triggerRemoteUpload">Upload Here</el-button>
+            <el-button size="small" :loading="remoteUploadLoading" @click="triggerRemoteUpload">Upload</el-button>
             <el-button size="small" type="primary" :disabled="!hasRemoteSelection" :loading="remoteZipDownloading" @click="downloadSelectedRemoteEntries">Download Selected</el-button>
             <el-button size="small" :disabled="!hasRemoteSelection" @click="clearRemoteSelection">Clear Selection</el-button>
           </div>

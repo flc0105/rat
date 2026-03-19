@@ -193,53 +193,8 @@ window.AppFilesModule = {
             );
         },
 
-        triggerUpload() {
-            if (!this.selectedId) {
-                ElementPlus.ElMessage.warning('Please select a device');
-                return;
-            }
 
-            const input = this.$refs.uploadInputRef;
-            if (input) {
-                input.value = '';
-                input.click();
-            }
-        },
 
-        async handleUploadChange(event) {
-            const file = event.target.files && event.target.files[0];
-            if (!file) return;
-
-            if (!this.selectedId) {
-                ElementPlus.ElMessage.warning('Please select a device');
-                return;
-            }
-
-            const formData = new FormData();
-            formData.append('file', file);
-
-            this.uploading = true;
-            this.appendOutput(this.selectedId, `> [Upload] ${file.name}`, 'command');
-
-            try {
-                const res = await fetch(`/api/connections/${encodeURIComponent(this.selectedId)}/upload`, {
-                    method: 'POST',
-                    body: formData
-                });
-
-                const json = await res.json();
-                if (!res.ok || json.code !== 0) {
-                    throw new Error(json.message || 'Upload failed');
-                }
-
-                ElementPlus.ElMessage.success(`Upload started: ${file.name}`);
-            } catch (e) {
-                this.appendOutput(this.selectedId, `[上传失败] ${e.message || 'unknown error'}`, 'error');
-                ElementPlus.ElMessage.error(e.message || 'Upload failed');
-            } finally {
-                this.uploading = false;
-            }
-        },
 
         triggerRemoteUpload() {
             if (!this.selectedId) {

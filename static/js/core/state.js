@@ -17,7 +17,6 @@ window.AppStateModule = {
             selectedCommandExecutionEntryId: '',
             commandExecutionOutputSortOrder: 'desc',
             sending: false,
-            uploading: false,
             eventSource: null,
             sseReady: false,
 
