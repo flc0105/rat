@@ -51,6 +51,43 @@ MSGBOX_ARGUMENT_SPEC = ArgumentCommandSpec(
     ]
 )
 
+NOTIFY_ARGUMENT_SPEC = ArgumentCommandSpec(
+    name='notify',
+    description='Show a native macOS notification',
+    options=[
+        ArgumentOptionSpec(
+            name='title',
+            option_type='str',
+            required=False,
+            default='',
+            allow_empty=True,
+            help_text='Notification title',
+        ),
+        ArgumentOptionSpec(
+            name='text',
+            option_type='str',
+            required=True,
+            default=None,
+            allow_empty=False,
+            help_text='Notification text',
+        ),
+        ArgumentOptionSpec(
+            name='sound',
+            option_type='flag',
+            required=False,
+            default=False,
+            help_text='Play the default notification sound',
+        ),
+        ArgumentOptionSpec(
+            name='help',
+            option_type='flag',
+            required=False,
+            default=False,
+            help_text='Show this help message',
+        ),
+    ]
+)
+
 
 class MacCommands(CommonCommands):
     """macOS 平台专用命令集合"""
@@ -150,6 +187,19 @@ class MacCommands(CommonCommands):
         text = text.replace('"', '\\"')
         return text
 
+    def _spawn_osascript(self, applescript: str):
+        """
+        异步启动 osascript，不等待执行结果。
+        适用于不希望阻塞当前命令返回的 UI 类操作。
+        """
+        return subprocess.Popen(
+            ['osascript', '-e', applescript],
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            start_new_session=True
+        )
+
     # ------------------ 已有命令优化 ------------------ #
     @desc("Capture a screenshot", group='platform')
     def screenshot(self):
@@ -203,7 +253,7 @@ class MacCommands(CommonCommands):
     @argument_command('msgbox', spec=MSGBOX_ARGUMENT_SPEC)
     def _acmd_msgbox(self, args_dict, payload=None):
         """
-        acmd 实验命令：显示消息框
+        acmd 实验命令：显示消息框（异步）
         """
         try:
             title = args_dict.get('title', '')
@@ -223,21 +273,40 @@ class MacCommands(CommonCommands):
             if timeout is not None and timeout > 0:
                 applescript += f' giving up after {timeout}'
 
-            command = f"osascript -e '{applescript}'"
-            result = subprocess.run(
-                command,
-                shell=True,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                stdin=subprocess.DEVNULL,
-                text=True,
-                encoding='utf-8',
-                errors='replace'
+            process = self._spawn_osascript(applescript)
+            return 1, (
+                f'Message box launched asynchronously: {title or "(no title)"}\n'
+                f'PID: {process.pid}'
             )
-
-            if result.returncode != 0:
-                return 0, result.stderr.strip() or 'Failed to show message box'
-
-            return 1, f'Message box displayed: {title or "(no title)"}'
         except Exception as e:
-            return 0, f'Failed to show message box: {e}'
+            return 0, f'Failed to launch message box: {e}'
+
+    @argument_command('notify', spec=NOTIFY_ARGUMENT_SPEC)
+    def _acmd_notify(self, args_dict, payload=None):
+        """
+        acmd 实验命令：显示系统通知（异步）
+        """
+        try:
+            title = args_dict.get('title', '')
+            text = args_dict['text']
+            sound = args_dict.get('sound', False)
+
+            escaped_text = self._escape_osascript_text(text)
+            escaped_title = self._escape_osascript_text(title)
+
+
+            applescript = f'display notification "{escaped_text}"'
+
+            if escaped_title:
+                applescript += f' with title "{escaped_title}"'
+
+            if sound:
+                applescript += ' sound name "default"'
+
+            process = self._spawn_osascript(applescript)
+            return 1, (
+                f'Notification launched asynchronously: {title or "(no title)"}\n'
+                f'PID: {process.pid}'
+            )
+        except Exception as e:
+            return 0, f'Failed to launch notification: {e}'

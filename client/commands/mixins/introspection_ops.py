@@ -1,5 +1,6 @@
 import inspect
 
+from client.commands.argument_command_registry import ArgumentCommandRegistry
 from core.utils.decorator import desc
 
 
@@ -17,6 +18,37 @@ class CommandIntrospectionMixin:
             if hasattr(method, 'help')
         }
 
+    def _get_argument_command_registry(self):
+        """
+        获取 acmd 注册表
+        """
+        return ArgumentCommandRegistry(self)
+
+    def _get_argument_command_manifest_payload(self):
+        """
+        获取 acmd 自动补全清单
+        """
+        try:
+            registry = self._get_argument_command_registry()
+            return registry.get_manifest_payload()
+        except Exception:
+            return []
+
+    def _get_argument_command_help_items(self):
+        """
+        获取 acmd help 分组项
+        """
+        try:
+            registry = self._get_argument_command_registry()
+            entries = registry.list_command_entries()
+            return [
+                (f'acmd {item.get("name", "")}', item.get('description') or 'No description')
+                for item in entries
+                if item.get('name')
+            ]
+        except Exception:
+            return []
+
     def get_command_manifest_payload(self):
         """
         获取命令清单数据（本地方法，不通过 socket 返回）
@@ -31,7 +63,9 @@ class CommandIntrospectionMixin:
             }
             for name, method in methods.items()
         ]
-        payload.sort(key=lambda item: (item['group'], item['name'].lower()))
+
+        payload.extend(self._get_argument_command_manifest_payload())
+        payload.sort(key=lambda item: (item.get('group', 'general'), item.get('name', '').lower()))
         return payload
 
     def _group_command_help_payload(self):
@@ -44,6 +78,10 @@ class CommandIntrospectionMixin:
         for name, method in methods.items():
             group = getattr(method, 'group', 'general')
             grouped.setdefault(group, []).append((name, method.help))
+
+        argument_command_items = self._get_argument_command_help_items()
+        if argument_command_items:
+            grouped.setdefault('acmd', []).extend(argument_command_items)
 
         for group_name in grouped:
             grouped[group_name].sort(key=lambda item: item[0].lower())
@@ -63,11 +101,12 @@ class CommandIntrospectionMixin:
             'job': 'Job',
             'session': 'Session',
             'platform': 'Platform',
+            'acmd': 'Acmd',
             'general': 'General',
         }
 
         lines = []
-        ordered_groups = ['shell', 'file', 'file_path', 'job', 'session', 'platform', 'general']
+        ordered_groups = ['shell', 'file', 'file_path', 'job', 'session', 'platform', 'acmd', 'general']
         seen = set()
 
         for group_name in ordered_groups:

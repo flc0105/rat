@@ -46,24 +46,7 @@ class CommandExecutor:
             'help': 'Clear command history for the current host',
             'source': 'server'
         },
-        {
-            'name': 'acmd',
-            'template': 'acmd msgbox --text "hello"',
-            'help': 'Experimental structured command channel',
-            'source': 'server'
-        },
-        {
-            'name': 'acmd',
-            'template': 'acmd msgbox --title "Notice" --text "hello"',
-            'help': 'Experimental structured dialog command',
-            'source': 'server'
-        },
-        {
-            'name': 'acmd',
-            'template': 'acmd msgbox --help',
-            'help': 'Show help for an experimental structured command',
-            'source': 'server'
-        },
+
     ]
 
     ACMD_PREFIX = 'acmd'

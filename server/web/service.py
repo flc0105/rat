@@ -61,16 +61,18 @@ class ServerWebService:
                 continue
 
             name = (item.get('name') or '').strip()
-            if not name:
+            template = (item.get('template') or name).strip()
+
+            if not name or not template:
                 continue
 
             result.append({
                 'name': name,
-                'template': name,
+                'template': template,
                 'help': item.get('help', ''),
                 'group': item.get('group', 'general'),
                 'suggest': item.get('suggest', True),
-                'source': 'client'
+                'source': item.get('source', 'client')
             })
 
         return result
