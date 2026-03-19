@@ -3,8 +3,9 @@ import os
 import shlex
 from functools import partial
 
-from core.utils.parsing import scan_args, parse
 from core.utils.formatting import format_dict
+from core.utils.parsing import parse, scan_args
+from server.application.command.invocation_service import RemoteExecutionService
 from server.config.config import SCRIPT_PATH
 
 
@@ -46,7 +47,6 @@ class CommandExecutor:
             'help': 'Clear command history for the current host',
             'source': 'server'
         },
-
     ]
 
     ACMD_PREFIX = 'acmd'
@@ -55,6 +55,7 @@ class CommandExecutor:
         self.conn = conn
         self.server = server
         self.current_history_entry_id = ''
+        self.remote_execution_service = RemoteExecutionService(server)
 
     # ------------------ 通用结果工具 ------------------ #
     def _yield_error(self, error):
@@ -111,8 +112,11 @@ class CommandExecutor:
         try:
             expanded_cmd = self.server.alias_manager.get_alias_command(name, arg)
             return partial(
-                self.conn.send_command,
+                self.remote_execution_service.stream_command,
+                self.conn,
                 expanded_cmd,
+                command_type='command',
+                extra=None,
                 history_entry_id=self.current_history_entry_id
             )
         except Exception as e:
@@ -123,8 +127,11 @@ class CommandExecutor:
         默认透传原始命令到客户端
         """
         return partial(
-            self.conn.send_command,
+            self.remote_execution_service.stream_command,
+            self.conn,
             raw_command,
+            command_type='command',
+            extra=None,
             history_entry_id=self.current_history_entry_id
         )
 
@@ -215,9 +222,10 @@ class CommandExecutor:
         """
         payload = self._parse_argument_command(raw_command)
         return partial(
-            self.conn.send_command,
+            self.remote_execution_service.stream_structured_command,
+            self.conn,
             raw_command,
-            type='acmd',
+            command_type='acmd',
             extra=payload,
             history_entry_id=self.current_history_entry_id
         )
@@ -251,11 +259,12 @@ class CommandExecutor:
             raise FileNotFoundError(f"File does not exist: {filename}")
 
         try:
-            for status, result in self.conn.send_file(
+            yield from self.remote_execution_service.stream_upload(
+                self.conn,
                 filename,
+                remote_path='',
                 history_entry_id=self.current_history_entry_id
-            ):
-                yield status, result
+            )
         except Exception:
             self.conn.pending_command_ids.clear()
             raise
@@ -294,9 +303,10 @@ class CommandExecutor:
         构造脚本执行命令
         """
         return partial(
-            self.conn.send_command,
+            self.remote_execution_service.stream_structured_command,
+            self.conn,
             script_text,
-            type='script',
+            command_type='script',
             extra=scan_args(script_args),
             history_entry_id=self.current_history_entry_id
         )
@@ -354,7 +364,7 @@ class CommandExecutor:
         try:
             self.server.alias_manager.remove_alias(arg)
             yield 1, f'Alias removed: {arg}'
-        except KeyError as e:
+        except KeyError:
             raise ValueError(f"Alias not found: {arg}")
 
     def history(self, arg):

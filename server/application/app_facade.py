@@ -1,15 +1,15 @@
-from server.application.command.executor import CommandExecutor
 from server.application.artifact.artifact_service import WebArtifactService
+from server.application.artifact.remote_files_service import WebRemoteFileService
+from server.application.artifact.upload_temp_service import WebFileService
+from server.application.command.executor import CommandExecutor
+from server.application.command.invocation_service import RemoteExecutionService
+from server.application.connection.connection_service import WebConnectionService
 from server.application.jobs.background_job_service import BackgroundJobService
 from server.application.jobs.background_job_store import BackgroundJobStore
-from server.application.connection.connection_service import WebConnectionService
-from server.web.event_bus import WebEventBus
-from server.application.artifact.upload_temp_service import WebFileService
-from server.application.artifact.remote_files_service import WebRemoteFileService
-from server.application.command.invocation_service import RemoteArtifactFetcher, RemoteCommandRunner
 from server.application.tasks.task_runner import WebTaskRunner
 from server.application.tasks.task_service import WebTaskService
 from server.application.tasks.task_store import WebTaskStore
+from server.web.event_bus import WebEventBus
 
 
 class ServerWebService:
@@ -17,7 +17,7 @@ class ServerWebService:
     Server 的 Web 门面服务。
 
     职责：
-    - 聚合 Web 侧各个子服务
+    - 聚合应用侧各个子服务
     - 对外暴露稳定接口，避免 app.py / server.py 直接依赖过多内部实现
     """
 
@@ -28,13 +28,10 @@ class ServerWebService:
 
         self.artifact_service = WebArtifactService()
         self.file_service = WebFileService(self.artifact_service)
-
-        self.remote_command_runner = RemoteCommandRunner(self.server)
-        self.remote_artifact_fetcher = RemoteArtifactFetcher(self.server)
+        self.remote_execution_service = RemoteExecutionService(self.server)
 
         self.remote_file_service = WebRemoteFileService(
-            command_runner=self.remote_command_runner,
-            artifact_fetcher=self.remote_artifact_fetcher,
+            remote_execution_service=self.remote_execution_service,
             artifact_service=self.artifact_service,
         )
 
@@ -60,10 +57,11 @@ class ServerWebService:
         self.background_job_store = BackgroundJobStore()
         self.background_job_store.artifact_service = self.artifact_service
         self.server.command_history.artifact_service = self.artifact_service
+
         self.background_job_service = BackgroundJobService(
             event_bus=self.event_bus,
             job_store=self.background_job_store,
-            command_runner=self.remote_command_runner,
+            remote_execution_service=self.remote_execution_service,
         )
 
     # ------------------ helpers ------------------ #

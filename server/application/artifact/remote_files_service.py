@@ -4,18 +4,17 @@ import json
 
 class WebRemoteFileService:
     """
-    Web 远程文件服务。
+    远程文件应用服务。
 
     职责：
     - 调用客户端目录浏览命令
     - 调用客户端删除命令
     - 调用客户端下载命令
-    - 将客户端返回结果转换成 Web 端可直接消费的数据
+    - 将客户端返回结果转换成上层可直接消费的数据
     """
 
-    def __init__(self, command_runner, artifact_fetcher, artifact_service):
-        self.command_runner = command_runner
-        self.artifact_fetcher = artifact_fetcher
+    def __init__(self, remote_execution_service, artifact_service):
+        self.remote_execution_service = remote_execution_service
         self.artifact_service = artifact_service
 
     def _encode_payload_arg(self, payload: dict) -> str:
@@ -33,7 +32,7 @@ class WebRemoteFileService:
         浏览远程目录
         """
         command = self._build_command('browse_dir', {'path': path})
-        payload = self.command_runner.run_json_command(client_id, command)
+        payload = self.remote_execution_service.run_json_command(client_id, command)
 
         return {
             'current_path': payload.get('current_path', ''),
@@ -49,7 +48,7 @@ class WebRemoteFileService:
             raise ValueError('path is required')
 
         command = self._build_command('delete_path', {'path': path})
-        result_text = self.command_runner.run_text_command(client_id, command)
+        result_text = self.remote_execution_service.run_text_command(client_id, command)
 
         return {
             'path': path,
@@ -64,7 +63,7 @@ class WebRemoteFileService:
             raise ValueError('path is required')
 
         command = self._build_command('mkdir_path', {'path': path})
-        result_text = self.command_runner.run_text_command(client_id, command)
+        result_text = self.remote_execution_service.run_text_command(client_id, command)
 
         return {
             'path': path,
@@ -84,7 +83,7 @@ class WebRemoteFileService:
             'old_path': old_path,
             'new_name': new_name
         })
-        result_text = self.command_runner.run_text_command(client_id, command)
+        result_text = self.remote_execution_service.run_text_command(client_id, command)
 
         return {
             'old_path': old_path,
@@ -92,7 +91,7 @@ class WebRemoteFileService:
             'message': result_text
         }
 
-    def download_file(self, client_id: str, path: str) -> dict:
+    def download_file(self, client_id: str, path: str, history_entry_id: str = '') -> dict:
         """
         下载远程文件到服务端 artifact downloads 区，并返回下载信息
         """
@@ -102,12 +101,13 @@ class WebRemoteFileService:
         normalized_path = path.strip()
         command = self._build_command('download_path', {'path': normalized_path})
 
-        result = self.artifact_fetcher.fetch_artifact(
-            client_id=client_id,
-            command=command,
+        result = self.remote_execution_service.fetch_artifact(
+            client_id,
+            command,
             artifact_type='downloads',
             source_type='remote_download',
             related_path=normalized_path,
+            history_entry_id=history_entry_id,
         )
 
         return {
@@ -116,7 +116,13 @@ class WebRemoteFileService:
             'artifact': result['artifact'],
         }
 
-    def download_paths_as_zip(self, client_id: str, paths: list[str], archive_name: str = '') -> dict:
+    def download_paths_as_zip(
+        self,
+        client_id: str,
+        paths: list[str],
+        archive_name: str = '',
+        history_entry_id: str = '',
+    ) -> dict:
         """
         将多个远程路径打包为 zip 下载到服务端 artifact downloads 区
         """
@@ -136,12 +142,13 @@ class WebRemoteFileService:
             'archive_name': archive_name,
         })
 
-        result = self.artifact_fetcher.fetch_artifact(
-            client_id=client_id,
-            command=command,
+        result = self.remote_execution_service.fetch_artifact(
+            client_id,
+            command,
             artifact_type='downloads',
             source_type='remote_download_bundle',
             related_path='\n'.join(normalized_paths),
+            history_entry_id=history_entry_id,
         )
 
         return {
@@ -150,7 +157,7 @@ class WebRemoteFileService:
             'artifact': result['artifact'],
         }
 
-    def preview_file(self, client_id: str, path: str) -> dict:
+    def preview_file(self, client_id: str, path: str, history_entry_id: str = '') -> dict:
         """
         预览远程文件：
         - 拉取到 previews 目录
@@ -162,12 +169,13 @@ class WebRemoteFileService:
         normalized_path = path.strip()
         command = self._build_command('download_path', {'path': normalized_path})
 
-        result = self.artifact_fetcher.fetch_artifact(
-            client_id=client_id,
-            command=command,
+        result = self.remote_execution_service.fetch_artifact(
+            client_id,
+            command,
             artifact_type='previews',
             source_type='remote_preview',
             related_path=normalized_path,
+            history_entry_id=history_entry_id,
         )
         artifact = result['artifact']
 

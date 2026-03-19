@@ -4,7 +4,7 @@ from datetime import datetime
 
 class BackgroundJobService:
     """
-    后台任务 Web 服务。
+    后台任务应用服务。
 
     职责：
     - 列出可启动任务
@@ -13,10 +13,10 @@ class BackgroundJobService:
     - 对外提供任务监控数据
     """
 
-    def __init__(self, event_bus, job_store, command_runner):
+    def __init__(self, event_bus, job_store, remote_execution_service):
         self.event_bus = event_bus
         self.job_store = job_store
-        self.command_runner = command_runner
+        self.remote_execution_service = remote_execution_service
 
     def _serialize_available_job(self, job_name: str) -> dict:
         normalized = str(job_name or '').strip()
@@ -36,7 +36,7 @@ class BackgroundJobService:
         return [self._serialize_available_job(line) for line in lines]
 
     def list_available_jobs(self, client_id: str) -> list[dict]:
-        text = self.command_runner.run_text_command(client_id, 'start_job')
+        text = self.remote_execution_service.run_text_command(client_id, 'start_job')
         return self._parse_available_jobs_text(text)
 
     def start_job(self, client_id: str, job_name: str) -> dict:
@@ -44,7 +44,7 @@ class BackgroundJobService:
         if not job_name:
             raise ValueError('job_name is required')
 
-        text = self.command_runner.run_text_command(client_id, f'start_job {job_name}')
+        text = self.remote_execution_service.run_text_command(client_id, f'start_job {job_name}')
         return {
             'client_id': client_id,
             'job_name': job_name,
@@ -56,7 +56,7 @@ class BackgroundJobService:
         if not job_key:
             raise ValueError('job_key is required')
 
-        text = self.command_runner.run_text_command(client_id, f'stop_job {job_key}')
+        text = self.remote_execution_service.run_text_command(client_id, f'stop_job {job_key}')
         return {
             'client_id': client_id,
             'job_key': job_key,
