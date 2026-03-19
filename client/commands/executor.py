@@ -1,6 +1,7 @@
 import inspect
 import platform
 
+from client.commands.argument_command_registry import ArgumentCommandRegistry
 from core.utils.parsing import parse
 
 
@@ -14,6 +15,7 @@ class CommandExecutor:
     def __init__(self, socket):
         self.socket = socket
         self.platform_commands = None
+        self.argument_command_registry = None
 
     # ------------------ 平台命令加载 ------------------ #
     def _get_platform_name(self) -> str:
@@ -43,6 +45,14 @@ class CommandExecutor:
             command_class = self._load_platform_command_class()
             self.platform_commands = command_class(self.socket)
         return self.platform_commands
+
+    def get_argument_command_registry(self):
+        """
+        获取当前平台对应的 acmd 注册表（懒加载）
+        """
+        if self.argument_command_registry is None:
+            self.argument_command_registry = ArgumentCommandRegistry(self.get_commands())
+        return self.argument_command_registry
 
     # ------------------ 命令路由 ------------------ #
     def _resolve_builtin_command(self, commands, name):
@@ -89,3 +99,16 @@ class CommandExecutor:
 
         default_command = self._resolve_default_command(commands, command)
         return default_command()
+
+    def execute_argument_command(self, command_id, payload: dict):
+        """
+        执行 acmd 结构化实验命令
+        :param command_id: 命令id
+        :param payload: 结构化命令负载
+        :return: 执行结果元组（状态和消息）
+        """
+        commands = self.get_commands()
+        commands.command_id = command_id
+
+        registry = self.get_argument_command_registry()
+        return registry.execute(payload)

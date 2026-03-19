@@ -46,7 +46,21 @@ class CommandExecutor:
             'help': 'Clear command history for the current host',
             'source': 'server'
         },
+        {
+            'name': 'acmd',
+            'template': 'acmd msgbox --text "hello"',
+            'help': 'Experimental structured command channel',
+            'source': 'server'
+        },
+        {
+            'name': 'acmd',
+            'template': 'acmd msgbox --title "Notice" --text "hello"',
+            'help': 'Experimental structured dialog command',
+            'source': 'server'
+        },
     ]
+
+    ACMD_PREFIX = 'acmd'
 
     def __init__(self, conn, server):
         self.conn = conn
@@ -133,11 +147,107 @@ class CommandExecutor:
     #
     #     return _runner
 
+    def _is_argument_command(self, cmd: str) -> bool:
+        """
+        判断是否为 acmd 实验命令
+        """
+        name, _ = parse(cmd)
+        return name == self.ACMD_PREFIX
+
+    def _parse_argument_command(self, cmd: str) -> dict:
+        """
+        解析 acmd 命令格式
+        格式：
+        acmd <command> [--arg1 value1] [--arg2 value2] [--flag] [--key=value]
+        返回：
+        {
+            'name': 'msgbox',
+            'args': {...},
+            'raw': 'acmd ...'
+        }
+        """
+        parts = shlex.split(cmd)
+
+        if len(parts) < 2:
+            raise ValueError('Usage: acmd <command> [--key value] [--flag]')
+
+        if parts[0] != self.ACMD_PREFIX:
+            raise ValueError('Invalid acmd format')
+
+        command_name = (parts[1] or '').strip()
+        if not command_name:
+            raise ValueError('Missing acmd command name')
+
+        args_dict = {}
+        positional_args = []
+        index = 2
+
+        while index < len(parts):
+            token = parts[index]
+
+            if token == '--':
+                positional_args.extend(parts[index + 1:])
+                break
+
+            if token.startswith('--'):
+                option_text = token[2:]
+                if not option_text:
+                    raise ValueError('Empty option name is not allowed')
+
+                if '=' in option_text:
+                    key, value = option_text.split('=', 1)
+                    key = key.strip()
+                    if not key:
+                        raise ValueError('Empty option name is not allowed')
+                    args_dict[key] = value
+                    index += 1
+                    continue
+
+                key = option_text.strip()
+                if not key:
+                    raise ValueError('Empty option name is not allowed')
+
+                if index + 1 < len(parts) and not parts[index + 1].startswith('--'):
+                    args_dict[key] = parts[index + 1]
+                    index += 2
+                    continue
+
+                args_dict[key] = True
+                index += 1
+                continue
+
+            positional_args.append(token)
+            index += 1
+
+        if positional_args:
+            args_dict['_args'] = positional_args
+
+        return {
+            'name': command_name,
+            'args': args_dict,
+            'raw': cmd,
+        }
+
+    def _resolve_argument_command(self, raw_command):
+        """
+        解析并发送 acmd 实验命令
+        """
+        payload = self._parse_argument_command(raw_command)
+        return partial(
+            self.conn.send_command,
+            raw_command,
+            type='acmd',
+            extra=payload
+        )
+
     def process_command(self, cmd):
         """
         处理命令，返回可执行的生成器函数
         """
         name, arg = parse(cmd)
+
+        if self._is_argument_command(cmd):
+            return self._resolve_argument_command(cmd)
 
         builtin_handler = self._resolve_builtin_command(name, arg)
         if builtin_handler:

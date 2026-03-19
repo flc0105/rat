@@ -9,7 +9,7 @@ class ClientInboundMessageDispatcher:
     """
 
     IMMEDIATE_MESSAGE_TYPES = {'rdy', 'file'}
-    DEFERRED_MESSAGE_TYPES = {'command', 'script'}
+    DEFERRED_MESSAGE_TYPES = {'command', 'script', 'acmd'}
 
     def __init__(self, connection):
         self.connection = connection
@@ -45,6 +45,7 @@ class ClientInboundMessageDispatcher:
         交给主线程处理的消息：
         - command
         - script
+        - acmd
         """
         self.connection.enqueue_pending_message(data)
         return None

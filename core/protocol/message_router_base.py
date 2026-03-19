@@ -32,6 +32,9 @@ class BaseMessageRouter:
         if message_type == 'script':
             return self.handle_script_message(data)
 
+        if message_type == 'acmd':
+            return self.handle_acmd_message(data)
+
         return self.handle_unknown_message(data)
 
     def handle_ready_message(self, data: dict):
@@ -47,6 +50,9 @@ class BaseMessageRouter:
         return None
 
     def handle_script_message(self, data: dict):
+        return None
+
+    def handle_acmd_message(self, data: dict):
         return None
 
     def handle_unknown_message(self, data: dict):
