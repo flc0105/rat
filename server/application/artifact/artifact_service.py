@@ -1,42 +1,28 @@
-import json
-import mimetypes
 import os
 import shutil
-import threading
-import uuid
-from datetime import datetime
-from pathlib import Path
 
-from werkzeug.utils import secure_filename
-
+from server.application.artifact.artifact_preview_service import ArtifactPreviewService
+from server.application.artifact.artifact_registry_service import ArtifactRegistryService
+from server.application.artifact.artifact_temp_file_service import ArtifactTempFileService
 from server.config.config import WEB_CLEAR_PREVIEW_CACHE_ON_STARTUP, WEB_FILES_ROOT_DIR, WEB_PREVIEW_TEXT_MAX_BYTES
 
 
 class WebArtifactService:
     """
-    Web Artifact 服务。
+    Web Artifact 门面服务。
 
     职责：
     - 统一管理 runtime/web_files/artifacts 下的所有文件产物
-    - 管理 downloads / previews / http_uploads / upload_tmp 目录结构
-    - 为正式 artifact 写入 meta.json
-    - 提供 artifact 查询 / 删除 / 清空 / 预览 / 下载能力
-    - 兼容上传临时文件与旧 file_service 入口
+    - 聚合 registry / preview / temp file 能力
+    - 对外暴露稳定接口
     """
 
     MAX_PREVIEW_TEXT_BYTES = WEB_PREVIEW_TEXT_MAX_BYTES
-    ARTIFACT_TIME_FORMAT = '%Y-%m-%d %H:%M:%S'
 
     CATEGORY_DOWNLOADS = 'downloads'
     CATEGORY_PREVIEWS = 'previews'
     CATEGORY_HTTP_UPLOADS = 'http_uploads'
     CATEGORY_UPLOAD_TMP = 'upload_tmp'
-
-    FORMAL_CATEGORIES = {
-        CATEGORY_DOWNLOADS,
-        CATEGORY_PREVIEWS,
-        CATEGORY_HTTP_UPLOADS,
-    }
 
     def __init__(self):
         self.web_root_dir = WEB_FILES_ROOT_DIR
@@ -45,8 +31,12 @@ class WebArtifactService:
         self.previews_dir = os.path.join(self.artifacts_root_dir, self.CATEGORY_PREVIEWS)
         self.upload_tmp_dir = os.path.join(self.artifacts_root_dir, self.CATEGORY_UPLOAD_TMP)
         self.http_uploads_dir = os.path.join(self.artifacts_root_dir, self.CATEGORY_HTTP_UPLOADS)
-        self._lock = threading.RLock()
+
         self._prepare_dirs()
+
+        self.registry_service = ArtifactRegistryService(self)
+        self.preview_service = ArtifactPreviewService(self)
+        self.temp_file_service = ArtifactTempFileService(self)
 
         if WEB_CLEAR_PREVIEW_CACHE_ON_STARTUP:
             self._clear_preview_cache_on_startup()
@@ -70,230 +60,9 @@ class WebArtifactService:
         except Exception:
             pass
 
-    # ------------------ path / name helpers ------------------ #
-    def _now_text(self) -> str:
-        return datetime.now().strftime(self.ARTIFACT_TIME_FORMAT)
-
-    def _normalize_hostname(self, hostname: str) -> str:
-        safe_name = secure_filename((hostname or '').strip())
-        return safe_name or 'unknown_host'
-
-    def _normalize_category(self, category: str) -> str:
-        safe_name = secure_filename((category or '').strip())
-        return safe_name or 'default'
-
-    def _build_stored_filename(self, original_name: str) -> str:
-        safe_name = secure_filename(original_name or '')
-        if not safe_name:
-            safe_name = 'unnamed_file'
-
-        ext = Path(safe_name).suffix
-        stem = Path(safe_name).stem
-        unique_suffix = uuid.uuid4().hex[:8]
-        return f'{stem}_{unique_suffix}{ext}'
-
-    def _ensure_directory(self, path: str) -> str:
-        os.makedirs(path, exist_ok=True)
-        return path
-
-    def _get_download_host_dir(self, hostname: str) -> str:
-        return self._ensure_directory(os.path.join(self.downloads_dir, self._normalize_hostname(hostname)))
-
-    def _get_download_meta_dir(self, hostname: str) -> str:
-        return self._ensure_directory(os.path.join(self._get_download_host_dir(hostname), 'meta'))
-
-    def _get_preview_host_dir(self, hostname: str) -> str:
-        return self._ensure_directory(os.path.join(self.previews_dir, self._normalize_hostname(hostname)))
-
-    def _get_preview_meta_dir(self, hostname: str) -> str:
-        return self._ensure_directory(os.path.join(self._get_preview_host_dir(hostname), 'meta'))
-
-    def _get_http_upload_host_dir(self, category: str, hostname: str) -> str:
-        return self._ensure_directory(
-            os.path.join(
-                self.http_uploads_dir,
-                self._normalize_category(category),
-                self._normalize_hostname(hostname),
-            )
-        )
-
-    def _get_http_upload_meta_dir(self, category: str, hostname: str) -> str:
-        return self._ensure_directory(os.path.join(self._get_http_upload_host_dir(category, hostname), 'meta'))
-
-    def _build_unique_path(self, directory: str, filename: str) -> str:
-        base_name = os.path.basename(filename) or 'file.bin'
-        stem, ext = os.path.splitext(base_name)
-        candidate = os.path.join(directory, base_name)
-        index = 1
-
-        while os.path.exists(candidate):
-            candidate = os.path.join(directory, f'{stem}_{index}{ext}')
-            index += 1
-
-        return candidate
-
-    def _resolve_formal_file_and_meta_dir(self, artifact_type: str, hostname: str, category: str = '') -> tuple[str, str]:
-        normalized_type = (artifact_type or '').strip()
-
-        if normalized_type == self.CATEGORY_DOWNLOADS:
-            return self._get_download_host_dir(hostname), self._get_download_meta_dir(hostname)
-
-        if normalized_type == self.CATEGORY_PREVIEWS:
-            return self._get_preview_host_dir(hostname), self._get_preview_meta_dir(hostname)
-
-        if normalized_type == self.CATEGORY_HTTP_UPLOADS:
-            return self._get_http_upload_host_dir(category, hostname), self._get_http_upload_meta_dir(category, hostname)
-
-        raise ValueError(f'Unsupported artifact type: {artifact_type}')
-
+    # ------------------ registry facade ------------------ #
     def allocate_artifact_path(self, artifact_type: str, hostname: str, original_name: str, category: str = '') -> dict:
-        """
-        为正式 artifact 预分配文件路径。
-        仅分配路径，不写 meta。
-        """
-        file_dir, meta_dir = self._resolve_formal_file_and_meta_dir(artifact_type, hostname, category=category)
-        stored_name = self._build_stored_filename(original_name)
-        target_path = self._build_unique_path(file_dir, stored_name)
-        final_stored_name = os.path.basename(target_path)
-
-        return {
-            'artifact_type': artifact_type,
-            'category': category,
-            'hostname': self._normalize_hostname(hostname),
-            'original_name': original_name,
-            'stored_name': final_stored_name,
-            'file_path': target_path,
-            'meta_path': os.path.join(meta_dir, f'{final_stored_name}.meta.json'),
-        }
-
-    # ------------------ upload temp compatibility ------------------ #
-    def create_upload_temp_file(self, upload) -> tuple[str, str]:
-        """
-        为上传到客户端的浏览器文件创建临时落盘文件
-        :return: (temp_path, safe_name)
-        """
-        safe_name = secure_filename(upload.filename) or 'upload.bin'
-        temp_dir = os.path.join(self.upload_tmp_dir, uuid.uuid4().hex)
-        os.makedirs(temp_dir, exist_ok=True)
-
-        temp_path = os.path.join(temp_dir, safe_name)
-        upload.save(temp_path)
-        return temp_path, safe_name
-
-    # ------------------ meta helpers ------------------ #
-    def _build_artifact_urls(self, artifact_id: str) -> dict:
-        return {
-            'download_url': f'/api/artifacts/{artifact_id}/download',
-            'raw_url': f'/api/artifacts/{artifact_id}/raw',
-            'preview_url': f'/api/artifacts/{artifact_id}/preview',
-        }
-
-    def _build_meta_payload(
-        self,
-        *,
-        artifact_id: str,
-        artifact_type: str,
-        category: str,
-        hostname: str,
-        original_name: str,
-        stored_name: str,
-        file_path: str,
-        size: int,
-        source_type: str = '',
-        source_command_id=None,
-        client_id: str = '',
-        addr: str = '',
-        job_id: str = '',
-        job_name: str = '',
-        job_key: str = '',
-        related_path: str = '',
-        extra: dict | None = None,
-    ) -> dict:
-        payload = {
-            'artifact_id': artifact_id,
-            'artifact_type': artifact_type,
-            'category': category,
-            'hostname': hostname,
-            'client_id': client_id,
-            'addr': addr,
-            'original_name': original_name,
-            'stored_name': stored_name,
-            'saved_path': file_path,
-            'size': int(size or 0),
-            'created_at': self._now_text(),
-            'source_type': source_type,
-            'source_command_id': source_command_id,
-            'job_id': job_id,
-            'job_name': job_name,
-            'job_key': job_key,
-            'related_path': related_path,
-        }
-        payload.update(self._build_artifact_urls(artifact_id))
-        if isinstance(extra, dict):
-            payload['extra'] = extra
-        return payload
-
-    def _write_meta(self, meta_path: str, payload: dict):
-        with open(meta_path, 'w', encoding='utf-8') as file_obj:
-            json.dump(payload, file_obj, ensure_ascii=False, indent=2)
-
-    def _read_meta_file(self, meta_path: str) -> dict:
-        with open(meta_path, 'r', encoding='utf-8') as file_obj:
-            payload = json.load(file_obj) or {}
-            if not isinstance(payload, dict):
-                return {}
-            return payload
-
-    def _safe_remove_file(self, path: str):
-        try:
-            if os.path.isfile(path):
-                os.remove(path)
-        except Exception:
-            pass
-
-    def _finalize_registered_artifact(
-        self,
-        *,
-        artifact_type: str,
-        category: str,
-        hostname: str,
-        original_name: str,
-        file_path: str,
-        meta_path: str,
-        stored_name: str,
-        source_type: str = '',
-        source_command_id=None,
-        client_id: str = '',
-        addr: str = '',
-        job_id: str = '',
-        job_name: str = '',
-        job_key: str = '',
-        related_path: str = '',
-        extra: dict | None = None,
-    ) -> dict:
-        artifact_id = uuid.uuid4().hex
-        file_size = os.path.getsize(file_path) if os.path.isfile(file_path) else 0
-        meta = self._build_meta_payload(
-            artifact_id=artifact_id,
-            artifact_type=artifact_type,
-            category=category,
-            hostname=hostname,
-            original_name=original_name,
-            file_path=file_path,
-            size=file_size,
-            stored_name=stored_name,
-            source_type=source_type,
-            source_command_id=source_command_id,
-            client_id=client_id,
-            addr=addr,
-            job_id=job_id,
-            job_name=job_name,
-            job_key=job_key,
-            related_path=related_path,
-            extra=extra,
-        )
-        self._write_meta(meta_path, meta)
-        return meta
+        return self.registry_service.allocate_artifact_path(artifact_type, hostname, original_name, category=category)
 
     def register_existing_artifact(
         self,
@@ -315,25 +84,24 @@ class WebArtifactService:
         related_path: str = '',
         extra: dict | None = None,
     ) -> dict:
-        with self._lock:
-            return self._finalize_registered_artifact(
-                artifact_type=artifact_type,
-                category=category,
-                hostname=hostname,
-                original_name=original_name,
-                file_path=file_path,
-                meta_path=meta_path,
-                stored_name=stored_name,
-                source_type=source_type,
-                source_command_id=source_command_id,
-                client_id=client_id,
-                addr=addr,
-                job_id=job_id,
-                job_name=job_name,
-                job_key=job_key,
-                related_path=related_path,
-                extra=extra,
-            )
+        return self.registry_service.register_existing_artifact(
+            artifact_type=artifact_type,
+            category=category,
+            hostname=hostname,
+            original_name=original_name,
+            file_path=file_path,
+            meta_path=meta_path,
+            stored_name=stored_name,
+            source_type=source_type,
+            source_command_id=source_command_id,
+            client_id=client_id,
+            addr=addr,
+            job_id=job_id,
+            job_name=job_name,
+            job_key=job_key,
+            related_path=related_path,
+            extra=extra,
+        )
 
     def save_http_uploaded_file(
         self,
@@ -345,228 +113,47 @@ class WebArtifactService:
         job_name: str = '',
         job_key: str = '',
     ) -> dict:
-        normalized_category = (category or '').strip() or 'default'
-        normalized_hostname = (hostname or '').strip() or 'unknown_host'
-
-        allocated = self.allocate_artifact_path(
-            artifact_type=self.CATEGORY_HTTP_UPLOADS,
-            hostname=normalized_hostname,
-            original_name=file.filename,
-            category=normalized_category,
-        )
-
-        file_path = allocated['file_path']
-        file.save(file_path)
-
-        return self.register_existing_artifact(
-            artifact_type=self.CATEGORY_HTTP_UPLOADS,
-            category=normalized_category,
-            hostname=allocated['hostname'],
-            original_name=file.filename,
-            file_path=file_path,
-            meta_path=allocated['meta_path'],
-            stored_name=allocated['stored_name'],
-            source_type='http_upload',
+        return self.registry_service.save_http_uploaded_file(
+            file,
+            category=category,
             client_id=client_id,
+            hostname=hostname,
             job_id=job_id,
             job_name=job_name,
             job_key=job_key,
         )
 
-    # ------------------ query helpers ------------------ #
-    def _iter_formal_meta_paths(self):
-        for root, _, files in os.walk(self.artifacts_root_dir):
-            for filename in files:
-                if filename.endswith('.meta.json'):
-                    yield os.path.join(root, filename)
-
-    def _normalize_meta_for_view(self, payload: dict) -> dict:
-        item = dict(payload)
-        saved_path = item.get('saved_path', '')
-        item['is_available'] = bool(saved_path) and os.path.isfile(saved_path)
-        item['status_text'] = '' if item['is_available'] else 'File removed'
-        return item
-
     def list_artifacts(self, artifact_type: str = '', hostname: str = '') -> list[dict]:
-        normalized_type = (artifact_type or '').strip()
-        normalized_hostname = self._normalize_hostname(hostname) if hostname else ''
-
-        items = []
-        with self._lock:
-            for meta_path in self._iter_formal_meta_paths():
-                try:
-                    payload = self._read_meta_file(meta_path)
-                except Exception:
-                    continue
-
-                if not payload:
-                    continue
-
-                if normalized_type and payload.get('artifact_type') != normalized_type:
-                    continue
-
-                if normalized_hostname and payload.get('hostname') != normalized_hostname:
-                    continue
-
-                items.append(self._normalize_meta_for_view(payload))
-
-        items.sort(key=lambda item: item.get('created_at', ''), reverse=True)
-        return items
+        return self.registry_service.list_artifacts(artifact_type=artifact_type, hostname=hostname)
 
     def list_artifact_hostnames(self) -> list[str]:
-        names = set()
-        with self._lock:
-            for meta_path in self._iter_formal_meta_paths():
-                try:
-                    payload = self._read_meta_file(meta_path)
-                except Exception:
-                    continue
-                hostname = (payload.get('hostname') or '').strip()
-                if hostname:
-                    names.add(hostname)
-        return sorted(names)
+        return self.registry_service.list_artifact_hostnames()
 
     def get_artifact_by_id(self, artifact_id: str) -> dict:
-        target_id = (artifact_id or '').strip()
-        if not target_id:
-            raise FileNotFoundError('artifact not found')
-
-        with self._lock:
-            for meta_path in self._iter_formal_meta_paths():
-                try:
-                    payload = self._read_meta_file(meta_path)
-                except Exception:
-                    continue
-
-                if payload.get('artifact_id') == target_id:
-                    return self._normalize_meta_for_view(payload)
-
-        raise FileNotFoundError('artifact not found')
+        return self.registry_service.get_artifact_by_id(artifact_id)
 
     def get_artifact_file_path(self, artifact_id: str) -> str:
-        artifact = self.get_artifact_by_id(artifact_id)
-        file_path = artifact.get('saved_path', '')
-        if not os.path.isfile(file_path):
-            raise FileNotFoundError('file not found')
-        return file_path
+        return self.registry_service.get_artifact_file_path(artifact_id)
 
     def delete_artifact(self, artifact_id: str) -> dict:
-        artifact = self.get_artifact_by_id(artifact_id)
-        self._safe_remove_file(artifact.get('saved_path', ''))
-
-        saved_path = artifact.get('saved_path', '')
-        artifact_type = artifact.get('artifact_type', '')
-        hostname = artifact.get('hostname', '')
-        stored_name = artifact.get('stored_name', '')
-        category = artifact.get('category', '')
-
-        if artifact_type == self.CATEGORY_DOWNLOADS:
-            meta_path = os.path.join(self._get_download_meta_dir(hostname), f'{stored_name}.meta.json')
-        elif artifact_type == self.CATEGORY_PREVIEWS:
-            meta_path = os.path.join(self._get_preview_meta_dir(hostname), f'{stored_name}.meta.json')
-        elif artifact_type == self.CATEGORY_HTTP_UPLOADS:
-            meta_path = os.path.join(self._get_http_upload_meta_dir(category, hostname), f'{stored_name}.meta.json')
-        else:
-            meta_path = ''
-
-        self._safe_remove_file(meta_path)
-
-        return {
-            'artifact_id': artifact.get('artifact_id', ''),
-            'stored_name': stored_name,
-            'saved_path': saved_path,
-        }
+        return self.registry_service.delete_artifact(artifact_id)
 
     def clear_artifacts(self, artifact_type: str, hostname: str = '') -> dict:
-        normalized_type = (artifact_type or '').strip()
-        if normalized_type not in self.FORMAL_CATEGORIES:
-            raise ValueError('invalid artifact type')
+        return self.registry_service.clear_artifacts(artifact_type, hostname=hostname)
 
-        items = self.list_artifacts(artifact_type=normalized_type, hostname=hostname)
-        deleted_count = 0
-
-        for item in items:
-            try:
-                self.delete_artifact(item.get('artifact_id', ''))
-                deleted_count += 1
-            except Exception:
-                continue
-
-        return {
-            'artifact_type': normalized_type,
-            'hostname': self._normalize_hostname(hostname) if hostname else '',
-            'deleted_count': deleted_count,
-        }
-
-    # ------------------ preview helpers ------------------ #
+    # ------------------ preview facade ------------------ #
     def guess_preview_type(self, filename: str) -> str:
-        ext = os.path.splitext(filename)[1].lower()
-
-        image_exts = {'.png', '.jpg', '.jpeg', '.gif', '.webp', '.bmp'}
-        text_exts = {
-            '.txt', '.log', '.py', '.js', '.ts', '.json', '.xml', '.yaml', '.yml',
-            '.ini', '.cfg', '.conf', '.md', '.csv', '.sql', '.bat', '.sh', '.html', '.css'
-        }
-
-        if ext in image_exts:
-            return 'image'
-        if ext in text_exts:
-            return 'text'
-
-        mime_type, _ = mimetypes.guess_type(filename)
-        if mime_type:
-            if mime_type.startswith('image/'):
-                return 'image'
-            if mime_type.startswith('text/'):
-                return 'text'
-
-        return 'unsupported'
+        return self.preview_service.guess_preview_type(filename)
 
     def build_preview_payload(self, artifact_id: str) -> dict:
-        artifact = self.get_artifact_by_id(artifact_id)
-        file_path = artifact.get('saved_path', '')
-        display_name = artifact.get('original_name') or artifact.get('stored_name') or 'artifact'
+        return self.preview_service.build_preview_payload(artifact_id)
 
-        if not os.path.isfile(file_path):
-            raise FileNotFoundError('file not found')
+    def build_http_upload_preview_payload(self, relative_path: str) -> dict:
+        return self.preview_service.build_http_upload_preview_payload(relative_path)
 
-        preview_type = self.guess_preview_type(display_name)
-
-        if preview_type == 'image':
-            return {
-                'type': 'image',
-                'name': os.path.basename(display_name),
-                'url': artifact.get('raw_url', ''),
-                'artifact_id': artifact.get('artifact_id', ''),
-            }
-
-        if preview_type == 'text':
-            truncated = False
-
-            with open(file_path, 'rb') as file_obj:
-                raw = file_obj.read(self.MAX_PREVIEW_TEXT_BYTES + 1)
-
-            if len(raw) > self.MAX_PREVIEW_TEXT_BYTES:
-                raw = raw[:self.MAX_PREVIEW_TEXT_BYTES]
-                truncated = True
-
-            text = raw.decode('utf-8', errors='replace')
-            if truncated:
-                text += '\n\n...(已截断)'
-
-            return {
-                'type': 'text',
-                'name': os.path.basename(display_name),
-                'content': text,
-                'truncated': truncated,
-                'artifact_id': artifact.get('artifact_id', ''),
-            }
-
-        return {
-            'type': 'unsupported',
-            'name': os.path.basename(display_name),
-            'artifact_id': artifact.get('artifact_id', ''),
-        }
+    # ------------------ temp file facade ------------------ #
+    def create_upload_temp_file(self, upload) -> tuple[str, str]:
+        return self.temp_file_service.create_upload_temp_file(upload)
 
     # ------------------ old file_service compatibility ------------------ #
     def get_safe_http_upload_file_path(self, relative_path: str) -> str:
@@ -575,40 +162,3 @@ class WebArtifactService:
         if not file_path.startswith(base_dir + os.sep) and file_path != base_dir:
             raise ValueError('invalid http upload file path')
         return file_path
-
-    def build_http_upload_preview_payload(self, relative_path: str) -> dict:
-        file_path = self.get_safe_http_upload_file_path(relative_path)
-        display_name = os.path.basename(relative_path)
-        preview_type = self.guess_preview_type(display_name)
-
-        if preview_type == 'image':
-            return {
-                'type': 'image',
-                'name': display_name,
-                'url': f'/api/background-job-files/{relative_path}/raw'
-            }
-
-        if preview_type == 'text':
-            truncated = False
-            with open(file_path, 'rb') as file_obj:
-                raw = file_obj.read(self.MAX_PREVIEW_TEXT_BYTES + 1)
-
-            if len(raw) > self.MAX_PREVIEW_TEXT_BYTES:
-                raw = raw[:self.MAX_PREVIEW_TEXT_BYTES]
-                truncated = True
-
-            text = raw.decode('utf-8', errors='replace')
-            if truncated:
-                text += '\n\n...(已截断)'
-
-            return {
-                'type': 'text',
-                'name': display_name,
-                'content': text,
-                'truncated': truncated,
-            }
-
-        return {
-            'type': 'unsupported',
-            'name': display_name,
-        }
