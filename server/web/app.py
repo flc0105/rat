@@ -334,6 +334,13 @@ def create_app(server_instance):
             job_name = request.form.get('job_name', '').strip()
             job_key = request.form.get('job_key', '').strip()
 
+            if not hostname and client_id:
+                try:
+                    conn = server_instance.get_target_connection_by_client_id(client_id)
+                    hostname = (getattr(conn, 'info', {}) or {}).get('hostname', '') or ''
+                except Exception:
+                    hostname = ''
+
             return artifact_service.save_http_uploaded_file(
                 upload,
                 category=category,

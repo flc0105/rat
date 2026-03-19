@@ -36,7 +36,7 @@ class Screenshot(Job):
             return
 
         try:
-            response = self.upload_file_via_http(screenshot_path)
+            response = self.upload_file_via_http(screenshot_path, 'scheduled_screenshot')
             self.send_to_server(1, f'Upload result: {response.text}', 0)
         finally:
             try:

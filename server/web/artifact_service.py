@@ -344,7 +344,7 @@ class WebArtifactService:
         job_key: str = '',
     ) -> dict:
         normalized_category = (category or '').strip() or 'default'
-        normalized_hostname = hostname or client_id or 'unknown_host'
+        normalized_hostname = (hostname or '').strip() or 'unknown_host'
 
         allocated = self.allocate_artifact_path(
             artifact_type=self.CATEGORY_HTTP_UPLOADS,
