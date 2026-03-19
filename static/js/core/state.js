@@ -112,6 +112,20 @@ window.AppStateModule = {
         selectedCommandExecutionEntry() {
             return this.commandExecutionItems.find(item => item.entry_id === this.selectedCommandExecutionEntryId) || null;
         },
+
+        selectedCommandExecutionOutputRecordsDesc() {
+    const records = this.selectedCommandExecutionEntry && Array.isArray(this.selectedCommandExecutionEntry.output_records)
+        ? this.selectedCommandExecutionEntry.output_records
+        : [];
+
+    return [...records].sort((a, b) => {
+        return Number(b.seq || 0) - Number(a.seq || 0);
+    });
+},
+
+        connectionInfoClientCommands() {
+    return (this.commandCandidates || []).filter(item => item && item.source === 'client');
+},
     },
 
     watch: {

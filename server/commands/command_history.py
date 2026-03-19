@@ -25,6 +25,7 @@ class CommandHistoryStore:
     MAX_OUTPUT_RECORD_CHARS = 64 * 1024
     MAX_OUTPUT_SUMMARY_CHARS = 240
     MAX_OUTPUT_RECORDS = 200
+    TIME_FORMAT = '%Y-%m-%d %H:%M:%S'
 
     def __init__(self):
         self.history_root_dir = COMMAND_HISTORY_ROOT_DIR
@@ -64,20 +65,26 @@ class CommandHistoryStore:
             json.dump(entries, file_obj, ensure_ascii=False, indent=2)
 
     def _now_text(self) -> str:
-        return datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        return datetime.now().strftime(self.TIME_FORMAT)
 
-    def _now_iso(self) -> str:
-        return datetime.now().isoformat()
+    def _parse_time_text(self, value: str):
+        text = str(value or '').strip()
+        if not text:
+            return None
+
+        try:
+            return datetime.strptime(text, self.TIME_FORMAT)
+        except Exception:
+            return None
 
     def _build_entry(self, conn, command: str, source: str) -> dict:
         info = getattr(conn, 'info', {}) or {}
-        started_at = self._now_iso()
         started_text = self._now_text()
 
         return {
             'entry_id': uuid.uuid4().hex,
             'time': started_text,
-            'started_at': started_at,
+            'started_at': started_text,
             'finished_at': '',
             'duration_ms': 0,
 
@@ -99,6 +106,7 @@ class CommandHistoryStore:
             'output_char_count': 0,
             'output_stored_char_count': 0,
             'output_truncated': False,
+            'output_record_seq': 0,
             'output_records': [],
 
             'has_files': False,
@@ -153,26 +161,46 @@ class CommandHistoryStore:
     def _update_duration(self, entry: dict):
         started_at = entry.get('started_at') or ''
         finished_at = entry.get('finished_at') or ''
-        if not started_at or not finished_at:
+        start_dt = self._parse_time_text(started_at)
+        end_dt = self._parse_time_text(finished_at)
+
+        if start_dt is None or end_dt is None:
             entry['duration_ms'] = 0
             return
 
-        try:
-            start_dt = datetime.fromisoformat(started_at)
-            end_dt = datetime.fromisoformat(finished_at)
-            entry['duration_ms'] = max(int((end_dt - start_dt).total_seconds() * 1000), 0)
-        except Exception:
-            entry['duration_ms'] = 0
+        entry['duration_ms'] = max(int((end_dt - start_dt).total_seconds() * 1000), 0)
 
     def _build_file_record(self, file_info: dict) -> dict:
+        saved_path = file_info.get('saved_path', '')
+        is_available = bool(saved_path) and os.path.isfile(saved_path)
+
         return {
             'original_name': file_info.get('original_name', ''),
             'saved_name': file_info.get('saved_name', ''),
-            'saved_path': file_info.get('saved_path', ''),
+            'saved_path': saved_path,
             'size': file_info.get('size', 0),
             'created_at': file_info.get('created_at', self._now_text()),
             'download_url': file_info.get('download_url', ''),
+            'is_available': is_available,
+            'status_text': '' if is_available else 'File removed',
         }
+
+    def _refresh_file_status_for_view(self, item: dict) -> dict:
+        copied = dict(item)
+        files = []
+
+        for file_item in item.get('files') or []:
+            file_copied = dict(file_item)
+            saved_path = file_copied.get('saved_path', '')
+            is_available = bool(saved_path) and os.path.isfile(saved_path)
+            file_copied['is_available'] = is_available
+            file_copied['status_text'] = '' if is_available else 'File removed'
+            files.append(file_copied)
+
+        copied['files'] = files
+        copied['file_count'] = len(files)
+        copied['has_files'] = len(files) > 0
+        return copied
 
     def create_entry_for_connection(self, conn, command: str, source: str = 'cli'):
         """
@@ -220,12 +248,15 @@ class CommandHistoryStore:
             stored_char_count = int(entry.get('output_stored_char_count', 0))
             remaining_chars = max(self.MAX_OUTPUT_RECORD_CHARS - stored_char_count, 0)
 
-            stored_text = ''
+            next_seq = int(entry.get('output_record_seq', 0)) + 1
+            entry['output_record_seq'] = next_seq
+
             if output_text and remaining_chars > 0 and len(records) < self.MAX_OUTPUT_RECORDS:
                 stored_text = output_text[:remaining_chars]
                 if len(stored_text) < len(output_text):
                     entry['output_truncated'] = True
                 records.append({
+                    'seq': next_seq,
                     'status': status,
                     'text': stored_text,
                     'time': self._now_text(),
@@ -277,7 +308,7 @@ class CommandHistoryStore:
                 if item.get('entry_id') == entry_id:
                     item['status'] = status
                     item['final_status'] = status
-                    item['finished_at'] = self._now_iso()
+                    item['finished_at'] = self._now_text()
                     item['cwd_end'] = cwd_end or (getattr(conn, 'info', {}) or {}).get('cwd', '') or item.get('cwd_end', '')
                     item['time'] = item.get('time') or self._now_text()
                     self._update_duration(item)
@@ -334,9 +365,8 @@ class CommandHistoryStore:
         result = []
 
         for item in reversed(entries):
-            copied = dict(item)
+            copied = self._refresh_file_status_for_view(item)
             copied['output_records'] = list(item.get('output_records') or [])
-            copied['files'] = list(item.get('files') or [])
             result.append(copied)
 
         for index, item in enumerate(result, start=1):

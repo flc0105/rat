@@ -156,6 +156,20 @@ window.AppUtilsModule = {
 
         formatCommandExecutionRecordText(text) {
             return String(text || '');
-        }
+        },
+
+        getCommandExecutionDisplayCwd(item) {
+    if (!item) return '-';
+    return item.cwd_end || item.cwd_start || '-';
+},
+
+        buildCommandExecutionSingleLineSummary(item) {
+    return this.buildCommandExecutionSummary(item);
+},
+
+getCommandExecutionFileStatusText(file) {
+    if (!file) return '';
+    return file.is_available ? '' : (file.status_text || 'File removed');
+},
     }
 };

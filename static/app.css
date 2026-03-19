@@ -1748,9 +1748,21 @@ body {
   margin-top: 10px;
   display: flex;
   flex-wrap: wrap;
-  gap: 8px 14px;
+  gap: 8px;
+}
+
+.command-execution-stats span {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: #f8fafc;
+  border: 1px solid rgba(15, 23, 42, 0.06);
   font-size: 12px;
   color: var(--muted);
+  line-height: 1.4;
+  max-width: 100%;
 }
 
 .command-execution-summary {
@@ -1758,12 +1770,9 @@ body {
   font-size: 13px;
   line-height: 1.6;
   color: var(--text);
-  word-break: break-word;
-  display: -webkit-box;
-  -webkit-line-clamp: 3;
-  line-clamp: 3;
-  -webkit-box-orient: vertical;
+  white-space: nowrap;
   overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .command-execution-actions {
@@ -1790,7 +1799,9 @@ body {
   font-size: 13px;
   line-height: 1.6;
   color: var(--text);
-  word-break: break-word;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .command-execution-detail-panels {
@@ -1811,4 +1822,8 @@ body {
   .command-execution-detail-panels {
     grid-template-columns: 1fr;
   }
+}
+
+.command-file-status-missing {
+  color: var(--danger);
 }

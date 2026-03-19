@@ -921,6 +921,14 @@
                 </template>
               </el-table-column>
 
+              <el-table-column prop="status" label="Status" width="120" align="center">
+  <template #default="{ row }">
+    <el-tag :type="buildCommandExecutionStatusTagType(row.status)" size="small">
+      {{ row.status || '-' }}
+    </el-tag>
+  </template>
+</el-table-column>
+
               <el-table-column label="Actions" width="150" align="center" fixed="right">
                 <template #default="{ row }">
                   <div class="table-actions table-actions-links">
@@ -965,17 +973,14 @@
                     </div>
                   </div>
 
-                  <div class="command-execution-stats">
-                    <span>Duration: {{ formatCommandExecutionDuration(item.duration_ms) }}</span>
-                    <span>Start CWD: {{ item.cwd_start || '-' }}</span>
-                    <span>End CWD: {{ item.cwd_end || '-' }}</span>
-                    <span>Chunks: {{ item.output_chunk_count || 0 }}</span>
-                    <span>Lines: {{ item.output_line_count || 0 }}</span>
-                  </div>
+<span>Duration: {{ formatCommandExecutionDuration(item.duration_ms) }}</span>
+<span>CWD: {{ getCommandExecutionDisplayCwd(item) }}</span>
+<span>Chunks: {{ item.output_chunk_count || 0 }}</span>
+<span>Lines: {{ item.output_line_count || 0 }}</span>
 
-                  <div class="command-execution-summary">
-                    {{ buildCommandExecutionSummary(item) }}
-                  </div>
+     <div class="command-execution-summary">
+  {{ buildCommandExecutionSingleLineSummary(item) }}
+</div>
                 </div>
 
                 <div class="command-execution-actions">
@@ -1054,7 +1059,7 @@
           <div class="background-job-panel-title">Output Records</div>
           <div class="background-job-message-list">
             <div
-              v-for="(record, index) in selectedCommandExecutionEntry.output_records"
+              v-for="(record, index) in selectedCommandExecutionOutputRecordsDesc"
               :key="`${selectedCommandExecutionEntry.entry_id}-output-${index}`"
               class="background-job-message-item"
             >
@@ -1090,21 +1095,21 @@
             >
               <div class="background-job-file-main">
                 <div class="background-job-file-name">{{ file.original_name || file.saved_name || '-' }}</div>
-                <div class="background-job-file-meta">
-                  <span>{{ formatBytes(file.size || 0) }}</span>
-                  <span>{{ file.created_at || '-' }}</span>
-                </div>
+<div class="background-job-file-meta">
+  <span>{{ formatBytes(file.size || 0) }}</span>
+  <span>{{ file.created_at || '-' }}</span>
+<span v-if="getCommandExecutionFileStatusText(file)">[{{ getCommandExecutionFileStatusText(file) }}]</span></div>
               </div>
 
               <div class="background-job-file-actions">
-                <a
-                  v-if="file.download_url"
-                  class="table-action-link"
-                  :href="file.download_url"
-                  target="_blank"
-                >
-                  Download
-                </a>
+<a
+  v-if="file.download_url && file.is_available"
+  class="table-action-link"
+  :href="file.download_url"
+  target="_blank"
+>
+  Download
+</a>
               </div>
             </div>
 
@@ -1168,18 +1173,17 @@
       <div class="background-job-panel-title">Command List</div>
       <div class="background-job-message-list">
         <div
-          v-for="(item, index) in commandCandidates"
+          v-for="(item, index) in connectionInfoClientCommands"
           :key="`${item.template}-${index}`"
           class="background-job-message-item"
         >
-          <div class="background-job-message-time">
-            {{ item.source || '-' }}<span v-if="item.group"> / {{ item.group }}</span>
-          </div>
-          <div class="background-job-message-text">
-            <span class="mono">{{ item.template }}</span>
-            <span v-if="item.help"> — {{ item.help }}</span>
-          </div>
-        </div>
+<div class="background-job-message-time">
+  client<span v-if="item.group"> / {{ item.group }}</span>
+</div>
+<div class="background-job-message-text">
+  <span class="mono">{{ item.name || item.template }}</span>
+  <span v-if="item.help"> — {{ item.help }}</span>
+</div>
 
         <div v-if="!commandCandidates.length" class="empty-state compact">
           No commands available
