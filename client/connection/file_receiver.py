@@ -30,10 +30,21 @@ class ServerFileReceiver:
             self.connection.send_signal(0, command_id)
             return 0, str(e)
 
+        # try:
+        #     self.connection.send_signal(1, command_id)
+        #     self.connection.recv_io(length, io)
+        #     return 1, f'File uploaded to: {os.path.abspath(file)}'
+        # except Exception as e:
+        #     logger.error(f'Error receiving file from server: {e}', exc_info=True)
+        #     return 0, f'Error receiving file from server: {e}'
+
         try:
-            self.connection.send_signal(1, command_id)
-            self.connection.recv_io(length, io)
-            return 1, f'File uploaded to: {os.path.abspath(file)}'
+            status, error = self.connection.recv_file_packet(command_id, length, io)
+            if status == 1:
+                return 1, f'File uploaded to: {os.path.abspath(file)}'
+
+            logger.error(f'Error receiving file from server: {error}', exc_info=True)
+            return 0, f'Error receiving file from server: {error}'
         except Exception as e:
             logger.error(f'Error receiving file from server: {e}', exc_info=True)
             return 0, f'Error receiving file from server: {e}'

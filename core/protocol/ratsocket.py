@@ -96,6 +96,23 @@ class RATSocket:
         """接收就绪信号"""
         return self.recv()['status']
 
+    def recv_file_packet(self, command_id: int, length: int, io: BinaryIO) -> tuple[int, str]:
+        """
+        以文件协议接收一个文件包：
+        - 先发送 rdy=1 表示已准备好接收
+        - 再接收指定长度的原始字节流写入 io
+
+        注意：
+        - 调用方应当先准备好目标 io
+        - 如果准备 io 失败，应由调用方自行发送 rdy=0
+        """
+        try:
+            self.send_signal(1, command_id)
+            self.recv_io(length, io)
+            return 1, ''
+        except Exception as e:
+            return 0, str(e)
+
     # ------------------ 包级发送接收 ------------------ #
     def _send_packet(self, data: bytes) -> None:
         """

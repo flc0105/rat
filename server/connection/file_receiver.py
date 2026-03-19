@@ -2,6 +2,7 @@ import json
 import ntpath
 import os
 from datetime import datetime
+from core.utils.files import get_input_stream
 
 
 class ClientFileReceiver:
@@ -37,11 +38,13 @@ class ClientFileReceiver:
         file_path = self._build_unique_file_path(target_dir, original_name)
 
         try:
-            from core.utils.files import get_input_stream
+
             io = get_input_stream(file_path)
+
             try:
-                self.connection.send_signal(1, command_id)
-                self.connection.recv_io(length, io)
+                status, error = self.connection.recv_file_packet(command_id, length, io)
+                if status != 1:
+                    return 0, f'Error receiving file from {self.connection.address}: {error}'
 
                 if write_meta:
                     self._write_file_meta(file_path, original_name, length)
@@ -51,6 +54,18 @@ class ClientFileReceiver:
                 return 1, f'File saved to: {file_path}'
             except Exception as e:
                 return 0, f'Error receiving file from {self.connection.address}: {e}'
+            # try:
+            #     self.connection.send_signal(1, command_id)
+            #     self.connection.recv_io(length, io)
+            #
+            #     if write_meta:
+            #         self._write_file_meta(file_path, original_name, length)
+            #
+            #     self._notify_file_saved(on_file_saved, original_name, file_path, length)
+            #
+            #     return 1, f'File saved to: {file_path}'
+            # except Exception as e:
+            #     return 0, f'Error receiving file from {self.connection.address}: {e}'
         except Exception as e:
             self.connection.send_signal(0, command_id)
             return 0, f'Error opening local file: {e}'
