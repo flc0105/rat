@@ -6,6 +6,8 @@ from server.web.connection_service import WebConnectionService
 from server.web.event_bus import WebEventBus
 from server.web.file_service import WebFileService
 from server.web.remote_file_service import WebRemoteFileService
+from server.web.remote_runner import RemoteArtifactFetcher, RemoteCommandRunner
+from server.web.task_runner import WebTaskRunner
 from server.web.task_service import WebTaskService
 from server.web.task_store import WebTaskStore
 
@@ -26,8 +28,13 @@ class ServerWebService:
 
         self.artifact_service = WebArtifactService()
         self.file_service = WebFileService(self.artifact_service)
+
+        self.remote_command_runner = RemoteCommandRunner(self.server)
+        self.remote_artifact_fetcher = RemoteArtifactFetcher(self.server)
+
         self.remote_file_service = WebRemoteFileService(
-            server=self.server,
+            command_runner=self.remote_command_runner,
+            artifact_fetcher=self.remote_artifact_fetcher,
             artifact_service=self.artifact_service,
         )
 
@@ -37,20 +44,26 @@ class ServerWebService:
             artifact_service=self.artifact_service,
         )
 
-        self.task_service = WebTaskService(
+        self.task_runner = WebTaskRunner(
             server=self.server,
             event_bus=self.event_bus,
             task_store=self.task_store,
+        )
+
+        self.task_service = WebTaskService(
+            server=self.server,
+            task_store=self.task_store,
             file_service=self.file_service,
+            task_runner=self.task_runner,
         )
 
         self.background_job_store = BackgroundJobStore()
         self.background_job_store.artifact_service = self.artifact_service
         self.server.command_history.artifact_service = self.artifact_service
         self.background_job_service = BackgroundJobService(
-            server=self.server,
             event_bus=self.event_bus,
             job_store=self.background_job_store,
+            command_runner=self.remote_command_runner,
         )
 
     # ------------------ helpers ------------------ #

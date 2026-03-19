@@ -1,8 +1,6 @@
 import os
 from datetime import datetime
 
-from server.connection.client_connection import ClientConnection
-
 
 class BackgroundJobService:
     """
@@ -15,30 +13,10 @@ class BackgroundJobService:
     - 对外提供任务监控数据
     """
 
-    def __init__(self, server, event_bus, job_store):
-        self.server = server
+    def __init__(self, event_bus, job_store, command_runner):
         self.event_bus = event_bus
         self.job_store = job_store
-
-    def _collect_result(self, result_iter):
-        final_status = 1
-        parts = []
-
-        for status, text in result_iter:
-            final_status = status
-            if text is not None:
-                parts.append(str(text))
-
-        return final_status, '\n'.join(part for part in parts if part).strip()
-
-    def _run_text_command(self, client_id: str, command: str) -> str:
-        conn = self.server.get_target_connection_by_client_id(client_id)
-        status, text = self._collect_result(conn.send_command(command))
-
-        if status != 1:
-            raise RuntimeError(text or 'Remote command failed')
-
-        return text
+        self.command_runner = command_runner
 
     def _serialize_available_job(self, job_name: str) -> dict:
         normalized = str(job_name or '').strip()
@@ -58,7 +36,7 @@ class BackgroundJobService:
         return [self._serialize_available_job(line) for line in lines]
 
     def list_available_jobs(self, client_id: str) -> list[dict]:
-        text = self._run_text_command(client_id, 'start_job')
+        text = self.command_runner.run_text_command(client_id, 'start_job')
         return self._parse_available_jobs_text(text)
 
     def start_job(self, client_id: str, job_name: str) -> dict:
@@ -66,7 +44,7 @@ class BackgroundJobService:
         if not job_name:
             raise ValueError('job_name is required')
 
-        text = self._run_text_command(client_id, f'start_job {job_name}')
+        text = self.command_runner.run_text_command(client_id, f'start_job {job_name}')
         return {
             'client_id': client_id,
             'job_name': job_name,
@@ -78,7 +56,7 @@ class BackgroundJobService:
         if not job_key:
             raise ValueError('job_key is required')
 
-        text = self._run_text_command(client_id, f'stop_job {job_key}')
+        text = self.command_runner.run_text_command(client_id, f'stop_job {job_key}')
         return {
             'client_id': client_id,
             'job_key': job_key,

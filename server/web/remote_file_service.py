@@ -1,6 +1,5 @@
 import base64
 import json
-import os
 
 
 class WebRemoteFileService:
@@ -14,8 +13,9 @@ class WebRemoteFileService:
     - 将客户端返回结果转换成 Web 端可直接消费的数据
     """
 
-    def __init__(self, server, artifact_service):
-        self.server = server
+    def __init__(self, command_runner, artifact_fetcher, artifact_service):
+        self.command_runner = command_runner
+        self.artifact_fetcher = artifact_fetcher
         self.artifact_service = artifact_service
 
     def _encode_payload_arg(self, payload: dict) -> str:
@@ -28,76 +28,12 @@ class WebRemoteFileService:
             return name
         return f'{name} {self._encode_payload_arg(payload)}'
 
-    def _collect_result(self, result_iter):
-        """
-        收集命令执行结果
-        """
-        final_status = 1
-        parts = []
-
-        for status, text in result_iter:
-            final_status = status
-            if text is not None:
-                parts.append(str(text))
-
-        return final_status, '\n'.join(part for part in parts if part).strip()
-
-    def _run_text_command(self, client_id: str, command: str) -> str:
-        conn = self.server.get_target_connection_by_client_id(client_id)
-        status, text = self._collect_result(conn.send_command(command))
-
-        if status != 1:
-            raise RuntimeError(text or 'Remote command failed')
-
-        return text
-
-    def _run_json_command(self, client_id: str, command: str) -> dict:
-        text = self._run_text_command(client_id, command)
-
-        try:
-            return json.loads(text or '{}')
-        except Exception as e:
-            raise RuntimeError(f'Invalid remote JSON payload: {e}')
-
-    def _fetch_artifact(self, client_id: str, command: str, *, artifact_type: str, source_type: str, related_path: str = '') -> dict:
-        conn = self.server.get_target_connection_by_client_id(client_id)
-        command_id = conn._generate_message_id()
-        capture_result = {}
-
-        conn.set_file_receive_context(
-            command_id,
-            artifact_type=artifact_type,
-            source_type=source_type,
-            related_path=related_path,
-            source_command_id=command_id,
-            capture_result=capture_result,
-        )
-
-        conn.send({
-            'type': 'command',
-            'id': command_id,
-            'text': command,
-        })
-
-        status, text = self._collect_result(conn.wait_for_result(command_id, command))
-        if status != 1:
-            raise RuntimeError(text or 'Remote file fetch failed')
-
-        artifact = capture_result.get('artifact') or {}
-        if not isinstance(artifact, dict) or not artifact.get('artifact_id'):
-            raise RuntimeError('Remote file download completed, but artifact was not found')
-
-        return {
-            'message': text,
-            'artifact': artifact,
-        }
-
     def browse_directory(self, client_id: str, path: str = '') -> dict:
         """
         浏览远程目录
         """
         command = self._build_command('browse_dir', {'path': path})
-        payload = self._run_json_command(client_id, command)
+        payload = self.command_runner.run_json_command(client_id, command)
 
         return {
             'current_path': payload.get('current_path', ''),
@@ -113,7 +49,7 @@ class WebRemoteFileService:
             raise ValueError('path is required')
 
         command = self._build_command('delete_path', {'path': path})
-        result_text = self._run_text_command(client_id, command)
+        result_text = self.command_runner.run_text_command(client_id, command)
 
         return {
             'path': path,
@@ -128,7 +64,7 @@ class WebRemoteFileService:
             raise ValueError('path is required')
 
         command = self._build_command('mkdir_path', {'path': path})
-        result_text = self._run_text_command(client_id, command)
+        result_text = self.command_runner.run_text_command(client_id, command)
 
         return {
             'path': path,
@@ -148,7 +84,7 @@ class WebRemoteFileService:
             'old_path': old_path,
             'new_name': new_name
         })
-        result_text = self._run_text_command(client_id, command)
+        result_text = self.command_runner.run_text_command(client_id, command)
 
         return {
             'old_path': old_path,
@@ -166,7 +102,7 @@ class WebRemoteFileService:
         normalized_path = path.strip()
         command = self._build_command('download_path', {'path': normalized_path})
 
-        result = self._fetch_artifact(
+        result = self.artifact_fetcher.fetch_artifact(
             client_id=client_id,
             command=command,
             artifact_type='downloads',
@@ -177,7 +113,7 @@ class WebRemoteFileService:
         return {
             'path': normalized_path,
             'message': result['message'],
-            'artifact': result['artifact']
+            'artifact': result['artifact'],
         }
 
     def download_paths_as_zip(self, client_id: str, paths: list[str], archive_name: str = '') -> dict:
@@ -200,7 +136,7 @@ class WebRemoteFileService:
             'archive_name': archive_name,
         })
 
-        result = self._fetch_artifact(
+        result = self.artifact_fetcher.fetch_artifact(
             client_id=client_id,
             command=command,
             artifact_type='downloads',
@@ -211,7 +147,7 @@ class WebRemoteFileService:
         return {
             'paths': normalized_paths,
             'message': result['message'],
-            'artifact': result['artifact']
+            'artifact': result['artifact'],
         }
 
     def preview_file(self, client_id: str, path: str) -> dict:
@@ -226,7 +162,7 @@ class WebRemoteFileService:
         normalized_path = path.strip()
         command = self._build_command('download_path', {'path': normalized_path})
 
-        result = self._fetch_artifact(
+        result = self.artifact_fetcher.fetch_artifact(
             client_id=client_id,
             command=command,
             artifact_type='previews',
