@@ -125,6 +125,22 @@ class WebFileService:
             raise ValueError('invalid preview file path')
         return file_path
 
+    def get_safe_http_upload_file_path(self, relative_path: str) -> str:
+        base_dir = os.path.abspath(self.http_uploads_dir)
+        file_path = os.path.abspath(os.path.join(base_dir, relative_path))
+        if not file_path.startswith(base_dir + os.sep) and file_path != base_dir:
+            raise ValueError('invalid http upload file path')
+        return file_path
+
+    def build_http_upload_preview_payload(self, relative_path: str) -> dict:
+        file_path = self.get_safe_http_upload_file_path(relative_path)
+        normalized_relative_path = relative_path.replace('\\', '/')
+        return self._build_preview_payload_from_path(
+            file_path=file_path,
+            display_name=os.path.basename(relative_path),
+            raw_url=f'/api/background-job-files/{normalized_relative_path}/raw'
+        )
+
     def build_preview_relative_path(self, hostname: str, saved_name: str) -> str:
         safe_host = secure_filename(hostname or 'unknown_host') or 'unknown_host'
         safe_name = os.path.basename(saved_name)
@@ -260,11 +276,25 @@ class WebFileService:
 
         file_size = stored_path.stat().st_size
 
+        # return {
+        #     'ok': True,
+        #     'original_name': file.filename,
+        #     'stored_name': stored_name,
+        #     'size': file_size,
+        #     'category': category,
+        #     'client_id': client_id,
+        # }
+        relative_path = stored_path.relative_to(self.http_uploads_dir).as_posix()
+
         return {
             'ok': True,
             'original_name': file.filename,
             'stored_name': stored_name,
+            'relative_path': relative_path,
             'size': file_size,
             'category': category,
             'client_id': client_id,
+            'download_url': f'/api/background-job-files/{relative_path}',
+            'raw_url': f'/api/background-job-files/{relative_path}/raw',
+            'preview_url': f'/api/background-job-files/{relative_path}/preview',
         }

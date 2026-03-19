@@ -40,6 +40,15 @@ createApp({
             previewText: '',
 
             pendingRemoteUploadRefresh: null,
+
+
+            backgroundJobsDialogVisible: false,
+            backgroundJobsLoading: false,
+            backgroundJobModulesLoading: false,
+            backgroundJobModules: [],
+            backgroundJobs: [],
+            backgroundJobsRefreshTimer: null,
+
         };
     },
 
@@ -303,6 +312,11 @@ createApp({
             this.commandHistoryItems = [];
             this.loadCommandCandidates(clientId);
             this.scrollToBottom();
+
+                        if (this.backgroundJobsDialogVisible) {
+                this.loadBackgroundJobModules();
+                this.loadBackgroundJobs();
+            }
         },
 
         buildCommonOpsCandidates() {
@@ -938,6 +952,181 @@ createApp({
             }
         },
 
+        async openBackgroundJobsDialog() {
+            if (!this.selectedId) {
+                ElementPlus.ElMessage.warning('Please select a device');
+                return;
+            }
+
+            this.backgroundJobsDialogVisible = true;
+            await Promise.all([
+                this.loadBackgroundJobModules(),
+                this.loadBackgroundJobs()
+            ]);
+        },
+
+        async loadBackgroundJobModules() {
+            if (!this.selectedId) return;
+
+            this.backgroundJobModulesLoading = true;
+            try {
+                const res = await fetch(`/api/connections/${encodeURIComponent(this.selectedId)}/background-jobs/modules`);
+                const json = await res.json();
+
+                if (!res.ok || json.code !== 0) {
+                    throw new Error(json.message || 'Failed to load job modules');
+                }
+
+                this.backgroundJobModules = Array.isArray(json.data) ? json.data : [];
+            } catch (e) {
+                this.backgroundJobModules = [];
+                ElementPlus.ElMessage.error(e.message || 'Failed to load job modules');
+            } finally {
+                this.backgroundJobModulesLoading = false;
+            }
+        },
+
+        async loadBackgroundJobs() {
+            if (!this.selectedId) return;
+
+            this.backgroundJobsLoading = true;
+            try {
+                const res = await fetch(`/api/connections/${encodeURIComponent(this.selectedId)}/background-jobs`);
+                const json = await res.json();
+
+                if (!res.ok || json.code !== 0) {
+                    throw new Error(json.message || 'Failed to load background jobs');
+                }
+
+                this.backgroundJobs = Array.isArray(json.data) ? json.data : [];
+            } catch (e) {
+                this.backgroundJobs = [];
+                ElementPlus.ElMessage.error(e.message || 'Failed to load background jobs');
+            } finally {
+                this.backgroundJobsLoading = false;
+            }
+        },
+
+        scheduleBackgroundJobsRefresh(clientId = '') {
+            if (!this.backgroundJobsDialogVisible) return;
+            if (clientId && clientId !== this.selectedId) return;
+
+            if (this.backgroundJobsRefreshTimer) {
+                clearTimeout(this.backgroundJobsRefreshTimer);
+            }
+
+            this.backgroundJobsRefreshTimer = setTimeout(() => {
+                this.loadBackgroundJobs();
+            }, 200);
+        },
+
+        async startBackgroundJob(jobName) {
+            if (!this.selectedId) {
+                ElementPlus.ElMessage.warning('Please select a device');
+                return;
+            }
+
+            const normalized = String(jobName || '').trim();
+            if (!normalized) {
+                ElementPlus.ElMessage.warning('Invalid job name');
+                return;
+            }
+
+            try {
+                const res = await fetch(`/api/connections/${encodeURIComponent(this.selectedId)}/background-jobs/start`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({job_name: normalized})
+                });
+
+                const json = await res.json();
+                if (!res.ok || json.code !== 0) {
+                    throw new Error(json.message || 'Failed to start background job');
+                }
+
+                ElementPlus.ElMessage.success(`Background job started: ${normalized}`);
+                await this.loadBackgroundJobs();
+            } catch (e) {
+                ElementPlus.ElMessage.error(e.message || 'Failed to start background job');
+            }
+        },
+
+        async stopBackgroundJob(job) {
+            const jobKey = String(job && job.job_key || '').trim();
+            if (!this.selectedId || !jobKey) {
+                ElementPlus.ElMessage.warning('Invalid background job');
+                return;
+            }
+
+            try {
+                await ElementPlus.ElMessageBox.confirm(
+                    `Stop "${job.display_name || job.job_name || jobKey}"?`,
+                    'Stop Background Job',
+                    {
+                        type: 'warning',
+                        confirmButtonText: 'Stop',
+                        cancelButtonText: 'Cancel'
+                    }
+                );
+
+                const res = await fetch(`/api/connections/${encodeURIComponent(this.selectedId)}/background-jobs/stop`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({job_key: jobKey})
+                });
+
+                const json = await res.json();
+                if (!res.ok || json.code !== 0) {
+                    throw new Error(json.message || 'Failed to stop background job');
+                }
+
+                ElementPlus.ElMessage.success(`Stop request sent: ${jobKey}`);
+                await this.loadBackgroundJobs();
+            } catch (e) {
+                if (e === 'cancel' || e === 'close' || e?.toString?.().includes('cancel')) return;
+                ElementPlus.ElMessage.error(e.message || 'Failed to stop background job');
+            }
+        },
+
+        buildBackgroundJobStateTagType(state) {
+            const value = String(state || '').toLowerCase();
+            if (value === 'running') return 'success';
+            if (value === 'stopping') return 'warning';
+            if (value === 'error') return 'danger';
+            return 'info';
+        },
+
+        formatBackgroundJobDuration(totalSeconds) {
+            const seconds = Number(totalSeconds || 0);
+            if (!seconds) return '0s';
+
+            const hours = Math.floor(seconds / 3600);
+            const minutes = Math.floor((seconds % 3600) / 60);
+            const remain = seconds % 60;
+
+            const parts = [];
+            if (hours) parts.push(`${hours}h`);
+            if (minutes) parts.push(`${minutes}m`);
+            if (remain || !parts.length) parts.push(`${remain}s`);
+
+            return parts.join(' ');
+        },
+
+        async previewBackgroundJobFile(file) {
+            if (!file || !file.preview_url) {
+                ElementPlus.ElMessage.warning('No preview available');
+                return;
+            }
+
+            await this.loadPreviewPayload(
+                () => fetch(file.preview_url),
+                file.original_name || file.stored_name || 'Job File Preview'
+            );
+        },
+
+
+
+
         async openCommandHistoryDialog() {
             if (!this.selectedId) {
                 ElementPlus.ElMessage.warning('Please select a device');
@@ -1132,6 +1321,33 @@ createApp({
                 this.appendOutput(payload.client_id, `[Background] ${payload.text || ''}`, 'info');
                 await this.loadConnections();
             });
+
+
+
+                        es.addEventListener('background_job_status', async (event) => {
+                const payload = JSON.parse(event.data);
+                this.scheduleBackgroundJobsRefresh(payload.client_id);
+            });
+
+            es.addEventListener('background_job_message', async (event) => {
+                const payload = JSON.parse(event.data);
+                this.scheduleBackgroundJobsRefresh(payload.client_id);
+            });
+
+            es.addEventListener('background_job_file', async (event) => {
+                const payload = JSON.parse(event.data);
+                this.scheduleBackgroundJobsRefresh(payload.client_id);
+
+                if (payload.client_id === this.selectedId) {
+                    ElementPlus.ElNotification({
+                        title: 'Background Job File',
+                        message: `${payload.display_name || payload.job_name || 'job'} uploaded a file`,
+                        type: 'success'
+                    });
+                }
+            });
+
+
 
             es.addEventListener('file_received', (event) => {
                 const payload = JSON.parse(event.data);

@@ -6,12 +6,14 @@ from datetime import datetime
 from flask import Flask, Response, jsonify, request, send_from_directory, stream_with_context
 
 from server.config.config import WEB_HTTP_UPLOAD_MAX_BYTES
+from server.web.background_job_blueprint import create_background_job_blueprint
 
 
 def create_app(server_instance):
     app = Flask(__name__, static_folder='../../static', static_url_path='')
     web_service = server_instance.web_service
     file_service = web_service.file_service
+    app.register_blueprint(create_background_job_blueprint(server_instance))
 
     # ------------------ response helpers ------------------ #
     def _ok(data=None, message='ok', code=0, http_status=200):

@@ -7,6 +7,8 @@ from server.web.file_service import WebFileService
 from server.web.remote_file_service import WebRemoteFileService
 from server.web.task_service import WebTaskService
 from server.web.task_store import WebTaskStore
+from server.web.background_job_service import BackgroundJobService
+from server.web.background_job_store import BackgroundJobStore
 
 
 class ServerWebService:
@@ -35,6 +37,14 @@ class ServerWebService:
             server=self.server,
             event_bus=self.event_bus,
             task_store=self.task_store,
+            file_service=self.file_service,
+        )
+
+        self.background_job_store = BackgroundJobStore()
+        self.background_job_service = BackgroundJobService(
+            server=self.server,
+            event_bus=self.event_bus,
+            job_store=self.background_job_store,
             file_service=self.file_service,
         )
 
@@ -125,6 +135,24 @@ class ServerWebService:
 
     def submit_web_upload(self, client_id: str, local_path: str, display_name: str, remote_path: str = ''):
         return self.task_service.submit_web_upload(client_id, local_path, display_name, remote_path)
+
+    # ------------------ background job facade ------------------ #
+    def list_background_jobs(self, client_id: str):
+        return self.background_job_service.list_jobs(client_id)
+
+    def list_available_background_jobs(self, client_id: str):
+        return self.background_job_service.list_available_jobs(client_id)
+
+    def start_background_job(self, client_id: str, job_name: str):
+        return self.background_job_service.start_job(client_id, job_name)
+
+    def stop_background_job(self, client_id: str, job_key: str):
+        return self.background_job_service.stop_job(client_id, job_key)
+
+    def ingest_background_job_report(self, payload: dict):
+        return self.background_job_service.ingest_report(payload)
+
+
 
     # ------------------ remote file facade ------------------ #
     def browse_remote_directory(self, client_id: str, path: str = ''):
