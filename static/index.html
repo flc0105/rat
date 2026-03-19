@@ -741,7 +741,7 @@
           <div class="background-job-panel-title">Messages</div>
           <div class="background-job-message-list">
             <div
-              v-for="(message, index) in selectedBackgroundJob.messages"
+              v-for="(message, index) in selectedBackgroundJobMessagesDesc"
               :key="`${selectedBackgroundJob.job_id}-msg-${index}`"
               class="background-job-message-item clickable"
               @click="openBackgroundJobMessageDialog(message)"

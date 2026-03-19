@@ -110,7 +110,18 @@ selectedBackgroundJobMessage: {},
                 const tb = String(b.updated_at || b.started_at || b.created_at || '');
                 return tb.localeCompare(ta);
             });
-        }
+        },
+        selectedBackgroundJobMessagesDesc() {
+    const messages = this.selectedBackgroundJob && Array.isArray(this.selectedBackgroundJob.messages)
+        ? this.selectedBackgroundJob.messages
+        : [];
+
+    return [...messages].sort((a, b) => {
+        const ta = String(a.time || '');
+        const tb = String(b.time || '');
+        return tb.localeCompare(ta);
+    });
+},
     },
 
     mounted() {
