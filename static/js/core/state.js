@@ -80,6 +80,27 @@ window.AppStateModule = {
             return this.remoteFilesEntries.filter(item => !item.is_hidden);
         },
 
+        displayRemoteFilesEntries() {
+            const entries = Array.isArray(this.filteredRemoteFilesEntries)
+                ? [...this.filteredRemoteFilesEntries]
+                : [];
+
+            if (this.remoteFilesParentPath) {
+                entries.unshift({
+                    name: '..',
+                    path: this.remoteFilesParentPath,
+                    is_dir: true,
+                    is_symlink: false,
+                    is_hidden: false,
+                    size: 0,
+                    modified_at: '',
+                    is_parent_entry: true,
+                });
+            }
+
+            return entries;
+        },
+
         selectedRemoteEntries() {
             const selectedSet = new Set(this.remoteSelectedPaths);
             return this.remoteFilesEntries.filter(item => selectedSet.has(item.path));
@@ -98,6 +119,27 @@ window.AppStateModule = {
                 if (hostname && item.hostname !== hostname) return false;
                 return true;
             });
+        },
+
+        artifactCountMap() {
+            const hostname = String(this.artifactHostnameFilter || '').trim();
+            const counts = {
+                downloads: 0,
+                previews: 0,
+                http_uploads: 0,
+            };
+
+            (this.artifactItems || []).forEach(item => {
+                if (!item) return;
+                if (hostname && item.hostname !== hostname) return;
+
+                const type = String(item.artifact_type || '').trim();
+                if (Object.prototype.hasOwnProperty.call(counts, type)) {
+                    counts[type] += 1;
+                }
+            });
+
+            return counts;
         },
 
         selectedBackgroundJob() {

@@ -176,11 +176,12 @@
       <div class="dialog-head">
         <div class="dialog-head-left">
           <div class="dialog-action-group">
-            <el-button size="small" @click="goToRemoteParent" :disabled="!remoteFilesParentPath">Up</el-button>
             <el-button size="small" @click="refreshRemoteDirectory">Refresh</el-button>
             <el-button size="small" @click="createRemoteDirectory">New Folder</el-button>
             <el-button size="small" :loading="remoteUploadLoading" @click="triggerRemoteUpload">Upload</el-button>
-            <el-button size="small" type="primary" :disabled="!hasRemoteSelection" :loading="remoteZipDownloading" @click="downloadSelectedRemoteEntries">Download Selected</el-button>
+            <el-button size="small" type="primary" :disabled="!hasRemoteSelection" :loading="remoteZipDownloading" @click="downloadSelectedRemoteEntries">
+              Download Selected<span v-if="remoteSelectedPaths.length"> ({{ remoteSelectedPaths.length }})</span>
+            </el-button>
             <el-button size="small" :disabled="!hasRemoteSelection" @click="clearRemoteSelection">Clear Selection</el-button>
           </div>
 
@@ -189,56 +190,68 @@
             <el-switch v-model="showHiddenFiles" inline-prompt active-text="On" inactive-text="Off" />
           </div>
         </div>
+      </div>
 
-        <div class="dialog-head-right">
-          <div class="dialog-path-box">
-            <el-input v-model="remoteFilesPathInput" placeholder="Enter a path and jump" @keyup.enter="goToRemotePathInput" />
-            <el-button size="small" @click="goToRemotePathInput">Go</el-button>
-          </div>
+      <div style="margin-bottom: 12px; flex-shrink: 0;">
+        <div class="dialog-path-box">
+          <el-input v-model="remoteFilesPathInput" placeholder="Enter a path and jump" @keyup.enter="goToRemotePathInput" />
+          <el-button size="small" @click="goToRemotePathInput">Go</el-button>
         </div>
       </div>
 
       <div class="dialog-table-shell">
         <el-table
           ref="remoteFilesTableRef"
-          :data="filteredRemoteFilesEntries"
+          :data="displayRemoteFilesEntries"
           v-loading="remoteFilesLoading"
           stripe width="100%" height="100%" empty-text="This folder is empty" table-layout="fixed"
           @row-dblclick="handleRemoteRowDblClick"
           @selection-change="handleRemoteSelectionChange"
         >
-          <el-table-column type="selection" width="52" align="center"></el-table-column>
+          <el-table-column type="selection" width="52" align="center" :selectable="row => !row.is_parent_entry"></el-table-column>
           <el-table-column label="Name" min-width="320" show-overflow-tooltip>
             <template #default="{ row }">
               <div class="file-cell">
                 <span>{{ row.is_dir ? '📁' : '📄' }}</span>
-                <span class="file-cell-text">{{ row.name }}</span>
-                <el-tag v-if="row.is_symlink" size="small" type="info">Link</el-tag>
-                <el-tag v-if="row.is_hidden" size="small" type="warning">Hidden</el-tag>
+                <span class="file-cell-text">{{ row.is_parent_entry ? '..' : row.name }}</span>
+                <el-tag v-if="row.is_parent_entry" size="small" type="info">Parent</el-tag>
+                <el-tag v-else-if="row.is_symlink" size="small" type="info">Link</el-tag>
+                <el-tag v-if="!row.is_parent_entry && row.is_hidden" size="small" type="warning">Hidden</el-tag>
               </div>
             </template>
           </el-table-column>
-          <el-table-column label="Type" width="110" align="center"><template #default="{ row }">{{ row.is_dir ? 'Folder' : 'File' }}</template></el-table-column>
-          <el-table-column label="Size" width="120" align="center"><template #default="{ row }">{{ row.is_dir ? '-' : formatBytes(row.size) }}</template></el-table-column>
-          <el-table-column prop="modified_at" label="Modified" width="180" show-overflow-tooltip><template #default="{ row }"><div class="ellipsis">{{ row.modified_at || '-' }}</div></template></el-table-column>
+          <el-table-column label="Type" width="110" align="center">
+            <template #default="{ row }">{{ row.is_parent_entry ? 'Parent' : (row.is_dir ? 'Folder' : 'File') }}</template>
+          </el-table-column>
+          <el-table-column label="Size" width="120" align="center">
+            <template #default="{ row }">{{ row.is_dir ? '-' : formatBytes(row.size) }}</template>
+          </el-table-column>
+          <el-table-column prop="modified_at" label="Modified" width="180" show-overflow-tooltip>
+            <template #default="{ row }"><div class="ellipsis">{{ row.is_parent_entry ? '-' : (row.modified_at || '-') }}</div></template>
+          </el-table-column>
           <el-table-column label="Actions" width="220" align="center" fixed="right">
             <template #default="{ row }">
               <div class="table-actions table-actions-links">
-                <el-button v-if="row.is_dir" size="small" link type="primary" @click="enterRemoteDirectory(row)">Open</el-button>
-                <template v-if="!row.is_dir">
-                  <el-button size="small" link type="primary" @click="previewRemoteEntry(row)">Preview</el-button>
-                  <el-button size="small" link type="primary" @click="downloadRemoteEntry(row)">Download</el-button>
+                <template v-if="row.is_parent_entry">
+                  <el-button size="small" link type="primary" @click="goToRemoteParent">Open</el-button>
                 </template>
-                <el-dropdown trigger="click" @command="(command) => handleRemoteMoreAction(command, row)">
-                  <el-button size="small" link type="primary">More</el-button>
-                  <template #dropdown>
-                    <el-dropdown-menu>
-                      <el-dropdown-item command="rename">Rename</el-dropdown-item>
-                      <el-dropdown-item command="copy_path">Copy Path</el-dropdown-item>
-                      <el-dropdown-item command="delete">Delete</el-dropdown-item>
-                    </el-dropdown-menu>
+                <template v-else>
+                  <el-button v-if="row.is_dir" size="small" link type="primary" @click="enterRemoteDirectory(row)">Open</el-button>
+                  <template v-if="!row.is_dir">
+                    <el-button size="small" link type="primary" @click="previewRemoteEntry(row)">Preview</el-button>
+                    <el-button size="small" link type="primary" @click="downloadRemoteEntry(row)">Download</el-button>
                   </template>
-                </el-dropdown>
+                  <el-dropdown trigger="click" @command="(command) => handleRemoteMoreAction(command, row)">
+                    <el-button size="small" link type="primary">More</el-button>
+                    <template #dropdown>
+                      <el-dropdown-menu>
+                        <el-dropdown-item command="rename">Rename</el-dropdown-item>
+                        <el-dropdown-item command="copy_path">Copy Path</el-dropdown-item>
+                        <el-dropdown-item command="delete">Delete</el-dropdown-item>
+                      </el-dropdown-menu>
+                    </template>
+                  </el-dropdown>
+                </template>
               </div>
             </template>
           </el-table-column>
@@ -247,32 +260,47 @@
 
       <div class="mobile-file-list-shell">
         <div class="mobile-file-list" v-loading="remoteFilesLoading">
-          <div v-if="!filteredRemoteFilesEntries.length && !remoteFilesLoading" class="empty-state">This folder is empty</div>
+          <div v-if="!displayRemoteFilesEntries.length && !remoteFilesLoading" class="empty-state">This folder is empty</div>
           <div v-else class="mobile-file-grid">
-            <div v-for="row in filteredRemoteFilesEntries" :key="row.path" class="mobile-file-card" style="position: relative;">
-              <div style="position:absolute; top:6px; right:12px; z-index:1;"><el-checkbox :model-value="isRemoteEntrySelected(row)" @change="toggleRemoteSelection(row)" /></div>
+            <div
+              v-for="row in displayRemoteFilesEntries"
+              :key="`${row.is_parent_entry ? 'parent-' : ''}${row.path}`"
+              class="mobile-file-card"
+              style="position: relative;"
+            >
+              <div v-if="!row.is_parent_entry" style="position:absolute; top:6px; right:12px; z-index:1;">
+                <el-checkbox :model-value="isRemoteEntrySelected(row)" @change="toggleRemoteSelection(row)" />
+              </div>
+
               <div class="mobile-file-card-top">
                 <div class="mobile-file-icon">{{ row.is_dir ? '📁' : '📄' }}</div>
                 <div class="mobile-file-main">
-                  <div class="mobile-file-name" style="padding-right: 42px;">{{ row.name }}</div>
+                  <div class="mobile-file-name" :style="row.is_parent_entry ? '' : 'padding-right: 42px;'">
+                    {{ row.is_parent_entry ? '..' : row.name }}
+                  </div>
                   <div class="mobile-file-tags">
-                    <el-tag size="small" type="info">{{ row.is_dir ? 'Folder' : 'File' }}</el-tag>
-                    <el-tag v-if="row.is_symlink" size="small" type="info">Link</el-tag>
-                    <el-tag v-if="row.is_hidden" size="small" type="warning">Hidden</el-tag>
+                    <el-tag size="small" type="info">{{ row.is_parent_entry ? 'Parent' : (row.is_dir ? 'Folder' : 'File') }}</el-tag>
+                    <el-tag v-if="!row.is_parent_entry && row.is_symlink" size="small" type="info">Link</el-tag>
+                    <el-tag v-if="!row.is_parent_entry && row.is_hidden" size="small" type="warning">Hidden</el-tag>
                   </div>
                   <div class="mobile-file-meta">
                     <div class="mobile-file-meta-item"><div class="mobile-file-meta-label">Size</div><div class="mobile-file-meta-value">{{ row.is_dir ? '-' : formatBytes(row.size) }}</div></div>
-                    <div class="mobile-file-meta-item"><div class="mobile-file-meta-label">Modified</div><div class="mobile-file-meta-value">{{ row.modified_at || '-' }}</div></div>
+                    <div class="mobile-file-meta-item"><div class="mobile-file-meta-label">Modified</div><div class="mobile-file-meta-value">{{ row.is_parent_entry ? '-' : (row.modified_at || '-') }}</div></div>
                   </div>
                   <div class="mobile-file-actions">
-                    <el-button v-if="row.is_dir" size="small" type="primary" plain @click="enterRemoteDirectory(row)">Open</el-button>
-                    <template v-if="!row.is_dir">
-                      <el-button size="small" type="primary" plain @click="previewRemoteEntry(row)">Preview</el-button>
-                      <el-button size="small" type="primary" plain @click="downloadRemoteEntry(row)">Download</el-button>
+                    <template v-if="row.is_parent_entry">
+                      <el-button size="small" type="primary" plain @click="goToRemoteParent">Open</el-button>
                     </template>
-                    <el-button size="small" plain @click="renameRemoteEntry(row)">Rename</el-button>
-                    <el-button size="small" plain @click="copyRemotePath(row)">Copy Path</el-button>
-                    <el-button size="small" type="danger" plain @click="deleteRemoteEntry(row)">Delete</el-button>
+                    <template v-else>
+                      <el-button v-if="row.is_dir" size="small" type="primary" plain @click="enterRemoteDirectory(row)">Open</el-button>
+                      <template v-if="!row.is_dir">
+                        <el-button size="small" type="primary" plain @click="previewRemoteEntry(row)">Preview</el-button>
+                        <el-button size="small" type="primary" plain @click="downloadRemoteEntry(row)">Download</el-button>
+                      </template>
+                      <el-button size="small" plain @click="renameRemoteEntry(row)">Rename</el-button>
+                      <el-button size="small" plain @click="copyRemotePath(row)">Copy Path</el-button>
+                      <el-button size="small" type="danger" plain @click="deleteRemoteEntry(row)">Delete</el-button>
+                    </template>
                   </div>
                 </div>
               </div>
@@ -288,40 +316,39 @@
       <div class="dialog-head">
         <div class="dialog-head-left">
           <el-button size="small" @click="loadArtifacts">Refresh</el-button>
-          <el-button size="small" type="danger" :loading="artifactClearing" @click="clearArtifactCategory">Clear Current Category</el-button>
+          <el-button size="small" type="danger" :loading="artifactClearing" @click="clearArtifactCategory">Clear Current</el-button>
         </div>
         <div class="dialog-head-right">
-          <div class="dialog-path-box">
+          <div class="dialog-path-box" style="grid-template-columns: minmax(0, 1fr);">
             <el-select v-model="artifactHostnameFilter" clearable filterable placeholder="Filter by hostname" @change="loadArtifacts">
               <el-option v-for="host in artifactHostnames" :key="host" :label="host" :value="host" />
             </el-select>
-            <el-button size="small" @click="artifactHostnameFilter=''; loadArtifacts();">Reset</el-button>
           </div>
         </div>
       </div>
 
       <el-tabs v-model="artifactActiveTab" class="command-history-tabs" @tab-change="loadArtifacts">
-        <el-tab-pane label="Downloads" name="downloads"></el-tab-pane>
-        <el-tab-pane label="Previews" name="previews"></el-tab-pane>
-        <el-tab-pane label="HTTP Uploads" name="http_uploads"></el-tab-pane>
+        <el-tab-pane name="downloads">
+          <template #label>Downloads ({{ artifactCountMap.downloads || 0 }})</template>
+        </el-tab-pane>
+        <el-tab-pane name="previews">
+          <template #label>Previews ({{ artifactCountMap.previews || 0 }})</template>
+        </el-tab-pane>
+        <el-tab-pane name="http_uploads">
+          <template #label>HTTP Uploads ({{ artifactCountMap.http_uploads || 0 }})</template>
+        </el-tab-pane>
       </el-tabs>
 
       <div class="dialog-table-shell">
         <el-table :data="filteredArtifactItems" v-loading="artifactLoading" stripe width="100%" height="100%" empty-text="No artifacts available" table-layout="fixed">
-          <el-table-column prop="original_name" label="Name" min-width="220" show-overflow-tooltip>
+          <el-table-column prop="original_name" label="Name" min-width="260" show-overflow-tooltip>
             <template #default="{ row }"><div class="ellipsis">{{ row.original_name || row.stored_name }}</div></template>
           </el-table-column>
-          <el-table-column label="Type" width="120" align="center">
-            <template #default="{ row }">{{ buildArtifactTypeLabel(row) }}</template>
-          </el-table-column>
-          <el-table-column label="Hostname" min-width="140" show-overflow-tooltip>
+          <el-table-column label="Hostname" min-width="150" show-overflow-tooltip>
             <template #default="{ row }"><div class="ellipsis">{{ row.hostname || '-' }}</div></template>
           </el-table-column>
-          <el-table-column label="Source / Category" min-width="190" show-overflow-tooltip>
+          <el-table-column label="Source / Category" min-width="220" show-overflow-tooltip>
             <template #default="{ row }"><div class="ellipsis">{{ formatArtifactSourceLabel(row) }}</div></template>
-          </el-table-column>
-          <el-table-column label="Artifact ID" min-width="180" show-overflow-tooltip>
-            <template #default="{ row }"><div class="ellipsis mono">{{ row.artifact_id || '-' }}</div></template>
           </el-table-column>
           <el-table-column label="Size" width="110" align="center">
             <template #default="{ row }">{{ formatBytes(row.size) }}</template>
@@ -351,12 +378,10 @@
                 <div class="mobile-file-main">
                   <div class="mobile-file-name">{{ row.original_name || row.stored_name }}</div>
                   <div class="mobile-file-tags">
-                    <el-tag size="small" type="info">{{ buildArtifactTypeLabel(row) }}</el-tag>
                     <el-tag v-if="row.hostname" size="small">{{ row.hostname }}</el-tag>
                   </div>
                   <div class="mobile-file-meta">
                     <div class="mobile-file-meta-item"><div class="mobile-file-meta-label">Source / Category</div><div class="mobile-file-meta-value">{{ formatArtifactSourceLabel(row) }}</div></div>
-                    <div class="mobile-file-meta-item"><div class="mobile-file-meta-label">Artifact ID</div><div class="mobile-file-meta-value mono">{{ row.artifact_id || '-' }}</div></div>
                     <div class="mobile-file-meta-item"><div class="mobile-file-meta-label">Size</div><div class="mobile-file-meta-value">{{ formatBytes(row.size) }}</div></div>
                     <div class="mobile-file-meta-item"><div class="mobile-file-meta-label">Created</div><div class="mobile-file-meta-value">{{ row.created_at || '-' }}</div></div>
                   </div>

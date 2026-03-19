@@ -108,10 +108,8 @@ window.AppFilesModule = {
 
             try {
                 const url = new URL('/api/artifacts', window.location.origin);
-                const activeType = String(this.artifactActiveTab || '').trim();
                 const hostname = String(this.artifactHostnameFilter || '').trim();
 
-                if (activeType) url.searchParams.set('type', activeType);
                 if (hostname) url.searchParams.set('hostname', hostname);
 
                 const res = await fetch(url.pathname + url.search);
@@ -178,7 +176,7 @@ window.AppFilesModule = {
         },
 
         async previewRemoteEntry(row) {
-            if (!row || !row.path || row.is_dir) {
+            if (!row || !row.path || row.is_dir || row.is_parent_entry) {
                 ElementPlus.ElMessage.warning('Please select a file');
                 return;
             }
@@ -192,9 +190,6 @@ window.AppFilesModule = {
                 row.name || 'File Preview'
             );
         },
-
-
-
 
         triggerRemoteUpload() {
             if (!this.selectedId) {
@@ -328,25 +323,44 @@ window.AppFilesModule = {
 
         async enterRemoteDirectory(row) {
             if (!row || !row.is_dir) return;
+
+            if (row.is_parent_entry) {
+                await this.goToRemoteParent();
+                return;
+            }
+
             await this.loadRemoteDirectory(row.path);
         },
 
         handleRemoteRowDblClick(row) {
-            if (row && row.is_dir) {
+            if (!row) return;
+
+            if (row.is_parent_entry) {
+                this.goToRemoteParent();
+                return;
+            }
+
+            if (row.is_dir) {
                 this.enterRemoteDirectory(row);
             }
         },
 
         handleRemoteSelectionChange(rows) {
-            this.remoteSelectedPaths = Array.isArray(rows) ? rows.map(item => item.path).filter(Boolean) : [];
+            this.remoteSelectedPaths = Array.isArray(rows)
+                ? rows
+                    .filter(item => item && !item.is_parent_entry)
+                    .map(item => item.path)
+                    .filter(Boolean)
+                : [];
         },
 
         isRemoteEntrySelected(row) {
-            return !!(row && row.path && this.remoteSelectedPaths.includes(row.path));
+            if (!row || row.is_parent_entry) return false;
+            return !!(row.path && this.remoteSelectedPaths.includes(row.path));
         },
 
         toggleRemoteSelection(row) {
-            if (!row || !row.path) return;
+            if (!row || !row.path || row.is_parent_entry) return;
 
             const exists = this.remoteSelectedPaths.includes(row.path);
             if (exists) {
@@ -365,7 +379,7 @@ window.AppFilesModule = {
         },
 
         async copyRemotePath(row) {
-            if (!row || !row.path) {
+            if (!row || !row.path || row.is_parent_entry) {
                 ElementPlus.ElMessage.warning('Invalid path');
                 return;
             }
@@ -379,6 +393,8 @@ window.AppFilesModule = {
         },
 
         handleRemoteMoreAction(command, row) {
+            if (!row || row.is_parent_entry) return;
+
             if (command === 'rename') {
                 this.renameRemoteEntry(row);
                 return;
@@ -442,7 +458,7 @@ window.AppFilesModule = {
         },
 
         async renameRemoteEntry(row) {
-            if (!row || !row.path) {
+            if (!row || !row.path || row.is_parent_entry) {
                 ElementPlus.ElMessage.warning('Invalid path');
                 return;
             }
@@ -486,7 +502,7 @@ window.AppFilesModule = {
         },
 
         async downloadRemoteEntry(row) {
-            if (!row || !row.path || row.is_dir) {
+            if (!row || !row.path || row.is_dir || row.is_parent_entry) {
                 ElementPlus.ElMessage.warning('Please select a file');
                 return;
             }
@@ -502,7 +518,7 @@ window.AppFilesModule = {
                     throw new Error(json.message || 'Download failed');
                 }
 
-                const file = json.data && json.data.artifact;
+                const file = (json.data && (json.data.file || json.data.artifact)) || null;
                 if (!file || !file.artifact_id) {
                     throw new Error('Download finished, but artifact was not found');
                 }
@@ -549,7 +565,7 @@ window.AppFilesModule = {
                     throw new Error(json.message || 'ZIP download failed');
                 }
 
-                const file = json.data && json.data.artifact;
+                const file = (json.data && (json.data.file || json.data.artifact)) || null;
                 if (!file || !file.artifact_id) {
                     throw new Error('ZIP download finished, but artifact was not found');
                 }
@@ -570,7 +586,7 @@ window.AppFilesModule = {
         },
 
         async deleteRemoteEntry(row) {
-            if (!row || !row.path) {
+            if (!row || !row.path || row.is_parent_entry) {
                 ElementPlus.ElMessage.warning('Invalid path');
                 return;
             }
@@ -605,15 +621,28 @@ window.AppFilesModule = {
         },
 
         async previewBackgroundJobFile(file) {
-    if (!file || !file.artifact_id) {
-        ElementPlus.ElMessage.warning('No preview available');
-        return;
-    }
+            if (!file) {
+                ElementPlus.ElMessage.warning('No preview available');
+                return;
+            }
 
-    await this.loadPreviewPayload(
-        () => fetch(`/api/artifacts/${encodeURIComponent(file.artifact_id)}/preview`),
-        file.original_name || file.stored_name || 'Job File Preview'
-    );
-}
+            if (file.artifact_id) {
+                await this.loadPreviewPayload(
+                    () => fetch(`/api/artifacts/${encodeURIComponent(file.artifact_id)}/preview`),
+                    file.original_name || file.stored_name || 'Job File Preview'
+                );
+                return;
+            }
+
+            if (!file.preview_url) {
+                ElementPlus.ElMessage.warning('No preview available');
+                return;
+            }
+
+            await this.loadPreviewPayload(
+                () => fetch(file.preview_url),
+                file.original_name || file.stored_name || 'Job File Preview'
+            );
+        }
     }
 };
