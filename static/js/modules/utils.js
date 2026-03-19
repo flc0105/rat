@@ -185,6 +185,14 @@ window.AppUtilsModule = {
             return artifactType || '-';
         },
 
+        formatDateTimeStandard(value) {
+            const text = String(value || '').trim();
+            if (!text) return '-';
+
+            const normalized = text.replace('T', ' ').split('.')[0];
+            return normalized || '-';
+        },
+
         formatArtifactSourceLabel(item) {
             if (!item) return '-';
 

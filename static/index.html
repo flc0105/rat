@@ -316,7 +316,7 @@
       <div class="dialog-head">
         <div class="dialog-head-left">
           <el-button size="small" @click="loadArtifacts">Refresh</el-button>
-          <el-button size="small" type="danger" :loading="artifactClearing" @click="clearArtifactCategory">Clear Current</el-button>
+          <el-button size="small" type="danger" :loading="artifactClearing" @click="clearArtifactCategory">Clear</el-button>
         </div>
         <div class="dialog-head-right">
           <div class="dialog-path-box" style="grid-template-columns: minmax(0, 1fr);">
@@ -341,13 +341,13 @@
 
       <div class="dialog-table-shell">
         <el-table :data="filteredArtifactItems" v-loading="artifactLoading" stripe width="100%" height="100%" empty-text="No artifacts available" table-layout="fixed">
-          <el-table-column prop="original_name" label="Name" min-width="260" show-overflow-tooltip>
+          <el-table-column prop="original_name" label="Name" min-width="280" show-overflow-tooltip>
             <template #default="{ row }"><div class="ellipsis">{{ row.original_name || row.stored_name }}</div></template>
           </el-table-column>
-          <el-table-column label="Hostname" min-width="150" show-overflow-tooltip>
+          <el-table-column label="Hostname" min-width="180" show-overflow-tooltip>
             <template #default="{ row }"><div class="ellipsis">{{ row.hostname || '-' }}</div></template>
           </el-table-column>
-          <el-table-column label="Source / Category" min-width="220" show-overflow-tooltip>
+          <el-table-column label="Source / Category" min-width="160" show-overflow-tooltip>
             <template #default="{ row }"><div class="ellipsis">{{ formatArtifactSourceLabel(row) }}</div></template>
           </el-table-column>
           <el-table-column label="Size" width="110" align="center">
@@ -356,7 +356,7 @@
           <el-table-column label="Created" width="170" show-overflow-tooltip>
             <template #default="{ row }"><div class="ellipsis">{{ row.created_at || '-' }}</div></template>
           </el-table-column>
-          <el-table-column label="Actions" width="220" align="center" fixed="right">
+          <el-table-column label="Actions" width="200" align="center" fixed="right">
             <template #default="{ row }">
               <div class="table-actions table-actions-links">
                 <a href="#" class="table-action-link" @click.prevent="previewArtifact(row)">Preview</a>
@@ -439,7 +439,7 @@
                     <span>{{ job.message_count || 0 }} msgs</span>
                     <span>{{ job.file_count || 0 }} files</span>
                     <span>{{ job.thread_name || '-' }}</span>
-                    <span>{{ job.started_at || '-' }}</span>
+                    <span>{{ formatDateTimeStandard(job.started_at) || '-' }}</span>
                   </div>
                 </div>
                 <div class="background-job-summary-actions">
@@ -470,8 +470,8 @@
         <div class="background-job-stat"><div class="background-job-stat-label">Duration</div><div class="background-job-stat-value">{{ formatBackgroundJobDuration(selectedBackgroundJob.duration_seconds) }}</div></div>
         <div class="background-job-stat"><div class="background-job-stat-label">Messages</div><div class="background-job-stat-value">{{ selectedBackgroundJob.message_count || 0 }}</div></div>
         <div class="background-job-stat"><div class="background-job-stat-label">Files</div><div class="background-job-stat-value">{{ selectedBackgroundJob.file_count || 0 }}</div></div>
-        <div class="background-job-stat"><div class="background-job-stat-label">Started</div><div class="background-job-stat-value">{{ selectedBackgroundJob.started_at || '-' }}</div></div>
-        <div class="background-job-stat"><div class="background-job-stat-label">Stopped</div><div class="background-job-stat-value">{{ selectedBackgroundJob.stopped_at || '-' }}</div></div>
+        <div class="background-job-stat"><div class="background-job-stat-label">Started</div><div class="background-job-stat-value">{{ formatDateTimeStandard(selectedBackgroundJob.started_at) || '-' }}</div></div>
+        <div class="background-job-stat"><div class="background-job-stat-label">Stopped</div><div class="background-job-stat-value">{{ formatDateTimeStandard(selectedBackgroundJob.stopped_at) || '-' }}</div></div>
         <div class="background-job-stat"><div class="background-job-stat-label">Thread</div><div class="background-job-stat-value mono">{{ selectedBackgroundJob.thread_name || '-' }}</div></div>
       </div>
       <div class="background-job-panels">
@@ -479,7 +479,7 @@
           <div class="background-job-panel-title">Messages</div>
           <div class="background-job-message-list">
             <div v-for="(message, index) in selectedBackgroundJobMessagesDesc" :key="`${selectedBackgroundJob.job_id}-msg-${index}`" class="background-job-message-item clickable" @click="openBackgroundJobMessageDialog(message)">
-              <div class="background-job-message-time">{{ message.time || '-' }}</div>
+              <div class="background-job-message-time">{{ formatDateTimeStandard(message.time) || '-' }}</div>
               <div class="background-job-message-text single-line" :class="{ 'is-error': message.status === 0, 'is-success': message.status === 1 }">{{ formatBackgroundJobMessageText(message.text || '') }}</div>
             </div>
             <div v-if="!selectedBackgroundJob.messages || !selectedBackgroundJob.messages.length" class="empty-state compact">No messages</div>
@@ -491,10 +491,10 @@
             <div v-for="(file, index) in selectedBackgroundJob.files" :key="`${selectedBackgroundJob.job_id}-file-${index}`" class="background-job-file-item">
               <div class="background-job-file-main">
                 <div class="background-job-file-name">{{ file.original_name || file.stored_name || '-' }}</div>
-                <div class="background-job-file-meta"><span>{{ formatBytes(file.size || 0) }}</span><span>{{ file.time || '-' }}</span></div>
+                <div class="background-job-file-meta"><span>{{ formatBytes(file.size || 0) }}</span><span>{{ formatDateTimeStandard(file.time) || '-' }}</span></div>
               </div>
               <div class="background-job-file-actions">
-                <el-button size="small" plain @click="previewBackgroundJobFile(file)">Preview</el-button>
+                <a class="table-action-link" style="cursor:pointer" @click="previewBackgroundJobFile(file)">Preview</a>
                 <a class="table-action-link" :href="file.download_url" target="_blank">Download</a>
               </div>
             </div>
@@ -507,7 +507,7 @@
 
   <el-dialog v-model="backgroundJobMessageDialogVisible" title="Message" width="760px" top="8vh" class="fixed-dialog background-job-message-dialog">
     <div class="fixed-dialog-body">
-      <div class="background-job-full-message-time">{{ selectedBackgroundJobMessage.time || '-' }}</div>
+      <div class="background-job-full-message-time">{{ formatDateTimeStandard(selectedBackgroundJobMessage.time) || '-' }}</div>
       <pre class="background-job-full-message-text" :class="{ 'is-error': selectedBackgroundJobMessage.status === 0, 'is-success': selectedBackgroundJobMessage.status === 1 }">{{ formatBackgroundJobMessageText(selectedBackgroundJobMessage.text || '') }}</pre>
     </div>
   </el-dialog>
@@ -587,7 +587,7 @@
       <div class="command-execution-detail-section"><div class="command-execution-detail-label">Summary</div><div class="command-execution-detail-summary">{{ buildCommandExecutionSummary(selectedCommandExecutionEntry) }}</div></div>
       <div class="command-execution-detail-panels">
         <div class="background-job-panel">
-          <div class="background-job-panel-title command-output-panel-title"><span>Output Records</span><el-button size="small" plain @click="toggleCommandExecutionOutputSort">{{ commandExecutionOutputSortOrder === 'desc' ? 'Newest first' : 'Oldest first' }}</el-button></div>
+          <div class="background-job-panel-title command-output-panel-title"><span>Output Records</span><el-button size="small" plain @click="toggleCommandExecutionOutputSort">{{ commandExecutionOutputSortOrder === 'desc' ? 'Oldest first' : 'Newest first' }}</el-button></div>
           <div class="background-job-message-list">
             <div v-for="(record, index) in selectedCommandExecutionOutputRecordsDesc" :key="`${selectedCommandExecutionEntry.entry_id}-output-${index}`" class="background-job-message-item">
               <div class="background-job-message-time">{{ record.time || '-' }}</div>
@@ -605,7 +605,10 @@
                 <div class="background-job-file-name">{{ file.original_name || file.stored_name || '-' }}</div>
                 <div class="background-job-file-meta"><span>{{ formatBytes(file.size || 0) }}</span><span>{{ file.created_at || '-' }}</span><span v-if="getCommandExecutionFileStatusText(file)">[{{ getCommandExecutionFileStatusText(file) }}]</span></div>
               </div>
-              <div class="background-job-file-actions"><a v-if="file.download_url && file.is_available" class="table-action-link" :href="file.download_url" target="_blank">Download</a></div>
+              <div class="background-job-file-actions">
+                <a v-if="file.download_url && file.is_available" style="cursor:pointer" class="table-action-link" @click="previewArtifact(file)">Preview</a>
+                <a v-if="file.download_url && file.is_available" class="table-action-link" :href="file.download_url" target="_blank">Download</a>
+              </div>
             </div>
             <div v-if="!selectedCommandExecutionEntry.files || !selectedCommandExecutionEntry.files.length" class="empty-state compact">No files produced</div>
           </div>
@@ -631,7 +634,7 @@
         <div class="background-job-panel-title">Command List</div>
         <div class="background-job-message-list">
           <div v-for="(item, index) in connectionInfoClientCommands" :key="`${item.template}-${index}`" class="background-job-message-item">
-            <div class="background-job-message-time">client<span v-if="item.group"> / {{ item.group }}</span></div>
+            <div class="background-job-message-time"><span v-if="item.group">{{ item.group }}</span></div>
             <div class="background-job-message-text"><span class="mono">{{ item.name || item.template }}</span><span v-if="item.help"> — {{ item.help }}</span></div>
           </div>
           <div v-if="!connectionInfoClientCommands.length" class="empty-state compact">No commands available</div>

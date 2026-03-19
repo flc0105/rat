@@ -980,6 +980,7 @@ body {
 }
 
 .background-jobs-toolbar {
+  margin-bottom: 10px;
   display: flex;
   gap: 8px;
   flex-wrap: wrap;
@@ -1128,7 +1129,7 @@ body {
 }
 
 .background-job-subtitle {
-  margin-top: 4px;
+  margin-top: 8px;
   color: var(--muted);
   font-size: 12px;
 }
@@ -1592,7 +1593,7 @@ body {
 }
 
 .background-job-summary-subtitle {
-  margin-top: 4px;
+  margin-top: 8px;
   color: var(--muted);
   font-size: 12px;
 }
@@ -1755,9 +1756,9 @@ body {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  min-height: 30px;
+  min-height: 24px;
   max-width: 100%;
-  padding: 6px 10px;
+  padding: 4px 10px;
   border-radius: 999px;
   background: #f8fafc;
   border: 1px solid rgba(15, 23, 42, 0.06);
