@@ -134,6 +134,8 @@ class BackgroundJobStore:
                 file_info = {}
 
             saved_file = {
+                'artifact_id': file_info.get('artifact_id', ''),
+                'artifact_type': file_info.get('artifact_type', ''),
                 'original_name': file_info.get('original_name', ''),
                 'stored_name': file_info.get('stored_name', ''),
                 'relative_path': file_info.get('relative_path', ''),

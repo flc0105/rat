@@ -1,14 +1,13 @@
-import json
-
 from server.commands.executor import CommandExecutor
+from server.web.artifact_service import WebArtifactService
+from server.web.background_job_service import BackgroundJobService
+from server.web.background_job_store import BackgroundJobStore
 from server.web.connection_service import WebConnectionService
 from server.web.event_bus import WebEventBus
 from server.web.file_service import WebFileService
 from server.web.remote_file_service import WebRemoteFileService
 from server.web.task_service import WebTaskService
 from server.web.task_store import WebTaskStore
-from server.web.background_job_service import BackgroundJobService
-from server.web.background_job_store import BackgroundJobStore
 
 
 class ServerWebService:
@@ -24,13 +23,18 @@ class ServerWebService:
         self.server = server
         self.event_bus = WebEventBus()
         self.task_store = WebTaskStore()
-        self.file_service = WebFileService()
-        self.remote_file_service = WebRemoteFileService(server=self.server)
+
+        self.artifact_service = WebArtifactService()
+        self.file_service = WebFileService(self.artifact_service)
+        self.remote_file_service = WebRemoteFileService(
+            server=self.server,
+            artifact_service=self.artifact_service,
+        )
 
         self.connection_service = WebConnectionService(
             server=self.server,
             event_bus=self.event_bus,
-            file_service=self.file_service,
+            artifact_service=self.artifact_service,
         )
 
         self.task_service = WebTaskService(
@@ -99,6 +103,28 @@ class ServerWebService:
 
     def handle_connection_closed(self, conn):
         self.connection_service.handle_connection_closed(conn)
+
+    # ------------------ artifact facade ------------------ #
+    def list_artifacts(self, artifact_type: str = '', hostname: str = ''):
+        return {
+            'items': self.artifact_service.list_artifacts(artifact_type=artifact_type, hostname=hostname),
+            'hostnames': self.artifact_service.list_artifact_hostnames(),
+        }
+
+    def delete_artifact(self, artifact_id: str):
+        return self.artifact_service.delete_artifact(artifact_id)
+
+    def clear_artifacts(self, artifact_type: str, hostname: str = ''):
+        return self.artifact_service.clear_artifacts(artifact_type, hostname=hostname)
+
+    def build_artifact_preview_payload(self, artifact_id: str):
+        return self.artifact_service.build_preview_payload(artifact_id)
+
+    def get_artifact_file_path(self, artifact_id: str):
+        return self.artifact_service.get_artifact_file_path(artifact_id)
+
+    def get_artifact_by_id(self, artifact_id: str):
+        return self.artifact_service.get_artifact_by_id(artifact_id)
 
     # ------------------ command candidates facade ------------------ #
     def get_command_candidates(self, client_id: str):

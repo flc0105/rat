@@ -1,7 +1,5 @@
-import json
 import ntpath
 import os
-from datetime import datetime
 
 from core.utils.files import get_input_stream
 
@@ -13,7 +11,7 @@ class ClientFileReceiver:
     职责：
     - 生成接收文件保存路径
     - 接收并保存文件
-    - 写入元数据
+    - 写入统一 artifact 元数据
     - 触发文件保存回调
     """
 
@@ -29,78 +27,80 @@ class ClientFileReceiver:
         :return: 文件保存结果元组 (status, message)
         """
         file_context = self.connection.pop_file_receive_context(command_id) or {}
-        target_dir = file_context.get('target_dir') or self.connection.file_save_dir or os.getcwd()
-        write_meta = file_context.get('write_meta', True)
         on_file_saved = file_context.get('on_file_saved') or self.connection.on_file_saved
+        capture_result = file_context.get('capture_result')
 
-        os.makedirs(target_dir, exist_ok=True)
+        artifact_service = getattr(self.connection, 'artifact_service', None)
+        if artifact_service is None:
+            self.connection.send_signal(0, command_id)
+            return 0, 'Artifact service is not configured'
 
-        original_name = ntpath.basename(filename) or os.path.basename(filename)
-        file_path = self._build_unique_file_path(target_dir, original_name)
+        original_name = ntpath.basename(filename) or os.path.basename(filename) or 'file.bin'
+        hostname = self.connection.info.get('hostname') or 'unknown_host'
+        client_id = self.connection.info.get('id') or ''
+        addr = self.connection.info.get('addr') or ''
+
+        artifact_type = (file_context.get('artifact_type') or 'downloads').strip() or 'downloads'
+        category = (file_context.get('category') or '').strip()
+        source_type = (file_context.get('source_type') or 'socket_file').strip()
+        related_path = (file_context.get('related_path') or '').strip()
+        source_command_id = file_context.get('source_command_id', command_id)
+        extra = file_context.get('extra') if isinstance(file_context.get('extra'), dict) else {}
 
         try:
+            allocated = artifact_service.allocate_artifact_path(
+                artifact_type=artifact_type,
+                hostname=hostname,
+                original_name=original_name,
+                category=category,
+            )
+            file_path = allocated['file_path']
+
             io = get_input_stream(file_path)
-
-            try:
-                status, error = self.connection.recv_file_packet(command_id, length, io)
-                if status != 1:
-                    return 0, f'Error receiving file from {self.connection.address}: {error}'
-
-                if write_meta:
-                    self._write_file_meta(file_path, original_name, length)
-
-                self._notify_file_saved(on_file_saved, original_name, file_path, length)
-                self._append_file_history(command_id, original_name, file_path, length)
-
-                return 1, f'File saved to: {file_path}'
-            except Exception as e:
-                return 0, f'Error receiving file from {self.connection.address}: {e}'
         except Exception as e:
             self.connection.send_signal(0, command_id)
             return 0, f'Error opening local file: {e}'
 
-    def _append_file_history(self, command_id: int, original_name: str, file_path: str, length: int):
+        try:
+            status, error = self.connection.recv_file_packet(command_id, length, io)
+            if status != 1:
+                return 0, f'Error receiving file from {self.connection.address}: {error}'
+
+            artifact_info = artifact_service.register_existing_artifact(
+                artifact_type=artifact_type,
+                category=category,
+                hostname=allocated['hostname'],
+                original_name=original_name,
+                file_path=file_path,
+                meta_path=allocated['meta_path'],
+                stored_name=allocated['stored_name'],
+                source_type=source_type,
+                source_command_id=source_command_id,
+                client_id=client_id,
+                addr=addr,
+                related_path=related_path,
+                extra=extra,
+            )
+
+            self._notify_file_saved(on_file_saved, artifact_info)
+            self._append_file_history(command_id, artifact_info)
+
+            if isinstance(capture_result, dict):
+                capture_result['artifact'] = artifact_info
+
+            return 1, f'File saved to: {artifact_info.get("saved_path", file_path)}'
+        except Exception as e:
+            return 0, f'Error receiving file from {self.connection.address}: {e}'
+
+    def _append_file_history(self, command_id: int, artifact_info: dict):
         """
         将收到的文件挂到对应执行记录上
         """
-        saved_name = os.path.basename(file_path)
-        self.connection.append_file_to_history(command_id, {
-            'original_name': original_name,
-            'saved_name': saved_name,
-            'saved_path': file_path,
-            'size': length,
-            'created_at': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-            'download_url': f'/api/files/recent/{saved_name}',
-        })
+        self.connection.append_file_to_history(command_id, artifact_info)
 
-    def _build_unique_file_path(self, directory: str, filename: str) -> str:
-        safe_name = ntpath.basename(filename) or 'file.bin'
-        base, ext = os.path.splitext(safe_name)
-        candidate = os.path.join(directory, safe_name)
-        index = 1
-        while os.path.exists(candidate):
-            candidate = os.path.join(directory, f'{base}_{index}{ext}')
-            index += 1
-        return candidate
-
-    def _write_file_meta(self, file_path: str, original_name: str, size: int):
-        meta_path = file_path + '.meta.json'
-        meta = {
-            'client_id': self.connection.info.get('id'),
-            'hostname': self.connection.info.get('hostname'),
-            'addr': self.connection.info.get('addr'),
-            'original_name': original_name,
-            'saved_name': os.path.basename(file_path),
-            'saved_path': file_path,
-            'size': size,
-            'created_at': datetime.now().strftime('%Y-%m-%d %H:%M')
-        }
-        with open(meta_path, 'w', encoding='utf-8') as f:
-            json.dump(meta, f, ensure_ascii=False, indent=2)
-
-    def _notify_file_saved(self, callback, original_name: str, file_path: str, length: int):
+    def _notify_file_saved(self, callback, artifact_info: dict):
         if callable(callback):
             try:
-                callback(original_name, file_path, length)
+                callback(artifact_info)
             except Exception:
                 pass

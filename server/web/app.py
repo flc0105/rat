@@ -3,7 +3,7 @@ import os
 import queue
 from datetime import datetime
 
-from flask import Flask, Response, jsonify, request, send_from_directory, stream_with_context
+from flask import Flask, Response, jsonify, request, send_file, send_from_directory, stream_with_context
 
 from server.config.config import WEB_HTTP_UPLOAD_MAX_BYTES
 from server.web.background_job_blueprint import create_background_job_blueprint
@@ -13,6 +13,7 @@ def create_app(server_instance):
     app = Flask(__name__, static_folder='../../static', static_url_path='')
     web_service = server_instance.web_service
     file_service = web_service.file_service
+    artifact_service = web_service.artifact_service
     app.register_blueprint(create_background_job_blueprint(server_instance))
 
     # ------------------ response helpers ------------------ #
@@ -88,30 +89,6 @@ def create_app(server_instance):
             return _ok(result)
         except Exception as e:
             return _map_common_error(e)
-
-    # ------------------ file send helpers ------------------ #
-    def _send_download_file(saved_name: str):
-        file_path = file_service.get_received_file_download_path(saved_name)
-
-        if not os.path.isfile(file_path):
-            raise FileNotFoundError('file not found')
-
-        return send_from_directory(
-            file_service.received_files_dir,
-            saved_name,
-            as_attachment=True,
-            download_name=saved_name
-        )
-
-    def _send_raw_file(saved_name: str):
-        file_path = file_service.get_safe_received_file_path(saved_name)
-
-        if not os.path.isfile(file_path):
-            raise FileNotFoundError('file not found')
-
-        directory = os.path.dirname(file_path)
-        filename = os.path.basename(file_path)
-        return send_from_directory(directory, filename, as_attachment=False)
 
     # ------------------ pages ------------------ #
     @app.get('/')
@@ -268,7 +245,7 @@ def create_app(server_instance):
                         yield f"event: {item['event']}\n"
                         yield f"data: {json.dumps(item['data'], ensure_ascii=False)}\n\n"
                     except queue.Empty:
-                        yield "event: ping\n"
+                        yield 'event: ping\n'
                         yield f"data: {json.dumps({'time': datetime.now().isoformat()}, ensure_ascii=False)}\n\n"
             finally:
                 web_service.event_bus.unsubscribe(q)
@@ -283,55 +260,65 @@ def create_app(server_instance):
             }
         )
 
-    # ------------------ received files ------------------ #
-    @app.get('/api/files/recent')
-    def get_recent_files():
+    # ------------------ artifact manager ------------------ #
+    @app.get('/api/artifacts')
+    def get_artifacts():
+        artifact_type = (request.args.get('type') or '').strip()
+        hostname = (request.args.get('hostname') or '').strip()
         return _json_endpoint(
-            lambda: file_service.list_received_files(),
+            lambda: web_service.list_artifacts(artifact_type=artifact_type, hostname=hostname),
             default_error_status=500
         )
 
-    @app.get('/api/files/recent/<path:saved_name>')
-    def download_recent_file(saved_name):
+    @app.get('/api/artifacts/<artifact_id>/download')
+    def download_artifact(artifact_id):
         try:
-            return _send_download_file(saved_name)
+            artifact = web_service.get_artifact_by_id(artifact_id)
+            file_path = web_service.get_artifact_file_path(artifact_id)
+            download_name = artifact.get('original_name') or artifact.get('stored_name') or os.path.basename(file_path)
+            return send_file(file_path, as_attachment=True, download_name=download_name)
         except Exception as e:
             return _map_common_error(e)
 
-    @app.get('/api/files/recent/<path:saved_name>/raw')
-    def get_recent_file_raw(saved_name):
+    @app.get('/api/artifacts/<artifact_id>/raw')
+    def raw_artifact(artifact_id):
         try:
-            return _send_raw_file(saved_name)
+            file_path = web_service.get_artifact_file_path(artifact_id)
+            return send_file(file_path, as_attachment=False)
         except Exception as e:
             return _map_common_error(e)
 
-    @app.get('/api/files/recent/<path:saved_name>/preview')
-    def preview_recent_file(saved_name):
+    @app.get('/api/artifacts/<artifact_id>/preview')
+    def preview_artifact(artifact_id):
         return _file_endpoint(
-            lambda: file_service.build_file_preview_payload(saved_name)
+            lambda: web_service.build_artifact_preview_payload(artifact_id)
         )
 
-    @app.get('/api/files/preview/<path:relative_path>/raw')
-    def get_preview_file_raw(relative_path):
-        try:
-            file_path = file_service.get_safe_preview_file_path(relative_path)
+    @app.delete('/api/artifacts/<artifact_id>')
+    def delete_artifact(artifact_id):
+        return _file_endpoint(
+            lambda: web_service.delete_artifact(artifact_id)
+        )
 
-            if not os.path.isfile(file_path):
-                raise FileNotFoundError('file not found')
-
-            directory = os.path.dirname(file_path)
-            filename = os.path.basename(file_path)
-            return send_from_directory(directory, filename, as_attachment=False)
-        except Exception as e:
-            return _map_common_error(e)
-
-    @app.delete('/api/files/recent/<path:saved_name>')
-    def delete_recent_file(saved_name):
+    @app.post('/api/artifacts/clear')
+    def clear_artifacts():
         def _execute():
-            file_service.delete_received_file(saved_name)
-            return None
+            payload = _get_json_payload()
+            artifact_type = (payload.get('type') or '').strip()
+            hostname = (payload.get('hostname') or '').strip()
+            if not artifact_type:
+                raise ValueError('type is required')
+            return web_service.clear_artifacts(artifact_type, hostname=hostname)
 
-        return _file_endpoint(_execute)
+        return _json_endpoint(_execute, default_error_status=500)
+
+    # ------------------ old recent endpoints compatibility ------------------ #
+    @app.get('/api/files/recent')
+    def get_recent_files():
+        return _json_endpoint(
+            lambda: web_service.list_artifacts(artifact_type='downloads').get('items', []),
+            default_error_status=500
+        )
 
     # ------------------ http uploads ------------------ #
     app.config['MAX_CONTENT_LENGTH'] = WEB_HTTP_UPLOAD_MAX_BYTES
@@ -342,11 +329,19 @@ def create_app(server_instance):
             upload = _get_required_upload()
             category = request.form.get('category', '').strip()
             client_id = request.form.get('client_id', '').strip()
+            hostname = request.form.get('hostname', '').strip()
+            job_id = request.form.get('job_id', '').strip()
+            job_name = request.form.get('job_name', '').strip()
+            job_key = request.form.get('job_key', '').strip()
 
-            return file_service.save_http_uploaded_file(
+            return artifact_service.save_http_uploaded_file(
                 upload,
                 category=category,
-                client_id=client_id
+                client_id=client_id,
+                hostname=hostname,
+                job_id=job_id,
+                job_name=job_name,
+                job_key=job_key,
             )
 
         return _json_endpoint(_execute, default_error_status=500)

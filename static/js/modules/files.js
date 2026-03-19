@@ -52,15 +52,15 @@ window.AppFilesModule = {
             window.open(this.previewUrl, '_blank');
         },
 
-        async previewRecentFile(row) {
-            if (!row || !row.saved_name) {
-                ElementPlus.ElMessage.warning('Invalid file');
+        async previewArtifact(row) {
+            if (!row || !row.artifact_id) {
+                ElementPlus.ElMessage.warning('Invalid artifact');
                 return;
             }
 
             await this.loadPreviewPayload(
-                () => fetch(`/api/files/recent/${encodeURIComponent(row.saved_name)}/preview`),
-                row.original_name || row.saved_name || 'File Preview'
+                () => fetch(`/api/artifacts/${encodeURIComponent(row.artifact_id)}/preview`),
+                row.original_name || row.stored_name || 'Artifact Preview'
             );
         },
 
@@ -80,15 +80,15 @@ window.AppFilesModule = {
             );
         },
 
-        async deleteRecentFile(row) {
-            if (!row || !row.saved_name) {
-                ElementPlus.ElMessage.warning('Invalid file');
+        async deleteArtifact(row) {
+            if (!row || !row.artifact_id) {
+                ElementPlus.ElMessage.warning('Invalid artifact');
                 return;
             }
 
             try {
                 await ElementPlus.ElMessageBox.confirm(
-                    `Delete "${row.original_name || row.saved_name}"?`,
+                    `Delete "${row.original_name || row.stored_name}"?`,
                     'Delete Confirmation',
                     {
                         type: 'warning',
@@ -97,7 +97,7 @@ window.AppFilesModule = {
                     }
                 );
 
-                const res = await fetch(`/api/files/recent/${encodeURIComponent(row.saved_name)}`, {
+                const res = await fetch(`/api/artifacts/${encodeURIComponent(row.artifact_id)}`, {
                     method: 'DELETE'
                 });
 
@@ -108,15 +108,93 @@ window.AppFilesModule = {
 
                 ElementPlus.ElMessage.success('Deleted');
 
-                if (this.previewDialogVisible && this.previewTitle === (row.original_name || row.saved_name)) {
+                if (this.previewDialogVisible && this.previewTitle === (row.original_name || row.stored_name)) {
                     this.previewDialogVisible = false;
                     this.resetPreviewState();
                 }
 
-                await this.openRecentFilesDialog();
+                await this.loadArtifacts();
             } catch (e) {
                 if (e === 'cancel' || e === 'close' || e?.toString?.().includes('cancel')) return;
                 ElementPlus.ElMessage.error(e.message || 'Delete failed');
+            }
+        },
+
+        async openArtifactDialog() {
+            this.artifactDialogVisible = true;
+            await this.loadArtifacts();
+        },
+
+        async loadArtifacts() {
+            this.artifactLoading = true;
+
+            try {
+                const url = new URL('/api/artifacts', window.location.origin);
+                const activeType = String(this.artifactActiveTab || '').trim();
+                const hostname = String(this.artifactHostnameFilter || '').trim();
+                if (activeType) url.searchParams.set('type', activeType);
+                if (hostname) url.searchParams.set('hostname', hostname);
+
+                const res = await fetch(url.pathname + url.search);
+                const json = await res.json();
+
+                if (!res.ok || json.code !== 0) {
+                    throw new Error(json.message || 'Failed to load artifacts');
+                }
+
+                const data = json.data || {};
+                this.artifactItems = Array.isArray(data.items) ? data.items : [];
+                this.artifactHostnames = Array.isArray(data.hostnames) ? data.hostnames : [];
+            } catch (e) {
+                this.artifactItems = [];
+                this.artifactHostnames = [];
+                ElementPlus.ElMessage.error(e.message || 'Failed to load artifacts');
+            } finally {
+                this.artifactLoading = false;
+            }
+        },
+
+        async clearArtifactCategory() {
+            const activeType = String(this.artifactActiveTab || '').trim();
+            if (!activeType) {
+                ElementPlus.ElMessage.warning('Please select a category');
+                return;
+            }
+
+            try {
+                const hostnameText = this.artifactHostnameFilter ? ` for ${this.artifactHostnameFilter}` : '';
+                await ElementPlus.ElMessageBox.confirm(
+                    `Clear all ${activeType}${hostnameText}?`,
+                    'Clear Artifacts',
+                    {
+                        type: 'warning',
+                        confirmButtonText: 'Clear',
+                        cancelButtonText: 'Cancel'
+                    }
+                );
+
+                this.artifactClearing = true;
+                const res = await fetch('/api/artifacts/clear', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        type: activeType,
+                        hostname: this.artifactHostnameFilter || ''
+                    })
+                });
+
+                const json = await res.json();
+                if (!res.ok || json.code !== 0) {
+                    throw new Error(json.message || 'Clear failed');
+                }
+
+                ElementPlus.ElMessage.success(`Cleared ${json.data?.deleted_count || 0} item(s)`);
+                await this.loadArtifacts();
+            } catch (e) {
+                if (e === 'cancel' || e === 'close' || e?.toString?.().includes('cancel')) return;
+                ElementPlus.ElMessage.error(e.message || 'Clear failed');
+            } finally {
+                this.artifactClearing = false;
             }
         },
 
@@ -474,18 +552,16 @@ window.AppFilesModule = {
                     throw new Error(json.message || 'Download failed');
                 }
 
-                const file = json.data && json.data.file;
-                if (!file || !file.saved_name) {
-                    throw new Error('Download finished, but saved file was not found');
+                const artifact = json.data && json.data.artifact;
+                if (!artifact || !artifact.artifact_id) {
+                    throw new Error('Download finished, but artifact was not found');
                 }
 
-                const downloadUrl = `/api/files/recent/${encodeURIComponent(file.saved_name)}`;
-                window.open(downloadUrl, '_blank');
-
+                window.open(artifact.download_url, '_blank');
                 ElementPlus.ElMessage.success(`Downloaded: ${row.name}`);
 
-                if (this.recentFilesDialogVisible) {
-                    await this.openRecentFilesDialog();
+                if (this.artifactDialogVisible) {
+                    await this.loadArtifacts();
                 }
             } catch (e) {
                 ElementPlus.ElMessage.error(e.message || 'Download failed');
@@ -521,18 +597,16 @@ window.AppFilesModule = {
                     throw new Error(json.message || 'ZIP download failed');
                 }
 
-                const file = json.data && json.data.file;
-                if (!file || !file.saved_name) {
-                    throw new Error('ZIP download finished, but saved file was not found');
+                const artifact = json.data && json.data.artifact;
+                if (!artifact || !artifact.artifact_id) {
+                    throw new Error('ZIP download finished, but artifact was not found');
                 }
 
-                const downloadUrl = `/api/files/recent/${encodeURIComponent(file.saved_name)}`;
-                window.open(downloadUrl, '_blank');
+                window.open(artifact.download_url, '_blank');
+                ElementPlus.ElMessage.success(`ZIP ready: ${artifact.original_name || artifact.stored_name}`);
 
-                ElementPlus.ElMessage.success(`ZIP ready: ${file.original_name || file.saved_name}`);
-
-                if (this.recentFilesDialogVisible) {
-                    await this.openRecentFilesDialog();
+                if (this.artifactDialogVisible) {
+                    await this.loadArtifacts();
                 }
             } catch (e) {
                 ElementPlus.ElMessage.error(e.message || 'ZIP download failed');
@@ -573,26 +647,6 @@ window.AppFilesModule = {
             } catch (e) {
                 if (e === 'cancel' || e === 'close' || e?.toString?.().includes('cancel')) return;
                 ElementPlus.ElMessage.error(e.message || 'Delete failed');
-            }
-        },
-
-        async openRecentFilesDialog() {
-            this.recentFilesDialogVisible = true;
-            this.recentFilesLoading = true;
-
-            try {
-                const res = await fetch('/api/files/recent');
-                const json = await res.json();
-
-                if (!res.ok || json.code !== 0) {
-                    throw new Error(json.message || 'Failed to load files');
-                }
-
-                this.recentFiles = json.data || [];
-            } catch (e) {
-                ElementPlus.ElMessage.error(e.message || 'Failed to load files');
-            } finally {
-                this.recentFilesLoading = false;
             }
         },
 

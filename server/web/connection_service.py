@@ -1,5 +1,4 @@
 from datetime import datetime
-import os
 
 from server.connection.client_connection import ClientConnection
 
@@ -14,10 +13,10 @@ class WebConnectionService:
     - 处理连接上线/下线/背景消息事件
     """
 
-    def __init__(self, server, event_bus, file_service):
+    def __init__(self, server, event_bus, artifact_service):
         self.server = server
         self.event_bus = event_bus
-        self.file_service = file_service
+        self.artifact_service = artifact_service
 
     # ------------------ payload ------------------ #
     def serialize_connection(self, conn: ClientConnection) -> dict:
@@ -40,20 +39,13 @@ class WebConnectionService:
         """
         创建并配置带 Web 能力的客户端连接对象
         """
-        connection = ClientConnection(
-            conn,
-            addr,
-            info,
-            file_save_dir=self.file_service.received_files_dir,
-            on_file_saved=lambda original_name, saved_path, size: self.publish_file_received(
-                info.get('id'),
-                original_name,
-                saved_path,
-                size
-            )
-        )
+        connection = ClientConnection(conn, addr, info)
         connection.command_history = self.server.command_history
+        connection.artifact_service = self.artifact_service
 
+        connection.on_file_saved = (
+            lambda artifact_info: self.publish_file_received(info.get('id'), artifact_info)
+        )
         connection.on_unexpected_message = (
             lambda status, text, end: self.publish_background_message(connection, status, text, end)
         )
@@ -93,12 +85,20 @@ class WebConnectionService:
             'time': datetime.now().isoformat()
         })
 
-    def publish_file_received(self, client_id: str, original_name: str, saved_path: str, size: int):
+    def publish_file_received(self, client_id: str, artifact_info: dict):
+        if not isinstance(artifact_info, dict):
+            return
+
         self.event_bus.publish('file_received', {
             'client_id': client_id,
-            'original_name': original_name,
-            'saved_name': os.path.basename(saved_path),
-            'saved_path': saved_path,
-            'size': size,
-            'created_at': datetime.now().isoformat(),
+            'artifact_id': artifact_info.get('artifact_id', ''),
+            'artifact_type': artifact_info.get('artifact_type', ''),
+            'category': artifact_info.get('category', ''),
+            'hostname': artifact_info.get('hostname', ''),
+            'original_name': artifact_info.get('original_name', ''),
+            'stored_name': artifact_info.get('stored_name', ''),
+            'size': artifact_info.get('size', 0),
+            'created_at': artifact_info.get('created_at', ''),
+            'download_url': artifact_info.get('download_url', ''),
+            'preview_url': artifact_info.get('preview_url', ''),
         })

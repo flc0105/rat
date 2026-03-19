@@ -32,9 +32,13 @@ window.AppStateModule = {
             remoteSelectedPaths: [],
             remoteZipDownloading: false,
 
-            recentFilesDialogVisible: false,
-            recentFilesLoading: false,
-            recentFiles: [],
+            artifactDialogVisible: false,
+            artifactLoading: false,
+            artifactItems: [],
+            artifactHostnames: [],
+            artifactActiveTab: 'downloads',
+            artifactHostnameFilter: '',
+            artifactClearing: false,
 
             previewDialogVisible: false,
             previewLoading: false,
@@ -115,28 +119,34 @@ window.AppStateModule = {
         },
 
         connectionInfoClientCommands() {
-    return (this.commandCandidates || []).filter(item => item && item.source === 'client');
-},
+            return (this.commandCandidates || []).filter(item => item && item.source === 'client');
+        },
 
         selectedCommandExecutionOutputRecordsDesc() {
-    const records = this.selectedCommandExecutionEntry && Array.isArray(this.selectedCommandExecutionEntry.output_records)
-        ? this.selectedCommandExecutionEntry.output_records
-        : [];
+            const records = this.selectedCommandExecutionEntry && Array.isArray(this.selectedCommandExecutionEntry.output_records)
+                ? this.selectedCommandExecutionEntry.output_records
+                : [];
 
-    const sorted = [...records].sort((a, b) => {
-        return Number(b.seq || 0) - Number(a.seq || 0);
-    });
+            const sorted = [...records].sort((a, b) => {
+                return Number(b.seq || 0) - Number(a.seq || 0);
+            });
 
-    if (this.commandExecutionOutputSortOrder === 'asc') {
-        sorted.reverse();
-    }
+            if (this.commandExecutionOutputSortOrder === 'asc') {
+                sorted.reverse();
+            }
 
-    return sorted;
-},
+            return sorted;
+        },
 
-
-
-
+        filteredArtifactItems() {
+            const activeType = String(this.artifactActiveTab || '').trim();
+            const hostname = String(this.artifactHostnameFilter || '').trim();
+            return (this.artifactItems || []).filter(item => {
+                if (activeType && item.artifact_type !== activeType) return false;
+                if (hostname && item.hostname !== hostname) return false;
+                return true;
+            });
+        },
     },
 
     watch: {
@@ -172,6 +182,12 @@ window.AppStateModule = {
         commandExecutionDetailDialogVisible(val) {
             if (!val) {
                 this.selectedCommandExecutionEntryId = '';
+            }
+        },
+
+        artifactDialogVisible(val) {
+            if (!val) {
+                this.artifactHostnameFilter = '';
             }
         },
     }

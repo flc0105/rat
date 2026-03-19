@@ -122,19 +122,22 @@ window.AppSseModule = {
                         type: 'success'
                     });
                 }
+
+                if (this.artifactDialogVisible) {
+                    await this.loadArtifacts();
+                }
             });
 
-            es.addEventListener('file_received', (event) => {
+            es.addEventListener('file_received', async (event) => {
                 const payload = JSON.parse(event.data);
-                const fileName = payload.saved_name || payload.original_name;
-                const downloadUrl = `/api/files/recent/${encodeURIComponent(fileName)}`;
+                const downloadUrl = payload.download_url || '#';
 
                 ElementPlus.ElNotification({
-                    title: 'File Received',
+                    title: 'Artifact Received',
                     dangerouslyUseHTMLString: true,
                     message: `
             <div>
-              <div>${payload.original_name || fileName} has been saved to the server file area</div>
+              <div>${payload.original_name || payload.stored_name || 'artifact'} has been saved to the artifact area</div>
               <div style="margin-top:6px;">
                 <a href="${downloadUrl}" target="_blank" style="color:#409eff;text-decoration:none;">
                   Download now
@@ -146,8 +149,8 @@ window.AppSseModule = {
                     duration: 6000
                 });
 
-                if (this.recentFilesDialogVisible) {
-                    this.openRecentFilesDialog();
+                if (this.artifactDialogVisible) {
+                    await this.loadArtifacts();
                 }
             });
 

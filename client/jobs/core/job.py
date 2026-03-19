@@ -136,17 +136,19 @@ class Job(ABC):
         if not isinstance(file_info, dict):
             return
 
-        relative_path = (file_info.get('relative_path') or '').strip()
-        if not relative_path:
+        artifact_id = (file_info.get('artifact_id') or '').strip()
+        if not artifact_id:
             return
 
         self._post_job_report(
             self._build_report_payload(
                 'file',
                 file={
+                    'artifact_id': artifact_id,
+                    'artifact_type': file_info.get('artifact_type', ''),
                     'original_name': file_info.get('original_name', ''),
                     'stored_name': file_info.get('stored_name', ''),
-                    'relative_path': relative_path,
+                    'relative_path': file_info.get('relative_path', ''),
                     'size': file_info.get('size', 0),
                     'category': file_info.get('category', ''),
                     'download_url': file_info.get('download_url', ''),
@@ -162,11 +164,12 @@ class Job(ABC):
                 self.upload_url,
                 files={'file': file_obj},
                 data={
-                    "category": category,
-                    "client_id": self.client_id,
-                    "job_id": self.job_id,
-                    "job_name": self.job_name,
-                    "job_key": self.job_key,
+                    'category': category,
+                    'client_id': self.client_id,
+                    'hostname': getattr(self.server, 'info', {}).get('hostname', '') if self.server else '',
+                    'job_id': self.job_id,
+                    'job_name': self.job_name,
+                    'job_key': self.job_key,
                 },
                 timeout=30,
             )

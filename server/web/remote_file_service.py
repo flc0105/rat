@@ -14,8 +14,9 @@ class WebRemoteFileService:
     - 将客户端返回结果转换成 Web 端可直接消费的数据
     """
 
-    def __init__(self, server):
+    def __init__(self, server, artifact_service):
         self.server = server
+        self.artifact_service = artifact_service
 
     def _encode_payload_arg(self, payload: dict) -> str:
         raw = json.dumps(payload, ensure_ascii=False).encode('utf-8')
@@ -58,69 +59,37 @@ class WebRemoteFileService:
         except Exception as e:
             raise RuntimeError(f'Invalid remote JSON payload: {e}')
 
-    def _fetch_file_to_custom_dir(self, client_id: str, path: str, target_dir: str, write_meta: bool = False):
-        """
-        将远程文件拉取到指定服务端目录，不进入 recent downloads
-        """
-        if not (path or '').strip():
-            raise ValueError('path is required')
-
-        normalized_path = path.strip()
-        command = self._build_command('download_path', {'path': normalized_path})
-
+    def _fetch_artifact(self, client_id: str, command: str, *, artifact_type: str, source_type: str, related_path: str = '') -> dict:
         conn = self.server.get_target_connection_by_client_id(client_id)
         command_id = conn._generate_message_id()
+        capture_result = {}
+
         conn.set_file_receive_context(
             command_id,
-            target_dir=target_dir,
-            write_meta=write_meta,
-            on_file_saved=None,
+            artifact_type=artifact_type,
+            source_type=source_type,
+            related_path=related_path,
+            source_command_id=command_id,
+            capture_result=capture_result,
         )
 
-        data = {
+        conn.send({
             'type': 'command',
             'id': command_id,
             'text': command,
-        }
-        conn.send(data)
+        })
 
         status, text = self._collect_result(conn.wait_for_result(command_id, command))
         if status != 1:
             raise RuntimeError(text or 'Remote file fetch failed')
 
-        return text
-
-    def _download_to_received_area(self, client_id: str, command: str, expected_saved_name: str | None = None) -> dict:
-        """
-        执行一次远程下载，并从 received files 中定位新文件
-        """
-        conn = self.server.get_target_connection_by_client_id(client_id)
-        before_files = {item['saved_name'] for item in self.server.web_service.file_service.list_received_files()}
-
-        status, text = self._collect_result(conn.send_command(command))
-        if status != 1:
-            raise RuntimeError(text or 'Remote download failed')
-
-        after_items = self.server.web_service.file_service.list_received_files()
-        target_item = None
-
-        for item in after_items:
-            if item['saved_name'] not in before_files and item.get('client_id') == client_id:
-                target_item = item
-                break
-
-        if not target_item and expected_saved_name:
-            for item in after_items:
-                if item.get('client_id') == client_id and item.get('saved_name') == expected_saved_name:
-                    target_item = item
-                    break
-
-        if not target_item:
-            raise RuntimeError('Remote file download completed, but saved file was not found')
+        artifact = capture_result.get('artifact') or {}
+        if not isinstance(artifact, dict) or not artifact.get('artifact_id'):
+            raise RuntimeError('Remote file download completed, but artifact was not found')
 
         return {
             'message': text,
-            'file': target_item
+            'artifact': artifact,
         }
 
     def browse_directory(self, client_id: str, path: str = '') -> dict:
@@ -189,7 +158,7 @@ class WebRemoteFileService:
 
     def download_file(self, client_id: str, path: str) -> dict:
         """
-        下载远程文件到服务端接收区，并返回下载信息
+        下载远程文件到服务端 artifact downloads 区，并返回下载信息
         """
         if not (path or '').strip():
             raise ValueError('path is required')
@@ -197,21 +166,23 @@ class WebRemoteFileService:
         normalized_path = path.strip()
         command = self._build_command('download_path', {'path': normalized_path})
 
-        result = self._download_to_received_area(
+        result = self._fetch_artifact(
             client_id=client_id,
             command=command,
-            expected_saved_name=os.path.basename(normalized_path)
+            artifact_type='downloads',
+            source_type='remote_download',
+            related_path=normalized_path,
         )
 
         return {
             'path': normalized_path,
             'message': result['message'],
-            'file': result['file']
+            'artifact': result['artifact']
         }
 
     def download_paths_as_zip(self, client_id: str, paths: list[str], archive_name: str = '') -> dict:
         """
-        将多个远程路径打包为 zip 下载到服务端接收区
+        将多个远程路径打包为 zip 下载到服务端 artifact downloads 区
         """
         if not isinstance(paths, list) or not paths:
             raise ValueError('paths is required')
@@ -224,80 +195,44 @@ class WebRemoteFileService:
         if not normalized_paths:
             raise ValueError('paths is required')
 
-        if archive_name:
-            expected_name = archive_name if archive_name.lower().endswith('.zip') else f'{archive_name}.zip'
-        elif len(normalized_paths) == 1:
-            splitter = "/\\"
-            expected_name = f'{os.path.basename(normalized_paths[0].rstrip(splitter)) or "download"}.zip'
-        else:
-            expected_name = None
-
         command = self._build_command('download_paths', {
             'paths': normalized_paths,
             'archive_name': archive_name,
         })
 
-        result = self._download_to_received_area(
+        result = self._fetch_artifact(
             client_id=client_id,
             command=command,
-            expected_saved_name=expected_name
+            artifact_type='downloads',
+            source_type='remote_download_bundle',
+            related_path='\n'.join(normalized_paths),
         )
 
         return {
             'paths': normalized_paths,
             'message': result['message'],
-            'file': result['file']
+            'artifact': result['artifact']
         }
 
     def preview_file(self, client_id: str, path: str) -> dict:
         """
         预览远程文件：
-        - 拉取到 preview 目录
-        - 不进入 recent downloads
-        - 复用现有图片/文本预览逻辑
+        - 拉取到 previews 目录
+        - 复用统一 artifact 预览逻辑
         """
         if not (path or '').strip():
             raise ValueError('path is required')
 
-        conn = self.server.get_target_connection_by_client_id(client_id)
-        hostname = conn.info.get('hostname') or 'unknown_host'
-        target_dir = self.server.web_service.file_service.get_preview_dir_for_hostname(hostname)
-
         normalized_path = path.strip()
-        base_name = os.path.basename(normalized_path)
+        command = self._build_command('download_path', {'path': normalized_path})
 
-        before_names = set(os.listdir(target_dir)) if os.path.isdir(target_dir) else set()
-
-        self._fetch_file_to_custom_dir(
+        result = self._fetch_artifact(
             client_id=client_id,
-            path=normalized_path,
-            target_dir=target_dir,
-            write_meta=False,
+            command=command,
+            artifact_type='previews',
+            source_type='remote_preview',
+            related_path=normalized_path,
         )
+        artifact = result['artifact']
 
-        after_names = set(os.listdir(target_dir)) if os.path.isdir(target_dir) else set()
-        new_names = [name for name in (after_names - before_names) if os.path.isfile(os.path.join(target_dir, name))]
-
-        saved_name = None
-        if new_names:
-            new_names.sort()
-            saved_name = new_names[0]
-        else:
-            candidate = os.path.join(target_dir, base_name)
-            if os.path.isfile(candidate):
-                saved_name = base_name
-            else:
-                prefix, ext = os.path.splitext(base_name)
-                matches = [
-                    name for name in after_names
-                    if name == base_name or (name.startswith(prefix + '_') and name.endswith(ext))
-                ]
-                matches.sort()
-                if matches:
-                    saved_name = matches[-1]
-
-        if not saved_name:
-            raise RuntimeError('Preview file was received, but saved file was not found')
-
-        relative_path = self.server.web_service.file_service.build_preview_relative_path(hostname, saved_name)
-        return self.server.web_service.file_service.build_preview_file_payload(relative_path)
+        return self.artifact_service.build_preview_payload(artifact.get('artifact_id', ''))

@@ -175,12 +175,21 @@ class CommandHistoryStore:
         is_available = bool(saved_path) and os.path.isfile(saved_path)
 
         return {
+            'artifact_id': file_info.get('artifact_id', ''),
+            'artifact_type': file_info.get('artifact_type', ''),
+            'category': file_info.get('category', ''),
+            'hostname': file_info.get('hostname', ''),
+            'client_id': file_info.get('client_id', ''),
             'original_name': file_info.get('original_name', ''),
-            'saved_name': file_info.get('saved_name', ''),
+            'saved_name': file_info.get('stored_name') or file_info.get('saved_name', ''),
             'saved_path': saved_path,
             'size': file_info.get('size', 0),
             'created_at': file_info.get('created_at', self._now_text()),
             'download_url': file_info.get('download_url', ''),
+            'raw_url': file_info.get('raw_url', ''),
+            'preview_url': file_info.get('preview_url', ''),
+            'source_type': file_info.get('source_type', ''),
+            'related_path': file_info.get('related_path', ''),
             'is_available': is_available,
             'status_text': '' if is_available else 'File removed',
         }

@@ -93,12 +93,10 @@
                   <div class="terminal-tools">
                     <el-button size="small" class="tool-btn tool-btn-accent" @click="triggerUpload">Upload</el-button>
                     <el-button size="small" class="tool-btn tool-btn-accent" @click="openRemoteFilesDialog">Remote Files</el-button>
-                    <el-button size="small" class="tool-btn tool-btn-accent" @click="openRecentFilesDialog">Downloads</el-button>
-                     <el-button size="small" class="tool-btn" @click="openConnectionInfoDialog">Connection Info</el-button>
-
+                    <el-button size="small" class="tool-btn tool-btn-accent" @click="openArtifactDialog">Artifacts</el-button>
+                    <el-button size="small" class="tool-btn" @click="openConnectionInfoDialog">Connection Info</el-button>
                     <el-button size="small" class="tool-btn" @click="openBackgroundJobsDialog">Background Jobs</el-button>
                     <el-button size="small" class="tool-btn" @click="openCommandHistoryDialog">History</el-button>
-
                     <el-button size="small" class="tool-btn tool-btn-danger" @click="killConnection">Disconnect</el-button>
 
                     <span class="tool-separator"></span>
@@ -172,27 +170,10 @@
     </div>
   </div>
 
-  <input
-    ref="uploadInputRef"
-    type="file"
-    class="hidden-file-input"
-    @change="handleUploadChange"
-  />
+  <input ref="uploadInputRef" type="file" class="hidden-file-input" @change="handleUploadChange" />
+  <input ref="remoteUploadInputRef" type="file" class="hidden-file-input" @change="handleRemoteUploadChange" />
 
-  <input
-    ref="remoteUploadInputRef"
-    type="file"
-    class="hidden-file-input"
-    @change="handleRemoteUploadChange"
-  />
-
-  <el-dialog
-    v-model="remoteFilesDialogVisible"
-    title="Remote File Browser"
-    width="1180px"
-    top="4vh"
-    class="fixed-dialog remote-files-dialog"
-  >
+  <el-dialog v-model="remoteFilesDialogVisible" title="Remote File Browser" width="1180px" top="4vh" class="fixed-dialog remote-files-dialog">
     <div class="fixed-dialog-body">
       <div class="dialog-head">
         <div class="dialog-head-left">
@@ -201,42 +182,19 @@
             <el-button size="small" @click="refreshRemoteDirectory">Refresh</el-button>
             <el-button size="small" @click="createRemoteDirectory">New Folder</el-button>
             <el-button size="small" :loading="remoteUploadLoading" @click="triggerRemoteUpload">Upload Here</el-button>
-            <el-button
-              size="small"
-              type="primary"
-              :disabled="!hasRemoteSelection"
-              :loading="remoteZipDownloading"
-              @click="downloadSelectedRemoteEntries"
-            >
-              Download Selected
-            </el-button>
-            <el-button
-              size="small"
-              :disabled="!hasRemoteSelection"
-              @click="clearRemoteSelection"
-            >
-              Clear Selection
-            </el-button>
+            <el-button size="small" type="primary" :disabled="!hasRemoteSelection" :loading="remoteZipDownloading" @click="downloadSelectedRemoteEntries">Download Selected</el-button>
+            <el-button size="small" :disabled="!hasRemoteSelection" @click="clearRemoteSelection">Clear Selection</el-button>
           </div>
 
           <div class="dialog-filter-box">
             <span class="dialog-filter-label">Hidden</span>
-            <el-switch
-              v-model="showHiddenFiles"
-              inline-prompt
-              active-text="On"
-              inactive-text="Off"
-            />
+            <el-switch v-model="showHiddenFiles" inline-prompt active-text="On" inactive-text="Off" />
           </div>
         </div>
 
         <div class="dialog-head-right">
           <div class="dialog-path-box">
-            <el-input
-              v-model="remoteFilesPathInput"
-              placeholder="Enter a path and jump"
-              @keyup.enter="goToRemotePathInput"
-            />
+            <el-input v-model="remoteFilesPathInput" placeholder="Enter a path and jump" @keyup.enter="goToRemotePathInput" />
             <el-button size="small" @click="goToRemotePathInput">Go</el-button>
           </div>
         </div>
@@ -247,11 +205,7 @@
           ref="remoteFilesTableRef"
           :data="filteredRemoteFilesEntries"
           v-loading="remoteFilesLoading"
-          stripe
-          width="100%"
-          height="100%"
-          empty-text="This folder is empty"
-          table-layout="fixed"
+          stripe width="100%" height="100%" empty-text="This folder is empty" table-layout="fixed"
           @row-dblclick="handleRemoteRowDblClick"
           @selection-change="handleRemoteSelectionChange"
         >
@@ -266,68 +220,19 @@
               </div>
             </template>
           </el-table-column>
-
-          <el-table-column label="Type" width="110" align="center">
-            <template #default="{ row }">
-              {{ row.is_dir ? 'Folder' : 'File' }}
-            </template>
-          </el-table-column>
-
-          <el-table-column label="Size" width="120" align="center">
-            <template #default="{ row }">
-              {{ row.is_dir ? '-' : formatBytes(row.size) }}
-            </template>
-          </el-table-column>
-
-          <el-table-column prop="modified_at" label="Modified" width="180" show-overflow-tooltip>
-            <template #default="{ row }">
-              <div class="ellipsis">{{ row.modified_at || '-' }}</div>
-            </template>
-          </el-table-column>
-
+          <el-table-column label="Type" width="110" align="center"><template #default="{ row }">{{ row.is_dir ? 'Folder' : 'File' }}</template></el-table-column>
+          <el-table-column label="Size" width="120" align="center"><template #default="{ row }">{{ row.is_dir ? '-' : formatBytes(row.size) }}</template></el-table-column>
+          <el-table-column prop="modified_at" label="Modified" width="180" show-overflow-tooltip><template #default="{ row }"><div class="ellipsis">{{ row.modified_at || '-' }}</div></template></el-table-column>
           <el-table-column label="Actions" width="220" align="center" fixed="right">
             <template #default="{ row }">
               <div class="table-actions table-actions-links">
-                <el-button
-                  v-if="row.is_dir"
-                  size="small"
-                  link
-                  type="primary"
-                  @click="enterRemoteDirectory(row)"
-                >
-                  Open
-                </el-button>
-
+                <el-button v-if="row.is_dir" size="small" link type="primary" @click="enterRemoteDirectory(row)">Open</el-button>
                 <template v-if="!row.is_dir">
-                  <el-button
-                    size="small"
-                    link
-                    type="primary"
-                    @click="previewRemoteEntry(row)"
-                  >
-                    Preview
-                  </el-button>
-                  <el-button
-                    size="small"
-                    link
-                    type="primary"
-                    @click="downloadRemoteEntry(row)"
-                  >
-                    Download
-                  </el-button>
+                  <el-button size="small" link type="primary" @click="previewRemoteEntry(row)">Preview</el-button>
+                  <el-button size="small" link type="primary" @click="downloadRemoteEntry(row)">Download</el-button>
                 </template>
-
-                <el-dropdown
-                  trigger="click"
-                  @command="(command) => handleRemoteMoreAction(command, row)"
-                >
-                  <el-button
-                    size="small"
-                    link
-                    type="primary"
-                  >
-                    More
-                  </el-button>
+                <el-dropdown trigger="click" @command="(command) => handleRemoteMoreAction(command, row)">
+                  <el-button size="small" link type="primary">More</el-button>
                   <template #dropdown>
                     <el-dropdown-menu>
                       <el-dropdown-item command="rename">Rename</el-dropdown-item>
@@ -344,162 +249,79 @@
 
       <div class="mobile-file-list-shell">
         <div class="mobile-file-list" v-loading="remoteFilesLoading">
-          <div v-if="!filteredRemoteFilesEntries.length && !remoteFilesLoading" class="empty-state">
-            This folder is empty
-          </div>
-
+          <div v-if="!filteredRemoteFilesEntries.length && !remoteFilesLoading" class="empty-state">This folder is empty</div>
           <div v-else class="mobile-file-grid">
-            <div
-              v-for="row in filteredRemoteFilesEntries"
-              :key="row.path"
-              class="mobile-file-card"
-              style="position: relative;"
-            >
-              <div style="position:absolute; top:6px; right:12px; z-index:1;">
-                <el-checkbox
-                  :model-value="isRemoteEntrySelected(row)"
-                  @change="toggleRemoteSelection(row)"
-                />
-              </div>
-
+            <div v-for="row in filteredRemoteFilesEntries" :key="row.path" class="mobile-file-card" style="position: relative;">
+              <div style="position:absolute; top:6px; right:12px; z-index:1;"><el-checkbox :model-value="isRemoteEntrySelected(row)" @change="toggleRemoteSelection(row)" /></div>
               <div class="mobile-file-card-top">
                 <div class="mobile-file-icon">{{ row.is_dir ? '📁' : '📄' }}</div>
                 <div class="mobile-file-main">
                   <div class="mobile-file-name" style="padding-right: 42px;">{{ row.name }}</div>
-
                   <div class="mobile-file-tags">
                     <el-tag size="small" type="info">{{ row.is_dir ? 'Folder' : 'File' }}</el-tag>
                     <el-tag v-if="row.is_symlink" size="small" type="info">Link</el-tag>
                     <el-tag v-if="row.is_hidden" size="small" type="warning">Hidden</el-tag>
                   </div>
-
                   <div class="mobile-file-meta">
-                    <div class="mobile-file-meta-item">
-                      <div class="mobile-file-meta-label">Size</div>
-                      <div class="mobile-file-meta-value">{{ row.is_dir ? '-' : formatBytes(row.size) }}</div>
-                    </div>
-                    <div class="mobile-file-meta-item">
-                      <div class="mobile-file-meta-label">Modified</div>
-                      <div class="mobile-file-meta-value">{{ row.modified_at || '-' }}</div>
-                    </div>
+                    <div class="mobile-file-meta-item"><div class="mobile-file-meta-label">Size</div><div class="mobile-file-meta-value">{{ row.is_dir ? '-' : formatBytes(row.size) }}</div></div>
+                    <div class="mobile-file-meta-item"><div class="mobile-file-meta-label">Modified</div><div class="mobile-file-meta-value">{{ row.modified_at || '-' }}</div></div>
                   </div>
-
                   <div class="mobile-file-actions">
-                    <el-button
-                      v-if="row.is_dir"
-                      size="small"
-                      type="primary"
-                      plain
-                      @click="enterRemoteDirectory(row)"
-                    >
-                      Open
-                    </el-button>
-
+                    <el-button v-if="row.is_dir" size="small" type="primary" plain @click="enterRemoteDirectory(row)">Open</el-button>
                     <template v-if="!row.is_dir">
-                      <el-button
-                        size="small"
-                        type="primary"
-                        plain
-                        @click="previewRemoteEntry(row)"
-                      >
-                        Preview
-                      </el-button>
-                      <el-button
-                        size="small"
-                        type="primary"
-                        plain
-                        @click="downloadRemoteEntry(row)"
-                      >
-                        Download
-                      </el-button>
+                      <el-button size="small" type="primary" plain @click="previewRemoteEntry(row)">Preview</el-button>
+                      <el-button size="small" type="primary" plain @click="downloadRemoteEntry(row)">Download</el-button>
                     </template>
-
-                    <el-button
-                      size="small"
-                      plain
-                      @click="renameRemoteEntry(row)"
-                    >
-                      Rename
-                    </el-button>
-
-                    <el-button
-                      size="small"
-                      plain
-                      @click="copyRemotePath(row)"
-                    >
-                      Copy Path
-                    </el-button>
-
-                    <el-button
-                      size="small"
-                      type="danger"
-                      plain
-                      @click="deleteRemoteEntry(row)"
-                    >
-                      Delete
-                    </el-button>
+                    <el-button size="small" plain @click="renameRemoteEntry(row)">Rename</el-button>
+                    <el-button size="small" plain @click="copyRemotePath(row)">Copy Path</el-button>
+                    <el-button size="small" type="danger" plain @click="deleteRemoteEntry(row)">Delete</el-button>
                   </div>
                 </div>
               </div>
             </div>
           </div>
-
         </div>
       </div>
-
     </div>
   </el-dialog>
 
-  <el-dialog
-    v-model="recentFilesDialogVisible"
-    title="Recent Downloads"
-    width="1120px"
-    top="5vh"
-    class="fixed-dialog recent-files-dialog"
-  >
+  <el-dialog v-model="artifactDialogVisible" title="Artifact Manager" width="1160px" top="5vh" class="fixed-dialog recent-files-dialog artifact-dialog">
     <div class="fixed-dialog-body">
+      <div class="dialog-head">
+        <div class="dialog-head-left">
+          <el-button size="small" @click="loadArtifacts">Refresh</el-button>
+          <el-button size="small" type="danger" :loading="artifactClearing" @click="clearArtifactCategory">Clear Current Category</el-button>
+        </div>
+        <div class="dialog-head-right">
+          <div class="dialog-path-box">
+            <el-select v-model="artifactHostnameFilter" clearable filterable placeholder="Filter by hostname" @change="loadArtifacts">
+              <el-option v-for="host in artifactHostnames" :key="host" :label="host" :value="host" />
+            </el-select>
+            <el-button size="small" @click="artifactHostnameFilter=''; loadArtifacts();">Reset</el-button>
+          </div>
+        </div>
+      </div>
+
+      <el-tabs v-model="artifactActiveTab" class="command-history-tabs" @tab-change="loadArtifacts">
+        <el-tab-pane label="Downloads" name="downloads"></el-tab-pane>
+        <el-tab-pane label="Previews" name="previews"></el-tab-pane>
+        <el-tab-pane label="HTTP Uploads" name="http_uploads"></el-tab-pane>
+      </el-tabs>
+
       <div class="dialog-table-shell">
-        <el-table
-          :data="recentFiles"
-          v-loading="recentFilesLoading"
-          stripe
-          width="100%"
-          height="100%"
-          empty-text="No files available"
-          table-layout="fixed"
-        >
-          <el-table-column prop="original_name" label="Name" min-width="220" show-overflow-tooltip>
-            <template #default="{ row }">
-              <div class="ellipsis">{{ row.original_name }}</div>
-            </template>
-          </el-table-column>
-
-          <el-table-column label="Size" width="110" align="center">
-            <template #default="{ row }">
-              {{ formatBytes(row.size) }}
-            </template>
-          </el-table-column>
-
-          <el-table-column prop="client_id" label="Source" min-width="160" show-overflow-tooltip>
-            <template #default="{ row }">
-              <div class="ellipsis">
-                {{ row.hostname || row.client_id || '-' }}
-              </div>
-            </template>
-          </el-table-column>
-
-          <el-table-column prop="created_at" label="Received" width="200" show-overflow-tooltip>
-            <template #default="{ row }">
-              <div class="ellipsis">{{ row.created_at }}</div>
-            </template>
-          </el-table-column>
-
-          <el-table-column label="Actions" width="180" align="center" fixed="right">
+        <el-table :data="filteredArtifactItems" v-loading="artifactLoading" stripe width="100%" height="100%" empty-text="No artifacts available" table-layout="fixed">
+          <el-table-column prop="original_name" label="Name" min-width="240" show-overflow-tooltip><template #default="{ row }"><div class="ellipsis">{{ row.original_name || row.stored_name }}</div></template></el-table-column>
+          <el-table-column label="Type" width="120" align="center"><template #default="{ row }">{{ row.artifact_type || '-' }}</template></el-table-column>
+          <el-table-column label="Hostname" min-width="140" show-overflow-tooltip><template #default="{ row }"><div class="ellipsis">{{ row.hostname || '-' }}</div></template></el-table-column>
+          <el-table-column label="Source" min-width="140" show-overflow-tooltip><template #default="{ row }"><div class="ellipsis">{{ row.source_type || '-' }}</div></template></el-table-column>
+          <el-table-column label="Size" width="110" align="center"><template #default="{ row }">{{ formatBytes(row.size) }}</template></el-table-column>
+          <el-table-column label="Created" width="170" show-overflow-tooltip><template #default="{ row }"><div class="ellipsis">{{ row.created_at || '-' }}</div></template></el-table-column>
+          <el-table-column label="Actions" width="220" align="center" fixed="right">
             <template #default="{ row }">
               <div class="table-actions table-actions-links">
-                <a href="#" class="table-action-link" @click.prevent="previewRecentFile(row)">Preview</a>
+                <a href="#" class="table-action-link" @click.prevent="previewArtifact(row)">Preview</a>
                 <a class="table-action-link" :href="row.download_url" target="_blank">Download</a>
-                <a href="#" class="table-action-link danger" @click.prevent="deleteRecentFile(row)">Delete</a>
+                <a href="#" class="table-action-link danger" @click.prevent="deleteArtifact(row)">Delete</a>
               </div>
             </template>
           </el-table-column>
@@ -507,55 +329,27 @@
       </div>
 
       <div class="mobile-file-list-shell">
-        <div class="mobile-file-list" v-loading="recentFilesLoading">
-          <div v-if="!recentFiles.length && !recentFilesLoading" class="empty-state">
-            No files available
-          </div>
-
+        <div class="mobile-file-list" v-loading="artifactLoading">
+          <div v-if="!filteredArtifactItems.length && !artifactLoading" class="empty-state">No artifacts available</div>
           <div v-else class="mobile-file-grid">
-            <div
-              v-for="row in recentFiles"
-              :key="row.saved_name"
-              class="mobile-file-card"
-            >
+            <div v-for="row in filteredArtifactItems" :key="row.artifact_id" class="mobile-file-card">
               <div class="mobile-file-card-top">
                 <div class="mobile-file-icon">📄</div>
                 <div class="mobile-file-main">
-                  <div class="mobile-file-name">{{ row.original_name }}</div>
-
-                  <div class="mobile-file-meta">
-                    <div class="mobile-file-meta-item">
-                      <div class="mobile-file-meta-label">Size</div>
-                      <div class="mobile-file-meta-value">{{ formatBytes(row.size) }}</div>
-                    </div>
-                    <div class="mobile-file-meta-item">
-                      <div class="mobile-file-meta-label">Source</div>
-                      <div class="mobile-file-meta-value">{{ row.hostname || row.client_id || '-' }}</div>
-                    </div>
-                    <div class="mobile-file-meta-item">
-                      <div class="mobile-file-meta-label">Received</div>
-                      <div class="mobile-file-meta-value">{{ row.created_at }}</div>
-                    </div>
+                  <div class="mobile-file-name">{{ row.original_name || row.stored_name }}</div>
+                  <div class="mobile-file-tags">
+                    <el-tag size="small" type="info">{{ row.artifact_type || '-' }}</el-tag>
+                    <el-tag v-if="row.hostname" size="small">{{ row.hostname }}</el-tag>
                   </div>
-
+                  <div class="mobile-file-meta">
+                    <div class="mobile-file-meta-item"><div class="mobile-file-meta-label">Source</div><div class="mobile-file-meta-value">{{ row.source_type || '-' }}</div></div>
+                    <div class="mobile-file-meta-item"><div class="mobile-file-meta-label">Size</div><div class="mobile-file-meta-value">{{ formatBytes(row.size) }}</div></div>
+                    <div class="mobile-file-meta-item"><div class="mobile-file-meta-label">Created</div><div class="mobile-file-meta-value">{{ row.created_at || '-' }}</div></div>
+                  </div>
                   <div class="mobile-file-actions">
-                    <el-button
-                      size="small"
-                      type="primary"
-                      plain
-                      @click="previewRecentFile(row)"
-                    >
-                      Preview
-                    </el-button>
+                    <el-button size="small" type="primary" plain @click="previewArtifact(row)">Preview</el-button>
                     <a class="table-action-link" :href="row.download_url" target="_blank">Download</a>
-                    <el-button
-                      size="small"
-                      type="danger"
-                      plain
-                      @click="deleteRecentFile(row)"
-                    >
-                      Delete
-                    </el-button>
+                    <el-button size="small" type="danger" plain @click="deleteArtifact(row)">Delete</el-button>
                   </div>
                 </div>
               </div>
@@ -563,83 +357,43 @@
           </div>
         </div>
       </div>
-
     </div>
   </el-dialog>
 
-  <el-dialog
-    v-model="backgroundJobsDialogVisible"
-    title="Background Jobs"
-    width="1180px"
-    top="5vh"
-    class="fixed-dialog background-jobs-dialog"
-  >
+  <el-dialog v-model="backgroundJobsDialogVisible" title="Background Jobs" width="1180px" top="5vh" class="fixed-dialog background-jobs-dialog">
     <div class="fixed-dialog-body background-jobs-body">
       <el-tabs v-model="backgroundJobsActiveTab" class="background-jobs-tabs">
         <el-tab-pane label="Modules" name="modules">
-          <div class="background-jobs-toolbar">
-            <el-button size="small" @click="loadBackgroundJobModules" :loading="backgroundJobModulesLoading">Refresh Modules</el-button>
-          </div>
-
+          <div class="background-jobs-toolbar"><el-button size="small" @click="loadBackgroundJobModules" :loading="backgroundJobModulesLoading">Refresh Modules</el-button></div>
           <div class="background-jobs-modules panel-lite">
             <div class="background-jobs-section-title">Available Modules</div>
-
-            <div v-if="!backgroundJobModules.length && !backgroundJobModulesLoading" class="empty-state">
-              No job modules available
-            </div>
-
+            <div v-if="!backgroundJobModules.length && !backgroundJobModulesLoading" class="empty-state">No job modules available</div>
             <div class="background-job-module-list" v-else>
-              <div
-                v-for="item in backgroundJobModules"
-                :key="item.job_name"
-                class="background-job-module-card"
-              >
+              <div v-for="item in backgroundJobModules" :key="item.job_name" class="background-job-module-card">
                 <div class="background-job-module-name">{{ item.job_name }}</div>
                 <div class="background-job-module-key mono">{{ item.job_key || '-' }}</div>
-                <el-button
-                  size="small"
-                  type="primary"
-                  plain
-                  @click="startBackgroundJob(item.job_name)"
-                >
-                  Start
-                </el-button>
+                <el-button size="small" type="primary" plain @click="startBackgroundJob(item.job_name)">Start</el-button>
               </div>
             </div>
           </div>
         </el-tab-pane>
-
         <el-tab-pane label="Jobs" name="jobs">
-          <div class="background-jobs-toolbar">
-            <el-button size="small" @click="loadBackgroundJobs" :loading="backgroundJobsLoading">Refresh Jobs</el-button>
-          </div>
-
+          <div class="background-jobs-toolbar"><el-button size="small" @click="loadBackgroundJobs" :loading="backgroundJobsLoading">Refresh Jobs</el-button></div>
           <div class="background-jobs-list-shell panel-lite" v-loading="backgroundJobsLoading">
             <div class="background-jobs-section-title">Reported Jobs</div>
-
-            <div v-if="!sortedBackgroundJobs.length && !backgroundJobsLoading" class="empty-state">
-              No background jobs reported for this connection
-            </div>
-
+            <div v-if="!sortedBackgroundJobs.length && !backgroundJobsLoading" class="empty-state">No background jobs reported for this connection</div>
             <div v-else class="background-jobs-list">
-              <div
-                v-for="job in sortedBackgroundJobs"
-                :key="job.job_id"
-                class="background-job-summary-card"
-              >
+              <div v-for="job in sortedBackgroundJobs" :key="job.job_id" class="background-job-summary-card">
                 <div class="background-job-summary-main">
                   <div class="background-job-summary-top">
                     <div class="background-job-summary-title-wrap">
                       <div class="background-job-summary-title-line">
                         <span class="background-job-summary-title">{{ job.display_name || job.job_name }}</span>
-                        <el-tag :type="buildBackgroundJobStateTagType(job.state)" size="small">
-                          {{ job.state || 'unknown' }}
-                        </el-tag>
+                        <el-tag :type="buildBackgroundJobStateTagType(job.state)" size="small">{{ job.state || 'unknown' }}</el-tag>
                       </div>
                       <div class="background-job-summary-subtitle mono">{{ job.job_name }} / {{ job.job_key || '-' }}</div>
                     </div>
                   </div>
-
                   <div class="background-job-summary-stats">
                     <span>{{ formatBackgroundJobDuration(job.duration_seconds) }}</span>
                     <span>{{ job.message_count || 0 }} msgs</span>
@@ -648,24 +402,9 @@
                     <span>{{ job.started_at || '-' }}</span>
                   </div>
                 </div>
-
                 <div class="background-job-summary-actions">
-                  <el-button
-                    size="small"
-                    plain
-                    @click="openBackgroundJobDetail(job)"
-                  >
-                    Details
-                  </el-button>
-                  <el-button
-                    size="small"
-                    type="danger"
-                    plain
-                    @click="stopBackgroundJob(job)"
-                    :disabled="!job.job_key || job.state === 'stopped'"
-                  >
-                    Stop
-                  </el-button>
+                  <el-button size="small" plain @click="openBackgroundJobDetail(job)">Details</el-button>
+                  <el-button size="small" type="danger" plain @click="stopBackgroundJob(job)" :disabled="!job.job_key || job.state === 'stopped'">Stop</el-button>
                 </div>
               </div>
             </div>
@@ -675,349 +414,118 @@
     </div>
   </el-dialog>
 
-  <el-dialog
-    v-model="backgroundJobDetailDialogVisible"
-    :title="selectedBackgroundJob ? (selectedBackgroundJob.display_name || selectedBackgroundJob.job_name || 'Background Job') : 'Background Job Detail'"
-    width="1080px"
-    top="5vh"
-    class="fixed-dialog background-job-detail-dialog"
-  >
+  <el-dialog v-model="backgroundJobDetailDialogVisible" :title="selectedBackgroundJob ? (selectedBackgroundJob.display_name || selectedBackgroundJob.job_name || 'Background Job') : 'Background Job Detail'" width="1080px" top="5vh" class="fixed-dialog background-job-detail-dialog">
     <div class="fixed-dialog-body" v-if="selectedBackgroundJob">
       <div class="background-job-detail-head">
         <div class="background-job-detail-head-left">
           <div class="background-job-title-line">
             <div class="background-job-title">{{ selectedBackgroundJob.display_name || selectedBackgroundJob.job_name }}</div>
-            <el-tag :type="buildBackgroundJobStateTagType(selectedBackgroundJob.state)" size="small">
-              {{ selectedBackgroundJob.state || 'unknown' }}
-            </el-tag>
+            <el-tag :type="buildBackgroundJobStateTagType(selectedBackgroundJob.state)" size="small">{{ selectedBackgroundJob.state || 'unknown' }}</el-tag>
           </div>
-          <div class="background-job-subtitle mono">
-            {{ selectedBackgroundJob.job_name }} / {{ selectedBackgroundJob.job_key || '-' }}
-          </div>
+          <div class="background-job-subtitle mono">{{ selectedBackgroundJob.job_name }} / {{ selectedBackgroundJob.job_key || '-' }}</div>
         </div>
-
-        <div class="background-job-card-head-right">
-          <el-button
-            size="small"
-            type="danger"
-            plain
-            @click="stopBackgroundJob(selectedBackgroundJob)"
-            :disabled="!selectedBackgroundJob.job_key || selectedBackgroundJob.state === 'stopped'"
-          >
-            Stop
-          </el-button>
-        </div>
+        <div class="background-job-card-head-right"><el-button size="small" type="danger" plain @click="stopBackgroundJob(selectedBackgroundJob)" :disabled="!selectedBackgroundJob.job_key || selectedBackgroundJob.state === 'stopped'">Stop</el-button></div>
       </div>
-
       <div class="background-job-stats">
-        <div class="background-job-stat">
-          <div class="background-job-stat-label">Duration</div>
-          <div class="background-job-stat-value">{{ formatBackgroundJobDuration(selectedBackgroundJob.duration_seconds) }}</div>
-        </div>
-        <div class="background-job-stat">
-          <div class="background-job-stat-label">Messages</div>
-          <div class="background-job-stat-value">{{ selectedBackgroundJob.message_count || 0 }}</div>
-        </div>
-        <div class="background-job-stat">
-          <div class="background-job-stat-label">Files</div>
-          <div class="background-job-stat-value">{{ selectedBackgroundJob.file_count || 0 }}</div>
-        </div>
-        <div class="background-job-stat">
-          <div class="background-job-stat-label">Started</div>
-          <div class="background-job-stat-value">{{ selectedBackgroundJob.started_at || '-' }}</div>
-        </div>
-        <div class="background-job-stat">
-          <div class="background-job-stat-label">Stopped</div>
-          <div class="background-job-stat-value">{{ selectedBackgroundJob.stopped_at || '-' }}</div>
-        </div>
-        <div class="background-job-stat">
-          <div class="background-job-stat-label">Thread</div>
-          <div class="background-job-stat-value mono">{{ selectedBackgroundJob.thread_name || '-' }}</div>
-        </div>
+        <div class="background-job-stat"><div class="background-job-stat-label">Duration</div><div class="background-job-stat-value">{{ formatBackgroundJobDuration(selectedBackgroundJob.duration_seconds) }}</div></div>
+        <div class="background-job-stat"><div class="background-job-stat-label">Messages</div><div class="background-job-stat-value">{{ selectedBackgroundJob.message_count || 0 }}</div></div>
+        <div class="background-job-stat"><div class="background-job-stat-label">Files</div><div class="background-job-stat-value">{{ selectedBackgroundJob.file_count || 0 }}</div></div>
+        <div class="background-job-stat"><div class="background-job-stat-label">Started</div><div class="background-job-stat-value">{{ selectedBackgroundJob.started_at || '-' }}</div></div>
+        <div class="background-job-stat"><div class="background-job-stat-label">Stopped</div><div class="background-job-stat-value">{{ selectedBackgroundJob.stopped_at || '-' }}</div></div>
+        <div class="background-job-stat"><div class="background-job-stat-label">Thread</div><div class="background-job-stat-value mono">{{ selectedBackgroundJob.thread_name || '-' }}</div></div>
       </div>
-
       <div class="background-job-panels">
         <div class="background-job-panel">
           <div class="background-job-panel-title">Messages</div>
           <div class="background-job-message-list">
-            <div
-              v-for="(message, index) in selectedBackgroundJobMessagesDesc"
-              :key="`${selectedBackgroundJob.job_id}-msg-${index}`"
-              class="background-job-message-item clickable"
-              @click="openBackgroundJobMessageDialog(message)"
-            >
+            <div v-for="(message, index) in selectedBackgroundJobMessagesDesc" :key="`${selectedBackgroundJob.job_id}-msg-${index}`" class="background-job-message-item clickable" @click="openBackgroundJobMessageDialog(message)">
               <div class="background-job-message-time">{{ message.time || '-' }}</div>
-              <div
-                class="background-job-message-text single-line"
-                :class="{
-                  'is-error': message.status === 0,
-                  'is-success': message.status === 1
-                }"
-              >
-                {{ formatBackgroundJobMessageText(message.text || '') }}
-              </div>
+              <div class="background-job-message-text single-line" :class="{ 'is-error': message.status === 0, 'is-success': message.status === 1 }">{{ formatBackgroundJobMessageText(message.text || '') }}</div>
             </div>
-
-            <div v-if="!selectedBackgroundJob.messages || !selectedBackgroundJob.messages.length" class="empty-state compact">
-              No messages
-            </div>
+            <div v-if="!selectedBackgroundJob.messages || !selectedBackgroundJob.messages.length" class="empty-state compact">No messages</div>
           </div>
         </div>
-
         <div class="background-job-panel">
           <div class="background-job-panel-title">Files</div>
           <div class="background-job-file-list">
-            <div
-              v-for="(file, index) in selectedBackgroundJob.files"
-              :key="`${selectedBackgroundJob.job_id}-file-${index}`"
-              class="background-job-file-item"
-            >
+            <div v-for="(file, index) in selectedBackgroundJob.files" :key="`${selectedBackgroundJob.job_id}-file-${index}`" class="background-job-file-item">
               <div class="background-job-file-main">
                 <div class="background-job-file-name">{{ file.original_name || file.stored_name || '-' }}</div>
-                <div class="background-job-file-meta">
-                  <span>{{ formatBytes(file.size || 0) }}</span>
-                  <span>{{ file.time || '-' }}</span>
-                </div>
+                <div class="background-job-file-meta"><span>{{ formatBytes(file.size || 0) }}</span><span>{{ file.time || '-' }}</span></div>
               </div>
-
               <div class="background-job-file-actions">
-                <el-button
-                  size="small"
-                  plain
-                  @click="previewBackgroundJobFile(file)"
-                >
-                  Preview
-                </el-button>
-                <a
-                  class="table-action-link"
-                  :href="file.download_url"
-                  target="_blank"
-                >
-                  Download
-                </a>
+                <el-button size="small" plain @click="previewBackgroundJobFile(file)">Preview</el-button>
+                <a class="table-action-link" :href="file.download_url" target="_blank">Download</a>
               </div>
             </div>
-
-            <div v-if="!selectedBackgroundJob.files || !selectedBackgroundJob.files.length" class="empty-state compact">
-              No files
-            </div>
+            <div v-if="!selectedBackgroundJob.files || !selectedBackgroundJob.files.length" class="empty-state compact">No files</div>
           </div>
         </div>
       </div>
     </div>
   </el-dialog>
 
-  <el-dialog
-    v-model="backgroundJobMessageDialogVisible"
-    title="Message"
-    width="760px"
-    top="8vh"
-    class="fixed-dialog background-job-message-dialog"
-  >
+  <el-dialog v-model="backgroundJobMessageDialogVisible" title="Message" width="760px" top="8vh" class="fixed-dialog background-job-message-dialog">
     <div class="fixed-dialog-body">
       <div class="background-job-full-message-time">{{ selectedBackgroundJobMessage.time || '-' }}</div>
-      <pre
-        class="background-job-full-message-text"
-        :class="{
-          'is-error': selectedBackgroundJobMessage.status === 0,
-          'is-success': selectedBackgroundJobMessage.status === 1
-        }"
-      >{{ formatBackgroundJobMessageText(selectedBackgroundJobMessage.text || '') }}</pre>
+      <pre class="background-job-full-message-text" :class="{ 'is-error': selectedBackgroundJobMessage.status === 0, 'is-success': selectedBackgroundJobMessage.status === 1 }">{{ formatBackgroundJobMessageText(selectedBackgroundJobMessage.text || '') }}</pre>
     </div>
   </el-dialog>
 
-  <el-dialog
-    v-model="previewDialogVisible"
-    :title="previewTitle || 'File Preview'"
-    width="1080px"
-    top="5vh"
-    class="fixed-dialog preview-dialog"
-  >
+  <el-dialog v-model="previewDialogVisible" :title="previewTitle || 'File Preview'" width="1080px" top="5vh" class="fixed-dialog preview-dialog">
     <div v-loading="previewLoading" class="preview-wrap">
-      <div
-        v-if="(previewType === 'image' && previewUrl) || previewType === 'text'"
-        style="display:flex; justify-content:flex-end; gap:8px; margin-bottom:12px;"
-      >
-        <el-button
-          v-if="previewType === 'text'"
-          size="small"
-          @click="copyPreviewText"
-        >
-          Copy Content
-        </el-button>
-
-        <el-button
-          v-if="previewType === 'image' && previewUrl"
-          size="small"
-          @click="openPreviewOriginal"
-        >
-          Open Original
-        </el-button>
+      <div v-if="(previewType === 'image' && previewUrl) || previewType === 'text'" style="display:flex; justify-content:flex-end; gap:8px; margin-bottom:12px;">
+        <el-button v-if="previewType === 'text'" size="small" @click="copyPreviewText">Copy Content</el-button>
+        <el-button v-if="previewType === 'image' && previewUrl" size="small" @click="openPreviewOriginal">Open Original</el-button>
       </div>
-
-      <template v-if="previewType === 'image' && previewUrl">
-        <div class="image-preview-box">
-          <img :src="previewUrl" alt="preview" class="preview-image" />
-        </div>
-      </template>
-
-      <template v-else-if="previewType === 'text'">
-        <pre class="preview-text">{{ previewText }}</pre>
-      </template>
-
-      <template v-else-if="previewType === 'unsupported'">
-        <div class="empty-state">This file type is not supported for preview.</div>
-      </template>
-
-      <template v-else>
-        <div class="empty-state">No preview available.</div>
-      </template>
+      <template v-if="previewType === 'image' && previewUrl"><div class="image-preview-box"><img :src="previewUrl" alt="preview" class="preview-image" /></div></template>
+      <template v-else-if="previewType === 'text'"><pre class="preview-text">{{ previewText }}</pre></template>
+      <template v-else-if="previewType === 'unsupported'"><div class="empty-state">This file type is not supported for preview.</div></template>
+      <template v-else><div class="empty-state">No preview available.</div></template>
     </div>
   </el-dialog>
 
-   <el-dialog
-    v-model="commandHistoryDialogVisible"
-    title="Command History"
-    width="1120px"
-    top="5vh"
-    class="fixed-dialog recent-files-dialog command-history-dialog"
-  >
+  <el-dialog v-model="commandHistoryDialogVisible" title="Command History" width="1120px" top="5vh" class="fixed-dialog recent-files-dialog command-history-dialog">
     <div class="fixed-dialog-body">
-      <div class="dialog-head">
-        <div class="dialog-head-left">
-          <el-button size="small" @click="openCommandHistoryDialog">Refresh</el-button>
-          <el-button size="small" type="danger" @click="clearCommandHistory">Clear History</el-button>
-        </div>
-      </div>
-
+      <div class="dialog-head"><div class="dialog-head-left"><el-button size="small" @click="openCommandHistoryDialog">Refresh</el-button><el-button size="small" type="danger" @click="clearCommandHistory">Clear History</el-button></div></div>
       <el-tabs v-model="commandHistoryActiveTab" class="command-history-tabs">
         <el-tab-pane label="Quick History" name="quick">
           <div class="dialog-table-shell">
-            <el-table
-              :data="commandHistoryItems"
-              v-loading="commandHistoryLoading"
-              stripe
-              width="100%"
-              height="100%"
-              empty-text="No command history available"
-              table-layout="fixed"
-              @row-dblclick="applyHistoryCommand"
-            >
-              <el-table-column prop="index" label="#" width="70" align="center">
-                <template #default="{ row }">
-                  <div class="ellipsis">{{ row.index || '-' }}</div>
-                </template>
-              </el-table-column>
-
-              <el-table-column prop="command" label="Command" min-width="280" show-overflow-tooltip>
-                <template #default="{ row }">
-                  <div class="ellipsis mono">{{ row.command || '-' }}</div>
-                </template>
-              </el-table-column>
-
-              <el-table-column prop="time" label="Last Used" width="220" show-overflow-tooltip>
-                <template #default="{ row }">
-                  <div class="ellipsis">{{ row.time || '-' }}</div>
-                </template>
-              </el-table-column>
-
-              <el-table-column prop="status" label="Status" width="120" align="center">
-  <template #default="{ row }">
-    <el-tag :type="buildCommandExecutionStatusTagType(row.status)" size="small">
-      {{ row.status || '-' }}
-    </el-tag>
-  </template>
-</el-table-column>
-
-              <el-table-column label="Actions" width="150" align="center" fixed="right">
-                <template #default="{ row }">
-                  <div class="table-actions table-actions-links">
-                    <a href="#" class="table-action-link" @click.prevent="applyHistoryCommand(row)">Use</a>
-                  </div>
-                </template>
-              </el-table-column>
+            <el-table :data="commandHistoryItems" v-loading="commandHistoryLoading" stripe width="100%" height="100%" empty-text="No command history available" table-layout="fixed" @row-dblclick="applyHistoryCommand">
+              <el-table-column prop="index" label="#" width="70" align="center"><template #default="{ row }"><div class="ellipsis">{{ row.index || '-' }}</div></template></el-table-column>
+              <el-table-column prop="command" label="Command" min-width="280" show-overflow-tooltip><template #default="{ row }"><div class="ellipsis mono">{{ row.command || '-' }}</div></template></el-table-column>
+              <el-table-column prop="time" label="Last Used" width="220" show-overflow-tooltip><template #default="{ row }"><div class="ellipsis">{{ row.time || '-' }}</div></template></el-table-column>
+              <el-table-column prop="status" label="Status" width="120" align="center"><template #default="{ row }"><el-tag :type="buildCommandExecutionStatusTagType(row.status)" size="small">{{ row.status || '-' }}</el-tag></template></el-table-column>
+              <el-table-column label="Actions" width="150" align="center" fixed="right"><template #default="{ row }"><div class="table-actions table-actions-links"><a href="#" class="table-action-link" @click.prevent="applyHistoryCommand(row)">Use</a></div></template></el-table-column>
             </el-table>
           </div>
         </el-tab-pane>
-
         <el-tab-pane label="Execution History" name="full">
           <div class="command-execution-list-shell" v-loading="commandExecutionHistoryLoading">
-            <div v-if="!commandExecutionItems.length && !commandExecutionHistoryLoading" class="empty-state">
-              No execution history available
-            </div>
-
+            <div v-if="!commandExecutionItems.length && !commandExecutionHistoryLoading" class="empty-state">No execution history available</div>
             <div v-else class="command-execution-list">
-              <div
-                v-for="item in commandExecutionItems"
-                :key="item.entry_id"
-                class="command-execution-card"
-              >
+              <div v-for="item in commandExecutionItems" :key="item.entry_id" class="command-execution-card">
                 <div class="command-execution-card-main">
                   <div class="command-execution-card-top">
                     <div class="command-execution-title-wrap">
                       <div class="command-execution-title-line">
                         <div class="command-execution-title mono">{{ item.command || '-' }}</div>
-                        <el-tag :type="buildCommandExecutionStatusTagType(item.status)" size="small">
-                          {{ item.status || 'unknown' }}
-                        </el-tag>
-                        <el-tag v-if="item.has_files" type="success" size="small">
-                          {{ item.file_count || 0 }} file(s)
-                        </el-tag>
-                        <el-tag v-if="item.output_truncated" type="warning" size="small">
-                          output truncated
-                        </el-tag>
+                        <el-tag :type="buildCommandExecutionStatusTagType(item.status)" size="small">{{ item.status || 'unknown' }}</el-tag>
+                        <el-tag v-if="item.has_files" type="success" size="small">{{ item.file_count || 0 }} file(s)</el-tag>
+                        <el-tag v-if="item.output_truncated" type="warning" size="small">output truncated</el-tag>
                       </div>
-                      <div class="command-execution-subtitle">
-                        {{ item.source || '-' }} / {{ item.started_at || '-' }}
-                      </div>
+                      <div class="command-execution-subtitle">{{ item.source || '-' }} / {{ item.started_at || '-' }}</div>
                     </div>
                   </div>
-
-<div class="command-execution-stats">
-  <div class="command-execution-stat-pill">
-    <span class="command-execution-stat-label">Duration</span>
-    <span class="command-execution-stat-value">{{ formatCommandExecutionDuration(item.duration_ms) }}</span>
-  </div>
-
-  <div class="command-execution-stat-pill command-execution-stat-pill-wide">
-    <span class="command-execution-stat-label">CWD</span>
-    <span class="command-execution-stat-value ellipsis">{{ getCommandExecutionDisplayCwd(item) }}</span>
-  </div>
-
-  <div class="command-execution-stat-pill">
-    <span class="command-execution-stat-label">Chunks</span>
-    <span class="command-execution-stat-value">{{ item.output_chunk_count || 0 }}</span>
-  </div>
-
-  <div class="command-execution-stat-pill">
-    <span class="command-execution-stat-label">Lines</span>
-    <span class="command-execution-stat-value">{{ item.output_line_count || 0 }}</span>
-  </div>
-</div>
-
-
-     <div class="command-execution-summary">
-  {{ buildCommandExecutionSingleLineSummary(item) }}
-</div>
+                  <div class="command-execution-stats">
+                    <div class="command-execution-stat-pill"><span class="command-execution-stat-label">Duration</span><span class="command-execution-stat-value">{{ formatCommandExecutionDuration(item.duration_ms) }}</span></div>
+                    <div class="command-execution-stat-pill command-execution-stat-pill-wide"><span class="command-execution-stat-label">CWD</span><span class="command-execution-stat-value ellipsis">{{ getCommandExecutionDisplayCwd(item) }}</span></div>
+                    <div class="command-execution-stat-pill"><span class="command-execution-stat-label">Chunks</span><span class="command-execution-stat-value">{{ item.output_chunk_count || 0 }}</span></div>
+                    <div class="command-execution-stat-pill"><span class="command-execution-stat-label">Lines</span><span class="command-execution-stat-value">{{ item.output_line_count || 0 }}</span></div>
+                  </div>
+                  <div class="command-execution-summary">{{ buildCommandExecutionSingleLineSummary(item) }}</div>
                 </div>
-
-                <div class="command-execution-actions">
-                  <el-button
-                    size="small"
-                    plain
-                    @click="applyHistoryCommand(item)"
-                  >
-                    Use
-                  </el-button>
-                  <el-button
-                    size="small"
-                    type="primary"
-                    plain
-                    @click="openCommandExecutionDetail(item)"
-                  >
-                    Details
-                  </el-button>
-                </div>
+                <div class="command-execution-actions"><el-button size="small" plain @click="applyHistoryCommand(item)">Use</el-button><el-button size="small" type="primary" plain @click="openCommandExecutionDetail(item)">Details</el-button></div>
               </div>
             </div>
           </div>
@@ -1026,207 +534,75 @@
     </div>
   </el-dialog>
 
-    <el-dialog
-    v-model="commandExecutionDetailDialogVisible"
-    :title="selectedCommandExecutionEntry ? (selectedCommandExecutionEntry.command || 'Execution Detail') : 'Execution Detail'"
-    width="1000px"
-    top="5vh"
-    class="fixed-dialog command-execution-detail-dialog"
-  >
+  <el-dialog v-model="commandExecutionDetailDialogVisible" :title="selectedCommandExecutionEntry ? (selectedCommandExecutionEntry.command || 'Execution Detail') : 'Execution Detail'" width="1000px" top="5vh" class="fixed-dialog command-execution-detail-dialog">
     <div class="fixed-dialog-body" v-if="selectedCommandExecutionEntry">
       <div class="background-job-stats">
-        <div class="background-job-stat">
-          <div class="background-job-stat-label">Status</div>
-          <div class="background-job-stat-value">
-            <el-tag :type="buildCommandExecutionStatusTagType(selectedCommandExecutionEntry.status)" size="small">
-              {{ selectedCommandExecutionEntry.status || 'unknown' }}
-            </el-tag>
-          </div>
-        </div>
-        <div class="background-job-stat">
-          <div class="background-job-stat-label">Source</div>
-          <div class="background-job-stat-value">{{ selectedCommandExecutionEntry.source || '-' }}</div>
-        </div>
-        <div class="background-job-stat">
-          <div class="background-job-stat-label">Duration</div>
-          <div class="background-job-stat-value">{{ formatCommandExecutionDuration(selectedCommandExecutionEntry.duration_ms) }}</div>
-        </div>
-        <div class="background-job-stat">
-          <div class="background-job-stat-label">Started</div>
-          <div class="background-job-stat-value">{{ selectedCommandExecutionEntry.started_at || '-' }}</div>
-        </div>
-        <div class="background-job-stat">
-          <div class="background-job-stat-label">Finished</div>
-          <div class="background-job-stat-value">{{ selectedCommandExecutionEntry.finished_at || '-' }}</div>
-        </div>
-        <div class="background-job-stat">
-          <div class="background-job-stat-label">Files</div>
-          <div class="background-job-stat-value">{{ selectedCommandExecutionEntry.file_count || 0 }}</div>
-        </div>
+        <div class="background-job-stat"><div class="background-job-stat-label">Status</div><div class="background-job-stat-value"><el-tag :type="buildCommandExecutionStatusTagType(selectedCommandExecutionEntry.status)" size="small">{{ selectedCommandExecutionEntry.status || 'unknown' }}</el-tag></div></div>
+        <div class="background-job-stat"><div class="background-job-stat-label">Source</div><div class="background-job-stat-value">{{ selectedCommandExecutionEntry.source || '-' }}</div></div>
+        <div class="background-job-stat"><div class="background-job-stat-label">Duration</div><div class="background-job-stat-value">{{ formatCommandExecutionDuration(selectedCommandExecutionEntry.duration_ms) }}</div></div>
+        <div class="background-job-stat"><div class="background-job-stat-label">Started</div><div class="background-job-stat-value">{{ selectedCommandExecutionEntry.started_at || '-' }}</div></div>
+        <div class="background-job-stat"><div class="background-job-stat-label">Finished</div><div class="background-job-stat-value">{{ selectedCommandExecutionEntry.finished_at || '-' }}</div></div>
+        <div class="background-job-stat"><div class="background-job-stat-label">Files</div><div class="background-job-stat-value">{{ selectedCommandExecutionEntry.file_count || 0 }}</div></div>
       </div>
-
-      <div class="command-execution-detail-section">
-        <div class="command-execution-detail-label">Summary</div>
-        <div class="command-execution-detail-summary">
-          {{ buildCommandExecutionSummary(selectedCommandExecutionEntry) }}
-        </div>
-      </div>
-
+      <div class="command-execution-detail-section"><div class="command-execution-detail-label">Summary</div><div class="command-execution-detail-summary">{{ buildCommandExecutionSummary(selectedCommandExecutionEntry) }}</div></div>
       <div class="command-execution-detail-panels">
         <div class="background-job-panel">
-<!--          <div class="background-job-panel-title">Output Records</div>-->
-          <div class="background-job-panel-title command-output-panel-title">
-  <span>Output Records</span>
-  <el-button
-    size="small"
-    plain
-    @click="toggleCommandExecutionOutputSort"
-  >
-    {{ commandExecutionOutputSortOrder === 'desc' ? 'Newest first' : 'Oldest first' }}
-  </el-button>
-</div>
+          <div class="background-job-panel-title command-output-panel-title"><span>Output Records</span><el-button size="small" plain @click="toggleCommandExecutionOutputSort">{{ commandExecutionOutputSortOrder === 'desc' ? 'Newest first' : 'Oldest first' }}</el-button></div>
           <div class="background-job-message-list">
-            <div
-              v-for="(record, index) in selectedCommandExecutionOutputRecordsDesc"
-              :key="`${selectedCommandExecutionEntry.entry_id}-output-${index}`"
-              class="background-job-message-item"
-            >
+            <div v-for="(record, index) in selectedCommandExecutionOutputRecordsDesc" :key="`${selectedCommandExecutionEntry.entry_id}-output-${index}`" class="background-job-message-item">
               <div class="background-job-message-time">{{ record.time || '-' }}</div>
-              <div
-                class="background-job-message-text"
-                :class="{
-                  'is-error': record.status === 0,
-                  'is-success': record.status === 1
-                }"
-              >
-                {{ formatCommandExecutionRecordText(record.text || '') }}
-              </div>
+              <div class="background-job-message-text" :class="{ 'is-error': record.status === 0, 'is-success': record.status === 1 }">{{ formatCommandExecutionRecordText(record.text || '') }}</div>
             </div>
-
-            <div v-if="selectedCommandExecutionEntry.output_truncated" class="empty-state compact">
-              Output was truncated for storage safety
-            </div>
-
-            <div v-if="!selectedCommandExecutionEntry.output_records || !selectedCommandExecutionEntry.output_records.length" class="empty-state compact">
-              No output records
-            </div>
+            <div v-if="selectedCommandExecutionEntry.output_truncated" class="empty-state compact">Output was truncated for storage safety</div>
+            <div v-if="!selectedCommandExecutionEntry.output_records || !selectedCommandExecutionEntry.output_records.length" class="empty-state compact">No output records</div>
           </div>
         </div>
-
         <div class="background-job-panel">
           <div class="background-job-panel-title">Produced Files</div>
           <div class="background-job-file-list">
-            <div
-              v-for="(file, index) in selectedCommandExecutionEntry.files"
-              :key="`${selectedCommandExecutionEntry.entry_id}-file-${index}`"
-              class="background-job-file-item"
-            >
+            <div v-for="(file, index) in selectedCommandExecutionEntry.files" :key="`${selectedCommandExecutionEntry.entry_id}-file-${index}`" class="background-job-file-item">
               <div class="background-job-file-main">
                 <div class="background-job-file-name">{{ file.original_name || file.saved_name || '-' }}</div>
-<div class="background-job-file-meta">
-  <span>{{ formatBytes(file.size || 0) }}</span>
-  <span>{{ file.created_at || '-' }}</span>
-<span v-if="getCommandExecutionFileStatusText(file)">[{{ getCommandExecutionFileStatusText(file) }}]</span></div>
+                <div class="background-job-file-meta"><span>{{ formatBytes(file.size || 0) }}</span><span>{{ file.created_at || '-' }}</span><span v-if="getCommandExecutionFileStatusText(file)">[{{ getCommandExecutionFileStatusText(file) }}]</span></div>
               </div>
-
-              <div class="background-job-file-actions">
-<a
-  v-if="file.download_url && file.is_available"
-  class="table-action-link"
-  :href="file.download_url"
-  target="_blank"
->
-  Download
-</a>
-              </div>
+              <div class="background-job-file-actions"><a v-if="file.download_url && file.is_available" class="table-action-link" :href="file.download_url" target="_blank">Download</a></div>
             </div>
-
-            <div v-if="!selectedCommandExecutionEntry.files || !selectedCommandExecutionEntry.files.length" class="empty-state compact">
-              No files produced
-            </div>
+            <div v-if="!selectedCommandExecutionEntry.files || !selectedCommandExecutionEntry.files.length" class="empty-state compact">No files produced</div>
           </div>
         </div>
       </div>
     </div>
   </el-dialog>
 
-<el-dialog
-  v-model="connectionInfoDialogVisible"
-  title="Connection Info"
-  width="980px"
-  top="6vh"
-  class="fixed-dialog connection-info-dialog"
->
-  <div class="fixed-dialog-body" v-loading="connectionInfoLoading">
-    <div class="background-job-stats">
-      <div class="background-job-stat">
-        <div class="background-job-stat-label">Status</div>
-        <div class="background-job-stat-value">online</div>
+  <el-dialog v-model="connectionInfoDialogVisible" title="Connection Info" width="980px" top="6vh" class="fixed-dialog connection-info-dialog">
+    <div class="fixed-dialog-body" v-loading="connectionInfoLoading">
+      <div class="background-job-stats">
+        <div class="background-job-stat"><div class="background-job-stat-label">Status</div><div class="background-job-stat-value">online</div></div>
+        <div class="background-job-stat"><div class="background-job-stat-label">Hostname</div><div class="background-job-stat-value">{{ currentConnection?.hostname || '-' }}</div></div>
+        <div class="background-job-stat"><div class="background-job-stat-label">Client ID</div><div class="background-job-stat-value mono">{{ currentConnection?.client_id || '-' }}</div></div>
+        <div class="background-job-stat"><div class="background-job-stat-label">Address</div><div class="background-job-stat-value mono">{{ currentConnection?.addr || '-' }}</div></div>
+        <div class="background-job-stat"><div class="background-job-stat-label">Platform</div><div class="background-job-stat-value">{{ formatOsLabel(currentConnection?.os_type, currentConnection?.os_ver) }}</div></div>
+        <div class="background-job-stat"><div class="background-job-stat-label">Integrity</div><div class="background-job-stat-value">{{ currentConnection?.integrity || '-' }}</div></div>
+        <div class="background-job-stat"><div class="background-job-stat-label">Working Directory</div><div class="background-job-stat-value mono">{{ currentConnection?.cwd || '-' }}</div></div>
+        <div class="background-job-stat"><div class="background-job-stat-label">Reported Jobs</div><div class="background-job-stat-value">{{ connectionInfoJobCount }}</div></div>
+        <div class="background-job-stat"><div class="background-job-stat-label">Command Count</div><div class="background-job-stat-value">{{ connectionInfoClientCommands.length }}</div></div>
       </div>
-      <div class="background-job-stat">
-        <div class="background-job-stat-label">Hostname</div>
-        <div class="background-job-stat-value">{{ currentConnection?.hostname || '-' }}</div>
-      </div>
-      <div class="background-job-stat">
-        <div class="background-job-stat-label">Client ID</div>
-        <div class="background-job-stat-value mono">{{ currentConnection?.client_id || '-' }}</div>
-      </div>
-      <div class="background-job-stat">
-        <div class="background-job-stat-label">Address</div>
-        <div class="background-job-stat-value mono">{{ currentConnection?.addr || '-' }}</div>
-      </div>
-      <div class="background-job-stat">
-        <div class="background-job-stat-label">Platform</div>
-        <div class="background-job-stat-value">{{ formatOsLabel(currentConnection?.os_type, currentConnection?.os_ver) }}</div>
-      </div>
-      <div class="background-job-stat">
-        <div class="background-job-stat-label">Integrity</div>
-        <div class="background-job-stat-value">{{ currentConnection?.integrity || '-' }}</div>
-      </div>
-      <div class="background-job-stat">
-        <div class="background-job-stat-label">Working Directory</div>
-        <div class="background-job-stat-value mono">{{ currentConnection?.cwd || '-' }}</div>
-      </div>
-      <div class="background-job-stat">
-        <div class="background-job-stat-label">Reported Jobs</div>
-        <div class="background-job-stat-value">{{ connectionInfoJobCount }}</div>
-      </div>
-      <div class="background-job-stat">
-        <div class="background-job-stat-label">Command Count</div>
-        <div class="background-job-stat-value">{{ connectionInfoClientCommands.length }}</div>
-      </div>
-    </div>
-
-    <div class="background-job-panel" style="margin-top:14px;">
-      <div class="background-job-panel-title">Command List</div>
-      <div class="background-job-message-list">
-        <div
-          v-for="(item, index) in connectionInfoClientCommands"
-          :key="`${item.template}-${index}`"
-          class="background-job-message-item"
-        >
-<div class="background-job-message-time">
-  client<span v-if="item.group"> / {{ item.group }}</span>
-</div>
-<div class="background-job-message-text">
-  <span class="mono">{{ item.name || item.template }}</span>
-  <span v-if="item.help"> — {{ item.help }}</span>
-</div>
-
-        <div v-if="!connectionInfoClientCommands.length" class="empty-state compact">
-          No commands available
+      <div class="background-job-panel" style="margin-top:14px;">
+        <div class="background-job-panel-title">Command List</div>
+        <div class="background-job-message-list">
+          <div v-for="(item, index) in connectionInfoClientCommands" :key="`${item.template}-${index}`" class="background-job-message-item">
+            <div class="background-job-message-time">client<span v-if="item.group"> / {{ item.group }}</span></div>
+            <div class="background-job-message-text"><span class="mono">{{ item.name || item.template }}</span><span v-if="item.help"> — {{ item.help }}</span></div>
+          </div>
+          <div v-if="!connectionInfoClientCommands.length" class="empty-state compact">No commands available</div>
         </div>
       </div>
     </div>
-  </div>
-</el-dialog>
-
-
+  </el-dialog>
 </div>
 
 <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
 <script src="https://unpkg.com/element-plus/dist/index.full.min.js"></script>
-
 <script src="/js/core/state.js"></script>
 <script src="/js/modules/utils.js"></script>
 <script src="/js/modules/commands.js"></script>
