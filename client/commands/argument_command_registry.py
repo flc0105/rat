@@ -1,14 +1,209 @@
 import inspect
+from dataclasses import dataclass, field
+from typing import Any, Callable
 
 
-def argument_command(name: str):
+class ArgumentCommandValidationError(ValueError):
+    """
+    acmd 参数校验异常
+    """
+    pass
+
+
+@dataclass
+class ArgumentOptionSpec:
+    """
+    单个 acmd 参数定义
+    """
+    name: str
+    option_type: str = 'str'
+    required: bool = False
+    default: Any = None
+    allow_empty: bool = True
+    help_text: str = ''
+
+    @property
+    def is_flag(self) -> bool:
+        return self.option_type == 'flag'
+
+
+@dataclass
+class ArgumentCommandSpec:
+    """
+    单个 acmd 命令定义
+    """
+    name: str
+    description: str = ''
+    options: list[ArgumentOptionSpec] = field(default_factory=list)
+
+    def get_option_map(self) -> dict[str, ArgumentOptionSpec]:
+        return {item.name: item for item in self.options}
+
+
+def argument_command(name: str, spec: ArgumentCommandSpec | None = None):
     """
     标记一个 acmd 实验命令处理方法
     """
     def decorator(func):
         func.argument_command_name = name
+        func.argument_command_spec = spec
         return func
     return decorator
+
+
+class ArgumentCommandHelpBuilder:
+    """
+    acmd 帮助文本构造器
+    """
+
+    TYPE_LABELS = {
+        'str': 'string',
+        'int': 'int',
+        'float': 'float',
+        'bool': 'bool',
+        'flag': 'flag',
+    }
+
+    def build(self, spec: ArgumentCommandSpec) -> str:
+        lines = [f'acmd {spec.name}']
+
+        if spec.description:
+            lines.append('')
+            lines.append(spec.description)
+
+        option_map = spec.get_option_map()
+        if option_map:
+            lines.append('')
+            lines.append('Options:')
+
+            for option in option_map.values():
+                type_label = self.TYPE_LABELS.get(option.option_type, option.option_type)
+                required_label = 'required' if option.required else 'optional'
+                default_label = ''
+
+                if option.default not in (None, '') and option.option_type != 'flag':
+                    default_label = f' default={option.default}'
+
+                if option.option_type == 'flag':
+                    option_usage = f'--{option.name}'
+                else:
+                    option_usage = f'--{option.name} <value>'
+
+                lines.append(
+                    f'  {option_usage:<22} {type_label:<7} {required_label:<8} '
+                    f'{option.help_text}{default_label}'
+                )
+
+        return '\n'.join(lines).rstrip()
+
+
+class ArgumentCommandValidator:
+    """
+    acmd 参数归一化与校验器
+    """
+
+    def normalize(self, spec: ArgumentCommandSpec, raw_args: dict | None) -> dict:
+        if raw_args is None:
+            raw_args = {}
+
+        if not isinstance(raw_args, dict):
+            raise ArgumentCommandValidationError('Invalid acmd args payload')
+
+        option_map = spec.get_option_map()
+        normalized = {}
+
+        self._validate_unknown_options(option_map, raw_args)
+
+        for option_name, option_spec in option_map.items():
+            has_value = option_name in raw_args
+            raw_value = raw_args.get(option_name)
+
+            if not has_value:
+                if option_spec.required and option_spec.default is None:
+                    raise ArgumentCommandValidationError(
+                        f'Missing required option: --{option_name}'
+                    )
+                normalized[option_name] = option_spec.default
+                continue
+
+            normalized_value = self._convert_value(option_spec, raw_value)
+
+            if option_spec.option_type == 'str' and not option_spec.allow_empty:
+                if str(normalized_value).strip() == '':
+                    raise ArgumentCommandValidationError(
+                        f'Option "--{option_name}" cannot be empty'
+                    )
+
+            normalized[option_name] = normalized_value
+
+        if '_args' in raw_args:
+            positional_args = raw_args.get('_args') or []
+            if not isinstance(positional_args, list):
+                raise ArgumentCommandValidationError('Invalid positional args payload')
+            normalized['_args'] = positional_args
+
+        return normalized
+
+    def _validate_unknown_options(self, option_map: dict[str, ArgumentOptionSpec], raw_args: dict):
+        for key in raw_args:
+            if key.startswith('_'):
+                continue
+            if key not in option_map:
+                raise ArgumentCommandValidationError(f'Unknown option: --{key}')
+
+    def _convert_value(self, option_spec: ArgumentOptionSpec, raw_value: Any):
+        option_name = option_spec.name
+
+        if option_spec.option_type == 'flag':
+            return self._convert_flag_value(option_name, raw_value)
+
+        if raw_value is True:
+            raise ArgumentCommandValidationError(f'Option "--{option_name}" requires a value')
+
+        if option_spec.option_type == 'str':
+            return str(raw_value)
+
+        if option_spec.option_type == 'int':
+            try:
+                return int(str(raw_value).strip())
+            except Exception:
+                raise ArgumentCommandValidationError(f'Option "--{option_name}" must be an integer')
+
+        if option_spec.option_type == 'float':
+            try:
+                return float(str(raw_value).strip())
+            except Exception:
+                raise ArgumentCommandValidationError(f'Option "--{option_name}" must be a number')
+
+        if option_spec.option_type == 'bool':
+            return self._convert_bool_value(option_name, raw_value)
+
+        return raw_value
+
+    def _convert_flag_value(self, option_name: str, raw_value: Any) -> bool:
+        if raw_value is True:
+            return True
+
+        if isinstance(raw_value, str):
+            text = raw_value.strip().lower()
+            if text in ('1', 'true', 'yes', 'on'):
+                return True
+            if text in ('0', 'false', 'no', 'off'):
+                return False
+
+        raise ArgumentCommandValidationError(f'Invalid flag value for --{option_name}')
+
+    def _convert_bool_value(self, option_name: str, raw_value: Any) -> bool:
+        if isinstance(raw_value, bool):
+            return raw_value
+
+        text = str(raw_value).strip().lower()
+        if text in ('1', 'true', 'yes', 'on'):
+            return True
+        if text in ('0', 'false', 'no', 'off'):
+            return False
+
+        raise ArgumentCommandValidationError(f'Option "--{option_name}" must be true/false')
 
 
 class ArgumentCommandRegistry:
@@ -17,35 +212,45 @@ class ArgumentCommandRegistry:
 
     职责：
     - 扫描命令对象上的实验命令处理器
-    - 根据 payload 中的 name 路由到对应方法
-    - 统一处理参数调用形式
+    - 管理 handler + spec
+    - 统一 help / 参数校验 / 执行分发
     """
+
+    HELP_OPTION_NAME = 'help'
 
     def __init__(self, commands):
         self.commands = commands
-        self._handlers = self._collect_handlers()
+        self.help_builder = ArgumentCommandHelpBuilder()
+        self.validator = ArgumentCommandValidator()
+        self._entries = self._collect_entries()
 
-    def _collect_handlers(self) -> dict:
+    def _collect_entries(self) -> dict:
         """
         扫描并收集所有已注册的实验命令处理器
         """
-        handlers = {}
+        entries = {}
 
         for _, method in inspect.getmembers(
             self.commands,
             lambda x: inspect.ismethod(x) or inspect.isfunction(x)
         ):
             command_name = getattr(method, 'argument_command_name', '')
-            if command_name:
-                handlers[command_name] = method
+            if not command_name:
+                continue
 
-        return handlers
+            spec = getattr(method, 'argument_command_spec', None)
+            entries[command_name] = {
+                'handler': method,
+                'spec': spec,
+            }
+
+        return entries
 
     def has_command(self, name: str) -> bool:
         """
         判断是否存在指定实验命令
         """
-        return name in self._handlers
+        return name in self._entries
 
     def execute(self, payload: dict):
         """
@@ -61,24 +266,55 @@ class ArgumentCommandRegistry:
             return 0, 'Invalid acmd payload'
 
         command_name = (payload.get('name') or '').strip()
-        args_dict = payload.get('args') or {}
+        raw_args = payload.get('args') or {}
 
         if not command_name:
             return 0, 'Missing acmd command name'
 
-        if not isinstance(args_dict, dict):
+        if not isinstance(raw_args, dict):
             return 0, 'Invalid acmd args payload'
 
-        handler = self._handlers.get(command_name)
-        if handler is None:
+        entry = self._entries.get(command_name)
+        if entry is None:
             return 0, f'acmd command not supported on this platform: {command_name}'
 
+        handler = entry.get('handler')
+        spec = entry.get('spec')
+
         try:
-            parameters_count = len(inspect.signature(handler).parameters)
+            if spec is not None:
+                help_flag = raw_args.get(self.HELP_OPTION_NAME, False)
+                normalized_help_flag = self._normalize_help_flag(help_flag)
+                if normalized_help_flag:
+                    return 1, self.help_builder.build(spec)
 
-            if parameters_count >= 2:
-                return handler(args_dict, payload)
+                normalized_args = self.validator.normalize(spec, raw_args)
+            else:
+                normalized_args = raw_args
 
-            return handler(args_dict)
+            return self._invoke_handler(handler, normalized_args, payload)
+        except ArgumentCommandValidationError as e:
+            return 0, str(e)
         except Exception as e:
             return 0, f'acmd execution failed: {e}'
+
+    def _normalize_help_flag(self, value: Any) -> bool:
+        if value is True:
+            return True
+
+        if isinstance(value, str):
+            text = value.strip().lower()
+            if text in ('1', 'true', 'yes', 'on'):
+                return True
+            if text in ('0', 'false', 'no', 'off', ''):
+                return False
+
+        return False
+
+    def _invoke_handler(self, handler: Callable, args_dict: dict, payload: dict):
+        parameters_count = len(inspect.signature(handler).parameters)
+
+        if parameters_count >= 2:
+            return handler(args_dict, payload)
+
+        return handler(args_dict)

@@ -58,6 +58,12 @@ class CommandExecutor:
             'help': 'Experimental structured dialog command',
             'source': 'server'
         },
+        {
+            'name': 'acmd',
+            'template': 'acmd msgbox --help',
+            'help': 'Show help for an experimental structured command',
+            'source': 'server'
+        },
     ]
 
     ACMD_PREFIX = 'acmd'
