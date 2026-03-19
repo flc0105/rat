@@ -1751,18 +1751,35 @@ body {
   gap: 8px;
 }
 
-.command-execution-stats span {
+.command-execution-stat-pill {
   display: inline-flex;
   align-items: center;
-  min-height: 28px;
-  padding: 4px 10px;
+  gap: 8px;
+  min-height: 30px;
+  max-width: 100%;
+  padding: 6px 10px;
   border-radius: 999px;
   background: #f8fafc;
   border: 1px solid rgba(15, 23, 42, 0.06);
+}
+
+.command-execution-stat-pill-wide {
+  max-width: min(100%, 480px);
+}
+
+.command-execution-stat-label {
+  font-size: 11px;
+  color: var(--muted-2);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.command-execution-stat-value {
   font-size: 12px;
-  color: var(--muted);
-  line-height: 1.4;
-  max-width: 100%;
+  color: var(--text);
+  min-width: 0;
 }
 
 .command-execution-summary {
@@ -1826,4 +1843,25 @@ body {
 
 .command-file-status-missing {
   color: var(--danger);
+}
+
+.command-output-panel-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+@media (max-width: 768px) {
+  .command-output-panel-title {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}
+
+.command-execution-stat-value.ellipsis {
+  display: inline-block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }

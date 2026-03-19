@@ -973,10 +973,28 @@
                     </div>
                   </div>
 
-<span>Duration: {{ formatCommandExecutionDuration(item.duration_ms) }}</span>
-<span>CWD: {{ getCommandExecutionDisplayCwd(item) }}</span>
-<span>Chunks: {{ item.output_chunk_count || 0 }}</span>
-<span>Lines: {{ item.output_line_count || 0 }}</span>
+<div class="command-execution-stats">
+  <div class="command-execution-stat-pill">
+    <span class="command-execution-stat-label">Duration</span>
+    <span class="command-execution-stat-value">{{ formatCommandExecutionDuration(item.duration_ms) }}</span>
+  </div>
+
+  <div class="command-execution-stat-pill command-execution-stat-pill-wide">
+    <span class="command-execution-stat-label">CWD</span>
+    <span class="command-execution-stat-value ellipsis">{{ getCommandExecutionDisplayCwd(item) }}</span>
+  </div>
+
+  <div class="command-execution-stat-pill">
+    <span class="command-execution-stat-label">Chunks</span>
+    <span class="command-execution-stat-value">{{ item.output_chunk_count || 0 }}</span>
+  </div>
+
+  <div class="command-execution-stat-pill">
+    <span class="command-execution-stat-label">Lines</span>
+    <span class="command-execution-stat-value">{{ item.output_line_count || 0 }}</span>
+  </div>
+</div>
+
 
      <div class="command-execution-summary">
   {{ buildCommandExecutionSingleLineSummary(item) }}
@@ -1056,7 +1074,17 @@
 
       <div class="command-execution-detail-panels">
         <div class="background-job-panel">
-          <div class="background-job-panel-title">Output Records</div>
+<!--          <div class="background-job-panel-title">Output Records</div>-->
+          <div class="background-job-panel-title command-output-panel-title">
+  <span>Output Records</span>
+  <el-button
+    size="small"
+    plain
+    @click="toggleCommandExecutionOutputSort"
+  >
+    {{ commandExecutionOutputSortOrder === 'desc' ? 'Newest first' : 'Oldest first' }}
+  </el-button>
+</div>
           <div class="background-job-message-list">
             <div
               v-for="(record, index) in selectedCommandExecutionOutputRecordsDesc"
@@ -1165,7 +1193,7 @@
       </div>
       <div class="background-job-stat">
         <div class="background-job-stat-label">Command Count</div>
-        <div class="background-job-stat-value">{{ commandCandidates.length }}</div>
+        <div class="background-job-stat-value">{{ connectionInfoClientCommands.length }}</div>
       </div>
     </div>
 
@@ -1185,7 +1213,7 @@
   <span v-if="item.help"> — {{ item.help }}</span>
 </div>
 
-        <div v-if="!commandCandidates.length" class="empty-state compact">
+        <div v-if="!connectionInfoClientCommands.length" class="empty-state compact">
           No commands available
         </div>
       </div>

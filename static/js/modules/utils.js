@@ -1,5 +1,10 @@
 window.AppUtilsModule = {
     methods: {
+
+        toggleCommandExecutionOutputSort() {
+    this.commandExecutionOutputSortOrder = this.commandExecutionOutputSortOrder === 'asc' ? 'desc' : 'asc';
+},
+
         resetPreviewState() {
             this.previewType = '';
             this.previewTitle = '';
