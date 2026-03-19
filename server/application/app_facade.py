@@ -1,9 +1,8 @@
 from server.application.artifact.artifact_service import WebArtifactService
 from server.application.artifact.remote_files_service import WebRemoteFileService
-from server.application.artifact.upload_temp_service import WebFileService
 from server.application.command.executor import CommandExecutor
-from server.application.command.invocation_service import RemoteExecutionService
 from server.application.connection.connection_service import WebConnectionService
+from server.application.execution.remote_execution_service import RemoteExecutionService
 from server.application.jobs.background_job_service import BackgroundJobService
 from server.application.jobs.background_job_store import BackgroundJobStore
 from server.application.tasks.task_runner import WebTaskRunner
@@ -27,7 +26,7 @@ class ServerWebService:
         self.task_store = WebTaskStore()
 
         self.artifact_service = WebArtifactService()
-        self.file_service = WebFileService(self.artifact_service)
+        self.file_service = self.artifact_service
         self.remote_execution_service = RemoteExecutionService(self.server)
 
         self.remote_file_service = WebRemoteFileService(

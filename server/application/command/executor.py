@@ -5,7 +5,7 @@ from functools import partial
 
 from core.utils.formatting import format_dict
 from core.utils.parsing import parse, scan_args
-from server.application.command.invocation_service import RemoteExecutionService
+from server.application.execution.remote_execution_service import RemoteExecutionService
 from server.config.config import SCRIPT_PATH
 
 

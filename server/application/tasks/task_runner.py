@@ -1,28 +1,32 @@
+import os
+import shutil
+import threading
 from datetime import datetime
 
-from server.connection.client_connection import ClientConnection
+from server.application.command.executor import CommandExecutor
+from server.application.execution.remote_execution_service import RemoteExecutionService
 
 
 class WebTaskRunner:
     """
-    Web 任务执行编排器。
+    Web 任务执行器。
 
     职责：
-    - 消费任务结果流
-    - 写入 task_store
-    - 推送 SSE 结果/完成事件
-    - 追加 command history 输出
-    - 标记任务完成状态
-    - 更新 command history 最终状态
+    - 消费命令 / 上传结果流
+    - 写 task chunks
+    - 推送 SSE
+    - 写 history
+    - 统一结束收尾
     """
 
     def __init__(self, server, event_bus, task_store):
         self.server = server
         self.event_bus = event_bus
         self.task_store = task_store
+        self.remote_execution_service = RemoteExecutionService(server)
 
-    # ------------------ publish helpers ------------------ #
-    def publish_task_result(self, task_id: str, client_id: str, command: str, status: int, text: str):
+    # ------------------ task event publish ------------------ #
+    def _publish_task_result(self, task_id: str, client_id: str, command: str, status: int, text: str):
         """
         发布 Web 任务执行中的单条结果，并写入任务记录
         """
@@ -37,7 +41,7 @@ class WebTaskRunner:
             'time': datetime.now().isoformat()
         })
 
-    def publish_task_complete(self, task_id: str, client_id: str, command: str, ok: bool):
+    def _publish_task_complete(self, task_id: str, client_id: str, command: str, ok: bool):
         """
         发布 Web 任务完成事件
         """
@@ -49,38 +53,8 @@ class WebTaskRunner:
             'time': datetime.now().isoformat()
         })
 
-    # ------------------ history helpers ------------------ #
-    def _get_task_history_entry_id(self, task_id: str) -> str:
-        task = self.task_store.get_task(task_id) or {}
-        return task.get('history_entry_id') or ''
-
-    def _append_history_output(self, conn: ClientConnection, task_id: str, status: int, text: str):
-        history_entry_id = self._get_task_history_entry_id(task_id)
-        if not history_entry_id:
-            return
-
-        self.server.command_history.append_output_for_connection(
-            conn,
-            history_entry_id,
-            status,
-            text,
-            0
-        )
-
-    def _finish_history_entry(self, conn: ClientConnection, task_id: str, ok: bool):
-        history_entry_id = self._get_task_history_entry_id(task_id)
-        if not history_entry_id:
-            return
-
-        self.server.command_history.update_entry_status_for_connection(
-            conn,
-            history_entry_id,
-            'success' if ok else 'error',
-            cwd_end=conn.info.get('cwd', '')
-        )
-
-    # ------------------ main runner ------------------ #
-    def run_task_stream(self, conn: ClientConnection, task_id: str, command: str, result_iter):
+    # ------------------ core stream runner ------------------ #
+    def _run_task_stream(self, conn, task_id: str, command: str, result_iter):
         """
         统一执行 Web 任务结果流：
         - 消费生成器输出
@@ -92,12 +66,22 @@ class WebTaskRunner:
         client_id = conn.info.get('id')
         ok = True
 
+        task = self.task_store.get_task(task_id) or {}
+        history_entry_id = task.get('history_entry_id') or ''
+
         try:
             for status, result in result_iter:
                 text = '' if result is None else str(result)
+                self._publish_task_result(task_id, client_id, command, status, text)
 
-                self.publish_task_result(task_id, client_id, command, status, text)
-                self._append_history_output(conn, task_id, status, text)
+                if history_entry_id:
+                    self.remote_execution_service.append_history_output(
+                        conn,
+                        history_entry_id,
+                        status,
+                        text,
+                        0
+                    )
 
                 if status == 0:
                     ok = False
@@ -105,11 +89,74 @@ class WebTaskRunner:
         except Exception as e:
             ok = False
             text = str(e)
+            self._publish_task_result(task_id, client_id, command, 0, text)
 
-            self.publish_task_result(task_id, client_id, command, 0, text)
-            self._append_history_output(conn, task_id, 0, text)
+            if history_entry_id:
+                self.remote_execution_service.append_history_output(
+                    conn,
+                    history_entry_id,
+                    0,
+                    text,
+                    0
+                )
 
         finally:
             self.task_store.finish_task(task_id, ok)
-            self._finish_history_entry(conn, task_id, ok)
-            self.publish_task_complete(task_id, client_id, command, ok)
+
+            if history_entry_id:
+                self.remote_execution_service.finalize_history_entry(
+                    conn,
+                    history_entry_id,
+                    ok,
+                    cwd_end=conn.info.get('cwd', '')
+                )
+
+            self._publish_task_complete(task_id, client_id, command, ok)
+
+    # ------------------ command ------------------ #
+    def run_command_task(self, conn, task_id: str, command: str):
+        try:
+            def _result_iter():
+                task = self.task_store.get_task(task_id) or {}
+                history_entry_id = task.get('history_entry_id') or ''
+
+                executor = CommandExecutor(conn, self.server)
+                func = executor.process_command(command, history_entry_id=history_entry_id)
+                if not func:
+                    raise RuntimeError('Unable to resolve command')
+                yield from func()
+
+            self._run_task_stream(conn, task_id, command, _result_iter())
+        finally:
+            conn.release_foreground_task(task_id=task_id, command=command)
+
+    # ------------------ upload ------------------ #
+    def run_upload_task(self, conn, task_id: str, local_path: str, display_name: str, remote_path: str = '', upload_tmp_dir: str = ''):
+        command = f'upload {display_name}'
+
+        try:
+            task = self.task_store.get_task(task_id) or {}
+            history_entry_id = task.get('history_entry_id') or ''
+
+            self._run_task_stream(
+                conn,
+                task_id,
+                command,
+                self.remote_execution_service.stream_upload(
+                    conn,
+                    local_path,
+                    remote_path=remote_path,
+                    history_entry_id=history_entry_id
+                )
+            )
+        finally:
+            conn.release_foreground_task(task_id=task_id, command=command)
+
+            try:
+                if os.path.exists(local_path):
+                    os.remove(local_path)
+                parent_dir = os.path.dirname(local_path)
+                if upload_tmp_dir and parent_dir.startswith(upload_tmp_dir) and os.path.isdir(parent_dir):
+                    shutil.rmtree(parent_dir, ignore_errors=True)
+            except Exception:
+                pass
