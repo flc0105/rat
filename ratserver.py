@@ -6,17 +6,17 @@ import threading
 import time
 
 from core.protocol.ratsocket import RATSocket
+from core.utils.formatting import print_table
 from core.utils.logger import logger
 from core.utils.parsing import parse
-from core.utils.formatting import print_table
-from server.application.command.alias_manager import AliasManager
-from server.application.history.history_store import CommandHistoryStore
-from server.application.command.executor import CommandExecutor
-from server.config.config import SOCKET_ADDR
 from core.utils.server_util import *
+from server.application.app_facade import ServerWebService
+from server.application.command.alias_manager import AliasManager
+from server.application.command.executor import CommandExecutor
+from server.application.history.history_store import CommandHistoryStore
+from server.config.config import SOCKET_ADDR
 from server.connection.client_connection import ClientConnection
 from server.connection.connection_manager import ConnectionManager
-from server.application.app_facade import ServerWebService
 
 
 class Server:
@@ -30,8 +30,6 @@ class Server:
         self.connections = ConnectionManager()
         self.alias_manager = AliasManager()
         self.command_history = CommandHistoryStore()
-
-        # web
         self.web_service = ServerWebService(self)
 
     # ------------------ connection lookup ------------------ #
@@ -70,17 +68,12 @@ class Server:
         """
         return {**{'addr': f'{addr[0]}:{addr[1]}'}, **info}
 
-    #web
     def _register_connection(self, conn, addr, info: dict) -> ClientConnection:
         connection = self.web_service.build_connection(conn, addr, info)
-
         self.connections.add(connection)
         logger.info('Connection has been established: {}'.format(addr))
-
         self.web_service.on_connection_registered(connection)
-
         return connection
-    #web end
 
     def _accept_connection(self):
         """
@@ -149,10 +142,7 @@ class Server:
         处理连接关闭后的清理逻辑
         """
         logger.error(f'Connection closed: {conn.address}')
-
-        #web
         self.web_service.on_connection_closed(conn)
-        #web end
         self._notify_connection_closed(conn)
         self._remove_connection(conn)
 
@@ -267,8 +257,8 @@ class Server:
         """
         command_text = cmd.strip()
         should_record = (
-            bool(command_text)
-            and not command_text.startswith('history')
+                bool(command_text)
+                and not command_text.startswith('history')
         )
 
         entry_id = ''
