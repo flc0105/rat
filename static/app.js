@@ -349,23 +349,23 @@ createApp({
 
                 const visibleSystemCandidates = systemCandidates.filter(item => item.suggest !== false);
 
-const clientCandidates = visibleSystemCandidates.filter(
-    item => item.source === 'client' && item.group !== 'acmd'
-);
-const acmdCandidates = visibleSystemCandidates.filter(
-    item => item.source === 'client' && item.group === 'acmd'
-);
-const serverCandidates = visibleSystemCandidates.filter(item => item.source === 'server');
-const aliasCandidates = visibleSystemCandidates.filter(item => item.source === 'alias');
-const scriptCandidates = visibleSystemCandidates.filter(item => item.source === 'script');
-const commonOpsCandidates = this.buildCommonOpsCandidates();
+                const clientCandidates = visibleSystemCandidates.filter(
+                    item => item.source === 'client' && item.group !== 'acmd'
+                );
+                const acmdCandidates = visibleSystemCandidates.filter(
+                    item => item.source === 'client' && item.group === 'acmd'
+                );
+                const serverCandidates = visibleSystemCandidates.filter(item => item.source === 'server');
+                const aliasCandidates = visibleSystemCandidates.filter(item => item.source === 'alias');
+                const scriptCandidates = visibleSystemCandidates.filter(item => item.source === 'script');
+                const commonOpsCandidates = this.buildCommonOpsCandidates();
 
-clientCandidates.forEach(pushUniqueCandidate);
-acmdCandidates.forEach(pushUniqueCandidate);
-serverCandidates.forEach(pushUniqueCandidate);
-commonOpsCandidates.forEach(pushUniqueCandidate);
-aliasCandidates.forEach(pushUniqueCandidate);
-scriptCandidates.forEach(pushUniqueCandidate);
+                clientCandidates.forEach(pushUniqueCandidate);
+                acmdCandidates.forEach(pushUniqueCandidate);
+                serverCandidates.forEach(pushUniqueCandidate);
+                commonOpsCandidates.forEach(pushUniqueCandidate);
+                aliasCandidates.forEach(pushUniqueCandidate);
+                scriptCandidates.forEach(pushUniqueCandidate);
 
                 // const visibleSystemCandidates = systemCandidates.filter(item => item.suggest !== false);
                 //
