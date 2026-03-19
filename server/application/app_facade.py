@@ -1,15 +1,15 @@
-from server.commands.executor import CommandExecutor
-from server.web.artifact_service import WebArtifactService
-from server.web.background_job_service import BackgroundJobService
-from server.web.background_job_store import BackgroundJobStore
-from server.web.connection_service import WebConnectionService
+from server.application.command.executor import CommandExecutor
+from server.application.artifact.artifact_service import WebArtifactService
+from server.application.jobs.background_job_service import BackgroundJobService
+from server.application.jobs.background_job_store import BackgroundJobStore
+from server.application.connection.connection_service import WebConnectionService
 from server.web.event_bus import WebEventBus
-from server.web.file_service import WebFileService
-from server.web.remote_file_service import WebRemoteFileService
-from server.web.remote_runner import RemoteArtifactFetcher, RemoteCommandRunner
-from server.web.task_runner import WebTaskRunner
-from server.web.task_service import WebTaskService
-from server.web.task_store import WebTaskStore
+from server.application.artifact.upload_temp_service import WebFileService
+from server.application.artifact.remote_files_service import WebRemoteFileService
+from server.application.command.invocation_service import RemoteArtifactFetcher, RemoteCommandRunner
+from server.application.tasks.task_runner import WebTaskRunner
+from server.application.tasks.task_service import WebTaskService
+from server.application.tasks.task_store import WebTaskStore
 
 
 class ServerWebService:

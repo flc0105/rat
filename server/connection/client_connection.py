@@ -10,7 +10,7 @@ from server.connection.message_dispatcher import ServerInboundMessageDispatcher
 from server.connection.message_router import ServerInboundMessageRouter
 from server.connection.result_dispatcher import ServerResultDispatcher
 from server.models.artifact import FileReceiveContext
-from server.services.artifact_ingest_service import ArtifactIngestService
+from server.application.artifact.ingest_service import ArtifactIngestService
 
 
 class ClientConnection(BaseSessionConnection):

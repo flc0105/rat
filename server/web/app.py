@@ -6,7 +6,7 @@ from datetime import datetime
 from flask import Flask, Response, jsonify, request, send_file, send_from_directory, stream_with_context
 
 from server.config.config import WEB_HTTP_UPLOAD_MAX_BYTES
-from server.web.background_job_blueprint import create_background_job_blueprint
+from server.web.routes.background_jobs import create_background_job_blueprint
 
 
 def create_app(server_instance):

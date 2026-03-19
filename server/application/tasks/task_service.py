@@ -2,7 +2,7 @@ import os
 import shutil
 import threading
 
-from server.commands.executor import CommandExecutor
+from server.application.command.executor import CommandExecutor
 from server.connection.client_connection import ClientConnection
 
 

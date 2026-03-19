@@ -1,4 +1,4 @@
-from server.web.artifact_service import WebArtifactService
+from server.application.artifact.artifact_service import WebArtifactService
 
 
 class WebFileService:

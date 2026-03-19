@@ -1,5 +1,4 @@
 import json
-import os
 import socket
 import subprocess
 import sys
@@ -10,15 +9,14 @@ from core.protocol.ratsocket import RATSocket
 from core.utils.logger import logger
 from core.utils.parsing import parse
 from core.utils.formatting import print_table
-from core.utils.terminal import Colors
-from server.commands.alias_manager import AliasManager
-from server.commands.command_history import CommandHistoryStore
-from server.commands.executor import CommandExecutor
+from server.application.command.alias_manager import AliasManager
+from server.application.history.history_store import CommandHistoryStore
+from server.application.command.executor import CommandExecutor
 from server.config.config import SOCKET_ADDR
 from core.utils.server_util import *
 from server.connection.client_connection import ClientConnection
 from server.connection.connection_manager import ConnectionManager
-from server.web.service import ServerWebService
+from server.application.app_facade import ServerWebService
 
 
 class Server:
