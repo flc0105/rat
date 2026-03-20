@@ -86,7 +86,9 @@ window.AppSseModule = {
         initSSE() {
             if (this.eventSource) this.eventSource.close();
 
-            const es = new EventSource('/api/stream');
+            const tabId = this.ensureTabId();
+            const streamUrl = `/api/stream?tab_id=${encodeURIComponent(tabId)}`;
+            const es = new EventSource(streamUrl);
             this.eventSource = es;
 
             es.addEventListener('open', () => {
@@ -191,16 +193,8 @@ window.AppSseModule = {
                 const payload = JSON.parse(event.data);
                 this.scheduleBackgroundJobsRefresh(payload.client_id);
 
-                // if (payload.client_id === this.selectedId) {
-                //     ElementPlus.ElNotification({
-                //         title: 'Background Job File',
-                //         message: `${payload.display_name || payload.job_name || 'job'} uploaded a file`,
-                //         type: 'success'
-                //     });
-                // }
-
                 if (this.artifactDialogVisible) {
-                    await this.loadArtifacts()
+                    await this.loadArtifacts();
                 }
             });
 

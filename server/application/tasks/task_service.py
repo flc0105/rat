@@ -20,7 +20,7 @@ class WebTaskService:
         self.task_runner = task_runner
         self.remote_execution_service = RemoteExecutionService(server)
 
-    def submit_web_command(self, client_id: str, command: str):
+    def submit_web_command(self, client_id: str, command: str, tab_id: str = ''):
         conn = self.server.get_target_connection_by_client_id(client_id)
 
         command_text = (command or '').strip()
@@ -36,7 +36,7 @@ class WebTaskService:
             should_record=should_record
         )
 
-        task = self.task_store.create_task(client_id, command)
+        task = self.task_store.create_task(client_id, command, tab_id=tab_id)
         task['history_entry_id'] = entry_id
 
         conn.acquire_foreground_task(
@@ -58,7 +58,7 @@ class WebTaskService:
             'command': command
         }
 
-    def submit_web_upload(self, client_id: str, local_path: str, display_name: str, remote_path: str = ''):
+    def submit_web_upload(self, client_id: str, local_path: str, display_name: str, remote_path: str = '', tab_id: str = ''):
         conn = self.server.get_target_connection_by_client_id(client_id)
         command = f'upload {display_name}'
 
@@ -69,7 +69,7 @@ class WebTaskService:
             should_record=True
         )
 
-        task = self.task_store.create_task(client_id, command)
+        task = self.task_store.create_task(client_id, command, tab_id=tab_id)
         task['history_entry_id'] = entry_id
 
         conn.acquire_foreground_task(

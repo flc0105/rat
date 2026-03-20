@@ -14,6 +14,7 @@ createApp({
     },
 
     mounted() {
+        this.ensureTabId();
         this.loadConnections();
         this.initSSE();
 

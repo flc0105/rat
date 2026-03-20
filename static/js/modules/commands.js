@@ -244,7 +244,7 @@ window.AppCommandsModule = {
             try {
                 const res = await fetch(`/api/connections/${encodeURIComponent(this.selectedId)}/command`, {
                     method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
+                    headers: this.getTabScopedHeaders({'Content-Type': 'application/json'}),
                     body: JSON.stringify({command})
                 });
 

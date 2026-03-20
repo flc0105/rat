@@ -1,6 +1,5 @@
 import os
 import shutil
-import threading
 from datetime import datetime
 
 from server.application.command.executor import CommandExecutor
@@ -17,6 +16,9 @@ class WebTaskRunner:
     - 推送 SSE
     - 写 history
     - 统一结束收尾
+
+    新增：
+    - 按 task.tab_id 定向推送前台命令结果
     """
 
     def __init__(self, server, event_bus, task_store):
@@ -25,33 +27,48 @@ class WebTaskRunner:
         self.task_store = task_store
         self.remote_execution_service = RemoteExecutionService(server)
 
+    def _get_task_tab_id(self, task_id: str) -> str:
+        task = self.task_store.get_task(task_id) or {}
+        return (task.get('tab_id') or '').strip()
+
     # ------------------ task event publish ------------------ #
     def _publish_task_result(self, task_id: str, client_id: str, command: str, status: int, text: str):
         """
         发布 Web 任务执行中的单条结果，并写入任务记录
         """
         self.task_store.append_chunk(task_id, status, text)
+        target_tab_id = self._get_task_tab_id(task_id)
 
-        self.event_bus.publish('command_result', {
-            'task_id': task_id,
-            'client_id': client_id,
-            'command': command,
-            'status': status,
-            'text': text,
-            'time': datetime.now().isoformat()
-        })
+        self.event_bus.publish(
+            'command_result',
+            {
+                'task_id': task_id,
+                'client_id': client_id,
+                'command': command,
+                'status': status,
+                'text': text,
+                'time': datetime.now().isoformat()
+            },
+            target_tab_id=target_tab_id
+        )
 
     def _publish_task_complete(self, task_id: str, client_id: str, command: str, ok: bool):
         """
         发布 Web 任务完成事件
         """
-        self.event_bus.publish('command_complete', {
-            'task_id': task_id,
-            'client_id': client_id,
-            'command': command,
-            'success': ok,
-            'time': datetime.now().isoformat()
-        })
+        target_tab_id = self._get_task_tab_id(task_id)
+
+        self.event_bus.publish(
+            'command_complete',
+            {
+                'task_id': task_id,
+                'client_id': client_id,
+                'command': command,
+                'success': ok,
+                'time': datetime.now().isoformat()
+            },
+            target_tab_id=target_tab_id
+        )
 
     # ------------------ core stream runner ------------------ #
     def _run_task_stream(self, conn, task_id: str, command: str, result_iter):

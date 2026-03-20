@@ -12,13 +12,16 @@ class WebTaskStore:
     - 追加任务输出分片
     - 标记任务完成状态
     - 提供任务查询能力（后续如需扩展）
+
+    新增：
+    - tab_id：记录发起当前任务的浏览器页签
     """
 
     def __init__(self):
         self._tasks = {}
         self._lock = threading.RLock()
 
-    def create_task(self, client_id: str, command: str) -> dict:
+    def create_task(self, client_id: str, command: str, tab_id: str = '') -> dict:
         """
         创建任务记录
         """
@@ -27,6 +30,7 @@ class WebTaskStore:
             'task_id': task_id,
             'client_id': client_id,
             'command': command,
+            'tab_id': (tab_id or '').strip(),
             'status': 'running',
             'created_at': datetime.now().isoformat(),
             'finished_at': None,

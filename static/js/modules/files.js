@@ -237,6 +237,7 @@ window.AppFilesModule = {
             try {
                 const res = await fetch(`/api/connections/${encodeURIComponent(this.selectedId)}/upload`, {
                     method: 'POST',
+                    headers: this.getTabScopedHeaders(),
                     body: formData
                 });
 

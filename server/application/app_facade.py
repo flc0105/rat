@@ -170,11 +170,17 @@ class ServerWebService:
         self.server.command_history.clear_history_for_connection(session)
         return None
 
-    def submit_web_command(self, client_id: str, command: str):
-        return self.task_service.submit_web_command(client_id, command)
+    def submit_web_command(self, client_id: str, command: str, tab_id: str = ''):
+        return self.task_service.submit_web_command(client_id, command, tab_id=tab_id)
 
-    def submit_web_upload(self, client_id: str, local_path: str, display_name: str, remote_path: str = ''):
-        return self.task_service.submit_web_upload(client_id, local_path, display_name, remote_path)
+    def submit_web_upload(self, client_id: str, local_path: str, display_name: str, remote_path: str = '', tab_id: str = ''):
+        return self.task_service.submit_web_upload(
+            client_id,
+            local_path,
+            display_name,
+            remote_path,
+            tab_id=tab_id
+        )
 
     def list_background_jobs(self, client_id: str):
         return self.background_job_service.list_jobs(client_id)
@@ -221,8 +227,14 @@ class ServerWebService:
     def on_connection_closed(self, session):
         self.handle_connection_closed(session)
 
-    def submit_command(self, client_id: str, command: str):
-        return self.submit_web_command(client_id, command)
+    def submit_command(self, client_id: str, command: str, tab_id: str = ''):
+        return self.submit_web_command(client_id, command, tab_id=tab_id)
 
-    def submit_upload(self, client_id: str, local_path: str, display_name: str, remote_path: str = ''):
-        return self.submit_web_upload(client_id, local_path, display_name, remote_path)
+    def submit_upload(self, client_id: str, local_path: str, display_name: str, remote_path: str = '', tab_id: str = ''):
+        return self.submit_web_upload(
+            client_id,
+            local_path,
+            display_name,
+            remote_path,
+            tab_id=tab_id
+        )

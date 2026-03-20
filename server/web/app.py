@@ -83,6 +83,12 @@ def create_app(server_instance):
     def _get_optional_form_text(name: str, default: str = '') -> str:
         return (request.form.get(name) or default).strip()
 
+    def _get_optional_header_text(name: str, default: str = '') -> str:
+        return (request.headers.get(name) or default).strip()
+
+    def _get_optional_tab_id() -> str:
+        return _get_optional_header_text('X-Tab-Id', '')
+
     def _parse_optional_json_form(name: str) -> dict:
         raw = (request.form.get(name) or '').strip()
         if not raw:
@@ -160,10 +166,14 @@ def create_app(server_instance):
 
     @app.post('/api/connections/<client_id>/command')
     def send_command(client_id):
-        return _json_endpoint(
-            lambda: web_service.submit_command(client_id, _get_required_command()),
-            default_error_status=500
-        )
+        def _execute():
+            return web_service.submit_command(
+                client_id,
+                _get_required_command(),
+                tab_id=_get_optional_tab_id()
+            )
+
+        return _json_endpoint(_execute, default_error_status=500)
 
     @app.get('/api/connections/<client_id>/command-candidates')
     def get_command_candidates(client_id):
@@ -213,12 +223,12 @@ def create_app(server_instance):
                 client_id,
                 temp_path,
                 safe_name,
-                target_path
+                target_path,
+                tab_id=_get_optional_tab_id()
             )
 
         return _json_endpoint(_execute, default_error_status=500)
 
-    # 关键：给 client 拉取 upload_tmp 文件用
     @app.get('/api/upload-tmp/<temp_id>/<filename>')
     def download_upload_tmp_file(temp_id, filename):
         try:
@@ -314,7 +324,8 @@ def create_app(server_instance):
     # ------------------ SSE ------------------ #
     @app.get('/api/stream')
     def stream():
-        q = web_service.event_bus.subscribe()
+        tab_id = (request.args.get('tab_id') or '').strip()
+        q = web_service.event_bus.subscribe(tab_id=tab_id)
 
         def event_stream():
             try:

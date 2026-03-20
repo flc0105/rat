@@ -1,6 +1,7 @@
 window.AppStateModule = {
     data() {
         return {
+            tabId: '',
             connections: [],
             selectedId: '',
             outputs: {},
@@ -123,7 +124,7 @@ window.AppStateModule = {
             });
         },
 
-     artifactCountMap() {
+        artifactCountMap() {
             const hostname = String(this.artifactHostnameFilter || '').trim();
             const counts = {
                 files: 0,
