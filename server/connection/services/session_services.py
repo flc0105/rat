@@ -1,8 +1,8 @@
 from server.application.artifact.ingest_service import ArtifactIngestService
-from server.connection.file_receiver import ClientFileReceiver
-from server.connection.message_dispatcher import ServerInboundMessageDispatcher
-from server.connection.message_router import ServerInboundMessageRouter
-from server.connection.result_dispatcher import ServerResultDispatcher
+from server.connection.services.file_receiver import ClientFileReceiver
+from server.connection.services.message_dispatcher import ServerInboundMessageDispatcher
+from server.connection.services.message_router import ServerInboundMessageRouter
+from server.connection.services.result_dispatcher import ServerResultDispatcher
 
 
 class ClientSessionServices:

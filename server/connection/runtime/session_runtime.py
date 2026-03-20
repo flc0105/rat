@@ -1,9 +1,9 @@
 from typing import Optional
 
 from core.protocol.message_queue import MessageQueue, PendingCommandQueue
-from server.connection.file_receive_context_store import FileReceiveContextStore
-from server.connection.foreground_task_guard import ForegroundTaskGuard
-from server.connection.history_binding_store import HistoryBindingStore
+from server.connection.runtime.file_receive_context_store import FileReceiveContextStore
+from server.connection.runtime.foreground_task_guard import ForegroundTaskGuard
+from server.connection.runtime.history_binding_store import HistoryBindingStore
 
 
 class ClientSessionRuntime:

@@ -1,8 +1,8 @@
 from core.protocol.base_connection import BaseSessionConnection
-from server.connection.session_command_channel import ClientSessionCommandChannel
-from server.connection.session_context import ClientSessionContext
-from server.connection.session_runtime import ClientSessionRuntime
-from server.connection.session_services import ClientSessionServices
+from server.connection.channel.session_command_channel import ClientSessionCommandChannel
+from server.connection.context.session_context import ClientSessionContext
+from server.connection.runtime.session_runtime import ClientSessionRuntime
+from server.connection.services.session_services import ClientSessionServices
 
 
 class ClientConnection(BaseSessionConnection):
