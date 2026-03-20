@@ -67,6 +67,12 @@ class CommandBase(ABC):
             return
         context.raise_if_interrupted(fallback_timeout=fallback_timeout)
 
+    def _set_cancel_policy(self, supported: bool = True, message: str = ''):
+        context = self._get_execution_context()
+        if context is None:
+            return
+        context.set_cancel_policy(supported=supported, message=message)
+
     def _register_cancel_handler(self, handler):
         context = self._get_execution_context()
         if context is None:
@@ -84,3 +90,23 @@ class CommandBase(ABC):
         if context is None:
             return
         context.run_cleanup()
+
+    def _run_interruptible(self, func, *args, fallback_timeout=None, **kwargs):
+        self._ensure_not_interrupted(fallback_timeout=fallback_timeout)
+        return func(*args, **kwargs)
+
+    def _iter_interruptible(self, iterable, fallback_timeout=None, check_interval: int = 1):
+        interval = max(int(check_interval or 1), 1)
+        for index, item in enumerate(iterable, start=1):
+            if index == 1 or index % interval == 0:
+                self._ensure_not_interrupted(fallback_timeout=fallback_timeout)
+            yield item
+        self._ensure_not_interrupted(fallback_timeout=fallback_timeout)
+
+    def _read_interruptible(self, file_obj, size=-1, fallback_timeout=None):
+        self._ensure_not_interrupted(fallback_timeout=fallback_timeout)
+        return file_obj.read(size)
+
+    def _write_interruptible(self, file_obj, data, fallback_timeout=None):
+        self._ensure_not_interrupted(fallback_timeout=fallback_timeout)
+        return file_obj.write(data)

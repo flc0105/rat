@@ -5,6 +5,7 @@ import threading
 from client.commands.argument_command_registry import ArgumentCommandRegistry
 from client.commands.command_context import CommandExecutionContext
 from core.utils.parsing import parse
+from client.config.runtime_config import COMMAND_DEFAULT_TIMEOUT
 
 
 class CommandExecutor:
@@ -69,7 +70,7 @@ class CommandExecutor:
             return None
 
         return self._normalize_timeout(
-            options.get('_timeout', options.get('timeout'))
+            options.get('_timeout', options.get('timeout', COMMAND_DEFAULT_TIMEOUT))
         )
 
     def _get_or_create_execution_context(self, command_id, timeout=None):
@@ -94,7 +95,7 @@ class CommandExecutor:
             except Exception:
                 pass
 
-    def cancel_command(self, command_id: int) -> bool:
+    def cancel_command(self, command_id: int) -> dict:
         """
         请求取消指定命令
         """
@@ -102,7 +103,10 @@ class CommandExecutor:
             context = self._execution_contexts.get(command_id)
 
         if context is None:
-            return False
+            return {
+                'accepted': False,
+                'message': 'Command is not running',
+            }
 
         return context.request_cancel()
 

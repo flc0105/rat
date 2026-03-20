@@ -3,11 +3,11 @@ import os
 import queue
 import traceback
 from datetime import datetime
-from http.cookiejar import logger
 
 from flask import Flask, Response, jsonify, request, send_file, send_from_directory, stream_with_context
 from werkzeug.exceptions import ClientDisconnected, RequestEntityTooLarge
 
+from core.utils.logger import logger
 from server.config.config import WEB_HTTP_UPLOAD_MAX_BYTES
 from server.web.routes.background_jobs import create_background_job_blueprint
 
@@ -163,12 +163,10 @@ def create_app(server_instance):
         except Exception:
             pass
 
-    # ------------------ static / index ------------------ #
     @app.get('/')
     def index():
         return send_from_directory(app.static_folder, 'index.html')
 
-    # ------------------ connections ------------------ #
     @app.get('/api/connections')
     def get_connections():
         return _ok(web_service.get_connections_payload())
@@ -181,7 +179,6 @@ def create_app(server_instance):
                 _get_required_command(),
                 tab_id=_get_optional_tab_id()
             )
-
         return _json_endpoint(_execute, default_error_status=500)
 
     @app.post('/api/tasks/<task_id>/cancel')
@@ -224,10 +221,8 @@ def create_app(server_instance):
         def _execute():
             server_instance.kill_connection_by_client_id(client_id)
             return None
-
         return _json_endpoint(_execute, default_error_status=500)
 
-    # ------------------ web upload -> client ------------------ #
     @app.post('/api/connections/<client_id>/upload')
     def upload_file_to_client(client_id):
         def _execute():
@@ -242,7 +237,6 @@ def create_app(server_instance):
                 target_path,
                 tab_id=_get_optional_tab_id()
             )
-
         return _json_endpoint(_execute, default_error_status=500)
 
     @app.get('/api/upload-tmp/<temp_id>/<filename>')
@@ -257,7 +251,6 @@ def create_app(server_instance):
         except Exception as e:
             return _map_common_error(e)
 
-    # ------------------ remote files ------------------ #
     @app.get('/api/connections/<client_id>/remote-files')
     def browse_remote_files(client_id):
         return _json_endpoint(
@@ -273,7 +266,6 @@ def create_app(server_instance):
             if not path:
                 raise ValueError('path is required')
             return web_service.create_remote_directory(client_id, path)
-
         return _json_endpoint(_execute, default_error_status=500)
 
     @app.post('/api/connections/<client_id>/remote-files/rename')
@@ -289,7 +281,6 @@ def create_app(server_instance):
                 raise ValueError('new_name is required')
 
             return web_service.rename_remote_path(client_id, old_path, new_name)
-
         return _json_endpoint(_execute, default_error_status=500)
 
     @app.delete('/api/connections/<client_id>/remote-files')
@@ -299,7 +290,6 @@ def create_app(server_instance):
             if not path:
                 raise ValueError('path is required')
             return web_service.delete_remote_path(client_id, path)
-
         return _json_endpoint(_execute, default_error_status=500)
 
     @app.post('/api/connections/<client_id>/remote-files/download')
@@ -309,7 +299,6 @@ def create_app(server_instance):
             if not path:
                 raise ValueError('path is required')
             return web_service.download_remote_file(client_id, path)
-
         return _json_endpoint(_execute, default_error_status=500)
 
     @app.post('/api/connections/<client_id>/remote-files/download-zip')
@@ -323,7 +312,6 @@ def create_app(server_instance):
                 raise ValueError('paths is required')
 
             return web_service.download_remote_paths_as_zip(client_id, paths, archive_name)
-
         return _json_endpoint(_execute, default_error_status=500)
 
     @app.post('/api/connections/<client_id>/remote-files/preview')
@@ -334,10 +322,8 @@ def create_app(server_instance):
             if not path:
                 raise ValueError('path is required')
             return web_service.preview_remote_file(client_id, path)
-
         return _json_endpoint(_execute, default_error_status=500)
 
-    # ------------------ SSE ------------------ #
     @app.get('/api/stream')
     def stream():
         tab_id = (request.args.get('tab_id') or '').strip()
@@ -366,17 +352,13 @@ def create_app(server_instance):
             }
         )
 
-    # ------------------ artifacts ------------------ #
     @app.get('/api/artifacts')
     def get_artifacts():
         artifact_type = (request.args.get('type') or '').strip()
         hostname = (request.args.get('hostname') or '').strip()
 
         return _json_endpoint(
-            lambda: web_service.list_artifacts(
-                artifact_type=artifact_type,
-                hostname=hostname
-            ),
+            lambda: web_service.list_artifacts(artifact_type=artifact_type, hostname=hostname),
             default_error_status=500
         )
 
@@ -425,10 +407,8 @@ def create_app(server_instance):
                 raise ValueError('type is required')
 
             return web_service.clear_artifacts(artifact_type, hostname=hostname)
-
         return _json_endpoint(_execute, default_error_status=500)
 
-    # ------------------ client/job http upload -> artifact ------------------ #
     @app.post('/api/files/upload')
     def upload_file():
         def _execute():
@@ -469,10 +449,8 @@ def create_app(server_instance):
             _publish_artifact_created(artifact)
 
             return artifact
-
         return _json_endpoint(_execute, default_error_status=500)
 
-    # ------------------ errors ------------------ #
     @app.errorhandler(413)
     def file_too_large(_):
         return _fail('File is too large', 413)

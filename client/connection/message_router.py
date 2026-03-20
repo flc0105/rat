@@ -45,16 +45,22 @@ class ClientInboundMessageRouter(BaseMessageRouter):
 
     def handle_cancel_message(self, data: dict):
         target_command_id = data.get('target_id')
-        cancelled = self.connection.command_executor.cancel_command(target_command_id)
-        if cancelled:
-            self.connection.send({
-                'type': 'cancel_ack',
-                'id': data.get('id'),
-                'target_id': target_command_id,
-                'accepted': True,
-                'cwd': os.getcwd(),
-                'client_ts': time.time(),
-            })
+        cancel_result = self.connection.command_executor.cancel_command(target_command_id)
+        accepted = bool(cancel_result.get('accepted'))
+        message = str(cancel_result.get('message') or '').strip()
+
+        if not accepted and target_command_id:
+            self.connection.send_result(target_command_id, 0, message or 'Command does not support cancellation', 0)
+
+        self.connection.send({
+            'type': 'cancel_ack',
+            'id': data.get('id'),
+            'target_id': target_command_id,
+            'accepted': accepted,
+            'message': message,
+            'cwd': os.getcwd(),
+            'client_ts': time.time(),
+        })
         return None
 
     def handle_heartbeat_message(self, data: dict):

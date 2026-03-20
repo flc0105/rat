@@ -9,14 +9,20 @@ import threading
 import time
 
 from client.commands.command_context import CommandCancelledError, CommandTimeoutError
+from client.commands.interrupts import interruptible
+from client.config.runtime_config import (
+    COMMAND_DEFAULT_SHELL_TIMEOUT,
+    COMMAND_DEFAULT_STREAM_TIMEOUT,
+    COMMAND_PROCESS_WAIT_POLL_INTERVAL,
+)
 from core.utils.decorator import desc
 
 
 class CommandExecutionMixin:
-    DEFAULT_SHELL_TIMEOUT = 30
-    DEFAULT_STREAM_TIMEOUT = 300
+    DEFAULT_SHELL_TIMEOUT = COMMAND_DEFAULT_SHELL_TIMEOUT
+    DEFAULT_STREAM_TIMEOUT = COMMAND_DEFAULT_STREAM_TIMEOUT
     PROCESS_KILL_GRACE_SECONDS = 2
-    PROCESS_WAIT_POLL_INTERVAL = 0.2
+    PROCESS_WAIT_POLL_INTERVAL = COMMAND_PROCESS_WAIT_POLL_INTERVAL
 
     # ------------------ 通用输出/子进程工具 ------------------ #
     def _get_default_encoding(self):
@@ -31,9 +37,7 @@ class CommandExecutionMixin:
         """
         encoding = self._get_default_encoding()
         while True:
-            if self._is_cancel_requested():
-                break
-
+            self._ensure_not_interrupted(fallback_timeout=self.DEFAULT_STREAM_TIMEOUT)
             line = stream.readline()
             if not line:
                 break
@@ -82,33 +86,28 @@ class CommandExecutionMixin:
             pass
 
     def _wait_process_with_cancel_support(self, process: subprocess.Popen, timeout=None):
-        """
-        支持取消/超时的进程等待
-        """
-        effective_timeout = self._resolve_timeout(timeout)
+        effective_timeout = self.DEFAULT_STREAM_TIMEOUT if timeout is None else timeout
+
         while True:
-            self._ensure_not_interrupted(fallback_timeout=timeout)
-
-            return_code = process.poll()
-            if return_code is not None:
-                return return_code
-
-            if effective_timeout is not None:
-                remaining_timeout = self._resolve_timeout(timeout)
-                if remaining_timeout is not None and remaining_timeout <= 0:
-                    self._terminate_process(process)
-                    raise subprocess.TimeoutExpired(process.args, timeout if timeout is not None else effective_timeout)
-
-            time.sleep(self.PROCESS_WAIT_POLL_INTERVAL)
+            try:
+                self._ensure_not_interrupted(fallback_timeout=effective_timeout)
+                return_code = process.poll()
+                if return_code is not None:
+                    return return_code
+                time.sleep(self.PROCESS_WAIT_POLL_INTERVAL)
+            except CommandCancelledError:
+                self._terminate_process(process)
+                raise
+            except CommandTimeoutError:
+                self._terminate_process(process)
+                raise subprocess.TimeoutExpired(process.args, effective_timeout)
 
     def _run_shell_command(self, command, timeout=None):
         """
         执行一次性 shell 命令
         """
         encoding = self._get_default_encoding()
-        effective_timeout = self._resolve_timeout(
-            self.DEFAULT_SHELL_TIMEOUT if timeout is None else timeout
-        )
+        effective_timeout = self.DEFAULT_SHELL_TIMEOUT if timeout is None else timeout
 
         process = subprocess.Popen(
             command,
@@ -124,25 +123,24 @@ class CommandExecutionMixin:
         self._register_cancel_handler(lambda: self._terminate_process(process))
 
         try:
-            self._wait_process_with_cancel_support(process, timeout=effective_timeout)
-            stdout, stderr = process.communicate()
-            self._ensure_not_interrupted(fallback_timeout=effective_timeout)
-
-            return subprocess.CompletedProcess(
-                args=command,
-                returncode=process.returncode,
-                stdout=stdout,
-                stderr=stderr
-            )
+            while True:
+                self._ensure_not_interrupted(fallback_timeout=effective_timeout)
+                try:
+                    stdout, stderr = process.communicate(timeout=self.PROCESS_WAIT_POLL_INTERVAL)
+                    return subprocess.CompletedProcess(
+                        args=command,
+                        returncode=process.returncode,
+                        stdout=stdout,
+                        stderr=stderr
+                    )
+                except subprocess.TimeoutExpired:
+                    continue
         except CommandCancelledError:
             self._terminate_process(process)
             raise
         except CommandTimeoutError:
             self._terminate_process(process)
             raise subprocess.TimeoutExpired(process.args, effective_timeout)
-        except subprocess.TimeoutExpired:
-            self._terminate_process(process)
-            raise
         except Exception:
             self._terminate_process(process)
             raise
@@ -227,9 +225,9 @@ class CommandExecutionMixin:
 
     # ------------------ 基础命令 ------------------ #
     @desc('Change working directory', group='shell')
+    @interruptible()
     def cd(self, path):
         try:
-            self._ensure_not_interrupted()
             os.chdir(path)
             return 1, ""
         except CommandCancelledError:
@@ -240,9 +238,9 @@ class CommandExecutionMixin:
             return 0, f'Failed to change directory: {e}'
 
     @desc('Run a shell command', group='shell')
+    @interruptible()
     def shell(self, command):
         try:
-            self._ensure_not_interrupted()
             result = self._run_shell_command(command)
             if result.returncode == 0:
                 return 1, result.stdout
@@ -255,6 +253,7 @@ class CommandExecutionMixin:
             return 0, f'Failed to execute command: {e}'
 
     @desc('Run a program in background', group='shell')
+    @interruptible()
     def spawn(self, command):
         """
         后台启动指定程序/命令，不等待其执行结束。
@@ -264,7 +263,6 @@ class CommandExecutionMixin:
             return 0, 'Usage: spawn <program ...>'
 
         try:
-            self._ensure_not_interrupted()
             process = self._spawn_background_process(command_text)
             return 1, (
                 f'Background process started\n'
@@ -279,17 +277,16 @@ class CommandExecutionMixin:
             return 0, f'Failed to start background process: {e}'
 
     @desc('Run a command with live output', group='shell')
+    @interruptible()
     def read(self, command):
         try:
-            self._ensure_not_interrupted()
             process = self._start_stream_process(command)
             self._start_output_threads(process)
             self._wait_stream_process(process)
             time.sleep(0.1)
-            self._ensure_not_interrupted(fallback_timeout=self.DEFAULT_STREAM_TIMEOUT)
 
             if process.returncode == 0:
-                self._send_final_result(1, 'Command completed')
+                self._send_final_result(1, "Command completed")
             else:
                 self._send_final_result(0, f'Command exited with code {process.returncode}')
         except CommandCancelledError:
@@ -300,35 +297,24 @@ class CommandExecutionMixin:
             self._send_final_result(0, f'Failed to execute command: {e}')
 
     @desc('Execute Python code', group='shell')
+    @interruptible()
     def pyexec(self, code, kwargs=None):
         if kwargs is None:
             kwargs = {}
-
-        try:
-            self._ensure_not_interrupted()
-            output = io.StringIO()
-            kwargs = dict(kwargs)
-            kwargs['_command_context'] = self._get_execution_context()
-
-            with contextlib.redirect_stdout(output), contextlib.redirect_stderr(output):
-                exec(code, kwargs)
-
-            self._ensure_not_interrupted()
-            return 1, output.getvalue()
-        except CommandCancelledError:
-            return 0, 'Command cancelled'
-        except CommandTimeoutError:
-            return 0, 'Command timed out and was terminated'
-        except Exception as e:
-            return 0, f'Failed to execute Python code: {e}'
+        output = io.StringIO()
+        with contextlib.redirect_stdout(output), contextlib.redirect_stderr(output):
+            exec(code, kwargs)
+        return 1, output.getvalue()
 
     # ------------------ 连接控制 ------------------ #
     @desc('Terminate current session', group='session')
+    @interruptible()
     def kill(self):
         self.socket.close()
         sys.exit(0)
 
     @desc('Restart client process and reconnect', group='session')
+    @interruptible()
     def reset(self):
         restart_command = self._build_restart_command()
         if os.name == 'nt':

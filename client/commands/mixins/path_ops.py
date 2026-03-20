@@ -7,13 +7,10 @@ import tempfile
 import time
 import zipfile
 
+from client.config.runtime_config import ZIP_CANCEL_CHECK_INTERVAL
+
 
 class CommandPathMixin:
-    def _check_cancel(self):
-        ensure_not_cancelled = getattr(self, '_ensure_not_cancelled', None)
-        if callable(ensure_not_cancelled):
-            ensure_not_cancelled()
-
     def _validate_directory_exists(self, path):
         directory = os.path.abspath(path)
         if not os.path.isdir(directory):
@@ -44,10 +41,9 @@ class CommandPathMixin:
         return parent
 
     def _build_directory_entry(self, entry):
-        self._check_cancel()
-        stat_result = entry.stat(follow_symlinks=False)
-        is_dir = entry.is_dir(follow_symlinks=True)
-        is_symlink = entry.is_symlink()
+        stat_result = self._run_interruptible(entry.stat, follow_symlinks=False)
+        is_dir = self._run_interruptible(entry.is_dir, follow_symlinks=True)
+        is_symlink = self._run_interruptible(entry.is_symlink)
         is_hidden = self._is_hidden_entry(entry, stat_result)
 
         return {
@@ -128,8 +124,7 @@ class CommandPathMixin:
     def _require_existing_paths_from_list(self, paths) -> list[str]:
         resolved_paths = []
 
-        for item in paths:
-            self._check_cancel()
+        for item in self._iter_interruptible(paths):
             raw_path = ''
             if isinstance(item, dict):
                 raw_path = (item.get('path') or '').strip()
@@ -151,7 +146,6 @@ class CommandPathMixin:
         return resolved_paths
 
     def _delete_target_path(self, target_path: str):
-        self._check_cancel()
         if os.path.isdir(target_path):
             shutil.rmtree(target_path)
             return 1, f'Directory deleted: {target_path}'
@@ -160,14 +154,12 @@ class CommandPathMixin:
         return 1, f'File deleted: {target_path}'
 
     def _create_directory(self, target_path: str):
-        self._check_cancel()
         if os.path.exists(target_path):
             raise FileExistsError(f'Path already exists: {target_path}')
 
         os.makedirs(target_path, exist_ok=False)
 
     def _rename_target_path(self, old_path: str, new_name: str = '', new_path: str = '') -> str:
-        self._check_cancel()
         if not os.path.exists(old_path):
             raise FileNotFoundError(f'Path not found: {old_path}')
 
@@ -187,7 +179,6 @@ class CommandPathMixin:
     def _create_zip_archive(self, dir_name: str) -> str:
         import pathlib
 
-        self._check_cancel()
         temp_dir = tempfile.mkdtemp()
         directory = self._validate_directory_exists(dir_name)
         archive_name = os.path.basename(directory)
@@ -215,21 +206,18 @@ class CommandPathMixin:
         return f'bundle_{timestamp}.zip'
 
     def _iter_directory_files(self, directory: str):
-        for root, _, files in os.walk(directory):
-            self._check_cancel()
-            for filename in files:
-                self._check_cancel()
+        for root, _, files in self._iter_interruptible(os.walk(directory), check_interval=ZIP_CANCEL_CHECK_INTERVAL):
+            for filename in self._iter_interruptible(files, check_interval=ZIP_CANCEL_CHECK_INTERVAL):
                 yield os.path.join(root, filename)
 
     def _write_path_to_zip(self, archive: zipfile.ZipFile, path: str, used_names: set[str]):
-        self._check_cancel()
         normalized_path = os.path.abspath(path)
         top_name = os.path.basename(normalized_path.rstrip('/\\')) or 'item'
         archive_root = top_name
         suffix_index = 1
 
         while archive_root in used_names:
-            self._check_cancel()
+            self._ensure_not_interrupted()
             archive_root = f'{top_name}_{suffix_index}'
             suffix_index += 1
 
@@ -243,7 +231,6 @@ class CommandPathMixin:
             has_content = False
 
             for file_path in self._iter_directory_files(normalized_path):
-                self._check_cancel()
                 has_content = True
                 relative_path = os.path.relpath(file_path, normalized_path)
                 archive.write(file_path, arcname=os.path.join(archive_root, relative_path))
@@ -256,19 +243,16 @@ class CommandPathMixin:
         raise FileNotFoundError(f'Path not found: {normalized_path}')
 
     def _create_zip_from_paths(self, paths: list[str], archive_name: str = '') -> str:
-        self._check_cancel()
         final_name = self._build_download_archive_name(paths, archive_name=archive_name)
         temp_dir = tempfile.mkdtemp()
         archive_path = os.path.join(temp_dir, final_name)
 
         used_names = set()
         with zipfile.ZipFile(archive_path, mode='w', compression=zipfile.ZIP_DEFLATED) as archive:
-            for path in paths:
-                self._check_cancel()
+            for path in self._iter_interruptible(paths, check_interval=ZIP_CANCEL_CHECK_INTERVAL):
                 self._write_path_to_zip(archive, path, used_names)
 
         return archive_path
 
     def _extract_archive_to_cwd(self, archive_path: str):
-        self._check_cancel()
         shutil.unpack_archive(archive_path, os.getcwd())

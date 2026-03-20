@@ -70,6 +70,16 @@ class WebTaskStore:
                 'time': datetime.now().isoformat()
             })
 
+    def _task_has_cancelled_output(self, task: dict) -> bool:
+        for chunk in reversed(task.get('chunks') or []):
+            text = str(chunk.get('text') or '').strip().lower()
+            if not text:
+                continue
+            if 'cancelled' in text or 'timed out and was terminated' in text:
+                return True
+            return False
+        return False
+
     def finish_task(self, task_id: str, ok: bool) -> None:
         """
         标记任务完成
@@ -79,7 +89,7 @@ class WebTaskStore:
             if not task:
                 return
 
-            if task.get('cancel_requested'):
+            if task.get('cancel_requested') and self._task_has_cancelled_output(task):
                 task['status'] = 'cancelled'
             else:
                 task['status'] = 'success' if ok else 'error'
