@@ -42,10 +42,7 @@ class RemoteExecutionService:
     def _build_http_receive_command(self, payload: dict) -> str:
         return f'{self.HTTP_RECEIVE_COMMAND_NAME} {self._encode_payload_arg(payload)}'
 
-    def _build_absolute_upload_url(self, relative_url: str) -> str:
-        base = WEB_PUBLIC_BASE_URL.rstrip('/')
-        path = '/' + str(relative_url or '').lstrip('/')
-        return f'{base}{path}'
+
 
     # ------------------ history helpers ------------------ #
     def create_history_entry(self, target, command: str, source: str = 'cli', should_record: bool = True) -> str:
@@ -161,10 +158,9 @@ class RemoteExecutionService:
                 display_name=os.path.basename(local_path)
             )
             relative_url = artifact_service.build_upload_temp_download_relative_url(staged_path)
-            absolute_url = self._build_absolute_upload_url(relative_url)
 
             command = self._build_http_receive_command({
-                'url': absolute_url,
+                'relative_url': relative_url,
                 'filename': safe_name,
                 'save_dir': remote_path,
             })

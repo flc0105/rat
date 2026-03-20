@@ -1,5 +1,6 @@
 import os
 
+from client.config.config import UPLOAD_BASE_URL
 from core.utils.decorator import desc
 
 
@@ -19,13 +20,15 @@ class CommandFileCliMixin:
         except Exception as e:
             return 0, f'Failed to download file: {e}'
 
+
     @desc('Receive a file from server via HTTP', group='file', suggest=False)
     def receive_http_upload(self, arg=''):
         """
         通过普通命令下发 HTTP 拉取任务，由 client 自己去 server 拉文件并保存到本地。
 
         结构化参数：
-        - url: server 提供的临时下载地址（绝对 URL）
+        - relative_url: server 提供的临时下载相对地址
+        - url: 兼容旧字段，完整下载地址
         - filename: 保存时使用的文件名
         - save_dir: 目标目录（可空，空则当前工作目录）
         """
@@ -34,12 +37,16 @@ class CommandFileCliMixin:
             if not isinstance(payload, dict):
                 return 0, 'Invalid HTTP upload payload'
 
+            relative_url = str(payload.get('relative_url') or '').strip()
             url = str(payload.get('url') or '').strip()
             filename = str(payload.get('filename') or '').strip()
             save_dir = str(payload.get('save_dir') or '').strip()
 
             if not url:
-                return 0, 'url is required'
+                if not relative_url:
+                    return 0, 'url or relative_url is required'
+                url = UPLOAD_BASE_URL.rstrip('/') + '/' + relative_url.lstrip('/')
+
             if not filename:
                 return 0, 'filename is required'
 
