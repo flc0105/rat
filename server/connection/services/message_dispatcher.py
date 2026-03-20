@@ -5,13 +5,12 @@ class ServerInboundMessageDispatcher:
     职责：
     - 决定消息如何进入后续处理流程
     - 当前服务端收到的消息都由接收线程即时分发
-    - 保持与 client 侧 dispatcher + router 的结构一致
     """
 
     IMMEDIATE_MESSAGE_TYPES = {'rdy', 'result', 'file'}
 
-    def __init__(self, connection):
-        self.connection = connection
+    def __init__(self, session):
+        self.session = session
 
     def dispatch(self, data: dict):
         """
@@ -31,7 +30,7 @@ class ServerInboundMessageDispatcher:
         - result
         - file
         """
-        return self.connection.services.message_router.dispatch(data)
+        return self.session.services.message_router.dispatch(data)
 
     def _dispatch_unknown_message(self, data: dict):
         """

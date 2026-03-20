@@ -8,7 +8,6 @@ class ServerInboundMessageRouter(BaseMessageRouter):
     职责：
     - 按消息 type 分发到对应处理逻辑
     - 不关心结果最终进入哪个队列
-    - 只关心“收到什么消息，就调用什么处理器”
     """
 
     def handle_ready_message(self, data: dict) -> None:

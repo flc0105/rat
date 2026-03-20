@@ -6,7 +6,7 @@ class RemoteExecutionService:
     统一远程执行服务。
 
     职责：
-    - 根据 client_id / conn 获取目标连接
+    - 根据 client_id / session 获取目标会话
     - 统一执行远程文本命令 / 结构化命令
     - 统一上传文件
     - 统一抓取 artifact
@@ -16,12 +16,12 @@ class RemoteExecutionService:
     def __init__(self, server):
         self.server = server
 
-    # ------------------ connection helpers ------------------ #
+    # ------------------ session helpers ------------------ #
     def get_connection(self, target):
         """
         target 支持：
         - client_id: str
-        - ClientConnection 实例
+        - ClientSession 实例
         """
         if hasattr(target, 'send_command') and hasattr(target, 'send_file'):
             return target
@@ -35,13 +35,13 @@ class RemoteExecutionService:
         if not should_record:
             return ''
 
-        conn = self.get_connection(target)
+        session = self.get_connection(target)
         command_text = (command or '').strip()
         if not command_text:
             return ''
 
         return self.server.command_history.create_entry_for_connection(
-            conn,
+            session,
             command_text,
             source=source
         )
@@ -53,12 +53,12 @@ class RemoteExecutionService:
         if not entry_id:
             return
 
-        conn = self.get_connection(target)
+        session = self.get_connection(target)
         self.server.command_history.update_entry_status_for_connection(
-            conn,
+            session,
             entry_id,
             'success' if ok else 'error',
-            cwd_end=cwd_end or (getattr(conn, 'info', {}) or {}).get('cwd', '')
+            cwd_end=cwd_end or (getattr(session, 'info', {}) or {}).get('cwd', '')
         )
 
     def append_history_output(self, target, entry_id: str, status: int, text: str, eof: int = 0):
@@ -68,9 +68,9 @@ class RemoteExecutionService:
         if not entry_id:
             return
 
-        conn = self.get_connection(target)
+        session = self.get_connection(target)
         self.server.command_history.append_output_for_connection(
-            conn,
+            session,
             entry_id,
             status,
             text,
@@ -105,8 +105,8 @@ class RemoteExecutionService:
         """
         以结果流方式执行远程命令
         """
-        conn = self.get_connection(target)
-        return conn.send_command(
+        session = self.get_connection(target)
+        return session.send_command(
             command,
             type=command_type,
             extra=extra,
@@ -144,8 +144,8 @@ class RemoteExecutionService:
         """
         以上传结果流方式执行文件上传
         """
-        conn = self.get_connection(target)
-        return conn.send_file(
+        session = self.get_connection(target)
+        return session.send_file(
             local_path,
             save_dir=remote_path,
             history_entry_id=history_entry_id
@@ -225,14 +225,14 @@ class RemoteExecutionService:
         """
         执行远程命令并接收 artifact
         """
-        conn = self.get_connection(target)
-        command_id = conn.command_channel.generate_message_id()
+        session = self.get_connection(target)
+        command_id = session.command_channel.generate_message_id()
         capture_result = {}
 
         if history_entry_id:
-            conn.runtime.bind_history_entry(command_id, history_entry_id)
+            session.runtime.bind_history_entry(command_id, history_entry_id)
 
-        conn.runtime.set_file_receive_context(
+        session.runtime.set_file_receive_context(
             command_id,
             artifact_type=artifact_type,
             category=category,
@@ -243,14 +243,14 @@ class RemoteExecutionService:
             extra=extra or {},
         )
 
-        conn.send({
+        session.send({
             'type': 'command',
             'id': command_id,
             'text': command,
         })
 
         status, text = self.collect_result(
-            conn.command_channel.wait_for_result(command_id, command)
+            session.command_channel.wait_for_result(command_id, command)
         )
         if status != 1:
             raise RuntimeError(text or 'Remote file fetch failed')

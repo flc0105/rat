@@ -1,30 +1,55 @@
-from core.protocol.base_connection import BaseSessionConnection
 from server.connection.channel.session_command_channel import ClientSessionCommandChannel
 from server.connection.context.session_context import ClientSessionContext
 from server.connection.runtime.session_runtime import ClientSessionRuntime
 from server.connection.services.session_services import ClientSessionServices
+from server.connection.transport.client_transport import ClientTransport
 
 
-class ClientConnection(BaseSessionConnection):
+class ClientSession:
     """
-    封装每个客户端连接的对象
+    客户端会话对象。
+
+    职责：
+    - 聚合 transport / runtime / context / services / command channel
+    - 承载上层对“一个在线会话”的全部操作
+    - 不再把 connection 本体误当成 session root
     """
 
-    FILE_TRANSFER_REJECTED_MESSAGE = 'Client rejected file transfer'
-
-    def __init__(self, sock, address=None, info=None, file_save_dir=None, on_file_saved=None):
-        super().__init__()
-        self.socket = sock
-        self.address = address
+    def __init__(self, transport: ClientTransport, info=None):
+        self.transport = transport
         self.info = info or {}
 
         self.runtime = ClientSessionRuntime()
-        self.context = ClientSessionContext(
-            file_save_dir=file_save_dir,
-            on_file_saved=on_file_saved
-        )
+        self.context = ClientSessionContext()
         self.services = ClientSessionServices(self)
         self.command_channel = ClientSessionCommandChannel(self)
+
+    # ------------------ transport facade ------------------ #
+    @property
+    def address(self):
+        return self.transport.address
+
+    @property
+    def ready_queue(self):
+        return self.transport.ready_queue
+
+    def send(self, data: dict):
+        self.transport.send(data)
+
+    def recv(self):
+        return self.transport.recv()
+
+    def close(self):
+        self.transport.close()
+
+    def send_signal(self, status: int, command_id=None):
+        self.transport.send_signal(status, command_id)
+
+    def recv_file_packet(self, command_id: int, length: int, io):
+        return self.transport.recv_file_packet(command_id, length, io)
+
+    def send_file_by_header(self, header: dict, filename: str):
+        self.transport.send_file_by_header(header, filename)
 
     # ------------------ history binding ------------------ #
     def bind_history_entry(self, command_id: int, entry_id: str):
@@ -90,6 +115,17 @@ class ClientConnection(BaseSessionConnection):
         """
         return self.services.message_dispatcher.dispatch(data)
 
+    def recv_message(self):
+        """
+        会话接收线程入口。
+        这里不再让 transport 直接承担“session message loop”职责。
+        """
+        data = self.transport.recv()
+        result = self.handle_received_message(data)
+        if result:
+            # 当前 server 侧正常不会走到这里，保留这个分支只是为了结构完整
+            raise RuntimeError(f'Unexpected recv_message result: {result}')
+
     def set_file_receive_context(self, command_id: int, **context):
         """
         为指定命令设置文件接收上下文
@@ -114,7 +150,7 @@ class ClientConnection(BaseSessionConnection):
     # ------------------ foreground lock ------------------ #
     def acquire_foreground_task(self, task_type: str, command: str, source: str = '', task_id: str = '') -> dict:
         """
-        尝试占用当前连接的前台执行槽。
+        尝试占用当前会话的前台执行槽。
         """
         return self.runtime.acquire_foreground_task(
             task_type=task_type,
@@ -125,12 +161,12 @@ class ClientConnection(BaseSessionConnection):
 
     def release_foreground_task(self, task_id: str = '', command: str = '') -> None:
         """
-        释放当前连接的前台执行槽。
+        释放当前会话的前台执行槽。
         """
         self.runtime.release_foreground_task(task_id=task_id, command=command)
 
     def get_foreground_task(self):
         """
-        获取当前连接的前台占用信息快照
+        获取当前会话的前台占用信息快照
         """
         return self.runtime.get_foreground_task()

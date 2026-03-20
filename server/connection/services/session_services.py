@@ -10,22 +10,15 @@ class ClientSessionServices:
     客户端会话服务集合。
 
     职责：
-    - 统一管理围绕连接会话工作的 helper / service
-    - 将消息分发、结果分发、文件接收、artifact 编排从 ClientConnection 本体中剥离
-
-    当前承载：
-    - result_dispatcher
-    - message_router
-    - message_dispatcher
-    - file_receiver
-    - artifact_ingest_service
+    - 统一管理围绕 session 工作的 helper / service
+    - 将消息分发、结果分发、文件接收、artifact 编排从 session 本体中剥离
     """
 
-    def __init__(self, connection):
-        self.connection = connection
+    def __init__(self, session):
+        self.session = session
 
-        self.result_dispatcher = ServerResultDispatcher(connection)
-        self.message_router = ServerInboundMessageRouter(connection)
-        self.message_dispatcher = ServerInboundMessageDispatcher(connection)
-        self.file_receiver = ClientFileReceiver(connection)
-        self.artifact_ingest_service = ArtifactIngestService(connection)
+        self.result_dispatcher = ServerResultDispatcher(session)
+        self.message_router = ServerInboundMessageRouter(session)
+        self.message_dispatcher = ServerInboundMessageDispatcher(session)
+        self.file_receiver = ClientFileReceiver(session)
+        self.artifact_ingest_service = ArtifactIngestService(session)

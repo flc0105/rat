@@ -14,10 +14,6 @@ from server.web.event_bus import WebEventBus
 class ServerWebService:
     """
     Server 的 Web 门面服务。
-
-    职责：
-    - 聚合应用侧各个子服务
-    - 对外暴露稳定接口，避免 app.py / server.py 直接依赖过多内部实现
     """
 
     def __init__(self, server):
@@ -75,8 +71,8 @@ class ServerWebService:
 
         return final_status, '\n'.join(part for part in parts if part).strip()
 
-    def _get_client_command_candidates(self, conn):
-        payload = conn.info.get('command_manifest') or []
+    def _get_client_command_candidates(self, session):
+        payload = session.info.get('command_manifest') or []
         if not isinstance(payload, list):
             return []
 
@@ -106,14 +102,14 @@ class ServerWebService:
     def get_connections_payload(self):
         return self.connection_service.get_connections_payload()
 
-    def create_web_connection(self, conn, addr, info: dict):
-        return self.connection_service.create_web_connection(conn, addr, info)
+    def create_web_connection(self, transport, addr, info: dict):
+        return self.connection_service.create_web_connection(transport, addr, info)
 
-    def handle_connection_registered(self, connection):
-        self.connection_service.handle_connection_registered(connection)
+    def handle_connection_registered(self, session):
+        self.connection_service.handle_connection_registered(session)
 
-    def handle_connection_closed(self, conn):
-        self.connection_service.handle_connection_closed(conn)
+    def handle_connection_closed(self, session):
+        self.connection_service.handle_connection_closed(session)
 
     # ------------------ artifact facade ------------------ #
     def list_artifacts(self, artifact_type: str = '', hostname: str = ''):
@@ -139,10 +135,10 @@ class ServerWebService:
 
     # ------------------ command candidates facade ------------------ #
     def get_command_candidates(self, client_id: str):
-        conn = self.server.get_target_connection_by_client_id(client_id)
+        session = self.server.get_target_connection_by_client_id(client_id)
 
-        client_candidates = self._get_client_command_candidates(conn)
-        server_candidates = CommandExecutor(conn, self.server).get_command_candidates()
+        client_candidates = self._get_client_command_candidates(session)
+        server_candidates = CommandExecutor(session, self.server).get_command_candidates()
 
         merged = []
         seen = set()
@@ -158,16 +154,16 @@ class ServerWebService:
         return merged
 
     def get_command_history(self, client_id: str):
-        conn = self.server.get_target_connection_by_client_id(client_id)
-        return self.server.command_history.get_history_for_connection(conn)
+        session = self.server.get_target_connection_by_client_id(client_id)
+        return self.server.command_history.get_history_for_connection(session)
 
     def get_command_execution_history(self, client_id: str):
-        conn = self.server.get_target_connection_by_client_id(client_id)
-        return self.server.command_history.get_execution_history_for_connection(conn)
+        session = self.server.get_target_connection_by_client_id(client_id)
+        return self.server.command_history.get_execution_history_for_connection(session)
 
     def clear_command_history(self, client_id: str):
-        conn = self.server.get_target_connection_by_client_id(client_id)
-        self.server.command_history.clear_history_for_connection(conn)
+        session = self.server.get_target_connection_by_client_id(client_id)
+        self.server.command_history.clear_history_for_connection(session)
         return None
 
     # ------------------ task facade ------------------ #
@@ -216,14 +212,14 @@ class ServerWebService:
         return self.remote_file_service.preview_file(client_id, path)
 
     # ------------------ compatibility facade ------------------ #
-    def build_connection(self, conn, addr, info: dict):
-        return self.create_web_connection(conn, addr, info)
+    def build_connection(self, transport, addr, info: dict):
+        return self.create_web_connection(transport, addr, info)
 
-    def on_connection_registered(self, connection):
-        self.handle_connection_registered(connection)
+    def on_connection_registered(self, session):
+        self.handle_connection_registered(session)
 
-    def on_connection_closed(self, conn):
-        self.handle_connection_closed(conn)
+    def on_connection_closed(self, session):
+        self.handle_connection_closed(session)
 
     def submit_command(self, client_id: str, command: str):
         return self.submit_web_command(client_id, command)
