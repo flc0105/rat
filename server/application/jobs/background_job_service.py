@@ -11,6 +11,9 @@ class BackgroundJobService:
     - 启动 / 停止后台任务
     - 接收客户端通过 HTTP 上报的任务消息/状态/文件
     - 对外提供任务监控数据
+
+    规则：
+    - 这里触发的前台远程命令统一走 foreground task 槽
     """
 
     def __init__(self, event_bus, job_store, remote_execution_service):
@@ -36,7 +39,12 @@ class BackgroundJobService:
         return [self._serialize_available_job(line) for line in lines]
 
     def list_available_jobs(self, client_id: str) -> list[dict]:
-        text = self.remote_execution_service.run_text_command(client_id, 'start_job')
+        text = self.remote_execution_service.run_foreground_text_command(
+            client_id,
+            'start_job',
+            task_type='job_control',
+            source='web_background_job',
+        )
         return self._parse_available_jobs_text(text)
 
     def start_job(self, client_id: str, job_name: str) -> dict:
@@ -44,7 +52,12 @@ class BackgroundJobService:
         if not job_name:
             raise ValueError('job_name is required')
 
-        text = self.remote_execution_service.run_text_command(client_id, f'start_job {job_name}')
+        text = self.remote_execution_service.run_foreground_text_command(
+            client_id,
+            f'start_job {job_name}',
+            task_type='job_control',
+            source='web_background_job',
+        )
         return {
             'client_id': client_id,
             'job_name': job_name,
@@ -56,7 +69,12 @@ class BackgroundJobService:
         if not job_key:
             raise ValueError('job_key is required')
 
-        text = self.remote_execution_service.run_text_command(client_id, f'stop_job {job_key}')
+        text = self.remote_execution_service.run_foreground_text_command(
+            client_id,
+            f'stop_job {job_key}',
+            task_type='job_control',
+            source='web_background_job',
+        )
         return {
             'client_id': client_id,
             'job_key': job_key,

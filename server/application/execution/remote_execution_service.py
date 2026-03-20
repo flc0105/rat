@@ -6,7 +6,15 @@ import os
 class RemoteExecutionService:
     """
     统一远程执行服务。
-    旧 socket 文件传输已移除。
+
+    说明：
+    - 普通 stream_command / run_text_command / run_json_command：
+      不主动占用 foreground task 槽
+      适用于已经在上层完成占槽的场景（例如 WebTaskRunner）
+
+    - stream_foreground_command / run_foreground_text_command / run_foreground_json_command：
+      在当前方法内部统一占用 foreground task 槽
+      适用于前台同步型请求（CLI / remote file / background job 等）
     """
 
     HTTP_RECEIVE_COMMAND_NAME = 'receive_http_upload'
@@ -78,6 +86,7 @@ class RemoteExecutionService:
 
         return final_status, '\n'.join(part for part in parts if part).strip()
 
+    # ------------------ raw stream api ------------------ #
     def stream_command(
         self,
         target,
@@ -112,45 +121,48 @@ class RemoteExecutionService:
             history_entry_id=history_entry_id,
         )
 
-    def stream_upload(
+    # ------------------ foreground guard api ------------------ #
+    def stream_foreground_command(
         self,
         target,
-        local_path: str,
+        command: str,
         *,
-        remote_path: str = '',
+        command_type: str = 'command',
+        extra=None,
         history_entry_id: str = '',
+        task_type: str = 'command',
+        source: str = 'foreground',
+        task_id: str = '',
     ):
+        """
+        统一前台执行入口：
+        凡是前台同步等待 session.send_command() 结果流的请求，都必须走这里。
+        """
         session = self.get_connection(target)
-        artifact_service = self.server.web_service.artifact_service
 
-        staged_path = ''
+        acquired_task = session.acquire_foreground_task(
+            task_type=task_type,
+            command=command,
+            source=source,
+            task_id=task_id,
+        )
+
+        effective_task_id = acquired_task.get('task_id', '') if isinstance(acquired_task, dict) else ''
+
         try:
-            staged_path, safe_name = artifact_service.stage_local_file(
-                local_path,
-                display_name=os.path.basename(local_path)
-            )
-            relative_url = artifact_service.build_upload_temp_download_relative_url(staged_path)
-
-            command = self._build_http_receive_command({
-                'relative_url': relative_url,
-                'filename': safe_name,
-                'save_dir': remote_path,
-            })
-
             result_iter = session.send_command(
                 command,
-                type='command',
-                extra=None,
+                type=command_type,
+                extra=extra,
                 history_entry_id=history_entry_id
             )
-
             for item in result_iter:
                 yield item
         finally:
-            try:
-                artifact_service.cleanup_upload_temp_file(staged_path)
-            except Exception:
-                pass
+            session.release_foreground_task(
+                task_id=effective_task_id or task_id,
+                command=command
+            )
 
     def run_text_command(
         self,
@@ -202,3 +214,107 @@ class RemoteExecutionService:
             raise RuntimeError('Invalid remote JSON payload: expected object')
 
         return payload
+
+    def run_foreground_text_command(
+        self,
+        target,
+        command: str,
+        *,
+        command_type: str = 'command',
+        extra=None,
+        history_entry_id: str = '',
+        task_type: str = 'command',
+        source: str = 'foreground',
+        task_id: str = '',
+    ) -> str:
+        status, text = self.collect_result(
+            self.stream_foreground_command(
+                target,
+                command,
+                command_type=command_type,
+                extra=extra,
+                history_entry_id=history_entry_id,
+                task_type=task_type,
+                source=source,
+                task_id=task_id,
+            )
+        )
+
+        if status != 1:
+            raise RuntimeError(text or 'Remote command failed')
+
+        return text
+
+    def run_foreground_json_command(
+        self,
+        target,
+        command: str,
+        *,
+        command_type: str = 'command',
+        extra=None,
+        history_entry_id: str = '',
+        task_type: str = 'command',
+        source: str = 'foreground',
+        task_id: str = '',
+    ) -> dict:
+        text = self.run_foreground_text_command(
+            target,
+            command,
+            command_type=command_type,
+            extra=extra,
+            history_entry_id=history_entry_id,
+            task_type=task_type,
+            source=source,
+            task_id=task_id,
+        )
+
+        try:
+            payload = json.loads(text or '{}')
+        except Exception as e:
+            raise RuntimeError(f'Invalid remote JSON payload: {e}')
+
+        if not isinstance(payload, dict):
+            raise RuntimeError('Invalid remote JSON payload: expected object')
+
+        return payload
+
+    # ------------------ upload ------------------ #
+    def stream_upload(
+        self,
+        target,
+        local_path: str,
+        *,
+        remote_path: str = '',
+        history_entry_id: str = '',
+    ):
+        session = self.get_connection(target)
+        artifact_service = self.server.web_service.artifact_service
+
+        staged_path = ''
+        try:
+            staged_path, safe_name = artifact_service.stage_local_file(
+                local_path,
+                display_name=os.path.basename(local_path)
+            )
+            relative_url = artifact_service.build_upload_temp_download_relative_url(staged_path)
+
+            command = self._build_http_receive_command({
+                'relative_url': relative_url,
+                'filename': safe_name,
+                'save_dir': remote_path,
+            })
+
+            result_iter = session.send_command(
+                command,
+                type='command',
+                extra=None,
+                history_entry_id=history_entry_id
+            )
+
+            for item in result_iter:
+                yield item
+        finally:
+            try:
+                artifact_service.cleanup_upload_temp_file(staged_path)
+            except Exception:
+                pass

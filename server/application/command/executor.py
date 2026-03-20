@@ -56,17 +56,31 @@ class CommandExecutor:
         },
     ]
 
-    def __init__(self, conn, server):
+    def __init__(self, conn, server, use_foreground_guard: bool = False, foreground_source: str = 'cli'):
         self.conn = conn
         self.server = server
         self.current_history_entry_id = ''
         self.remote_execution_service = RemoteExecutionService(server)
         self.plan_builder = CommandPlanBuilder(server.alias_manager)
+        self.use_foreground_guard = bool(use_foreground_guard)
+        self.foreground_source = (foreground_source or '').strip() or 'cli'
 
     def _yield_error(self, error):
         yield 0, str(error)
 
     def _execute_remote_plan(self, plan: dict):
+        if self.use_foreground_guard:
+            return partial(
+                self.remote_execution_service.stream_foreground_command,
+                self.conn,
+                plan.get('command', ''),
+                command_type=plan.get('command_type', 'command'),
+                extra=plan.get('extra'),
+                history_entry_id=self.current_history_entry_id,
+                task_type='command',
+                source=self.foreground_source,
+            )
+
         return partial(
             self.remote_execution_service.stream_command,
             self.conn,

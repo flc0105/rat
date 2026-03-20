@@ -11,6 +11,10 @@ class WebRemoteFileService:
     - 预览下载：进入 artifact previews 区
     - client 在命令结果文本中返回 Artifact ID
     - server 再根据 Artifact ID 查询 artifact
+
+    规则：
+    - 所有这里发往 client 且同步等待结果流的前台请求
+      统一通过 foreground task 槽保护
     """
 
     RESULT_ARTIFACT_ID_PREFIX = 'Artifact ID:'
@@ -51,7 +55,12 @@ class WebRemoteFileService:
 
     def browse_directory(self, client_id: str, path: str = '') -> dict:
         command = self._build_command('browse_dir', {'path': path})
-        payload = self.remote_execution_service.run_json_command(client_id, command)
+        payload = self.remote_execution_service.run_foreground_json_command(
+            client_id,
+            command,
+            task_type='remote_file',
+            source='web_remote_file',
+        )
 
         return {
             'current_path': payload.get('current_path', ''),
@@ -64,7 +73,12 @@ class WebRemoteFileService:
             raise ValueError('path is required')
 
         command = self._build_command('delete_path', {'path': path})
-        result_text = self.remote_execution_service.run_text_command(client_id, command)
+        result_text = self.remote_execution_service.run_foreground_text_command(
+            client_id,
+            command,
+            task_type='remote_file',
+            source='web_remote_file',
+        )
 
         return {
             'path': path,
@@ -76,7 +90,12 @@ class WebRemoteFileService:
             raise ValueError('path is required')
 
         command = self._build_command('mkdir_path', {'path': path})
-        result_text = self.remote_execution_service.run_text_command(client_id, command)
+        result_text = self.remote_execution_service.run_foreground_text_command(
+            client_id,
+            command,
+            task_type='remote_file',
+            source='web_remote_file',
+        )
 
         return {
             'path': path,
@@ -93,7 +112,12 @@ class WebRemoteFileService:
             'old_path': old_path,
             'new_name': new_name
         })
-        result_text = self.remote_execution_service.run_text_command(client_id, command)
+        result_text = self.remote_execution_service.run_foreground_text_command(
+            client_id,
+            command,
+            task_type='remote_file',
+            source='web_remote_file',
+        )
 
         return {
             'old_path': old_path,
@@ -108,10 +132,12 @@ class WebRemoteFileService:
         normalized_path = path.strip()
         command = self._build_command('download_path', {'path': normalized_path})
 
-        result_text = self.remote_execution_service.run_text_command(
+        result_text = self.remote_execution_service.run_foreground_text_command(
             client_id,
             command,
             history_entry_id=history_entry_id,
+            task_type='remote_file',
+            source='web_remote_file',
         )
         artifact = self._resolve_artifact_from_result_text(result_text)
 
@@ -144,10 +170,12 @@ class WebRemoteFileService:
             'archive_name': archive_name,
         })
 
-        result_text = self.remote_execution_service.run_text_command(
+        result_text = self.remote_execution_service.run_foreground_text_command(
             client_id,
             command,
             history_entry_id=history_entry_id,
+            task_type='remote_file',
+            source='web_remote_file',
         )
         artifact = self._resolve_artifact_from_result_text(result_text)
 
@@ -164,10 +192,12 @@ class WebRemoteFileService:
         normalized_path = path.strip()
         command = self._build_command('preview_path', {'path': normalized_path})
 
-        result_text = self.remote_execution_service.run_text_command(
+        result_text = self.remote_execution_service.run_foreground_text_command(
             client_id,
             command,
             history_entry_id=history_entry_id,
+            task_type='remote_file',
+            source='web_remote_file',
         )
         artifact = self._resolve_artifact_from_result_text(result_text)
 

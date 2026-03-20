@@ -322,7 +322,12 @@ class Server:
         session.context.is_interactive = True
         self._print_unread_messages(session)
 
-        command_executor = CommandExecutor(session, self)
+        command_executor = CommandExecutor(
+            session,
+            self,
+            use_foreground_guard=True,
+            foreground_source='cli'
+        )
         try:
             while 1:
                 try:
