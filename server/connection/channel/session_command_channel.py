@@ -26,14 +26,32 @@ class ClientSessionCommandChannel:
             data['extra'] = extra
         return data
 
+    def build_cancel_payload(self, target_command_id: int) -> dict:
+        return {
+            'type': 'cancel',
+            'id': self.generate_message_id(),
+            'target_id': target_command_id,
+        }
+
     def send_command(self, command: str, type='command', extra=None, history_entry_id: str = ''):
         data = self.build_command_payload(command, type, extra)
 
         if history_entry_id:
             self.session.runtime.bind_history_entry(data.get('id'), history_entry_id)
 
+        bound_task = self.session.runtime.bind_foreground_command_id(data.get('id'))
+
         self.session.send(data)
+
+        if bound_task and bound_task.get('cancel_requested'):
+            self.send_cancel(data.get('id'))
+
         return self.wait_for_result(data.get('id'), command if type == 'command' else None)
+
+    def send_cancel(self, target_command_id: int):
+        data = self.build_cancel_payload(target_command_id)
+        self.session.send(data)
+        return data
 
     def wait_for_result(self, command_id: int, command: str = ''):
         yield from self.session.runtime.wait_for_result(self.session, command_id, command)

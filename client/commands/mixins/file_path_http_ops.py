@@ -3,6 +3,7 @@ import os
 
 import requests
 
+from client.commands.command_context import CommandCancelledError
 from client.config.config import UPLOAD_BASE_URL
 from core.utils.decorator import desc
 
@@ -51,6 +52,14 @@ class CommandFilePathHttpMixin:
 
         return payload
 
+    def _create_cancellable_http_session(self):
+        session = requests.Session()
+        self._register_cancel_handler(lambda: session.close())
+        return session
+
+    def _raise_if_cancelled_http(self):
+        self._ensure_not_cancelled()
+
     def _upload_file_to_server_via_http(
         self,
         file_path: str,
@@ -70,15 +79,31 @@ class CommandFilePathHttpMixin:
             extra=extra,
         )
 
-        with open(file_path, 'rb') as file_obj:
-            response = requests.post(
-                upload_url,
-                files={'file': (os.path.basename(file_path), file_obj)},
-                data=form_data,
-                timeout=self.HTTP_UPLOAD_TIMEOUT,
-            )
+        session = self._create_cancellable_http_session()
+        response = None
 
-        return response
+        try:
+            with open(file_path, 'rb') as file_obj:
+                response = session.post(
+                    upload_url,
+                    files={'file': (os.path.basename(file_path), file_obj)},
+                    data=form_data,
+                    timeout=self.HTTP_UPLOAD_TIMEOUT,
+                )
+            self._raise_if_cancelled_http()
+            return response
+        except CommandCancelledError:
+            raise
+        except requests.RequestException as e:
+            self._raise_if_cancelled_http()
+            raise e
+        finally:
+            try:
+                if response is not None:
+                    response.close()
+            except Exception:
+                pass
+            session.close()
 
     def _parse_http_upload_response(self, response):
         try:
@@ -119,6 +144,7 @@ class CommandFilePathHttpMixin:
         related_path: str = '',
         extra: dict | None = None,
     ):
+        self._ensure_not_cancelled()
         file_size = os.path.getsize(file_path)
 
         self._send_interim_result(1, f'Preparing HTTP upload: {file_path}', 0)
@@ -133,6 +159,7 @@ class CommandFilePathHttpMixin:
             extra=extra,
         )
         response.raise_for_status()
+        self._ensure_not_cancelled()
 
         payload = self._parse_http_upload_response(response)
         message = self._build_http_upload_success_message(
@@ -155,10 +182,12 @@ class CommandFilePathHttpMixin:
     ):
         temp_archive_path = ''
         try:
+            self._ensure_not_cancelled()
             temp_archive_path = self._create_zip_from_paths(
                 resolved_paths,
                 archive_name=archive_name
             )
+            self._ensure_not_cancelled()
             return self._upload_single_file_to_server_result(
                 temp_archive_path,
                 artifact_type=artifact_type,
@@ -175,14 +204,38 @@ class CommandFilePathHttpMixin:
                     pass
 
     def _download_file_from_http(self, url: str, target_path: str):
-        with requests.get(url, stream=True, timeout=self.HTTP_DOWNLOAD_TIMEOUT) as response:
+        session = self._create_cancellable_http_session()
+        response = None
+
+        try:
+            response = session.get(url, stream=True, timeout=self.HTTP_DOWNLOAD_TIMEOUT)
             response.raise_for_status()
 
             with open(target_path, 'wb') as file_obj:
                 for chunk in response.iter_content(chunk_size=self.HTTP_DOWNLOAD_CHUNK_SIZE):
+                    self._raise_if_cancelled_http()
                     if not chunk:
                         continue
                     file_obj.write(chunk)
+
+            self._raise_if_cancelled_http()
+        except CommandCancelledError:
+            try:
+                if os.path.isfile(target_path):
+                    os.remove(target_path)
+            except Exception:
+                pass
+            raise
+        except requests.RequestException as e:
+            self._raise_if_cancelled_http()
+            raise e
+        finally:
+            try:
+                if response is not None:
+                    response.close()
+            except Exception:
+                pass
+            session.close()
 
     @desc('Download a file by path', group='file_path', suggest=False)
     def download_path(self, path=''):
@@ -198,6 +251,8 @@ class CommandFilePathHttpMixin:
                 source_type='client_upload',
                 related_path=file_path,
             )
+        except CommandCancelledError:
+            return 0, 'Command cancelled'
         except Exception as e:
             return 0, f'Failed to download file via HTTP: {e}'
 
@@ -228,6 +283,8 @@ class CommandFilePathHttpMixin:
                 source_type='client_upload',
                 related_path=related_path,
             )
+        except CommandCancelledError:
+            return 0, 'Command cancelled'
         except Exception as e:
             return 0, f'Failed to download paths via HTTP: {e}'
 
@@ -245,17 +302,21 @@ class CommandFilePathHttpMixin:
                 source_type='client_upload',
                 related_path=file_path,
             )
+        except CommandCancelledError:
+            return 0, 'Command cancelled'
         except Exception as e:
             return 0, f'Failed to preview file via HTTP: {e}'
 
     @desc('Browse directory as JSON payload', group='file_path', suggest=False)
     def browse_dir(self, path=''):
         try:
+            self._ensure_not_cancelled()
             directory = self._require_existing_directory_from_arg(path)
 
             entries = []
             with os.scandir(directory) as iterator:
                 for entry in iterator:
+                    self._ensure_not_cancelled()
                     try:
                         entries.append(self._build_directory_entry(entry))
                     except Exception:
@@ -269,32 +330,41 @@ class CommandFilePathHttpMixin:
                 'entries': entries
             }
             return 1, json.dumps(payload, ensure_ascii=False)
+        except CommandCancelledError:
+            return 0, 'Command cancelled'
         except Exception as e:
             return 0, f'Failed to browse directory: {e}'
 
     @desc('Delete a file or directory', group='file_path', suggest=False)
     def delete_path(self, path=''):
         try:
+            self._ensure_not_cancelled()
             target_path = self._require_existing_path_from_arg(path)
             return self._delete_target_path(target_path)
+        except CommandCancelledError:
+            return 0, 'Command cancelled'
         except Exception as e:
             return 0, f'Failed to delete path: {e}'
 
     @desc('Create a directory', group='file_path', suggest=False)
     def mkdir_path(self, path=''):
         try:
+            self._ensure_not_cancelled()
             target_path = self._resolve_target_path(self._extract_path_arg(path))
             if not target_path:
                 return 0, 'Path is required'
 
             self._create_directory(target_path)
             return 1, f'Directory created: {target_path}'
+        except CommandCancelledError:
+            return 0, 'Command cancelled'
         except Exception as e:
             return 0, f'Failed to create directory: {e}'
 
     @desc('Rename a file or directory', group='file_path', suggest=False)
     def rename_path(self, arg=''):
         try:
+            self._ensure_not_cancelled()
             payload = self._decode_structured_arg(arg)
             if not isinstance(payload, dict):
                 return 0, 'Invalid rename payload'
@@ -309,5 +379,7 @@ class CommandFilePathHttpMixin:
                 new_path=new_path
             )
             return 1, f'Renamed to: {renamed_path}'
+        except CommandCancelledError:
+            return 0, 'Command cancelled'
         except Exception as e:
             return 0, f'Failed to rename path: {e}'

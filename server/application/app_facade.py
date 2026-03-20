@@ -173,6 +173,9 @@ class ServerWebService:
     def submit_web_command(self, client_id: str, command: str, tab_id: str = ''):
         return self.task_service.submit_web_command(client_id, command, tab_id=tab_id)
 
+    def cancel_web_task(self, task_id: str):
+        return self.task_service.cancel_web_task(task_id)
+
     def submit_web_upload(self, client_id: str, local_path: str, display_name: str, remote_path: str = '', tab_id: str = ''):
         return self.task_service.submit_web_upload(
             client_id,

@@ -8,7 +8,7 @@ class ClientInboundMessageDispatcher:
     - 返回接收线程是否需要立即 send_result
     """
 
-    IMMEDIATE_MESSAGE_TYPES = {'heartbeat', 'heartbeat_ack'}
+    IMMEDIATE_MESSAGE_TYPES = {'heartbeat', 'heartbeat_ack', 'cancel'}
     DEFERRED_MESSAGE_TYPES = {'command', 'script', 'acmd'}
 
     def __init__(self, connection):

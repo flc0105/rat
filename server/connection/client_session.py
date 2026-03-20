@@ -45,6 +45,9 @@ class ClientSession:
             history_entry_id=history_entry_id
         )
 
+    def send_cancel(self, target_command_id: int):
+        return self.command_channel.send_cancel(target_command_id)
+
     def handle_received_message(self, data: dict):
         return self.services.message_dispatcher.dispatch(data)
 
@@ -61,6 +64,9 @@ class ClientSession:
             source=source,
             task_id=task_id
         )
+
+    def request_foreground_task_cancel(self, task_id: str = ''):
+        return self.runtime.request_foreground_task_cancel(task_id=task_id)
 
     def release_foreground_task(self, task_id: str = '', command: str = '') -> None:
         self.runtime.release_foreground_task(task_id=task_id, command=command)

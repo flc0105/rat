@@ -20,6 +20,8 @@ class ForegroundTaskGuard:
             'command': (command or '').strip(),
             'source': (source or '').strip(),
             'task_id': (task_id or '').strip(),
+            'command_id': None,
+            'cancel_requested': False,
         }
 
         with self._lock:
@@ -32,6 +34,27 @@ class ForegroundTaskGuard:
 
             self._task = task_info
             return dict(task_info)
+
+    def bind_command_id(self, command_id: int):
+        with self._lock:
+            if self._task is None:
+                return None
+
+            self._task['command_id'] = command_id
+            return dict(self._task)
+
+    def request_cancel(self, task_id: str = ''):
+        task_id = (task_id or '').strip()
+
+        with self._lock:
+            if self._task is None:
+                return None
+
+            if task_id and self._task.get('task_id') and self._task.get('task_id') != task_id:
+                return None
+
+            self._task['cancel_requested'] = True
+            return dict(self._task)
 
     def release(self, task_id: str = '', command: str = '') -> None:
         task_id = (task_id or '').strip()

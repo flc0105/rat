@@ -1,7 +1,9 @@
 import inspect
 import platform
+import threading
 
 from client.commands.argument_command_registry import ArgumentCommandRegistry
+from client.commands.command_context import CommandExecutionContext
 from core.utils.parsing import parse
 
 
@@ -16,6 +18,9 @@ class CommandExecutor:
         self.socket = socket
         self.platform_commands = None
         self.argument_command_registry = None
+
+        self._execution_contexts = {}
+        self._context_lock = threading.RLock()
 
     # ------------------ 平台命令加载 ------------------ #
     def _get_platform_name(self) -> str:
@@ -46,12 +51,40 @@ class CommandExecutor:
             self.platform_commands = command_class(self.socket)
         return self.platform_commands
 
+    def _get_or_create_execution_context(self, command_id):
+        with self._context_lock:
+            context = self._execution_contexts.get(command_id)
+            if context is None:
+                context = CommandExecutionContext(command_id)
+                self._execution_contexts[command_id] = context
+            return context
+
+    def _clear_execution_context(self, command_id):
+        with self._context_lock:
+            self._execution_contexts.pop(command_id, None)
+
+    def cancel_command(self, command_id: int) -> bool:
+        """
+        请求取消指定命令
+        """
+        with self._context_lock:
+            context = self._execution_contexts.get(command_id)
+
+        if context is None:
+            return False
+
+        return context.request_cancel()
+
     def _prepare_commands(self, command_id):
         """
         获取命令实例并绑定当前 command_id
         """
         commands = self.get_commands()
-        commands.command_id = command_id
+        execution_context = self._get_or_create_execution_context(command_id)
+        if hasattr(commands, 'bind_execution'):
+            commands.bind_execution(command_id, execution_context)
+        else:
+            commands.command_id = command_id
         return commands
 
     def get_argument_command_registry(self):
@@ -90,6 +123,12 @@ class CommandExecutor:
             return func(arg)
         return func()
 
+    def _execute_with_cleanup(self, command_id, invoke):
+        try:
+            return invoke()
+        finally:
+            self._clear_execution_context(command_id)
+
     def execute_command(self, command_id, command):
         """
         执行命令
@@ -97,15 +136,18 @@ class CommandExecutor:
         :param command: 命令字符串
         :return: 执行结果元组（状态和消息）
         """
-        name, arg = parse(command)
-        commands = self._prepare_commands(command_id)
+        def _invoke():
+            name, arg = parse(command)
+            commands = self._prepare_commands(command_id)
 
-        builtin_command = self._resolve_builtin_command(commands, name)
-        if builtin_command:
-            return self._invoke_command_method(builtin_command, arg)
+            builtin_command = self._resolve_builtin_command(commands, name)
+            if builtin_command:
+                return self._invoke_command_method(builtin_command, arg)
 
-        default_command = self._resolve_default_command(commands, command)
-        return default_command()
+            default_command = self._resolve_default_command(commands, command)
+            return default_command()
+
+        return self._execute_with_cleanup(command_id, _invoke)
 
     def execute_argument_command(self, command_id, payload: dict):
         """
@@ -114,14 +156,20 @@ class CommandExecutor:
         :param payload: 结构化命令负载
         :return: 执行结果元组（状态和消息）
         """
-        self._prepare_commands(command_id)
-        registry = self.get_argument_command_registry()
-        return registry.execute(payload)
+        def _invoke():
+            self._prepare_commands(command_id)
+            registry = self.get_argument_command_registry()
+            return registry.execute(payload)
+
+        return self._execute_with_cleanup(command_id, _invoke)
 
     def execute_script_command(self, command_id, script_text: str, kwargs=None):
         """
         执行 script 消息
         统一通过 CommandExecutor 入口分发，避免绕过命令执行器
         """
-        commands = self._prepare_commands(command_id)
-        return commands.pyexec(script_text, kwargs=kwargs)
+        def _invoke():
+            commands = self._prepare_commands(command_id)
+            return commands.pyexec(script_text, kwargs=kwargs)
+
+        return self._execute_with_cleanup(command_id, _invoke)

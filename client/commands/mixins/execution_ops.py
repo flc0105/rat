@@ -8,6 +8,7 @@ import sys
 import threading
 import time
 
+from client.commands.command_context import CommandCancelledError
 from core.utils.decorator import desc
 
 
@@ -15,6 +16,7 @@ class CommandExecutionMixin:
     DEFAULT_SHELL_TIMEOUT = 30
     DEFAULT_STREAM_TIMEOUT = 300
     PROCESS_KILL_GRACE_SECONDS = 2
+    PROCESS_WAIT_POLL_INTERVAL = 0.2
 
     # ------------------ 通用输出/子进程工具 ------------------ #
     def _get_default_encoding(self):
@@ -29,6 +31,9 @@ class CommandExecutionMixin:
         """
         encoding = self._get_default_encoding()
         while True:
+            if self._is_cancel_requested():
+                break
+
             line = stream.readline()
             if not line:
                 break
@@ -76,6 +81,28 @@ class CommandExecutionMixin:
         except Exception:
             pass
 
+    def _wait_process_with_cancel_support(self, process: subprocess.Popen, timeout=None):
+        """
+        支持取消/超时的进程等待
+        """
+        started_at = time.monotonic()
+        effective_timeout = timeout
+
+        while True:
+            self._ensure_not_cancelled()
+
+            return_code = process.poll()
+            if return_code is not None:
+                return return_code
+
+            if effective_timeout is not None:
+                elapsed = time.monotonic() - started_at
+                if elapsed >= effective_timeout:
+                    self._terminate_process(process)
+                    raise subprocess.TimeoutExpired(process.args, effective_timeout)
+
+            time.sleep(self.PROCESS_WAIT_POLL_INTERVAL)
+
     def _run_shell_command(self, command, timeout=None):
         """
         执行一次性 shell 命令
@@ -94,16 +121,26 @@ class CommandExecutionMixin:
             errors='replace',
             **self._build_process_creation_kwargs()
         )
+        self._register_cancel_handler(lambda: self._terminate_process(process))
 
         try:
-            stdout, stderr = process.communicate(timeout=effective_timeout)
+            self._wait_process_with_cancel_support(process, timeout=effective_timeout)
+            stdout, stderr = process.communicate()
+            self._ensure_not_cancelled()
+
             return subprocess.CompletedProcess(
                 args=command,
                 returncode=process.returncode,
                 stdout=stdout,
                 stderr=stderr
             )
+        except CommandCancelledError:
+            self._terminate_process(process)
+            raise
         except subprocess.TimeoutExpired:
+            self._terminate_process(process)
+            raise
+        except Exception:
             self._terminate_process(process)
             raise
 
@@ -111,7 +148,7 @@ class CommandExecutionMixin:
         """
         启动带流式输出的子进程
         """
-        return subprocess.Popen(
+        process = subprocess.Popen(
             command,
             shell=True,
             stdout=subprocess.PIPE,
@@ -119,6 +156,8 @@ class CommandExecutionMixin:
             stdin=subprocess.DEVNULL,
             **self._build_process_creation_kwargs()
         )
+        self._register_cancel_handler(lambda: self._terminate_process(process))
+        return process
 
     def _start_output_threads(self, process):
         """
@@ -137,11 +176,7 @@ class CommandExecutionMixin:
         等待流式子进程结束；超时则强制终止
         """
         effective_timeout = self.DEFAULT_STREAM_TIMEOUT if timeout is None else timeout
-        try:
-            return process.wait(timeout=effective_timeout)
-        except subprocess.TimeoutExpired:
-            self._terminate_process(process)
-            raise
+        return self._wait_process_with_cancel_support(process, timeout=effective_timeout)
 
     def _build_restart_command(self):
         """
@@ -191,18 +226,24 @@ class CommandExecutionMixin:
     @desc('Change working directory', group='shell')
     def cd(self, path):
         try:
+            self._ensure_not_cancelled()
             os.chdir(path)
             return 1, ""
+        except CommandCancelledError:
+            return 0, 'Command cancelled'
         except Exception as e:
             return 0, f'Failed to change directory: {e}'
 
     @desc('Run a shell command', group='shell')
     def shell(self, command):
         try:
+            self._ensure_not_cancelled()
             result = self._run_shell_command(command)
             if result.returncode == 0:
                 return 1, result.stdout
             return 0, result.stderr or f'Command exited with code {result.returncode}'
+        except CommandCancelledError:
+            return 0, 'Command cancelled'
         except subprocess.TimeoutExpired:
             return 0, 'Command timed out and was terminated'
         except Exception as e:
@@ -218,27 +259,34 @@ class CommandExecutionMixin:
             return 0, 'Usage: spawn <program ...>'
 
         try:
+            self._ensure_not_cancelled()
             process = self._spawn_background_process(command_text)
             return 1, (
                 f'Background process started\n'
                 f'PID: {process.pid}\n'
                 f'Command: {command_text}'
             )
+        except CommandCancelledError:
+            return 0, 'Command cancelled'
         except Exception as e:
             return 0, f'Failed to start background process: {e}'
 
     @desc('Run a command with live output', group='shell')
     def read(self, command):
         try:
+            self._ensure_not_cancelled()
             process = self._start_stream_process(command)
             self._start_output_threads(process)
             self._wait_stream_process(process)
             time.sleep(0.1)
+            self._ensure_not_cancelled()
 
             if process.returncode == 0:
                 self._send_final_result(1, "Command completed")
             else:
                 self._send_final_result(0, f'Command exited with code {process.returncode}')
+        except CommandCancelledError:
+            self._send_final_result(0, 'Command cancelled')
         except subprocess.TimeoutExpired:
             self._send_final_result(0, 'Command timed out and was terminated')
         except Exception as e:
@@ -248,10 +296,22 @@ class CommandExecutionMixin:
     def pyexec(self, code, kwargs=None):
         if kwargs is None:
             kwargs = {}
-        output = io.StringIO()
-        with contextlib.redirect_stdout(output), contextlib.redirect_stderr(output):
-            exec(code, kwargs)
-        return 1, output.getvalue()
+
+        try:
+            self._ensure_not_cancelled()
+            output = io.StringIO()
+            kwargs = dict(kwargs)
+            kwargs['_command_context'] = self._get_execution_context()
+
+            with contextlib.redirect_stdout(output), contextlib.redirect_stderr(output):
+                exec(code, kwargs)
+
+            self._ensure_not_cancelled()
+            return 1, output.getvalue()
+        except CommandCancelledError:
+            return 0, 'Command cancelled'
+        except Exception as e:
+            return 0, f'Failed to execute python code: {e}'
 
     # ------------------ 连接控制 ------------------ #
     @desc('Terminate current session', group='session')

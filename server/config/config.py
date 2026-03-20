@@ -26,7 +26,7 @@ COMMAND_HISTORY_MAX_ENTRIES_PER_HOST = 300
 # ------------------ web files ------------------ #
 WEB_FILES_ROOT_DIR = os.path.abspath(os.path.join('runtime', 'web_files'))
 WEB_PREVIEW_TEXT_MAX_BYTES = 200 * 1024
-WEB_HTTP_UPLOAD_MAX_BYTES = 50 * 1024 * 1024
+WEB_HTTP_UPLOAD_MAX_BYTES = 10 * 1024 * 1024 * 1024  # 10GB
 WEB_CLEAR_PREVIEW_CACHE_ON_STARTUP = True
 
 WEB_PUBLIC_BASE_URL = 'http://127.0.0.1:8085'

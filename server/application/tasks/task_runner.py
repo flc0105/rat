@@ -57,6 +57,8 @@ class WebTaskRunner:
         发布 Web 任务完成事件
         """
         target_tab_id = self._get_task_tab_id(task_id)
+        task = self.task_store.get_task(task_id) or {}
+        task_status = task.get('status') or ('success' if ok else 'error')
 
         self.event_bus.publish(
             'command_complete',
@@ -65,6 +67,9 @@ class WebTaskRunner:
                 'client_id': client_id,
                 'command': command,
                 'success': ok,
+                'status': task_status,
+                'cancel_requested': bool(task.get('cancel_requested')),
+                'cancelled': task_status == 'cancelled',
                 'time': datetime.now().isoformat()
             },
             target_tab_id=target_tab_id
@@ -124,7 +129,7 @@ class WebTaskRunner:
                 self.remote_execution_service.finalize_history_entry(
                     conn,
                     history_entry_id,
-                    ok,
+                    ok and not self.task_store.is_task_cancelled(task_id),
                     cwd_end=conn.info.get('cwd', '')
                 )
 

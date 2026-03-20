@@ -32,6 +32,7 @@ class WebTaskStore:
             'command': command,
             'tab_id': (tab_id or '').strip(),
             'status': 'running',
+            'cancel_requested': False,
             'created_at': datetime.now().isoformat(),
             'finished_at': None,
             'history_entry_id': '',
@@ -40,6 +41,20 @@ class WebTaskStore:
         with self._lock:
             self._tasks[task_id] = task
         return task
+
+    def request_cancel(self, task_id: str) -> dict | None:
+        """
+        请求取消任务
+        """
+        with self._lock:
+            task = self._tasks.get(task_id)
+            if not task:
+                return None
+
+            task['cancel_requested'] = True
+            if task.get('status') == 'running':
+                task['status'] = 'cancelling'
+            return dict(task)
 
     def append_chunk(self, task_id: str, status: int, text: str) -> None:
         """
@@ -63,15 +78,30 @@ class WebTaskStore:
             task = self._tasks.get(task_id)
             if not task:
                 return
-            task['status'] = 'success' if ok else 'error'
+
+            if task.get('cancel_requested'):
+                task['status'] = 'cancelled'
+            else:
+                task['status'] = 'success' if ok else 'error'
+
             task['finished_at'] = datetime.now().isoformat()
+
+    def is_task_cancelled(self, task_id: str) -> bool:
+        with self._lock:
+            task = self._tasks.get(task_id)
+            if not task:
+                return False
+            return task.get('status') == 'cancelled'
 
     def get_task(self, task_id: str):
         """
         获取任务信息
         """
         with self._lock:
-            return self._tasks.get(task_id)
+            task = self._tasks.get(task_id)
+            if task is None:
+                return None
+            return dict(task)
 
     def all_tasks(self):
         """

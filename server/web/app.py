@@ -1,10 +1,13 @@
 import json
 import os
 import queue
+import traceback
 from datetime import datetime
 
 from flask import Flask, Response, jsonify, request, send_file, send_from_directory, stream_with_context
+from werkzeug.exceptions import RequestEntityTooLarge
 
+from core.utils.logger import logger
 from server.config.config import WEB_HTTP_UPLOAD_MAX_BYTES
 from server.web.routes.background_jobs import create_background_job_blueprint
 
@@ -51,7 +54,11 @@ def create_app(server_instance):
             return _fail(e, 400)
         except FileNotFoundError as e:
             return _fail(e, 404)
+        except RequestEntityTooLarge as e:
+            return _fail('File is too large', 413)
         except Exception as e:
+            logger.error(f'Web API error: {e}', exc_info=True)
+            traceback.print_exc()
             return _fail(e, default_error_status)
 
     def _file_endpoint(func):
@@ -174,6 +181,13 @@ def create_app(server_instance):
             )
 
         return _json_endpoint(_execute, default_error_status=500)
+
+    @app.post('/api/tasks/<task_id>/cancel')
+    def cancel_task(task_id):
+        return _json_endpoint(
+            lambda: web_service.cancel_web_task(task_id),
+            default_error_status=500
+        )
 
     @app.get('/api/connections/<client_id>/command-candidates')
     def get_command_candidates(client_id):

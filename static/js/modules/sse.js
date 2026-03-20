@@ -119,6 +119,8 @@ window.AppSseModule = {
                     is_transfer_active: false,
                 });
 
+                this.clearActiveTask(clientId);
+
                 ElementPlus.ElNotification({
                     title: 'Device Offline',
                     message: `${(conn && conn.hostname) || clientId} went offline`,
@@ -139,12 +141,26 @@ window.AppSseModule = {
 
             es.addEventListener('command_complete', async (event) => {
                 const payload = JSON.parse(event.data);
+                const statusText = String(payload.status || '').trim();
+
+                let finishText = 'Failed';
+                let finishKind = 'error';
+
+                if (statusText === 'cancelled' || payload.cancelled) {
+                    finishText = 'Cancelled';
+                    finishKind = 'info';
+                } else if (payload.success) {
+                    finishText = 'Success';
+                    finishKind = 'success';
+                }
 
                 this.appendOutput(
                     payload.client_id,
-                    `[Command finished] ${payload.command} (${payload.success ? 'Success' : 'Failed'})`,
-                    payload.success ? 'success' : 'error'
+                    `[Command finished] ${payload.command} (${finishText})`,
+                    finishKind
                 );
+
+                this.clearActiveTask(payload.client_id, payload.task_id);
 
                 const pendingRefresh = this.pendingRemoteUploadRefresh;
                 if (

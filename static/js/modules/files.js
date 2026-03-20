@@ -247,6 +247,8 @@ window.AppFilesModule = {
                 }
 
                 const taskId = json.data && json.data.task_id;
+                this.setActiveTask(this.selectedId, taskId || '');
+
                 this.pendingRemoteUploadRefresh = {
                     taskId: taskId || '',
                     clientId: this.selectedId,

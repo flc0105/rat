@@ -21,6 +21,9 @@ class BaseMessageRouter:
         if message_type == 'acmd':
             return self.handle_acmd_message(data)
 
+        if message_type == 'cancel':
+            return self.handle_cancel_message(data)
+
         if message_type == 'heartbeat':
             return self.handle_heartbeat_message(data)
 
@@ -39,6 +42,9 @@ class BaseMessageRouter:
         return None
 
     def handle_acmd_message(self, data: dict):
+        return None
+
+    def handle_cancel_message(self, data: dict):
         return None
 
     def handle_heartbeat_message(self, data: dict):

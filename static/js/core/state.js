@@ -18,6 +18,8 @@ window.AppStateModule = {
             selectedCommandExecutionEntryId: '',
             commandExecutionOutputSortOrder: 'desc',
             sending: false,
+            activeTaskIds: {},
+            cancellingTaskIds: {},
             eventSource: null,
             sseReady: false,
             statusNowTick: Date.now(),
@@ -76,6 +78,18 @@ window.AppStateModule = {
 
         currentOutputLines() {
             return this.outputs[this.selectedId] || [];
+        },
+
+        currentActiveTaskId() {
+            return this.activeTaskIds[this.selectedId] || '';
+        },
+
+        currentTaskIsCancelling() {
+            return !!this.cancellingTaskIds[this.selectedId];
+        },
+
+        hasRunningWebTask() {
+            return !!this.currentActiveTaskId;
         },
 
         filteredRemoteFilesEntries() {

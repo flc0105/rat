@@ -37,6 +37,20 @@ class ClientInboundMessageRouter(BaseMessageRouter):
             return command_id, *result
         return None
 
+    def handle_cancel_message(self, data: dict):
+        target_command_id = data.get('target_id')
+        cancelled = self.connection.command_executor.cancel_command(target_command_id)
+        if cancelled:
+            self.connection.send({
+                'type': 'cancel_ack',
+                'id': data.get('id'),
+                'target_id': target_command_id,
+                'accepted': True,
+                'cwd': os.getcwd(),
+                'client_ts': time.time(),
+            })
+        return None
+
     def handle_heartbeat_message(self, data: dict):
         self.connection.send({
             'type': 'heartbeat_ack',

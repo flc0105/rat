@@ -59,6 +59,18 @@ class ClientSessionRuntime:
             task_id=task_id,
         )
 
+    def bind_foreground_command_id(self, command_id: int):
+        """
+        将实际下发的 command_id 绑定到当前前台任务
+        """
+        return self._foreground_task_guard.bind_command_id(command_id)
+
+    def request_foreground_task_cancel(self, task_id: str = ''):
+        """
+        请求取消当前前台任务
+        """
+        return self._foreground_task_guard.request_cancel(task_id=task_id)
+
     def release_foreground_task(self, task_id: str = '', command: str = '') -> None:
         """
         释放当前连接的前台执行槽。

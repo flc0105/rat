@@ -129,6 +129,15 @@
                                         <el-button size="small" class="tool-btn" @click="clearOutput">Clear</el-button>
                                         <el-button size="small" class="tool-btn" @click="scrollToBottom">Bottom
                                         </el-button>
+                                        <el-button
+                                                size="small"
+                                                class="tool-btn tool-btn-danger"
+                                                :disabled="!hasRunningWebTask"
+                                                :loading="currentTaskIsCancelling"
+                                                @click="cancelCurrentTask"
+                                        >
+                                            Cancel
+                                        </el-button>
                                     </div>
                                 </div>
 
@@ -155,11 +164,12 @@
                                         </datalist>
                                         <button
                                                 class="run-button"
-                                                :disabled="sending"
+                                                :disabled="sending || hasRunningWebTask"
                                                 @click="sendCommand"
                                         >
-                                            <span v-if="!sending">Run</span>
-                                            <span v-else>...</span>
+                                            <span v-if="!sending && !hasRunningWebTask">Run</span>
+                                            <span v-else-if="sending">...</span>
+                                            <span v-else>Busy</span>
                                         </button>
                                     </div>
                                 </div>
