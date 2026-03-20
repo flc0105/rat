@@ -1,5 +1,6 @@
 from core.protocol.base_connection import BaseSessionConnection
 from server.connection.session_command_channel import ClientSessionCommandChannel
+from server.connection.session_context import ClientSessionContext
 from server.connection.session_runtime import ClientSessionRuntime
 from server.connection.session_services import ClientSessionServices
 
@@ -18,19 +19,12 @@ class ClientConnection(BaseSessionConnection):
         self.info = info or {}
 
         self.runtime = ClientSessionRuntime()
+        self.context = ClientSessionContext(
+            file_save_dir=file_save_dir,
+            on_file_saved=on_file_saved
+        )
         self.services = ClientSessionServices(self)
         self.command_channel = ClientSessionCommandChannel(self)
-
-        self.is_interactive = False
-
-        self.command_history = None
-
-        # web
-        self.on_unexpected_message = None
-
-        # web files
-        self.file_save_dir = file_save_dir
-        self.on_file_saved = on_file_saved
 
     # ------------------ 兼容旧属性访问 ------------------ #
     @property
@@ -60,6 +54,46 @@ class ClientConnection(BaseSessionConnection):
     @property
     def artifact_ingest_service(self):
         return self.services.artifact_ingest_service
+
+    @property
+    def is_interactive(self):
+        return self.context.is_interactive
+
+    @is_interactive.setter
+    def is_interactive(self, value):
+        self.context.is_interactive = bool(value)
+
+    @property
+    def command_history(self):
+        return self.context.command_history
+
+    @command_history.setter
+    def command_history(self, value):
+        self.context.command_history = value
+
+    @property
+    def on_unexpected_message(self):
+        return self.context.on_unexpected_message
+
+    @on_unexpected_message.setter
+    def on_unexpected_message(self, value):
+        self.context.on_unexpected_message = value
+
+    @property
+    def file_save_dir(self):
+        return self.context.file_save_dir
+
+    @file_save_dir.setter
+    def file_save_dir(self, value):
+        self.context.file_save_dir = value
+
+    @property
+    def on_file_saved(self):
+        return self.context.on_file_saved
+
+    @on_file_saved.setter
+    def on_file_saved(self, value):
+        self.context.on_file_saved = value
 
     # ------------------ compatibility for old callers ------------------ #
     def _generate_message_id(self) -> int:
