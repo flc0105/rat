@@ -26,11 +26,11 @@ class ArtifactIngestService:
         """
         接收客户端上传的文件并注册为 artifact
         """
-        file_context = self.connection.pop_file_receive_context(command_id)
+        file_context = self.connection.runtime.pop_file_receive_context(command_id)
         if not isinstance(file_context, FileReceiveContext):
             file_context = FileReceiveContext.from_dict(None)
 
-        on_file_saved = file_context.on_file_saved or self.connection.on_file_saved
+        on_file_saved = file_context.on_file_saved or self.connection.context.on_file_saved
         capture_result = file_context.capture_result
 
         artifact_service = getattr(self.connection, 'artifact_service', None)
@@ -62,7 +62,7 @@ class ArtifactIngestService:
             return 0, f'Error opening local file: {e}'
 
         try:
-            status, error = self.connection.file_receiver.receive_to_io(command_id, length, io)
+            status, error = self.connection.services.file_receiver.receive_to_io(command_id, length, io)
             if status != 1:
                 self._rollback_artifact_files(file_path, meta_path)
                 return 0, f'Error receiving file from {self.connection.address}: {error}'

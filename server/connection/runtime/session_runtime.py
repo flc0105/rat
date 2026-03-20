@@ -67,18 +67,6 @@ class ClientSessionRuntime:
     def acquire_foreground_task(self, task_type: str, command: str, source: str = '', task_id: str = '') -> dict:
         """
         尝试占用当前连接的前台执行槽。
-
-        Args:
-            task_type: 任务类型，如 command / upload
-            command: 展示用命令文本
-            source: 来源，如 cli / web
-            task_id: 可选的 web task_id
-
-        Returns:
-            当前占用信息 dict
-
-        Raises:
-            RuntimeError: 当前连接已被其他前台任务占用
         """
         return self._foreground_task_guard.acquire(
             task_type=task_type,
@@ -90,9 +78,6 @@ class ClientSessionRuntime:
     def release_foreground_task(self, task_id: str = '', command: str = '') -> None:
         """
         释放当前连接的前台执行槽。
-
-        可按 task_id 或 command 做保护性匹配，避免误释放别人的占用。
-        若未传匹配条件，则直接释放当前占用。
         """
         self._foreground_task_guard.release(task_id=task_id, command=command)
 
@@ -106,12 +91,6 @@ class ClientSessionRuntime:
     def wait_for_result(self, connection, command_id: int, command: Optional[str]):
         """
         主线程等待接收结果，并保存执行记录
-
-        Args:
-            connection: 外层 ClientConnection，用于 finally 中清理 history binding
-            command_id: 命令 id
-            command: 命令文本
-        :return: 结果生成器
         """
         self.pending_command_ids.put(command_id)
 
@@ -124,6 +103,6 @@ class ClientSessionRuntime:
                     break
         finally:
             try:
-                connection.clear_history_entry(command_id)
+                self.clear_history_entry(command_id)
             except Exception:
                 pass

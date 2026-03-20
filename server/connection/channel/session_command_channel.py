@@ -1,6 +1,5 @@
 import ntpath
 import os
-from typing import Generator
 
 
 class ClientSessionCommandChannel:
@@ -59,7 +58,7 @@ class ClientSessionCommandChannel:
         return data
 
     # ------------------ command / file send ------------------ #
-    def send_command(self, command: str, type='command', extra=None, history_entry_id: str = '') -> Generator:
+    def send_command(self, command: str, type='command', extra=None, history_entry_id: str = ''):
         """
         向客户端发送命令
 
@@ -72,12 +71,12 @@ class ClientSessionCommandChannel:
         data = self.build_command_payload(command, type, extra)
 
         if history_entry_id:
-            self.connection.bind_history_entry(data.get('id'), history_entry_id)
+            self.connection.runtime.bind_history_entry(data.get('id'), history_entry_id)
 
         self.connection.send(data)
         return self.wait_for_result(data.get('id'), command if type == 'command' else None)
 
-    def send_file(self, filename: str, save_dir: str = '', history_entry_id: str = '') -> Generator:
+    def send_file(self, filename: str, save_dir: str = '', history_entry_id: str = ''):
         """
         向客户端发送文件
 
@@ -89,7 +88,7 @@ class ClientSessionCommandChannel:
         data = self.build_file_payload(filename, save_dir)
 
         if history_entry_id:
-            self.connection.bind_history_entry(data.get('id'), history_entry_id)
+            self.connection.runtime.bind_history_entry(data.get('id'), history_entry_id)
 
         self.connection.send_file_by_header(data, filename)
         return self.wait_for_result(data.get('id'), 'upload ' + filename)

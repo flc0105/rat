@@ -26,94 +26,6 @@ class ClientConnection(BaseSessionConnection):
         self.services = ClientSessionServices(self)
         self.command_channel = ClientSessionCommandChannel(self)
 
-    # ------------------ 兼容旧属性访问 ------------------ #
-    @property
-    def pending_command_ids(self):
-        return self.runtime.pending_command_ids
-
-    @property
-    def message_queue(self):
-        return self.runtime.message_queue
-
-    @property
-    def result_dispatcher(self):
-        return self.services.result_dispatcher
-
-    @property
-    def message_router(self):
-        return self.services.message_router
-
-    @property
-    def message_dispatcher(self):
-        return self.services.message_dispatcher
-
-    @property
-    def file_receiver(self):
-        return self.services.file_receiver
-
-    @property
-    def artifact_ingest_service(self):
-        return self.services.artifact_ingest_service
-
-    @property
-    def is_interactive(self):
-        return self.context.is_interactive
-
-    @is_interactive.setter
-    def is_interactive(self, value):
-        self.context.is_interactive = bool(value)
-
-    @property
-    def command_history(self):
-        return self.context.command_history
-
-    @command_history.setter
-    def command_history(self, value):
-        self.context.command_history = value
-
-    @property
-    def on_unexpected_message(self):
-        return self.context.on_unexpected_message
-
-    @on_unexpected_message.setter
-    def on_unexpected_message(self, value):
-        self.context.on_unexpected_message = value
-
-    @property
-    def file_save_dir(self):
-        return self.context.file_save_dir
-
-    @file_save_dir.setter
-    def file_save_dir(self, value):
-        self.context.file_save_dir = value
-
-    @property
-    def on_file_saved(self):
-        return self.context.on_file_saved
-
-    @on_file_saved.setter
-    def on_file_saved(self, value):
-        self.context.on_file_saved = value
-
-    # ------------------ compatibility for old callers ------------------ #
-    def _generate_message_id(self) -> int:
-        """
-        兼容旧调用入口：生成连接内唯一消息 ID
-        """
-        return self.command_channel.generate_message_id()
-
-    def _build_command_payload(self, command: str, command_type: str = 'command', extra=None) -> dict:
-        """
-        兼容旧调用入口：构造命令消息
-        """
-        return self.command_channel.build_command_payload(command, command_type, extra)
-
-    def _build_file_payload(self, filename: str, save_dir: str = '') -> dict:
-        """
-        兼容旧调用入口：构造文件消息头
-        """
-        return self.command_channel.build_file_payload(filename, save_dir)
-
     # ------------------ history binding ------------------ #
     def bind_history_entry(self, command_id: int, entry_id: str):
         """
@@ -137,15 +49,15 @@ class ClientConnection(BaseSessionConnection):
         """
         将接收到的文件挂到对应执行记录上
         """
-        if self.command_history is None:
+        if self.context.command_history is None:
             return
 
-        entry_id = self.get_history_entry_id(command_id)
+        entry_id = self.runtime.get_history_entry_id(command_id)
         if not entry_id:
             return
 
         try:
-            self.command_history.append_file_for_connection(self, entry_id, file_info)
+            self.context.command_history.append_file_for_connection(self, entry_id, file_info)
         except Exception:
             pass
 
@@ -222,10 +134,3 @@ class ClientConnection(BaseSessionConnection):
         获取当前连接的前台占用信息快照
         """
         return self.runtime.get_foreground_task()
-
-    # ------------------ result wait ------------------ #
-    def wait_for_result(self, id: int, command: str = ''):
-        """
-        主线程等待接收结果，并保存执行记录
-        """
-        yield from self.command_channel.wait_for_result(id, command)

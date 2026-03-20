@@ -173,7 +173,7 @@ class CommandExecutor:
                 history_entry_id=self.current_history_entry_id
             )
         except Exception:
-            self.conn.pending_command_ids.clear()
+            self.conn.runtime.pending_command_ids.clear()
             raise
 
     # ------------------ exec ------------------ #

@@ -40,13 +40,13 @@ class WebConnectionService:
         创建并配置带 Web 能力的客户端连接对象
         """
         connection = ClientConnection(conn, addr, info)
-        connection.command_history = self.server.command_history
+        connection.context.command_history = self.server.command_history
         connection.artifact_service = self.artifact_service
 
-        connection.on_file_saved = (
+        connection.context.on_file_saved = (
             lambda artifact_info: self.publish_file_received(info.get('id'), artifact_info)
         )
-        connection.on_unexpected_message = (
+        connection.context.on_unexpected_message = (
             lambda status, text, end: self.publish_background_message(connection, status, text, end)
         )
         return connection

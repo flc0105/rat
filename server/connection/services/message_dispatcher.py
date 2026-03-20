@@ -16,9 +16,6 @@ class ServerInboundMessageDispatcher:
     def dispatch(self, data: dict):
         """
         调度一条收到的消息。
-
-        返回值：
-        - None: 该消息已处理完成，调用方无需额外动作
         """
         message_type = data.get('type')
 
@@ -34,7 +31,7 @@ class ServerInboundMessageDispatcher:
         - result
         - file
         """
-        return self.connection.message_router.dispatch(data)
+        return self.connection.services.message_router.dispatch(data)
 
     def _dispatch_unknown_message(self, data: dict):
         """

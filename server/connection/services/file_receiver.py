@@ -12,10 +12,10 @@ class ClientFileReceiver:
 
     def save_file(self, command_id, filename, length):
         """
-        兼容旧调用入口：
+        兼容当前调用入口：
         当前正式文件接收由 ArtifactIngestService 编排。
         """
-        return self.connection.artifact_ingest_service.receive_artifact_file(
+        return self.connection.services.artifact_ingest_service.receive_artifact_file(
             command_id,
             filename,
             length

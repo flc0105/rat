@@ -129,7 +129,7 @@ class Server:
         """
         通知等待中的主线程：该连接已关闭
         """
-        conn.message_queue.put(0, None, 1)
+        conn.runtime.message_queue.put(0, None, 1)
 
     def _remove_connection(self, conn: ClientConnection):
         """
@@ -227,8 +227,8 @@ class Server:
         """
         输出连接的未读消息
         """
-        while not conn.message_queue.empty():
-            logger.info('[UNREAD] ' + str(conn.message_queue.get()[1]))
+        while not conn.runtime.message_queue.empty():
+            logger.info('[UNREAD] ' + str(conn.runtime.message_queue.get()[1]))
 
     def _handle_interactive_control_command(self, conn: ClientConnection, cmd: str) -> bool:
         """
@@ -304,7 +304,7 @@ class Server:
         :param conn: 连接
         """
         print('[+] Connected to {}'.format(conn.address))
-        conn.is_interactive = True
+        conn.context.is_interactive = True
         self._print_unread_messages(conn)
 
         command_executor = CommandExecutor(conn, self)
@@ -329,7 +329,7 @@ class Server:
         except Exception as e:
             print_error(f'{e.__class__.__name__}: {e}')
         finally:
-            conn.is_interactive = False
+            conn.context.is_interactive = False
 
     # ------------------ 主控台命令 ------------------ #
     def _handle_console_command(self, cmd: str):

@@ -1,5 +1,5 @@
-from server.config.config import BACKGROUND_MESSAGE_OUTPUT_TO_FILE, BACKGROUND_MESSAGE_LOG_FILE
-from core.utils.logger import logger, get_file_logger
+from core.utils.logger import get_file_logger, logger
+from server.config.config import BACKGROUND_MESSAGE_LOG_FILE, BACKGROUND_MESSAGE_OUTPUT_TO_FILE
 
 if BACKGROUND_MESSAGE_OUTPUT_TO_FILE:
     file_logger = get_file_logger(BACKGROUND_MESSAGE_LOG_FILE)
@@ -32,27 +32,28 @@ class ServerResultDispatcher:
         """
         将预期命令结果写入结果队列
         """
-        self.connection.message_queue.put(status, text, end)
+        self.connection.runtime.message_queue.put(status, text, end)
 
     def _is_expected_result(self, command_id) -> bool:
         """
         判断当前结果是否属于队首等待中的命令
         """
-        pending_id = self.connection.pending_command_ids.peek_first()
+        pending_id = self.connection.runtime.pending_command_ids.peek_first()
         return command_id == pending_id
 
     def _handle_unexpected_message(self, status, text, end):
         """
         处理非预期消息
         """
-        if callable(self.connection.on_unexpected_message):
+        callback = self.connection.context.on_unexpected_message
+        if callable(callback):
             try:
-                self.connection.on_unexpected_message(status, text, end)
+                callback(status, text, end)
             except Exception:
                 pass
 
         # 如果交互态 且开启了背景消息写文件
-        if self.connection.is_interactive:
+        if self.connection.context.is_interactive:
             if BACKGROUND_MESSAGE_OUTPUT_TO_FILE:
                 file_logger.info(f'Message from {self.connection.address}: {text}')
             else:
@@ -65,4 +66,4 @@ class ServerResultDispatcher:
             return
 
         # 如果非交互态 没开背景消息 收到消息 直接存储到未读消息
-        self.connection.message_queue.put(status, text, end)
+        self.connection.runtime.message_queue.put(status, text, end)

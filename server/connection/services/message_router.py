@@ -22,7 +22,7 @@ class ServerInboundMessageRouter(BaseMessageRouter):
         处理命令执行结果消息
         """
         self.connection.info['cwd'] = data.get('cwd')
-        self.connection.result_dispatcher.dispatch_result(
+        self.connection.services.result_dispatcher.dispatch_result(
             data.get('id'),
             data.get('status'),
             data.get('text'),
@@ -39,7 +39,7 @@ class ServerInboundMessageRouter(BaseMessageRouter):
             data.get('filename'),
             data.get('length')
         )
-        self.connection.result_dispatcher.dispatch_result(
+        self.connection.services.result_dispatcher.dispatch_result(
             data.get('id'),
             status,
             text,

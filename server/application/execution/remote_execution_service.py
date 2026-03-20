@@ -226,13 +226,13 @@ class RemoteExecutionService:
         执行远程命令并接收 artifact
         """
         conn = self.get_connection(target)
-        command_id = conn._generate_message_id()
+        command_id = conn.command_channel.generate_message_id()
         capture_result = {}
 
         if history_entry_id:
-            conn.bind_history_entry(command_id, history_entry_id)
+            conn.runtime.bind_history_entry(command_id, history_entry_id)
 
-        conn.set_file_receive_context(
+        conn.runtime.set_file_receive_context(
             command_id,
             artifact_type=artifact_type,
             category=category,
@@ -249,7 +249,9 @@ class RemoteExecutionService:
             'text': command,
         })
 
-        status, text = self.collect_result(conn.wait_for_result(command_id, command))
+        status, text = self.collect_result(
+            conn.command_channel.wait_for_result(command_id, command)
+        )
         if status != 1:
             raise RuntimeError(text or 'Remote file fetch failed')
 
