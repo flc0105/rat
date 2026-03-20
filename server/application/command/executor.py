@@ -48,6 +48,12 @@ class CommandExecutor:
             'help': 'Clear command history for the current host',
             'source': 'server'
         },
+        {
+            'name': 'rtt',
+            'template': 'rtt',
+            'help': 'Show current heartbeat RTT / last seen state',
+            'source': 'server'
+        },
     ]
 
     def __init__(self, conn, server):
@@ -296,3 +302,20 @@ class CommandExecutor:
             return
 
         raise ValueError('Usage: history | history clear')
+
+    def rtt(self, _arg=''):
+        """
+        显示当前 heartbeat RTT / last seen 状态
+        """
+        payload = {
+            'connection_state': self.conn.context.connected_at and (
+                'offline' if self.conn.context.disconnected_at else 'online'
+            ) or 'unknown',
+            'connected_at': self.conn.context.connected_at or '',
+            'last_seen_at': self.conn.context.last_seen_at or '',
+            'last_heartbeat_sent_at': self.conn.context.last_heartbeat_sent_at or '',
+            'last_heartbeat_ack_at': self.conn.context.last_heartbeat_ack_at or '',
+            'last_rtt_ms': self.conn.context.last_rtt_ms if self.conn.context.last_rtt_ms is not None else '',
+            'last_heartbeat_id': self.conn.context.last_heartbeat_id if self.conn.context.last_heartbeat_id is not None else '',
+        }
+        yield 1, format_dict(payload)

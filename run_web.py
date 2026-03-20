@@ -9,6 +9,7 @@ def main():
     server = Server(SOCKET_ADDR)
 
     threading.Thread(target=server.serve, daemon=True).start()
+    threading.Thread(target=server.heartbeat_loop, daemon=True).start()
 
     app = create_app(server)
     app.run(host=WEB_HOST, port=WEB_PORT, threaded=True, debug=False)

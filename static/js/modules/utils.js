@@ -213,5 +213,56 @@ window.AppUtilsModule = {
 
             return sourceType || '-';
         },
+
+        getConnectionDisplayState(conn) {
+            const state = String(conn && conn.connection_state || '').trim();
+            if (state === 'offline') return 'offline';
+
+            const disconnectedAt = String(conn && conn.disconnected_at || '').trim();
+            if (disconnectedAt) return 'offline';
+
+            const lastSeenAt = String(conn && conn.last_seen_at || '').trim();
+            if (!lastSeenAt) return state || 'online';
+
+            const staleAfterSeconds = Number(conn && conn.stale_after_seconds || 45);
+            const seenMs = Date.parse(lastSeenAt);
+            if (!Number.isFinite(seenMs)) return state || 'online';
+
+            const ageMs = Math.max(this.statusNowTick - seenMs, 0);
+            if (ageMs > staleAfterSeconds * 1000) return 'stale';
+
+            return 'online';
+        },
+
+        getConnectionStatusDotClass(conn) {
+            const state = this.getConnectionDisplayState(conn);
+            if (state === 'online') return 'device-dot-online';
+            if (state === 'stale') return 'device-dot-stale';
+            return 'device-dot-offline';
+        },
+
+        getConnectionStatusText(conn) {
+            const state = this.getConnectionDisplayState(conn);
+            if (state === 'online') return 'online';
+            if (state === 'stale') return 'stale';
+            return 'offline';
+        },
+
+        formatConnectionLastSeen(conn) {
+            if (!conn) return '-';
+
+            const state = this.getConnectionDisplayState(conn);
+            if (state === 'offline') {
+                return this.formatDateTimeStandard(conn.disconnected_at) || '-';
+            }
+
+            return this.formatDateTimeStandard(conn.last_seen_at) || '-';
+        },
+
+        formatConnectionRtt(conn) {
+            const value = conn && conn.last_rtt_ms;
+            if (value === null || value === undefined || value === '') return '-';
+            return `${value} ms`;
+        },
     }
 };

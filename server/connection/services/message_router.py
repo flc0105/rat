@@ -44,3 +44,10 @@ class ServerInboundMessageRouter(BaseMessageRouter):
             text,
             1
         )
+
+    def handle_heartbeat_ack_message(self, data: dict) -> None:
+        """
+        处理客户端 heartbeat ack。
+        """
+        self.connection.info['cwd'] = data.get('cwd') or self.connection.info.get('cwd', '')
+        self.connection.services.heartbeat_service.handle_heartbeat_ack(data)

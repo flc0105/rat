@@ -26,6 +26,7 @@ class ServerConnection(BaseSessionConnection):
 
         self.command_executor = CommandExecutor(self)
         self.pending_message_queue = queue.Queue()
+        self.common_commands = CommonCommands(self)
 
         self.job_manager = JobManager(self)
         self.is_connected = False

@@ -5,17 +5,25 @@ window.AppSseModule = {
             if (idx === -1) {
                 this.connections.unshift(conn);
             } else {
-                this.connections[idx] = conn;
+                this.connections[idx] = {
+                    ...this.connections[idx],
+                    ...conn
+                };
             }
 
             if (!this.selectedId) this.selectedId = conn.client_id;
         },
 
         removeConnection(clientId) {
-            this.connections = this.connections.filter(item => item.client_id !== clientId);
-            if (this.selectedId === clientId) {
-                this.selectedId = this.connections.length ? this.connections[0].client_id : '';
-            }
+            const idx = this.connections.findIndex(item => item.client_id === clientId);
+            if (idx === -1) return;
+
+            const oldItem = this.connections[idx];
+            this.connections[idx] = {
+                ...oldItem,
+                connection_state: 'offline',
+                disconnected_at: oldItem.disconnected_at || new Date().toISOString()
+            };
         },
 
         initSSE() {
@@ -43,15 +51,25 @@ window.AppSseModule = {
             es.addEventListener('connection_offline', (event) => {
                 const payload = JSON.parse(event.data);
                 const clientId = payload.client_id;
-                const oldConn = this.connections.find(item => item.client_id === clientId);
+                const conn = payload.connection || this.connections.find(item => item.client_id === clientId) || {client_id: clientId};
 
-                this.removeConnection(clientId);
+                this.upsertConnection({
+                    ...conn,
+                    connection_state: 'offline',
+                    disconnected_at: conn.disconnected_at || payload.time
+                });
 
                 ElementPlus.ElNotification({
                     title: 'Device Offline',
-                    message: `${(oldConn && oldConn.hostname) || clientId} went offline`,
+                    message: `${(conn && conn.hostname) || clientId} went offline`,
                     type: 'warning'
                 });
+            });
+
+            es.addEventListener('connection_heartbeat', (event) => {
+                const payload = JSON.parse(event.data);
+                const conn = payload.connection;
+                this.upsertConnection(conn);
             });
 
             es.addEventListener('command_result', (event) => {
@@ -132,7 +150,6 @@ window.AppSseModule = {
                 const payload = JSON.parse(event.data);
                 const fileName = payload.stored_name || payload.original_name || 'file';
                 const downloadUrl = payload.download_url || (payload.artifact_id ? `/api/artifacts/${encodeURIComponent(payload.artifact_id)}/download` : '#');
-                const sourceText = this.formatArtifactSourceLabel(payload);
 
                 ElementPlus.ElNotification({
                     title: 'File Received',

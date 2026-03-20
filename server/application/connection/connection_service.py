@@ -11,13 +11,42 @@ class WebConnectionService:
     职责：
     - 序列化连接信息
     - 创建带 Web 能力的客户端会话对象
-    - 处理连接上线/下线/背景消息事件
+    - 处理连接上线/下线/心跳状态事件
     """
+
+    STALE_AFTER_SECONDS = 45
 
     def __init__(self, server, event_bus, artifact_service):
         self.server = server
         self.event_bus = event_bus
         self.artifact_service = artifact_service
+
+    def _now(self):
+        return datetime.now()
+
+    def _safe_parse_iso(self, value: str):
+        text = str(value or '').strip()
+        if not text:
+            return None
+        try:
+            return datetime.fromisoformat(text)
+        except Exception:
+            return None
+
+    def _build_connection_state(self, session: ClientSession) -> str:
+        disconnected_at = self._safe_parse_iso(session.context.disconnected_at)
+        if disconnected_at is not None:
+            return 'offline'
+
+        last_seen_at = self._safe_parse_iso(session.context.last_seen_at)
+        if last_seen_at is None:
+            return 'online'
+
+        age_seconds = max((self._now() - last_seen_at).total_seconds(), 0)
+        if age_seconds > self.STALE_AFTER_SECONDS:
+            return 'stale'
+
+        return 'online'
 
     # ------------------ payload ------------------ #
     def serialize_connection(self, session: ClientSession) -> dict:
@@ -30,6 +59,14 @@ class WebConnectionService:
             'hostname': info.get('hostname', 'Unknown'),
             'integrity': info.get('integrity', '?'),
             'cwd': info.get('cwd', ''),
+            'connected_at': session.context.connected_at,
+            'disconnected_at': session.context.disconnected_at,
+            'last_seen_at': session.context.last_seen_at,
+            'last_heartbeat_sent_at': session.context.last_heartbeat_sent_at,
+            'last_heartbeat_ack_at': session.context.last_heartbeat_ack_at,
+            'last_rtt_ms': session.context.last_rtt_ms,
+            'stale_after_seconds': self.STALE_AFTER_SECONDS,
+            'connection_state': self._build_connection_state(session),
         }
 
     def get_connections_payload(self):
@@ -50,18 +87,23 @@ class WebConnectionService:
         session.context.on_unexpected_message = (
             lambda status, text, end: self.publish_background_message(session, status, text, end)
         )
+        session.context.on_heartbeat_updated = (
+            lambda current_session: self.publish_connection_heartbeat(current_session)
+        )
         return session
 
     def handle_connection_registered(self, session: ClientSession):
         """
         连接注册成功后的 Web 通知
         """
+        session.services.heartbeat_service.mark_connected()
         self.publish_connection_online(session)
 
     def handle_connection_closed(self, session: ClientSession):
         """
         连接关闭后的 Web 通知
         """
+        session.services.heartbeat_service.mark_disconnected()
         self.publish_connection_offline(session)
 
     # ------------------ event publish ------------------ #
@@ -74,6 +116,13 @@ class WebConnectionService:
     def publish_connection_offline(self, session: ClientSession):
         self.event_bus.publish('connection_offline', {
             'client_id': session.info.get('id'),
+            'connection': self.serialize_connection(session),
+            'time': datetime.now().isoformat()
+        })
+
+    def publish_connection_heartbeat(self, session: ClientSession):
+        self.event_bus.publish('connection_heartbeat', {
+            'connection': self.serialize_connection(session),
             'time': datetime.now().isoformat()
         })
 

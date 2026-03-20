@@ -8,7 +8,7 @@ class ClientInboundMessageDispatcher:
     - 返回接收线程是否需要立即 send_result
     """
 
-    IMMEDIATE_MESSAGE_TYPES = {'rdy', 'file'}
+    IMMEDIATE_MESSAGE_TYPES = {'rdy', 'file', 'heartbeat', 'heartbeat_ack'}
     DEFERRED_MESSAGE_TYPES = {'command', 'script', 'acmd'}
 
     def __init__(self, connection):
@@ -37,6 +37,8 @@ class ClientInboundMessageDispatcher:
         立即处理的消息：
         - rdy
         - file
+        - heartbeat
+        - heartbeat_ack
         """
         return self.connection.message_router.dispatch(data)
 

@@ -211,12 +211,41 @@ body {
   white-space: nowrap;
 }
 
+.device-status-row {
+  margin-top: 7px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.device-status-text {
+  line-height: 1.4;
+}
+
+.device-status-sep {
+  color: var(--muted-2);
+}
+
 .device-dot {
   width: 9px;
   height: 9px;
   border-radius: 50%;
-  background: #22c55e;
   flex-shrink: 0;
+}
+
+.device-dot-online {
+  background: #22c55e;
+}
+
+.device-dot-stale {
+  background: #f59e0b;
+}
+
+.device-dot-offline {
+  background: #94a3b8;
 }
 
 .main-body {
@@ -230,7 +259,7 @@ body {
   padding: 18px 20px 14px;
   border-bottom: 1px solid var(--line);
   display: grid;
-  grid-template-columns: 1.2fr 1fr 1fr 2.4fr;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 12px;
   flex-shrink: 0;
 }
@@ -241,6 +270,10 @@ body {
   background: var(--bg-card);
   border: 1px solid rgba(15, 23, 42, 0.05);
   min-width: 0;
+}
+
+.info-card-wide {
+  grid-column: span 5;
 }
 
 .info-label {

@@ -22,7 +22,7 @@
         <div class="banner-subtitle">Remote access, shell control, file browsing</div>
       </div>
       <div class="banner-right">
-        <span class="banner-meta-label">Online Nodes</span>
+        <span class="banner-meta-label">Known Nodes</span>
         <span class="banner-meta-value">{{ connections.length }}</span>
       </div>
     </header>
@@ -51,9 +51,14 @@
                 <div class="device-name">{{ item.hostname || 'Unknown Host' }}</div>
                 <div class="device-os">{{ formatOsLabel(item.os_type, item.os_ver) }}</div>
               </div>
-              <div class="device-dot"></div>
+              <div class="device-dot" :class="getConnectionStatusDotClass(item)"></div>
             </div>
             <div class="device-ip">{{ formatAddress(item.addr) }}</div>
+            <div class="device-status-row">
+              <span class="device-status-text">{{ getConnectionStatusText(item) }}</span>
+              <span class="device-status-sep">·</span>
+              <span class="device-status-text">last seen {{ formatConnectionLastSeen(item) }}</span>
+            </div>
           </div>
         </div>
       </aside>
@@ -73,6 +78,14 @@
               <div class="info-card">
                 <div class="info-label">Platform</div>
                 <div class="info-value">{{ formatOsLabel(currentConnection.os_type, currentConnection.os_ver) }}</div>
+              </div>
+              <div class="info-card">
+                <div class="info-label">Status</div>
+                <div class="info-value">{{ getConnectionStatusText(currentConnection) }}</div>
+              </div>
+              <div class="info-card">
+                <div class="info-label">RTT</div>
+                <div class="info-value">{{ formatConnectionRtt(currentConnection) }}</div>
               </div>
               <div class="info-card info-card-wide">
                 <div class="info-label">Working Directory</div>
@@ -195,7 +208,6 @@
       <div class="dialog-path-row">
         <div class="dialog-path-box">
           <el-input v-model="remoteFilesPathInput" placeholder="Enter a path and jump" @keyup.enter="goToRemotePathInput" />
-<!--          <el-button size="small" @click="goToRemotePathInput">Go</el-button>-->
         </div>
       </div>
 
@@ -700,13 +712,15 @@
   <el-dialog v-model="connectionInfoDialogVisible" title="Connection Info" width="980px" top="6vh" class="fixed-dialog connection-info-dialog">
     <div class="fixed-dialog-body" v-loading="connectionInfoLoading">
       <div class="background-job-stats">
-        <div class="background-job-stat"><div class="background-job-stat-label">Status</div><div class="background-job-stat-value">online</div></div>
+        <div class="background-job-stat"><div class="background-job-stat-label">Status</div><div class="background-job-stat-value">{{ getConnectionStatusText(currentConnection) }}</div></div>
         <div class="background-job-stat"><div class="background-job-stat-label">Hostname</div><div class="background-job-stat-value">{{ currentConnection?.hostname || '-' }}</div></div>
         <div class="background-job-stat"><div class="background-job-stat-label">Client ID</div><div class="background-job-stat-value mono">{{ currentConnection?.client_id || '-' }}</div></div>
         <div class="background-job-stat"><div class="background-job-stat-label">Address</div><div class="background-job-stat-value mono">{{ currentConnection?.addr || '-' }}</div></div>
         <div class="background-job-stat"><div class="background-job-stat-label">Platform</div><div class="background-job-stat-value">{{ formatOsLabel(currentConnection?.os_type, currentConnection?.os_ver) }}</div></div>
         <div class="background-job-stat"><div class="background-job-stat-label">Integrity</div><div class="background-job-stat-value">{{ currentConnection?.integrity || '-' }}</div></div>
         <div class="background-job-stat"><div class="background-job-stat-label">Working Directory</div><div class="background-job-stat-value mono">{{ currentConnection?.cwd || '-' }}</div></div>
+        <div class="background-job-stat"><div class="background-job-stat-label">Last Seen</div><div class="background-job-stat-value">{{ formatConnectionLastSeen(currentConnection) }}</div></div>
+        <div class="background-job-stat"><div class="background-job-stat-label">RTT</div><div class="background-job-stat-value">{{ formatConnectionRtt(currentConnection) }}</div></div>
         <div class="background-job-stat"><div class="background-job-stat-label">Reported Jobs</div><div class="background-job-stat-value">{{ connectionInfoJobCount }}</div></div>
         <div class="background-job-stat"><div class="background-job-stat-label">Command Count</div><div class="background-job-stat-value">{{ connectionInfoClientCommands.length }}</div></div>
       </div>

@@ -7,7 +7,7 @@ class ServerInboundMessageDispatcher:
     - 当前服务端收到的消息都由接收线程即时分发
     """
 
-    IMMEDIATE_MESSAGE_TYPES = {'rdy', 'result', 'file'}
+    IMMEDIATE_MESSAGE_TYPES = {'rdy', 'result', 'file', 'heartbeat_ack'}
 
     def __init__(self, session):
         self.session = session
@@ -29,6 +29,7 @@ class ServerInboundMessageDispatcher:
         - rdy
         - result
         - file
+        - heartbeat_ack
         """
         return self.session.services.message_router.dispatch(data)
 

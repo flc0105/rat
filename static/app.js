@@ -16,6 +16,10 @@ createApp({
     mounted() {
         this.loadConnections();
         this.initSSE();
+
+        this.statusTickTimer = setInterval(() => {
+            this.statusNowTick = Date.now();
+        }, 5000);
     },
 
     beforeUnmount() {
@@ -23,6 +27,10 @@ createApp({
         if (this.backgroundJobsRefreshTimer) {
             clearTimeout(this.backgroundJobsRefreshTimer);
             this.backgroundJobsRefreshTimer = null;
+        }
+        if (this.statusTickTimer) {
+            clearInterval(this.statusTickTimer);
+            this.statusTickTimer = null;
         }
     },
 

@@ -22,6 +22,8 @@ from server.connection.transport.client_transport import ClientTransport
 
 
 class Server:
+    HEARTBEAT_INTERVAL_SECONDS = 15
+
     def __init__(self, address):
         """
         初始化服务器对象
@@ -44,6 +46,24 @@ class Server:
     def kill_connection_by_client_id(self, client_id):
         session = self.get_target_connection_by_client_id(client_id)
         session.send_command('kill')
+
+    # ------------------ heartbeat ------------------ #
+    def heartbeat_loop(self):
+        """
+        周期性向所有在线 session 发送 heartbeat。
+        """
+        while 1:
+            try:
+                sessions = self.connections.all()
+                for session in sessions:
+                    try:
+                        session.services.heartbeat_service.send_heartbeat()
+                    except Exception as e:
+                        logger.debug(f'Failed to send heartbeat to {session.address}: {e}')
+            except Exception as e:
+                logger.error(f'Heartbeat loop error: {e}', exc_info=True)
+
+            time.sleep(self.HEARTBEAT_INTERVAL_SECONDS)
 
     # ------------------ 连接建立 ------------------ #
     def _bind_server_socket(self):
@@ -390,4 +410,5 @@ if __name__ == '__main__':
     os.system('')  # 初始化颜色显示
     server = Server(SOCKET_ADDR)
     threading.Thread(target=server.serve, daemon=True).start()
+    threading.Thread(target=server.heartbeat_loop, daemon=True).start()
     server.cmdloop()

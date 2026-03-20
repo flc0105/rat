@@ -19,6 +19,8 @@ window.AppStateModule = {
             sending: false,
             eventSource: null,
             sseReady: false,
+            statusNowTick: Date.now(),
+            statusTickTimer: null,
 
             remoteFilesDialogVisible: false,
             remoteFilesLoading: false,
@@ -131,7 +133,7 @@ window.AppStateModule = {
 
             (this.artifactItems || []).forEach(item => {
                 if (!item) return;
-                if (hostname && item.hostname !== hostname) return;
+                if (hostname && item.hostname !== hostname) return false;
 
                 const type = String(item.artifact_type || '').trim();
                 if (Object.prototype.hasOwnProperty.call(counts, type)) {

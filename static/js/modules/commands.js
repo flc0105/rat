@@ -31,7 +31,39 @@ window.AppCommandsModule = {
             try {
                 const res = await fetch('/api/connections');
                 const json = await res.json();
-                this.connections = json.data || [];
+                const activeConnections = Array.isArray(json.data) ? json.data : [];
+
+                const mergedMap = new Map();
+                (this.connections || []).forEach(item => {
+                    if (item && item.client_id) {
+                        mergedMap.set(item.client_id, {...item});
+                    }
+                });
+
+                activeConnections.forEach(item => {
+                    mergedMap.set(item.client_id, {...mergedMap.get(item.client_id), ...item});
+                });
+
+                const activeIds = new Set(activeConnections.map(item => item.client_id));
+                mergedMap.forEach((item, key) => {
+                    if (!activeIds.has(key) && item.disconnected_at) {
+                        item.connection_state = 'offline';
+                    }
+                });
+
+                this.connections = Array.from(mergedMap.values()).sort((a, b) => {
+                    const sa = this.getConnectionDisplayState(a);
+                    const sb = this.getConnectionDisplayState(b);
+
+                    const order = {online: 0, stale: 1, offline: 2};
+                    const oa = Object.prototype.hasOwnProperty.call(order, sa) ? order[sa] : 9;
+                    const ob = Object.prototype.hasOwnProperty.call(order, sb) ? order[sb] : 9;
+                    if (oa !== ob) return oa - ob;
+
+                    const ta = String(a.last_seen_at || a.connected_at || '');
+                    const tb = String(b.last_seen_at || b.connected_at || '');
+                    return tb.localeCompare(ta);
+                });
 
                 if (!this.selectedId && this.connections.length > 0) {
                     this.selectedId = this.connections[0].client_id;
