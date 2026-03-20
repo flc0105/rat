@@ -18,6 +18,26 @@ class RATSocket:
 
         self._send_lock = threading.RLock()
 
+        # 文件传输运行态：
+        # 只要当前连接正在发送/接收原始文件字节流，就认为 transfer active
+        self._transfer_lock = threading.RLock()
+        self._active_transfer_count = 0
+
+    # ------------------ transfer runtime ------------------ #
+    def _begin_transfer(self):
+        with self._transfer_lock:
+            self._active_transfer_count += 1
+
+    def _end_transfer(self):
+        with self._transfer_lock:
+            if self._active_transfer_count > 0:
+                self._active_transfer_count -= 1
+
+    @property
+    def is_transfer_active(self) -> bool:
+        with self._transfer_lock:
+            return self._active_transfer_count > 0
+
     # ------------------ 基础连接操作 ------------------ #
     def connect(self, address: tuple) -> bool:
         """连接服务器"""
@@ -57,29 +77,41 @@ class RATSocket:
         buffer_size = self._resolve_send_buffer_size(buffer_size)
 
         bytes_sent = 0
-        with self._send_lock:
-            while True:
-                chunk = io.read(buffer_size)
-                if not chunk:
-                    break
-                self._send_raw(chunk)
-                bytes_sent += len(chunk)
-                draw_progress_bar(bytes_sent, total)
-        io.close()
+        self._begin_transfer()
+        try:
+            with self._send_lock:
+                while True:
+                    chunk = io.read(buffer_size)
+                    if not chunk:
+                        break
+                    self._send_raw(chunk)
+                    bytes_sent += len(chunk)
+                    draw_progress_bar(bytes_sent, total)
+        finally:
+            try:
+                io.close()
+            finally:
+                self._end_transfer()
 
     def recv_io(self, length: int, io: BinaryIO, buffer_size: Optional[int] = None) -> None:
         """接收文件"""
         buffer_size = self._resolve_recv_buffer_size(buffer_size)
 
         bytes_left = length
-        while bytes_left > 0:
-            chunk = self.socket.recv(min(buffer_size, bytes_left))
-            if not chunk:
-                raise socket.error("Connection aborted")
-            bytes_left -= len(chunk)
-            draw_progress_bar(length - bytes_left, length)
-            io.write(chunk)
-        io.close()
+        self._begin_transfer()
+        try:
+            while bytes_left > 0:
+                chunk = self.socket.recv(min(buffer_size, bytes_left))
+                if not chunk:
+                    raise socket.error("Connection aborted")
+                bytes_left -= len(chunk)
+                draw_progress_bar(length - bytes_left, length)
+                io.write(chunk)
+        finally:
+            try:
+                io.close()
+            finally:
+                self._end_transfer()
 
     # ------------------ 信号 ------------------ #
     def send_signal(self, status: int, command_id: Optional[int] = None) -> None:

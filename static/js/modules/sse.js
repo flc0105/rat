@@ -1,17 +1,71 @@
 window.AppSseModule = {
     methods: {
         upsertConnection(conn) {
-            const idx = this.connections.findIndex(item => item.client_id === conn.client_id);
-            if (idx === -1) {
+            if (!conn || !conn.client_id) return;
+
+            const identityKey = this.buildConnectionIdentityKey(conn);
+            const incomingState = this.getConnectionDisplayState(conn);
+
+            const duplicates = [];
+            this.connections.forEach((item, index) => {
+                if (!item) return;
+
+                const sameClientId = item.client_id === conn.client_id;
+                const sameIdentity = identityKey && this.buildConnectionIdentityKey(item) === identityKey;
+
+                if (sameClientId || sameIdentity) {
+                    duplicates.push({index, item});
+                }
+            });
+
+            if (!duplicates.length) {
                 this.connections.unshift(conn);
-            } else {
-                this.connections[idx] = {
-                    ...this.connections[idx],
-                    ...conn
-                };
+                this.connections = this.dedupeConnections(this.connections);
+                return;
             }
 
-            if (!this.selectedId) this.selectedId = conn.client_id;
+            let best = duplicates[0];
+            duplicates.forEach((entry) => {
+                const currentState = this.getConnectionDisplayState(entry.item);
+                const currentRank = currentState === 'online' ? 0 : (currentState === 'stale' ? 1 : 2);
+                const bestState = this.getConnectionDisplayState(best.item);
+                const bestRank = bestState === 'online' ? 0 : (bestState === 'stale' ? 1 : 2);
+
+                if (currentRank < bestRank) {
+                    best = entry;
+                    return;
+                }
+
+                if (currentRank === bestRank) {
+                    const currentTime = String(entry.item.last_seen_at || entry.item.connected_at || entry.item.disconnected_at || '');
+                    const bestTime = String(best.item.last_seen_at || best.item.connected_at || best.item.disconnected_at || '');
+                    if (currentTime > bestTime) {
+                        best = entry;
+                    }
+                }
+            });
+
+            const merged = {
+                ...best.item,
+                ...conn
+            };
+
+            if (incomingState === 'online') {
+                merged.disconnected_at = '';
+            }
+
+            this.connections.splice(best.index, 1, merged);
+
+            const removeIndexes = duplicates
+                .map(entry => entry.index)
+                .filter(index => index !== best.index)
+                .sort((a, b) => b - a);
+
+            removeIndexes.forEach(index => {
+                this.connections.splice(index, 1);
+            });
+
+            this.connections = this.dedupeConnections(this.connections);
         },
 
         removeConnection(clientId) {
@@ -22,8 +76,11 @@ window.AppSseModule = {
             this.connections[idx] = {
                 ...oldItem,
                 connection_state: 'offline',
-                disconnected_at: oldItem.disconnected_at || new Date().toISOString()
+                disconnected_at: oldItem.disconnected_at || new Date().toISOString(),
+                is_transfer_active: false,
             };
+
+            this.connections = this.dedupeConnections(this.connections);
         },
 
         initSSE() {
@@ -56,7 +113,8 @@ window.AppSseModule = {
                 this.upsertConnection({
                     ...conn,
                     connection_state: 'offline',
-                    disconnected_at: conn.disconnected_at || payload.time
+                    disconnected_at: conn.disconnected_at || payload.time,
+                    is_transfer_active: false,
                 });
 
                 ElementPlus.ElNotification({

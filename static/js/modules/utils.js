@@ -218,6 +218,10 @@ window.AppUtilsModule = {
             const state = String(conn && conn.connection_state || '').trim();
             if (state === 'offline') return 'offline';
 
+            if (conn && conn.is_transfer_active) {
+                return 'online';
+            }
+
             const disconnectedAt = String(conn && conn.disconnected_at || '').trim();
             if (disconnectedAt) return 'offline';
 
@@ -257,6 +261,35 @@ window.AppUtilsModule = {
             }
 
             return this.formatDateTimeStandard(conn.last_seen_at) || '-';
+        },
+
+        formatConnectionLastSeenRelative(conn) {
+            if (!conn) return '-';
+
+            const state = this.getConnectionDisplayState(conn);
+            const baseText = state === 'offline'
+                ? String(conn.disconnected_at || '').trim()
+                : String(conn.last_seen_at || '').trim();
+
+            if (!baseText) return '-';
+
+            const ts = Date.parse(baseText);
+            if (!Number.isFinite(ts)) return '-';
+
+            const diffMs = Math.max(this.statusNowTick - ts, 0);
+            const diffSec = Math.floor(diffMs / 1000);
+
+            if (diffSec < 5) return 'just now';
+            if (diffSec < 60) return `${diffSec}s ago`;
+
+            const diffMin = Math.floor(diffSec / 60);
+            if (diffMin < 60) return `${diffMin}m ago`;
+
+            const diffHour = Math.floor(diffMin / 60);
+            if (diffHour < 24) return `${diffHour}h ago`;
+
+            const diffDay = Math.floor(diffHour / 24);
+            return `${diffDay}d ago`;
         },
 
         formatConnectionRtt(conn) {

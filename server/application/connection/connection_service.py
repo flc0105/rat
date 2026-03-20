@@ -33,10 +33,20 @@ class WebConnectionService:
         except Exception:
             return None
 
+    def _is_transfer_active(self, session: ClientSession) -> bool:
+        try:
+            return bool(getattr(session.transport, 'is_transfer_active', False))
+        except Exception:
+            return False
+
     def _build_connection_state(self, session: ClientSession) -> str:
         disconnected_at = self._safe_parse_iso(session.context.disconnected_at)
         if disconnected_at is not None:
             return 'offline'
+
+        # 文件传输期间即使暂停 heartbeat，也不要判 stale
+        if self._is_transfer_active(session):
+            return 'online'
 
         last_seen_at = self._safe_parse_iso(session.context.last_seen_at)
         if last_seen_at is None:
@@ -67,6 +77,7 @@ class WebConnectionService:
             'last_rtt_ms': session.context.last_rtt_ms,
             'stale_after_seconds': self.STALE_AFTER_SECONDS,
             'connection_state': self._build_connection_state(session),
+            'is_transfer_active': self._is_transfer_active(session),
         }
 
     def get_connections_payload(self):

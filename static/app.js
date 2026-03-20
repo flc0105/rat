@@ -19,7 +19,7 @@ createApp({
 
         this.statusTickTimer = setInterval(() => {
             this.statusNowTick = Date.now();
-        }, 5000);
+        }, 15000);
     },
 
     beforeUnmount() {
