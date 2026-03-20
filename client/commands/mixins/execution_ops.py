@@ -81,7 +81,7 @@ class CommandExecutionMixin:
         if os.name == 'posix':
             executable_path = os.path.realpath(sys.executable)
             script_path = os.path.realpath(''.join(sys.argv))
-            return f'{executable_path} {script_path}'
+            return f'{executable_path} {script_path} '
 
         raise RuntimeError(f'Unsupported platform: {os.name}')
 
