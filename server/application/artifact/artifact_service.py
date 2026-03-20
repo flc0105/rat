@@ -10,27 +10,22 @@ from server.config.config import WEB_CLEAR_PREVIEW_CACHE_ON_STARTUP, WEB_FILES_R
 class WebArtifactService:
     """
     Web Artifact 门面服务。
-
-    职责：
-    - 统一管理 runtime/web_files/artifacts 下的所有文件产物
-    - 聚合 registry / preview / temp file 能力
-    - 对外暴露稳定接口
     """
 
     MAX_PREVIEW_TEXT_BYTES = WEB_PREVIEW_TEXT_MAX_BYTES
 
-    CATEGORY_DOWNLOADS = 'downloads'
+    CATEGORY_FILES = 'files'
     CATEGORY_PREVIEWS = 'previews'
-    CATEGORY_HTTP_UPLOADS = 'http_uploads'
     CATEGORY_UPLOAD_TMP = 'upload_tmp'
+
 
     def __init__(self):
         self.web_root_dir = WEB_FILES_ROOT_DIR
         self.artifacts_root_dir = os.path.join(self.web_root_dir, 'artifacts')
-        self.downloads_dir = os.path.join(self.artifacts_root_dir, self.CATEGORY_DOWNLOADS)
+
+        self.files_dir = os.path.join(self.artifacts_root_dir, self.CATEGORY_FILES)
         self.previews_dir = os.path.join(self.artifacts_root_dir, self.CATEGORY_PREVIEWS)
         self.upload_tmp_dir = os.path.join(self.artifacts_root_dir, self.CATEGORY_UPLOAD_TMP)
-        self.http_uploads_dir = os.path.join(self.artifacts_root_dir, self.CATEGORY_HTTP_UPLOADS)
 
         self._prepare_dirs()
 
@@ -41,18 +36,13 @@ class WebArtifactService:
         if WEB_CLEAR_PREVIEW_CACHE_ON_STARTUP:
             self._clear_preview_cache_on_startup()
 
-    # ------------------ dirs ------------------ #
     def _prepare_dirs(self):
         os.makedirs(self.artifacts_root_dir, exist_ok=True)
-        os.makedirs(self.downloads_dir, exist_ok=True)
+        os.makedirs(self.files_dir, exist_ok=True)
         os.makedirs(self.previews_dir, exist_ok=True)
         os.makedirs(self.upload_tmp_dir, exist_ok=True)
-        os.makedirs(self.http_uploads_dir, exist_ok=True)
 
     def _clear_preview_cache_on_startup(self):
-        """
-        服务端启动时清空 previews 缓存目录，避免预览文件无限堆积
-        """
         try:
             if os.path.isdir(self.previews_dir):
                 shutil.rmtree(self.previews_dir, ignore_errors=True)
@@ -60,7 +50,6 @@ class WebArtifactService:
         except Exception:
             pass
 
-    # ------------------ registry facade ------------------ #
     def allocate_artifact_path(self, artifact_type: str, hostname: str, original_name: str, category: str = '') -> dict:
         return self.registry_service.allocate_artifact_path(artifact_type, hostname, original_name, category=category)
 
@@ -141,7 +130,6 @@ class WebArtifactService:
     def clear_artifacts(self, artifact_type: str, hostname: str = '') -> dict:
         return self.registry_service.clear_artifacts(artifact_type, hostname=hostname)
 
-    # ------------------ preview facade ------------------ #
     def guess_preview_type(self, filename: str) -> str:
         return self.preview_service.guess_preview_type(filename)
 
@@ -151,7 +139,6 @@ class WebArtifactService:
     def build_http_upload_preview_payload(self, relative_path: str) -> dict:
         return self.preview_service.build_http_upload_preview_payload(relative_path)
 
-    # ------------------ temp file facade ------------------ #
     def create_upload_temp_file(self, upload) -> tuple[str, str]:
         return self.temp_file_service.create_upload_temp_file(upload)
 
@@ -167,10 +154,9 @@ class WebArtifactService:
     def cleanup_upload_temp_file(self, temp_path: str):
         return self.temp_file_service.cleanup_temp_file(temp_path)
 
-    # ------------------ old file_service compatibility ------------------ #
     def get_safe_http_upload_file_path(self, relative_path: str) -> str:
-        base_dir = os.path.abspath(self.http_uploads_dir)
+        base_dir = os.path.abspath(self.files_dir)
         file_path = os.path.abspath(os.path.join(base_dir, relative_path))
         if not file_path.startswith(base_dir + os.sep) and file_path != base_dir:
-            raise ValueError('invalid http upload file path')
+            raise ValueError('invalid file path')
         return file_path

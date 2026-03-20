@@ -10,18 +10,13 @@ from core.utils.decorator import desc
 class CommandFilePathHttpMixin:
     """
     HTTP 版路径命令 mixin。
-
-    说明：
-    - 保持命令名与旧版 file_path_ops 一致，方便上层调用不变
-    - 文件“下载”类行为统一改为 client -> server HTTP 上传
-    - 目录浏览 / 删除 / 重命名 / 新建目录 仍是本地路径操作
     """
 
     HTTP_UPLOAD_TIMEOUT = 120
     HTTP_DOWNLOAD_TIMEOUT = (15, 300)
     HTTP_DOWNLOAD_CHUNK_SIZE = 64 * 1024
 
-    def _upload_file_to_server_via_http(self, file_path: str, category: str = 'downloads'):
+    def _upload_file_to_server_via_http(self, file_path: str, category: str = 'files'):
         upload_url = UPLOAD_BASE_URL.rstrip('/') + '/api/files/upload'
         client_id = getattr(self.socket, 'client_id', '') or ''
 
@@ -67,7 +62,7 @@ class CommandFilePathHttpMixin:
 
         return '\n'.join(lines)
 
-    def _upload_single_file_to_server_result(self, file_path: str, category: str = 'downloads'):
+    def _upload_single_file_to_server_result(self, file_path: str, category: str = 'files'):
         file_size = os.path.getsize(file_path)
 
         self._send_interim_result(1, f'Preparing HTTP upload: {file_path}', 0)
@@ -88,7 +83,7 @@ class CommandFilePathHttpMixin:
         self,
         resolved_paths: list[str],
         archive_name: str = '',
-        category: str = 'downloads',
+        category: str = 'files',
     ):
         temp_archive_path = ''
         try:
@@ -123,7 +118,7 @@ class CommandFilePathHttpMixin:
             file_path = self._require_existing_file_from_arg(path)
             return self._upload_single_file_to_server_result(
                 file_path,
-                category='downloads'
+                category='files'
             )
         except Exception as e:
             return 0, f'Failed to download file via HTTP: {e}'
@@ -145,7 +140,7 @@ class CommandFilePathHttpMixin:
             return self._upload_paths_as_zip_to_server_result(
                 resolved_paths,
                 archive_name=archive_name,
-                category='downloads'
+                category='files'
             )
         except Exception as e:
             return 0, f'Failed to download paths via HTTP: {e}'

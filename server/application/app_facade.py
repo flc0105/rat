@@ -226,3 +226,24 @@ class ServerWebService:
 
     def submit_upload(self, client_id: str, local_path: str, display_name: str, remote_path: str = ''):
         return self.submit_web_upload(client_id, local_path, display_name, remote_path)
+
+        # 在 ServerWebService 里加这个方法
+
+    def publish_artifact_created(self, artifact_info: dict):
+        if not isinstance(artifact_info, dict):
+            return
+
+        self.event_bus.publish('artifact_created', {
+            'artifact_id': artifact_info.get('artifact_id', ''),
+            'artifact_type': artifact_info.get('artifact_type', ''),
+            'category': artifact_info.get('category', ''),
+            'hostname': artifact_info.get('hostname', ''),
+            'client_id': artifact_info.get('client_id', ''),
+            'original_name': artifact_info.get('original_name', ''),
+            'stored_name': artifact_info.get('stored_name', ''),
+            'size': artifact_info.get('size', 0),
+            'created_at': artifact_info.get('created_at', ''),
+            'source_type': artifact_info.get('source_type', ''),
+            'download_url': artifact_info.get('download_url', ''),
+            'preview_url': artifact_info.get('preview_url', ''),
+        })

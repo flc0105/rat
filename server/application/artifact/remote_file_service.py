@@ -5,6 +5,18 @@ import json
 class WebRemoteFileService:
     """
     远程文件应用服务。
+
+    职责：
+    - 调用客户端目录浏览命令
+    - 调用客户端删除命令
+    - 调用客户端下载命令
+    - 将客户端返回结果转换成上层可直接消费的数据
+
+    当前文件下载链路：
+    - server 下发普通命令
+    - client 通过 HTTP 上传文件到 /api/files/upload
+    - client 在命令结果文本中返回 Artifact ID
+    - server 再根据 Artifact ID 查询 artifact
     """
 
     DOWNLOAD_RESULT_PREFIX = 'Artifact ID:'
@@ -44,6 +56,9 @@ class WebRemoteFileService:
         return artifact
 
     def browse_directory(self, client_id: str, path: str = '') -> dict:
+        """
+        浏览远程目录
+        """
         command = self._build_command('browse_dir', {'path': path})
         payload = self.remote_execution_service.run_json_command(client_id, command)
 
@@ -54,6 +69,9 @@ class WebRemoteFileService:
         }
 
     def delete_path(self, client_id: str, path: str) -> dict:
+        """
+        删除远程路径
+        """
         if not (path or '').strip():
             raise ValueError('path is required')
 
@@ -66,6 +84,9 @@ class WebRemoteFileService:
         }
 
     def create_directory(self, client_id: str, path: str) -> dict:
+        """
+        创建远程目录
+        """
         if not (path or '').strip():
             raise ValueError('path is required')
 
@@ -78,6 +99,9 @@ class WebRemoteFileService:
         }
 
     def rename_path(self, client_id: str, old_path: str, new_name: str) -> dict:
+        """
+        重命名远程文件或目录
+        """
         if not (old_path or '').strip():
             raise ValueError('old_path is required')
         if not (new_name or '').strip():
@@ -96,6 +120,9 @@ class WebRemoteFileService:
         }
 
     def download_file(self, client_id: str, path: str, history_entry_id: str = '') -> dict:
+        """
+        下载远程文件到服务端 artifact files 区，并返回下载信息
+        """
         if not (path or '').strip():
             raise ValueError('path is required')
 
@@ -122,6 +149,9 @@ class WebRemoteFileService:
         archive_name: str = '',
         history_entry_id: str = '',
     ) -> dict:
+        """
+        将多个远程路径打包为 zip 上传到服务端 artifact files 区
+        """
         if not isinstance(paths, list) or not paths:
             raise ValueError('paths is required')
 
@@ -152,6 +182,11 @@ class WebRemoteFileService:
         }
 
     def preview_file(self, client_id: str, path: str, history_entry_id: str = '') -> dict:
+        """
+        预览远程文件：
+        - 通过 download_path 拉到服务端 files 区
+        - 再复用统一预览逻辑
+        """
         if not (path or '').strip():
             raise ValueError('path is required')
 

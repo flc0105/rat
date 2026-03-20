@@ -417,17 +417,14 @@
                 </div>
             </div>
 
-            <el-tabs v-model="artifactActiveTab" class="command-history-tabs" @tab-change="loadArtifacts">
-                <el-tab-pane name="downloads">
-                    <template #label>Downloads ({{ artifactCountMap.downloads || 0 }})</template>
-                </el-tab-pane>
-                <el-tab-pane name="previews">
-                    <template #label>Previews ({{ artifactCountMap.previews || 0 }})</template>
-                </el-tab-pane>
-                <el-tab-pane name="http_uploads">
-                    <template #label>HTTP Uploads ({{ artifactCountMap.http_uploads || 0 }})</template>
-                </el-tab-pane>
-            </el-tabs>
+        <el-tabs v-model="artifactActiveTab" class="command-history-tabs" @tab-change="loadArtifacts">
+    <el-tab-pane name="files">
+        <template #label>Files ({{ artifactCountMap.files || 0 }})</template>
+    </el-tab-pane>
+    <el-tab-pane name="previews">
+        <template #label>Previews ({{ artifactCountMap.previews || 0 }})</template>
+    </el-tab-pane>
+</el-tabs>
 
             <div class="dialog-table-shell">
                 <el-table :data="filteredArtifactItems" v-loading="artifactLoading" stripe width="100%" height="100%"

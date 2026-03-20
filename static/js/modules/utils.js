@@ -193,22 +193,18 @@ window.AppUtilsModule = {
             return normalized || '-';
         },
 
-        formatArtifactSourceLabel(item) {
+              formatArtifactSourceLabel(item) {
             if (!item) return '-';
 
             const sourceType = String(item.source_type || '').trim();
             const category = String(item.category || '').trim();
 
-            if (sourceType === 'http_upload' && category) {
-                return `http_upload / ${category}`;
-            }
-
-            if (category && item.artifact_type === 'http_uploads') {
-                return `${sourceType || 'http_upload'} / ${category}`;
+            if (category && sourceType) {
+                return `${sourceType} / ${category}`;
             }
 
             if (category) {
-                return `${sourceType || 'artifact'} / ${category}`;
+                return category;
             }
 
             return sourceType || '-';

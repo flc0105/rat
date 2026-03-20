@@ -37,7 +37,7 @@ window.AppStateModule = {
             artifactLoading: false,
             artifactItems: [],
             artifactHostnames: [],
-            artifactActiveTab: 'downloads',
+            artifactActiveTab: 'files',
             artifactHostnameFilter: '',
             artifactClearing: false,
 
@@ -123,12 +123,11 @@ window.AppStateModule = {
             });
         },
 
-        artifactCountMap() {
+     artifactCountMap() {
             const hostname = String(this.artifactHostnameFilter || '').trim();
             const counts = {
-                downloads: 0,
+                files: 0,
                 previews: 0,
-                http_uploads: 0,
             };
 
             (this.artifactItems || []).forEach(item => {

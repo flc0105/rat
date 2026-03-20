@@ -325,7 +325,7 @@ def create_app(server_instance):
                 except Exception:
                     hostname = ''
 
-            return artifact_service.save_http_uploaded_file(
+            artifact = artifact_service.save_http_uploaded_file(
                 upload,
                 category=category,
                 client_id=client_id,
@@ -335,8 +335,14 @@ def create_app(server_instance):
                 job_key=job_key,
             )
 
-        return _json_endpoint(_execute, default_error_status=500)
+            try:
+                web_service.publish_artifact_created(artifact)
+            except Exception:
+                pass
 
+            return artifact
+
+        return _json_endpoint(_execute, default_error_status=500)
     @app.errorhandler(413)
     def file_too_large(_):
         return _fail('File is too large', 413)

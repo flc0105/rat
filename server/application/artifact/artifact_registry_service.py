@@ -1,6 +1,5 @@
 import json
 import os
-import shutil
 import threading
 import uuid
 from datetime import datetime
@@ -19,18 +18,20 @@ class ArtifactRegistryService:
     - 列表查询
     - 单个查询
     - 删除 / 清空
+
+    当前仅保留两类正式 artifact：
+    - files
+    - previews
     """
 
     ARTIFACT_TIME_FORMAT = '%Y-%m-%d %H:%M:%S'
 
-    CATEGORY_DOWNLOADS = 'downloads'
+    CATEGORY_FILES = 'files'
     CATEGORY_PREVIEWS = 'previews'
-    CATEGORY_HTTP_UPLOADS = 'http_uploads'
 
     FORMAL_CATEGORIES = {
-        CATEGORY_DOWNLOADS,
+        CATEGORY_FILES,
         CATEGORY_PREVIEWS,
-        CATEGORY_HTTP_UPLOADS,
     }
 
     def __init__(self, artifact_service):
@@ -48,6 +49,12 @@ class ArtifactRegistryService:
         safe_name = secure_filename((category or '').strip())
         return safe_name or 'default'
 
+    def _normalize_artifact_type(self, artifact_type: str) -> str:
+        normalized = (artifact_type or '').strip()
+        if normalized not in self.FORMAL_CATEGORIES:
+            raise ValueError(f'Unsupported artifact type: {artifact_type}')
+        return normalized
+
     def _build_stored_filename(self, original_name: str) -> str:
         safe_name = secure_filename(original_name or '')
         if not safe_name:
@@ -62,29 +69,32 @@ class ArtifactRegistryService:
         os.makedirs(path, exist_ok=True)
         return path
 
-    def _get_download_host_dir(self, hostname: str) -> str:
-        return self._ensure_directory(os.path.join(self.artifact_service.downloads_dir, self._normalize_hostname(hostname)))
-
-    def _get_download_meta_dir(self, hostname: str) -> str:
-        return self._ensure_directory(os.path.join(self._get_download_host_dir(hostname), 'meta'))
-
-    def _get_preview_host_dir(self, hostname: str) -> str:
-        return self._ensure_directory(os.path.join(self.artifact_service.previews_dir, self._normalize_hostname(hostname)))
-
-    def _get_preview_meta_dir(self, hostname: str) -> str:
-        return self._ensure_directory(os.path.join(self._get_preview_host_dir(hostname), 'meta'))
-
-    def _get_http_upload_host_dir(self, category: str, hostname: str) -> str:
+    def _get_files_host_dir(self, category: str, hostname: str) -> str:
         return self._ensure_directory(
             os.path.join(
-                self.artifact_service.http_uploads_dir,
+                self.artifact_service.files_dir,
                 self._normalize_category(category),
                 self._normalize_hostname(hostname),
             )
         )
 
-    def _get_http_upload_meta_dir(self, category: str, hostname: str) -> str:
-        return self._ensure_directory(os.path.join(self._get_http_upload_host_dir(category, hostname), 'meta'))
+    def _get_files_meta_dir(self, category: str, hostname: str) -> str:
+        return self._ensure_directory(
+            os.path.join(self._get_files_host_dir(category, hostname), 'meta')
+        )
+
+    def _get_preview_host_dir(self, hostname: str) -> str:
+        return self._ensure_directory(
+            os.path.join(
+                self.artifact_service.previews_dir,
+                self._normalize_hostname(hostname)
+            )
+        )
+
+    def _get_preview_meta_dir(self, hostname: str) -> str:
+        return self._ensure_directory(
+            os.path.join(self._get_preview_host_dir(hostname), 'meta')
+        )
 
     def _build_unique_path(self, directory: str, filename: str) -> str:
         base_name = os.path.basename(filename) or 'file.bin'
@@ -98,28 +108,48 @@ class ArtifactRegistryService:
 
         return candidate
 
-    def _resolve_formal_file_and_meta_dir(self, artifact_type: str, hostname: str, category: str = '') -> tuple[str, str]:
-        normalized_type = (artifact_type or '').strip()
+    def _resolve_formal_file_and_meta_dir(
+        self,
+        artifact_type: str,
+        hostname: str,
+        category: str = ''
+    ) -> tuple[str, str]:
+        normalized_type = self._normalize_artifact_type(artifact_type)
 
-        if normalized_type == self.CATEGORY_DOWNLOADS:
-            return self._get_download_host_dir(hostname), self._get_download_meta_dir(hostname)
+        if normalized_type == self.CATEGORY_FILES:
+            return (
+                self._get_files_host_dir(category, hostname),
+                self._get_files_meta_dir(category, hostname),
+            )
 
         if normalized_type == self.CATEGORY_PREVIEWS:
-            return self._get_preview_host_dir(hostname), self._get_preview_meta_dir(hostname)
-
-        if normalized_type == self.CATEGORY_HTTP_UPLOADS:
-            return self._get_http_upload_host_dir(category, hostname), self._get_http_upload_meta_dir(category, hostname)
+            return (
+                self._get_preview_host_dir(hostname),
+                self._get_preview_meta_dir(hostname),
+            )
 
         raise ValueError(f'Unsupported artifact type: {artifact_type}')
 
-    def allocate_artifact_path(self, artifact_type: str, hostname: str, original_name: str, category: str = '') -> dict:
-        file_dir, meta_dir = self._resolve_formal_file_and_meta_dir(artifact_type, hostname, category=category)
+    def allocate_artifact_path(
+        self,
+        artifact_type: str,
+        hostname: str,
+        original_name: str,
+        category: str = ''
+    ) -> dict:
+        normalized_type = self._normalize_artifact_type(artifact_type)
+        file_dir, meta_dir = self._resolve_formal_file_and_meta_dir(
+            normalized_type,
+            hostname,
+            category=category
+        )
+
         stored_name = self._build_stored_filename(original_name)
         target_path = self._build_unique_path(file_dir, stored_name)
         final_stored_name = os.path.basename(target_path)
 
         return {
-            'artifact_type': artifact_type,
+            'artifact_type': normalized_type,
             'category': category,
             'hostname': self._normalize_hostname(hostname),
             'original_name': original_name,
@@ -158,7 +188,7 @@ class ArtifactRegistryService:
     ) -> dict:
         payload = {
             'artifact_id': artifact_id,
-            'artifact_type': artifact_type,
+            'artifact_type': self._normalize_artifact_type(artifact_type),
             'category': category,
             'hostname': hostname,
             'client_id': client_id,
@@ -189,6 +219,7 @@ class ArtifactRegistryService:
             payload = json.load(file_obj) or {}
             if not isinstance(payload, dict):
                 return {}
+            payload['_meta_path'] = meta_path
             return payload
 
     def _safe_remove_file(self, path: str):
@@ -220,6 +251,7 @@ class ArtifactRegistryService:
     ) -> dict:
         artifact_id = uuid.uuid4().hex
         file_size = os.path.getsize(file_path) if os.path.isfile(file_path) else 0
+
         meta = self._build_meta_payload(
             artifact_id=artifact_id,
             artifact_type=artifact_type,
@@ -240,6 +272,7 @@ class ArtifactRegistryService:
             extra=extra,
         )
         self._write_meta(meta_path, meta)
+        meta['_meta_path'] = meta_path
         return meta
 
     def register_existing_artifact(
@@ -285,18 +318,27 @@ class ArtifactRegistryService:
     def save_http_uploaded_file(
         self,
         file,
+        artifact_type: str = '',
         category: str = '',
         client_id: str = '',
         hostname: str = '',
         job_id: str = '',
         job_name: str = '',
         job_key: str = '',
+        source_type: str = '',
+        source_command_id=None,
+        addr: str = '',
+        related_path: str = '',
+        extra: dict | None = None,
     ) -> dict:
+        normalized_type = self._normalize_artifact_type(
+            artifact_type or self.CATEGORY_FILES
+        )
         normalized_category = (category or '').strip() or 'default'
         normalized_hostname = (hostname or '').strip() or 'unknown_host'
 
         allocated = self.allocate_artifact_path(
-            artifact_type=self.CATEGORY_HTTP_UPLOADS,
+            artifact_type=normalized_type,
             hostname=normalized_hostname,
             original_name=file.filename,
             category=normalized_category,
@@ -306,25 +348,38 @@ class ArtifactRegistryService:
         file.save(file_path)
 
         return self.register_existing_artifact(
-            artifact_type=self.CATEGORY_HTTP_UPLOADS,
+            artifact_type=normalized_type,
             category=normalized_category,
             hostname=allocated['hostname'],
             original_name=file.filename,
             file_path=file_path,
             meta_path=allocated['meta_path'],
             stored_name=allocated['stored_name'],
-            source_type='http_upload',
+            source_type=source_type or 'client_upload',
+            source_command_id=source_command_id,
             client_id=client_id,
+            addr=addr,
             job_id=job_id,
             job_name=job_name,
             job_key=job_key,
+            related_path=related_path,
+            extra=extra,
         )
 
     def _iter_formal_meta_paths(self):
-        for root, _, files in os.walk(self.artifact_service.artifacts_root_dir):
-            for filename in files:
-                if filename.endswith('.meta.json'):
-                    yield os.path.join(root, filename)
+        search_roots = [
+            self.artifact_service.files_dir,
+            self.artifact_service.previews_dir,
+        ]
+
+        for root_dir in search_roots:
+            if not os.path.isdir(root_dir):
+                continue
+
+            for root, _, files in os.walk(root_dir):
+                for filename in files:
+                    if filename.endswith('.meta.json'):
+                        yield os.path.join(root, filename)
 
     def _normalize_meta_for_view(self, payload: dict) -> dict:
         item = dict(payload)
@@ -334,7 +389,10 @@ class ArtifactRegistryService:
         return item
 
     def list_artifacts(self, artifact_type: str = '', hostname: str = '') -> list[dict]:
-        normalized_type = (artifact_type or '').strip()
+        normalized_type = ''
+        if artifact_type:
+            normalized_type = self._normalize_artifact_type(artifact_type)
+
         normalized_hostname = self._normalize_hostname(hostname) if hostname else ''
 
         items = []
@@ -348,28 +406,33 @@ class ArtifactRegistryService:
                 if not payload:
                     continue
 
-                if normalized_type and payload.get('artifact_type') != normalized_type:
+                view_payload = self._normalize_meta_for_view(payload)
+
+                if normalized_type and view_payload.get('artifact_type') != normalized_type:
                     continue
 
-                if normalized_hostname and payload.get('hostname') != normalized_hostname:
+                if normalized_hostname and view_payload.get('hostname') != normalized_hostname:
                     continue
 
-                items.append(self._normalize_meta_for_view(payload))
+                items.append(view_payload)
 
         items.sort(key=lambda item: item.get('created_at', ''), reverse=True)
         return items
 
     def list_artifact_hostnames(self) -> list[str]:
         names = set()
+
         with self._lock:
             for meta_path in self._iter_formal_meta_paths():
                 try:
                     payload = self._read_meta_file(meta_path)
                 except Exception:
                     continue
+
                 hostname = (payload.get('hostname') or '').strip()
                 if hostname:
                     names.add(hostname)
+
         return sorted(names)
 
     def get_artifact_by_id(self, artifact_id: str) -> dict:
@@ -398,39 +461,25 @@ class ArtifactRegistryService:
 
     def delete_artifact(self, artifact_id: str) -> dict:
         artifact = self.get_artifact_by_id(artifact_id)
+
         self._safe_remove_file(artifact.get('saved_path', ''))
-
-        saved_path = artifact.get('saved_path', '')
-        artifact_type = artifact.get('artifact_type', '')
-        hostname = artifact.get('hostname', '')
-        stored_name = artifact.get('stored_name', '')
-        category = artifact.get('category', '')
-
-        if artifact_type == self.CATEGORY_DOWNLOADS:
-            meta_path = os.path.join(self._get_download_meta_dir(hostname), f'{stored_name}.meta.json')
-        elif artifact_type == self.CATEGORY_PREVIEWS:
-            meta_path = os.path.join(self._get_preview_meta_dir(hostname), f'{stored_name}.meta.json')
-        elif artifact_type == self.CATEGORY_HTTP_UPLOADS:
-            meta_path = os.path.join(self._get_http_upload_meta_dir(category, hostname), f'{stored_name}.meta.json')
-        else:
-            meta_path = ''
-
-        self._safe_remove_file(meta_path)
+        self._safe_remove_file(artifact.get('_meta_path', ''))
 
         return {
             'artifact_id': artifact.get('artifact_id', ''),
-            'stored_name': stored_name,
-            'saved_path': saved_path,
+            'stored_name': artifact.get('stored_name', ''),
+            'saved_path': artifact.get('saved_path', ''),
         }
 
     def clear_artifacts(self, artifact_type: str, hostname: str = '') -> dict:
-        normalized_type = (artifact_type or '').strip()
-        if normalized_type not in self.FORMAL_CATEGORIES:
-            raise ValueError('invalid artifact type')
+        normalized_type = self._normalize_artifact_type(artifact_type)
 
-        items = self.list_artifacts(artifact_type=normalized_type, hostname=hostname)
+        items = self.list_artifacts(
+            artifact_type=normalized_type,
+            hostname=hostname
+        )
+
         deleted_count = 0
-
         for item in items:
             try:
                 self.delete_artifact(item.get('artifact_id', ''))
