@@ -3,12 +3,8 @@ import os
 from typing import Generator, Optional
 
 from core.protocol.base_connection import BaseSessionConnection
-from server.connection.file_receiver import ClientFileReceiver
-from server.connection.message_dispatcher import ServerInboundMessageDispatcher
-from server.connection.message_router import ServerInboundMessageRouter
-from server.connection.result_dispatcher import ServerResultDispatcher
 from server.connection.session_runtime import ClientSessionRuntime
-from server.application.artifact.ingest_service import ArtifactIngestService
+from server.connection.session_services import ClientSessionServices
 
 
 class ClientConnection(BaseSessionConnection):
@@ -25,6 +21,7 @@ class ClientConnection(BaseSessionConnection):
         self.info = info or {}
 
         self.runtime = ClientSessionRuntime()
+        self.services = ClientSessionServices(self)
 
         self.is_interactive = False
         self._message_id_counter = 0
@@ -38,13 +35,6 @@ class ClientConnection(BaseSessionConnection):
         self.file_save_dir = file_save_dir
         self.on_file_saved = on_file_saved
 
-        # helpers
-        self.result_dispatcher = ServerResultDispatcher(self)
-        self.message_router = ServerInboundMessageRouter(self)
-        self.message_dispatcher = ServerInboundMessageDispatcher(self)
-        self.file_receiver = ClientFileReceiver(self)
-        self.artifact_ingest_service = ArtifactIngestService(self)
-
     # ------------------ 兼容旧属性访问 ------------------ #
     @property
     def pending_command_ids(self):
@@ -53,6 +43,26 @@ class ClientConnection(BaseSessionConnection):
     @property
     def message_queue(self):
         return self.runtime.message_queue
+
+    @property
+    def result_dispatcher(self):
+        return self.services.result_dispatcher
+
+    @property
+    def message_router(self):
+        return self.services.message_router
+
+    @property
+    def message_dispatcher(self):
+        return self.services.message_dispatcher
+
+    @property
+    def file_receiver(self):
+        return self.services.file_receiver
+
+    @property
+    def artifact_ingest_service(self):
+        return self.services.artifact_ingest_service
 
     # ------------------ ID/构包 ------------------ #
     def _generate_message_id(self) -> int:
@@ -124,6 +134,7 @@ class ClientConnection(BaseSessionConnection):
         except Exception:
             pass
 
+    # ------------------ send helpers ------------------ #
     def send_command(self, command: str, type='command', extra=None, history_entry_id: str = '') -> Generator:
         """
         向客户端发送命令
@@ -156,11 +167,12 @@ class ClientConnection(BaseSessionConnection):
         self.send_file_by_header(data, filename)
         return self.wait_for_result(data.get('id'), 'upload ' + filename)
 
+    # ------------------ receive helpers ------------------ #
     def handle_received_message(self, data: dict):
         """
         处理接收线程收到的消息
         """
-        return self.message_dispatcher.dispatch(data)
+        return self.services.message_dispatcher.dispatch(data)
 
     def set_file_receive_context(self, command_id: int, **context):
         """
@@ -181,7 +193,7 @@ class ClientConnection(BaseSessionConnection):
         :param length: 文件长度
         :return: 文件保存结果元组 (status, message)
         """
-        return self.file_receiver.save_file(command_id, filename, length)
+        return self.services.file_receiver.save_file(command_id, filename, length)
 
     # ------------------ foreground lock ------------------ #
     def acquire_foreground_task(self, task_type: str, command: str, source: str = '', task_id: str = '') -> dict:
@@ -222,6 +234,7 @@ class ClientConnection(BaseSessionConnection):
         """
         return self.runtime.get_foreground_task()
 
+    # ------------------ result wait ------------------ #
     def wait_for_result(self, id: int, command: Optional[str]):
         """
         主线程等待接收结果，并保存执行记录

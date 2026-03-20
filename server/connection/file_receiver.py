@@ -1,6 +1,6 @@
 class ClientFileReceiver:
     """
-    ClientConnection 文件接收器。
+    ClientSessionServices 文件接收器。
 
     职责：
     - 执行底层文件接收
