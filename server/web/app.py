@@ -16,7 +16,6 @@ def create_app(server_instance):
     artifact_service = web_service.artifact_service
     app.register_blueprint(create_background_job_blueprint(server_instance))
 
-    # ------------------ response helpers ------------------ #
     def _ok(data=None, message='ok', code=0, http_status=200):
         payload = {
             'code': code,
@@ -35,7 +34,6 @@ def create_app(server_instance):
             payload.update(extra)
         return jsonify(payload), http_status
 
-    # ------------------ request helpers ------------------ #
     def _get_required_command():
         payload = request.get_json(silent=True) or {}
         command = (payload.get('command') or '').strip()
@@ -55,7 +53,6 @@ def create_app(server_instance):
     def _get_json_payload():
         return request.get_json(silent=True) or {}
 
-    # ------------------ error mapping ------------------ #
     def _map_common_error(error):
         if isinstance(error, ValueError):
             return _fail(str(error), 400)
@@ -64,12 +61,6 @@ def create_app(server_instance):
         return _fail(str(error), 500)
 
     def _json_endpoint(func, *, default_error_status=400):
-        """
-        统一 JSON 接口包装：
-        - 正常返回值自动包装为 _ok(...)
-        - ValueError 按 400 返回
-        - 其他异常按 default_error_status 返回
-        """
         try:
             result = func()
             return _ok(result)
@@ -79,23 +70,16 @@ def create_app(server_instance):
             return _fail(e, default_error_status)
 
     def _file_endpoint(func):
-        """
-        统一文件相关 JSON 接口包装：
-        - 正常返回值自动包装为 _ok(...)
-        - 文件路径/不存在等异常自动映射
-        """
         try:
             result = func()
             return _ok(result)
         except Exception as e:
             return _map_common_error(e)
 
-    # ------------------ pages ------------------ #
     @app.get('/')
     def index():
         return send_from_directory(app.static_folder, 'index.html')
 
-    # ------------------ connections ------------------ #
     @app.get('/api/connections')
     def get_connections():
         return _ok(web_service.get_connections_payload())
@@ -152,7 +136,6 @@ def create_app(server_instance):
 
         return _json_endpoint(_execute)
 
-    # ------------------ remote files ------------------ #
     @app.get('/api/connections/<client_id>/remote-files')
     def browse_remote_files(client_id):
         return _json_endpoint(
@@ -232,7 +215,6 @@ def create_app(server_instance):
 
         return _json_endpoint(_execute, default_error_status=500)
 
-    # ------------------ event stream ------------------ #
     @app.get('/api/stream')
     def stream():
         q = web_service.event_bus.subscribe()
@@ -260,7 +242,6 @@ def create_app(server_instance):
             }
         )
 
-    # ------------------ artifact manager ------------------ #
     @app.get('/api/artifacts')
     def get_artifacts():
         artifact_type = (request.args.get('type') or '').strip()
@@ -312,7 +293,18 @@ def create_app(server_instance):
 
         return _json_endpoint(_execute, default_error_status=500)
 
-    # ------------------ http uploads ------------------ #
+    @app.get('/api/upload-tmp/<temp_id>/<filename>')
+    def download_upload_tmp_file(temp_id, filename):
+        try:
+            file_path = artifact_service.get_upload_temp_file_path(temp_id, filename)
+            return send_file(
+                file_path,
+                as_attachment=True,
+                download_name=os.path.basename(file_path)
+            )
+        except Exception as e:
+            return _map_common_error(e)
+
     app.config['MAX_CONTENT_LENGTH'] = WEB_HTTP_UPLOAD_MAX_BYTES
 
     @app.route('/api/files/upload', methods=['POST'])

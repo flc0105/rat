@@ -12,17 +12,21 @@ class CommandFilePathHttpMixin:
     HTTP 版路径命令 mixin。
 
     说明：
-    - 保持命令名与旧版 file_path_ops 一致，方便切换
-    - 旧版 file_path_ops.py 不改、不删
-    - 当前主要把 download_path 改为通过 server Flask HTTP 上传
-    - 其他路径类命令仍然是本地文件操作，只是保留同样的对外命令名
+    - 保持命令名与旧版 file_path_ops 一致，方便上层调用不变
+    - 文件“下载”类行为统一改为 client -> server HTTP 上传
+    - 目录浏览 / 删除 / 重命名 / 新建目录 仍是本地路径操作
     """
 
-    def _upload_file_to_server_via_http(self, file_path: str, category: str = 'remote_downloads'):
+    HTTP_UPLOAD_TIMEOUT = 120
+    HTTP_DOWNLOAD_TIMEOUT = (15, 300)
+    HTTP_DOWNLOAD_CHUNK_SIZE = 64 * 1024
+
+    # ------------------ http helper ------------------ #
+    def _upload_file_to_server_via_http(self, file_path: str, category: str = 'downloads'):
         """
         将指定文件通过 HTTP 上传到 server Flask
         """
-        upload_url = UPLOAD_BASE_URL + '/api/files/upload'
+        upload_url = UPLOAD_BASE_URL.rstrip('/') + '/api/files/upload'
         client_id = getattr(self.socket, 'client_id', '') or ''
 
         with open(file_path, 'rb') as file_obj:
@@ -33,11 +37,100 @@ class CommandFilePathHttpMixin:
                     'category': category,
                     'client_id': client_id,
                 },
-                timeout=60,
+                timeout=self.HTTP_UPLOAD_TIMEOUT,
             )
 
         return response
 
+    def _parse_http_upload_response(self, response):
+        try:
+            payload = response.json()
+        except Exception:
+            payload = None
+        return payload
+
+    def _build_http_upload_success_message(self, payload, file_path: str, fallback_message: str):
+        if not isinstance(payload, dict):
+            return fallback_message
+
+        message = payload.get('message') or fallback_message
+        data = payload.get('data') or {}
+
+        original_name = data.get('original_name') or os.path.basename(file_path)
+        stored_name = data.get('stored_name') or ''
+        artifact_id = data.get('artifact_id') or ''
+        download_url = data.get('download_url') or ''
+
+        lines = [message, f'Original: {original_name}']
+        if stored_name:
+            lines.append(f'Stored: {stored_name}')
+        if artifact_id:
+            lines.append(f'Artifact ID: {artifact_id}')
+        if download_url:
+            lines.append(f'Download URL: {download_url}')
+
+        return '\n'.join(lines)
+
+    def _upload_single_file_to_server_result(self, file_path: str, category: str = 'downloads'):
+        """
+        上传单文件并返回统一结果文本
+        """
+        file_size = os.path.getsize(file_path)
+
+        self._send_interim_result(1, f'Preparing HTTP upload: {file_path}', 0)
+        self._send_interim_result(1, f'File size: {file_size} bytes', 0)
+
+        response = self._upload_file_to_server_via_http(file_path, category=category)
+        response.raise_for_status()
+
+        payload = self._parse_http_upload_response(response)
+        message = self._build_http_upload_success_message(
+            payload,
+            file_path=file_path,
+            fallback_message='HTTP upload completed'
+        )
+        return 1, message
+
+    def _upload_paths_as_zip_to_server_result(
+        self,
+        resolved_paths: list[str],
+        archive_name: str = '',
+        category: str = 'downloads',
+    ):
+        """
+        将多个路径打成 zip 后通过 HTTP 上传到 server
+        """
+        temp_archive_path = ''
+        try:
+            temp_archive_path = self._create_zip_from_paths(
+                resolved_paths,
+                archive_name=archive_name
+            )
+            return self._upload_single_file_to_server_result(
+                temp_archive_path,
+                category=category
+            )
+        finally:
+            if temp_archive_path and os.path.isfile(temp_archive_path):
+                try:
+                    os.remove(temp_archive_path)
+                except Exception:
+                    pass
+
+    def _download_file_from_http(self, url: str, target_path: str):
+        """
+        从 server HTTP 拉取文件到本地
+        """
+        with requests.get(url, stream=True, timeout=self.HTTP_DOWNLOAD_TIMEOUT) as response:
+            response.raise_for_status()
+
+            with open(target_path, 'wb') as file_obj:
+                for chunk in response.iter_content(chunk_size=self.HTTP_DOWNLOAD_CHUNK_SIZE):
+                    if not chunk:
+                        continue
+                    file_obj.write(chunk)
+
+    # ------------------ file path command ------------------ #
     @desc('Download a file by path', group='file_path', suggest=False)
     def download_path(self, path=''):
         """
@@ -46,37 +139,42 @@ class CommandFilePathHttpMixin:
         """
         try:
             file_path = self._require_existing_file_from_arg(path)
-            file_size = os.path.getsize(file_path)
-
-            self._send_interim_result(1, f'Preparing HTTP upload: {file_path}', 0)
-            self._send_interim_result(1, f'File size: {file_size} bytes', 0)
-
-            response = self._upload_file_to_server_via_http(file_path)
-            response.raise_for_status()
-
-            try:
-                payload = response.json()
-            except Exception:
-                payload = None
-
-            if isinstance(payload, dict):
-                message = payload.get('message') or 'HTTP upload completed'
-                data = payload.get('data') or {}
-                stored_name = data.get('stored_name') or ''
-                original_name = data.get('original_name') or os.path.basename(file_path)
-
-                if stored_name:
-                    return 1, (
-                        f'{message}\n'
-                        f'Original: {original_name}\n'
-                        f'Stored: {stored_name}'
-                    )
-
-                return 1, message
-
-            return 1, 'HTTP upload completed'
+            return self._upload_single_file_to_server_result(
+                file_path,
+                category='downloads'
+            )
         except Exception as e:
             return 0, f'Failed to download file via HTTP: {e}'
+
+    @desc('Download multiple paths as ZIP archive', group='file_path', suggest=False)
+    def download_paths(self, arg=''):
+        """
+        按路径列表打包下载，支持文件和目录混合。
+        HTTP 版实现为：client 本地打包 zip -> 直接 HTTP 上传到 server artifact downloads。
+
+        结构化参数：
+        - paths: 路径数组
+        - archive_name: 可选，自定义压缩包名称（不带 .zip 也可）
+        """
+        try:
+            payload = self._decode_structured_arg(arg)
+            if not isinstance(payload, dict):
+                return 0, 'Invalid download payload'
+
+            raw_paths = payload.get('paths') or []
+            archive_name = (payload.get('archive_name') or '').strip()
+
+            if not isinstance(raw_paths, list) or not raw_paths:
+                return 0, 'paths is required'
+
+            resolved_paths = self._require_existing_paths_from_list(raw_paths)
+            return self._upload_paths_as_zip_to_server_result(
+                resolved_paths,
+                archive_name=archive_name,
+                category='downloads'
+            )
+        except Exception as e:
+            return 0, f'Failed to download paths via HTTP: {e}'
 
     @desc('Browse directory as JSON payload', group='file_path', suggest=False)
     def browse_dir(self, path=''):

@@ -1,4 +1,8 @@
+import base64
 import json
+import os
+
+from server.config.config import WEB_PUBLIC_BASE_URL
 
 
 class RemoteExecutionService:
@@ -12,6 +16,8 @@ class RemoteExecutionService:
     - 统一抓取 artifact
     - 提供 history entry 创建 / 结束辅助能力
     """
+
+    HTTP_RECEIVE_COMMAND_NAME = 'receive_http_upload'
 
     def __init__(self, server):
         self.server = server
@@ -27,11 +33,22 @@ class RemoteExecutionService:
             return target
         return self.server.get_target_connection_by_client_id(str(target))
 
+    # ------------------ internal helpers ------------------ #
+    def _encode_payload_arg(self, payload: dict) -> str:
+        raw = json.dumps(payload, ensure_ascii=False).encode('utf-8')
+        encoded = base64.urlsafe_b64encode(raw).decode('utf-8')
+        return f'__json__:{encoded}'
+
+    def _build_http_receive_command(self, payload: dict) -> str:
+        return f'{self.HTTP_RECEIVE_COMMAND_NAME} {self._encode_payload_arg(payload)}'
+
+    def _build_absolute_upload_url(self, relative_url: str) -> str:
+        base = WEB_PUBLIC_BASE_URL.rstrip('/')
+        path = '/' + str(relative_url or '').lstrip('/')
+        return f'{base}{path}'
+
     # ------------------ history helpers ------------------ #
     def create_history_entry(self, target, command: str, source: str = 'cli', should_record: bool = True) -> str:
-        """
-        创建执行记录并返回 entry_id
-        """
         if not should_record:
             return ''
 
@@ -47,9 +64,6 @@ class RemoteExecutionService:
         )
 
     def finalize_history_entry(self, target, entry_id: str, ok: bool, cwd_end: str = ''):
-        """
-        结束执行记录
-        """
         if not entry_id:
             return
 
@@ -62,9 +76,6 @@ class RemoteExecutionService:
         )
 
     def append_history_output(self, target, entry_id: str, status: int, text: str, eof: int = 0):
-        """
-        追加执行输出到 history
-        """
         if not entry_id:
             return
 
@@ -79,9 +90,6 @@ class RemoteExecutionService:
 
     # ------------------ result helpers ------------------ #
     def collect_result(self, result_iter):
-        """
-        收集生成器结果为单个文本
-        """
         final_status = 1
         parts = []
 
@@ -102,9 +110,6 @@ class RemoteExecutionService:
         extra=None,
         history_entry_id: str = '',
     ):
-        """
-        以结果流方式执行远程命令
-        """
         session = self.get_connection(target)
         return session.send_command(
             command,
@@ -122,9 +127,6 @@ class RemoteExecutionService:
         extra,
         history_entry_id: str = '',
     ):
-        """
-        结构化命令结果流执行
-        """
         return self.stream_command(
             target,
             command,
@@ -142,14 +144,45 @@ class RemoteExecutionService:
         history_entry_id: str = '',
     ):
         """
-        以上传结果流方式执行文件上传
+        以上传结果流方式执行文件上传。
+
+        新实现：
+        - 先将服务端本地文件临时发布到 upload_tmp
+        - 再通过普通命令通知 client 用 HTTP 拉取
+        - 不再走 socket 原始文件流
         """
         session = self.get_connection(target)
-        return session.send_file(
-            local_path,
-            save_dir=remote_path,
-            history_entry_id=history_entry_id
-        )
+        artifact_service = self.server.web_service.artifact_service
+
+        staged_path = ''
+        try:
+            staged_path, safe_name = artifact_service.stage_local_file(
+                local_path,
+                display_name=os.path.basename(local_path)
+            )
+            relative_url = artifact_service.build_upload_temp_download_relative_url(staged_path)
+            absolute_url = self._build_absolute_upload_url(relative_url)
+
+            command = self._build_http_receive_command({
+                'url': absolute_url,
+                'filename': safe_name,
+                'save_dir': remote_path,
+            })
+
+            result_iter = session.send_command(
+                command,
+                type='command',
+                extra=None,
+                history_entry_id=history_entry_id
+            )
+
+            for item in result_iter:
+                yield item
+        finally:
+            try:
+                artifact_service.cleanup_upload_temp_file(staged_path)
+            except Exception:
+                pass
 
     # ------------------ text / json execution ------------------ #
     def run_text_command(
@@ -161,9 +194,6 @@ class RemoteExecutionService:
         extra=None,
         history_entry_id: str = '',
     ) -> str:
-        """
-        执行远程命令并返回最终文本
-        """
         status, text = self.collect_result(
             self.stream_command(
                 target,
@@ -188,9 +218,6 @@ class RemoteExecutionService:
         extra=None,
         history_entry_id: str = '',
     ) -> dict:
-        """
-        执行远程命令并解析 JSON 对象
-        """
         text = self.run_text_command(
             target,
             command,
@@ -208,58 +235,3 @@ class RemoteExecutionService:
             raise RuntimeError('Invalid remote JSON payload: expected object')
 
         return payload
-
-    # ------------------ artifact execution ------------------ #
-    def fetch_artifact(
-        self,
-        target,
-        command: str,
-        *,
-        artifact_type: str,
-        source_type: str,
-        related_path: str = '',
-        category: str = '',
-        extra: dict | None = None,
-        history_entry_id: str = '',
-    ) -> dict:
-        """
-        执行远程命令并接收 artifact
-        """
-        session = self.get_connection(target)
-        command_id = session.command_channel.generate_message_id()
-        capture_result = {}
-
-        if history_entry_id:
-            session.runtime.bind_history_entry(command_id, history_entry_id)
-
-        session.runtime.set_file_receive_context(
-            command_id,
-            artifact_type=artifact_type,
-            category=category,
-            source_type=source_type,
-            related_path=related_path,
-            source_command_id=command_id,
-            capture_result=capture_result,
-            extra=extra or {},
-        )
-
-        session.send({
-            'type': 'command',
-            'id': command_id,
-            'text': command,
-        })
-
-        status, text = self.collect_result(
-            session.command_channel.wait_for_result(command_id, command)
-        )
-        if status != 1:
-            raise RuntimeError(text or 'Remote file fetch failed')
-
-        artifact = capture_result.get('artifact') or {}
-        if not isinstance(artifact, dict) or not artifact.get('artifact_id'):
-            raise RuntimeError('Remote file download completed, but artifact was not found')
-
-        return {
-            'message': text,
-            'artifact': artifact,
-        }

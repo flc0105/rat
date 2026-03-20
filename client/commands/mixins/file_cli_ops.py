@@ -1,13 +1,66 @@
+import os
+
 from core.utils.decorator import desc
 
 
 class CommandFileCliMixin:
     @desc('Download a file from the client', group='file')
     def download(self, filename):
-        if self._is_file_path(filename):
-            self._send_file_download(filename)
-        else:
-            return 0, f'File not found: {self._to_abs_path(filename)}'
+        """
+        旧版为 socket 发送文件。
+        现改为 client 直接通过 HTTP 上传到 server artifact 区。
+        """
+        try:
+            file_path = self._require_existing_file_from_arg(filename)
+            return self._upload_single_file_to_server_result(
+                file_path,
+                category='downloads'
+            )
+        except Exception as e:
+            return 0, f'Failed to download file: {e}'
+
+    @desc('Receive a file from server via HTTP', group='file', suggest=False)
+    def receive_http_upload(self, arg=''):
+        """
+        通过普通命令下发 HTTP 拉取任务，由 client 自己去 server 拉文件并保存到本地。
+
+        结构化参数：
+        - url: server 提供的临时下载地址（绝对 URL）
+        - filename: 保存时使用的文件名
+        - save_dir: 目标目录（可空，空则当前工作目录）
+        """
+        try:
+            payload = self._decode_structured_arg(arg)
+            if not isinstance(payload, dict):
+                return 0, 'Invalid HTTP upload payload'
+
+            url = str(payload.get('url') or '').strip()
+            filename = str(payload.get('filename') or '').strip()
+            save_dir = str(payload.get('save_dir') or '').strip()
+
+            if not url:
+                return 0, 'url is required'
+            if not filename:
+                return 0, 'filename is required'
+
+            target_dir = self._resolve_target_path(save_dir or '.')
+            if os.path.exists(target_dir) and not os.path.isdir(target_dir):
+                return 0, f'Target path is not a directory: {target_dir}'
+
+            os.makedirs(target_dir, exist_ok=True)
+            target_path = os.path.join(target_dir, os.path.basename(filename))
+
+            self._send_interim_result(1, f'Preparing HTTP download: {url}', 0)
+            self._download_file_from_http(url, target_path)
+            file_size = os.path.getsize(target_path)
+
+            return 1, (
+                f'File saved successfully via HTTP\n'
+                f'Path: {target_path}\n'
+                f'Size: {file_size} bytes'
+            )
+        except Exception as e:
+            return 0, f'Failed to receive file via HTTP: {e}'
 
     @desc('Create a ZIP archive', group='file')
     def zip(self, dir_name):

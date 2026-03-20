@@ -155,6 +155,18 @@ class WebArtifactService:
     def create_upload_temp_file(self, upload) -> tuple[str, str]:
         return self.temp_file_service.create_upload_temp_file(upload)
 
+    def stage_local_file(self, source_path: str, display_name: str = '') -> tuple[str, str]:
+        return self.temp_file_service.stage_local_file(source_path, display_name=display_name)
+
+    def get_upload_temp_file_path(self, temp_id: str, filename: str) -> str:
+        return self.temp_file_service.get_temp_file_path(temp_id, filename)
+
+    def build_upload_temp_download_relative_url(self, temp_path: str) -> str:
+        return self.temp_file_service.build_temp_download_relative_url(temp_path)
+
+    def cleanup_upload_temp_file(self, temp_path: str):
+        return self.temp_file_service.cleanup_temp_file(temp_path)
+
     # ------------------ old file_service compatibility ------------------ #
     def get_safe_http_upload_file_path(self, relative_path: str) -> str:
         base_dir = os.path.abspath(self.http_uploads_dir)
