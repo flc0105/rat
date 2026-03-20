@@ -51,17 +51,48 @@ class CommandExecutor:
             self.platform_commands = command_class(self.socket)
         return self.platform_commands
 
-    def _get_or_create_execution_context(self, command_id):
+    def _normalize_timeout(self, timeout):
+        if timeout in (None, ''):
+            return None
+
+        try:
+            value = float(timeout)
+        except Exception:
+            return None
+
+        if value <= 0:
+            return None
+        return value
+
+    def _extract_timeout(self, options=None):
+        if not isinstance(options, dict):
+            return None
+
+        return self._normalize_timeout(
+            options.get('_timeout', options.get('timeout'))
+        )
+
+    def _get_or_create_execution_context(self, command_id, timeout=None):
+        normalized_timeout = self._normalize_timeout(timeout)
+
         with self._context_lock:
             context = self._execution_contexts.get(command_id)
             if context is None:
-                context = CommandExecutionContext(command_id)
+                context = CommandExecutionContext(command_id, timeout=normalized_timeout)
                 self._execution_contexts[command_id] = context
+            elif normalized_timeout is not None:
+                context.set_timeout(normalized_timeout)
             return context
 
     def _clear_execution_context(self, command_id):
         with self._context_lock:
-            self._execution_contexts.pop(command_id, None)
+            context = self._execution_contexts.pop(command_id, None)
+
+        if context is not None:
+            try:
+                context.run_cleanup()
+            except Exception:
+                pass
 
     def cancel_command(self, command_id: int) -> bool:
         """
@@ -75,12 +106,12 @@ class CommandExecutor:
 
         return context.request_cancel()
 
-    def _prepare_commands(self, command_id):
+    def _prepare_commands(self, command_id, timeout=None):
         """
         获取命令实例并绑定当前 command_id
         """
         commands = self.get_commands()
-        execution_context = self._get_or_create_execution_context(command_id)
+        execution_context = self._get_or_create_execution_context(command_id, timeout=timeout)
         if hasattr(commands, 'bind_execution'):
             commands.bind_execution(command_id, execution_context)
         else:
@@ -129,16 +160,20 @@ class CommandExecutor:
         finally:
             self._clear_execution_context(command_id)
 
-    def execute_command(self, command_id, command):
+    def execute_command(self, command_id, command, options=None):
         """
         执行命令
         :param command_id: 命令id，用于返回结果时指定对应的命令id
         :param command: 命令字符串
+        :param options: 执行选项（如 timeout）
         :return: 执行结果元组（状态和消息）
         """
         def _invoke():
             name, arg = parse(command)
-            commands = self._prepare_commands(command_id)
+            commands = self._prepare_commands(
+                command_id,
+                timeout=self._extract_timeout(options)
+            )
 
             builtin_command = self._resolve_builtin_command(commands, name)
             if builtin_command:
@@ -149,27 +184,36 @@ class CommandExecutor:
 
         return self._execute_with_cleanup(command_id, _invoke)
 
-    def execute_argument_command(self, command_id, payload: dict):
+    def execute_argument_command(self, command_id, payload: dict, options=None):
         """
         执行 acmd 结构化实验命令
         :param command_id: 命令id
         :param payload: 结构化命令负载
+        :param options: 执行选项（如 timeout）
         :return: 执行结果元组（状态和消息）
         """
         def _invoke():
-            self._prepare_commands(command_id)
+            payload_timeout = self._extract_timeout(payload)
+            commands = self._prepare_commands(
+                command_id,
+                timeout=payload_timeout if payload_timeout is not None else self._extract_timeout(options)
+            )
             registry = self.get_argument_command_registry()
             return registry.execute(payload)
 
         return self._execute_with_cleanup(command_id, _invoke)
 
-    def execute_script_command(self, command_id, script_text: str, kwargs=None):
+    def execute_script_command(self, command_id, script_text: str, kwargs=None, options=None):
         """
         执行 script 消息
         统一通过 CommandExecutor 入口分发，避免绕过命令执行器
         """
         def _invoke():
-            commands = self._prepare_commands(command_id)
+            timeout = self._extract_timeout(options)
+            if timeout is None and isinstance(kwargs, dict):
+                timeout = self._extract_timeout(kwargs)
+
+            commands = self._prepare_commands(command_id, timeout=timeout)
             return commands.pyexec(script_text, kwargs=kwargs)
 
         return self._execute_with_cleanup(command_id, _invoke)

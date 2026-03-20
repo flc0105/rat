@@ -3,11 +3,11 @@ import os
 import queue
 import traceback
 from datetime import datetime
+from http.cookiejar import logger
 
 from flask import Flask, Response, jsonify, request, send_file, send_from_directory, stream_with_context
-from werkzeug.exceptions import RequestEntityTooLarge
+from werkzeug.exceptions import ClientDisconnected, RequestEntityTooLarge
 
-from core.utils.logger import logger
 from server.config.config import WEB_HTTP_UPLOAD_MAX_BYTES
 from server.web.routes.background_jobs import create_background_job_blueprint
 
@@ -50,12 +50,14 @@ def create_app(server_instance):
     def _json_endpoint(func, *, default_error_status=400):
         try:
             return _ok(func())
+        except RequestEntityTooLarge:
+            return _fail('File is too large', 413)
+        except ClientDisconnected:
+            return _fail('Client disconnected during upload', 400)
         except ValueError as e:
             return _fail(e, 400)
         except FileNotFoundError as e:
             return _fail(e, 404)
-        except RequestEntityTooLarge as e:
-            return _fail('File is too large', 413)
         except Exception as e:
             logger.error(f'Web API error: {e}', exc_info=True)
             traceback.print_exc()

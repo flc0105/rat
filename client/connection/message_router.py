@@ -11,7 +11,11 @@ class ClientInboundMessageRouter(BaseMessageRouter):
 
     def handle_command_message(self, data: dict):
         command_id = data.get('id')
-        result = self.connection.command_executor.execute_command(command_id, data.get('text'))
+        result = self.connection.command_executor.execute_command(
+            command_id,
+            data.get('text'),
+            options=data.get('extra') if isinstance(data.get('extra'), dict) else None,
+        )
         if result:
             return command_id, *result
         return None
@@ -22,6 +26,7 @@ class ClientInboundMessageRouter(BaseMessageRouter):
             command_id,
             data.get('text') or '',
             kwargs=data.get('extra'),
+            options=data.get('extra') if isinstance(data.get('extra'), dict) else None,
         )
         if result:
             return command_id, *result
@@ -31,7 +36,8 @@ class ClientInboundMessageRouter(BaseMessageRouter):
         command_id = data.get('id')
         result = self.connection.command_executor.execute_argument_command(
             command_id,
-            data.get('extra') or {}
+            data.get('extra') or {},
+            options=data.get('extra') if isinstance(data.get('extra'), dict) else None,
         )
         if result:
             return command_id, *result

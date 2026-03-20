@@ -1,11 +1,151 @@
 import json
 import os
+import uuid
 
 import requests
 
-from client.commands.command_context import CommandCancelledError
+from client.commands.command_context import CommandCancelledError, CommandTimeoutError
 from client.config.config import UPLOAD_BASE_URL
 from core.utils.decorator import desc
+
+
+class CancelableMultipartUploadStream:
+    """
+    可取消的 multipart/form-data 流。
+
+    说明：
+    - 使用 file-like read() 接口，而不是生成器迭代
+    - 让 requests / urllib3 按固定 Content-Length 发送请求体
+    - 在 prefix / file / suffix 三段读取过程中统一检查 cancel / timeout
+    """
+
+    def __init__(self, file_path: str, form_data: dict, context, chunk_size: int = 64 * 1024):
+        self.file_path = file_path
+        self.form_data = form_data or {}
+        self.context = context
+        self.chunk_size = chunk_size
+        self.boundary = f'----ratboundary{uuid.uuid4().hex}'
+        self.file_name = os.path.basename(file_path)
+        self.file_size = os.path.getsize(file_path)
+
+        self._opened_file = None
+        self._prefix = self._build_prefix_bytes()
+        self._suffix = self._build_suffix_bytes()
+        self._prefix_offset = 0
+        self._suffix_offset = 0
+        self._file_finished = False
+
+    def _ensure_not_interrupted(self):
+        if self.context is None:
+            return
+        self.context.raise_if_interrupted()
+
+    def _build_prefix_bytes(self) -> bytes:
+        lines = []
+
+        for key, value in self.form_data.items():
+            lines.append(f'--{self.boundary}\r\n'.encode('utf-8'))
+            lines.append(
+                f'Content-Disposition: form-data; name="{key}"\r\n\r\n'.encode('utf-8')
+            )
+            lines.append(str(value).encode('utf-8'))
+            lines.append(b'\r\n')
+
+        lines.append(f'--{self.boundary}\r\n'.encode('utf-8'))
+        lines.append(
+            (
+                'Content-Disposition: form-data; '
+                f'name="file"; filename="{self.file_name}"\r\n'
+            ).encode('utf-8')
+        )
+        lines.append(b'Content-Type: application/octet-stream\r\n\r\n')
+        return b''.join(lines)
+
+    def _build_suffix_bytes(self) -> bytes:
+        return f'\r\n--{self.boundary}--\r\n'.encode('utf-8')
+
+    @property
+    def content_type(self) -> str:
+        return f'multipart/form-data; boundary={self.boundary}'
+
+    @property
+    def content_length(self) -> int:
+        return len(self._prefix) + self.file_size + len(self._suffix)
+
+    def __len__(self) -> int:
+        return self.content_length
+
+    def close(self):
+        try:
+            if self._opened_file is not None:
+                self._opened_file.close()
+        except Exception:
+            pass
+        finally:
+            self._opened_file = None
+
+    def _open_file_if_needed(self):
+        if self._opened_file is None and not self._file_finished:
+            self._opened_file = open(self.file_path, 'rb')
+
+    def _read_from_prefix(self, size: int) -> bytes:
+        if self._prefix_offset >= len(self._prefix):
+            return b''
+
+        end = min(self._prefix_offset + size, len(self._prefix))
+        data = self._prefix[self._prefix_offset:end]
+        self._prefix_offset = end
+        return data
+
+    def _read_from_file(self, size: int) -> bytes:
+        if self._file_finished:
+            return b''
+
+        self._open_file_if_needed()
+        data = self._opened_file.read(size)
+        if data:
+            return data
+
+        self._file_finished = True
+        self.close()
+        return b''
+
+    def _read_from_suffix(self, size: int) -> bytes:
+        if self._suffix_offset >= len(self._suffix):
+            return b''
+
+        end = min(self._suffix_offset + size, len(self._suffix))
+        data = self._suffix[self._suffix_offset:end]
+        self._suffix_offset = end
+        return data
+
+    def read(self, size: int = -1) -> bytes:
+        self._ensure_not_interrupted()
+
+        if size is None or size < 0:
+            size = self.chunk_size
+
+        if size == 0:
+            return b''
+
+        parts = []
+        remaining = size
+
+        while remaining > 0:
+            self._ensure_not_interrupted()
+
+            chunk = self._read_from_prefix(remaining)
+            if not chunk:
+                chunk = self._read_from_file(remaining)
+            if not chunk:
+                chunk = self._read_from_suffix(remaining)
+            if not chunk:
+                break
+
+            parts.append(chunk)
+            remaining -= len(chunk)
+
+        return b''.join(parts)
 
 
 class CommandFilePathHttpMixin:
@@ -26,6 +166,7 @@ class CommandFilePathHttpMixin:
     HTTP_UPLOAD_TIMEOUT = 120
     HTTP_DOWNLOAD_TIMEOUT = (15, 300)
     HTTP_DOWNLOAD_CHUNK_SIZE = 64 * 1024
+    HTTP_UPLOAD_CHUNK_SIZE = 64 * 1024
 
     def _build_http_upload_form_data(
         self,
@@ -55,10 +196,24 @@ class CommandFilePathHttpMixin:
     def _create_cancellable_http_session(self):
         session = requests.Session()
         self._register_cancel_handler(lambda: session.close())
+        self._register_cleanup_handler(lambda: session.close())
         return session
 
     def _raise_if_cancelled_http(self):
-        self._ensure_not_cancelled()
+        self._ensure_not_interrupted()
+
+    def _resolve_http_timeout(self, fallback_timeout=None):
+        timeout_value = self._resolve_timeout(fallback_timeout)
+        if timeout_value is None:
+            return None
+        return max(float(timeout_value), 0.001)
+
+    def _resolve_http_download_timeout(self):
+        connect_timeout, read_timeout = self.HTTP_DOWNLOAD_TIMEOUT
+        resolved_read_timeout = self._resolve_http_timeout(read_timeout)
+        if resolved_read_timeout is None:
+            return connect_timeout, read_timeout
+        return connect_timeout, resolved_read_timeout
 
     def _upload_file_to_server_via_http(
         self,
@@ -70,6 +225,8 @@ class CommandFilePathHttpMixin:
         related_path: str = '',
         extra: dict | None = None,
     ):
+        self._ensure_not_interrupted()
+
         upload_url = UPLOAD_BASE_URL.rstrip('/') + '/api/files/upload'
         form_data = self._build_http_upload_form_data(
             artifact_type=artifact_type,
@@ -81,23 +238,40 @@ class CommandFilePathHttpMixin:
 
         session = self._create_cancellable_http_session()
         response = None
+        stream = CancelableMultipartUploadStream(
+            file_path,
+            form_data,
+            self._get_execution_context(),
+            chunk_size=self.HTTP_UPLOAD_CHUNK_SIZE,
+        )
+        self._register_cancel_handler(stream.close)
+        self._register_cleanup_handler(stream.close)
 
         try:
-            with open(file_path, 'rb') as file_obj:
-                response = session.post(
-                    upload_url,
-                    files={'file': (os.path.basename(file_path), file_obj)},
-                    data=form_data,
-                    timeout=self.HTTP_UPLOAD_TIMEOUT,
-                )
+            headers = {
+                'Content-Type': stream.content_type,
+                'Content-Length': str(stream.content_length),
+            }
+            response = session.post(
+                upload_url,
+                data=stream,
+                headers=headers,
+                timeout=self._resolve_http_timeout(self.HTTP_UPLOAD_TIMEOUT),
+            )
             self._raise_if_cancelled_http()
             return response
         except CommandCancelledError:
             raise
+        except CommandTimeoutError:
+            raise requests.Timeout('HTTP upload timed out')
         except requests.RequestException as e:
             self._raise_if_cancelled_http()
             raise e
         finally:
+            try:
+                stream.close()
+            except Exception:
+                pass
             try:
                 if response is not None:
                     response.close()
@@ -144,7 +318,7 @@ class CommandFilePathHttpMixin:
         related_path: str = '',
         extra: dict | None = None,
     ):
-        self._ensure_not_cancelled()
+        self._ensure_not_interrupted()
         file_size = os.path.getsize(file_path)
 
         self._send_interim_result(1, f'Preparing HTTP upload: {file_path}', 0)
@@ -159,7 +333,7 @@ class CommandFilePathHttpMixin:
             extra=extra,
         )
         response.raise_for_status()
-        self._ensure_not_cancelled()
+        self._ensure_not_interrupted()
 
         payload = self._parse_http_upload_response(response)
         message = self._build_http_upload_success_message(
@@ -182,12 +356,12 @@ class CommandFilePathHttpMixin:
     ):
         temp_archive_path = ''
         try:
-            self._ensure_not_cancelled()
+            self._ensure_not_interrupted()
             temp_archive_path = self._create_zip_from_paths(
                 resolved_paths,
                 archive_name=archive_name
             )
-            self._ensure_not_cancelled()
+            self._ensure_not_interrupted()
             return self._upload_single_file_to_server_result(
                 temp_archive_path,
                 artifact_type=artifact_type,
@@ -204,11 +378,16 @@ class CommandFilePathHttpMixin:
                     pass
 
     def _download_file_from_http(self, url: str, target_path: str):
+        self._ensure_not_interrupted()
         session = self._create_cancellable_http_session()
         response = None
 
         try:
-            response = session.get(url, stream=True, timeout=self.HTTP_DOWNLOAD_TIMEOUT)
+            response = session.get(
+                url,
+                stream=True,
+                timeout=self._resolve_http_download_timeout(),
+            )
             response.raise_for_status()
 
             with open(target_path, 'wb') as file_obj:
@@ -226,6 +405,13 @@ class CommandFilePathHttpMixin:
             except Exception:
                 pass
             raise
+        except CommandTimeoutError:
+            try:
+                if os.path.isfile(target_path):
+                    os.remove(target_path)
+            except Exception:
+                pass
+            raise requests.Timeout('HTTP download timed out')
         except requests.RequestException as e:
             self._raise_if_cancelled_http()
             raise e
@@ -253,6 +439,8 @@ class CommandFilePathHttpMixin:
             )
         except CommandCancelledError:
             return 0, 'Command cancelled'
+        except (CommandTimeoutError, requests.Timeout):
+            return 0, 'Command timed out and was terminated'
         except Exception as e:
             return 0, f'Failed to download file via HTTP: {e}'
 
@@ -285,6 +473,8 @@ class CommandFilePathHttpMixin:
             )
         except CommandCancelledError:
             return 0, 'Command cancelled'
+        except (CommandTimeoutError, requests.Timeout):
+            return 0, 'Command timed out and was terminated'
         except Exception as e:
             return 0, f'Failed to download paths via HTTP: {e}'
 
@@ -304,19 +494,21 @@ class CommandFilePathHttpMixin:
             )
         except CommandCancelledError:
             return 0, 'Command cancelled'
+        except (CommandTimeoutError, requests.Timeout):
+            return 0, 'Command timed out and was terminated'
         except Exception as e:
             return 0, f'Failed to preview file via HTTP: {e}'
 
     @desc('Browse directory as JSON payload', group='file_path', suggest=False)
     def browse_dir(self, path=''):
         try:
-            self._ensure_not_cancelled()
+            self._ensure_not_interrupted()
             directory = self._require_existing_directory_from_arg(path)
 
             entries = []
             with os.scandir(directory) as iterator:
                 for entry in iterator:
-                    self._ensure_not_cancelled()
+                    self._ensure_not_interrupted()
                     try:
                         entries.append(self._build_directory_entry(entry))
                     except Exception:
@@ -332,24 +524,28 @@ class CommandFilePathHttpMixin:
             return 1, json.dumps(payload, ensure_ascii=False)
         except CommandCancelledError:
             return 0, 'Command cancelled'
+        except CommandTimeoutError:
+            return 0, 'Command timed out and was terminated'
         except Exception as e:
             return 0, f'Failed to browse directory: {e}'
 
     @desc('Delete a file or directory', group='file_path', suggest=False)
     def delete_path(self, path=''):
         try:
-            self._ensure_not_cancelled()
+            self._ensure_not_interrupted()
             target_path = self._require_existing_path_from_arg(path)
             return self._delete_target_path(target_path)
         except CommandCancelledError:
             return 0, 'Command cancelled'
+        except CommandTimeoutError:
+            return 0, 'Command timed out and was terminated'
         except Exception as e:
             return 0, f'Failed to delete path: {e}'
 
     @desc('Create a directory', group='file_path', suggest=False)
     def mkdir_path(self, path=''):
         try:
-            self._ensure_not_cancelled()
+            self._ensure_not_interrupted()
             target_path = self._resolve_target_path(self._extract_path_arg(path))
             if not target_path:
                 return 0, 'Path is required'
@@ -358,13 +554,15 @@ class CommandFilePathHttpMixin:
             return 1, f'Directory created: {target_path}'
         except CommandCancelledError:
             return 0, 'Command cancelled'
+        except CommandTimeoutError:
+            return 0, 'Command timed out and was terminated'
         except Exception as e:
             return 0, f'Failed to create directory: {e}'
 
     @desc('Rename a file or directory', group='file_path', suggest=False)
     def rename_path(self, arg=''):
         try:
-            self._ensure_not_cancelled()
+            self._ensure_not_interrupted()
             payload = self._decode_structured_arg(arg)
             if not isinstance(payload, dict):
                 return 0, 'Invalid rename payload'
@@ -381,5 +579,7 @@ class CommandFilePathHttpMixin:
             return 1, f'Renamed to: {renamed_path}'
         except CommandCancelledError:
             return 0, 'Command cancelled'
+        except CommandTimeoutError:
+            return 0, 'Command timed out and was terminated'
         except Exception as e:
             return 0, f'Failed to rename path: {e}'

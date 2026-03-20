@@ -1,6 +1,6 @@
 from abc import ABC
 
-from client.commands.command_context import CommandCancelledError
+from client.commands.command_context import CommandCancelledError, CommandTimeoutError
 
 
 class CommandBase(ABC):
@@ -43,12 +43,44 @@ class CommandBase(ABC):
         context = self._get_execution_context()
         return bool(context and context.is_cancel_requested())
 
+    def _resolve_timeout(self, fallback_timeout=None):
+        context = self._get_execution_context()
+        if context is None:
+            return fallback_timeout
+        return context.resolve_timeout(fallback_timeout)
+
     def _ensure_not_cancelled(self):
-        if self._is_cancel_requested():
-            raise CommandCancelledError('Command cancelled')
+        context = self._get_execution_context()
+        if context is None:
+            return
+        context.raise_if_cancelled()
+
+    def _ensure_not_timed_out(self, fallback_timeout=None):
+        context = self._get_execution_context()
+        if context is None:
+            return
+        context.raise_if_timed_out(fallback_timeout=fallback_timeout)
+
+    def _ensure_not_interrupted(self, fallback_timeout=None):
+        context = self._get_execution_context()
+        if context is None:
+            return
+        context.raise_if_interrupted(fallback_timeout=fallback_timeout)
 
     def _register_cancel_handler(self, handler):
         context = self._get_execution_context()
         if context is None:
             return
         context.add_cancel_handler(handler)
+
+    def _register_cleanup_handler(self, handler):
+        context = self._get_execution_context()
+        if context is None:
+            return
+        context.add_cleanup_handler(handler)
+
+    def _cleanup_execution_context(self):
+        context = self._get_execution_context()
+        if context is None:
+            return
+        context.run_cleanup()
