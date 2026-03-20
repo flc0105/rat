@@ -98,7 +98,7 @@ class MacCommands(CommonCommands):
                 return 0, result.stderr or 'Failed to capture screenshot'
 
             self._send_interim_result(1, 'Screenshot captured successfully', 0)
-            return self._upload_single_file_to_server_result(screenshot_path, category='downloads')
+            return self._upload_single_file_to_server_result(screenshot_path, category='screenshot')
         except subprocess.TimeoutExpired:
             return 0, 'Screenshot capture timed out and was terminated'
         except Exception as e:

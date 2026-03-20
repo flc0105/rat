@@ -12,14 +12,7 @@ class ArtifactRegistryService:
     """
     Artifact 注册/查询服务。
 
-    职责：
-    - 路径分配
-    - meta 注册
-    - 列表查询
-    - 单个查询
-    - 删除 / 清空
-
-    当前仅保留两类正式 artifact：
+    当前正式 artifact 仅保留：
     - files
     - previews
     """
@@ -87,7 +80,7 @@ class ArtifactRegistryService:
         return self._ensure_directory(
             os.path.join(
                 self.artifact_service.previews_dir,
-                self._normalize_hostname(hostname)
+                self._normalize_hostname(hostname),
             )
         )
 
@@ -108,12 +101,7 @@ class ArtifactRegistryService:
 
         return candidate
 
-    def _resolve_formal_file_and_meta_dir(
-        self,
-        artifact_type: str,
-        hostname: str,
-        category: str = ''
-    ) -> tuple[str, str]:
+    def _resolve_formal_file_and_meta_dir(self, artifact_type: str, hostname: str, category: str = '') -> tuple[str, str]:
         normalized_type = self._normalize_artifact_type(artifact_type)
 
         if normalized_type == self.CATEGORY_FILES:
@@ -130,13 +118,7 @@ class ArtifactRegistryService:
 
         raise ValueError(f'Unsupported artifact type: {artifact_type}')
 
-    def allocate_artifact_path(
-        self,
-        artifact_type: str,
-        hostname: str,
-        original_name: str,
-        category: str = ''
-    ) -> dict:
+    def allocate_artifact_path(self, artifact_type: str, hostname: str, original_name: str, category: str = '') -> dict:
         normalized_type = self._normalize_artifact_type(artifact_type)
         file_dir, meta_dir = self._resolve_formal_file_and_meta_dir(
             normalized_type,

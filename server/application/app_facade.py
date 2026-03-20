@@ -59,7 +59,6 @@ class ServerWebService:
             remote_execution_service=self.remote_execution_service,
         )
 
-    # ------------------ helpers ------------------ #
     def _collect_result(self, result_iter):
         final_status = 1
         parts = []
@@ -98,7 +97,6 @@ class ServerWebService:
 
         return result
 
-    # ------------------ connection facade ------------------ #
     def get_connections_payload(self):
         return self.connection_service.get_connections_payload()
 
@@ -111,7 +109,6 @@ class ServerWebService:
     def handle_connection_closed(self, session):
         self.connection_service.handle_connection_closed(session)
 
-    # ------------------ artifact facade ------------------ #
     def list_artifacts(self, artifact_type: str = '', hostname: str = ''):
         return {
             'items': self.artifact_service.list_artifacts(artifact_type=artifact_type, hostname=hostname),
@@ -133,7 +130,25 @@ class ServerWebService:
     def get_artifact_by_id(self, artifact_id: str):
         return self.artifact_service.get_artifact_by_id(artifact_id)
 
-    # ------------------ command candidates facade ------------------ #
+    def publish_artifact_created(self, artifact_info: dict):
+        if not isinstance(artifact_info, dict):
+            return
+
+        self.event_bus.publish('artifact_created', {
+            'artifact_id': artifact_info.get('artifact_id', ''),
+            'artifact_type': artifact_info.get('artifact_type', ''),
+            'category': artifact_info.get('category', ''),
+            'hostname': artifact_info.get('hostname', ''),
+            'client_id': artifact_info.get('client_id', ''),
+            'original_name': artifact_info.get('original_name', ''),
+            'stored_name': artifact_info.get('stored_name', ''),
+            'size': artifact_info.get('size', 0),
+            'created_at': artifact_info.get('created_at', ''),
+            'source_type': artifact_info.get('source_type', ''),
+            'download_url': artifact_info.get('download_url', ''),
+            'preview_url': artifact_info.get('preview_url', ''),
+        })
+
     def get_command_candidates(self, client_id: str):
         session = self.server.get_target_connection_by_client_id(client_id)
 
@@ -166,14 +181,12 @@ class ServerWebService:
         self.server.command_history.clear_history_for_connection(session)
         return None
 
-    # ------------------ task facade ------------------ #
     def submit_web_command(self, client_id: str, command: str):
         return self.task_service.submit_web_command(client_id, command)
 
     def submit_web_upload(self, client_id: str, local_path: str, display_name: str, remote_path: str = ''):
         return self.task_service.submit_web_upload(client_id, local_path, display_name, remote_path)
 
-    # ------------------ background job facade ------------------ #
     def list_background_jobs(self, client_id: str):
         return self.background_job_service.list_jobs(client_id)
 
@@ -189,7 +202,6 @@ class ServerWebService:
     def ingest_background_job_report(self, payload: dict):
         return self.background_job_service.ingest_report(payload)
 
-    # ------------------ remote file facade ------------------ #
     def browse_remote_directory(self, client_id: str, path: str = ''):
         return self.remote_file_service.browse_directory(client_id, path)
 
@@ -211,7 +223,6 @@ class ServerWebService:
     def preview_remote_file(self, client_id: str, path: str):
         return self.remote_file_service.preview_file(client_id, path)
 
-    # ------------------ compatibility facade ------------------ #
     def build_connection(self, transport, addr, info: dict):
         return self.create_web_connection(transport, addr, info)
 
@@ -226,24 +237,3 @@ class ServerWebService:
 
     def submit_upload(self, client_id: str, local_path: str, display_name: str, remote_path: str = ''):
         return self.submit_web_upload(client_id, local_path, display_name, remote_path)
-
-        # 在 ServerWebService 里加这个方法
-
-    def publish_artifact_created(self, artifact_info: dict):
-        if not isinstance(artifact_info, dict):
-            return
-
-        self.event_bus.publish('artifact_created', {
-            'artifact_id': artifact_info.get('artifact_id', ''),
-            'artifact_type': artifact_info.get('artifact_type', ''),
-            'category': artifact_info.get('category', ''),
-            'hostname': artifact_info.get('hostname', ''),
-            'client_id': artifact_info.get('client_id', ''),
-            'original_name': artifact_info.get('original_name', ''),
-            'stored_name': artifact_info.get('stored_name', ''),
-            'size': artifact_info.get('size', 0),
-            'created_at': artifact_info.get('created_at', ''),
-            'source_type': artifact_info.get('source_type', ''),
-            'download_url': artifact_info.get('download_url', ''),
-            'preview_url': artifact_info.get('preview_url', ''),
-        })

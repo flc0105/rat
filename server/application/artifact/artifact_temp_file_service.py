@@ -8,6 +8,10 @@ from werkzeug.utils import secure_filename
 class ArtifactTempFileService:
     """
     Artifact 临时文件服务。
+
+    仅负责 upload_tmp 目录下的临时文件：
+    - 浏览器上传到 server，准备再下发给 client
+    - server 本地文件暂存后给 client 通过 HTTP 拉取
     """
 
     def __init__(self, artifact_service):
@@ -20,12 +24,11 @@ class ArtifactTempFileService:
 
     def create_upload_temp_file(self, upload) -> tuple[str, str]:
         """
-        为上传到客户端的浏览器文件创建临时落盘文件
+        为浏览器上传文件创建临时落盘文件
         :return: (temp_path, safe_name)
         """
         safe_name = secure_filename(upload.filename) or 'upload.bin'
         temp_dir = self._build_temp_dir()
-
         temp_path = os.path.join(temp_dir, safe_name)
         upload.save(temp_path)
         return temp_path, safe_name
@@ -33,17 +36,17 @@ class ArtifactTempFileService:
     def stage_local_file(self, source_path: str, display_name: str = '') -> tuple[str, str]:
         """
         将服务端本地文件复制到 upload_tmp 暂存区，供 client 通过 HTTP 拉取
-        :return: (staged_path, safe_name)
+        :return: (temp_path, safe_name)
         """
-        if not os.path.isfile(source_path):
-            raise FileNotFoundError(f'File not found: {source_path}')
+        abs_source_path = os.path.abspath(source_path)
+        if not os.path.isfile(abs_source_path):
+            raise FileNotFoundError(f'File not found: {abs_source_path}')
 
-        safe_name = secure_filename(display_name or os.path.basename(source_path)) or 'upload.bin'
+        safe_name = secure_filename(display_name or os.path.basename(abs_source_path)) or 'upload.bin'
         temp_dir = self._build_temp_dir()
-        staged_path = os.path.join(temp_dir, safe_name)
-
-        shutil.copy2(source_path, staged_path)
-        return staged_path, safe_name
+        temp_path = os.path.join(temp_dir, safe_name)
+        shutil.copy2(abs_source_path, temp_path)
+        return temp_path, safe_name
 
     def get_temp_file_path(self, temp_id: str, filename: str) -> str:
         """
@@ -71,12 +74,12 @@ class ArtifactTempFileService:
         根据 upload_tmp 下的临时文件路径生成 HTTP 下载相对地址
         """
         base_dir = os.path.abspath(self.artifact_service.upload_tmp_dir)
-        file_path = os.path.abspath(temp_path)
+        abs_temp_path = os.path.abspath(temp_path)
 
-        if not file_path.startswith(base_dir + os.sep):
+        if not abs_temp_path.startswith(base_dir + os.sep):
             raise ValueError('temp file is outside upload tmp dir')
 
-        relative_path = os.path.relpath(file_path, base_dir).replace('\\', '/')
+        relative_path = os.path.relpath(abs_temp_path, base_dir).replace('\\', '/')
         parts = [part for part in relative_path.split('/') if part]
         if len(parts) < 2:
             raise ValueError('invalid staged temp file path')
@@ -101,9 +104,9 @@ class ArtifactTempFileService:
         try:
             parent_dir = os.path.dirname(temp_path)
             base_dir = os.path.abspath(self.artifact_service.upload_tmp_dir)
-            parent_dir_abs = os.path.abspath(parent_dir)
+            abs_parent_dir = os.path.abspath(parent_dir)
 
-            if parent_dir_abs.startswith(base_dir + os.sep) and os.path.isdir(parent_dir_abs):
-                shutil.rmtree(parent_dir_abs, ignore_errors=True)
+            if abs_parent_dir.startswith(base_dir + os.sep) and os.path.isdir(abs_parent_dir):
+                shutil.rmtree(abs_parent_dir, ignore_errors=True)
         except Exception:
             pass

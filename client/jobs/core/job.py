@@ -1,3 +1,4 @@
+import json
 import threading
 import uuid
 from abc import ABC, abstractmethod
@@ -24,8 +25,8 @@ class Job(ABC):
         self.is_running = False
         self.stop_event = threading.Event()
 
-        self.upload_url = UPLOAD_BASE_URL + '/api/files/upload'
-        self.report_url = UPLOAD_BASE_URL + '/api/background-jobs/report'
+        self.upload_url = UPLOAD_BASE_URL.rstrip('/') + '/api/files/upload'
+        self.report_url = UPLOAD_BASE_URL.rstrip('/') + '/api/background-jobs/report'
         self.client_id = None
         self.hostname = ''
 
@@ -75,7 +76,6 @@ class Job(ABC):
                 timeout=10,
             )
         except Exception:
-            # 后台任务不应因为上报失败而崩溃
             pass
 
     def send_to_server(self, status, message, eof=0):
@@ -83,7 +83,6 @@ class Job(ABC):
         向服务端发送任务输出。
         当前实现改为 HTTP 上报。
         """
-
         thread_name = threading.current_thread().name
         formatted_message = (
             f'[{self.job_name}#{self.job_id[:8]} @ {thread_name} '
@@ -114,8 +113,7 @@ class Job(ABC):
             return
 
         artifact_id = (file_info.get('artifact_id') or '').strip()
-        relative_path = (file_info.get('relative_path') or '').strip()
-        if not artifact_id and not relative_path:
+        if not artifact_id:
             return
 
         self._post_job_report(
@@ -126,7 +124,7 @@ class Job(ABC):
                     'artifact_type': file_info.get('artifact_type', ''),
                     'original_name': file_info.get('original_name', ''),
                     'stored_name': file_info.get('stored_name', ''),
-                    'relative_path': relative_path,
+                    'relative_path': file_info.get('relative_path', ''),
                     'size': file_info.get('size', 0),
                     'category': file_info.get('category', ''),
                     'hostname': file_info.get('hostname', ''),
@@ -139,19 +137,37 @@ class Job(ABC):
             )
         )
 
-    def upload_file_via_http(self, file_path, category=None):
+    def upload_file_via_http(
+        self,
+        file_path,
+        category=None,
+        *,
+        artifact_type: str = 'files',
+        source_type: str = 'job_output',
+        related_path: str = '',
+        extra: dict | None = None,
+    ):
+        form_data = {
+            'artifact_type': (artifact_type or 'files').strip() or 'files',
+            'category': (category or '').strip() or 'default',
+            'client_id': self.client_id,
+            'hostname': self.hostname,
+            'job_id': self.job_id,
+            'job_name': self.job_name,
+            'job_key': self.job_key,
+            'source_type': (source_type or 'job_output').strip() or 'job_output',
+            'source_command_id': self.command_id if self.command_id is not None else '',
+            'related_path': (related_path or '').strip(),
+        }
+
+        if isinstance(extra, dict) and extra:
+            form_data['extra'] = json.dumps(extra, ensure_ascii=False)
+
         with open(file_path, 'rb') as file_obj:
             response = requests.post(
                 self.upload_url,
-                files={'file': file_obj},
-                data={
-                    "category": category,
-                    "client_id": self.client_id,
-                    "hostname": self.hostname,
-                    "job_id": self.job_id,
-                    "job_name": self.job_name,
-                    "job_key": self.job_key,
-                },
+                files={'file': (file_path.split('/')[-1], file_obj)},
+                data=form_data,
                 timeout=30,
             )
 
@@ -179,18 +195,9 @@ class Job(ABC):
 
     @abstractmethod
     def run(self):
-        """
-        任务主逻辑
-        """
         raise NotImplementedError
 
     def request_stop(self, notify: bool = True):
-        """
-        请求任务停止。
-
-        Args:
-            notify: 是否向服务端发送停止通知。
-        """
         if self.is_running and notify:
             try:
                 self._report_state('stopping', status=1, text='Stop requested')
@@ -202,7 +209,4 @@ class Job(ABC):
         self.stop_event.set()
 
     def stop(self, notify: bool = True):
-        """
-        默认停止逻辑；子类可覆盖扩展
-        """
         self.request_stop(notify=notify)

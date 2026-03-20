@@ -10,16 +10,15 @@ class ClientSessionRuntime:
     客户端会话运行时。
 
     职责：
-    - 保存与“本次连接会话运行状态”相关的数据
+    - 保存与本次连接会话相关的运行状态
     - 不直接负责 socket 收发
-    - 为 ClientConnection / ClientSessionCommandChannel 提供运行态存取能力
+    - 为 ClientSession / CommandChannel 提供运行态存取能力
 
     当前承载：
     - pending_command_ids
     - message_queue
     - foreground_task_guard
     - history_binding_store
-    - file_receive_context_store
     """
 
     def __init__(self):
@@ -28,6 +27,7 @@ class ClientSessionRuntime:
 
         self._foreground_task_guard = ForegroundTaskGuard()
         self._history_binding_store = HistoryBindingStore()
+
     # ------------------ history binding ------------------ #
     def bind_history_entry(self, command_id: int, entry_id: str):
         """
@@ -47,19 +47,6 @@ class ClientSessionRuntime:
         """
         self._history_binding_store.clear(command_id)
 
-    # ------------------ file receive context ------------------ #
-    def set_file_receive_context(self, command_id: int, **context):
-        """
-        为指定命令设置文件接收上下文
-        """
-        self._file_receive_context_store.set(command_id, **context)
-
-    def pop_file_receive_context(self, command_id: int):
-        """
-        取出并删除指定命令的文件接收上下文
-        """
-        return self._file_receive_context_store.pop(command_id)
-
     # ------------------ foreground task ------------------ #
     def acquire_foreground_task(self, task_type: str, command: str, source: str = '', task_id: str = '') -> dict:
         """
@@ -69,7 +56,7 @@ class ClientSessionRuntime:
             task_type=task_type,
             command=command,
             source=source,
-            task_id=task_id
+            task_id=task_id,
         )
 
     def release_foreground_task(self, task_id: str = '', command: str = '') -> None:

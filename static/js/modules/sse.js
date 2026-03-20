@@ -191,13 +191,13 @@ window.AppSseModule = {
                 const payload = JSON.parse(event.data);
                 this.scheduleBackgroundJobsRefresh(payload.client_id);
 
-                if (payload.client_id === this.selectedId) {
-                    ElementPlus.ElNotification({
-                        title: 'Background Job File',
-                        message: `${payload.display_name || payload.job_name || 'job'} uploaded a file`,
-                        type: 'success'
-                    });
-                }
+                // if (payload.client_id === this.selectedId) {
+                //     ElementPlus.ElNotification({
+                //         title: 'Background Job File',
+                //         message: `${payload.display_name || payload.job_name || 'job'} uploaded a file`,
+                //         type: 'success'
+                //     });
+                // }
 
                 if (this.artifactDialogVisible) {
                     await this.loadArtifacts()

@@ -18,8 +18,14 @@ class ClientInboundMessageRouter(BaseMessageRouter):
 
     def handle_script_message(self, data: dict):
         command_id = data.get('id')
-        result = self.connection.common_commands.pyexec(data['text'], kwargs=data.get('extra'))
-        return command_id, *result
+        result = self.connection.command_executor.execute_script_command(
+            command_id,
+            data.get('text') or '',
+            kwargs=data.get('extra'),
+        )
+        if result:
+            return command_id, *result
+        return None
 
     def handle_acmd_message(self, data: dict):
         command_id = data.get('id')
