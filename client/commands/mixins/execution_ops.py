@@ -2,6 +2,7 @@ import contextlib
 import io
 import locale
 import os
+import signal
 import subprocess
 import sys
 import threading
@@ -11,6 +12,10 @@ from core.utils.decorator import desc
 
 
 class CommandExecutionMixin:
+    DEFAULT_SHELL_TIMEOUT = 30
+    DEFAULT_STREAM_TIMEOUT = 300
+    PROCESS_KILL_GRACE_SECONDS = 2
+
     # ------------------ 通用输出/子进程工具 ------------------ #
     def _get_default_encoding(self):
         """
@@ -29,12 +34,56 @@ class CommandExecutionMixin:
                 break
             self._send_interim_result(1, line.decode(encoding, errors='replace').rstrip('\n'))
 
-    def _run_shell_command(self, command):
+    def _build_process_creation_kwargs(self) -> dict:
+        """
+        构造可被强制终止的一组子进程创建参数
+        """
+        kwargs = {}
+
+        if os.name == 'nt':
+            kwargs['creationflags'] = getattr(subprocess, 'CREATE_NEW_PROCESS_GROUP', 0)
+        else:
+            kwargs['start_new_session'] = True
+
+        return kwargs
+
+    def _terminate_process(self, process: subprocess.Popen):
+        """
+        终止子进程；优先杀整个进程组
+        """
+        if process is None:
+            return
+
+        try:
+            if process.poll() is not None:
+                return
+        except Exception:
+            return
+
+        try:
+            if os.name == 'nt':
+                process.kill()
+            else:
+                os.killpg(os.getpgid(process.pid), signal.SIGKILL)
+        except Exception:
+            try:
+                process.kill()
+            except Exception:
+                pass
+
+        try:
+            process.wait(timeout=self.PROCESS_KILL_GRACE_SECONDS)
+        except Exception:
+            pass
+
+    def _run_shell_command(self, command, timeout=None):
         """
         执行一次性 shell 命令
         """
         encoding = self._get_default_encoding()
-        return subprocess.run(
+        effective_timeout = self.DEFAULT_SHELL_TIMEOUT if timeout is None else timeout
+
+        process = subprocess.Popen(
             command,
             shell=True,
             stdin=subprocess.DEVNULL,
@@ -43,8 +92,20 @@ class CommandExecutionMixin:
             text=True,
             encoding=encoding,
             errors='replace',
-            timeout=30
+            **self._build_process_creation_kwargs()
         )
+
+        try:
+            stdout, stderr = process.communicate(timeout=effective_timeout)
+            return subprocess.CompletedProcess(
+                args=command,
+                returncode=process.returncode,
+                stdout=stdout,
+                stderr=stderr
+            )
+        except subprocess.TimeoutExpired:
+            self._terminate_process(process)
+            raise
 
     def _start_stream_process(self, command):
         """
@@ -55,7 +116,8 @@ class CommandExecutionMixin:
             shell=True,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
-            stdin=subprocess.DEVNULL
+            stdin=subprocess.DEVNULL,
+            **self._build_process_creation_kwargs()
         )
 
     def _start_output_threads(self, process):
@@ -69,6 +131,17 @@ class CommandExecutionMixin:
         stdout_thread.start()
         stderr_thread.start()
         return stdout_thread, stderr_thread
+
+    def _wait_stream_process(self, process, timeout=None):
+        """
+        等待流式子进程结束；超时则强制终止
+        """
+        effective_timeout = self.DEFAULT_STREAM_TIMEOUT if timeout is None else timeout
+        try:
+            return process.wait(timeout=effective_timeout)
+        except subprocess.TimeoutExpired:
+            self._terminate_process(process)
+            raise
 
     def _build_restart_command(self):
         """
@@ -131,7 +204,7 @@ class CommandExecutionMixin:
                 return 1, result.stdout
             return 0, result.stderr or f'Command exited with code {result.returncode}'
         except subprocess.TimeoutExpired:
-            return 0, 'Command timed out'
+            return 0, 'Command timed out and was terminated'
         except Exception as e:
             return 0, f'Failed to execute command: {e}'
 
@@ -159,13 +232,15 @@ class CommandExecutionMixin:
         try:
             process = self._start_stream_process(command)
             self._start_output_threads(process)
-            process.wait()
+            self._wait_stream_process(process)
             time.sleep(0.1)
 
             if process.returncode == 0:
                 self._send_final_result(1, "Command completed")
             else:
                 self._send_final_result(0, f'Command exited with code {process.returncode}')
+        except subprocess.TimeoutExpired:
+            self._send_final_result(0, 'Command timed out and was terminated')
         except Exception as e:
             self._send_final_result(0, f'Failed to execute command: {e}')
 

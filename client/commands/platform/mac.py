@@ -200,7 +200,6 @@ class MacCommands(CommonCommands):
             start_new_session=True
         )
 
-    # ------------------ 已有命令优化 ------------------ #
     @desc("Capture a screenshot", group='platform')
     def screenshot(self):
         screenshot_path = f'screenshot_{get_time()}.png'
@@ -209,12 +208,15 @@ class MacCommands(CommonCommands):
         try:
             self._send_interim_result(1, f'Capturing screen: {capture_command}')
 
-            if not self._run_command_success(capture_command):
-                self._send_final_result(0, 'Failed to capture screenshot')
+            result = self._run_shell_command(capture_command, timeout=15)
+            if result.returncode != 0:
+                self._send_final_result(0, result.stderr or 'Failed to capture screenshot')
                 return
 
             self._send_interim_result(1, 'Screenshot captured successfully')
             self._send_temp_file_result(screenshot_path)
+        except subprocess.TimeoutExpired:
+            self._send_final_result(0, 'Screenshot capture timed out and was terminated')
         except Exception as e:
             self._send_final_result(0, f'Failed to capture screenshot: {e}')
         finally:

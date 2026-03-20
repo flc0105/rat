@@ -46,6 +46,14 @@ class CommandExecutor:
             self.platform_commands = command_class(self.socket)
         return self.platform_commands
 
+    def _prepare_commands(self, command_id):
+        """
+        获取命令实例并绑定当前 command_id
+        """
+        commands = self.get_commands()
+        commands.command_id = command_id
+        return commands
+
     def get_argument_command_registry(self):
         """
         获取当前平台对应的 acmd 注册表（懒加载）
@@ -90,8 +98,7 @@ class CommandExecutor:
         :return: 执行结果元组（状态和消息）
         """
         name, arg = parse(command)
-        commands = self.get_commands()
-        commands.command_id = command_id
+        commands = self._prepare_commands(command_id)
 
         builtin_command = self._resolve_builtin_command(commands, name)
         if builtin_command:
@@ -107,8 +114,14 @@ class CommandExecutor:
         :param payload: 结构化命令负载
         :return: 执行结果元组（状态和消息）
         """
-        commands = self.get_commands()
-        commands.command_id = command_id
-
+        self._prepare_commands(command_id)
         registry = self.get_argument_command_registry()
         return registry.execute(payload)
+
+    def execute_script_command(self, command_id, script_text: str, kwargs=None):
+        """
+        执行 script 消息
+        统一通过 CommandExecutor 入口分发，避免绕过命令执行器
+        """
+        commands = self._prepare_commands(command_id)
+        return commands.pyexec(script_text, kwargs=kwargs)

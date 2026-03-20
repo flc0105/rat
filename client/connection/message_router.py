@@ -25,7 +25,11 @@ class ClientInboundMessageRouter(BaseMessageRouter):
         处理 Python 脚本消息
         """
         command_id = data.get('id')
-        result = self.connection.common_commands.pyexec(data['text'], kwargs=data.get('extra'))
+        result = self.connection.command_executor.execute_script_command(
+            command_id,
+            data.get('text', ''),
+            kwargs=data.get('extra')
+        )
         return command_id, *result
 
     def handle_acmd_message(self, data: dict):
