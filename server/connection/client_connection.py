@@ -3,14 +3,11 @@ import os
 from typing import Generator, Optional
 
 from core.protocol.base_connection import BaseSessionConnection
-from core.protocol.message_queue import MessageQueue, PendingCommandQueue
-from server.connection.file_receive_context_store import FileReceiveContextStore
 from server.connection.file_receiver import ClientFileReceiver
-from server.connection.foreground_task_guard import ForegroundTaskGuard
-from server.connection.history_binding_store import HistoryBindingStore
 from server.connection.message_dispatcher import ServerInboundMessageDispatcher
 from server.connection.message_router import ServerInboundMessageRouter
 from server.connection.result_dispatcher import ServerResultDispatcher
+from server.connection.session_runtime import ClientSessionRuntime
 from server.application.artifact.ingest_service import ArtifactIngestService
 
 
@@ -27,14 +24,10 @@ class ClientConnection(BaseSessionConnection):
         self.address = address
         self.info = info or {}
 
-        self.pending_command_ids = PendingCommandQueue()
-        self.message_queue = MessageQueue()
+        self.runtime = ClientSessionRuntime()
+
         self.is_interactive = False
         self._message_id_counter = 0
-
-        self._file_receive_context_store = FileReceiveContextStore()
-        self._foreground_task_guard = ForegroundTaskGuard()
-        self._history_binding_store = HistoryBindingStore()
 
         self.command_history = None
 
@@ -51,6 +44,15 @@ class ClientConnection(BaseSessionConnection):
         self.message_dispatcher = ServerInboundMessageDispatcher(self)
         self.file_receiver = ClientFileReceiver(self)
         self.artifact_ingest_service = ArtifactIngestService(self)
+
+    # ------------------ 兼容旧属性访问 ------------------ #
+    @property
+    def pending_command_ids(self):
+        return self.runtime.pending_command_ids
+
+    @property
+    def message_queue(self):
+        return self.runtime.message_queue
 
     # ------------------ ID/构包 ------------------ #
     def _generate_message_id(self) -> int:
@@ -92,19 +94,19 @@ class ClientConnection(BaseSessionConnection):
         """
         绑定 command_id -> history entry_id
         """
-        self._history_binding_store.bind(command_id, entry_id)
+        self.runtime.bind_history_entry(command_id, entry_id)
 
     def get_history_entry_id(self, command_id: int) -> str:
         """
         获取指定 command_id 绑定的 history entry_id
         """
-        return self._history_binding_store.get(command_id)
+        return self.runtime.get_history_entry_id(command_id)
 
     def clear_history_entry(self, command_id: int):
         """
         清理指定 command_id 的历史绑定
         """
-        self._history_binding_store.clear(command_id)
+        self.runtime.clear_history_entry(command_id)
 
     def append_file_to_history(self, command_id: int, file_info: dict):
         """
@@ -164,13 +166,13 @@ class ClientConnection(BaseSessionConnection):
         """
         为指定命令设置文件接收上下文
         """
-        self._file_receive_context_store.set(command_id, **context)
+        self.runtime.set_file_receive_context(command_id, **context)
 
     def pop_file_receive_context(self, command_id: int):
         """
         取出并删除指定命令的文件接收上下文
         """
-        return self._file_receive_context_store.pop(command_id)
+        return self.runtime.pop_file_receive_context(command_id)
 
     def save_file(self, command_id, filename, length):
         """
@@ -198,7 +200,7 @@ class ClientConnection(BaseSessionConnection):
         Raises:
             RuntimeError: 当前连接已被其他前台任务占用
         """
-        return self._foreground_task_guard.acquire(
+        return self.runtime.acquire_foreground_task(
             task_type=task_type,
             command=command,
             source=source,
@@ -212,13 +214,13 @@ class ClientConnection(BaseSessionConnection):
         可按 task_id 或 command 做保护性匹配，避免误释放别人的占用。
         若未传匹配条件，则直接释放当前占用。
         """
-        self._foreground_task_guard.release(task_id=task_id, command=command)
+        self.runtime.release_foreground_task(task_id=task_id, command=command)
 
     def get_foreground_task(self):
         """
         获取当前连接的前台占用信息快照
         """
-        return self._foreground_task_guard.snapshot()
+        return self.runtime.get_foreground_task()
 
     def wait_for_result(self, id: int, command: Optional[str]):
         """
@@ -227,14 +229,4 @@ class ClientConnection(BaseSessionConnection):
         :param command: 命令文本
         :return: 结果生成器
         """
-        self.pending_command_ids.put(id)
-
-        try:
-            while 1:
-                status, result, eof = self.message_queue.get()
-                yield status, result
-                if eof:
-                    self.pending_command_ids.get()
-                    break
-        finally:
-            self.clear_history_entry(id)
+        yield from self.runtime.wait_for_result(self, id, command)
