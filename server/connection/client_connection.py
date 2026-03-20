@@ -1,8 +1,5 @@
-import ntpath
-import os
-from typing import Generator, Optional
-
 from core.protocol.base_connection import BaseSessionConnection
+from server.connection.session_command_channel import ClientSessionCommandChannel
 from server.connection.session_runtime import ClientSessionRuntime
 from server.connection.session_services import ClientSessionServices
 
@@ -22,9 +19,9 @@ class ClientConnection(BaseSessionConnection):
 
         self.runtime = ClientSessionRuntime()
         self.services = ClientSessionServices(self)
+        self.command_channel = ClientSessionCommandChannel(self)
 
         self.is_interactive = False
-        self._message_id_counter = 0
 
         self.command_history = None
 
@@ -64,40 +61,24 @@ class ClientConnection(BaseSessionConnection):
     def artifact_ingest_service(self):
         return self.services.artifact_ingest_service
 
-    # ------------------ ID/构包 ------------------ #
+    # ------------------ compatibility for old callers ------------------ #
     def _generate_message_id(self) -> int:
         """
-        生成连接内唯一的消息 ID
+        兼容旧调用入口：生成连接内唯一消息 ID
         """
-        self._message_id_counter += 1
-        return self._message_id_counter
+        return self.command_channel.generate_message_id()
 
     def _build_command_payload(self, command: str, command_type: str = 'command', extra=None) -> dict:
         """
-        构造命令消息
+        兼容旧调用入口：构造命令消息
         """
-        data = {
-            'type': command_type,
-            'id': self._generate_message_id(),
-            'text': command,
-        }
-        if extra:
-            data['extra'] = extra
-        return data
+        return self.command_channel.build_command_payload(command, command_type, extra)
 
     def _build_file_payload(self, filename: str, save_dir: str = '') -> dict:
         """
-        构造文件消息头
+        兼容旧调用入口：构造文件消息头
         """
-        data = {
-            'type': 'file',
-            'id': self._generate_message_id(),
-            'length': os.stat(filename).st_size,
-            'filename': ntpath.basename(filename),
-        }
-        if save_dir:
-            data['save_dir'] = save_dir
-        return data
+        return self.command_channel.build_file_payload(filename, save_dir)
 
     # ------------------ history binding ------------------ #
     def bind_history_entry(self, command_id: int, entry_id: str):
@@ -135,37 +116,26 @@ class ClientConnection(BaseSessionConnection):
             pass
 
     # ------------------ send helpers ------------------ #
-    def send_command(self, command: str, type='command', extra=None, history_entry_id: str = '') -> Generator:
+    def send_command(self, command: str, type='command', extra=None, history_entry_id: str = ''):
         """
         向客户端发送命令
-        :param command: 命令
-        :param type: 命令类型
-        :param extra: 额外信息
-        :param history_entry_id: 执行记录 entry_id
-        :return: 结果生成器
         """
-        data = self._build_command_payload(command, type, extra)
+        return self.command_channel.send_command(
+            command,
+            type=type,
+            extra=extra,
+            history_entry_id=history_entry_id
+        )
 
-        if history_entry_id:
-            self.bind_history_entry(data.get('id'), history_entry_id)
-
-        self.send(data)
-        return self.wait_for_result(data.get('id'), command if type == 'command' else None)
-
-    def send_file(self, filename: str, save_dir: str = '', history_entry_id: str = '') -> Generator:
+    def send_file(self, filename: str, save_dir: str = '', history_entry_id: str = ''):
         """
         向客户端发送文件
-        :param filename: 文件名
-        :param history_entry_id: 执行记录 entry_id
-        :return: 结果生成器
         """
-        data = self._build_file_payload(filename, save_dir)
-
-        if history_entry_id:
-            self.bind_history_entry(data.get('id'), history_entry_id)
-
-        self.send_file_by_header(data, filename)
-        return self.wait_for_result(data.get('id'), 'upload ' + filename)
+        return self.command_channel.send_file(
+            filename,
+            save_dir=save_dir,
+            history_entry_id=history_entry_id
+        )
 
     # ------------------ receive helpers ------------------ #
     def handle_received_message(self, data: dict):
@@ -199,18 +169,6 @@ class ClientConnection(BaseSessionConnection):
     def acquire_foreground_task(self, task_type: str, command: str, source: str = '', task_id: str = '') -> dict:
         """
         尝试占用当前连接的前台执行槽。
-
-        Args:
-            task_type: 任务类型，如 command / upload
-            command: 展示用命令文本
-            source: 来源，如 cli / web
-            task_id: 可选的 web task_id
-
-        Returns:
-            当前占用信息 dict
-
-        Raises:
-            RuntimeError: 当前连接已被其他前台任务占用
         """
         return self.runtime.acquire_foreground_task(
             task_type=task_type,
@@ -222,9 +180,6 @@ class ClientConnection(BaseSessionConnection):
     def release_foreground_task(self, task_id: str = '', command: str = '') -> None:
         """
         释放当前连接的前台执行槽。
-
-        可按 task_id 或 command 做保护性匹配，避免误释放别人的占用。
-        若未传匹配条件，则直接释放当前占用。
         """
         self.runtime.release_foreground_task(task_id=task_id, command=command)
 
@@ -235,11 +190,8 @@ class ClientConnection(BaseSessionConnection):
         return self.runtime.get_foreground_task()
 
     # ------------------ result wait ------------------ #
-    def wait_for_result(self, id: int, command: Optional[str]):
+    def wait_for_result(self, id: int, command: str = ''):
         """
         主线程等待接收结果，并保存执行记录
-        :param id: 命令id
-        :param command: 命令文本
-        :return: 结果生成器
         """
-        yield from self.runtime.wait_for_result(self, id, command)
+        yield from self.command_channel.wait_for_result(id, command)

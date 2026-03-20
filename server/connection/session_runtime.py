@@ -13,7 +13,7 @@ class ClientSessionRuntime:
     职责：
     - 保存与“本次连接会话运行状态”相关的数据
     - 不直接负责 socket 收发
-    - 为 ClientConnection 提供运行态存取能力
+    - 为 ClientConnection / ClientSessionCommandChannel 提供运行态存取能力
 
     当前承载：
     - pending_command_ids
