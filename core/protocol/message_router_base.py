@@ -1,7 +1,6 @@
 class BaseMessageRouter:
     """
     消息分发基类。
-    旧 socket 文件消息（file / rdy）已移除。
     """
 
     def __init__(self, connection):

@@ -1,15 +1,12 @@
 from abc import ABC
 
-from client.jobs.core.manager import JobManager
-
 
 class CommandBase(ABC):
-    """命令基类，定义公共接口"""
+    """命令基类，定义公共接口。"""
 
     def __init__(self, socket):
         self.socket = socket
         self.command_id = None
-        # self.job_manager = JobManager(socket)
 
     def _send_result(self, status, result, eof=1):
         """

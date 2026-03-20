@@ -1,7 +1,10 @@
 class ServerInboundMessageDispatcher:
     """
     Server 侧入站消息调度器。
-    旧 file / rdy 消息已移除。
+
+    当前仅对需要立即消费的消息做分发：
+    - result
+    - heartbeat_ack
     """
 
     IMMEDIATE_MESSAGE_TYPES = {'result', 'heartbeat_ack'}

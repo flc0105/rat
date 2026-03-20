@@ -59,17 +59,6 @@ class ServerWebService:
             remote_execution_service=self.remote_execution_service,
         )
 
-    def _collect_result(self, result_iter):
-        final_status = 1
-        parts = []
-
-        for status, text in result_iter:
-            final_status = status
-            if text is not None:
-                parts.append(str(text))
-
-        return final_status, '\n'.join(part for part in parts if part).strip()
-
     def _get_client_command_candidates(self, session):
         payload = session.info.get('command_manifest') or []
         if not isinstance(payload, list):

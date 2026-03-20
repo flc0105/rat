@@ -1,7 +1,11 @@
 class ClientSessionCommandChannel:
     """
     客户端会话命令通道。
-    旧 socket 文件发送能力已移除。
+
+    职责：
+    - 生成消息 id
+    - 下发远程命令
+    - 等待对应结果返回
     """
 
     def __init__(self, session):

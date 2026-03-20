@@ -12,9 +12,7 @@ class ClientSessionContext:
     - command_history
     - artifact_service
     - on_unexpected_message
-    - on_file_saved
     - on_heartbeat_updated
-    - file_save_dir
     - connected_at
     - disconnected_at
     - last_seen_at
@@ -24,15 +22,12 @@ class ClientSessionContext:
     - last_heartbeat_id
     """
 
-    def __init__(self, *, file_save_dir=None, on_file_saved=None):
+    def __init__(self):
         self.is_interactive = False
         self.command_history = None
         self.artifact_service = None
         self.on_unexpected_message = None
         self.on_heartbeat_updated = None
-
-        self.file_save_dir = file_save_dir
-        self.on_file_saved = on_file_saved
 
         self.connected_at = ''
         self.disconnected_at = ''

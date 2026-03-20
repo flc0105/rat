@@ -37,19 +37,6 @@ class ClientSession:
     def clear_history_entry(self, command_id: int):
         self.runtime.clear_history_entry(command_id)
 
-    def append_file_to_history(self, command_id: int, file_info: dict):
-        if self.context.command_history is None:
-            return
-
-        entry_id = self.runtime.get_history_entry_id(command_id)
-        if not entry_id:
-            return
-
-        try:
-            self.context.command_history.append_file_for_connection(self, entry_id, file_info)
-        except Exception:
-            pass
-
     def send_command(self, command: str, type='command', extra=None, history_entry_id: str = ''):
         return self.command_channel.send_command(
             command,

@@ -1,5 +1,4 @@
 import hashlib
-import io
 import os
 import threading
 import time
@@ -51,19 +50,12 @@ class ClipboardMonitor(Job):
                     self._handle_text_change(clipboard_text)
                     time.sleep(self.interval)
 
-            # 旧逻辑依赖 socket 连接态，先保留注释，当前改为 HTTP 上报，不再依赖 socket 是否连接
-            # if getattr(self.server, 'is_connected', True):
-            #     self.send_to_server(1, 'Clipboard monitor stopped', 0)
             self.send_to_server(1, 'Clipboard monitor stopped', 0)
         except Exception as e:
-            # if getattr(self.server, 'is_connected', True):
-            #     self.send_to_server(0, f'Clipboard monitor error: {e}', 0)
             self.send_to_server(0, f'Clipboard monitor error: {e}', 0)
         finally:
             self.mark_stopped()
             logger.info(f'Thread ended: {threading.current_thread().name}')
-            # if getattr(self.server, 'is_connected', True):
-            #     self.send_to_server(1, f'Task ended: {threading.current_thread().name}', 1)
             self.send_to_server(1, f'Task ended: {threading.current_thread().name}', 1)
 
     def stop(self, notify: bool = True):
@@ -95,7 +87,6 @@ class ClipboardMonitor(Job):
                     self.upload_file_via_http(file_name, 'clipboard_images')
                     self.send_to_server(1, f'Clipboard image uploaded successfully: {file_name}', 0)
                 finally:
-                    print()
                     try:
                         os.remove(file_name)
                     except Exception as e:

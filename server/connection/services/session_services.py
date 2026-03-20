@@ -7,7 +7,6 @@ from server.connection.services.result_dispatcher import ServerResultDispatcher
 class ClientSessionServices:
     """
     客户端会话服务集合。
-    旧 socket 文件接收 / artifact ingest 服务已移除。
     """
 
     def __init__(self, session):

@@ -12,14 +12,6 @@ class RATSocket:
         self.socket = socket.socket(family, type, proto)
         self._send_lock = threading.RLock()
 
-    @property
-    def is_transfer_active(self) -> bool:
-        """
-        兼容旧上层字段。
-        旧 socket 文件传输已移除，因此恒为 False。
-        """
-        return False
-
     def connect(self, address: tuple) -> bool:
         result = self.socket.connect_ex(address)
         return result == 0

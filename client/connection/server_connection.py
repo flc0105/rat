@@ -1,7 +1,6 @@
 import os
 import queue
 
-from client.commands.common import CommonCommands
 from client.commands.executor import CommandExecutor
 from client.connection.message_dispatcher import ClientInboundMessageDispatcher
 from client.connection.message_router import ClientInboundMessageRouter
@@ -13,12 +12,12 @@ from core.utils.logger import logger
 class ServerConnection(RATSocket):
     """
     客户端与服务端的连接类。
-    当前只承载：
+
+    当前承载：
     - 普通消息收发
     - 命令执行结果回传
-    - 后台任务与运行态管理
-
-    旧 socket 文件传输链路已完全移除。
+    - 后台任务运行态管理
+    - 入站消息分发与路由
     """
 
     def __init__(self):
@@ -27,7 +26,6 @@ class ServerConnection(RATSocket):
 
         self.command_executor = CommandExecutor(self)
         self.pending_message_queue = queue.Queue()
-        self.common_commands = CommonCommands(self)
 
         self.job_manager = JobManager(self)
         self.is_connected = False
