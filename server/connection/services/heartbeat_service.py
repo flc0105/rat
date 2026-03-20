@@ -2,15 +2,6 @@ from datetime import datetime
 
 
 class SessionHeartbeatService:
-    """
-    会话心跳服务。
-
-    职责：
-    - 向客户端发送 heartbeat
-    - 接收 heartbeat_ack
-    - 更新 last_seen / rtt 等会话状态
-    """
-
     def __init__(self, session):
         self.session = session
 
@@ -27,15 +18,6 @@ class SessionHeartbeatService:
         self.session.context.disconnected_at = self._now_iso()
 
     def send_heartbeat(self):
-        """
-        文件传输期间暂停 heartbeat，避免控制消息和原始文件流抢占同一 socket。
-        """
-        try:
-            if getattr(self.session.transport, 'is_transfer_active', False):
-                return
-        except Exception:
-            pass
-
         heartbeat_id = self.session.command_channel.generate_message_id()
         now_iso = self._now_iso()
 

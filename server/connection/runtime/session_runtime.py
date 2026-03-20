@@ -1,7 +1,6 @@
 from typing import Optional
 
 from core.protocol.message_queue import MessageQueue, PendingCommandQueue
-from server.connection.runtime.file_receive_context_store import FileReceiveContextStore
 from server.connection.runtime.foreground_task_guard import ForegroundTaskGuard
 from server.connection.runtime.history_binding_store import HistoryBindingStore
 
@@ -29,8 +28,6 @@ class ClientSessionRuntime:
 
         self._foreground_task_guard = ForegroundTaskGuard()
         self._history_binding_store = HistoryBindingStore()
-        self._file_receive_context_store = FileReceiveContextStore()
-
     # ------------------ history binding ------------------ #
     def bind_history_entry(self, command_id: int, entry_id: str):
         """

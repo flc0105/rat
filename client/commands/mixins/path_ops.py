@@ -10,29 +10,18 @@ import zipfile
 
 class CommandPathMixin:
     def _validate_directory_exists(self, path):
-        """
-        校验目录是否存在，并返回绝对路径
-        """
         directory = os.path.abspath(path)
         if not os.path.isdir(directory):
             raise FileNotFoundError(f'Directory not found: {directory}')
         return directory
 
     def _validate_file_exists(self, path):
-        """
-        校验文件是否存在，并返回绝对路径
-        """
         file_path = os.path.abspath(path)
         if not os.path.isfile(file_path):
             raise FileNotFoundError(f'File not found: {file_path}')
         return file_path
 
     def _resolve_target_path(self, path: str) -> str:
-        """
-        将传入路径解析为当前客户端上的绝对路径
-        - 空路径默认当前工作目录
-        - 相对路径基于当前 cwd
-        """
         raw_path = (path or '').strip()
         if not raw_path:
             raw_path = '.'
@@ -43,9 +32,6 @@ class CommandPathMixin:
         return os.path.abspath(os.path.join(os.getcwd(), raw_path))
 
     def _build_parent_path(self, path: str):
-        """
-        获取上级目录；如果已经到根目录，则返回 None
-        """
         current = os.path.abspath(path)
         parent = os.path.dirname(current)
         if parent == current:
@@ -53,9 +39,6 @@ class CommandPathMixin:
         return parent
 
     def _build_directory_entry(self, entry):
-        """
-        构造目录项描述
-        """
         stat_result = entry.stat(follow_symlinks=False)
         is_dir = entry.is_dir(follow_symlinks=True)
         is_symlink = entry.is_symlink()
@@ -72,11 +55,6 @@ class CommandPathMixin:
         }
 
     def _is_hidden_entry(self, entry, stat_result):
-        """
-        判断目录项是否为隐藏文件
-        - Unix/macOS: 以 . 开头
-        - Windows: 支持文件属性隐藏位
-        """
         if entry.name.startswith('.'):
             return True
 
@@ -88,20 +66,12 @@ class CommandPathMixin:
         return False
 
     def _strip_wrapped_quotes(self, value: str) -> str:
-        """
-        去掉参数最外层成对引号
-        """
         text = (value or '').strip()
         if len(text) >= 2 and text[0] == text[-1] and text[0] in ('"', "'"):
             return text[1:-1]
         return text
 
     def _decode_structured_arg(self, raw):
-        """
-        解码结构化参数：
-        - __json__:<base64(json)>
-        - 普通字符串
-        """
         text = self._strip_wrapped_quotes(raw)
         if not text:
             return ''
@@ -115,64 +85,33 @@ class CommandPathMixin:
         return text
 
     def _extract_path_arg(self, raw) -> str:
-        """
-        提取路径参数，兼容普通字符串和结构化参数
-        """
         value = self._decode_structured_arg(raw)
         if isinstance(value, dict):
             return (value.get('path') or '').strip()
         return (value or '').strip()
 
-    # ------------------ 共用 helper ------------------ #
     def _to_abs_path(self, path: str) -> str:
-        """
-        转为绝对路径
-        """
         return os.path.abspath(path)
 
     def _is_file_path(self, path: str) -> bool:
-        """
-        判断是否为现有文件
-        """
         return os.path.isfile(path)
 
     def _get_current_directory(self) -> str:
-        """
-        获取当前工作目录
-        """
         return os.getcwd()
 
-    def _send_file_download(self, file_path: str):
-        """
-        发送文件下载（共用底层逻辑）
-        """
-        file_size = os.path.getsize(file_path)
-        self.socket.send_result(self.command_id, 1, 'Preparing file transfer...', eof=0)
-        self.socket.send_result(self.command_id, 1, f'File size: {file_size} bytes', eof=0)
-        self.socket.send_file(self.command_id, file_path)
-
     def _require_existing_path_from_arg(self, raw) -> str:
-        """
-        从结构化/普通参数中提取并校验路径存在
-        """
         target_path = self._resolve_target_path(self._extract_path_arg(raw))
         if not os.path.exists(target_path):
             raise FileNotFoundError(f'Path not found: {target_path}')
         return target_path
 
     def _require_existing_file_from_arg(self, raw) -> str:
-        """
-        从结构化/普通参数中提取并校验文件存在
-        """
         file_path = self._require_existing_path_from_arg(raw)
         if not os.path.isfile(file_path):
             raise IsADirectoryError(f'Not a file: {file_path}')
         return file_path
 
     def _require_existing_directory_from_arg(self, raw) -> str:
-        """
-        从结构化/普通参数中提取并校验目录存在
-        """
         directory = self._resolve_target_path(self._extract_path_arg(raw))
         if not os.path.exists(directory):
             raise FileNotFoundError(f'Directory not found: {directory}')
@@ -181,9 +120,6 @@ class CommandPathMixin:
         return directory
 
     def _require_existing_paths_from_list(self, paths) -> list[str]:
-        """
-        从路径列表中提取并校验所有路径存在
-        """
         resolved_paths = []
 
         for item in paths:
@@ -208,9 +144,6 @@ class CommandPathMixin:
         return resolved_paths
 
     def _delete_target_path(self, target_path: str):
-        """
-        删除文件或目录
-        """
         if os.path.isdir(target_path):
             shutil.rmtree(target_path)
             return 1, f'Directory deleted: {target_path}'
@@ -219,18 +152,12 @@ class CommandPathMixin:
         return 1, f'File deleted: {target_path}'
 
     def _create_directory(self, target_path: str):
-        """
-        创建目录
-        """
         if os.path.exists(target_path):
             raise FileExistsError(f'Path already exists: {target_path}')
 
         os.makedirs(target_path, exist_ok=False)
 
     def _rename_target_path(self, old_path: str, new_name: str = '', new_path: str = '') -> str:
-        """
-        重命名文件或目录
-        """
         if not os.path.exists(old_path):
             raise FileNotFoundError(f'Path not found: {old_path}')
 
@@ -248,9 +175,6 @@ class CommandPathMixin:
         return target_path
 
     def _create_zip_archive(self, dir_name: str) -> str:
-        """
-        创建 ZIP 压缩包并返回压缩包路径
-        """
         import pathlib
 
         temp_dir = tempfile.mkdtemp()
@@ -266,9 +190,6 @@ class CommandPathMixin:
         )
 
     def _build_download_archive_name(self, paths: list[str], archive_name: str = '') -> str:
-        """
-        生成下载压缩包文件名
-        """
         custom_name = (archive_name or '').strip()
         if custom_name:
             if not custom_name.lower().endswith('.zip'):
@@ -283,17 +204,11 @@ class CommandPathMixin:
         return f'bundle_{timestamp}.zip'
 
     def _iter_directory_files(self, directory: str):
-        """
-        遍历目录内所有文件（递归）
-        """
         for root, _, files in os.walk(directory):
             for filename in files:
                 yield os.path.join(root, filename)
 
     def _write_path_to_zip(self, archive: zipfile.ZipFile, path: str, used_names: set[str]):
-        """
-        将单个文件或目录写入 zip，避免顶层重名冲突
-        """
         normalized_path = os.path.abspath(path)
         top_name = os.path.basename(normalized_path.rstrip('/\\')) or 'item'
         archive_root = top_name
@@ -325,9 +240,6 @@ class CommandPathMixin:
         raise FileNotFoundError(f'Path not found: {normalized_path}')
 
     def _create_zip_from_paths(self, paths: list[str], archive_name: str = '') -> str:
-        """
-        将多个文件/目录打包到 tempfile 生成的 zip 中
-        """
         final_name = self._build_download_archive_name(paths, archive_name=archive_name)
         temp_dir = tempfile.mkdtemp()
         archive_path = os.path.join(temp_dir, final_name)
@@ -340,7 +252,4 @@ class CommandPathMixin:
         return archive_path
 
     def _extract_archive_to_cwd(self, archive_path: str):
-        """
-        解压压缩包到当前工作目录
-        """
         shutil.unpack_archive(archive_path, os.getcwd())

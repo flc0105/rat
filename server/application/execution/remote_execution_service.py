@@ -2,19 +2,11 @@ import base64
 import json
 import os
 
-from server.config.config import WEB_PUBLIC_BASE_URL
-
 
 class RemoteExecutionService:
     """
     统一远程执行服务。
-
-    职责：
-    - 根据 client_id / session 获取目标会话
-    - 统一执行远程文本命令 / 结构化命令
-    - 统一上传文件
-    - 统一抓取 artifact
-    - 提供 history entry 创建 / 结束辅助能力
+    旧 socket 文件传输已移除。
     """
 
     HTTP_RECEIVE_COMMAND_NAME = 'receive_http_upload'
@@ -22,18 +14,11 @@ class RemoteExecutionService:
     def __init__(self, server):
         self.server = server
 
-    # ------------------ session helpers ------------------ #
     def get_connection(self, target):
-        """
-        target 支持：
-        - client_id: str
-        - ClientSession 实例
-        """
-        if hasattr(target, 'send_command') and hasattr(target, 'send_file'):
+        if hasattr(target, 'send_command'):
             return target
         return self.server.get_target_connection_by_client_id(str(target))
 
-    # ------------------ internal helpers ------------------ #
     def _encode_payload_arg(self, payload: dict) -> str:
         raw = json.dumps(payload, ensure_ascii=False).encode('utf-8')
         encoded = base64.urlsafe_b64encode(raw).decode('utf-8')
@@ -42,9 +27,6 @@ class RemoteExecutionService:
     def _build_http_receive_command(self, payload: dict) -> str:
         return f'{self.HTTP_RECEIVE_COMMAND_NAME} {self._encode_payload_arg(payload)}'
 
-
-
-    # ------------------ history helpers ------------------ #
     def create_history_entry(self, target, command: str, source: str = 'cli', should_record: bool = True) -> str:
         if not should_record:
             return ''
@@ -85,7 +67,6 @@ class RemoteExecutionService:
             eof
         )
 
-    # ------------------ result helpers ------------------ #
     def collect_result(self, result_iter):
         final_status = 1
         parts = []
@@ -97,7 +78,6 @@ class RemoteExecutionService:
 
         return final_status, '\n'.join(part for part in parts if part).strip()
 
-    # ------------------ stream execution ------------------ #
     def stream_command(
         self,
         target,
@@ -140,14 +120,6 @@ class RemoteExecutionService:
         remote_path: str = '',
         history_entry_id: str = '',
     ):
-        """
-        以上传结果流方式执行文件上传。
-
-        新实现：
-        - 先将服务端本地文件临时发布到 upload_tmp
-        - 再通过普通命令通知 client 用 HTTP 拉取
-        - 不再走 socket 原始文件流
-        """
         session = self.get_connection(target)
         artifact_service = self.server.web_service.artifact_service
 
@@ -180,7 +152,6 @@ class RemoteExecutionService:
             except Exception:
                 pass
 
-    # ------------------ text / json execution ------------------ #
     def run_text_command(
         self,
         target,

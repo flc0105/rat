@@ -20,7 +20,6 @@ class CommandFileCliMixin:
         except Exception as e:
             return 0, f'Failed to download file: {e}'
 
-
     @desc('Receive a file from server via HTTP', group='file', suggest=False)
     def receive_http_upload(self, arg=''):
         """

@@ -1,18 +1,9 @@
 from dataclasses import dataclass, field
-from typing import Any, Callable
+from typing import Any
 
 
 @dataclass
 class ArtifactRecord:
-    """
-    Artifact 正式记录模型。
-
-    说明：
-    - 这是 artifact 的统一内部领域模型
-    - meta 文件持久化时使用 to_meta_dict()
-    - 对前端输出时使用 to_view_dict()
-    """
-
     artifact_id: str = ''
     artifact_type: str = ''
     category: str = ''
@@ -67,9 +58,6 @@ class ArtifactRecord:
         )
 
     def to_meta_dict(self) -> dict:
-        """
-        持久化到 meta.json 的字段
-        """
         payload = {
             'artifact_id': self.artifact_id,
             'artifact_type': self.artifact_type,
@@ -97,58 +85,7 @@ class ArtifactRecord:
         return payload
 
     def to_view_dict(self, *, is_available: bool = True, status_text: str = '') -> dict:
-        """
-        对外展示用字段
-        """
         payload = self.to_meta_dict()
         payload['is_available'] = bool(is_available)
         payload['status_text'] = status_text or ''
         return payload
-
-
-@dataclass
-class FileReceiveContext:
-    """
-    文件接收上下文模型。
-
-    说明：
-    - 由发送文件前的上游逻辑构造
-    - 由 file_receiver 读取并驱动 artifact 注册 / 历史挂载 / 回调
-    """
-
-    artifact_type: str = 'downloads'
-    category: str = ''
-    source_type: str = 'socket_file'
-    related_path: str = ''
-    source_command_id: Any = None
-    extra: dict = field(default_factory=dict)
-    on_file_saved: Callable | None = None
-    capture_result: dict | None = None
-
-    @classmethod
-    def from_dict(cls, payload: dict | None):
-        if not isinstance(payload, dict):
-            return cls()
-
-        return cls(
-            artifact_type=(payload.get('artifact_type') or 'downloads').strip() or 'downloads',
-            category=(payload.get('category') or '').strip(),
-            source_type=(payload.get('source_type') or 'socket_file').strip() or 'socket_file',
-            related_path=(payload.get('related_path') or '').strip(),
-            source_command_id=payload.get('source_command_id'),
-            extra=payload.get('extra') if isinstance(payload.get('extra'), dict) else {},
-            on_file_saved=payload.get('on_file_saved') if callable(payload.get('on_file_saved')) else None,
-            capture_result=payload.get('capture_result') if isinstance(payload.get('capture_result'), dict) else None,
-        )
-
-    def to_dict(self) -> dict:
-        return {
-            'artifact_type': self.artifact_type,
-            'category': self.category,
-            'source_type': self.source_type,
-            'related_path': self.related_path,
-            'source_command_id': self.source_command_id,
-            'extra': dict(self.extra),
-            'on_file_saved': self.on_file_saved,
-            'capture_result': self.capture_result,
-        }

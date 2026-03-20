@@ -4,22 +4,10 @@ from core.protocol.message_router_base import BaseMessageRouter
 class ServerInboundMessageRouter(BaseMessageRouter):
     """
     Server 侧入站消息路由器。
-
-    职责：
-    - 按消息 type 分发到对应处理逻辑
-    - 不关心结果最终进入哪个队列
+    旧 file / rdy 消息已移除。
     """
 
-    def handle_ready_message(self, data: dict) -> None:
-        """
-        处理文件传输就绪信号
-        """
-        self.connection.ready_queue.put(data.get('id'), data.get('status'))
-
     def handle_result_message(self, data: dict) -> None:
-        """
-        处理命令执行结果消息
-        """
         self.connection.info['cwd'] = data.get('cwd')
         self.connection.services.result_dispatcher.dispatch_result(
             data.get('id'),
@@ -28,26 +16,6 @@ class ServerInboundMessageRouter(BaseMessageRouter):
             data.get('eof')
         )
 
-    def handle_file_message(self, data: dict) -> None:
-        """
-        处理客户端上传的文件消息
-        """
-        self.connection.info['cwd'] = data.get('cwd')
-        status, text = self.connection.save_file(
-            data.get('id'),
-            data.get('filename'),
-            data.get('length')
-        )
-        self.connection.services.result_dispatcher.dispatch_result(
-            data.get('id'),
-            status,
-            text,
-            1
-        )
-
     def handle_heartbeat_ack_message(self, data: dict) -> None:
-        """
-        处理客户端 heartbeat ack。
-        """
         self.connection.info['cwd'] = data.get('cwd') or self.connection.info.get('cwd', '')
         self.connection.services.heartbeat_service.handle_heartbeat_ack(data)

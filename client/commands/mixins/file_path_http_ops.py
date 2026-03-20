@@ -21,11 +21,7 @@ class CommandFilePathHttpMixin:
     HTTP_DOWNLOAD_TIMEOUT = (15, 300)
     HTTP_DOWNLOAD_CHUNK_SIZE = 64 * 1024
 
-    # ------------------ http helper ------------------ #
     def _upload_file_to_server_via_http(self, file_path: str, category: str = 'downloads'):
-        """
-        将指定文件通过 HTTP 上传到 server Flask
-        """
         upload_url = UPLOAD_BASE_URL.rstrip('/') + '/api/files/upload'
         client_id = getattr(self.socket, 'client_id', '') or ''
 
@@ -72,9 +68,6 @@ class CommandFilePathHttpMixin:
         return '\n'.join(lines)
 
     def _upload_single_file_to_server_result(self, file_path: str, category: str = 'downloads'):
-        """
-        上传单文件并返回统一结果文本
-        """
         file_size = os.path.getsize(file_path)
 
         self._send_interim_result(1, f'Preparing HTTP upload: {file_path}', 0)
@@ -97,9 +90,6 @@ class CommandFilePathHttpMixin:
         archive_name: str = '',
         category: str = 'downloads',
     ):
-        """
-        将多个路径打成 zip 后通过 HTTP 上传到 server
-        """
         temp_archive_path = ''
         try:
             temp_archive_path = self._create_zip_from_paths(
@@ -118,9 +108,6 @@ class CommandFilePathHttpMixin:
                     pass
 
     def _download_file_from_http(self, url: str, target_path: str):
-        """
-        从 server HTTP 拉取文件到本地
-        """
         with requests.get(url, stream=True, timeout=self.HTTP_DOWNLOAD_TIMEOUT) as response:
             response.raise_for_status()
 
@@ -130,13 +117,8 @@ class CommandFilePathHttpMixin:
                         continue
                     file_obj.write(chunk)
 
-    # ------------------ file path command ------------------ #
     @desc('Download a file by path', group='file_path', suggest=False)
     def download_path(self, path=''):
-        """
-        按路径“下载”文件：
-        HTTP 版实现为 client 直接上传到 server Flask。
-        """
         try:
             file_path = self._require_existing_file_from_arg(path)
             return self._upload_single_file_to_server_result(
@@ -148,14 +130,6 @@ class CommandFilePathHttpMixin:
 
     @desc('Download multiple paths as ZIP archive', group='file_path', suggest=False)
     def download_paths(self, arg=''):
-        """
-        按路径列表打包下载，支持文件和目录混合。
-        HTTP 版实现为：client 本地打包 zip -> 直接 HTTP 上传到 server artifact downloads。
-
-        结构化参数：
-        - paths: 路径数组
-        - archive_name: 可选，自定义压缩包名称（不带 .zip 也可）
-        """
         try:
             payload = self._decode_structured_arg(arg)
             if not isinstance(payload, dict):
@@ -178,10 +152,6 @@ class CommandFilePathHttpMixin:
 
     @desc('Browse directory as JSON payload', group='file_path', suggest=False)
     def browse_dir(self, path=''):
-        """
-        浏览目录，返回 JSON 结构，供 Web 端可视化文件浏览使用。
-        这里仍是本地路径操作；当前架构下不涉及文件字节传输。
-        """
         try:
             directory = self._require_existing_directory_from_arg(path)
 
@@ -206,9 +176,6 @@ class CommandFilePathHttpMixin:
 
     @desc('Delete a file or directory', group='file_path', suggest=False)
     def delete_path(self, path=''):
-        """
-        删除文件或目录。
-        """
         try:
             target_path = self._require_existing_path_from_arg(path)
             return self._delete_target_path(target_path)
@@ -217,9 +184,6 @@ class CommandFilePathHttpMixin:
 
     @desc('Create a directory', group='file_path', suggest=False)
     def mkdir_path(self, path=''):
-        """
-        创建目录。
-        """
         try:
             target_path = self._resolve_target_path(self._extract_path_arg(path))
             if not target_path:
@@ -232,11 +196,6 @@ class CommandFilePathHttpMixin:
 
     @desc('Rename a file or directory', group='file_path', suggest=False)
     def rename_path(self, arg=''):
-        """
-        重命名文件或目录。
-        兼容：
-        - 结构化参数：old_path + new_name / new_path
-        """
         try:
             payload = self._decode_structured_arg(arg)
             if not isinstance(payload, dict):

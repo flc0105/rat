@@ -5,12 +5,6 @@ import json
 class WebRemoteFileService:
     """
     远程文件应用服务。
-
-    职责：
-    - 调用客户端目录浏览命令
-    - 调用客户端删除命令
-    - 调用客户端下载命令
-    - 将客户端返回结果转换成上层可直接消费的数据
     """
 
     DOWNLOAD_RESULT_PREFIX = 'Artifact ID:'
@@ -107,6 +101,7 @@ class WebRemoteFileService:
 
         normalized_path = path.strip()
         command = self._build_command('download_path', {'path': normalized_path})
+
         result_text = self.remote_execution_service.run_text_command(
             client_id,
             command,
@@ -142,6 +137,7 @@ class WebRemoteFileService:
             'paths': normalized_paths,
             'archive_name': archive_name,
         })
+
         result_text = self.remote_execution_service.run_text_command(
             client_id,
             command,
@@ -161,6 +157,7 @@ class WebRemoteFileService:
 
         normalized_path = path.strip()
         command = self._build_command('download_path', {'path': normalized_path})
+
         result_text = self.remote_execution_service.run_text_command(
             client_id,
             command,
