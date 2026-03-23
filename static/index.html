@@ -89,6 +89,10 @@
                                 <div class="info-label">RTT</div>
                                 <div class="info-value">{{ formatConnectionRtt(currentConnection) }}</div>
                             </div>
+                            <div class="info-card">
+                                <div class="info-label">Integrity</div>
+                                <div class="info-value">{{ currentConnection.integrity }}</div>
+                            </div>
                             <div class="info-card info-card-wide">
                                 <div class="info-label">Working Directory</div>
                                 <div class="info-value mono">{{ currentConnection.cwd || '-' }}</div>
@@ -129,20 +133,13 @@
                                         <el-button size="small" class="tool-btn" @click="clearOutput">Clear</el-button>
                                         <el-button size="small" class="tool-btn" @click="scrollToBottom">Bottom
                                         </el-button>
-                                        <el-button
-                                                size="small"
-                                                class="tool-btn tool-btn-danger"
-                                                :disabled="!hasRunningWebTask"
-                                                :loading="currentTaskIsCancelling"
-                                                @click="cancelCurrentTask"
-                                        >
-                                            Cancel
-                                        </el-button>
+
                                     </div>
                                 </div>
 
                                 <div class="command-row">
-                                    <div class="command-box command-box-full">
+                                    <div class="command-box command-box-full"
+                                         style="display: flex; gap: 8px; align-items: center;">
                                         <input
                                                 ref="commandInputRef"
                                                 v-model="commandText"
@@ -152,6 +149,7 @@
                                                 autocomplete="off"
                                                 placeholder="Enter a command..."
                                                 @keyup.enter="sendCommand"
+                                                style="flex: 1; min-width: 0;"
                                         />
                                         <datalist id="commandCandidatesList">
                                             <option
@@ -166,11 +164,21 @@
                                                 class="run-button"
                                                 :disabled="sending || hasRunningWebTask"
                                                 @click="sendCommand"
+                                                style="white-space: nowrap;"
                                         >
                                             <span v-if="!sending && !hasRunningWebTask">Run</span>
                                             <span v-else-if="sending">...</span>
                                             <span v-else>Busy</span>
                                         </button>
+                                        <el-button
+                                                class="run-button tool-btn-danger"
+                                                :disabled="!hasRunningWebTask"
+                                                :loading="currentTaskIsCancelling"
+                                                @click="cancelCurrentTask"
+                                                style="white-space: nowrap;"
+                                        >
+                                            Cancel
+                                        </el-button>
                                     </div>
                                 </div>
 
@@ -427,14 +435,14 @@
                 </div>
             </div>
 
-        <el-tabs v-model="artifactActiveTab" class="command-history-tabs" @tab-change="loadArtifacts">
-    <el-tab-pane name="files">
-        <template #label>Files ({{ artifactCountMap.files || 0 }})</template>
-    </el-tab-pane>
-    <el-tab-pane name="previews">
-        <template #label>Previews ({{ artifactCountMap.previews || 0 }})</template>
-    </el-tab-pane>
-</el-tabs>
+            <el-tabs v-model="artifactActiveTab" class="command-history-tabs" @tab-change="loadArtifacts">
+                <el-tab-pane name="files">
+                    <template #label>Files ({{ artifactCountMap.files || 0 }})</template>
+                </el-tab-pane>
+                <el-tab-pane name="previews">
+                    <template #label>Previews ({{ artifactCountMap.previews || 0 }})</template>
+                </el-tab-pane>
+            </el-tabs>
 
             <div class="dialog-table-shell">
                 <el-table :data="filteredArtifactItems" v-loading="artifactLoading" stripe width="100%" height="100%"

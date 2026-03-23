@@ -273,7 +273,7 @@ body {
 }
 
 .info-card-wide {
-  grid-column: span 5;
+  grid-column: span 4;
 }
 
 .info-label {
@@ -451,7 +451,9 @@ body {
   background: #1d4ed8;
 }
 
-.run-button:disabled {
+
+
+.cancel:disabled {
   opacity: 0.7;
   cursor: not-allowed;
 }

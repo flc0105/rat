@@ -1,8 +1,7 @@
 import os
 
 from client.config.config import UPLOAD_BASE_URL
-from client.config.runtime_config import HTTP_TRANSFER_MODE, HTTP_UPLOAD_CANCEL_UNSUPPORTED_MESSAGE, \
-    HTTP_DOWNLOAD_CANCEL_UNSUPPORTED_MESSAGE
+from client.config.runtime_config import HTTP_TRANSFER_MODE, HTTP_DOWNLOAD_CANCEL_UNSUPPORTED_MESSAGE
 from core.utils.decorator import desc
 
 
@@ -36,7 +35,7 @@ class CommandFileCliMixin:
         try:
 
             # add temp fix
-            if HTTP_TRANSFER_MODE=='legacy':
+            if HTTP_TRANSFER_MODE == 'legacy':
                 self._set_cancel_policy(
                     supported=False,
                     message=HTTP_DOWNLOAD_CANCEL_UNSUPPORTED_MESSAGE)
