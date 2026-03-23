@@ -323,3 +323,48 @@ class CommandExecutionMixin:
             subprocess.Popen(restart_command, shell=True)
         self.socket.close()
         sys.exit(0)
+
+    @desc('Run a command with live output', group='shell')
+    @interruptible()
+    def canping(self, command):
+        try:
+            process = self._start_stream_process("ping -c 6 127.0.0.01")
+            self._start_output_threads(process)
+            self._wait_stream_process(process)
+            time.sleep(0.1)
+
+            if process.returncode == 0:
+                self._send_final_result(1, "Command completed")
+            else:
+                self._send_final_result(0, f'Command exited with code {process.returncode}')
+        except CommandCancelledError:
+            self._send_final_result(0, 'Command cancelled')
+        except (CommandTimeoutError, subprocess.TimeoutExpired):
+            self._send_final_result(0, 'Command timed out and was terminated')
+        except Exception as e:
+            self._send_final_result(0, f'Failed to execute command: {e}')
+
+    @desc('Run a command with live output', group='shell')
+    @interruptible()
+    def noping(self, command):
+        try:
+            self._set_cancel_policy(
+                supported=False)
+
+            process = self._start_stream_process("ping -c 6 127.0.0.01")
+            self._start_output_threads(process)
+            self._wait_stream_process(process)
+            time.sleep(0.1)
+
+            if process.returncode == 0:
+                self._send_final_result(1, "Command completed")
+            else:
+                self._send_final_result(0, f'Command exited with code {process.returncode}')
+        except CommandCancelledError:
+            self._send_final_result(0, 'Command cancelled')
+        except (CommandTimeoutError, subprocess.TimeoutExpired):
+            self._send_final_result(0, 'Command timed out and was terminated')
+        except Exception as e:
+            self._send_final_result(0, f'Failed to execute command: {e}')
+
+        #TODO 没有注解的不允许取消

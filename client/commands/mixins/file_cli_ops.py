@@ -57,6 +57,11 @@ class CommandFileCliMixin:
             target_path = os.path.join(target_dir, os.path.basename(filename))
 
             self._send_interim_result(1, f'Preparing HTTP download: {url}', 0)
+
+            #这个过程之后才可取消，之前取消不了。手动设置cancelpolicy之后 会提示command notrun因为这时还没有启动cancelpolicy，(我们不能设置 因为方法能不能被取消取决于strategy
+            # 所以我们可以考虑方法开始的时候判断一下当前模式 如果strategy是legacy直接拒绝 而不单纯依赖于上传后判断
+            #因为上传到临时目录 也很慢 这个过程用户不知道能不能取消
+            # 如果不手动设置则默认方法其实可以被取消，但是又取消不掉，类似pyexec import time;time.sleep(3)
             self._download_file_from_http(url, target_path)
             file_size = os.path.getsize(target_path)
 

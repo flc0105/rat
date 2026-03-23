@@ -14,6 +14,7 @@ from client.commands.http_transfer.base import HttpTransferStrategy
 class LegacyHttpTransferStrategy(HttpTransferStrategy):
     MODE_NAME = 'legacy'
 
+    #TODO 这个方法上传4GB文件会报错
     def upload_file(self, file_path: str, upload_url: str, form_data: dict):
         self.configure_context_for_upload()
 
