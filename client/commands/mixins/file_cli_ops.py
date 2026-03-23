@@ -1,6 +1,8 @@
 import os
 
 from client.config.config import UPLOAD_BASE_URL
+from client.config.runtime_config import HTTP_TRANSFER_MODE, HTTP_UPLOAD_CANCEL_UNSUPPORTED_MESSAGE, \
+    HTTP_DOWNLOAD_CANCEL_UNSUPPORTED_MESSAGE
 from core.utils.decorator import desc
 
 
@@ -32,6 +34,13 @@ class CommandFileCliMixin:
         - save_dir: 目标目录（可空，空则当前工作目录）
         """
         try:
+
+            # add temp fix
+            if HTTP_TRANSFER_MODE=='legacy':
+                self._set_cancel_policy(
+                    supported=False,
+                    message=HTTP_DOWNLOAD_CANCEL_UNSUPPORTED_MESSAGE)
+
             payload = self._decode_structured_arg(arg)
             if not isinstance(payload, dict):
                 return 0, 'Invalid HTTP upload payload'
@@ -58,9 +67,9 @@ class CommandFileCliMixin:
 
             self._send_interim_result(1, f'Preparing HTTP download: {url}', 0)
 
-            #这个过程之后才可取消，之前取消不了。手动设置cancelpolicy之后 会提示command notrun因为这时还没有启动cancelpolicy，(我们不能设置 因为方法能不能被取消取决于strategy
+            # 这个过程之后才可取消，之前取消不了。手动设置cancelpolicy之后 会提示command notrun因为这时还没有启动cancelpolicy，(我们不能设置 因为方法能不能被取消取决于strategy
             # 所以我们可以考虑方法开始的时候判断一下当前模式 如果strategy是legacy直接拒绝 而不单纯依赖于上传后判断
-            #因为上传到临时目录 也很慢 这个过程用户不知道能不能取消
+            # 因为上传到临时目录 也很慢 这个过程用户不知道能不能取消
             # 如果不手动设置则默认方法其实可以被取消，但是又取消不掉，类似pyexec import time;time.sleep(3)
             self._download_file_from_http(url, target_path)
             file_size = os.path.getsize(target_path)
