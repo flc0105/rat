@@ -9,7 +9,7 @@ import threading
 import time
 
 from client.commands.command_context import CommandCancelledError, CommandTimeoutError
-from client.commands.interrupts import interruptible
+from client.commands.interrupts import interruptible, cancel_policy, timeout
 from client.config.runtime_config import (
     COMMAND_DEFAULT_SHELL_TIMEOUT,
     COMMAND_DEFAULT_STREAM_TIMEOUT,
@@ -326,9 +326,11 @@ class CommandExecutionMixin:
 
     @desc('Run a command with live output', group='shell')
     @interruptible()
+    @timeout(5)
+    @cancel_policy(True)
     def canping(self, command):
         try:
-            process = self._start_stream_process("ping -c 6 127.0.0.01")
+            process = self._start_stream_process("ping -c 10 127.0.0.1")
             self._start_output_threads(process)
             self._wait_stream_process(process)
             time.sleep(0.1)
@@ -346,12 +348,14 @@ class CommandExecutionMixin:
 
     @desc('Run a command with live output', group='shell')
     @interruptible()
+    @timeout(20)
+    @cancel_policy(False)
     def noping(self, command):
         try:
-            self._set_cancel_policy(
-                supported=False)
+            # self._set_cancel_policy(
+            #     supported=False)
 
-            process = self._start_stream_process("ping -c 6 127.0.0.01")
+            process = self._start_stream_process("ping -c 10 127.0.0.1")
             self._start_output_threads(process)
             self._wait_stream_process(process)
             time.sleep(0.1)

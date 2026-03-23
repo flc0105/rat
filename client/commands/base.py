@@ -73,6 +73,16 @@ class CommandBase(ABC):
             return
         context.set_cancel_policy(supported=supported, message=message)
 
+    #add
+    def _set_timeout(self, timeout: float):
+        """
+        设置当前命令的超时时间
+        """
+        context = self._get_execution_context()
+        if context is None:
+            return
+        context.set_timeout(timeout)
+
     def _register_cancel_handler(self, handler):
         context = self._get_execution_context()
         if context is None:

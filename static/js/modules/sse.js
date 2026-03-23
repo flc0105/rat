@@ -68,6 +68,8 @@ window.AppSseModule = {
             this.connections = this.dedupeConnections(this.connections);
         },
 
+
+
         removeConnection(clientId) {
             const idx = this.connections.findIndex(item => item.client_id === clientId);
             if (idx === -1) return;
@@ -128,9 +130,15 @@ window.AppSseModule = {
                 });
             });
 
+            //TODO 这里会让dataList重新渲染
+
             es.addEventListener('connection_heartbeat', (event) => {
                 const payload = JSON.parse(event.data);
                 const conn = payload.connection;
+                //
+                // //add
+                // this.statusNowTick = Date.now();
+
                 this.upsertConnection(conn);
             });
 

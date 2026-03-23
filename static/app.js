@@ -1,4 +1,4 @@
-const { createApp } = Vue;
+const {createApp} = Vue;
 
 createApp({
     data() {
@@ -18,9 +18,9 @@ createApp({
         this.loadConnections();
         this.initSSE();
 
-        // this.statusTickTimer = setInterval(() => {
-        //     this.statusNowTick = Date.now();
-        // }, 15000);
+        this.statusTickTimer = setInterval(() => {
+            this.statusNowTick = Date.now();
+        }, 30 * 1000);
     },
 
     beforeUnmount() {

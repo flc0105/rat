@@ -15,14 +15,13 @@ from server.application.app_facade import ServerWebService
 from server.application.command.alias_manager import AliasManager
 from server.application.command.executor import CommandExecutor
 from server.application.history.history_store import CommandHistoryStore
-from server.config.config import SOCKET_ADDR
+from server.config.config import SOCKET_ADDR, HEARTBEAT_INTERVAL_SECONDS
 from server.connection.client_session import ClientSession
 from server.connection.connection_manager import ConnectionManager
 from server.connection.transport.client_transport import ClientTransport
 
 
 class Server:
-    HEARTBEAT_INTERVAL_SECONDS = 15
 
     def __init__(self, address):
         """
@@ -63,7 +62,7 @@ class Server:
             except Exception as e:
                 logger.error(f'Heartbeat loop error: {e}', exc_info=True)
 
-            time.sleep(self.HEARTBEAT_INTERVAL_SECONDS)
+            time.sleep(HEARTBEAT_INTERVAL_SECONDS)
 
     # ------------------ 连接建立 ------------------ #
     def _bind_server_socket(self):
