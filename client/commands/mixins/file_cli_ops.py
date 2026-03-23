@@ -1,18 +1,26 @@
 import os
 
+from client.commands.interrupts import interruptible
 from client.config.config import UPLOAD_BASE_URL
-from client.config.runtime_config import HTTP_TRANSFER_MODE, HTTP_DOWNLOAD_CANCEL_UNSUPPORTED_MESSAGE
+from client.config.runtime_config import HTTP_TRANSFER_MODE, HTTP_DOWNLOAD_CANCEL_UNSUPPORTED_MESSAGE, \
+    HTTP_UPLOAD_CANCEL_UNSUPPORTED_MESSAGE
 from core.utils.decorator import desc
 
 
 class CommandFileCliMixin:
     @desc('Download a file from the client', group='file')
+    @interruptible()
     def download(self, filename):
         """
         旧版为 socket 发送文件。
         现改为 client 直接通过 HTTP 上传到 server artifact 区。
         """
         try:
+            if HTTP_TRANSFER_MODE == 'legacy':
+                self._set_cancel_policy(
+                    supported=False,
+                    message=HTTP_DOWNLOAD_CANCEL_UNSUPPORTED_MESSAGE)
+
             file_path = self._require_existing_file_from_arg(filename)
             return self._upload_single_file_to_server_result(
                 file_path,
@@ -22,6 +30,7 @@ class CommandFileCliMixin:
             return 0, f'Failed to download file: {e}'
 
     @desc('Receive a file from server via HTTP', group='file', suggest=False)
+    @interruptible()
     def receive_http_upload(self, arg=''):
         """
         通过普通命令下发 HTTP 拉取任务，由 client 自己去 server 拉文件并保存到本地。
@@ -34,11 +43,11 @@ class CommandFileCliMixin:
         """
         try:
 
-            # add temp fix
+            # 如果传输模式为legacy在正式上传之前设置不可取消
             if HTTP_TRANSFER_MODE == 'legacy':
                 self._set_cancel_policy(
                     supported=False,
-                    message=HTTP_DOWNLOAD_CANCEL_UNSUPPORTED_MESSAGE)
+                    message=HTTP_UPLOAD_CANCEL_UNSUPPORTED_MESSAGE)
 
             payload = self._decode_structured_arg(arg)
             if not isinstance(payload, dict):
@@ -65,11 +74,6 @@ class CommandFileCliMixin:
             target_path = os.path.join(target_dir, os.path.basename(filename))
 
             self._send_interim_result(1, f'Preparing HTTP download: {url}', 0)
-
-            # 这个过程之后才可取消，之前取消不了。手动设置cancelpolicy之后 会提示command notrun因为这时还没有启动cancelpolicy，(我们不能设置 因为方法能不能被取消取决于strategy
-            # 所以我们可以考虑方法开始的时候判断一下当前模式 如果strategy是legacy直接拒绝 而不单纯依赖于上传后判断
-            # 因为上传到临时目录 也很慢 这个过程用户不知道能不能取消
-            # 如果不手动设置则默认方法其实可以被取消，但是又取消不掉，类似pyexec import time;time.sleep(3)
             self._download_file_from_http(url, target_path)
             file_size = os.path.getsize(target_path)
 

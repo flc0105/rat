@@ -14,7 +14,7 @@ from client.commands.http_transfer.base import HttpTransferStrategy
 class LegacyHttpTransferStrategy(HttpTransferStrategy):
     MODE_NAME = 'legacy'
 
-    #TODO 这个方法上传4GB文件会报错
+    # TODO 这个方法上传4GB文件会报错
     def upload_file(self, file_path: str, upload_url: str, form_data: dict):
         self.configure_context_for_upload()
 
@@ -30,12 +30,12 @@ class LegacyHttpTransferStrategy(HttpTransferStrategy):
         self.configure_context_for_download()
 
         with requests.get(
-            url,
-            stream=True,
-            timeout=(
-                HTTP_DOWNLOAD_CONNECT_TIMEOUT_LEGACY,
-                HTTP_DOWNLOAD_READ_TIMEOUT_LEGACY,
-            ),
+                url,
+                stream=True,
+                timeout=(
+                        HTTP_DOWNLOAD_CONNECT_TIMEOUT_LEGACY,
+                        HTTP_DOWNLOAD_READ_TIMEOUT_LEGACY,
+                ),
         ) as response:
             response.raise_for_status()
             with open(target_path, 'wb') as file_obj:

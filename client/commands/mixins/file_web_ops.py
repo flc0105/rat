@@ -13,12 +13,12 @@ from client.config.runtime_config import (
     HTTP_DOWNLOAD_READ_TIMEOUT_CANCELABLE,
     HTTP_TRANSFER_MODE,
     HTTP_UPLOAD_CHUNK_SIZE,
-    HTTP_UPLOAD_TIMEOUT_CANCELABLE,
+    HTTP_UPLOAD_TIMEOUT_CANCELABLE, HTTP_DOWNLOAD_CANCEL_UNSUPPORTED_MESSAGE,
 )
 from core.utils.decorator import desc
 
 
-class CommandFilePathHttpMixin:
+class CommandFileWebMixin:
     """
     HTTP 版路径命令 mixin。
 
@@ -206,6 +206,11 @@ class CommandFilePathHttpMixin:
         下载单个路径到 server artifact files 区
         """
         try:
+            if HTTP_TRANSFER_MODE == 'legacy':
+                self._set_cancel_policy(
+                    supported=False,
+                    message=HTTP_DOWNLOAD_CANCEL_UNSUPPORTED_MESSAGE)
+
             file_path = self._require_existing_file_from_arg(path)
             return self._upload_single_file_to_server_result(
                 file_path,
