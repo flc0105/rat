@@ -184,7 +184,7 @@ class CommandExecutionMixin:
         构造当前程序重启命令
         """
         if os.name == 'nt':
-            from core.utils.client_util.win32util import get_executable_path
+            from core.utils.client_util import get_executable_path
             return get_executable_path()
 
         if os.name == 'posix':
@@ -296,15 +296,35 @@ class CommandExecutionMixin:
         except Exception as e:
             self._send_final_result(0, f'Failed to execute command: {e}')
 
+    # @desc('Execute Python code', group='shell')
+    # @interruptible()
+    # @cancel_policy(False)
+    # def pyexec(self, code, kwargs=None):
+    #     if kwargs is None:
+    #         kwargs = {}
+    #     output = io.StringIO()
+    #     with contextlib.redirect_stdout(output), contextlib.redirect_stderr(output):
+    #         exec(code, kwargs)
+    #     return 1, output.getvalue()
+
     @desc('Execute Python code', group='shell')
     @interruptible()
     @cancel_policy(False)
     def pyexec(self, code, kwargs=None):
         if kwargs is None:
             kwargs = {}
+
+        # 创建执行环境，将 kwargs 合并到全局变量中
+        exec_globals = {}
+        exec_globals.update(kwargs)  # 用户传入的参数
+
+        # 同时注入 kwargs 本身，方便脚本使用
+        exec_globals['kwargs'] = kwargs
+
         output = io.StringIO()
         with contextlib.redirect_stdout(output), contextlib.redirect_stderr(output):
-            exec(code, kwargs)
+            exec(code, exec_globals)
+
         return 1, output.getvalue()
 
     @desc('Execute Python code with streaming output (generator)', group='shell')

@@ -272,8 +272,20 @@ body {
   min-width: 0;
 }
 
-.info-card-wide {
+.info-card-wide-2 {
+  grid-column: span 2;
+}
+
+.info-card-wide-3 {
+  grid-column: span 3;
+}
+
+.info-card-wide-4 {
   grid-column: span 4;
+}
+
+.info-card-wide-5 {
+  grid-column: span 5;
 }
 
 .info-label {

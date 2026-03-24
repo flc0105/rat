@@ -1,64 +1,122 @@
 window.AppCommandsModule = {
     methods: {
-        buildConnectionIdentityKey(item) {
-            if (!item) return '';
-            const hostname = String(item.hostname || '').trim().toLowerCase();
-            const addr = String(this.formatAddress(item.addr) || '').trim().toLowerCase();
-            const osType = String(item.os_type || '').trim().toLowerCase();
-            return `${hostname}__${addr}__${osType}`;
-        },
+        // static/js/modules/commands.js
+buildConnectionIdentityKey(item) {
+    if (!item) return '';
+    // 直接返回 clientId 作为唯一标识
+    return item.client_id;
+},
 
-        dedupeConnections(items) {
-            const order = {online: 0, stale: 1, offline: 2};
-            const grouped = new Map();
+dedupeConnections(items) {
+    const order = {online: 0, stale: 1, offline: 2};
+    const grouped = new Map();
 
-            (Array.isArray(items) ? items : []).forEach((item) => {
-                if (!item || !item.client_id) return;
+    (Array.isArray(items) ? items : []).forEach((item) => {
+        if (!item || !item.client_id) return;
 
-                const key = this.buildConnectionIdentityKey(item) || item.client_id;
-                const existing = grouped.get(key);
+        const key = item.client_id;  // 直接用 clientId
+        const existing = grouped.get(key);
 
-                if (!existing) {
-                    grouped.set(key, {...item});
-                    return;
-                }
+        if (!existing) {
+            grouped.set(key, {...item});
+            return;
+        }
 
-                const existingState = this.getConnectionDisplayState(existing);
-                const currentState = this.getConnectionDisplayState(item);
+        const existingState = this.getConnectionDisplayState(existing);
+        const currentState = this.getConnectionDisplayState(item);
 
-                const existingOrder = Object.prototype.hasOwnProperty.call(order, existingState) ? order[existingState] : 9;
-                const currentOrder = Object.prototype.hasOwnProperty.call(order, currentState) ? order[currentState] : 9;
+        const existingOrder = Object.prototype.hasOwnProperty.call(order, existingState) ? order[existingState] : 9;
+        const currentOrder = Object.prototype.hasOwnProperty.call(order, currentState) ? order[currentState] : 9;
 
-                if (currentOrder < existingOrder) {
-                    grouped.set(key, {...existing, ...item});
-                    return;
-                }
+        if (currentOrder < existingOrder) {
+            grouped.set(key, {...existing, ...item});
+            return;
+        }
 
-                if (currentOrder > existingOrder) {
-                    return;
-                }
+        if (currentOrder > existingOrder) {
+            return;
+        }
 
-                const existingTime = String(existing.last_seen_at || existing.connected_at || existing.disconnected_at || '');
-                const currentTime = String(item.last_seen_at || item.connected_at || item.disconnected_at || '');
+        const existingTime = String(existing.last_seen_at || existing.connected_at || existing.disconnected_at || '');
+        const currentTime = String(item.last_seen_at || item.connected_at || item.disconnected_at || '');
 
-                if (currentTime >= existingTime) {
-                    grouped.set(key, {...existing, ...item});
-                }
-            });
+        if (currentTime >= existingTime) {
+            grouped.set(key, {...existing, ...item});
+        }
+    });
 
-            return Array.from(grouped.values()).sort((a, b) => {
-                const sa = this.getConnectionDisplayState(a);
-                const sb = this.getConnectionDisplayState(b);
+    return Array.from(grouped.values()).sort((a, b) => {
+        const sa = this.getConnectionDisplayState(a);
+        const sb = this.getConnectionDisplayState(b);
 
-                const oa = Object.prototype.hasOwnProperty.call(order, sa) ? order[sa] : 9;
-                const ob = Object.prototype.hasOwnProperty.call(order, sb) ? order[sb] : 9;
-                if (oa !== ob) return oa - ob;
+        const oa = Object.prototype.hasOwnProperty.call(order, sa) ? order[sa] : 9;
+        const ob = Object.prototype.hasOwnProperty.call(order, sb) ? order[sb] : 9;
+        if (oa !== ob) return oa - ob;
 
-                const ta = String(a.last_seen_at || a.connected_at || a.disconnected_at || '');
-                const tb = String(b.last_seen_at || b.connected_at || b.disconnected_at || '');
-                return tb.localeCompare(ta);
-            });
-        },
+        const ta = String(a.last_seen_at || a.connected_at || a.disconnected_at || '');
+        const tb = String(b.last_seen_at || b.connected_at || b.disconnected_at || '');
+        return tb.localeCompare(ta);
+    });
+},
+        // buildConnectionIdentityKey(item) {
+        //     if (!item) return '';
+        //     const hostname = String(item.hostname || '').trim().toLowerCase();
+        //     const addr = String(this.formatAddress(item.addr) || '').trim().toLowerCase();
+        //     const osType = String(item.os_type || '').trim().toLowerCase();
+        //     return `${hostname}__${addr}__${osType}`;
+        // },
+        //
+        // dedupeConnections(items) {
+        //     const order = {online: 0, stale: 1, offline: 2};
+        //     const grouped = new Map();
+        //
+        //     (Array.isArray(items) ? items : []).forEach((item) => {
+        //         if (!item || !item.client_id) return;
+        //
+        //         const key = this.buildConnectionIdentityKey(item) || item.client_id;
+        //         const existing = grouped.get(key);
+        //
+        //         if (!existing) {
+        //             grouped.set(key, {...item});
+        //             return;
+        //         }
+        //
+        //         const existingState = this.getConnectionDisplayState(existing);
+        //         const currentState = this.getConnectionDisplayState(item);
+        //
+        //         const existingOrder = Object.prototype.hasOwnProperty.call(order, existingState) ? order[existingState] : 9;
+        //         const currentOrder = Object.prototype.hasOwnProperty.call(order, currentState) ? order[currentState] : 9;
+        //
+        //         if (currentOrder < existingOrder) {
+        //             grouped.set(key, {...existing, ...item});
+        //             return;
+        //         }
+        //
+        //         if (currentOrder > existingOrder) {
+        //             return;
+        //         }
+        //
+        //         const existingTime = String(existing.last_seen_at || existing.connected_at || existing.disconnected_at || '');
+        //         const currentTime = String(item.last_seen_at || item.connected_at || item.disconnected_at || '');
+        //
+        //         if (currentTime >= existingTime) {
+        //             grouped.set(key, {...existing, ...item});
+        //         }
+        //     });
+        //
+        //     return Array.from(grouped.values()).sort((a, b) => {
+        //         const sa = this.getConnectionDisplayState(a);
+        //         const sb = this.getConnectionDisplayState(b);
+        //
+        //         const oa = Object.prototype.hasOwnProperty.call(order, sa) ? order[sa] : 9;
+        //         const ob = Object.prototype.hasOwnProperty.call(order, sb) ? order[sb] : 9;
+        //         if (oa !== ob) return oa - ob;
+        //
+        //         const ta = String(a.last_seen_at || a.connected_at || a.disconnected_at || '');
+        //         const tb = String(b.last_seen_at || b.connected_at || b.disconnected_at || '');
+        //         return tb.localeCompare(ta);
+        //     });
+        // },
 
         setActiveTask(clientId, taskId) {
             if (!clientId) return;
