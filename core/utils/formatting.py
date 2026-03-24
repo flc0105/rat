@@ -90,3 +90,38 @@ def print_table(headers: Iterable[Any], data: Iterable[Iterable[Any]]) -> None:
     for row in rows:
         print(row_format.format(*row))
     print()
+
+
+def format_table(headers: Iterable[Any], data: Iterable[Iterable[Any]]) -> str:
+    """
+    将表格数据格式化为字符串并返回，而不是直接打印
+    """
+    headers = list(headers)
+    rows = [list(row) for row in data]
+
+    if not headers:
+        return "No headers to display"
+
+    if not rows:
+        return "No data to display"
+
+    column_count = len(headers)
+    rows = [row for row in rows if len(row) == column_count]
+    if not rows:
+        return "Table rows do not match header count"
+
+    column_widths = [
+        max(len(str(headers[i])), *(len(str(row[i])) for row in rows))
+        for i in range(column_count)
+    ]
+
+    row_format = " | ".join(f"{{:<{width}}}" for width in column_widths)
+
+    lines = []
+    lines.append(row_format.format(*headers))
+    lines.append("-" * (sum(column_widths) + 3 * (column_count - 1)))
+
+    for row in rows:
+        lines.append(row_format.format(*row))
+
+    return "\n".join(lines)

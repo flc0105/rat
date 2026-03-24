@@ -298,6 +298,7 @@ class CommandExecutionMixin:
 
     @desc('Execute Python code', group='shell')
     @interruptible()
+    @cancel_policy(False)
     def pyexec(self, code, kwargs=None):
         if kwargs is None:
             kwargs = {}
@@ -305,6 +306,176 @@ class CommandExecutionMixin:
         with contextlib.redirect_stdout(output), contextlib.redirect_stderr(output):
             exec(code, kwargs)
         return 1, output.getvalue()
+
+    @desc('Execute Python code with streaming output (generator)', group='shell')
+    @interruptible()
+    @cancel_policy(False)
+    def pyexec_gen(self, code, kwargs=None):
+        """
+        执行 Python 代码并生成输出流
+        """
+        if kwargs is None:
+            kwargs = {}
+
+        try:
+            import sys
+            from io import StringIO
+
+            # 创建自定义的 StringIO 来捕获输出
+            class StreamGenerator:
+                def __init__(self, owner):
+                    self.owner = owner
+                    self.buffer = ''
+
+                def write(self, text):
+                    if text:
+                        self.buffer += text
+                        lines = self.buffer.split('\n')
+                        self.buffer = lines[-1]
+                        for line in lines[:-1]:
+                            if line:
+                                self.owner._send_interim_result(1, line, 0)
+
+                def flush(self):
+                    if self.buffer:
+                        self.owner._send_interim_result(1, self.buffer, 0)
+                        self.buffer = ''
+
+            # 保存原始 stdout/stderr
+            old_stdout = sys.stdout
+            old_stderr = sys.stderr
+
+            # 创建捕获器
+            generator = StreamGenerator(self)
+
+            sys.stdout = generator
+            sys.stderr = generator
+
+            try:
+                exec(code, kwargs)
+                generator.flush()
+            except Exception as e:
+                self._send_interim_result(0, f'Error: {e}', 0)
+                return 0, f'Execution failed: {e}'
+            finally:
+                sys.stdout = old_stdout
+                sys.stderr = old_stderr
+
+            self._send_final_result(1, "Code execution completed")
+
+        except CommandCancelledError:
+            return 0, 'Command cancelled'
+        except CommandTimeoutError:
+            return 0, 'Command timed out'
+        except Exception as e:
+            return 0, f'Failed to execute code: {e}'
+
+    @desc('Execute Python code in subprocess with streaming output', group='shell')
+    @interruptible()
+    def pyexec_subprocess_gen(self, code, kwargs=None):
+        """
+        在子进程中执行 Python 代码，实时流式输出，支持强制取消
+        """
+        if kwargs is None:
+            kwargs = {}
+
+        import subprocess
+        import tempfile
+        os
+        import select
+        import threading
+
+        temp_file = None
+        process = None
+
+        try:
+            # 创建临时文件
+            with tempfile.NamedTemporaryFile(mode='w', suffix='.py', delete=False, encoding='utf-8') as f:
+                # 写入用户代码
+                f.write(code)
+                temp_file = f.name
+
+            # 启动子进程
+            process = subprocess.Popen(
+                ['python3', temp_file],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                bufsize=1  # 行缓冲
+            )
+
+            # 注册取消处理器
+            def cancel_handler():
+                if process and process.poll() is None:
+                    try:
+                        process.terminate()
+                        try:
+                            process.wait(timeout=2)
+                        except subprocess.TimeoutExpired:
+                            process.kill()
+                    except Exception:
+                        pass
+
+            self._register_cancel_handler(cancel_handler)
+
+            # 实时读取输出并发送
+            def read_stream(stream, is_stderr=False):
+                for line in iter(stream.readline, ''):
+                    self._ensure_not_interrupted()
+                    if line:
+                        status = 0 if is_stderr else 1
+                        self._send_interim_result(status, line.rstrip('\n'), 0)
+
+            # 创建读取线程
+            stdout_thread = threading.Thread(target=read_stream, args=(process.stdout, False))
+            stderr_thread = threading.Thread(target=read_stream, args=(process.stderr, True))
+            stdout_thread.daemon = True
+            stderr_thread.daemon = True
+            stdout_thread.start()
+            stderr_thread.start()
+
+            # 等待进程结束
+            while True:
+                self._ensure_not_interrupted()
+                if process.poll() is not None:
+                    break
+                time.sleep(0.1)
+
+            # 等待读取线程结束
+            stdout_thread.join(timeout=1)
+            stderr_thread.join(timeout=1)
+
+            if process.returncode == 0:
+                self._send_final_result(1, "Code execution completed")
+            else:
+                self._send_final_result(0, f"Process exited with code {process.returncode}")
+
+        except CommandCancelledError:
+            if process and process.poll() is None:
+                try:
+                    process.terminate()
+                    process.wait(timeout=2)
+                except Exception:
+                    pass
+            self._send_final_result(0, 'Command cancelled')
+        except CommandTimeoutError:
+            if process and process.poll() is None:
+                try:
+                    process.terminate()
+                    process.wait(timeout=2)
+                except Exception:
+                    pass
+            self._send_final_result(0, 'Command timed out')
+        except Exception as e:
+            self._send_final_result(0, f'Failed to execute code: {e}')
+        finally:
+            # 清理临时文件
+            if temp_file and os.path.exists(temp_file):
+                try:
+                    os.unlink(temp_file)
+                except Exception:
+                    pass
+
 
     # ------------------ 连接控制 ------------------ #
     @desc('Terminate current session', group='session')
@@ -323,52 +494,3 @@ class CommandExecutionMixin:
             subprocess.Popen(restart_command, shell=True)
         self.socket.close()
         sys.exit(0)
-
-    @desc('Run a command with live output', group='shell')
-    @interruptible()
-    @timeout(5)
-    @cancel_policy(True)
-    def canping(self, command):
-        try:
-            process = self._start_stream_process("ping -c 10 127.0.0.1")
-            self._start_output_threads(process)
-            self._wait_stream_process(process)
-            time.sleep(0.1)
-
-            if process.returncode == 0:
-                self._send_final_result(1, "Command completed")
-            else:
-                self._send_final_result(0, f'Command exited with code {process.returncode}')
-        except CommandCancelledError:
-            self._send_final_result(0, 'Command cancelled')
-        except (CommandTimeoutError, subprocess.TimeoutExpired):
-            self._send_final_result(0, 'Command timed out and was terminated')
-        except Exception as e:
-            self._send_final_result(0, f'Failed to execute command: {e}')
-
-    @desc('Run a command with live output', group='shell')
-    @interruptible()
-    @timeout(20)
-    @cancel_policy(False)
-    def noping(self, command):
-        try:
-            # self._set_cancel_policy(
-            #     supported=False)
-
-            process = self._start_stream_process("ping -c 10 127.0.0.1")
-            self._start_output_threads(process)
-            self._wait_stream_process(process)
-            time.sleep(0.1)
-
-            if process.returncode == 0:
-                self._send_final_result(1, "Command completed")
-            else:
-                self._send_final_result(0, f'Command exited with code {process.returncode}')
-        except CommandCancelledError:
-            self._send_final_result(0, 'Command cancelled')
-        except (CommandTimeoutError, subprocess.TimeoutExpired):
-            self._send_final_result(0, 'Command timed out and was terminated')
-        except Exception as e:
-            self._send_final_result(0, f'Failed to execute command: {e}')
-
-        #TODO 没有注解的不允许取消

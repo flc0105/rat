@@ -218,6 +218,6 @@ class CommandExecutor:
                 timeout = self._extract_timeout(kwargs)
 
             commands = self._prepare_commands(command_id, timeout=timeout)
-            return commands.pyexec(script_text, kwargs=kwargs)
+            return commands.pyexec_gen(script_text, kwargs=kwargs)  # TODO 让exec命令支持取消
 
         return self._execute_with_cleanup(command_id, _invoke)
