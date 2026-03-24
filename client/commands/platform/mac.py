@@ -15,15 +15,18 @@ from core.utils.decorator import desc
 from core.utils.formatting import get_time, format_dict
 from core.utils.logger import logger
 
-
 MSGBOX_ARGUMENT_SPEC = ArgumentCommandSpec(
     name='msgbox',
     description='Show a native macOS dialog',
     options=[
-        ArgumentOptionSpec(name='title', option_type='str', required=False, default='', allow_empty=True, help_text='Dialog title'),
-        ArgumentOptionSpec(name='text', option_type='str', required=True, default=None, allow_empty=False, help_text='Dialog text'),
-        ArgumentOptionSpec(name='timeout', option_type='int', required=False, default=None, help_text='Auto close timeout in seconds'),
-        ArgumentOptionSpec(name='help', option_type='flag', required=False, default=False, help_text='Show this help message'),
+        ArgumentOptionSpec(name='title', option_type='str', required=False, default='', allow_empty=True,
+                           help_text='Dialog title'),
+        ArgumentOptionSpec(name='text', option_type='str', required=True, default=None, allow_empty=False,
+                           help_text='Dialog text'),
+        ArgumentOptionSpec(name='timeout', option_type='int', required=False, default=None,
+                           help_text='Auto close timeout in seconds'),
+        ArgumentOptionSpec(name='help', option_type='flag', required=False, default=False,
+                           help_text='Show this help message'),
     ]
 )
 
@@ -31,10 +34,14 @@ NOTIFY_ARGUMENT_SPEC = ArgumentCommandSpec(
     name='notify',
     description='Show a native macOS notification',
     options=[
-        ArgumentOptionSpec(name='title', option_type='str', required=False, default='', allow_empty=True, help_text='Notification title'),
-        ArgumentOptionSpec(name='text', option_type='str', required=True, default=None, allow_empty=False, help_text='Notification text'),
-        ArgumentOptionSpec(name='sound', option_type='flag', required=False, default=False, help_text='Play the default notification sound'),
-        ArgumentOptionSpec(name='help', option_type='flag', required=False, default=False, help_text='Show this help message'),
+        ArgumentOptionSpec(name='title', option_type='str', required=False, default='', allow_empty=True,
+                           help_text='Notification title'),
+        ArgumentOptionSpec(name='text', option_type='str', required=True, default=None, allow_empty=False,
+                           help_text='Notification text'),
+        ArgumentOptionSpec(name='sound', option_type='flag', required=False, default=False,
+                           help_text='Play the default notification sound'),
+        ArgumentOptionSpec(name='help', option_type='flag', required=False, default=False,
+                           help_text='Show this help message'),
     ]
 )
 
@@ -141,7 +148,8 @@ class MacCommands(CommonCommands):
     @interruptible()
     def idletime(self):
         try:
-            from Quartz import CGEventSourceSecondsSinceLastEventType, kCGEventSourceStateHIDSystemState, kCGAnyInputEventType
+            from Quartz import CGEventSourceSecondsSinceLastEventType, kCGEventSourceStateHIDSystemState, \
+                kCGAnyInputEventType
             idle_seconds = self._run_interruptible(
                 CGEventSourceSecondsSinceLastEventType,
                 kCGEventSourceStateHIDSystemState,
