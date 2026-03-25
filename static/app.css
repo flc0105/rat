@@ -651,22 +651,22 @@ body {
   flex-wrap: wrap;
 }
 
-.dialog-filter-box {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 0 10px;
-  height: 34px;
-  border-radius: 10px;
-  border: 1px solid var(--line);
-  flex: 0 0 auto;
-}
+/*.dialog-filter-box {*/
+/*  display: inline-flex;*/
+/*  align-items: center;*/
+/*  gap: 8px;*/
+/*  padding: 0 10px;*/
+/*  height: 34px;*/
+/*  border-radius: 10px;*/
+/*  border: 1px solid var(--line);*/
+/*  flex: 0 0 auto;*/
+/*}*/
 
-.dialog-filter-label {
-  font-size: 12px;
-  color: var(--muted);
-  white-space: nowrap;
-}
+/*.dialog-filter-label {*/
+/*  font-size: 12px;*/
+/*  color: var(--muted);*/
+/*  white-space: nowrap;*/
+/*}*/
 
 .dialog-head-left .el-button {
   height: 34px;
@@ -681,19 +681,19 @@ body {
   flex-shrink: 0;
 }
 
-.dialog-path-box {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 64px;
-  gap: 8px;
-  min-width: 0;
-  width: 100%;
-}
+/*.dialog-path-box {*/
+/*  display: grid;*/
+/*  !*grid-template-columns: minmax(0, 1fr) 64px;*!*/
+/*  gap: 8px;*/
+/*  min-width: 0;*/
+/*  width: 100%;*/
+/*}*/
 
-.dialog-path-box .el-button {
-  width: 64px;
-  min-width: 64px;
-  margin: 0;
-}
+/*.dialog-path-box .el-button {*/
+/*  width: 64px;*/
+/*  min-width: 64px;*/
+/*  margin: 0;*/
+/*}*/
 
 .artifact-filter-box {
   grid-template-columns: minmax(0, 1fr);

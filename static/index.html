@@ -240,17 +240,23 @@
                             Download Selected<span
                                 v-if="remoteSelectedPaths.length"> ({{ remoteSelectedPaths.length }})</span>
                         </el-button>
+                            <el-button size="small" type="danger" :disabled="!hasRemoteSelection" @click="deleteSelectedRemoteEntries">
+        Delete Selected<span v-if="remoteSelectedPaths.length"> ({{ remoteSelectedPaths.length }})</span>
+    </el-button>
                         <el-button size="small" :disabled="!hasRemoteSelection" @click="clearRemoteSelection">Clear
                             Selection
                         </el-button>
-                    </div>
 
-                    <div class="dialog-filter-box">
-                        <span class="dialog-filter-label">Hidden</span>
-                        <el-switch v-model="showHiddenFiles" inline-prompt active-text="On" inactive-text="Off"/>
+                        <el-button
+                                size="small"
+                                @click="showHiddenFiles = !showHiddenFiles"
+                        >
+                            {{ showHiddenFiles ? 'Hide Hidden' : 'Show Hidden' }}
+                        </el-button>
                     </div>
                 </div>
             </div>
+
 
             <div class="dialog-path-row">
                 <div class="dialog-path-box">
@@ -258,6 +264,7 @@
                               @keyup.enter="goToRemotePathInput"/>
                 </div>
             </div>
+
 
             <div class="dialog-table-shell">
                 <el-table

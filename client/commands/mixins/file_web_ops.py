@@ -1,5 +1,6 @@
 import json
 import os
+import shutil
 
 import requests
 
@@ -324,6 +325,66 @@ class CommandFileWebMixin:
             return 0, 'Command timed out and was terminated'
         except Exception as e:
             return 0, f'Failed to delete path: {e}'
+
+    @desc('Delete multiple files or directories', group='file_path', suggest=False)
+    @interruptible()
+    def delete_paths(self, arg=''):
+        """
+        批量删除多个文件或目录
+        参数格式: __json__:base64编码的JSON {"paths": ["path1", "path2", ...]}
+        """
+        try:
+            payload = self._decode_structured_arg(arg)
+            if not isinstance(payload, dict):
+                return 0, 'Invalid delete payload'
+
+            paths = payload.get('paths')
+            if not isinstance(paths, list) or not paths:
+                return 0, 'paths is required and must be a non-empty list'
+
+            resolved_paths = []
+            errors = []
+            success_count = 0
+
+            for raw_path in paths:
+                try:
+                    path_str = str(raw_path or '').strip()
+                    if not path_str:
+                        continue
+
+                    target_path = self._require_existing_path_from_arg(path_str)
+                    resolved_paths.append(target_path)
+                except Exception as e:
+                    errors.append(f'{raw_path}: {e}')
+
+            if not resolved_paths:
+                return 0, 'No valid paths to delete'
+
+            for target_path in resolved_paths:
+                try:
+                    if os.path.isdir(target_path):
+                        shutil.rmtree(target_path)
+                        success_count += 1
+                    else:
+                        os.remove(target_path)
+                        success_count += 1
+                except Exception as e:
+                    errors.append(f'{target_path}: {e}')
+
+            result_msg = f'Deleted {success_count} of {len(resolved_paths)} items'
+            if errors:
+                result_msg += f'\nErrors:\n  ' + '\n  '.join(errors)
+
+            if success_count > 0:
+                return 1, result_msg
+            return 0, result_msg
+
+        except CommandCancelledError:
+            return 0, 'Command cancelled'
+        except CommandTimeoutError:
+            return 0, 'Command timed out and was terminated'
+        except Exception as e:
+            return 0, f'Failed to delete paths: {e}'
 
     @desc('Create a directory', group='file_path', suggest=False)
     @interruptible()

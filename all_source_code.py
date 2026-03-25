@@ -1,6 +1,5 @@
 from pathlib import Path
 
-
 EXCLUDE_DIRS = {
     ".git",
     ".idea",
@@ -23,8 +22,8 @@ EXCLUDE_DIRS = {
     "temp",
     "config",
     "utils",
+    "scripts",
 }
-
 
 INCLUDE_SUFFIXES = {".py", ".css", ".html", ".js"}
 
@@ -75,7 +74,6 @@ def main():
 
 if __name__ == "__main__":
     main()
-
 
 # from pathlib import Path
 #

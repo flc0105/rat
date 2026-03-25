@@ -314,6 +314,17 @@ def create_app(server_instance):
             return web_service.download_remote_paths_as_zip(client_id, paths, archive_name)
         return _json_endpoint(_execute, default_error_status=500)
 
+    @app.delete('/api/connections/<client_id>/remote-files/batch')
+    def delete_remote_files_batch(client_id):
+        def _execute():
+            payload = _get_json_payload()
+            paths = payload.get('paths') or []
+            if not isinstance(paths, list) or not paths:
+                raise ValueError('paths is required and must be a non-empty list')
+            return web_service.delete_remote_paths(client_id, paths)
+
+        return _json_endpoint(_execute, default_error_status=500)
+
     @app.post('/api/connections/<client_id>/remote-files/preview')
     def preview_remote_file(client_id):
         def _execute():

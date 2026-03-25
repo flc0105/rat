@@ -185,6 +185,34 @@ class WebRemoteFileService:
             'artifact': artifact,
         }
 
+    def delete_paths(self, client_id: str, paths: list[str]) -> dict:
+        """
+        批量删除远程文件或目录
+        """
+        if not isinstance(paths, list) or not paths:
+            raise ValueError('paths is required and must be a non-empty list')
+
+        normalized_paths = [
+            str(item or '').strip()
+            for item in paths
+            if str(item or '').strip()
+        ]
+        if not normalized_paths:
+            raise ValueError('paths is required and must contain valid paths')
+
+        command = self._build_command('delete_paths', {'paths': normalized_paths})
+        result_text = self.remote_execution_service.run_foreground_text_command(
+            client_id,
+            command,
+            task_type='remote_file',
+            source='web_remote_file',
+        )
+
+        return {
+            'paths': normalized_paths,
+            'message': result_text
+        }
+
     def preview_file(self, client_id: str, path: str, history_entry_id: str = '') -> dict:
         if not (path or '').strip():
             raise ValueError('path is required')

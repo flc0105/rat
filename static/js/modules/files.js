@@ -623,6 +623,62 @@ window.AppFilesModule = {
             }
         },
 
+
+        async deleteSelectedRemoteEntries() {
+    if (!this.selectedId) {
+        ElementPlus.ElMessage.warning('Please select a device');
+        return;
+    }
+
+    const paths = [...this.remoteSelectedPaths];
+    if (!paths.length) {
+        ElementPlus.ElMessage.warning('Please select at least one file or folder to delete');
+        return;
+    }
+
+    try {
+        await ElementPlus.ElMessageBox.confirm(
+            `Delete ${paths.length} selected item(s)?`,
+            'Delete Multiple Items',
+            {
+                type: 'warning',
+                confirmButtonText: 'Delete',
+                cancelButtonText: 'Cancel',
+                confirmButtonClass: 'el-button--danger',
+                dangerouslyUseHTMLString: false
+            }
+        );
+
+        const res = await fetch(`/api/connections/${encodeURIComponent(this.selectedId)}/remote-files/batch`, {
+            method: 'DELETE',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ paths })
+        });
+
+        const json = await res.json();
+        if (!res.ok || json.code !== 0) {
+            throw new Error(json.message || 'Batch delete failed');
+        }
+
+        const message = json.data?.message || 'Delete completed';
+        ElementPlus.ElMessage.success(`Deleted ${paths.length} item(s)`);
+
+        // 刷新当前目录
+        await this.refreshRemoteDirectory();
+
+        // 清空选中状态
+        this.clearRemoteSelection();
+
+        // 可选：显示详细结果
+        if (message && message !== 'Delete completed') {
+            ElementPlus.ElMessage.info(message);
+        }
+    } catch (e) {
+        if (e === 'cancel' || e === 'close' || e?.toString?.().includes('cancel')) return;
+        ElementPlus.ElMessage.error(e.message || 'Batch delete failed');
+    }
+},
+
         async previewBackgroundJobFile(file) {
             if (!file) {
                 ElementPlus.ElMessage.warning('No preview available');
