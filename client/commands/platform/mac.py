@@ -52,11 +52,34 @@ SQLITE_QUERY_SPEC = ArgumentCommandSpec(
         ArgumentOptionSpec(name='db', option_type='str', required=True, help_text='Database file path'),
         ArgumentOptionSpec(name='query', option_type='str', required=True, help_text='SQL query'),
         ArgumentOptionSpec(name='json', option_type='flag', required=False, default=False,
-                          help_text='Output as JSON'),
+                           help_text='Output as JSON'),
         ArgumentOptionSpec(name='help', option_type='flag', required=False, default=False,
-                          help_text='Show this help message'),
+                           help_text='Show this help message'),
     ]
 )
+
+IMAGE_INFO_SPEC = ArgumentCommandSpec(
+    name='image_info',
+    description='Show image metadata (size, resolution, color mode, EXIF)',
+    options=[
+        ArgumentOptionSpec(name='path', option_type='str', required=True, help_text='Image file path'),
+        ArgumentOptionSpec(name='json', option_type='flag', required=False, default=False,
+                           help_text='Output as JSON'),
+        ArgumentOptionSpec(name='help', option_type='flag', required=False, default=False,
+                           help_text='Show this help message'),
+    ]
+)
+
+IMPORT_CHECK_SPEC = ArgumentCommandSpec(
+    name='import_check',
+    description='Check Python package/module status',
+    options=[
+        ArgumentOptionSpec(name='module', option_type='str', required=True, help_text='Module name'),
+        ArgumentOptionSpec(name='help', option_type='flag', required=False, default=False,
+                           help_text='Show this help message'),
+    ]
+)
+
 
 class MacCommands(CommonCommands):
     """macOS 平台专用命令集合"""
@@ -209,7 +232,6 @@ class MacCommands(CommonCommands):
         except Exception as e:
             return 0, f'Failed to launch notification: {e}'
 
-
     @argument_command('sqlite_query', spec=SQLITE_QUERY_SPEC)
     def _acmd_sqlite_query(self, args_dict, payload=None):
         """
@@ -260,3 +282,299 @@ class MacCommands(CommonCommands):
             return 0, f'SQLite error: {e}'
         except Exception as e:
             return 0, f'Query failed: {e}'
+
+    # @argument_command('image_info', spec=IMAGE_INFO_SPEC)
+    # def _acmd_image_info(self, args_dict, payload=None):
+    #     """获取图片信息"""
+    #     try:
+    #         from PIL import Image
+    #         import json
+    #
+    #         img_path = args_dict.get('path', '')
+    #         output_json = args_dict.get('json', False)
+    #
+    #         if not img_path:
+    #             return 0, 'path is required'
+    #
+    #         if not os.path.isfile(img_path):
+    #             return 0, f'File not found: {img_path}'
+    #
+    #         img = Image.open(img_path)
+    #
+    #         info = {
+    #             'path': img_path,
+    #             'size': f"{img.width}x{img.height}",
+    #             'width': img.width,
+    #             'height': img.height,
+    #             'format': img.format,
+    #             'mode': img.mode,
+    #             'file_size': os.path.getsize(img_path)
+    #         }
+    #
+    #         # 获取 EXIF 信息
+    #         if hasattr(img, '_getexif') and img._getexif():
+    #             exif = img._getexif()
+    #             exif_tags = {
+    #                 271: 'make', 272: 'model', 306: 'datetime',
+    #                 33434: 'exposure_time', 34855: 'iso', 37386: 'focal_length'
+    #             }
+    #             for tag, name in exif_tags.items():
+    #                 if tag in exif:
+    #                     info[name] = exif[tag]
+    #
+    #         img.close()
+    #
+    #         if output_json:
+    #             return 1, json.dumps(info, ensure_ascii=False, indent=2)
+    #
+    #         from core.utils.formatting import format_dict
+    #         return 1, format_dict(info)
+    #
+    #     except ImportError:
+    #         return 0, 'PIL not installed, install with: pip install Pillow'
+    #     except Exception as e:
+    #         return 0, f'Failed to get image info: {e}'
+
+    @argument_command('image_info', spec=IMAGE_INFO_SPEC)
+    def _acmd_image_info(self, args_dict, payload=None):
+        """获取图片信息"""
+        try:
+            from PIL import Image
+            from PIL.ExifTags import TAGS
+            import json
+
+            img_path = args_dict.get('path', '')
+            output_json = args_dict.get('json', False)
+
+            if not img_path:
+                return 0, 'path is required'
+
+            if not os.path.isfile(img_path):
+                return 0, f'File not found: {img_path}'
+
+            from core.utils.formatting import get_size
+
+            img = Image.open(img_path)
+
+            info = {
+                'path': img_path,
+                'width': img.width,
+                'height': img.height,
+                'size': f"{img.width}x{img.height}",
+                'format': img.format,
+                'mode': img.mode,
+                'file_size': get_size(os.path.getsize(img_path))
+            }
+
+            # 获取 EXIF 信息
+            exif_tags = {
+                271: 'make',
+                272: 'model',
+                42036: 'lens_model',
+                33434: 'exposure_time',
+                33437: 'f_number',
+                34855: 'iso',
+                36867: 'datetime_original',
+                37386: 'focal_length',
+                305: 'software',
+                37510: 'user_comment',
+                40961: 'color_space',
+            }
+
+            if hasattr(img, '_getexif') and img._getexif():
+                raw_exif = img._getexif()
+                for tag, value in raw_exif.items():
+                    if tag in exif_tags:
+                        # 处理元组类型
+                        if isinstance(value, tuple):
+                            value = f"{value[0]}/{value[1]}"
+                        # 处理字节类型
+                        elif isinstance(value, bytes):
+                            value = value.decode('utf-8', errors='replace')
+                        # 色彩空间映射
+                        elif tag == 40961:
+                            value = 'sRGB' if value == 1 else 'Uncalibrated'
+
+                        info[exif_tags[tag]] = value
+
+            img.close()
+
+            if output_json:
+                return 1, json.dumps(info, ensure_ascii=False, indent=2)
+
+            from core.utils.formatting import format_dict
+            return 1, format_dict(info, width=30)
+
+        except ImportError:
+            return 0, 'PIL not installed, install with: pip install Pillow'
+        except Exception as e:
+            return 0, f'Failed to get image info: {e}'
+
+    # @argument_command('import_check', spec=IMPORT_CHECK_SPEC)
+    # def _acmd_import_check(self, args_dict, payload=None):
+    #     """检查 Python 包是否可以导入"""
+    #     try:
+    #         import importlib
+    #         import pkgutil
+    #
+    #         module_name = args_dict.get('module', '')
+    #
+    #         if not module_name:
+    #             return 0, 'module name is required'
+    #
+    #         result = {
+    #             'module': module_name,
+    #             'importable': False,
+    #             'version': None,
+    #             'path': None,
+    #             'dependencies': []
+    #         }
+    #
+    #         try:
+    #             module = importlib.import_module(module_name)
+    #             result['importable'] = True
+    #             result['path'] = getattr(module, '__file__', None)
+    #
+    #             # 获取版本
+    #             for attr in ['__version__', 'version', 'VERSION']:
+    #                 if hasattr(module, attr):
+    #                     result['version'] = str(getattr(module, attr))
+    #                     break
+    #
+    #             # 获取依赖（尝试从 metadata 获取）
+    #             try:
+    #                 import importlib.metadata
+    #                 dist = importlib.metadata.distribution(module_name)
+    #                 result['dependencies'] = [str(req) for req in dist.requires or []]
+    #             except:
+    #                 pass
+    #
+    #         except ImportError as e:
+    #             result['error'] = str(e)
+    #
+    #         from core.utils.formatting import format_dict
+    #         return 1, format_dict(result)
+    #
+    #     except Exception as e:
+    #         return 0, f'Check failed: {e}'
+
+    # @argument_command('import_check', spec=IMPORT_CHECK_SPEC)
+    # def _acmd_import_check(self, args_dict, payload=None):
+    #     """检查 Python 包是否可以导入"""
+    #     try:
+    #         import importlib
+    #         import importlib.metadata
+    #         from pathlib import Path
+    #
+    #         module_name = args_dict.get('module', '')
+    #
+    #         if not module_name:
+    #             return 0, 'module name is required'
+    #
+    #         result = {
+    #             'module': module_name,
+    #             'importable': False,
+    #             'package': None,
+    #             'version': None,
+    #             'path': None,
+    #             'dependencies': []
+    #         }
+    #
+    #         try:
+    #             module = importlib.import_module(module_name)
+    #             result['importable'] = True
+    #             result['path'] = getattr(module, '__file__', None)
+    #
+    #             # 获取版本
+    #             for attr in ['__version__', 'version', 'VERSION']:
+    #                 if hasattr(module, attr):
+    #                     result['version'] = str(getattr(module, attr))
+    #                     break
+    #
+    #             # 从模块路径找到所属的 distribution
+    #             if result['path']:
+    #                 module_path = Path(result['path']).resolve()
+    #                 # 遍历 site-packages 目录
+    #                 for dist in importlib.metadata.distributions():
+    #                     try:
+    #                         dist_files = list(dist.files or [])
+    #                         for file in dist_files:
+    #                             if str(module_path).endswith(str(file)):
+    #                                 result['package'] = dist.metadata['Name']
+    #                                 if not result['version']:
+    #                                     result['version'] = dist.version
+    #                                 result['dependencies'] = [str(req) for req in dist.requires or []]
+    #                                 break
+    #                         if result['package']:
+    #                             break
+    #                     except:
+    #                         continue
+    #
+    #         except ImportError as e:
+    #             result['error'] = str(e)
+    #
+    #         from core.utils.formatting import format_dict
+    #         return 1, format_dict(result)
+    #
+    #     except Exception as e:
+    #         return 0, f'Check failed: {e}'
+
+    @argument_command('import_check', spec=IMPORT_CHECK_SPEC)
+    def _acmd_import_check(self, args_dict, payload=None):
+        """检查 Python 包是否可以导入"""
+        try:
+            import importlib
+            import importlib.metadata
+            from pathlib import Path
+
+            module_name = args_dict.get('module', '')
+
+            if not module_name:
+                return 0, 'module name is required'
+
+            result = {
+                'module': module_name,
+                'importable': False,
+                'module_path': None,
+                'module_version': None,  # 模块内定义的 __version__
+                'package_name': None,  # 实际安装的包名
+                'package_version': None,  # 包的版本
+                'package_dependencies': []  # 包的依赖
+            }
+
+            try:
+                module = importlib.import_module(module_name)
+                result['importable'] = True
+                result['module_path'] = getattr(module, '__file__', None)
+
+                # 模块版本（模块内部定义的）
+                for attr in ['__version__', 'version', 'VERSION']:
+                    if hasattr(module, attr):
+                        result['module_version'] = str(getattr(module, attr))
+                        break
+
+                # 包信息（从 distribution 获取）
+                if result['module_path']:
+                    module_path = Path(result['module_path']).resolve()
+                    for dist in importlib.metadata.distributions():
+                        try:
+                            dist_files = list(dist.files or [])
+                            for file in dist_files:
+                                if str(module_path).endswith(str(file)):
+                                    result['package_name'] = dist.metadata['Name']
+                                    result['package_version'] = dist.version
+                                    result['package_dependencies'] = [str(req) for req in dist.requires or []]
+                                    break
+                            if result['package_name']:
+                                break
+                        except:
+                            continue
+
+            except ImportError as e:
+                result['error'] = str(e)
+
+            from core.utils.formatting import format_dict
+            return 1, format_dict(result)
+
+        except Exception as e:
+            return 0, f'Check failed: {e}'

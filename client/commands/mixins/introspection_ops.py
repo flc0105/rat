@@ -117,7 +117,7 @@ class CommandIntrospectionMixin:
             seen.add(group_name)
             lines.append(f'[{title_map.get(group_name, group_name)}]')
             for name, help_text in items:
-                lines.append(f'{name:<16}{help_text}')
+                lines.append(f'{name:<24}{help_text}')
             lines.append('')
 
         for group_name, items in grouped.items():
@@ -126,7 +126,7 @@ class CommandIntrospectionMixin:
 
             lines.append(f'[{title_map.get(group_name, group_name)}]')
             for name, help_text in items:
-                lines.append(f'{name:<16}{help_text}')
+                lines.append(f'{name:<24}{help_text}')
             lines.append('')
 
         return 1, '\n'.join(lines).rstrip()
