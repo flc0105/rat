@@ -54,6 +54,11 @@ window.AppStateModule = {
             previewEditMode: false,  // 新增：是否处于编辑模式
 previewSaving: false,    // 新增：保存中状态
 previewFilePath: '',     // 新增：当前编辑的文件路径
+            previewOriginalContent: '',  // 原始内容副本（用于取消编辑时恢复）
+            previewTruncated: false,     // 是否被截断
+previewFileSize: '',         // 文件大小显示
+previewFileEncoding: 'UTF-8', // 文件编码
+
 
             pendingRemoteUploadRefresh: null,
 

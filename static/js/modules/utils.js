@@ -39,12 +39,26 @@ window.AppUtilsModule = {
             this.commandExecutionOutputSortOrder = this.commandExecutionOutputSortOrder === 'asc' ? 'desc' : 'asc';
         },
 
-        resetPreviewState() {
-            this.previewType = '';
-            this.previewTitle = '';
-            this.previewUrl = '';
-            this.previewText = '';
-        },
+        // resetPreviewState() {
+        //     this.previewType = '';
+        //     this.previewTitle = '';
+        //     this.previewUrl = '';
+        //     this.previewText = '';
+        // },
+
+        // static/js/modules/utils.js
+// 修改 resetPreviewState 方法
+
+resetPreviewState() {
+    this.previewType = '';
+    this.previewTitle = '';
+    this.previewUrl = '';
+    this.previewText = '';
+    this.previewOriginalContent = '';  // 清空原始内容
+    this.previewEditMode = false;
+    this.previewSaving = false;
+    this.previewFilePath = '';
+},
 
         resetRemoteFilesState() {
             this.remoteFilesCurrentPath = '';

@@ -1677,3 +1677,98 @@ body {
     padding: 8px 4px;
     font-family: monospace;
 }
+
+/* static/css/app.css */
+/* 预览对话框工具栏样式 */
+
+.preview-toolbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 16px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid var(--line);
+    flex-wrap: wrap;
+    gap: 12px;
+}
+
+.preview-toolbar-left {
+    display: flex;
+    gap: 4px;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+.preview-toolbar-right {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+.preview-info-tags {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+.preview-info-tags .el-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 0 8px;
+    height: 28px;
+    line-height: 28px;
+}
+
+.preview-info-tags .el-tag .el-icon {
+    font-size: 14px;
+}
+
+.preview-toolbar-left .el-button {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 6px 16px;
+    height: 28px;
+}
+
+.preview-toolbar-left .el-button .el-icon {
+    font-size: 14px;
+}
+
+/* 编辑区域样式 */
+.edit-text-area {
+    min-height: 400px;
+}
+
+.edit-text-area .el-textarea__inner {
+    font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', 'Consolas', monospace;
+    font-size: 13px;
+    line-height: 1.6;
+    background: #fafcff;
+    border-color: rgba(15, 23, 42, 0.15);
+}
+
+.edit-text-area .el-textarea__inner:focus {
+    border-color: var(--primary);
+    box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.1);
+}
+
+/* 响应式调整 */
+@media (max-width: 768px) {
+    .preview-toolbar {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
+    .preview-toolbar-left,
+    .preview-toolbar-right {
+        width: 100%;
+    }
+
+    .preview-info-tags {
+        justify-content: flex-start;
+    }
+}

@@ -7,23 +7,26 @@ window.AppFilesModule = {
 
 // 进入编辑模式
 enterEditMode() {
+        this.previewOriginalContent = this.previewText;  // 保存原始内容
     this.previewEditMode = true;
 },
 
 // 取消编辑模式
 cancelEditMode() {
     this.previewEditMode = false;
+    this.previewText = this.previewOriginalContent;  // 恢复原始内容
+    this.previewOriginalContent = '';  // 清空缓存
     // 重新加载原始内容
-    if (this.previewFilePath) {
-        this.loadPreviewPayload(
-            () => fetch(`/api/connections/${encodeURIComponent(this.selectedId)}/remote-files/preview`, {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({path: this.previewFilePath})
-            }),
-            this.previewTitle
-        );
-    }
+    // if (this.previewFilePath) {
+    //     this.loadPreviewPayload(
+    //         () => fetch(`/api/connections/${encodeURIComponent(this.selectedId)}/remote-files/preview`, {
+    //             method: 'POST',
+    //             headers: {'Content-Type': 'application/json'},
+    //             body: JSON.stringify({path: this.previewFilePath})
+    //         }),
+    //         this.previewTitle
+    //     );
+    // }
 },
 
 // 保存编辑后的内容
@@ -52,7 +55,10 @@ async saveEditedContent() {
         }
 
         ElementPlus.ElMessage.success('File saved successfully');
+              // 保存成功后，更新原始内容副本为当前内容
+        this.previewOriginalContent = this.previewText;
         this.previewEditMode = false;
+        // this.previewEditMode = false;
 
         // 刷新文件列表
         if (this.remoteFilesDialogVisible) {
@@ -89,15 +95,17 @@ async previewRemoteEntry(row) {
     this.previewEditMode = false;
 },
 
-// static/js/modules/files.js
-// 修改 loadPreviewPayload 方法，在加载完成后重置编辑模式
 
-async loadPreviewPayload(fetcher, fallbackTitle = 'File Preview') {
+        // static/js/modules/files.js
+// 修改 loadPreviewPayload 方法
+
+        async loadPreviewPayload(fetcher, fallbackTitle = 'File Preview') {
     this.previewDialogVisible = true;
     this.previewLoading = true;
     this.resetPreviewState();
-    this.previewEditMode = false;  // 重置编辑模式
-    this.previewSaving = false;     // 重置保存状态
+    this.previewEditMode = false;
+    this.previewSaving = false;
+    this.previewOriginalContent = '';
 
     try {
         const res = await fetcher();
@@ -115,6 +123,15 @@ async loadPreviewPayload(fetcher, fallbackTitle = 'File Preview') {
             this.previewUrl = data.url || '';
         } else if (this.previewType === 'text') {
             this.previewText = data.content || '';
+            this.previewTruncated = data.truncated || false;
+            this.previewOriginalContent = this.previewText;
+
+            // 计算文件大小显示
+            const size = data.size || this.previewText.length;
+            this.previewFileSize = this.formatBytes(size);
+
+            // 检测文件编码（简单实现，可以后续优化）
+            this.previewFileEncoding = this.detectEncoding(this.previewText);
         }
     } catch (e) {
         this.previewDialogVisible = false;
@@ -123,6 +140,93 @@ async loadPreviewPayload(fetcher, fallbackTitle = 'File Preview') {
         this.previewLoading = false;
     }
 },
+
+        detectEncoding(text) {
+    // 简单的编码检测
+    if (!text) return 'UTF-8';
+
+    // 检测是否包含常见的中文字符
+    if (/[\u4e00-\u9fa5]/.test(text)) {
+        // 简单判断：如果内容看起来正常，就是 UTF-8
+        return 'UTF-8';
+    }
+
+    // 检测是否包含 BOM
+    if (text.charCodeAt(0) === 0xFEFF) {
+        return 'UTF-8 with BOM';
+    }
+
+    return 'UTF-8';
+},
+
+// async loadPreviewPayload(fetcher, fallbackTitle = 'File Preview') {
+//     this.previewDialogVisible = true;
+//     this.previewLoading = true;
+//     this.resetPreviewState();
+//     this.previewEditMode = false;
+//     this.previewSaving = false;
+//     this.previewOriginalContent = '';  // 清空原始内容缓存
+//
+//     try {
+//         const res = await fetcher();
+//         const json = await res.json();
+//
+//         if (!res.ok || json.code !== 0) {
+//             throw new Error(json.message || 'Preview failed');
+//         }
+//
+//         const data = json.data || {};
+//         this.previewType = data.type || 'unsupported';
+//         this.previewTitle = data.name || fallbackTitle;
+//
+//         if (this.previewType === 'image') {
+//             this.previewUrl = data.url || '';
+//         } else if (this.previewType === 'text') {
+//             this.previewText = data.content || '';
+//             // 保存原始内容副本
+//             this.previewOriginalContent = this.previewText;
+//         }
+//     } catch (e) {
+//         this.previewDialogVisible = false;
+//         ElementPlus.ElMessage.error(e.message || 'Preview failed');
+//     } finally {
+//         this.previewLoading = false;
+//     }
+// },
+// static/js/modules/files.js
+// 修改 loadPreviewPayload 方法，在加载完成后重置编辑模式
+//
+// async loadPreviewPayload(fetcher, fallbackTitle = 'File Preview') {
+//     this.previewDialogVisible = true;
+//     this.previewLoading = true;
+//     this.resetPreviewState();
+//     this.previewEditMode = false;  // 重置编辑模式
+//     this.previewSaving = false;     // 重置保存状态
+//
+//     try {
+//         const res = await fetcher();
+//         const json = await res.json();
+//
+//         if (!res.ok || json.code !== 0) {
+//             throw new Error(json.message || 'Preview failed');
+//         }
+//
+//         const data = json.data || {};
+//         this.previewType = data.type || 'unsupported';
+//         this.previewTitle = data.name || fallbackTitle;
+//
+//         if (this.previewType === 'image') {
+//             this.previewUrl = data.url || '';
+//         } else if (this.previewType === 'text') {
+//             this.previewText = data.content || '';
+//         }
+//     } catch (e) {
+//         this.previewDialogVisible = false;
+//         ElementPlus.ElMessage.error(e.message || 'Preview failed');
+//     } finally {
+//         this.previewLoading = false;
+//     }
+// },
         //
         // async loadPreviewPayload(fetcher, fallbackTitle = 'File Preview') {
         //     this.previewDialogVisible = true;
