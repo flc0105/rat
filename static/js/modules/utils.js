@@ -57,7 +57,7 @@ resetPreviewState() {
     this.previewOriginalContent = '';  // 清空原始内容
     this.previewEditMode = false;
     this.previewSaving = false;
-    this.previewFilePath = '';
+    // this.previewFilePath = '';
 },
 
         resetRemoteFilesState() {

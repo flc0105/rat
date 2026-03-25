@@ -31,6 +31,9 @@ cancelEditMode() {
 
 // 保存编辑后的内容
 async saveEditedContent() {
+   console.log('saveEditedContent called');
+    console.log('selectedId:', this.selectedId);
+    console.log('previewFilePath:', this.previewFilePath);
     if (!this.selectedId || !this.previewFilePath) {
         ElementPlus.ElMessage.warning('Invalid file path');
         return;
