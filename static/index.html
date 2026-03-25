@@ -742,29 +742,80 @@
         </div>
     </el-dialog>
 
-    <el-dialog v-model="previewDialogVisible" :title="previewTitle || 'File Preview'" width="1080px" top="5vh"
-               class="fixed-dialog preview-dialog">
-        <div v-loading="previewLoading" class="preview-wrap">
-            <div v-if="(previewType === 'image' && previewUrl) || previewType === 'text'" class="preview-toolbar">
-                <el-button v-if="previewType === 'text'" size="small" @click="copyPreviewText">Copy Content</el-button>
-                <el-button v-if="previewType === 'image' && previewUrl" size="small" @click="openPreviewOriginal">Open
-                    Original
-                </el-button>
-            </div>
-            <template v-if="previewType === 'image' && previewUrl">
-                <div class="image-preview-box"><img :src="previewUrl" alt="preview" class="preview-image"/></div>
+<!-- static/index.html -->
+<!-- 修改预览对话框，添加编辑模式支持 -->
+
+<el-dialog v-model="previewDialogVisible" :title="previewTitle || 'File Preview'" width="1080px" top="5vh"
+           class="fixed-dialog preview-dialog">
+    <div v-loading="previewLoading" class="preview-wrap">
+        <div v-if="(previewType === 'image' && previewUrl) || previewType === 'text'" class="preview-toolbar">
+            <template v-if="previewType === 'text'">
+                <el-button v-if="!previewEditMode" size="small" @click="enterEditMode">Edit</el-button>
+                <template v-else>
+                    <el-button size="small" type="primary" :loading="previewSaving" @click="saveEditedContent">Save</el-button>
+                    <el-button size="small" @click="cancelEditMode">Cancel</el-button>
+                </template>
+                <el-button size="small" @click="copyPreviewText">Copy Content</el-button>
             </template>
-            <template v-else-if="previewType === 'text'">
-                <pre class="preview-text">{{ previewText }}</pre>
-            </template>
-            <template v-else-if="previewType === 'unsupported'">
-                <div class="empty-state">This file type is not supported for preview.</div>
-            </template>
-            <template v-else>
-                <div class="empty-state">No preview available.</div>
-            </template>
+            <el-button v-if="previewType === 'image' && previewUrl" size="small" @click="openPreviewOriginal">Open Original</el-button>
         </div>
-    </el-dialog>
+
+        <template v-if="previewType === 'image' && previewUrl">
+            <div class="image-preview-box"><img :src="previewUrl" alt="preview" class="preview-image"/></div>
+        </template>
+
+        <template v-else-if="previewType === 'text'">
+            <!-- 预览模式：只读展示 -->
+            <pre v-if="!previewEditMode" class="preview-text">{{ previewText }}</pre>
+            <!-- 编辑模式：可编辑文本框 -->
+            <div v-else class="edit-text-area">
+                <el-input
+                    v-model="previewText"
+                    type="textarea"
+                    :rows="25"
+                    placeholder="Edit file content..."
+                    style="font-family: monospace; font-size: 13px; line-height: 1.6;"
+                />
+                <div class="edit-file-info" style="margin-top: 8px; font-size: 12px; color: var(--muted);">
+                    <span>Path: {{ previewFilePath }}</span>
+                    <span style="margin-left: 16px;">Characters: {{ previewText.length }}</span>
+                </div>
+            </div>
+        </template>
+
+        <template v-else-if="previewType === 'unsupported'">
+            <div class="empty-state">This file type is not supported for preview.</div>
+        </template>
+        <template v-else>
+            <div class="empty-state">No preview available.</div>
+        </template>
+    </div>
+</el-dialog>
+
+
+<!--    <el-dialog v-model="previewDialogVisible" :title="previewTitle || 'File Preview'" width="1080px" top="5vh"-->
+<!--               class="fixed-dialog preview-dialog">-->
+<!--        <div v-loading="previewLoading" class="preview-wrap">-->
+<!--            <div v-if="(previewType === 'image' && previewUrl) || previewType === 'text'" class="preview-toolbar">-->
+<!--                <el-button v-if="previewType === 'text'" size="small" @click="copyPreviewText">Copy Content</el-button>-->
+<!--                <el-button v-if="previewType === 'image' && previewUrl" size="small" @click="openPreviewOriginal">Open-->
+<!--                    Original-->
+<!--                </el-button>-->
+<!--            </div>-->
+<!--            <template v-if="previewType === 'image' && previewUrl">-->
+<!--                <div class="image-preview-box"><img :src="previewUrl" alt="preview" class="preview-image"/></div>-->
+<!--            </template>-->
+<!--            <template v-else-if="previewType === 'text'">-->
+<!--                <pre class="preview-text">{{ previewText }}</pre>-->
+<!--            </template>-->
+<!--            <template v-else-if="previewType === 'unsupported'">-->
+<!--                <div class="empty-state">This file type is not supported for preview.</div>-->
+<!--            </template>-->
+<!--            <template v-else>-->
+<!--                <div class="empty-state">No preview available.</div>-->
+<!--            </template>-->
+<!--        </div>-->
+<!--    </el-dialog>-->
 
     <el-dialog v-model="commandHistoryDialogVisible" title="Command History" width="1120px" top="5vh"
                class="fixed-dialog recent-files-dialog command-history-dialog">

@@ -50,13 +50,13 @@ class CommandFileWebMixin:
         return build_http_transfer_strategy(self, self.HTTP_TRANSFER_MODE)
 
     def _build_http_upload_form_data(
-        self,
-        *,
-        artifact_type: str,
-        category: str,
-        source_type: str,
-        related_path: str = '',
-        extra: dict | None = None,
+            self,
+            *,
+            artifact_type: str,
+            category: str,
+            source_type: str,
+            related_path: str = '',
+            extra: dict | None = None,
     ) -> dict:
         client_id = getattr(self.socket, 'client_id', '') or ''
 
@@ -110,14 +110,14 @@ class CommandFileWebMixin:
         return '\n'.join(lines)
 
     def _upload_file_to_server_via_http(
-        self,
-        file_path: str,
-        *,
-        artifact_type: str = 'files',
-        category: str = 'default',
-        source_type: str = 'client_upload',
-        related_path: str = '',
-        extra: dict | None = None,
+            self,
+            file_path: str,
+            *,
+            artifact_type: str = 'files',
+            category: str = 'default',
+            source_type: str = 'client_upload',
+            related_path: str = '',
+            extra: dict | None = None,
     ):
         upload_url = UPLOAD_BASE_URL.rstrip('/') + '/api/files/upload'
         form_data = self._build_http_upload_form_data(
@@ -132,14 +132,14 @@ class CommandFileWebMixin:
         return strategy.upload_file(file_path, upload_url, form_data)
 
     def _upload_single_file_to_server_result(
-        self,
-        file_path: str,
-        *,
-        artifact_type: str = 'files',
-        category: str = 'default',
-        source_type: str = 'client_upload',
-        related_path: str = '',
-        extra: dict | None = None,
+            self,
+            file_path: str,
+            *,
+            artifact_type: str = 'files',
+            category: str = 'default',
+            source_type: str = 'client_upload',
+            related_path: str = '',
+            extra: dict | None = None,
     ):
         file_size = os.path.getsize(file_path)
 
@@ -165,15 +165,15 @@ class CommandFileWebMixin:
         return 1, message
 
     def _upload_paths_as_zip_to_server_result(
-        self,
-        resolved_paths: list[str],
-        *,
-        archive_name: str = '',
-        artifact_type: str = 'files',
-        category: str = 'default',
-        source_type: str = 'client_upload',
-        related_path: str = '',
-        extra: dict | None = None,
+            self,
+            resolved_paths: list[str],
+            *,
+            archive_name: str = '',
+            artifact_type: str = 'files',
+            category: str = 'default',
+            source_type: str = 'client_upload',
+            related_path: str = '',
+            extra: dict | None = None,
     ):
         temp_archive_path = ''
         try:
@@ -427,3 +427,53 @@ class CommandFileWebMixin:
             return 0, 'Command timed out and was terminated'
         except Exception as e:
             return 0, f'Failed to rename path: {e}'
+
+    @desc('Save content to a file', group='file_path', suggest=False)
+    @interruptible()
+    def save_file_content(self, arg=''):
+        """
+        保存内容到文件
+        参数格式: __json__:base64编码的JSON
+        {
+            "path": "/path/to/file",
+            "content": "file content",
+            "encoding": "utf-8"  # 可选，默认 utf-8
+        }
+        """
+        try:
+            payload = self._decode_structured_arg(arg)
+            if not isinstance(payload, dict):
+                return 0, 'Invalid save payload'
+
+            file_path = payload.get('path', '').strip()
+            content = payload.get('content', '')
+            encoding = payload.get('encoding', 'utf-8')
+
+            if not file_path:
+                return 0, 'path is required'
+
+            # 验证路径存在且是文件
+            target_path = self._require_existing_path_from_arg(file_path)
+            if os.path.isdir(target_path):
+                return 0, f'Cannot write to directory: {target_path}'
+
+            # 写入文件
+            try:
+                with open(target_path, 'w', encoding=encoding) as f:
+                    f.write(content)
+            except UnicodeEncodeError:
+                # 如果指定编码失败，尝试 utf-8
+                with open(target_path, 'w', encoding='utf-8') as f:
+                    f.write(content)
+                encoding = 'utf-8'
+
+            file_size = os.path.getsize(target_path)
+
+            return 1, f'File saved successfully\nPath: {target_path}\nSize: {file_size} bytes\nEncoding: {encoding}'
+
+        except CommandCancelledError:
+            return 0, 'Command cancelled'
+        except CommandTimeoutError:
+            return 0, 'Command timed out and was terminated'
+        except Exception as e:
+            return 0, f'Failed to save file: {e}'

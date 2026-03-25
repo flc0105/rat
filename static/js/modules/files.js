@@ -1,34 +1,158 @@
 window.AppFilesModule = {
     methods: {
-        async loadPreviewPayload(fetcher, fallbackTitle = 'File Preview') {
-            this.previewDialogVisible = true;
-            this.previewLoading = true;
-            this.resetPreviewState();
 
-            try {
-                const res = await fetcher();
-                const json = await res.json();
 
-                if (!res.ok || json.code !== 0) {
-                    throw new Error(json.message || 'Preview failed');
-                }
+        // static/js/modules/files.js
+// 在 window.AppFilesModule.methods 中添加
 
-                const data = json.data || {};
-                this.previewType = data.type || 'unsupported';
-                this.previewTitle = data.name || fallbackTitle;
+// 进入编辑模式
+enterEditMode() {
+    this.previewEditMode = true;
+},
 
-                if (this.previewType === 'image') {
-                    this.previewUrl = data.url || '';
-                } else if (this.previewType === 'text') {
-                    this.previewText = data.content || '';
-                }
-            } catch (e) {
-                this.previewDialogVisible = false;
-                ElementPlus.ElMessage.error(e.message || 'Preview failed');
-            } finally {
-                this.previewLoading = false;
-            }
-        },
+// 取消编辑模式
+cancelEditMode() {
+    this.previewEditMode = false;
+    // 重新加载原始内容
+    if (this.previewFilePath) {
+        this.loadPreviewPayload(
+            () => fetch(`/api/connections/${encodeURIComponent(this.selectedId)}/remote-files/preview`, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({path: this.previewFilePath})
+            }),
+            this.previewTitle
+        );
+    }
+},
+
+// 保存编辑后的内容
+async saveEditedContent() {
+    if (!this.selectedId || !this.previewFilePath) {
+        ElementPlus.ElMessage.warning('Invalid file path');
+        return;
+    }
+
+    this.previewSaving = true;
+
+    try {
+        const res = await fetch(`/api/connections/${encodeURIComponent(this.selectedId)}/remote-files/save`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                path: this.previewFilePath,
+                content: this.previewText,
+                encoding: 'utf-8'
+            })
+        });
+
+        const json = await res.json();
+        if (!res.ok || json.code !== 0) {
+            throw new Error(json.message || 'Failed to save file');
+        }
+
+        ElementPlus.ElMessage.success('File saved successfully');
+        this.previewEditMode = false;
+
+        // 刷新文件列表
+        if (this.remoteFilesDialogVisible) {
+            await this.refreshRemoteDirectory();
+        }
+
+    } catch (e) {
+        ElementPlus.ElMessage.error(e.message || 'Failed to save file');
+    } finally {
+        this.previewSaving = false;
+    }
+},
+
+// 修改 previewRemoteEntry 方法，记录文件路径
+async previewRemoteEntry(row) {
+    if (!row || !row.path || row.is_dir || row.is_parent_entry) {
+        ElementPlus.ElMessage.warning('Please select a file');
+        return;
+    }
+
+    // 记录文件路径
+    this.previewFilePath = row.path;
+
+    await this.loadPreviewPayload(
+        () => fetch(`/api/connections/${encodeURIComponent(this.selectedId)}/remote-files/preview`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({path: row.path})
+        }),
+        row.name || 'File Preview'
+    );
+
+    // 重置编辑模式
+    this.previewEditMode = false;
+},
+
+// static/js/modules/files.js
+// 修改 loadPreviewPayload 方法，在加载完成后重置编辑模式
+
+async loadPreviewPayload(fetcher, fallbackTitle = 'File Preview') {
+    this.previewDialogVisible = true;
+    this.previewLoading = true;
+    this.resetPreviewState();
+    this.previewEditMode = false;  // 重置编辑模式
+    this.previewSaving = false;     // 重置保存状态
+
+    try {
+        const res = await fetcher();
+        const json = await res.json();
+
+        if (!res.ok || json.code !== 0) {
+            throw new Error(json.message || 'Preview failed');
+        }
+
+        const data = json.data || {};
+        this.previewType = data.type || 'unsupported';
+        this.previewTitle = data.name || fallbackTitle;
+
+        if (this.previewType === 'image') {
+            this.previewUrl = data.url || '';
+        } else if (this.previewType === 'text') {
+            this.previewText = data.content || '';
+        }
+    } catch (e) {
+        this.previewDialogVisible = false;
+        ElementPlus.ElMessage.error(e.message || 'Preview failed');
+    } finally {
+        this.previewLoading = false;
+    }
+},
+        //
+        // async loadPreviewPayload(fetcher, fallbackTitle = 'File Preview') {
+        //     this.previewDialogVisible = true;
+        //     this.previewLoading = true;
+        //     this.resetPreviewState();
+        //
+        //     try {
+        //         const res = await fetcher();
+        //         const json = await res.json();
+        //
+        //         if (!res.ok || json.code !== 0) {
+        //             throw new Error(json.message || 'Preview failed');
+        //         }
+        //
+        //         const data = json.data || {};
+        //         this.previewType = data.type || 'unsupported';
+        //         this.previewTitle = data.name || fallbackTitle;
+        //
+        //         if (this.previewType === 'image') {
+        //             this.previewUrl = data.url || '';
+        //         } else if (this.previewType === 'text') {
+        //             this.previewText = data.content || '';
+        //         }
+        //     } catch (e) {
+        //         this.previewDialogVisible = false;
+        //         ElementPlus.ElMessage.error(e.message || 'Preview failed');
+        //     } finally {
+        //         this.previewLoading = false;
+        //     }
+        // },
 
         async copyPreviewText() {
             if (!this.previewText) {
@@ -175,21 +299,21 @@ window.AppFilesModule = {
             }
         },
 
-        async previewRemoteEntry(row) {
-            if (!row || !row.path || row.is_dir || row.is_parent_entry) {
-                ElementPlus.ElMessage.warning('Please select a file');
-                return;
-            }
-
-            await this.loadPreviewPayload(
-                () => fetch(`/api/connections/${encodeURIComponent(this.selectedId)}/remote-files/preview`, {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({path: row.path})
-                }),
-                row.name || 'File Preview'
-            );
-        },
+        // async previewRemoteEntry(row) {
+        //     if (!row || !row.path || row.is_dir || row.is_parent_entry) {
+        //         ElementPlus.ElMessage.warning('Please select a file');
+        //         return;
+        //     }
+        //
+        //     await this.loadPreviewPayload(
+        //         () => fetch(`/api/connections/${encodeURIComponent(this.selectedId)}/remote-files/preview`, {
+        //             method: 'POST',
+        //             headers: {'Content-Type': 'application/json'},
+        //             body: JSON.stringify({path: row.path})
+        //         }),
+        //         row.name || 'File Preview'
+        //     );
+        // },
 
         triggerRemoteUpload() {
             if (!this.selectedId) {

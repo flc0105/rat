@@ -51,6 +51,10 @@ window.AppStateModule = {
             previewUrl: '',
             previewText: '',
 
+            previewEditMode: false,  // 新增：是否处于编辑模式
+previewSaving: false,    // 新增：保存中状态
+previewFilePath: '',     // 新增：当前编辑的文件路径
+
             pendingRemoteUploadRefresh: null,
 
             backgroundJobsDialogVisible: false,

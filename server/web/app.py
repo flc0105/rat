@@ -335,6 +335,54 @@ def create_app(server_instance):
             return web_service.preview_remote_file(client_id, path)
         return _json_endpoint(_execute, default_error_status=500)
 
+    def save_file_content(self, client_id: str, path: str, content: str, encoding: str = 'utf-8') -> dict:
+        """
+        保存内容到远程文件
+        """
+        if not (path or '').strip():
+            raise ValueError('path is required')
+
+        normalized_path = path.strip()
+
+        # 构建保存命令
+        command = self._build_command('save_file_content', {
+            'path': normalized_path,
+            'content': content,
+            'encoding': encoding
+        })
+
+        result_text = self.remote_execution_service.run_foreground_text_command(
+            client_id,
+            command,
+            task_type='remote_file',
+            source='web_remote_file',
+        )
+
+        return {
+            'path': normalized_path,
+            'message': result_text
+        }
+
+    # server/web/app.py
+    # 在 create_app 函数中添加路由
+
+    @app.post('/api/connections/<client_id>/remote-files/save')
+    def save_remote_file(client_id):
+        def _execute():
+            payload = _get_json_payload()
+            path = (payload.get('path') or '').strip()
+            content = payload.get('content', '')
+            encoding = (payload.get('encoding') or 'utf-8').strip()
+
+            if not path:
+                raise ValueError('path is required')
+
+            return web_service.remote_file_service.save_file_content(
+                client_id, path, content, encoding
+            )
+
+        return _json_endpoint(_execute, default_error_status=500)
+
     @app.get('/api/stream')
     def stream():
         tab_id = (request.args.get('tab_id') or '').strip()

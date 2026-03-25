@@ -1648,3 +1648,32 @@ body {
     justify-content: center;
   }
 }
+
+
+/* static/css/app.css */
+/* 编辑文本区域样式 */
+
+.edit-text-area {
+    min-height: 400px;
+}
+
+.edit-text-area .el-textarea__inner {
+    font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', 'Consolas', monospace;
+    font-size: 13px;
+    line-height: 1.6;
+    background: #fafcff;
+    border-color: rgba(15, 23, 42, 0.15);
+}
+
+.edit-text-area .el-textarea__inner:focus {
+    border-color: var(--primary);
+    box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.1);
+}
+
+.edit-file-info {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    padding: 8px 4px;
+    font-family: monospace;
+}

@@ -230,3 +230,53 @@ class WebRemoteFileService:
         artifact = self._resolve_artifact_from_result_text(result_text)
 
         return self.artifact_service.build_preview_payload(artifact.get('artifact_id', ''))
+
+    def save_file_content(self, client_id: str, path: str, content: str, encoding: str = 'utf-8') -> dict:
+        """
+        保存内容到远程文件
+        """
+        if not (path or '').strip():
+            raise ValueError('path is required')
+
+        normalized_path = path.strip()
+
+        # 构建保存命令
+        command = self._build_command('save_file_content', {
+            'path': normalized_path,
+            'content': content,
+            'encoding': encoding
+        })
+
+        result_text = self.remote_execution_service.run_foreground_text_command(
+            client_id,
+            command,
+            task_type='remote_file',
+            source='web_remote_file',
+        )
+
+        return {
+            'path': normalized_path,
+            'message': result_text
+        }
+
+    def get_file_content(self, client_id: str, path: str) -> dict:
+        """
+        获取远程文件内容用于编辑
+        """
+        if not (path or '').strip():
+            raise ValueError('path is required')
+
+        # 使用现有的预览功能获取内容
+        preview_result = self.preview_file(client_id, path)
+
+        # 从预览结果中提取内容
+        if preview_result.get('type') == 'text':
+            return {
+                'path': path,
+                'content': preview_result.get('content', ''),
+                'truncated': preview_result.get('truncated', False),
+                'name': preview_result.get('name', ''),
+                'size': len(preview_result.get('content', ''))
+            }
+        else:
+            raise ValueError('File is not a text file or cannot be edited')
