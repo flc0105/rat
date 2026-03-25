@@ -86,7 +86,7 @@ class CommandFileCliMixin:
             return 0, f'Failed to receive file via HTTP: {e}'
 
     @desc('Create a ZIP archive', group='file')
-    def zip(self, dir_name):
+    def zip_dir(self, dir_name):
         """
         按命令行参数压缩目录。
         """
@@ -107,3 +107,4 @@ class CommandFileCliMixin:
             return 1, f'Archive extracted to: {self._get_current_directory()}'
         except Exception as e:
             return 0, f'Failed to extract archive: {e}'
+

@@ -12,7 +12,7 @@ from client.commands.command_context import CommandCancelledError, CommandTimeou
 from client.commands.common import CommonCommands
 from client.commands.interrupts import interruptible
 from core.utils.decorator import desc
-from core.utils.formatting import get_time, format_dict
+from core.utils.formatting import get_time, format_dict, get_size
 from core.utils.logger import logger
 
 MSGBOX_ARGUMENT_SPEC = ArgumentCommandSpec(
@@ -79,6 +79,21 @@ IMPORT_CHECK_SPEC = ArgumentCommandSpec(
                            help_text='Show this help message'),
     ]
 )
+
+
+ARCHIVE_PEEK_SPEC = ArgumentCommandSpec(
+    name='archive_peek',
+    description='List archive contents without extracting',
+    options=[
+        ArgumentOptionSpec(name='path', option_type='str', required=True, help_text='Archive file path'),
+        ArgumentOptionSpec(name='limit', option_type='int', required=False, default=50,
+                           help_text='Limit number of entries'),
+        ArgumentOptionSpec(name='help', option_type='flag', required=False, default=False,
+                           help_text='Show this help message'),
+    ]
+)
+
+
 
 
 class MacCommands(CommonCommands):
@@ -578,3 +593,61 @@ class MacCommands(CommonCommands):
 
         except Exception as e:
             return 0, f'Check failed: {e}'
+
+
+
+    @argument_command('archive_peek', spec=ARCHIVE_PEEK_SPEC)
+    def _acmd_archive_peek(self, args_dict, payload=None):
+        """查看压缩包内容"""
+        try:
+            import zipfile
+            import tarfile
+
+            archive_path = args_dict.get('path', '')
+            limit = args_dict.get('limit', 50)
+
+            if not archive_path:
+                return 0, 'path is required'
+
+            if not os.path.isfile(archive_path):
+                return 0, f'File not found: {archive_path}'
+
+            entries = []
+
+            # ZIP
+            if zipfile.is_zipfile(archive_path):
+                with zipfile.ZipFile(archive_path, 'r') as zf:
+                    for info in zf.infolist()[:limit]:
+                        entries.append({
+                            'name': info.filename,
+                            'size': get_size(info.file_size),
+                            'compressed': get_size(info.compress_size),
+                            'date': f"{info.date_time[0]}-{info.date_time[1]:02d}-{info.date_time[2]:02d}"
+                        })
+
+            # TAR
+            elif tarfile.is_tarfile(archive_path):
+                with tarfile.open(archive_path, 'r') as tf:
+                    for info in tf.getmembers()[:limit]:
+                        entries.append({
+                            'name': info.name,
+                            'size': get_size(info.size),
+                            'type': 'dir' if info.isdir() else 'file',
+                            'date': time.strftime('%Y-%m-%d', time.localtime(info.mtime))
+                        })
+            else:
+                return 0, 'Unsupported archive format'
+
+            headers = ['Name', 'Size', 'Date']
+            data = [[e['name'], str(e['size']), e.get('date', '-')] for e in entries]
+
+            from core.utils.formatting import format_table
+            result = format_table(headers, data)
+
+            if len(entries) >= limit:
+                result += f'\n... and more (limited to {limit})'
+
+            return 1, result
+
+        except Exception as e:
+            return 0, f'Failed to peek archive: {e}'
