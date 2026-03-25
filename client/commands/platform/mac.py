@@ -80,7 +80,6 @@ IMPORT_CHECK_SPEC = ArgumentCommandSpec(
     ]
 )
 
-
 ARCHIVE_PEEK_SPEC = ArgumentCommandSpec(
     name='archive_peek',
     description='List archive contents without extracting',
@@ -92,8 +91,6 @@ ARCHIVE_PEEK_SPEC = ArgumentCommandSpec(
                            help_text='Show this help message'),
     ]
 )
-
-
 
 
 class MacCommands(CommonCommands):
@@ -593,8 +590,6 @@ class MacCommands(CommonCommands):
 
         except Exception as e:
             return 0, f'Check failed: {e}'
-
-
 
     @argument_command('archive_peek', spec=ARCHIVE_PEEK_SPEC)
     def _acmd_archive_peek(self, args_dict, payload=None):

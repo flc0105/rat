@@ -323,7 +323,7 @@ class ArgumentCommandRegistry:
                 continue
 
             payload.append({
-                'name': 'acmd',
+                'name': f'acmd {command_name}',
                 'template': f'acmd {command_name}',
                 'help': description,
                 'group': 'acmd',
