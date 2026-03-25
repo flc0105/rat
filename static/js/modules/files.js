@@ -1,265 +1,147 @@
 window.AppFilesModule = {
     methods: {
 
+        // 进入编辑模式
+        enterEditMode() {
+            this.previewOriginalContent = this.previewText;  // 保存原始内容
+            this.previewEditMode = true;
+        },
 
-        // static/js/modules/files.js
-// 在 window.AppFilesModule.methods 中添加
+        // 取消编辑模式
+        cancelEditMode() {
+            this.previewEditMode = false;
+            this.previewText = this.previewOriginalContent;  // 恢复原始内容
+            this.previewOriginalContent = '';  // 清空缓存
+        },
 
-// 进入编辑模式
-enterEditMode() {
-        this.previewOriginalContent = this.previewText;  // 保存原始内容
-    this.previewEditMode = true;
-},
+        // 保存编辑后的内容
+        async saveEditedContent() {
+            console.log('saveEditedContent called');
+            console.log('selectedId:', this.selectedId);
+            console.log('previewFilePath:', this.previewFilePath);
+            if (!this.selectedId || !this.previewFilePath) {
+                ElementPlus.ElMessage.warning('Invalid file path');
+                return;
+            }
 
-// 取消编辑模式
-cancelEditMode() {
-    this.previewEditMode = false;
-    this.previewText = this.previewOriginalContent;  // 恢复原始内容
-    this.previewOriginalContent = '';  // 清空缓存
-    // 重新加载原始内容
-    // if (this.previewFilePath) {
-    //     this.loadPreviewPayload(
-    //         () => fetch(`/api/connections/${encodeURIComponent(this.selectedId)}/remote-files/preview`, {
-    //             method: 'POST',
-    //             headers: {'Content-Type': 'application/json'},
-    //             body: JSON.stringify({path: this.previewFilePath})
-    //         }),
-    //         this.previewTitle
-    //     );
-    // }
-},
+            this.previewSaving = true;
 
-// 保存编辑后的内容
-async saveEditedContent() {
-   console.log('saveEditedContent called');
-    console.log('selectedId:', this.selectedId);
-    console.log('previewFilePath:', this.previewFilePath);
-    if (!this.selectedId || !this.previewFilePath) {
-        ElementPlus.ElMessage.warning('Invalid file path');
-        return;
-    }
+            try {
+                const res = await fetch(`/api/connections/${encodeURIComponent(this.selectedId)}/remote-files/save`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        path: this.previewFilePath,
+                        content: this.previewText,
+                        encoding: 'utf-8'
+                    })
+                });
 
-    this.previewSaving = true;
+                const json = await res.json();
+                if (!res.ok || json.code !== 0) {
+                    throw new Error(json.message || 'Failed to save file');
+                }
 
-    try {
-        const res = await fetch(`/api/connections/${encodeURIComponent(this.selectedId)}/remote-files/save`, {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({
-                path: this.previewFilePath,
-                content: this.previewText,
-                encoding: 'utf-8'
-            })
-        });
+                ElementPlus.ElMessage.success('File saved successfully');
+                // 保存成功后，更新原始内容副本为当前内容
+                this.previewOriginalContent = this.previewText;
+                this.previewEditMode = false;
+                // this.previewEditMode = false;
 
-        const json = await res.json();
-        if (!res.ok || json.code !== 0) {
-            throw new Error(json.message || 'Failed to save file');
-        }
+                // 刷新文件列表
+                if (this.remoteFilesDialogVisible) {
+                    await this.refreshRemoteDirectory();
+                }
 
-        ElementPlus.ElMessage.success('File saved successfully');
-              // 保存成功后，更新原始内容副本为当前内容
-        this.previewOriginalContent = this.previewText;
-        this.previewEditMode = false;
-        // this.previewEditMode = false;
+            } catch (e) {
+                ElementPlus.ElMessage.error(e.message || 'Failed to save file');
+            } finally {
+                this.previewSaving = false;
+            }
+        },
 
-        // 刷新文件列表
-        if (this.remoteFilesDialogVisible) {
-            await this.refreshRemoteDirectory();
-        }
+        async previewRemoteEntry(row) {
+            if (!row || !row.path || row.is_dir || row.is_parent_entry) {
+                ElementPlus.ElMessage.warning('Please select a file');
+                return;
+            }
 
-    } catch (e) {
-        ElementPlus.ElMessage.error(e.message || 'Failed to save file');
-    } finally {
-        this.previewSaving = false;
-    }
-},
+            // 记录文件路径
+            this.previewFilePath = row.path;
 
-// 修改 previewRemoteEntry 方法，记录文件路径
-async previewRemoteEntry(row) {
-    if (!row || !row.path || row.is_dir || row.is_parent_entry) {
-        ElementPlus.ElMessage.warning('Please select a file');
-        return;
-    }
+            await this.loadPreviewPayload(
+                () => fetch(`/api/connections/${encodeURIComponent(this.selectedId)}/remote-files/preview`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({path: row.path})
+                }),
+                row.name || 'File Preview'
+            );
 
-    // 记录文件路径
-    this.previewFilePath = row.path;
+            // 重置编辑模式
+            this.previewEditMode = false;
+        },
 
-    await this.loadPreviewPayload(
-        () => fetch(`/api/connections/${encodeURIComponent(this.selectedId)}/remote-files/preview`, {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({path: row.path})
-        }),
-        row.name || 'File Preview'
-    );
-
-    // 重置编辑模式
-    this.previewEditMode = false;
-},
-
-
-        // static/js/modules/files.js
-// 修改 loadPreviewPayload 方法
 
         async loadPreviewPayload(fetcher, fallbackTitle = 'File Preview') {
-    this.previewDialogVisible = true;
-    this.previewLoading = true;
-    this.resetPreviewState();
-    this.previewEditMode = false;
-    this.previewSaving = false;
-    this.previewOriginalContent = '';
+            this.previewDialogVisible = true;
+            this.previewLoading = true;
+            this.resetPreviewState();
+            this.previewEditMode = false;
+            this.previewSaving = false;
+            this.previewOriginalContent = '';
 
-    try {
-        const res = await fetcher();
-        const json = await res.json();
+            try {
+                const res = await fetcher();
+                const json = await res.json();
 
-        if (!res.ok || json.code !== 0) {
-            throw new Error(json.message || 'Preview failed');
-        }
+                if (!res.ok || json.code !== 0) {
+                    throw new Error(json.message || 'Preview failed');
+                }
 
-        const data = json.data || {};
-        this.previewType = data.type || 'unsupported';
-        this.previewTitle = data.name || fallbackTitle;
+                const data = json.data || {};
+                this.previewType = data.type || 'unsupported';
+                this.previewTitle = data.name || fallbackTitle;
 
-        if (this.previewType === 'image') {
-            this.previewUrl = data.url || '';
-        } else if (this.previewType === 'text') {
-            this.previewText = data.content || '';
-            this.previewTruncated = data.truncated || false;
-            this.previewOriginalContent = this.previewText;
+                if (this.previewType === 'image') {
+                    this.previewUrl = data.url || '';
+                } else if (this.previewType === 'text') {
+                    this.previewText = data.content || '';
+                    this.previewTruncated = data.truncated || false;
+                    this.previewOriginalContent = this.previewText;
 
-            // 计算文件大小显示
-            const size = data.size || this.previewText.length;
-            this.previewFileSize = this.formatBytes(size);
+                    // 计算文件大小显示
+                    const size = data.size || this.previewText.length;
+                    this.previewFileSize = this.formatBytes(size);
 
-            // 检测文件编码（简单实现，可以后续优化）
-            this.previewFileEncoding = this.detectEncoding(this.previewText);
-        }
-    } catch (e) {
-        this.previewDialogVisible = false;
-        ElementPlus.ElMessage.error(e.message || 'Preview failed');
-    } finally {
-        this.previewLoading = false;
-    }
-},
+                    // 检测文件编码（简单实现，可以后续优化）
+                    this.previewFileEncoding = this.detectEncoding(this.previewText);
+                }
+            } catch (e) {
+                this.previewDialogVisible = false;
+                ElementPlus.ElMessage.error(e.message || 'Preview failed');
+            } finally {
+                this.previewLoading = false;
+            }
+        },
 
         detectEncoding(text) {
-    // 简单的编码检测
-    if (!text) return 'UTF-8';
+            // 简单的编码检测
+            if (!text) return 'UTF-8';
 
-    // 检测是否包含常见的中文字符
-    if (/[\u4e00-\u9fa5]/.test(text)) {
-        // 简单判断：如果内容看起来正常，就是 UTF-8
-        return 'UTF-8';
-    }
+            // 检测是否包含常见的中文字符
+            if (/[\u4e00-\u9fa5]/.test(text)) {
+                // 简单判断：如果内容看起来正常，就是 UTF-8
+                return 'UTF-8';
+            }
 
-    // 检测是否包含 BOM
-    if (text.charCodeAt(0) === 0xFEFF) {
-        return 'UTF-8 with BOM';
-    }
+            // 检测是否包含 BOM
+            if (text.charCodeAt(0) === 0xFEFF) {
+                return 'UTF-8 with BOM';
+            }
 
-    return 'UTF-8';
-},
-
-// async loadPreviewPayload(fetcher, fallbackTitle = 'File Preview') {
-//     this.previewDialogVisible = true;
-//     this.previewLoading = true;
-//     this.resetPreviewState();
-//     this.previewEditMode = false;
-//     this.previewSaving = false;
-//     this.previewOriginalContent = '';  // 清空原始内容缓存
-//
-//     try {
-//         const res = await fetcher();
-//         const json = await res.json();
-//
-//         if (!res.ok || json.code !== 0) {
-//             throw new Error(json.message || 'Preview failed');
-//         }
-//
-//         const data = json.data || {};
-//         this.previewType = data.type || 'unsupported';
-//         this.previewTitle = data.name || fallbackTitle;
-//
-//         if (this.previewType === 'image') {
-//             this.previewUrl = data.url || '';
-//         } else if (this.previewType === 'text') {
-//             this.previewText = data.content || '';
-//             // 保存原始内容副本
-//             this.previewOriginalContent = this.previewText;
-//         }
-//     } catch (e) {
-//         this.previewDialogVisible = false;
-//         ElementPlus.ElMessage.error(e.message || 'Preview failed');
-//     } finally {
-//         this.previewLoading = false;
-//     }
-// },
-// static/js/modules/files.js
-// 修改 loadPreviewPayload 方法，在加载完成后重置编辑模式
-//
-// async loadPreviewPayload(fetcher, fallbackTitle = 'File Preview') {
-//     this.previewDialogVisible = true;
-//     this.previewLoading = true;
-//     this.resetPreviewState();
-//     this.previewEditMode = false;  // 重置编辑模式
-//     this.previewSaving = false;     // 重置保存状态
-//
-//     try {
-//         const res = await fetcher();
-//         const json = await res.json();
-//
-//         if (!res.ok || json.code !== 0) {
-//             throw new Error(json.message || 'Preview failed');
-//         }
-//
-//         const data = json.data || {};
-//         this.previewType = data.type || 'unsupported';
-//         this.previewTitle = data.name || fallbackTitle;
-//
-//         if (this.previewType === 'image') {
-//             this.previewUrl = data.url || '';
-//         } else if (this.previewType === 'text') {
-//             this.previewText = data.content || '';
-//         }
-//     } catch (e) {
-//         this.previewDialogVisible = false;
-//         ElementPlus.ElMessage.error(e.message || 'Preview failed');
-//     } finally {
-//         this.previewLoading = false;
-//     }
-// },
-        //
-        // async loadPreviewPayload(fetcher, fallbackTitle = 'File Preview') {
-        //     this.previewDialogVisible = true;
-        //     this.previewLoading = true;
-        //     this.resetPreviewState();
-        //
-        //     try {
-        //         const res = await fetcher();
-        //         const json = await res.json();
-        //
-        //         if (!res.ok || json.code !== 0) {
-        //             throw new Error(json.message || 'Preview failed');
-        //         }
-        //
-        //         const data = json.data || {};
-        //         this.previewType = data.type || 'unsupported';
-        //         this.previewTitle = data.name || fallbackTitle;
-        //
-        //         if (this.previewType === 'image') {
-        //             this.previewUrl = data.url || '';
-        //         } else if (this.previewType === 'text') {
-        //             this.previewText = data.content || '';
-        //         }
-        //     } catch (e) {
-        //         this.previewDialogVisible = false;
-        //         ElementPlus.ElMessage.error(e.message || 'Preview failed');
-        //     } finally {
-        //         this.previewLoading = false;
-        //     }
-        // },
+            return 'UTF-8';
+        },
 
         async copyPreviewText() {
             if (!this.previewText) {
@@ -406,21 +288,6 @@ async previewRemoteEntry(row) {
             }
         },
 
-        // async previewRemoteEntry(row) {
-        //     if (!row || !row.path || row.is_dir || row.is_parent_entry) {
-        //         ElementPlus.ElMessage.warning('Please select a file');
-        //         return;
-        //     }
-        //
-        //     await this.loadPreviewPayload(
-        //         () => fetch(`/api/connections/${encodeURIComponent(this.selectedId)}/remote-files/preview`, {
-        //             method: 'POST',
-        //             headers: {'Content-Type': 'application/json'},
-        //             body: JSON.stringify({path: row.path})
-        //         }),
-        //         row.name || 'File Preview'
-        //     );
-        // },
 
         triggerRemoteUpload() {
             if (!this.selectedId) {
@@ -856,59 +723,59 @@ async previewRemoteEntry(row) {
 
 
         async deleteSelectedRemoteEntries() {
-    if (!this.selectedId) {
-        ElementPlus.ElMessage.warning('Please select a device');
-        return;
-    }
-
-    const paths = [...this.remoteSelectedPaths];
-    if (!paths.length) {
-        ElementPlus.ElMessage.warning('Please select at least one file or folder to delete');
-        return;
-    }
-
-    try {
-        await ElementPlus.ElMessageBox.confirm(
-            `Delete ${paths.length} selected item(s)?`,
-            'Delete Multiple Items',
-            {
-                type: 'warning',
-                confirmButtonText: 'Delete',
-                cancelButtonText: 'Cancel',
-                confirmButtonClass: 'el-button--danger',
-                dangerouslyUseHTMLString: false
+            if (!this.selectedId) {
+                ElementPlus.ElMessage.warning('Please select a device');
+                return;
             }
-        );
 
-        const res = await fetch(`/api/connections/${encodeURIComponent(this.selectedId)}/remote-files/batch`, {
-            method: 'DELETE',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({ paths })
-        });
+            const paths = [...this.remoteSelectedPaths];
+            if (!paths.length) {
+                ElementPlus.ElMessage.warning('Please select at least one file or folder to delete');
+                return;
+            }
 
-        const json = await res.json();
-        if (!res.ok || json.code !== 0) {
-            throw new Error(json.message || 'Batch delete failed');
-        }
+            try {
+                await ElementPlus.ElMessageBox.confirm(
+                    `Delete ${paths.length} selected item(s)?`,
+                    'Delete Multiple Items',
+                    {
+                        type: 'warning',
+                        confirmButtonText: 'Delete',
+                        cancelButtonText: 'Cancel',
+                        confirmButtonClass: 'el-button--danger',
+                        dangerouslyUseHTMLString: false
+                    }
+                );
 
-        const message = json.data?.message || 'Delete completed';
-        ElementPlus.ElMessage.success(`Deleted ${paths.length} item(s)`);
+                const res = await fetch(`/api/connections/${encodeURIComponent(this.selectedId)}/remote-files/batch`, {
+                    method: 'DELETE',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({paths})
+                });
 
-        // 刷新当前目录
-        await this.refreshRemoteDirectory();
+                const json = await res.json();
+                if (!res.ok || json.code !== 0) {
+                    throw new Error(json.message || 'Batch delete failed');
+                }
 
-        // 清空选中状态
-        this.clearRemoteSelection();
+                const message = json.data?.message || 'Delete completed';
+                ElementPlus.ElMessage.success(`Deleted ${paths.length} item(s)`);
 
-        // 可选：显示详细结果
-        if (message && message !== 'Delete completed') {
-            ElementPlus.ElMessage.info(message);
-        }
-    } catch (e) {
-        if (e === 'cancel' || e === 'close' || e?.toString?.().includes('cancel')) return;
-        ElementPlus.ElMessage.error(e.message || 'Batch delete failed');
-    }
-},
+                // 刷新当前目录
+                await this.refreshRemoteDirectory();
+
+                // 清空选中状态
+                this.clearRemoteSelection();
+
+                // 可选：显示详细结果
+                if (message && message !== 'Delete completed') {
+                    ElementPlus.ElMessage.info(message);
+                }
+            } catch (e) {
+                if (e === 'cancel' || e === 'close' || e?.toString?.().includes('cancel')) return;
+                ElementPlus.ElMessage.error(e.message || 'Batch delete failed');
+            }
+        },
 
         async previewBackgroundJobFile(file) {
             if (!file) {

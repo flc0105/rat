@@ -240,9 +240,11 @@
                             Download Selected<span
                                 v-if="remoteSelectedPaths.length"> ({{ remoteSelectedPaths.length }})</span>
                         </el-button>
-                            <el-button size="small" type="danger" :disabled="!hasRemoteSelection" @click="deleteSelectedRemoteEntries">
-        Delete Selected<span v-if="remoteSelectedPaths.length"> ({{ remoteSelectedPaths.length }})</span>
-    </el-button>
+                        <el-button size="small" type="danger" :disabled="!hasRemoteSelection"
+                                   @click="deleteSelectedRemoteEntries">
+                            Delete Selected<span
+                                v-if="remoteSelectedPaths.length"> ({{ remoteSelectedPaths.length }})</span>
+                        </el-button>
                         <el-button size="small" :disabled="!hasRemoteSelection" @click="clearRemoteSelection">Clear
                             Selection
                         </el-button>
@@ -742,193 +744,112 @@
         </div>
     </el-dialog>
 
-<!-- static/index.html -->
-<!-- 修改预览对话框，添加编辑模式支持 -->
 
-    <!-- static/index.html -->
-<!-- 修改预览对话框 -->
-<!-- static/index.html -->
-<!-- 修改预览对话框，不使用 el-icon -->
-
-<el-dialog v-model="previewDialogVisible" :title="previewTitle || 'File Preview'" width="1080px" top="5vh"
-           class="fixed-dialog preview-dialog">
-    <div v-loading="previewLoading" class="preview-wrap">
-        <!-- 优化后的工具栏 - 左对齐，无图标 -->
-        <div class="preview-toolbar" v-if="previewType === 'image' || previewType === 'text'">
-            <div class="preview-toolbar-left">
-                <!-- 文本文件特有按钮 -->
-                <template v-if="previewType === 'text'">
-                    <!-- 复制按钮 -->
-                    <el-button size="small" @click="copyPreviewText">
-                       Copy
-                    </el-button>
-
-                    <!-- 编辑按钮 - 仅当文件完整且未截断时可用 -->
-                    <el-button
-                        v-if="!previewEditMode && !previewTruncated"
-                        size="small"
-                        type="primary"
-                        @click="enterEditMode"
-                    >
-                        Edit
-                    </el-button>
-
-                    <!-- 编辑模式下的保存和取消 -->
-                    <template v-else-if="previewEditMode">
-                        <el-button
-                            size="small"
-                            type="primary"
-                            :loading="previewSaving"
-                            @click="saveEditedContent"
-                        >
-                            Save
+    <el-dialog v-model="previewDialogVisible" :title="previewTitle || 'File Preview'" width="1080px" top="5vh"
+               class="fixed-dialog preview-dialog">
+        <div v-loading="previewLoading" class="preview-wrap">
+            <div class="preview-toolbar" v-if="previewType === 'image' || previewType === 'text'">
+                <div class="preview-toolbar-left">
+                    <!-- 文本文件特有按钮 -->
+                    <template v-if="previewType === 'text'">
+                        <!-- 复制按钮 -->
+                        <el-button size="small" @click="copyPreviewText">
+                            Copy
                         </el-button>
+
+                        <!-- 编辑按钮 - 仅当文件完整且未截断时可用 -->
                         <el-button
-                            size="small"
-                            @click="cancelEditMode"
+                                v-if="!previewEditMode && !previewTruncated"
+                                size="small"
+                                type="primary"
+                                @click="enterEditMode"
                         >
-                            Cancel
+                            Edit
+                        </el-button>
+
+                        <!-- 编辑模式下的保存和取消 -->
+                        <template v-else-if="previewEditMode">
+                            <el-button
+                                    size="small"
+                                    type="primary"
+                                    :loading="previewSaving"
+                                    @click="saveEditedContent"
+                            >
+                                Save
+                            </el-button>
+                            <el-button
+                                    size="small"
+                                    @click="cancelEditMode"
+                            >
+                                Cancel
+                            </el-button>
+                        </template>
+                    </template>
+
+                    <!-- 图片文件特有按钮 -->
+                    <template v-if="previewType === 'image' && previewUrl">
+                        <el-button size="small" @click="openPreviewOriginal">
+                            Open Original
                         </el-button>
                     </template>
-                </template>
+                </div>
 
-                <!-- 图片文件特有按钮 -->
-                <template v-if="previewType === 'image' && previewUrl">
-                    <el-button size="small" @click="openPreviewOriginal">
-                        Open Original
-                    </el-button>
-                </template>
+                <div class="preview-toolbar-right">
+                    <!-- 文件信息标签 -->
+                    <template v-if="previewType === 'text'">
+                        <div class="preview-info-tags">
+                            <el-tag size="small" type="info">
+                                {{ previewFileSize }}
+                            </el-tag>
+                            <el-tag size="small" type="info">
+                                {{ previewFileEncoding }}
+                            </el-tag>
+                            <el-tag
+                                    v-if="previewTruncated"
+                                    size="small"
+                                    type="danger"
+                            >
+                                Truncated - Edit disabled
+                            </el-tag>
+                            <el-tag
+                                    v-else
+                                    size="small"
+                                    type="success"
+                            >
+                                Full content
+                            </el-tag>
+                        </div>
+                    </template>
+                </div>
             </div>
 
-            <div class="preview-toolbar-right">
-                <!-- 文件信息标签 -->
-                <template v-if="previewType === 'text'">
-                    <div class="preview-info-tags">
-                        <el-tag size="small" type="info">
-                            {{ previewFileSize }}
-                        </el-tag>
-                        <el-tag size="small" type="info">
-                            {{ previewFileEncoding }}
-                        </el-tag>
-                        <el-tag
-                            v-if="previewTruncated"
-                            size="small"
-                            type="danger"
-                        >
-                            Truncated - Edit disabled
-                        </el-tag>
-                        <el-tag
-                            v-else
-                            size="small"
-                            type="success"
-                        >
-                            Full content
-                        </el-tag>
-                    </div>
-                </template>
-            </div>
+            <template v-if="previewType === 'image' && previewUrl">
+                <div class="image-preview-box"><img :src="previewUrl" alt="preview" class="preview-image"/></div>
+            </template>
+
+            <template v-else-if="previewType === 'text'">
+                <!-- 预览模式：只读展示 -->
+                <pre v-if="!previewEditMode" class="preview-text">{{ previewText }}</pre>
+                <!-- 编辑模式：可编辑文本框 -->
+                <div v-else class="edit-text-area">
+                    <el-input
+                            v-model="previewText"
+                            type="textarea"
+                            :rows="25"
+                            placeholder="Edit file content..."
+                            style="font-family: monospace; font-size: 13px; line-height: 1.6;"
+                    />
+                </div>
+            </template>
+
+            <template v-else-if="previewType === 'unsupported'">
+                <div class="empty-state">This file type is not supported for preview.</div>
+            </template>
+            <template v-else>
+                <div class="empty-state">No preview available.</div>
+            </template>
         </div>
-
-        <template v-if="previewType === 'image' && previewUrl">
-            <div class="image-preview-box"><img :src="previewUrl" alt="preview" class="preview-image"/></div>
-        </template>
-
-        <template v-else-if="previewType === 'text'">
-            <!-- 预览模式：只读展示 -->
-            <pre v-if="!previewEditMode" class="preview-text">{{ previewText }}</pre>
-            <!-- 编辑模式：可编辑文本框 -->
-            <div v-else class="edit-text-area">
-                <el-input
-                    v-model="previewText"
-                    type="textarea"
-                    :rows="25"
-                    placeholder="Edit file content..."
-                    style="font-family: monospace; font-size: 13px; line-height: 1.6;"
-                />
-            </div>
-        </template>
-
-        <template v-else-if="previewType === 'unsupported'">
-            <div class="empty-state">This file type is not supported for preview.</div>
-        </template>
-        <template v-else>
-            <div class="empty-state">No preview available.</div>
-        </template>
-    </div>
-</el-dialog>
-
-
-<!--<el-dialog v-model="previewDialogVisible" :title="previewTitle || 'File Preview'" width="1080px" top="5vh"-->
-<!--           class="fixed-dialog preview-dialog">-->
-<!--    <div v-loading="previewLoading" class="preview-wrap">-->
-<!--        <div v-if="(previewType === 'image' && previewUrl) || previewType === 'text'" class="preview-toolbar">-->
-<!--            <template v-if="previewType === 'text'">-->
-<!--                <el-button v-if="!previewEditMode" size="small" @click="enterEditMode">Edit</el-button>-->
-<!--                <template v-else>-->
-<!--                    <el-button size="small" type="primary" :loading="previewSaving" @click="saveEditedContent">Save</el-button>-->
-<!--                    <el-button size="small" @click="cancelEditMode">Cancel</el-button>-->
-<!--                </template>-->
-<!--                <el-button size="small" @click="copyPreviewText">Copy Content</el-button>-->
-<!--            </template>-->
-<!--            <el-button v-if="previewType === 'image' && previewUrl" size="small" @click="openPreviewOriginal">Open Original</el-button>-->
-<!--        </div>-->
-
-<!--        <template v-if="previewType === 'image' && previewUrl">-->
-<!--            <div class="image-preview-box"><img :src="previewUrl" alt="preview" class="preview-image"/></div>-->
-<!--        </template>-->
-
-<!--        <template v-else-if="previewType === 'text'">-->
-<!--            &lt;!&ndash; 预览模式：只读展示 &ndash;&gt;-->
-<!--            <pre v-if="!previewEditMode" class="preview-text">{{ previewText }}</pre>-->
-<!--            &lt;!&ndash; 编辑模式：可编辑文本框 &ndash;&gt;-->
-<!--            <div v-else class="edit-text-area">-->
-<!--                <el-input-->
-<!--                    v-model="previewText"-->
-<!--                    type="textarea"-->
-<!--                    :rows="25"-->
-<!--                    placeholder="Edit file content..."-->
-<!--                    style="font-family: monospace; font-size: 13px; line-height: 1.6;"-->
-<!--                />-->
-<!--                <div class="edit-file-info" style="margin-top: 8px; font-size: 12px; color: var(&#45;&#45;muted);">-->
-<!--                    <span>Path: {{ previewFilePath }}</span>-->
-<!--                    <span style="margin-left: 16px;">Characters: {{ previewText.length }}</span>-->
-<!--                </div>-->
-<!--            </div>-->
-<!--        </template>-->
-
-<!--        <template v-else-if="previewType === 'unsupported'">-->
-<!--            <div class="empty-state">This file type is not supported for preview.</div>-->
-<!--        </template>-->
-<!--        <template v-else>-->
-<!--            <div class="empty-state">No preview available.</div>-->
-<!--        </template>-->
-<!--    </div>-->
-<!--</el-dialog>-->
-
-
-<!--    <el-dialog v-model="previewDialogVisible" :title="previewTitle || 'File Preview'" width="1080px" top="5vh"-->
-<!--               class="fixed-dialog preview-dialog">-->
-<!--        <div v-loading="previewLoading" class="preview-wrap">-->
-<!--            <div v-if="(previewType === 'image' && previewUrl) || previewType === 'text'" class="preview-toolbar">-->
-<!--                <el-button v-if="previewType === 'text'" size="small" @click="copyPreviewText">Copy Content</el-button>-->
-<!--                <el-button v-if="previewType === 'image' && previewUrl" size="small" @click="openPreviewOriginal">Open-->
-<!--                    Original-->
-<!--                </el-button>-->
-<!--            </div>-->
-<!--            <template v-if="previewType === 'image' && previewUrl">-->
-<!--                <div class="image-preview-box"><img :src="previewUrl" alt="preview" class="preview-image"/></div>-->
-<!--            </template>-->
-<!--            <template v-else-if="previewType === 'text'">-->
-<!--                <pre class="preview-text">{{ previewText }}</pre>-->
-<!--            </template>-->
-<!--            <template v-else-if="previewType === 'unsupported'">-->
-<!--                <div class="empty-state">This file type is not supported for preview.</div>-->
-<!--            </template>-->
-<!--            <template v-else>-->
-<!--                <div class="empty-state">No preview available.</div>-->
-<!--            </template>-->
-<!--        </div>-->
-<!--    </el-dialog>-->
+    </el-dialog>
 
     <el-dialog v-model="commandHistoryDialogVisible" title="Command History" width="1120px" top="5vh"
                class="fixed-dialog recent-files-dialog command-history-dialog">
@@ -1016,67 +937,132 @@
                     </div>
                 </el-tab-pane>
 
+<!--                <el-tab-pane label="Execution History" name="full">-->
+<!--                    <div class="command-execution-list-shell" v-loading="commandExecutionHistoryLoading">-->
+<!--                        <div v-if="!commandExecutionItems.length && !commandExecutionHistoryLoading"-->
+<!--                             class="empty-state">No execution history available-->
+<!--                        </div>-->
+<!--                        <div v-else class="command-execution-list">-->
+<!--                            <div v-for="item in commandExecutionItems" :key="item.entry_id"-->
+<!--                                 class="command-execution-card">-->
+<!--                                <div class="command-execution-card-main">-->
+<!--                                    <div class="command-execution-card-top">-->
+<!--                                        <div class="command-execution-title-wrap">-->
+<!--                                            <div class="command-execution-title-line">-->
+<!--                                                <div class="command-execution-title mono">{{ item.command || '-' }}-->
+<!--                                                </div>-->
+<!--                                                <el-tag :type="buildCommandExecutionStatusTagType(item.status)"-->
+<!--                                                        size="small">{{ item.status || 'unknown' }}-->
+<!--                                                </el-tag>-->
+<!--                                                <el-tag v-if="item.has_files" type="success" size="small">{{-->
+<!--                                                    item.file_count || 0 }} file(s)-->
+<!--                                                </el-tag>-->
+<!--                                                <el-tag v-if="item.output_truncated" type="warning" size="small">output-->
+<!--                                                    truncated-->
+<!--                                                </el-tag>-->
+<!--                                            </div>-->
+<!--                                            <div class="command-execution-subtitle">{{ item.source || '-' }} / {{-->
+<!--                                                item.started_at || '-' }}-->
+<!--                                            </div>-->
+<!--                                        </div>-->
+<!--                                    </div>-->
+<!--                                    <div class="command-execution-stats">-->
+<!--                                        <div class="command-execution-stat-pill"><span-->
+<!--                                                class="command-execution-stat-label">Duration</span><span-->
+<!--                                                class="command-execution-stat-value">{{ formatCommandExecutionDuration(item.duration_ms) }}</span>-->
+<!--                                        </div>-->
+<!--                                        <div class="command-execution-stat-pill command-execution-stat-pill-wide"><span-->
+<!--                                                class="command-execution-stat-label">CWD</span><span-->
+<!--                                                class="command-execution-stat-value ellipsis">{{ getCommandExecutionDisplayCwd(item) }}</span>-->
+<!--                                        </div>-->
+<!--                                        <div class="command-execution-stat-pill"><span-->
+<!--                                                class="command-execution-stat-label">Chunks</span><span-->
+<!--                                                class="command-execution-stat-value">{{ item.output_chunk_count || 0 }}</span>-->
+<!--                                        </div>-->
+<!--                                        <div class="command-execution-stat-pill"><span-->
+<!--                                                class="command-execution-stat-label">Lines</span><span-->
+<!--                                                class="command-execution-stat-value">{{ item.output_line_count || 0 }}</span>-->
+<!--                                        </div>-->
+<!--                                    </div>-->
+<!--                                    <div class="command-execution-summary">{{-->
+<!--                                        buildCommandExecutionSingleLineSummary(item) }}-->
+<!--                                    </div>-->
+<!--                                </div>-->
+<!--                                <div class="command-execution-actions">-->
+<!--                                    <el-button size="small" plain @click="applyHistoryCommand(item)">Use</el-button>-->
+<!--                                    <el-button size="small" type="primary" plain-->
+<!--                                               @click="openCommandExecutionDetail(item)">Details-->
+<!--                                    </el-button>-->
+<!--                                </div>-->
+<!--                            </div>-->
+<!--                        </div>-->
+<!--                    </div>-->
+<!--                </el-tab-pane>-->
                 <el-tab-pane label="Execution History" name="full">
-                    <div class="command-execution-list-shell" v-loading="commandExecutionHistoryLoading">
-                        <div v-if="!commandExecutionItems.length && !commandExecutionHistoryLoading"
-                             class="empty-state">No execution history available
-                        </div>
-                        <div v-else class="command-execution-list">
-                            <div v-for="item in commandExecutionItems" :key="item.entry_id"
-                                 class="command-execution-card">
-                                <div class="command-execution-card-main">
-                                    <div class="command-execution-card-top">
-                                        <div class="command-execution-title-wrap">
-                                            <div class="command-execution-title-line">
-                                                <div class="command-execution-title mono">{{ item.command || '-' }}
-                                                </div>
-                                                <el-tag :type="buildCommandExecutionStatusTagType(item.status)"
-                                                        size="small">{{ item.status || 'unknown' }}
-                                                </el-tag>
-                                                <el-tag v-if="item.has_files" type="success" size="small">{{
-                                                    item.file_count || 0 }} file(s)
-                                                </el-tag>
-                                                <el-tag v-if="item.output_truncated" type="warning" size="small">output
-                                                    truncated
-                                                </el-tag>
-                                            </div>
-                                            <div class="command-execution-subtitle">{{ item.source || '-' }} / {{
-                                                item.started_at || '-' }}
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <div class="command-execution-stats">
-                                        <div class="command-execution-stat-pill"><span
-                                                class="command-execution-stat-label">Duration</span><span
-                                                class="command-execution-stat-value">{{ formatCommandExecutionDuration(item.duration_ms) }}</span>
-                                        </div>
-                                        <div class="command-execution-stat-pill command-execution-stat-pill-wide"><span
-                                                class="command-execution-stat-label">CWD</span><span
-                                                class="command-execution-stat-value ellipsis">{{ getCommandExecutionDisplayCwd(item) }}</span>
-                                        </div>
-                                        <div class="command-execution-stat-pill"><span
-                                                class="command-execution-stat-label">Chunks</span><span
-                                                class="command-execution-stat-value">{{ item.output_chunk_count || 0 }}</span>
-                                        </div>
-                                        <div class="command-execution-stat-pill"><span
-                                                class="command-execution-stat-label">Lines</span><span
-                                                class="command-execution-stat-value">{{ item.output_line_count || 0 }}</span>
-                                        </div>
-                                    </div>
-                                    <div class="command-execution-summary">{{
-                                        buildCommandExecutionSingleLineSummary(item) }}
-                                    </div>
-                                </div>
-                                <div class="command-execution-actions">
-                                    <el-button size="small" plain @click="applyHistoryCommand(item)">Use</el-button>
-                                    <el-button size="small" type="primary" plain
-                                               @click="openCommandExecutionDetail(item)">Details
-                                    </el-button>
-                                </div>
-                            </div>
-                        </div>
+    <div class="command-execution-list-shell" v-loading="commandExecutionHistoryLoading">
+        <div v-if="!commandExecutionItems.length && !commandExecutionHistoryLoading"
+             class="empty-state">No execution history available
+        </div>
+        <div v-else class="command-execution-list">
+            <div v-for="item in commandExecutionItems" :key="item.entry_id"
+                 class="execution-card">
+                <!-- 卡片头部：命令和状态 -->
+                <div class="execution-card-header">
+                    <div class="execution-command mono">{{ item.command || '-' }}</div>
+                    <div class="execution-badges">
+                        <span class="execution-status" :class="`status-${item.status || 'unknown'}`">
+                            {{ item.status || 'unknown' }}
+                        </span>
+                        <span v-if="item.has_files" class="execution-badge badge-files">
+                            📎 {{ item.file_count || 0 }}
+                        </span>
+                        <span v-if="item.output_truncated" class="execution-badge badge-truncated">
+                            ✂️ truncated
+                        </span>
                     </div>
-                </el-tab-pane>
+                </div>
+
+                <!-- 卡片元数据：时间和来源 -->
+                <div class="execution-meta">
+                    <span class="meta-source">{{ item.source || '-' }}</span>
+                    <span class="meta-separator">•</span>
+                    <span class="meta-time">{{ formatDateTimeStandard(item.started_at) || '-' }}</span>
+                </div>
+
+                <!-- 统计信息行 -->
+                <div class="execution-stats">
+                    <div class="stat-item">
+                        <span class="stat-label">Duration</span>
+                        <span class="stat-value">{{ formatCommandExecutionDuration(item.duration_ms) }}</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">Chunks</span>
+                        <span class="stat-value">{{ item.output_chunk_count || 0 }}</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">Lines</span>
+                        <span class="stat-value">{{ item.output_line_count || 0 }}</span>
+                    </div>
+                </div>
+
+                <!-- 输出摘要 -->
+                <div class="execution-summary" :title="buildCommandExecutionSingleLineSummary(item)">
+                    {{ buildCommandExecutionSingleLineSummary(item) }}
+                </div>
+
+                <!-- 操作按钮 -->
+                <div class="execution-actions">
+                    <button class="action-btn action-btn-secondary" @click="applyHistoryCommand(item)">
+                        Use
+                    </button>
+                    <button class="action-btn action-btn-primary" @click="openCommandExecutionDetail(item)">
+                        Details
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</el-tab-pane>
             </el-tabs>
         </div>
     </el-dialog>

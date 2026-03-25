@@ -1772,3 +1772,251 @@ body {
         justify-content: flex-start;
     }
 }
+
+
+/* static/css/app.css */
+/* Execution History 卡片样式 */
+
+.command-execution-list-shell {
+    height: calc(78vh - 170px);
+    min-height: 320px;
+    overflow: hidden;
+}
+
+.command-execution-list {
+    height: 100%;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    padding: 4px 2px 4px 0;
+}
+
+/* 卡片主体 */
+.execution-card {
+    background: #ffffff;
+    border: 1px solid #eef2f6;
+    border-radius: 16px;
+    padding: 16px 20px;
+    transition: all 0.2s ease;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.02);
+}
+
+.execution-card:hover {
+    border-color: #e2e8f0;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.04);
+    transform: translateY(-1px);
+}
+
+/* 卡片头部 */
+.execution-card-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 8px;
+}
+
+.execution-command {
+    font-size: 14px;
+    font-weight: 600;
+    color: #1e293b;
+    line-height: 1.4;
+    word-break: break-word;
+    flex: 1;
+}
+
+/* 状态和标签区域 */
+.execution-badges {
+    display: flex;
+    gap: 8px;
+    flex-shrink: 0;
+}
+
+.execution-status {
+    display: inline-block;
+    padding: 2px 8px;
+    font-size: 11px;
+    font-weight: 500;
+    border-radius: 20px;
+    line-height: 18px;
+}
+
+.status-success {
+    background: #e6f7e6;
+    color: #2e7d32;
+}
+
+.status-error {
+    background: #fee;
+    color: #c62828;
+}
+
+.status-running {
+    background: #e3f2fd;
+    color: #1565c0;
+}
+
+.status-unknown {
+    background: #f5f5f5;
+    color: #616161;
+}
+
+.execution-badge {
+    display: inline-block;
+    padding: 2px 8px;
+    font-size: 11px;
+    font-weight: 500;
+    border-radius: 20px;
+    line-height: 18px;
+}
+
+.badge-files {
+    background: #e8f0fe;
+    color: #1a73e8;
+}
+
+.badge-truncated {
+    background: #fff3e0;
+    color: #ed6c02;
+}
+
+/* 元数据行 */
+.execution-meta {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 12px;
+    font-size: 12px;
+    color: #6b7280;
+}
+
+.meta-source {
+    font-family: monospace;
+}
+
+.meta-separator {
+    color: #d1d5db;
+}
+
+/* 统计信息 */
+.execution-stats {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 16px;
+    margin-bottom: 12px;
+    padding: 10px 0;
+    border-top: 1px solid #f0f2f5;
+    border-bottom: 1px solid #f0f2f5;
+}
+
+.stat-item {
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+}
+
+.stat-label {
+    font-size: 11px;
+    font-weight: 500;
+    color: #9ca3af;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+}
+
+.stat-value {
+    font-size: 13px;
+    font-weight: 500;
+    color: #1e293b;
+}
+
+.stat-value-ellipsis {
+    max-width: 240px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* 输出摘要 */
+.execution-summary {
+    font-size: 12px;
+    color: #4b5563;
+    line-height: 1.5;
+    margin-bottom: 14px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* 操作按钮 */
+.execution-actions {
+    display: flex;
+    gap: 12px;
+    justify-content: flex-end;
+}
+
+.action-btn {
+    padding: 6px 16px;
+    font-size: 12px;
+    font-weight: 500;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    border: none;
+    background: transparent;
+}
+
+.action-btn-secondary {
+    background: #f8fafc;
+    color: #475569;
+    border: 1px solid #e2e8f0;
+}
+
+.action-btn-secondary:hover {
+    background: #f1f5f9;
+    border-color: #cbd5e1;
+}
+
+.action-btn-primary {
+    background: #eef2ff;
+    color: #4f46e5;
+    border: 1px solid #e0e7ff;
+}
+
+.action-btn-primary:hover {
+    background: #e0e7ff;
+    border-color: #c7d2fe;
+}
+
+/* 移动端适配 */
+@media (max-width: 768px) {
+    .execution-card {
+        padding: 14px 16px;
+    }
+
+    .execution-card-header {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
+    .execution-badges {
+        flex-wrap: wrap;
+    }
+
+    .execution-stats {
+        gap: 12px;
+    }
+
+    .stat-value-ellipsis {
+        max-width: 150px;
+    }
+
+    .execution-summary {
+        white-space: normal;
+        word-break: break-word;
+    }
+
+    .execution-actions {
+        justify-content: flex-start;
+    }
+}
