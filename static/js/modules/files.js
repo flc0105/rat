@@ -1,28 +1,187 @@
 window.AppFilesModule = {
     methods: {
 
-        // 进入编辑模式
-        enterEditMode() {
-            this.previewOriginalContent = this.previewText;  // 保存原始内容
-            this.previewEditMode = true;
+        monacoEditor: null,
+
+// 初始化 Monaco Editor
+        initMonacoEditor(content, readOnly = true) {
+            if (this.monacoEditor) {
+                this.monacoEditor.dispose();
+                this.monacoEditor = null;
+            }
+
+            const container = document.getElementById('monaco-editor-container');
+            if (!container) return;
+
+            // 等待容器渲染完成
+            this.$nextTick(() => {
+                require.config({paths: {vs: 'https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs'}});
+                require(['vs/editor/editor.main'], () => {
+                    // 根据文件扩展名推断语言
+                    const lang = this.getLanguageFromFilename(this.previewTitle);
+
+                    this.monacoEditor = monaco.editor.create(container, {
+                        value: content,
+                        language: lang,
+                        theme: 'vs',
+                        readOnly: readOnly,
+                        automaticLayout: true,
+                        fontSize: 13,
+                        fontFamily: 'Monaco, Menlo, "Ubuntu Mono", Consolas, monospace',
+                        lineNumbers: 'on',
+                        minimap: {enabled: false},
+                        scrollBeyondLastLine: false,
+                        wordWrap: 'on',
+                        renderWhitespace: 'boundary',
+                        tabSize: 4,
+                        insertSpaces: true,
+                    });
+                });
+            });
         },
 
-        // 取消编辑模式
+// 根据文件名获取语言
+        getLanguageFromFilename(filename) {
+            if (!filename) return 'plaintext';
+
+            const ext = filename.split('.').pop().toLowerCase();
+            const langMap = {
+                'py': 'python',
+                'js': 'javascript',
+                'ts': 'typescript',
+                'html': 'html',
+                'css': 'css',
+                'json': 'json',
+                'xml': 'xml',
+                'yaml': 'yaml',
+                'yml': 'yaml',
+                'md': 'markdown',
+                'sh': 'shell',
+                'bash': 'shell',
+                'sql': 'sql',
+                'java': 'java',
+                'c': 'c',
+                'cpp': 'cpp',
+                'h': 'cpp',
+                'go': 'go',
+                'rs': 'rust',
+                'php': 'php',
+                'rb': 'ruby',
+                'pl': 'perl',
+                'lua': 'lua',
+                'ini': 'ini',
+                'conf': 'ini',
+                'log': 'log',
+                'txt': 'plaintext',
+            };
+
+            return langMap[ext] || 'plaintext';
+        },
+
+// 获取编辑器内容
+        getMonacoEditorContent() {
+            if (this.monacoEditor) {
+                return this.monacoEditor.getValue();
+            }
+            return this.previewText;
+        },
+
+// 设置编辑器只读状态
+        setMonacoEditorReadOnly(readOnly) {
+            if (this.monacoEditor) {
+                this.monacoEditor.updateOptions({readOnly: readOnly});
+            }
+        },
+
+        // 进入编辑模式
+        // enterEditMode() {
+        //     this.previewOriginalContent = this.previewText;  // 保存原始内容
+        //     this.previewEditMode = true;
+        // },
+        //
+        // // 取消编辑模式
+        // cancelEditMode() {
+        //     this.previewEditMode = false;
+        //     this.previewText = this.previewOriginalContent;  // 恢复原始内容
+        //     this.previewOriginalContent = '';  // 清空缓存
+        // },
+        //
+        // // 保存编辑后的内容
+        // async saveEditedContent() {
+        //     console.log('saveEditedContent called');
+        //     console.log('selectedId:', this.selectedId);
+        //     console.log('previewFilePath:', this.previewFilePath);
+        //     if (!this.selectedId || !this.previewFilePath) {
+        //         ElementPlus.ElMessage.warning('Invalid file path');
+        //         return;
+        //     }
+        //
+        //     this.previewSaving = true;
+        //
+        //     try {
+        //         const res = await fetch(`/api/connections/${encodeURIComponent(this.selectedId)}/remote-files/save`, {
+        //             method: 'POST',
+        //             headers: {'Content-Type': 'application/json'},
+        //             body: JSON.stringify({
+        //                 path: this.previewFilePath,
+        //                 content: this.previewText,
+        //                 encoding: 'utf-8'
+        //             })
+        //         });
+        //
+        //         const json = await res.json();
+        //         if (!res.ok || json.code !== 0) {
+        //             throw new Error(json.message || 'Failed to save file');
+        //         }
+        //
+        //         ElementPlus.ElMessage.success('File saved successfully');
+        //         // 保存成功后，更新原始内容副本为当前内容
+        //         this.previewOriginalContent = this.previewText;
+        //         this.previewEditMode = false;
+        //         // this.previewEditMode = false;
+        //
+        //         // 刷新文件列表
+        //         if (this.remoteFilesDialogVisible) {
+        //             await this.refreshRemoteDirectory();
+        //         }
+        //
+        //     } catch (e) {
+        //         ElementPlus.ElMessage.error(e.message || 'Failed to save file');
+        //     } finally {
+        //         this.previewSaving = false;
+        //     }
+        // },
+
+        // 修改 enterEditMode
+        enterEditMode() {
+            this.previewOriginalContent = this.previewText;
+            this.previewEditMode = true;
+            // 切换编辑器为可编辑模式
+            this.setMonacoEditorReadOnly(false);
+        },
+
+// 修改 cancelEditMode
         cancelEditMode() {
             this.previewEditMode = false;
-            this.previewText = this.previewOriginalContent;  // 恢复原始内容
-            this.previewOriginalContent = '';  // 清空缓存
+            // 恢复原始内容
+            if (this.monacoEditor) {
+                this.monacoEditor.setValue(this.previewOriginalContent);
+            }
+            this.previewText = this.previewOriginalContent;
+            this.previewOriginalContent = '';
+            // 切换编辑器为只读模式
+            this.setMonacoEditorReadOnly(true);
         },
 
-        // 保存编辑后的内容
+// 修改 saveEditedContent
         async saveEditedContent() {
-            console.log('saveEditedContent called');
-            console.log('selectedId:', this.selectedId);
-            console.log('previewFilePath:', this.previewFilePath);
             if (!this.selectedId || !this.previewFilePath) {
                 ElementPlus.ElMessage.warning('Invalid file path');
                 return;
             }
+
+            // 从编辑器获取最新内容
+            const currentContent = this.getMonacoEditorContent();
 
             this.previewSaving = true;
 
@@ -32,7 +191,7 @@ window.AppFilesModule = {
                     headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify({
                         path: this.previewFilePath,
-                        content: this.previewText,
+                        content: currentContent,
                         encoding: 'utf-8'
                     })
                 });
@@ -43,12 +202,12 @@ window.AppFilesModule = {
                 }
 
                 ElementPlus.ElMessage.success('File saved successfully');
-                // 保存成功后，更新原始内容副本为当前内容
-                this.previewOriginalContent = this.previewText;
-                this.previewEditMode = false;
-                // this.previewEditMode = false;
 
-                // 刷新文件列表
+                this.previewOriginalContent = currentContent;
+                this.previewText = currentContent;
+                this.previewEditMode = false;
+                this.setMonacoEditorReadOnly(true);
+
                 if (this.remoteFilesDialogVisible) {
                     await this.refreshRemoteDirectory();
                 }
@@ -59,6 +218,7 @@ window.AppFilesModule = {
                 this.previewSaving = false;
             }
         },
+
 
         async previewRemoteEntry(row) {
             if (!row || !row.path || row.is_dir || row.is_parent_entry) {
@@ -83,6 +243,7 @@ window.AppFilesModule = {
         },
 
 
+        // 修改 loadPreviewPayload，加载后初始化编辑器
         async loadPreviewPayload(fetcher, fallbackTitle = 'File Preview') {
             this.previewDialogVisible = true;
             this.previewLoading = true;
@@ -109,13 +270,13 @@ window.AppFilesModule = {
                     this.previewText = data.content || '';
                     this.previewTruncated = data.truncated || false;
                     this.previewOriginalContent = this.previewText;
-
-                    // 计算文件大小显示
-                    const size = data.size || this.previewText.length;
-                    this.previewFileSize = this.formatBytes(size);
-
-                    // 检测文件编码（简单实现，可以后续优化）
+                    this.previewFileSize = this.formatBytes(data.size || this.previewText.length);
                     this.previewFileEncoding = this.detectEncoding(this.previewText);
+
+                    // 等待 DOM 渲染完成后初始化编辑器
+                    this.$nextTick(() => {
+                        this.initMonacoEditor(this.previewText, true);
+                    });
                 }
             } catch (e) {
                 this.previewDialogVisible = false;
@@ -124,6 +285,48 @@ window.AppFilesModule = {
                 this.previewLoading = false;
             }
         },
+
+        // async loadPreviewPayload(fetcher, fallbackTitle = 'File Preview') {
+        //     this.previewDialogVisible = true;
+        //     this.previewLoading = true;
+        //     this.resetPreviewState();
+        //     this.previewEditMode = false;
+        //     this.previewSaving = false;
+        //     this.previewOriginalContent = '';
+        //
+        //     try {
+        //         const res = await fetcher();
+        //         const json = await res.json();
+        //
+        //         if (!res.ok || json.code !== 0) {
+        //             throw new Error(json.message || 'Preview failed');
+        //         }
+        //
+        //         const data = json.data || {};
+        //         this.previewType = data.type || 'unsupported';
+        //         this.previewTitle = data.name || fallbackTitle;
+        //
+        //         if (this.previewType === 'image') {
+        //             this.previewUrl = data.url || '';
+        //         } else if (this.previewType === 'text') {
+        //             this.previewText = data.content || '';
+        //             this.previewTruncated = data.truncated || false;
+        //             this.previewOriginalContent = this.previewText;
+        //
+        //             // 计算文件大小显示
+        //             const size = data.size || this.previewText.length;
+        //             this.previewFileSize = this.formatBytes(size);
+        //
+        //             // 检测文件编码（简单实现，可以后续优化）
+        //             this.previewFileEncoding = this.detectEncoding(this.previewText);
+        //         }
+        //     } catch (e) {
+        //         this.previewDialogVisible = false;
+        //         ElementPlus.ElMessage.error(e.message || 'Preview failed');
+        //     } finally {
+        //         this.previewLoading = false;
+        //     }
+        // },
 
         detectEncoding(text) {
             // 简单的编码检测
@@ -143,14 +346,16 @@ window.AppFilesModule = {
             return 'UTF-8';
         },
 
+
         async copyPreviewText() {
-            if (!this.previewText) {
-                ElementPlus.ElMessage.warning('No preview text available');
+            const content = this.getMonacoEditorContent();
+            if (!content) {
+                ElementPlus.ElMessage.warning('No content to copy');
                 return;
             }
 
             try {
-                await navigator.clipboard.writeText(this.previewText);
+                await navigator.clipboard.writeText(content);
                 ElementPlus.ElMessage.success('Content copied');
             } catch (e) {
                 ElementPlus.ElMessage.error('Failed to copy content');
