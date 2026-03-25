@@ -78,7 +78,7 @@ window.AppFilesModule = {
             return langMap[ext] || 'plaintext';
         },
 
-// 获取编辑器内容
+        // 获取编辑器内容
         getMonacoEditorContent() {
             if (this.monacoEditor) {
                 return this.monacoEditor.getValue();
@@ -86,71 +86,13 @@ window.AppFilesModule = {
             return this.previewText;
         },
 
-// 设置编辑器只读状态
+        // 设置编辑器只读状态
         setMonacoEditorReadOnly(readOnly) {
             if (this.monacoEditor) {
                 this.monacoEditor.updateOptions({readOnly: readOnly});
             }
         },
 
-        // 进入编辑模式
-        // enterEditMode() {
-        //     this.previewOriginalContent = this.previewText;  // 保存原始内容
-        //     this.previewEditMode = true;
-        // },
-        //
-        // // 取消编辑模式
-        // cancelEditMode() {
-        //     this.previewEditMode = false;
-        //     this.previewText = this.previewOriginalContent;  // 恢复原始内容
-        //     this.previewOriginalContent = '';  // 清空缓存
-        // },
-        //
-        // // 保存编辑后的内容
-        // async saveEditedContent() {
-        //     console.log('saveEditedContent called');
-        //     console.log('selectedId:', this.selectedId);
-        //     console.log('previewFilePath:', this.previewFilePath);
-        //     if (!this.selectedId || !this.previewFilePath) {
-        //         ElementPlus.ElMessage.warning('Invalid file path');
-        //         return;
-        //     }
-        //
-        //     this.previewSaving = true;
-        //
-        //     try {
-        //         const res = await fetch(`/api/connections/${encodeURIComponent(this.selectedId)}/remote-files/save`, {
-        //             method: 'POST',
-        //             headers: {'Content-Type': 'application/json'},
-        //             body: JSON.stringify({
-        //                 path: this.previewFilePath,
-        //                 content: this.previewText,
-        //                 encoding: 'utf-8'
-        //             })
-        //         });
-        //
-        //         const json = await res.json();
-        //         if (!res.ok || json.code !== 0) {
-        //             throw new Error(json.message || 'Failed to save file');
-        //         }
-        //
-        //         ElementPlus.ElMessage.success('File saved successfully');
-        //         // 保存成功后，更新原始内容副本为当前内容
-        //         this.previewOriginalContent = this.previewText;
-        //         this.previewEditMode = false;
-        //         // this.previewEditMode = false;
-        //
-        //         // 刷新文件列表
-        //         if (this.remoteFilesDialogVisible) {
-        //             await this.refreshRemoteDirectory();
-        //         }
-        //
-        //     } catch (e) {
-        //         ElementPlus.ElMessage.error(e.message || 'Failed to save file');
-        //     } finally {
-        //         this.previewSaving = false;
-        //     }
-        // },
 
         // 修改 enterEditMode
         enterEditMode() {
@@ -173,15 +115,25 @@ window.AppFilesModule = {
             this.setMonacoEditorReadOnly(true);
         },
 
-// 修改 saveEditedContent
         async saveEditedContent() {
+            const currentContent = this.getMonacoEditorContent();
+
+            // 根据来源选择不同的保存方式
+            if (this.previewSource === 'remote_file') {
+                await this.saveToRemoteFile(currentContent);
+            } else if (this.previewSource === 'artifact') {
+                await this.saveToArtifact(currentContent);
+            } else {
+                ElementPlus.ElMessage.warning('Unknown preview source');
+            }
+        },
+
+// 保存到远程文件
+        async saveToRemoteFile(content) {
             if (!this.selectedId || !this.previewFilePath) {
                 ElementPlus.ElMessage.warning('Invalid file path');
                 return;
             }
-
-            // 从编辑器获取最新内容
-            const currentContent = this.getMonacoEditorContent();
 
             this.previewSaving = true;
 
@@ -191,7 +143,7 @@ window.AppFilesModule = {
                     headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify({
                         path: this.previewFilePath,
-                        content: currentContent,
+                        content: content,
                         encoding: 'utf-8'
                     })
                 });
@@ -203,8 +155,8 @@ window.AppFilesModule = {
 
                 ElementPlus.ElMessage.success('File saved successfully');
 
-                this.previewOriginalContent = currentContent;
-                this.previewText = currentContent;
+                this.previewOriginalContent = content;
+                this.previewText = content;
                 this.previewEditMode = false;
                 this.setMonacoEditorReadOnly(true);
 
@@ -219,6 +171,61 @@ window.AppFilesModule = {
             }
         },
 
+// 保存到 Artifact
+async saveToArtifact(content) {
+    if (!this.previewFilePath) {
+        ElementPlus.ElMessage.warning('Invalid artifact');
+        return;
+    }
+
+    this.previewSaving = true;
+
+    try {
+        const res = await fetch(`/api/artifacts/${encodeURIComponent(this.previewFilePath)}/content`, {
+            method: 'PUT',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                content: content,
+                encoding: this.previewFileEncoding || 'utf-8'
+            })
+        });
+
+        const json = await res.json();
+        if (!res.ok || json.code !== 0) {
+            throw new Error(json.message || 'Failed to save artifact');
+        }
+
+        ElementPlus.ElMessage.success('Artifact saved successfully');
+
+        // 更新本地内容
+        this.previewOriginalContent = content;
+        this.previewText = content;
+        this.previewEditMode = false;
+        this.setMonacoEditorReadOnly(true);
+
+        // 更新文件大小显示
+        if (json.data && json.data.size) {
+            this.previewFileSize = this.formatBytes(json.data.size);
+        }
+
+        // 刷新 Artifact 列表
+        if (this.artifactDialogVisible) {
+            await this.loadArtifacts();
+        }
+
+        // 触发 artifact_created 事件，通知其他组件
+        if (this.previewArtifactInfo) {
+            // 更新本地 artifact 信息
+            this.previewArtifactInfo.size = json.data?.size || this.previewArtifactInfo.size;
+        }
+
+    } catch (e) {
+        ElementPlus.ElMessage.error(e.message || 'Failed to save artifact');
+    } finally {
+        this.previewSaving = false;
+    }
+},
+
 
         async previewRemoteEntry(row) {
             if (!row || !row.path || row.is_dir || row.is_parent_entry) {
@@ -228,6 +235,8 @@ window.AppFilesModule = {
 
             // 记录文件路径
             this.previewFilePath = row.path;
+            this.previewSource = 'remote_file';  // 标记来源
+
 
             await this.loadPreviewPayload(
                 () => fetch(`/api/connections/${encodeURIComponent(this.selectedId)}/remote-files/preview`, {
@@ -286,48 +295,6 @@ window.AppFilesModule = {
             }
         },
 
-        // async loadPreviewPayload(fetcher, fallbackTitle = 'File Preview') {
-        //     this.previewDialogVisible = true;
-        //     this.previewLoading = true;
-        //     this.resetPreviewState();
-        //     this.previewEditMode = false;
-        //     this.previewSaving = false;
-        //     this.previewOriginalContent = '';
-        //
-        //     try {
-        //         const res = await fetcher();
-        //         const json = await res.json();
-        //
-        //         if (!res.ok || json.code !== 0) {
-        //             throw new Error(json.message || 'Preview failed');
-        //         }
-        //
-        //         const data = json.data || {};
-        //         this.previewType = data.type || 'unsupported';
-        //         this.previewTitle = data.name || fallbackTitle;
-        //
-        //         if (this.previewType === 'image') {
-        //             this.previewUrl = data.url || '';
-        //         } else if (this.previewType === 'text') {
-        //             this.previewText = data.content || '';
-        //             this.previewTruncated = data.truncated || false;
-        //             this.previewOriginalContent = this.previewText;
-        //
-        //             // 计算文件大小显示
-        //             const size = data.size || this.previewText.length;
-        //             this.previewFileSize = this.formatBytes(size);
-        //
-        //             // 检测文件编码（简单实现，可以后续优化）
-        //             this.previewFileEncoding = this.detectEncoding(this.previewText);
-        //         }
-        //     } catch (e) {
-        //         this.previewDialogVisible = false;
-        //         ElementPlus.ElMessage.error(e.message || 'Preview failed');
-        //     } finally {
-        //         this.previewLoading = false;
-        //     }
-        // },
-
         detectEncoding(text) {
             // 简单的编码检测
             if (!text) return 'UTF-8';
@@ -376,10 +343,18 @@ window.AppFilesModule = {
                 return;
             }
 
+            this.previewSource = 'artifact';  // 标记来源
+            this.previewFilePath = row.artifact_id;  // 存储 artifact_id 而不是路径
+            this.previewArtifactInfo = row;  // 保存 artifact 信息，用于后续刷新
+
+
             await this.loadPreviewPayload(
                 () => fetch(`/api/artifacts/${encodeURIComponent(row.artifact_id)}/preview`),
                 row.original_name || row.stored_name || 'Artifact Preview'
             );
+
+            this.previewEditMode = false;
+
         },
 
         async deleteArtifact(row) {

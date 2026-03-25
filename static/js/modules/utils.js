@@ -48,7 +48,11 @@ window.AppUtilsModule = {
             this.previewOriginalContent = '';  // 清空原始内容
             this.previewEditMode = false;
             this.previewSaving = false;
+            // this.previewSource = '';  // 重置来源
+
             // this.previewFilePath = '';
+                this.previewArtifactInfo = null;  // 重置 artifact 信息
+
         },
 
         resetRemoteFilesState() {

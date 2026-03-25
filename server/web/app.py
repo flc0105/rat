@@ -514,4 +514,68 @@ def create_app(server_instance):
     def file_too_large(_):
         return _fail('File is too large', 413)
 
+    @app.put('/api/artifacts/<artifact_id>/content')
+    def update_artifact_content(artifact_id):
+        """
+        更新 Artifact 文件内容
+        """
+
+        def _execute():
+            payload = _get_json_payload()
+            content = payload.get('content', '')
+            encoding = (payload.get('encoding') or 'utf-8').strip()
+
+            if content is None:
+                raise ValueError('content is required')
+
+            # 获取 artifact 信息
+            artifact = web_service.get_artifact_by_id(artifact_id)
+            if not artifact:
+                raise FileNotFoundError('Artifact not found')
+
+            file_path = artifact.get('saved_path', '')
+            if not file_path or not os.path.isfile(file_path):
+                raise FileNotFoundError('Artifact file not found')
+
+            # 检查是否是文本文件（preview_type 为 text）
+            preview_type = artifact_service.guess_preview_type(artifact.get('original_name', ''))
+            if preview_type != 'text':
+                raise ValueError('Only text files can be edited')
+
+            # 写入新内容
+            try:
+                with open(file_path, 'w', encoding=encoding) as f:
+                    f.write(content)
+            except UnicodeEncodeError:
+                # 如果指定编码失败，尝试 utf-8
+                with open(file_path, 'w', encoding='utf-8') as f:
+                    f.write(content)
+                encoding = 'utf-8'
+
+            # 更新 artifact 元数据中的大小和修改时间
+            file_size = os.path.getsize(file_path)
+
+            # 更新 meta 文件
+            meta_path = artifact.get('_meta_path', '')
+            if meta_path and os.path.isfile(meta_path):
+                import json
+                try:
+                    with open(meta_path, 'r', encoding='utf-8') as f:
+                        meta = json.load(f)
+                    meta['size'] = file_size
+                    meta['updated_at'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                    with open(meta_path, 'w', encoding='utf-8') as f:
+                        json.dump(meta, f, ensure_ascii=False, indent=2)
+                except Exception:
+                    pass
+
+            return {
+                'artifact_id': artifact_id,
+                'size': file_size,
+                'encoding': encoding,
+                'message': 'File updated successfully'
+            }
+
+        return _json_endpoint(_execute, default_error_status=500)
+
     return app
