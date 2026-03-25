@@ -31,12 +31,29 @@ def get_executable_path():
     """
     executable = wrap_path(os.path.realpath(sys.executable))
 
-    # 判断是否是打包后的可执行文件
     if getattr(sys, 'frozen', False):
-        # PyInstaller 打包后的模式
         return executable
     else:
-        # 开发模式，需要包含脚本路径
-        script_path = os.path.realpath(''.join(sys.argv))
+        script_path = os.path.realpath(sys.argv[0])
+        args = sys.argv[1:]
         argv = wrap_path(script_path)
+        if args:
+            args_str = ' '.join(wrap_path(arg) for arg in args)
+            return f'{executable} {argv} {args_str}'
         return f'{executable} {argv}'
+
+
+def get_executable_path_for_shell():
+    """返回 (shell, args) 元组，用于 ShellExecuteW"""
+    executable = wrap_path(os.path.realpath(sys.executable))
+    script_path = os.path.realpath(sys.argv[0])
+    args = sys.argv[1:]
+
+    if not getattr(sys, 'frozen', False):
+        cmd_parts = [executable, wrap_path(script_path)]
+        if args:
+            cmd_parts.extend(wrap_path(arg) for arg in args)
+        cmd = ' '.join(cmd_parts)
+        return r'c:\windows\system32\cmd.exe', f'/c {cmd}'
+    else:
+        return executable, None
