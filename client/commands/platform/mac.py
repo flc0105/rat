@@ -45,6 +45,18 @@ NOTIFY_ARGUMENT_SPEC = ArgumentCommandSpec(
     ]
 )
 
+SQLITE_QUERY_SPEC = ArgumentCommandSpec(
+    name='sqlite_query',
+    description='Read-only SQLite query',
+    options=[
+        ArgumentOptionSpec(name='db', option_type='str', required=True, help_text='Database file path'),
+        ArgumentOptionSpec(name='query', option_type='str', required=True, help_text='SQL query'),
+        ArgumentOptionSpec(name='json', option_type='flag', required=False, default=False,
+                          help_text='Output as JSON'),
+        ArgumentOptionSpec(name='help', option_type='flag', required=False, default=False,
+                          help_text='Show this help message'),
+    ]
+)
 
 class MacCommands(CommonCommands):
     """macOS 平台专用命令集合"""
@@ -196,3 +208,55 @@ class MacCommands(CommonCommands):
             return 1, f'Notification launched asynchronously: {title or "(no title)"}\nPID: {process.pid}'
         except Exception as e:
             return 0, f'Failed to launch notification: {e}'
+
+
+    @argument_command('sqlite_query', spec=SQLITE_QUERY_SPEC)
+    def _acmd_sqlite_query(self, args_dict, payload=None):
+        """
+        只读 SQLite 查询
+        Examples:
+            acmd sqlite_query --db /Users/flc/studio.db --query "PRAGMA table_list;"
+            acmd sqlite_query --db /Users/flc/studio.db --query "PRAGMA table_info('bookings')"
+            acmd sqlite_query --db /Users/flc/studio.db --query "select * from scenes"
+        """
+        try:
+            import sqlite3
+            import json
+
+            db_path = args_dict.get('db', '')
+            query = args_dict.get('query', '')
+            output_json = args_dict.get('json', False)
+
+            if not db_path or not query:
+                return 0, 'db and query are required'
+
+            if not os.path.isfile(db_path):
+                return 0, f'Database file not found: {db_path}'
+
+            # 只读模式打开
+            conn = sqlite3.connect(f'file:{db_path}?mode=ro', uri=True)
+            conn.row_factory = sqlite3.Row
+            cursor = conn.cursor()
+
+            cursor.execute(query)
+            rows = cursor.fetchall()
+
+            result = [dict(row) for row in rows]
+            conn.close()
+
+            if output_json:
+                return 1, json.dumps(result, ensure_ascii=False, indent=2)
+
+            if not result:
+                return 1, 'No results'
+
+            headers = list(result[0].keys())
+            data = [[str(row[h]) for h in headers] for row in result[:100]]
+
+            from core.utils.formatting import format_table
+            return 1, format_table(headers, data)
+
+        except sqlite3.Error as e:
+            return 0, f'SQLite error: {e}'
+        except Exception as e:
+            return 0, f'Query failed: {e}'
