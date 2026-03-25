@@ -83,6 +83,15 @@ window.AppStateModule = {
     },
 
     computed: {
+        previewSourceLabel() {
+            if (this.previewSource === 'remote_file') {
+                return 'Remote File';
+            }
+            if (this.previewSource === 'artifact') {
+                return 'Artifact';
+            }
+            return 'Unknown';
+        },
         currentConnection() {
             return this.connections.find(item => item.client_id === this.selectedId) || null;
         },

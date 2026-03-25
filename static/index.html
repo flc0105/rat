@@ -796,6 +796,8 @@
             <div class="preview-toolbar-right">
                 <template v-if="previewType === 'text'">
                     <div class="preview-info-tags">
+                        <el-tag size="small" type="primary">
+{{ previewSourceLabel }}</el-tag>
                         <el-tag size="small" type="info">{{ previewFileSize }}</el-tag>
                         <el-tag size="small" type="info">{{ previewFileEncoding }}</el-tag>
                         <el-tag v-if="previewTruncated" size="small" type="danger">
