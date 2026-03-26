@@ -1,15 +1,8 @@
-# server/application/script/script_service.py
-
-import os
 import glob
-from pathlib import Path
+import os
 
 
-class ScriptService:
-    """
-    脚本管理服务。
-    负责管理 server/scripts/jobs 目录下的脚本文件。
-    """
+class ServerJobService:
 
     def __init__(self, scripts_root_dir: str):
         self.scripts_root_dir = os.path.abspath(scripts_root_dir)
@@ -33,24 +26,10 @@ class ScriptService:
                     'job_name': name,
                     'job_key': name,
                     'path': file_path,
-                    # 'description': self._get_script_description(file_path),
                     'size': os.path.getsize(file_path),
                     'source': 'server'
                 })
         return sorted(scripts, key=lambda x: x['job_name'])
-
-    # def _get_script_description(self, file_path: str) -> str:
-    #     """
-    #     从脚本中提取描述（读取第一行注释）
-    #     """
-    #     try:
-    #         with open(file_path, 'r', encoding='utf-8') as f:
-    #             first_line = f.readline().strip()
-    #             if first_line.startswith('#') and len(first_line) > 1:
-    #                 return first_line[1:].strip()
-    #     except Exception:
-    #         pass
-    #     return ''
 
     def get_script_content(self, script_name: str) -> str:
         """
@@ -102,21 +81,4 @@ class ScriptService:
             'name': safe_name,
             'path': script_path,
             'size': os.path.getsize(script_path),
-        }
-
-    def delete_script(self, script_name: str) -> dict:
-        """
-        删除脚本
-        """
-        safe_name = self._normalize_script_name(script_name)
-        script_path = os.path.join(self.scripts_root_dir, safe_name)
-
-        if not os.path.isfile(script_path):
-            raise FileNotFoundError(f'Script not found: {script_name}')
-
-        os.remove(script_path)
-
-        return {
-            'name': safe_name,
-            'deleted': True,
         }

@@ -8,13 +8,12 @@ from server.application.connection.connection_service import WebConnectionServic
 from server.application.execution.remote_execution_service import RemoteExecutionService
 from server.application.jobs.background_job_service import BackgroundJobService
 from server.application.jobs.background_job_store import BackgroundJobStore
-from server.application.script.script_service import ScriptService
+from server.application.script.script_service import ServerJobService
 from server.application.tasks.task_runner import WebTaskRunner
 from server.application.tasks.task_service import WebTaskService
 from server.application.tasks.task_store import WebTaskStore
 from server.web.event_bus import WebEventBus
 from server.config.config import SCRIPT_JOBS_PATH  # 需要在 config 中添加
-
 
 
 class ServerWebService:
@@ -65,10 +64,8 @@ class ServerWebService:
             remote_execution_service=self.remote_execution_service,
         )
 
-        self.script_service = ScriptService(SCRIPT_JOBS_PATH)
-
+        self.script_service = ServerJobService(SCRIPT_JOBS_PATH)
         self.agent_builder = AgentBuilder()
-
 
     def _get_client_command_candidates(self, session):
         payload = session.info.get('command_manifest') or []
@@ -187,7 +184,8 @@ class ServerWebService:
     def cancel_web_task(self, task_id: str):
         return self.task_service.cancel_web_task(task_id)
 
-    def submit_web_upload(self, client_id: str, local_path: str, display_name: str, remote_path: str = '', tab_id: str = ''):
+    def submit_web_upload(self, client_id: str, local_path: str, display_name: str, remote_path: str = '',
+                          tab_id: str = ''):
         return self.task_service.submit_web_upload(
             client_id,
             local_path,
@@ -203,6 +201,9 @@ class ServerWebService:
     def get_server_job_content(self, script_name: str) -> str:
         """获取远程脚本内容"""
         return self.script_service.get_script_content(script_name)
+
+    def save_server_job_content(self, script_name, content):
+        return self.script_service.save_script(script_name, content)
 
     def list_background_jobs(self, client_id: str):
         return self.background_job_service.list_jobs(client_id)
@@ -255,7 +256,8 @@ class ServerWebService:
     def submit_command(self, client_id: str, command: str, tab_id: str = ''):
         return self.submit_web_command(client_id, command, tab_id=tab_id)
 
-    def submit_upload(self, client_id: str, local_path: str, display_name: str, remote_path: str = '', tab_id: str = ''):
+    def submit_upload(self, client_id: str, local_path: str, display_name: str, remote_path: str = '',
+                      tab_id: str = ''):
         return self.submit_web_upload(
             client_id,
             local_path,
@@ -264,25 +266,13 @@ class ServerWebService:
             tab_id=tab_id
         )
 
-    #script
-
     def build_agent(self, server_host: str, server_port: int, web_port,
-                    target_os: str, builder: str, console) -> dict:
+                    target_os: str, builder: str) -> dict:
         """构建 Agent"""
         return self.agent_builder.build_agent(
-            server_host, server_port, web_port, target_os, builder, console
+            server_host, server_port, web_port, target_os, builder
         )
 
     def cleanup_agent_build(self, work_dir: str):
         """清理构建临时文件"""
         self.agent_builder.cleanup(work_dir)
-
-
-
-    # def save_remote_script(self, script_name: str, content: str) -> dict:
-    #     """保存远程脚本"""
-    #     return self.script_service.save_script(script_name, content)
-    #
-    # def delete_remote_script(self, script_name: str) -> dict:
-    #     """删除远程脚本"""
-    #     return self.script_service.delete_script(script_name)

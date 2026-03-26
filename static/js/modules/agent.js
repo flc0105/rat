@@ -1,5 +1,3 @@
-// static/js/modules/agent.js
-
 window.AppAgentModule = {
     data() {
         return {
@@ -11,7 +9,6 @@ window.AppAgentModule = {
                 web_port: 8085,
                 target_os: 'mac',
                 builder: 'pyinstaller',
-                console: false,
             }
         };
     },
@@ -39,7 +36,7 @@ window.AppAgentModule = {
             try {
                 const res = await fetch('/api/agent/build', {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify(this.agentForm)
                 });
 

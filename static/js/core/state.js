@@ -79,18 +79,6 @@ window.AppStateModule = {
             connectionInfoDialogVisible: false,
             connectionInfoLoading: false,
             connectionInfoJobCount: 0,
-
-
-                        jobCreatorDialogVisible: false,
-            jobCreatorLoading: false,
-            jobCreatorSaving: false,
-            jobCreatorMode: 'new', // 'new' or 'edit'
-            jobCreatorName: '',
-            jobCreatorDescription: '',
-            jobCreatorContent: '',
-            jobCreatorOriginalName: '',
-            jobCreatorEditor: null,
-            jobCreatorMonacoReady: false,
         };
     },
 
@@ -102,7 +90,7 @@ window.AppStateModule = {
             if (this.previewSource === 'artifact') {
                 return 'Artifact';
             }
-                        if (this.previewSource === 'server_job') {
+            if (this.previewSource === 'server_job') {
                 return 'Server Job';
             }
             return 'Unknown';

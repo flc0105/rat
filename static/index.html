@@ -28,6 +28,9 @@
                 <div class="banner-subtitle">Remote access, shell control, file browsing</div>
             </div>
             <div class="banner-right">
+                <el-button size="small" class="tool-btn tool-btn-accent"
+                           @click="openAgentBuilderDialog" style="margin-right: 3px">Build Agent
+                </el-button>
                 <span class="banner-meta-label">Known Nodes</span>
                 <span class="banner-meta-value">{{ connections.length }}</span>
             </div>
@@ -125,9 +128,6 @@
                                                    @click="openRemoteFilesDialog">Remote Files
                                         </el-button>
 
-                                        <el-button size="small" class="tool-btn tool-btn-accent"
-                                                   @click="openAgentBuilderDialog">Build Agent
-                                        </el-button>
                                         <el-button size="small" class="tool-btn tool-btn-accent"
                                                    @click="openArtifactDialog">Artifacts
                                         </el-button>
@@ -1390,8 +1390,8 @@
     </el-dialog>
 
 
-    <el-dialog v-model="agentBuilderDialogVisible" title="Build Agent" width="800px">
-        <el-form :model="agentForm" label-width="200px">
+    <el-dialog v-model="agentBuilderDialogVisible" title="Build Agent" width="600px">
+        <el-form :model="agentForm" label-width="100px">
             <el-form-item label="Server IP" required>
                 <el-input v-model="agentForm.server_host" placeholder="e.g., 192.168.1.100"/>
             </el-form-item>
@@ -1407,15 +1407,9 @@
                     <el-radio label="win">Windows</el-radio>
                 </el-radio-group>
             </el-form-item>
-                <el-form-item label="Builder">
+            <el-form-item label="Builder">
                 <el-radio-group v-model="agentForm.builder">
                     <el-radio label="pyinstaller">PyInstaller</el-radio>
-                </el-radio-group>
-            </el-form-item>
-            <el-form-item label="Console Window">
-                <el-radio-group v-model="agentForm.console">
-                    <el-radio :label="true">Show Console</el-radio>
-                    <el-radio :label="false">Hide Console</el-radio>
                 </el-radio-group>
             </el-form-item>
         </el-form>
@@ -1437,7 +1431,6 @@
 <script src="/js/modules/files.js"></script>
 <script src="/js/modules/jobs.js"></script>
 <script src="/js/modules/sse.js"></script>
-<script src="/js/modules/job_creator.js"></script>
 <script src="/js/modules/agent.js"></script>
 <script src="/app.js"></script>
 <!-- Monaco Editor JS -->

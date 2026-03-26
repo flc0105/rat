@@ -3,7 +3,6 @@ window.AppFilesModule = {
 
         monacoEditor: null,
 
-// 初始化 Monaco Editor
         initMonacoEditor(content, readOnly = true) {
             if (this.monacoEditor) {
                 this.monacoEditor.dispose();
@@ -40,7 +39,7 @@ window.AppFilesModule = {
             });
         },
 
-// 根据文件名获取语言
+        // 根据文件名获取语言
         getLanguageFromFilename(filename) {
             if (!filename) return 'plaintext';
 
@@ -94,7 +93,6 @@ window.AppFilesModule = {
         },
 
 
-        // 修改 enterEditMode
         enterEditMode() {
             this.previewOriginalContent = this.previewText;
             this.previewEditMode = true;
@@ -102,7 +100,6 @@ window.AppFilesModule = {
             this.setMonacoEditorReadOnly(false);
         },
 
-// 修改 cancelEditMode
         cancelEditMode() {
             this.previewEditMode = false;
             // 恢复原始内容
@@ -123,12 +120,55 @@ window.AppFilesModule = {
                 await this.saveToRemoteFile(currentContent);
             } else if (this.previewSource === 'artifact') {
                 await this.saveToArtifact(currentContent);
+            } else if (this.previewSource === 'server_job') {
+                await this.saveToServerJob(currentContent);
             } else {
                 ElementPlus.ElMessage.warning('Unknown preview source');
             }
         },
 
-// 保存到远程文件
+        async saveToServerJob(content) {
+            if (!this.previewFilePath) {
+                ElementPlus.ElMessage.warning('Invalid job name');
+                return;
+            }
+
+            this.previewSaving = true;
+
+            try {
+                const res = await fetch('/api/server/jobs/save', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        name: this.previewFilePath,
+                        content: content
+                    })
+                });
+
+                const json = await res.json();
+                if (!res.ok || json.code !== 0) {
+                    throw new Error(json.message || 'Failed to save job');
+                }
+
+                ElementPlus.ElMessage.success('Job saved successfully');
+
+                this.previewOriginalContent = content;
+                this.previewText = content;
+                this.previewEditMode = false;
+                this.setMonacoEditorReadOnly(true);
+
+                // 刷新 Jobs 列表
+                if (this.backgroundJobsDialogVisible) {
+                    await this.loadBackgroundJobModules();
+                }
+
+            } catch (e) {
+                ElementPlus.ElMessage.error(e.message || 'Failed to save job');
+            } finally {
+                this.previewSaving = false;
+            }
+        },
+
         async saveToRemoteFile(content) {
             if (!this.selectedId || !this.previewFilePath) {
                 ElementPlus.ElMessage.warning('Invalid file path');
@@ -171,7 +211,7 @@ window.AppFilesModule = {
             }
         },
 
-// 保存到 Artifact
+
         async saveToArtifact(content) {
             if (!this.previewFilePath) {
                 ElementPlus.ElMessage.warning('Invalid artifact');

@@ -39,7 +39,7 @@ def create_background_job_blueprint(server_instance):
     def list_server_jobs():
         """列出所有可用的远程脚本"""
         return _json_endpoint(
-            lambda:  web_service.list_server_jobs(),
+            lambda: web_service.list_server_jobs(),
             default_error_status=500
         )
 
@@ -57,6 +57,21 @@ def create_background_job_blueprint(server_instance):
             return _fail(str(e), 404)
         except Exception as e:
             return _fail(str(e), 500)
+
+    @blueprint.post('/api/server/jobs/save')
+    def save_server_job():
+        payload = _json_payload()
+        name = (payload.get('name') or '').strip()
+        content = payload.get('content', '')
+
+        if not name:
+            raise ValueError('job name is required')
+        if not content:
+            raise ValueError('job content is required')
+        return _json_endpoint(
+            lambda: web_service.save_server_job_content(name, content),
+            default_error_status=500
+        )
 
     @blueprint.get('/api/connections/<client_id>/background-jobs/modules')
     def list_available_background_jobs(client_id):

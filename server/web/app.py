@@ -179,6 +179,7 @@ def create_app(server_instance):
                 _get_required_command(),
                 tab_id=_get_optional_tab_id()
             )
+
         return _json_endpoint(_execute, default_error_status=500)
 
     @app.post('/api/tasks/<task_id>/cancel')
@@ -221,6 +222,7 @@ def create_app(server_instance):
         def _execute():
             server_instance.kill_connection_by_client_id(client_id)
             return None
+
         return _json_endpoint(_execute, default_error_status=500)
 
     @app.post('/api/connections/<client_id>/upload')
@@ -237,6 +239,7 @@ def create_app(server_instance):
                 target_path,
                 tab_id=_get_optional_tab_id()
             )
+
         return _json_endpoint(_execute, default_error_status=500)
 
     @app.get('/api/upload-tmp/<temp_id>/<filename>')
@@ -266,6 +269,7 @@ def create_app(server_instance):
             if not path:
                 raise ValueError('path is required')
             return web_service.create_remote_directory(client_id, path)
+
         return _json_endpoint(_execute, default_error_status=500)
 
     @app.post('/api/connections/<client_id>/remote-files/rename')
@@ -281,6 +285,7 @@ def create_app(server_instance):
                 raise ValueError('new_name is required')
 
             return web_service.rename_remote_path(client_id, old_path, new_name)
+
         return _json_endpoint(_execute, default_error_status=500)
 
     @app.delete('/api/connections/<client_id>/remote-files')
@@ -290,6 +295,7 @@ def create_app(server_instance):
             if not path:
                 raise ValueError('path is required')
             return web_service.delete_remote_path(client_id, path)
+
         return _json_endpoint(_execute, default_error_status=500)
 
     @app.post('/api/connections/<client_id>/remote-files/download')
@@ -299,6 +305,7 @@ def create_app(server_instance):
             if not path:
                 raise ValueError('path is required')
             return web_service.download_remote_file(client_id, path)
+
         return _json_endpoint(_execute, default_error_status=500)
 
     @app.post('/api/connections/<client_id>/remote-files/download-zip')
@@ -312,6 +319,7 @@ def create_app(server_instance):
                 raise ValueError('paths is required')
 
             return web_service.download_remote_paths_as_zip(client_id, paths, archive_name)
+
         return _json_endpoint(_execute, default_error_status=500)
 
     @app.delete('/api/connections/<client_id>/remote-files/batch')
@@ -333,6 +341,7 @@ def create_app(server_instance):
             if not path:
                 raise ValueError('path is required')
             return web_service.preview_remote_file(client_id, path)
+
         return _json_endpoint(_execute, default_error_status=500)
 
     def save_file_content(self, client_id: str, path: str, content: str, encoding: str = 'utf-8') -> dict:
@@ -427,9 +436,9 @@ def create_app(server_instance):
             artifact = web_service.get_artifact_by_id(artifact_id)
             file_path = web_service.get_artifact_file_path(artifact_id)
             download_name = (
-                artifact.get('original_name')
-                or artifact.get('stored_name')
-                or os.path.basename(file_path)
+                    artifact.get('original_name')
+                    or artifact.get('stored_name')
+                    or os.path.basename(file_path)
             )
             return send_file(file_path, as_attachment=True, download_name=download_name)
         except Exception as e:
@@ -466,6 +475,7 @@ def create_app(server_instance):
                 raise ValueError('type is required')
 
             return web_service.clear_artifacts(artifact_type, hostname=hostname)
+
         return _json_endpoint(_execute, default_error_status=500)
 
     @app.post('/api/files/upload')
@@ -508,6 +518,7 @@ def create_app(server_instance):
             _publish_artifact_created(artifact)
 
             return artifact
+
         return _json_endpoint(_execute, default_error_status=500)
 
     @app.errorhandler(413)
@@ -578,52 +589,6 @@ def create_app(server_instance):
 
         return _json_endpoint(_execute, default_error_status=500)
 
-    # ==================== Script Management Routes ====================
-
-
-
-    # @app.post('/api/scripts/upload')
-    # def upload_script():
-    #     """上传/创建脚本（供 Web 前端使用）"""
-    #
-    #     def _execute():
-    #         payload = _get_json_payload()
-    #         script_name = (payload.get('name') or '').strip()
-    #         content = payload.get('content', '')
-    #         overwrite = payload.get('overwrite', False)
-    #
-    #         if not script_name:
-    #             raise ValueError('script name is required')
-    #         if not content:
-    #             raise ValueError('script content is required')
-    #
-    #         # 确保 .py 后缀
-    #         if not script_name.endswith('.py'):
-    #             script_name += '.py'
-    #
-    #         # 检查是否已存在
-    #         try:
-    #             existing = web_service.get_server_job_content(script_name)
-    #             if existing and not overwrite:
-    #                 raise ValueError(f'Script "{script_name}" already exists, use overwrite=true to replace')
-    #         except FileNotFoundError:
-    #             pass
-    #
-    #         result = web_service.save_remote_script(script_name, content)
-    #         return result
-    #
-    #     return _json_endpoint(_execute, default_error_status=500)
-    #
-    # @app.delete('/api/scripts/<path:script_name>')
-    # def delete_script(script_name):
-    #     """删除脚本"""
-    #
-    #     def _execute():
-    #         result = web_service.delete_remote_script(script_name)
-    #         return result
-    #
-    #     return _json_endpoint(_execute, default_error_status=500)
-
     @app.post('/api/agent/build')
     def build_agent():
         """构建 Agent"""
@@ -635,7 +600,6 @@ def create_app(server_instance):
             web_port = payload.get('web_port')
             target_os = (payload.get('target_os') or 'mac').strip()
             builder = (payload.get('builder') or 'pyinstaller').strip()
-            console = payload.get('console', True)
 
             if not server_host:
                 raise ValueError('server_host is required')
@@ -648,7 +612,7 @@ def create_app(server_instance):
                 raise ValueError('server_port must be integer')
 
             result = web_service.build_agent(
-                server_host, server_port, web_port, target_os, builder, console
+                server_host, server_port, web_port, target_os, builder
             )
 
             return result
@@ -682,7 +646,5 @@ def create_app(server_instance):
             return {'cleaned': True}
 
         return _json_endpoint(_execute)
+
     return app
-
-
-

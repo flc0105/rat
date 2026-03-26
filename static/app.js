@@ -45,7 +45,6 @@ createApp({
         ...window.AppFilesModule.methods,
         ...window.AppJobsModule.methods,
         ...window.AppSseModule.methods,
-        ...window.AppJobCreatorModule.methods,
         ...window.AppAgentModule.methods,
 
     }
