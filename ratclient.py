@@ -8,7 +8,7 @@ import time
 import uuid
 
 from client.config.config import SERVER_ADDR, RECONNECT_INTERVAL_SECONDS
-from core.utils.client_util import check_privilege
+from core.utils.client_util import check_privilege, get_system_paths
 from client.connection.server_connection import ServerConnection
 from core.utils.logger import logger
 
@@ -109,6 +109,7 @@ class Client:
             'integrity': check_privilege(),
             'cwd': os.getcwd(),
             'command_manifest': command_manifest,
+            'system_paths': get_system_paths(),
         }
 
     def _connect_socket(self):

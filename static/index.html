@@ -242,6 +242,8 @@
             <div class="dialog-head">
                 <div class="dialog-head-left">
                     <div class="dialog-action-group">
+
+
                         <el-button size="small" @click="refreshRemoteDirectory">Refresh</el-button>
                         <el-button size="small" @click="createRemoteDirectory">New Folder</el-button>
                         <el-button size="small" :loading="remoteUploadLoading" @click="triggerRemoteUpload">Upload
@@ -259,6 +261,23 @@
                         <el-button size="small" :disabled="!hasRemoteSelection" @click="clearRemoteSelection">Clear
                             Selection
                         </el-button>
+
+                        <el-dropdown @command="jumpToPath" :loading="quickJumpLoading">
+                            <el-button size="small">
+                                Quick Jump
+                            </el-button>
+                            <template #dropdown>
+                                <el-dropdown-menu>
+                                    <el-dropdown-item command="root">Root (/)</el-dropdown-item>
+                                    <el-dropdown-item command="home">Home (~)</el-dropdown-item>
+                                    <el-dropdown-item command="desktop">Desktop</el-dropdown-item>
+                                    <el-dropdown-item command="documents">Documents</el-dropdown-item>
+                                    <el-dropdown-item command="downloads">Downloads</el-dropdown-item>
+                                    <el-dropdown-item command="executable">Program Directory</el-dropdown-item>
+                                </el-dropdown-menu>
+                            </template>
+                        </el-dropdown>
+
 
                         <el-button
                                 size="small"

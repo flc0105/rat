@@ -589,6 +589,7 @@ window.AppFilesModule = {
             }
 
             this.remoteFilesDialogVisible = true;
+            this.loadQuickJumpPaths();  // 加载快速跳转路径
             await this.loadRemoteDirectory('');
         },
 
@@ -1030,6 +1031,33 @@ window.AppFilesModule = {
             } catch (e) {
                 ElementPlus.ElMessage.error(e.message || 'Failed to load script');
             }
+        },
+
+        async loadQuickJumpPaths() {
+            if (!this.selectedId) return;
+
+            this.quickJumpLoading = true;
+            try {
+                const res = await fetch(`/api/connections/${encodeURIComponent(this.selectedId)}/system-paths`);
+                const json = await res.json();
+                if (res.ok && json.code === 0 && json.data) {
+                    this.quickJumpPaths = json.data;
+                }
+            } catch (e) {
+                console.error('Failed to load quick jump paths:', e);
+            } finally {
+                this.quickJumpLoading = false;
+            }
+        },
+
+        async jumpToPath(command) {
+            // command 是 'root', 'home', 'desktop' 等
+            const path = this.quickJumpPaths[command];
+            if (!path) {
+                ElementPlus.ElMessage.warning('Path not available');
+                return;
+            }
+            await this.loadRemoteDirectory(path);
         },
 
         async previewBackgroundJobFile(file) {

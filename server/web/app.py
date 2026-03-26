@@ -647,4 +647,16 @@ def create_app(server_instance):
 
         return _json_endpoint(_execute)
 
+    @app.get('/api/connections/<client_id>/system-paths')
+    def get_system_paths(client_id):
+        """获取客户端系统路径"""
+
+        def _execute():
+            session = server_instance.get_target_connection_by_client_id(client_id)
+            # 从已存储的 info 中获取
+            system_paths = session.info.get('system_paths', {})
+            return system_paths
+
+        return _json_endpoint(_execute, default_error_status=500)
+
     return app

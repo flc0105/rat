@@ -79,6 +79,9 @@ window.AppStateModule = {
             connectionInfoDialogVisible: false,
             connectionInfoLoading: false,
             connectionInfoJobCount: 0,
+
+                    quickJumpPaths: {},
+        quickJumpLoading: false
         };
     },
 

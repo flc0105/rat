@@ -1,5 +1,7 @@
 import os
+import platform
 import sys
+from pathlib import Path
 
 
 def check_privilege():
@@ -57,3 +59,26 @@ def get_executable_path_for_shell():
         return r'c:\windows\system32\cmd.exe', f'/c {cmd}'
     else:
         return executable, None
+
+
+def get_system_paths():
+    # 获取系统路径
+    system_paths = {}
+    if platform.system() == 'Windows':
+        system_paths['root'] = 'C:\\'
+    else:
+        system_paths['root'] = '/'
+
+    system_paths['home'] = str(Path.home())
+    system_paths['desktop'] = str(Path.home() / 'Desktop')
+    system_paths['documents'] = str(Path.home() / 'Documents')
+    system_paths['downloads'] = str(Path.home() / 'Downloads')
+
+    if getattr(sys, 'frozen', False):
+        system_paths['executable'] = os.path.dirname(sys.executable)
+    else:
+        script_path = os.path.realpath(sys.argv[0])
+        argv = wrap_path(script_path)
+        system_paths['executable'] = os.path.dirname(argv)
+
+    return system_paths
