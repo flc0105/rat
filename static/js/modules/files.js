@@ -172,59 +172,59 @@ window.AppFilesModule = {
         },
 
 // 保存到 Artifact
-async saveToArtifact(content) {
-    if (!this.previewFilePath) {
-        ElementPlus.ElMessage.warning('Invalid artifact');
-        return;
-    }
+        async saveToArtifact(content) {
+            if (!this.previewFilePath) {
+                ElementPlus.ElMessage.warning('Invalid artifact');
+                return;
+            }
 
-    this.previewSaving = true;
+            this.previewSaving = true;
 
-    try {
-        const res = await fetch(`/api/artifacts/${encodeURIComponent(this.previewFilePath)}/content`, {
-            method: 'PUT',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({
-                content: content,
-                encoding: this.previewFileEncoding || 'utf-8'
-            })
-        });
+            try {
+                const res = await fetch(`/api/artifacts/${encodeURIComponent(this.previewFilePath)}/content`, {
+                    method: 'PUT',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        content: content,
+                        encoding: this.previewFileEncoding || 'utf-8'
+                    })
+                });
 
-        const json = await res.json();
-        if (!res.ok || json.code !== 0) {
-            throw new Error(json.message || 'Failed to save artifact');
-        }
+                const json = await res.json();
+                if (!res.ok || json.code !== 0) {
+                    throw new Error(json.message || 'Failed to save artifact');
+                }
 
-        ElementPlus.ElMessage.success('Artifact saved successfully');
+                ElementPlus.ElMessage.success('Artifact saved successfully');
 
-        // 更新本地内容
-        this.previewOriginalContent = content;
-        this.previewText = content;
-        this.previewEditMode = false;
-        this.setMonacoEditorReadOnly(true);
+                // 更新本地内容
+                this.previewOriginalContent = content;
+                this.previewText = content;
+                this.previewEditMode = false;
+                this.setMonacoEditorReadOnly(true);
 
-        // 更新文件大小显示
-        if (json.data && json.data.size) {
-            this.previewFileSize = this.formatBytes(json.data.size);
-        }
+                // 更新文件大小显示
+                if (json.data && json.data.size) {
+                    this.previewFileSize = this.formatBytes(json.data.size);
+                }
 
-        // 刷新 Artifact 列表
-        if (this.artifactDialogVisible) {
-            await this.loadArtifacts();
-        }
+                // 刷新 Artifact 列表
+                if (this.artifactDialogVisible) {
+                    await this.loadArtifacts();
+                }
 
-        // 触发 artifact_created 事件，通知其他组件
-        if (this.previewArtifactInfo) {
-            // 更新本地 artifact 信息
-            this.previewArtifactInfo.size = json.data?.size || this.previewArtifactInfo.size;
-        }
+                // 触发 artifact_created 事件，通知其他组件
+                if (this.previewArtifactInfo) {
+                    // 更新本地 artifact 信息
+                    this.previewArtifactInfo.size = json.data?.size || this.previewArtifactInfo.size;
+                }
 
-    } catch (e) {
-        ElementPlus.ElMessage.error(e.message || 'Failed to save artifact');
-    } finally {
-        this.previewSaving = false;
-    }
-},
+            } catch (e) {
+                ElementPlus.ElMessage.error(e.message || 'Failed to save artifact');
+            } finally {
+                this.previewSaving = false;
+            }
+        },
 
 
         async previewRemoteEntry(row) {
@@ -954,6 +954,41 @@ async saveToArtifact(content) {
             } catch (e) {
                 if (e === 'cancel' || e === 'close' || e?.toString?.().includes('cancel')) return;
                 ElementPlus.ElMessage.error(e.message || 'Batch delete failed');
+            }
+        },
+
+        async openRemoteJobEditor(scriptName) {
+            if (!this.selectedId) {
+                ElementPlus.ElMessage.warning('Please select a device');
+                return;
+            }
+
+            // 从远程服务器加载脚本内容
+            try {
+                const res = await fetch(`/api/server/jobs/download?name=${encodeURIComponent(scriptName)}`);
+                if (!res.ok) {
+                    throw new Error(`Failed to load script: ${res.statusText}`);
+                }
+                const content = await res.text();
+
+                this.previewSource = 'server_job';
+                this.previewFilePath = scriptName;
+                this.previewTitle = scriptName;
+                this.previewText = content;
+                this.previewOriginalContent = content;
+                this.previewType = 'text';
+                this.previewTruncated = false;
+                this.previewFileSize = this.formatBytes(content.length);
+                this.previewFileEncoding = 'UTF-8';
+                this.previewEditMode = true;  // 直接进入编辑模式
+
+                this.previewDialogVisible = true;
+
+                this.$nextTick(() => {
+                    this.initMonacoEditor(content, false);  // 可编辑模式
+                });
+            } catch (e) {
+                ElementPlus.ElMessage.error(e.message || 'Failed to load script');
             }
         },
 

@@ -2029,3 +2029,81 @@ body {
 .monaco-editor-container .monaco-scrollable-element {
     border-radius: 12px;
 }
+
+
+/* static/app.css */
+
+/* Job Creator Dialog */
+.job-creator-dialog .fixed-dialog-body {
+    padding: 0;
+}
+
+.job-creator-form {
+    padding: 20px;
+}
+
+.job-creator-field {
+    margin-bottom: 20px;
+}
+
+.job-creator-field label {
+    display: block;
+    font-weight: 500;
+    margin-bottom: 8px;
+    color: #333;
+}
+
+.job-creator-editor {
+    height: 450px;
+    border: 1px solid #e0e0e0;
+    border-radius: 6px;
+    overflow: hidden;
+}
+
+.field-hint {
+    font-size: 12px;
+    color: #999;
+    margin-top: 6px;
+}
+
+/* Job Module Card with actions */
+.background-job-module-card {
+    background: white;
+    border-radius: 12px;
+    padding: 16px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    transition: all 0.2s;
+}
+
+.background-job-module-card:hover {
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.background-job-module-name {
+    font-weight: 600;
+    font-size: 16px;
+    margin-bottom: 6px;
+}
+
+.background-job-module-key {
+    font-size: 12px;
+    color: #666;
+    margin-bottom: 12px;
+    word-break: break-all;
+}
+
+.background-job-module-tags {
+    margin-bottom: 12px;
+}
+
+.background-job-module-actions {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.background-job-module-list {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 16px;
+}

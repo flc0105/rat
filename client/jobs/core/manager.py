@@ -79,6 +79,30 @@ class JobManager:
         except Exception as e:
             raise ImportError(f'Failed to load job module "{module_name}": {e}')
 
+
+    def _load_job_instance_remote(self, full_path: str, job_name, command_id: int):
+        module_name = job_name
+
+        try:
+            spec = importlib.util.spec_from_file_location(module_name, full_path)
+            if spec is None or spec.loader is None:
+                raise ImportError(f'Unable to create import spec for: {module_name}')
+
+            module = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(module)
+
+            job_class = get_main_class(module, module_name)
+            job_instance = job_class()
+            job_instance.bind_context(
+                self.socket,
+                command_id,
+                client_id=getattr(self.socket, 'client_id', None),
+                job_key=self.get_job_key(module_name)
+            )
+            return job_instance
+        except Exception as e:
+            raise ImportError(f'Failed to load job module "{module_name}": {e}')
+
     # ------------------ 运行状态 ------------------ #
     def is_running(self, job_name: str) -> bool:
         job_key = self.get_job_key(job_name)
@@ -110,6 +134,34 @@ class JobManager:
                 self._runtimes.pop(job_key, None)
 
     # ------------------ 启动 / 停止 ------------------ #
+
+    def start_job_rem(self, full_path, job_name, command_id: int) -> JobRuntime:
+        self.cleanup_finished_jobs()
+        self.validate_job_name(job_name)
+
+        job_key = self.get_job_key(job_name)
+        if self.is_running(job_name):
+            raise RuntimeError(f'Job is already running: {job_key}')
+
+        job_instance = self._load_job_instance_remote(full_path, job_name, command_id)
+        thread = threading.Thread(
+            target=job_instance.run,
+            name=f'JobThread-{job_key}',
+            daemon=True,
+        )
+
+        runtime = JobRuntime(
+            job_key=job_key,
+            job_instance=job_instance,
+            thread=thread,
+        )
+
+        with self._lock:
+            self._runtimes[job_key] = runtime
+
+        thread.start()
+        return runtime
+
     def start_job(self, job_name: str, command_id: int) -> JobRuntime:
         self.cleanup_finished_jobs()
         self.validate_job_name(job_name)

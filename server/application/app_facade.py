@@ -1,3 +1,5 @@
+import os
+
 from server.application.artifact.artifact_service import WebArtifactService
 from server.application.artifact.remote_file_service import WebRemoteFileService
 from server.application.command.executor import CommandExecutor
@@ -5,10 +7,13 @@ from server.application.connection.connection_service import WebConnectionServic
 from server.application.execution.remote_execution_service import RemoteExecutionService
 from server.application.jobs.background_job_service import BackgroundJobService
 from server.application.jobs.background_job_store import BackgroundJobStore
+from server.application.script.script_service import ScriptService
 from server.application.tasks.task_runner import WebTaskRunner
 from server.application.tasks.task_service import WebTaskService
 from server.application.tasks.task_store import WebTaskStore
 from server.web.event_bus import WebEventBus
+from server.config.config import SCRIPT_JOBS_PATH  # 需要在 config 中添加
+
 
 
 class ServerWebService:
@@ -58,6 +63,8 @@ class ServerWebService:
             job_store=self.background_job_store,
             remote_execution_service=self.remote_execution_service,
         )
+
+        self.script_service = ScriptService(SCRIPT_JOBS_PATH)
 
     def _get_client_command_candidates(self, session):
         payload = session.info.get('command_manifest') or []
@@ -185,6 +192,14 @@ class ServerWebService:
             tab_id=tab_id
         )
 
+    def list_server_jobs(self) -> list[dict]:
+        """列出所有可用的远程脚本"""
+        return self.script_service.list_scripts()
+
+    def get_server_job_content(self, script_name: str) -> str:
+        """获取远程脚本内容"""
+        return self.script_service.get_script_content(script_name)
+
     def list_background_jobs(self, client_id: str):
         return self.background_job_service.list_jobs(client_id)
 
@@ -244,3 +259,15 @@ class ServerWebService:
             remote_path,
             tab_id=tab_id
         )
+
+    #script
+
+
+
+    # def save_remote_script(self, script_name: str, content: str) -> dict:
+    #     """保存远程脚本"""
+    #     return self.script_service.save_script(script_name, content)
+    #
+    # def delete_remote_script(self, script_name: str) -> dict:
+    #     """删除远程脚本"""
+    #     return self.script_service.delete_script(script_name)

@@ -26,6 +26,7 @@ class BackgroundJobService:
         return {
             'job_name': normalized,
             'job_key': os.path.splitext(os.path.basename(normalized))[0] if normalized else '',
+            'source': 'client'
         }
 
     def _parse_available_jobs_text(self, text: str) -> list[dict]:

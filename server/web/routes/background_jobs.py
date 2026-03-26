@@ -1,4 +1,4 @@
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, jsonify, request, Response
 
 
 def create_background_job_blueprint(server_instance):
@@ -34,6 +34,29 @@ def create_background_job_blueprint(server_instance):
             return _fail(e, 404)
         except Exception as e:
             return _fail(e, default_error_status)
+
+    @blueprint.get('/api/server/jobs/list')
+    def list_server_jobs():
+        """列出所有可用的远程脚本"""
+        return _json_endpoint(
+            lambda:  web_service.list_server_jobs(),
+            default_error_status=500
+        )
+
+    @blueprint.get('/api/server/jobs/download')
+    def download_server_job():
+        """下载脚本内容（供 Client 使用）"""
+        script_name = request.args.get('name', '').strip()
+        if not script_name:
+            return _fail('script name is required', 400)
+
+        try:
+            content = web_service.get_server_job_content(script_name)
+            return Response(content, mimetype='text/plain')
+        except FileNotFoundError as e:
+            return _fail(str(e), 404)
+        except Exception as e:
+            return _fail(str(e), 500)
 
     @blueprint.get('/api/connections/<client_id>/background-jobs/modules')
     def list_available_background_jobs(client_id):

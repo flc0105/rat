@@ -13,8 +13,9 @@
     </noscript>
     <script src="/auth.js"></script>
 
-     <!-- Monaco Editor CSS -->
-    <link rel="stylesheet" data-name="vs/editor/editor.main" href="https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs/editor/editor.main.min.css">
+    <!-- Monaco Editor CSS -->
+    <link rel="stylesheet" data-name="vs/editor/editor.main"
+          href="https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs/editor/editor.main.min.css">
 
 
 </head>
@@ -559,22 +560,53 @@
                         <el-button size="small" @click="loadBackgroundJobModules"
                                    :loading="backgroundJobModulesLoading">Refresh Modules
                         </el-button>
+<!--                        <el-button size="small" type="primary" @click="openJobCreatorDialog()">-->
+<!--                            + New Remote Job-->
+<!--                        </el-button>-->
                     </div>
                     <div class="background-jobs-modules panel-lite">
                         <div class="background-jobs-section-title">Available Modules</div>
                         <div v-if="!backgroundJobModules.length && !backgroundJobModulesLoading" class="empty-state">No
                             job modules available
                         </div>
+                        <!-- 修改模块卡片，区分本地和远程 -->
                         <div class="background-job-module-list" v-else>
                             <div v-for="item in backgroundJobModules" :key="item.job_name"
                                  class="background-job-module-card">
                                 <div class="background-job-module-name">{{ item.job_name }}</div>
                                 <div class="background-job-module-key mono">{{ item.job_key || '-' }}</div>
-                                <el-button size="small" type="primary" plain @click="startBackgroundJob(item.job_name)">
-                                    Start
-                                </el-button>
+                                <div class="background-job-module-tags">
+                                    <el-tag v-if="item.source === 'server'" size="small" type="success">Server</el-tag>
+                                    <el-tag v-else-if="item.source === 'client'" size="small" type="info">Client
+                                    </el-tag>
+                                    <el-tag v-else size="small" type="info">Local</el-tag>
+                                </div>
+                                <div class="background-job-module-actions">
+                                    <el-button size="small" type="primary" plain
+                                               @click="startBackgroundJob(item.job_name, item.source)">
+                                        Start
+                                    </el-button>
+                                    <el-button v-if="item.source === 'server'" size="small" plain
+                                               @click="openRemoteJobEditor(item.job_name)">
+                                        Edit
+                                    </el-button>
+<!--                                    <el-button v-if="item.source === 'server'" size="small" type="danger" plain-->
+<!--                                               @click="deleteRemoteScript(item.job_name)">-->
+<!--                                        Delete-->
+<!--                                    </el-button>-->
+                                </div>
                             </div>
                         </div>
+                        <!--                        <div class="background-job-module-list" v-else>-->
+                        <!--                            <div v-for="item in backgroundJobModules" :key="item.job_name"-->
+                        <!--                                 class="background-job-module-card">-->
+                        <!--                                <div class="background-job-module-name">{{ item.job_name }}</div>-->
+                        <!--                                <div class="background-job-module-key mono">{{ item.job_key || '-' }}</div>-->
+                        <!--                                <el-button size="small" type="primary" plain @click="startBackgroundJob(item.job_name)">-->
+                        <!--                                    Start-->
+                        <!--                                </el-button>-->
+                        <!--                            </div>-->
+                        <!--                        </div>-->
                     </div>
                 </el-tab-pane>
 
@@ -750,189 +782,190 @@
     </el-dialog>
 
     <!-- static/index.html -->
-<!-- 替换预览对话框中的文本展示部分 -->
+    <!-- 替换预览对话框中的文本展示部分 -->
 
-<el-dialog v-model="previewDialogVisible" :title="previewTitle || 'File Preview'" width="1080px" top="5vh"
-           class="fixed-dialog preview-dialog">
-    <div v-loading="previewLoading" class="preview-wrap">
-        <div class="preview-toolbar" v-if="previewType === 'image' || previewType === 'text'">
-            <div class="preview-toolbar-left">
-                <template v-if="previewType === 'text'">
-                    <el-button size="small" @click="copyPreviewText">
-                        Copy
-                    </el-button>
-                    <el-button
-                        v-if="!previewEditMode && !previewTruncated"
-                        size="small"
-                        type="primary"
-                        @click="enterEditMode"
-                    >
-                        Edit
-                    </el-button>
-                    <template v-else-if="previewEditMode">
-                        <el-button
-                            size="small"
-                            type="primary"
-                            :loading="previewSaving"
-                            @click="saveEditedContent"
-                        >
-                            Save
+    <el-dialog v-model="previewDialogVisible" :title="previewTitle || 'File Preview'" width="1080px" top="5vh"
+               class="fixed-dialog preview-dialog">
+        <div v-loading="previewLoading" class="preview-wrap">
+            <div class="preview-toolbar" v-if="previewType === 'image' || previewType === 'text'">
+                <div class="preview-toolbar-left">
+                    <template v-if="previewType === 'text'">
+                        <el-button size="small" @click="copyPreviewText">
+                            Copy
                         </el-button>
                         <el-button
-                            size="small"
-                            @click="cancelEditMode"
+                                v-if="!previewEditMode && !previewTruncated"
+                                size="small"
+                                type="primary"
+                                @click="enterEditMode"
                         >
-                            Cancel
+                            Edit
+                        </el-button>
+                        <template v-else-if="previewEditMode">
+                            <el-button
+                                    size="small"
+                                    type="primary"
+                                    :loading="previewSaving"
+                                    @click="saveEditedContent"
+                            >
+                                Save
+                            </el-button>
+                            <el-button
+                                    size="small"
+                                    @click="cancelEditMode"
+                            >
+                                Cancel
+                            </el-button>
+                        </template>
+                    </template>
+                    <template v-if="previewType === 'image' && previewUrl">
+                        <el-button size="small" @click="openPreviewOriginal">
+                            Open Original
                         </el-button>
                     </template>
-                </template>
-                <template v-if="previewType === 'image' && previewUrl">
-                    <el-button size="small" @click="openPreviewOriginal">
-                        Open Original
-                    </el-button>
-                </template>
+                </div>
+
+                <div class="preview-toolbar-right">
+                    <template v-if="previewType === 'text'">
+                        <div class="preview-info-tags">
+                            <el-tag size="small" type="primary">
+                                {{ previewSourceLabel }}
+                            </el-tag>
+                            <el-tag size="small" type="info">{{ previewFileSize }}</el-tag>
+                            <el-tag size="small" type="info">{{ previewFileEncoding }}</el-tag>
+                            <el-tag v-if="previewTruncated" size="small" type="danger">
+                                Truncated - Edit disabled
+                            </el-tag>
+                            <el-tag v-else size="small" type="success">Full content</el-tag>
+                        </div>
+                    </template>
+                </div>
             </div>
 
-            <div class="preview-toolbar-right">
-                <template v-if="previewType === 'text'">
-                    <div class="preview-info-tags">
-                        <el-tag size="small" type="primary">
-{{ previewSourceLabel }}</el-tag>
-                        <el-tag size="small" type="info">{{ previewFileSize }}</el-tag>
-                        <el-tag size="small" type="info">{{ previewFileEncoding }}</el-tag>
-                        <el-tag v-if="previewTruncated" size="small" type="danger">
-                            Truncated - Edit disabled
-                        </el-tag>
-                        <el-tag v-else size="small" type="success">Full content</el-tag>
-                    </div>
-                </template>
-            </div>
+            <template v-if="previewType === 'image' && previewUrl">
+                <div class="image-preview-box"><img :src="previewUrl" alt="preview" class="preview-image"/></div>
+            </template>
+
+            <template v-else-if="previewType === 'text'">
+                <!-- Monaco Editor 容器 -->
+                <div id="monaco-editor-container" class="monaco-editor-container"></div>
+            </template>
+
+            <template v-else-if="previewType === 'unsupported'">
+                <div class="empty-state">This file type is not supported for preview.</div>
+            </template>
+            <template v-else>
+                <div class="empty-state">No preview available.</div>
+            </template>
         </div>
-
-        <template v-if="previewType === 'image' && previewUrl">
-            <div class="image-preview-box"><img :src="previewUrl" alt="preview" class="preview-image"/></div>
-        </template>
-
-        <template v-else-if="previewType === 'text'">
-            <!-- Monaco Editor 容器 -->
-            <div id="monaco-editor-container" class="monaco-editor-container"></div>
-        </template>
-
-        <template v-else-if="previewType === 'unsupported'">
-            <div class="empty-state">This file type is not supported for preview.</div>
-        </template>
-        <template v-else>
-            <div class="empty-state">No preview available.</div>
-        </template>
-    </div>
-</el-dialog>
+    </el-dialog>
 
 
-<!--    <el-dialog v-model="previewDialogVisible" :title="previewTitle || 'File Preview'" width="1080px" top="5vh"-->
-<!--               class="fixed-dialog preview-dialog">-->
-<!--        <div v-loading="previewLoading" class="preview-wrap">-->
-<!--            <div class="preview-toolbar" v-if="previewType === 'image' || previewType === 'text'">-->
-<!--                <div class="preview-toolbar-left">-->
-<!--                    &lt;!&ndash; 文本文件特有按钮 &ndash;&gt;-->
-<!--                    <template v-if="previewType === 'text'">-->
-<!--                        &lt;!&ndash; 复制按钮 &ndash;&gt;-->
-<!--                        <el-button size="small" @click="copyPreviewText">-->
-<!--                            Copy-->
-<!--                        </el-button>-->
+    <!--    <el-dialog v-model="previewDialogVisible" :title="previewTitle || 'File Preview'" width="1080px" top="5vh"-->
+    <!--               class="fixed-dialog preview-dialog">-->
+    <!--        <div v-loading="previewLoading" class="preview-wrap">-->
+    <!--            <div class="preview-toolbar" v-if="previewType === 'image' || previewType === 'text'">-->
+    <!--                <div class="preview-toolbar-left">-->
+    <!--                    &lt;!&ndash; 文本文件特有按钮 &ndash;&gt;-->
+    <!--                    <template v-if="previewType === 'text'">-->
+    <!--                        &lt;!&ndash; 复制按钮 &ndash;&gt;-->
+    <!--                        <el-button size="small" @click="copyPreviewText">-->
+    <!--                            Copy-->
+    <!--                        </el-button>-->
 
-<!--                        &lt;!&ndash; 编辑按钮 - 仅当文件完整且未截断时可用 &ndash;&gt;-->
-<!--                        <el-button-->
-<!--                                v-if="!previewEditMode && !previewTruncated"-->
-<!--                                size="small"-->
-<!--                                type="primary"-->
-<!--                                @click="enterEditMode"-->
-<!--                        >-->
-<!--                            Edit-->
-<!--                        </el-button>-->
+    <!--                        &lt;!&ndash; 编辑按钮 - 仅当文件完整且未截断时可用 &ndash;&gt;-->
+    <!--                        <el-button-->
+    <!--                                v-if="!previewEditMode && !previewTruncated"-->
+    <!--                                size="small"-->
+    <!--                                type="primary"-->
+    <!--                                @click="enterEditMode"-->
+    <!--                        >-->
+    <!--                            Edit-->
+    <!--                        </el-button>-->
 
-<!--                        &lt;!&ndash; 编辑模式下的保存和取消 &ndash;&gt;-->
-<!--                        <template v-else-if="previewEditMode">-->
-<!--                            <el-button-->
-<!--                                    size="small"-->
-<!--                                    type="primary"-->
-<!--                                    :loading="previewSaving"-->
-<!--                                    @click="saveEditedContent"-->
-<!--                            >-->
-<!--                                Save-->
-<!--                            </el-button>-->
-<!--                            <el-button-->
-<!--                                    size="small"-->
-<!--                                    @click="cancelEditMode"-->
-<!--                            >-->
-<!--                                Cancel-->
-<!--                            </el-button>-->
-<!--                        </template>-->
-<!--                    </template>-->
+    <!--                        &lt;!&ndash; 编辑模式下的保存和取消 &ndash;&gt;-->
+    <!--                        <template v-else-if="previewEditMode">-->
+    <!--                            <el-button-->
+    <!--                                    size="small"-->
+    <!--                                    type="primary"-->
+    <!--                                    :loading="previewSaving"-->
+    <!--                                    @click="saveEditedContent"-->
+    <!--                            >-->
+    <!--                                Save-->
+    <!--                            </el-button>-->
+    <!--                            <el-button-->
+    <!--                                    size="small"-->
+    <!--                                    @click="cancelEditMode"-->
+    <!--                            >-->
+    <!--                                Cancel-->
+    <!--                            </el-button>-->
+    <!--                        </template>-->
+    <!--                    </template>-->
 
-<!--                    &lt;!&ndash; 图片文件特有按钮 &ndash;&gt;-->
-<!--                    <template v-if="previewType === 'image' && previewUrl">-->
-<!--                        <el-button size="small" @click="openPreviewOriginal">-->
-<!--                            Open Original-->
-<!--                        </el-button>-->
-<!--                    </template>-->
-<!--                </div>-->
+    <!--                    &lt;!&ndash; 图片文件特有按钮 &ndash;&gt;-->
+    <!--                    <template v-if="previewType === 'image' && previewUrl">-->
+    <!--                        <el-button size="small" @click="openPreviewOriginal">-->
+    <!--                            Open Original-->
+    <!--                        </el-button>-->
+    <!--                    </template>-->
+    <!--                </div>-->
 
-<!--                <div class="preview-toolbar-right">-->
-<!--                    &lt;!&ndash; 文件信息标签 &ndash;&gt;-->
-<!--                    <template v-if="previewType === 'text'">-->
-<!--                        <div class="preview-info-tags">-->
-<!--                            <el-tag size="small" type="info">-->
-<!--                                {{ previewFileSize }}-->
-<!--                            </el-tag>-->
-<!--                            <el-tag size="small" type="info">-->
-<!--                                {{ previewFileEncoding }}-->
-<!--                            </el-tag>-->
-<!--                            <el-tag-->
-<!--                                    v-if="previewTruncated"-->
-<!--                                    size="small"-->
-<!--                                    type="danger"-->
-<!--                            >-->
-<!--                                Truncated - Edit disabled-->
-<!--                            </el-tag>-->
-<!--                            <el-tag-->
-<!--                                    v-else-->
-<!--                                    size="small"-->
-<!--                                    type="success"-->
-<!--                            >-->
-<!--                                Full content-->
-<!--                            </el-tag>-->
-<!--                        </div>-->
-<!--                    </template>-->
-<!--                </div>-->
-<!--            </div>-->
+    <!--                <div class="preview-toolbar-right">-->
+    <!--                    &lt;!&ndash; 文件信息标签 &ndash;&gt;-->
+    <!--                    <template v-if="previewType === 'text'">-->
+    <!--                        <div class="preview-info-tags">-->
+    <!--                            <el-tag size="small" type="info">-->
+    <!--                                {{ previewFileSize }}-->
+    <!--                            </el-tag>-->
+    <!--                            <el-tag size="small" type="info">-->
+    <!--                                {{ previewFileEncoding }}-->
+    <!--                            </el-tag>-->
+    <!--                            <el-tag-->
+    <!--                                    v-if="previewTruncated"-->
+    <!--                                    size="small"-->
+    <!--                                    type="danger"-->
+    <!--                            >-->
+    <!--                                Truncated - Edit disabled-->
+    <!--                            </el-tag>-->
+    <!--                            <el-tag-->
+    <!--                                    v-else-->
+    <!--                                    size="small"-->
+    <!--                                    type="success"-->
+    <!--                            >-->
+    <!--                                Full content-->
+    <!--                            </el-tag>-->
+    <!--                        </div>-->
+    <!--                    </template>-->
+    <!--                </div>-->
+    <!--            </div>-->
 
-<!--            <template v-if="previewType === 'image' && previewUrl">-->
-<!--                <div class="image-preview-box"><img :src="previewUrl" alt="preview" class="preview-image"/></div>-->
-<!--            </template>-->
+    <!--            <template v-if="previewType === 'image' && previewUrl">-->
+    <!--                <div class="image-preview-box"><img :src="previewUrl" alt="preview" class="preview-image"/></div>-->
+    <!--            </template>-->
 
-<!--            <template v-else-if="previewType === 'text'">-->
-<!--                &lt;!&ndash; 预览模式：只读展示 &ndash;&gt;-->
-<!--                <pre v-if="!previewEditMode" class="preview-text">{{ previewText }}</pre>-->
-<!--                &lt;!&ndash; 编辑模式：可编辑文本框 &ndash;&gt;-->
-<!--                <div v-else class="edit-text-area">-->
-<!--                    <el-input-->
-<!--                            v-model="previewText"-->
-<!--                            type="textarea"-->
-<!--                            :rows="25"-->
-<!--                            placeholder="Edit file content..."-->
-<!--                            style="font-family: monospace; font-size: 13px; line-height: 1.6;"-->
-<!--                    />-->
-<!--                </div>-->
-<!--            </template>-->
+    <!--            <template v-else-if="previewType === 'text'">-->
+    <!--                &lt;!&ndash; 预览模式：只读展示 &ndash;&gt;-->
+    <!--                <pre v-if="!previewEditMode" class="preview-text">{{ previewText }}</pre>-->
+    <!--                &lt;!&ndash; 编辑模式：可编辑文本框 &ndash;&gt;-->
+    <!--                <div v-else class="edit-text-area">-->
+    <!--                    <el-input-->
+    <!--                            v-model="previewText"-->
+    <!--                            type="textarea"-->
+    <!--                            :rows="25"-->
+    <!--                            placeholder="Edit file content..."-->
+    <!--                            style="font-family: monospace; font-size: 13px; line-height: 1.6;"-->
+    <!--                    />-->
+    <!--                </div>-->
+    <!--            </template>-->
 
-<!--            <template v-else-if="previewType === 'unsupported'">-->
-<!--                <div class="empty-state">This file type is not supported for preview.</div>-->
-<!--            </template>-->
-<!--            <template v-else>-->
-<!--                <div class="empty-state">No preview available.</div>-->
-<!--            </template>-->
-<!--        </div>-->
-<!--    </el-dialog>-->
+    <!--            <template v-else-if="previewType === 'unsupported'">-->
+    <!--                <div class="empty-state">This file type is not supported for preview.</div>-->
+    <!--            </template>-->
+    <!--            <template v-else>-->
+    <!--                <div class="empty-state">No preview available.</div>-->
+    <!--            </template>-->
+    <!--        </div>-->
+    <!--    </el-dialog>-->
 
     <el-dialog v-model="commandHistoryDialogVisible" title="Command History" width="1120px" top="5vh"
                class="fixed-dialog recent-files-dialog command-history-dialog">
@@ -1020,132 +1053,133 @@
                     </div>
                 </el-tab-pane>
 
-<!--                <el-tab-pane label="Execution History" name="full">-->
-<!--                    <div class="command-execution-list-shell" v-loading="commandExecutionHistoryLoading">-->
-<!--                        <div v-if="!commandExecutionItems.length && !commandExecutionHistoryLoading"-->
-<!--                             class="empty-state">No execution history available-->
-<!--                        </div>-->
-<!--                        <div v-else class="command-execution-list">-->
-<!--                            <div v-for="item in commandExecutionItems" :key="item.entry_id"-->
-<!--                                 class="command-execution-card">-->
-<!--                                <div class="command-execution-card-main">-->
-<!--                                    <div class="command-execution-card-top">-->
-<!--                                        <div class="command-execution-title-wrap">-->
-<!--                                            <div class="command-execution-title-line">-->
-<!--                                                <div class="command-execution-title mono">{{ item.command || '-' }}-->
-<!--                                                </div>-->
-<!--                                                <el-tag :type="buildCommandExecutionStatusTagType(item.status)"-->
-<!--                                                        size="small">{{ item.status || 'unknown' }}-->
-<!--                                                </el-tag>-->
-<!--                                                <el-tag v-if="item.has_files" type="success" size="small">{{-->
-<!--                                                    item.file_count || 0 }} file(s)-->
-<!--                                                </el-tag>-->
-<!--                                                <el-tag v-if="item.output_truncated" type="warning" size="small">output-->
-<!--                                                    truncated-->
-<!--                                                </el-tag>-->
-<!--                                            </div>-->
-<!--                                            <div class="command-execution-subtitle">{{ item.source || '-' }} / {{-->
-<!--                                                item.started_at || '-' }}-->
-<!--                                            </div>-->
-<!--                                        </div>-->
-<!--                                    </div>-->
-<!--                                    <div class="command-execution-stats">-->
-<!--                                        <div class="command-execution-stat-pill"><span-->
-<!--                                                class="command-execution-stat-label">Duration</span><span-->
-<!--                                                class="command-execution-stat-value">{{ formatCommandExecutionDuration(item.duration_ms) }}</span>-->
-<!--                                        </div>-->
-<!--                                        <div class="command-execution-stat-pill command-execution-stat-pill-wide"><span-->
-<!--                                                class="command-execution-stat-label">CWD</span><span-->
-<!--                                                class="command-execution-stat-value ellipsis">{{ getCommandExecutionDisplayCwd(item) }}</span>-->
-<!--                                        </div>-->
-<!--                                        <div class="command-execution-stat-pill"><span-->
-<!--                                                class="command-execution-stat-label">Chunks</span><span-->
-<!--                                                class="command-execution-stat-value">{{ item.output_chunk_count || 0 }}</span>-->
-<!--                                        </div>-->
-<!--                                        <div class="command-execution-stat-pill"><span-->
-<!--                                                class="command-execution-stat-label">Lines</span><span-->
-<!--                                                class="command-execution-stat-value">{{ item.output_line_count || 0 }}</span>-->
-<!--                                        </div>-->
-<!--                                    </div>-->
-<!--                                    <div class="command-execution-summary">{{-->
-<!--                                        buildCommandExecutionSingleLineSummary(item) }}-->
-<!--                                    </div>-->
-<!--                                </div>-->
-<!--                                <div class="command-execution-actions">-->
-<!--                                    <el-button size="small" plain @click="applyHistoryCommand(item)">Use</el-button>-->
-<!--                                    <el-button size="small" type="primary" plain-->
-<!--                                               @click="openCommandExecutionDetail(item)">Details-->
-<!--                                    </el-button>-->
-<!--                                </div>-->
-<!--                            </div>-->
-<!--                        </div>-->
-<!--                    </div>-->
-<!--                </el-tab-pane>-->
+                <!--                <el-tab-pane label="Execution History" name="full">-->
+                <!--                    <div class="command-execution-list-shell" v-loading="commandExecutionHistoryLoading">-->
+                <!--                        <div v-if="!commandExecutionItems.length && !commandExecutionHistoryLoading"-->
+                <!--                             class="empty-state">No execution history available-->
+                <!--                        </div>-->
+                <!--                        <div v-else class="command-execution-list">-->
+                <!--                            <div v-for="item in commandExecutionItems" :key="item.entry_id"-->
+                <!--                                 class="command-execution-card">-->
+                <!--                                <div class="command-execution-card-main">-->
+                <!--                                    <div class="command-execution-card-top">-->
+                <!--                                        <div class="command-execution-title-wrap">-->
+                <!--                                            <div class="command-execution-title-line">-->
+                <!--                                                <div class="command-execution-title mono">{{ item.command || '-' }}-->
+                <!--                                                </div>-->
+                <!--                                                <el-tag :type="buildCommandExecutionStatusTagType(item.status)"-->
+                <!--                                                        size="small">{{ item.status || 'unknown' }}-->
+                <!--                                                </el-tag>-->
+                <!--                                                <el-tag v-if="item.has_files" type="success" size="small">{{-->
+                <!--                                                    item.file_count || 0 }} file(s)-->
+                <!--                                                </el-tag>-->
+                <!--                                                <el-tag v-if="item.output_truncated" type="warning" size="small">output-->
+                <!--                                                    truncated-->
+                <!--                                                </el-tag>-->
+                <!--                                            </div>-->
+                <!--                                            <div class="command-execution-subtitle">{{ item.source || '-' }} / {{-->
+                <!--                                                item.started_at || '-' }}-->
+                <!--                                            </div>-->
+                <!--                                        </div>-->
+                <!--                                    </div>-->
+                <!--                                    <div class="command-execution-stats">-->
+                <!--                                        <div class="command-execution-stat-pill"><span-->
+                <!--                                                class="command-execution-stat-label">Duration</span><span-->
+                <!--                                                class="command-execution-stat-value">{{ formatCommandExecutionDuration(item.duration_ms) }}</span>-->
+                <!--                                        </div>-->
+                <!--                                        <div class="command-execution-stat-pill command-execution-stat-pill-wide"><span-->
+                <!--                                                class="command-execution-stat-label">CWD</span><span-->
+                <!--                                                class="command-execution-stat-value ellipsis">{{ getCommandExecutionDisplayCwd(item) }}</span>-->
+                <!--                                        </div>-->
+                <!--                                        <div class="command-execution-stat-pill"><span-->
+                <!--                                                class="command-execution-stat-label">Chunks</span><span-->
+                <!--                                                class="command-execution-stat-value">{{ item.output_chunk_count || 0 }}</span>-->
+                <!--                                        </div>-->
+                <!--                                        <div class="command-execution-stat-pill"><span-->
+                <!--                                                class="command-execution-stat-label">Lines</span><span-->
+                <!--                                                class="command-execution-stat-value">{{ item.output_line_count || 0 }}</span>-->
+                <!--                                        </div>-->
+                <!--                                    </div>-->
+                <!--                                    <div class="command-execution-summary">{{-->
+                <!--                                        buildCommandExecutionSingleLineSummary(item) }}-->
+                <!--                                    </div>-->
+                <!--                                </div>-->
+                <!--                                <div class="command-execution-actions">-->
+                <!--                                    <el-button size="small" plain @click="applyHistoryCommand(item)">Use</el-button>-->
+                <!--                                    <el-button size="small" type="primary" plain-->
+                <!--                                               @click="openCommandExecutionDetail(item)">Details-->
+                <!--                                    </el-button>-->
+                <!--                                </div>-->
+                <!--                            </div>-->
+                <!--                        </div>-->
+                <!--                    </div>-->
+                <!--                </el-tab-pane>-->
                 <el-tab-pane label="Execution History" name="full">
-    <div class="command-execution-list-shell" v-loading="commandExecutionHistoryLoading">
-        <div v-if="!commandExecutionItems.length && !commandExecutionHistoryLoading"
-             class="empty-state">No execution history available
-        </div>
-        <div v-else class="command-execution-list">
-            <div v-for="item in commandExecutionItems" :key="item.entry_id"
-                 class="execution-card">
-                <!-- 卡片头部：命令和状态 -->
-                <div class="execution-card-header">
-                    <div class="execution-command mono">{{ item.command || '-' }}</div>
-                    <div class="execution-badges">
+                    <div class="command-execution-list-shell" v-loading="commandExecutionHistoryLoading">
+                        <div v-if="!commandExecutionItems.length && !commandExecutionHistoryLoading"
+                             class="empty-state">No execution history available
+                        </div>
+                        <div v-else class="command-execution-list">
+                            <div v-for="item in commandExecutionItems" :key="item.entry_id"
+                                 class="execution-card">
+                                <!-- 卡片头部：命令和状态 -->
+                                <div class="execution-card-header">
+                                    <div class="execution-command mono">{{ item.command || '-' }}</div>
+                                    <div class="execution-badges">
                         <span class="execution-status" :class="`status-${item.status || 'unknown'}`">
                             {{ item.status || 'unknown' }}
                         </span>
-                        <span v-if="item.has_files" class="execution-badge badge-files">
+                                        <span v-if="item.has_files" class="execution-badge badge-files">
                             📎 {{ item.file_count || 0 }}
                         </span>
-                        <span v-if="item.output_truncated" class="execution-badge badge-truncated">
+                                        <span v-if="item.output_truncated" class="execution-badge badge-truncated">
                             ✂️ truncated
                         </span>
-                    </div>
-                </div>
+                                    </div>
+                                </div>
 
-                <!-- 卡片元数据：时间和来源 -->
-                <div class="execution-meta">
-                    <span class="meta-source">{{ item.source || '-' }}</span>
-                    <span class="meta-separator">•</span>
-                    <span class="meta-time">{{ formatDateTimeStandard(item.started_at) || '-' }}</span>
-                </div>
+                                <!-- 卡片元数据：时间和来源 -->
+                                <div class="execution-meta">
+                                    <span class="meta-source">{{ item.source || '-' }}</span>
+                                    <span class="meta-separator">•</span>
+                                    <span class="meta-time">{{ formatDateTimeStandard(item.started_at) || '-' }}</span>
+                                </div>
 
-                <!-- 统计信息行 -->
-                <div class="execution-stats">
-                    <div class="stat-item">
-                        <span class="stat-label">Duration</span>
-                        <span class="stat-value">{{ formatCommandExecutionDuration(item.duration_ms) }}</span>
-                    </div>
-                    <div class="stat-item">
-                        <span class="stat-label">Chunks</span>
-                        <span class="stat-value">{{ item.output_chunk_count || 0 }}</span>
-                    </div>
-                    <div class="stat-item">
-                        <span class="stat-label">Lines</span>
-                        <span class="stat-value">{{ item.output_line_count || 0 }}</span>
-                    </div>
-                </div>
+                                <!-- 统计信息行 -->
+                                <div class="execution-stats">
+                                    <div class="stat-item">
+                                        <span class="stat-label">Duration</span>
+                                        <span class="stat-value">{{ formatCommandExecutionDuration(item.duration_ms) }}</span>
+                                    </div>
+                                    <div class="stat-item">
+                                        <span class="stat-label">Chunks</span>
+                                        <span class="stat-value">{{ item.output_chunk_count || 0 }}</span>
+                                    </div>
+                                    <div class="stat-item">
+                                        <span class="stat-label">Lines</span>
+                                        <span class="stat-value">{{ item.output_line_count || 0 }}</span>
+                                    </div>
+                                </div>
 
-                <!-- 输出摘要 -->
-                <div class="execution-summary" :title="buildCommandExecutionSingleLineSummary(item)">
-                    {{ buildCommandExecutionSingleLineSummary(item) }}
-                </div>
+                                <!-- 输出摘要 -->
+                                <div class="execution-summary" :title="buildCommandExecutionSingleLineSummary(item)">
+                                    {{ buildCommandExecutionSingleLineSummary(item) }}
+                                </div>
 
-                <!-- 操作按钮 -->
-                <div class="execution-actions">
-                    <button class="action-btn action-btn-secondary" @click="applyHistoryCommand(item)">
-                        Use
-                    </button>
-                    <button class="action-btn action-btn-primary" @click="openCommandExecutionDetail(item)">
-                        Details
-                    </button>
-                </div>
-            </div>
-        </div>
-    </div>
-</el-tab-pane>
+                                <!-- 操作按钮 -->
+                                <div class="execution-actions">
+                                    <button class="action-btn action-btn-secondary" @click="applyHistoryCommand(item)">
+                                        Use
+                                    </button>
+                                    <button class="action-btn action-btn-primary"
+                                            @click="openCommandExecutionDetail(item)">
+                                        Details
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </el-tab-pane>
             </el-tabs>
         </div>
     </el-dialog>
@@ -1321,6 +1355,34 @@
             </div>
         </div>
     </el-dialog>
+
+
+    <el-dialog v-model="jobCreatorDialogVisible"
+               :title="jobCreatorMode === 'edit' ? 'Edit Remote Job' : 'Create New Remote Job'"
+               width="900px" top="5vh" class="fixed-dialog job-creator-dialog" @close="closeJobCreatorDialog">
+        <div class="fixed-dialog-body" v-loading="jobCreatorLoading">
+            <div class="job-creator-form">
+                <div class="job-creator-field">
+                    <label>Job Name</label>
+                    <el-input v-model="jobCreatorName" placeholder="e.g., my_monitor"/>
+                    <div class="field-hint">Name will be used as the script filename (automatically adds .py)</div>
+                </div>
+                <div class="job-creator-field">
+                    <label>Description (optional)</label>
+                    <el-input v-model="jobCreatorDescription" placeholder="Brief description of what this job does"/>
+                </div>
+                <div class="job-creator-field">
+                    <label>Code</label>
+                    <div id="job-creator-editor" class="job-creator-editor"></div>
+                    <div class="field-hint">Python code that inherits from Job class</div>
+                </div>
+            </div>
+        </div>
+        <template #footer>
+            <el-button @click="closeJobCreatorDialog">Cancel</el-button>
+            <el-button type="primary" @click="saveJobCreator" :loading="jobCreatorSaving">Save</el-button>
+        </template>
+    </el-dialog>
 </div>
 
 <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
@@ -1331,8 +1393,9 @@
 <script src="/js/modules/files.js"></script>
 <script src="/js/modules/jobs.js"></script>
 <script src="/js/modules/sse.js"></script>
+<script src="/js/modules/job_creator.js"></script>
 <script src="/app.js"></script>
-    <!-- Monaco Editor JS -->
-    <script src="https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs/loader.js"></script>
+<!-- Monaco Editor JS -->
+<script src="https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs/loader.js"></script>
 </body>
 </html>

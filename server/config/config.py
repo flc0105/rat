@@ -14,6 +14,8 @@ WEB_PORT = 8085
 # ------------------ command / alias ------------------ #
 ALIAS_PATH = os.path.join(BASE_DIR, 'aliases.json')
 SCRIPT_PATH = os.path.join(SERVER_DIR, 'scripts')
+# 脚本目录
+SCRIPT_JOBS_PATH = os.path.join(SERVER_DIR, 'jobs')
 
 # ------------------ logging ------------------ #
 BACKGROUND_MESSAGE_OUTPUT_TO_FILE = True

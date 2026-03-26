@@ -578,4 +578,53 @@ def create_app(server_instance):
 
         return _json_endpoint(_execute, default_error_status=500)
 
+    # ==================== Script Management Routes ====================
+
+
+
+    # @app.post('/api/scripts/upload')
+    # def upload_script():
+    #     """上传/创建脚本（供 Web 前端使用）"""
+    #
+    #     def _execute():
+    #         payload = _get_json_payload()
+    #         script_name = (payload.get('name') or '').strip()
+    #         content = payload.get('content', '')
+    #         overwrite = payload.get('overwrite', False)
+    #
+    #         if not script_name:
+    #             raise ValueError('script name is required')
+    #         if not content:
+    #             raise ValueError('script content is required')
+    #
+    #         # 确保 .py 后缀
+    #         if not script_name.endswith('.py'):
+    #             script_name += '.py'
+    #
+    #         # 检查是否已存在
+    #         try:
+    #             existing = web_service.get_server_job_content(script_name)
+    #             if existing and not overwrite:
+    #                 raise ValueError(f'Script "{script_name}" already exists, use overwrite=true to replace')
+    #         except FileNotFoundError:
+    #             pass
+    #
+    #         result = web_service.save_remote_script(script_name, content)
+    #         return result
+    #
+    #     return _json_endpoint(_execute, default_error_status=500)
+    #
+    # @app.delete('/api/scripts/<path:script_name>')
+    # def delete_script(script_name):
+    #     """删除脚本"""
+    #
+    #     def _execute():
+    #         result = web_service.delete_remote_script(script_name)
+    #         return result
+    #
+    #     return _json_endpoint(_execute, default_error_status=500)
+
     return app
+
+
+
