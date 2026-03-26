@@ -25,7 +25,9 @@ EXCLUDE_DIRS = {
     "scripts",
 }
 
-INCLUDE_SUFFIXES = {".py", ".css", ".html", ".js"}
+# INCLUDE_SUFFIXES = {".py", ".css", ".html", ".js"}
+INCLUDE_SUFFIXES = {".py", ".html", ".js"}
+# INCLUDE_SUFFIXES = {".go"}
 
 
 def should_skip(path: Path) -> bool:

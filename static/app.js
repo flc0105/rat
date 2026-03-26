@@ -5,12 +5,14 @@ createApp({
         return {
             ...window.AppStateModule.data(),
             ...window.AppAgentModule.data(),
+            ...window.AppProcessModule.data(),
 
         }
     },
 
     computed: {
         ...window.AppStateModule.computed,
+         ...window.AppProcessModule.computed,
     },
 
     watch: {
@@ -46,6 +48,8 @@ createApp({
         ...window.AppJobsModule.methods,
         ...window.AppSseModule.methods,
         ...window.AppAgentModule.methods,
+        ...window.AppProcessModule.methods,
+
 
     }
 }).use(ElementPlus).mount('#app');
