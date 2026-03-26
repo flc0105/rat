@@ -1,5 +1,6 @@
 import os
 
+from server.application.agent.agent_builder import AgentBuilder
 from server.application.artifact.artifact_service import WebArtifactService
 from server.application.artifact.remote_file_service import WebRemoteFileService
 from server.application.command.executor import CommandExecutor
@@ -65,6 +66,9 @@ class ServerWebService:
         )
 
         self.script_service = ScriptService(SCRIPT_JOBS_PATH)
+
+        self.agent_builder = AgentBuilder()
+
 
     def _get_client_command_candidates(self, session):
         payload = session.info.get('command_manifest') or []
@@ -261,6 +265,17 @@ class ServerWebService:
         )
 
     #script
+
+    def build_agent(self, server_host: str, server_port: int, web_port,
+                    target_os: str, builder: str, console) -> dict:
+        """构建 Agent"""
+        return self.agent_builder.build_agent(
+            server_host, server_port, web_port, target_os, builder, console
+        )
+
+    def cleanup_agent_build(self, work_dir: str):
+        """清理构建临时文件"""
+        self.agent_builder.cleanup(work_dir)
 
 
 

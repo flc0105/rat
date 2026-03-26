@@ -2,7 +2,11 @@ const {createApp} = Vue;
 
 createApp({
     data() {
-        return window.AppStateModule.data()
+        return {
+            ...window.AppStateModule.data(),
+            ...window.AppAgentModule.data(),
+
+        }
     },
 
     computed: {
@@ -41,6 +45,8 @@ createApp({
         ...window.AppFilesModule.methods,
         ...window.AppJobsModule.methods,
         ...window.AppSseModule.methods,
-        ...window.AppJobCreatorModule.methods
+        ...window.AppJobCreatorModule.methods,
+        ...window.AppAgentModule.methods,
+
     }
 }).use(ElementPlus).mount('#app');

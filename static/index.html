@@ -120,8 +120,13 @@
                                     </div>
 
                                     <div class="terminal-tools">
+
                                         <el-button size="small" class="tool-btn tool-btn-accent"
                                                    @click="openRemoteFilesDialog">Remote Files
+                                        </el-button>
+
+                                        <el-button size="small" class="tool-btn tool-btn-accent"
+                                                   @click="openAgentBuilderDialog">Build Agent
                                         </el-button>
                                         <el-button size="small" class="tool-btn tool-btn-accent"
                                                    @click="openArtifactDialog">Artifacts
@@ -560,9 +565,9 @@
                         <el-button size="small" @click="loadBackgroundJobModules"
                                    :loading="backgroundJobModulesLoading">Refresh Modules
                         </el-button>
-<!--                        <el-button size="small" type="primary" @click="openJobCreatorDialog()">-->
-<!--                            + New Remote Job-->
-<!--                        </el-button>-->
+                        <!--                        <el-button size="small" type="primary" @click="openJobCreatorDialog()">-->
+                        <!--                            + New Remote Job-->
+                        <!--                        </el-button>-->
                     </div>
                     <div class="background-jobs-modules panel-lite">
                         <div class="background-jobs-section-title">Available Modules</div>
@@ -590,10 +595,10 @@
                                                @click="openRemoteJobEditor(item.job_name)">
                                         Edit
                                     </el-button>
-<!--                                    <el-button v-if="item.source === 'server'" size="small" type="danger" plain-->
-<!--                                               @click="deleteRemoteScript(item.job_name)">-->
-<!--                                        Delete-->
-<!--                                    </el-button>-->
+                                    <!--                                    <el-button v-if="item.source === 'server'" size="small" type="danger" plain-->
+                                    <!--                                               @click="deleteRemoteScript(item.job_name)">-->
+                                    <!--                                        Delete-->
+                                    <!--                                    </el-button>-->
                                 </div>
                             </div>
                         </div>
@@ -1383,6 +1388,45 @@
             <el-button type="primary" @click="saveJobCreator" :loading="jobCreatorSaving">Save</el-button>
         </template>
     </el-dialog>
+
+
+    <el-dialog v-model="agentBuilderDialogVisible" title="Build Agent" width="800px">
+        <el-form :model="agentForm" label-width="200px">
+            <el-form-item label="Server IP" required>
+                <el-input v-model="agentForm.server_host" placeholder="e.g., 192.168.1.100"/>
+            </el-form-item>
+            <el-form-item label="Server Port" required>
+                <el-input v-model.number="agentForm.server_port" type="number" placeholder="8000"/>
+            </el-form-item>
+            <el-form-item label="Web Port" required>
+                <el-input v-model.number="agentForm.web_port" type="number" placeholder="8000"/>
+            </el-form-item>
+            <el-form-item label="Target OS">
+                <el-radio-group v-model="agentForm.target_os">
+                    <el-radio label="mac">macOS</el-radio>
+                    <el-radio label="win">Windows</el-radio>
+                </el-radio-group>
+            </el-form-item>
+                <el-form-item label="Builder">
+                <el-radio-group v-model="agentForm.builder">
+                    <el-radio label="pyinstaller">PyInstaller</el-radio>
+                </el-radio-group>
+            </el-form-item>
+            <el-form-item label="Console Window">
+                <el-radio-group v-model="agentForm.console">
+                    <el-radio :label="true">Show Console</el-radio>
+                    <el-radio :label="false">Hide Console</el-radio>
+                </el-radio-group>
+            </el-form-item>
+        </el-form>
+        <template #footer>
+            <el-button @click="agentBuilderDialogVisible = false">Cancel</el-button>
+            <el-button type="primary" @click="buildAgent" :loading="agentBuilding">
+                Build & Download
+            </el-button>
+
+        </template>
+    </el-dialog>
 </div>
 
 <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
@@ -1394,6 +1438,7 @@
 <script src="/js/modules/jobs.js"></script>
 <script src="/js/modules/sse.js"></script>
 <script src="/js/modules/job_creator.js"></script>
+<script src="/js/modules/agent.js"></script>
 <script src="/app.js"></script>
 <!-- Monaco Editor JS -->
 <script src="https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs/loader.js"></script>

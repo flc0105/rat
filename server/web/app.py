@@ -624,6 +624,64 @@ def create_app(server_instance):
     #
     #     return _json_endpoint(_execute, default_error_status=500)
 
+    @app.post('/api/agent/build')
+    def build_agent():
+        """构建 Agent"""
+
+        def _execute():
+            payload = _get_json_payload()
+            server_host = (payload.get('server_host') or '').strip()
+            server_port = payload.get('server_port')
+            web_port = payload.get('web_port')
+            target_os = (payload.get('target_os') or 'mac').strip()
+            builder = (payload.get('builder') or 'pyinstaller').strip()
+            console = payload.get('console', True)
+
+            if not server_host:
+                raise ValueError('server_host is required')
+            if not server_port:
+                raise ValueError('server_port is required')
+
+            try:
+                server_port = int(server_port)
+            except ValueError:
+                raise ValueError('server_port must be integer')
+
+            result = web_service.build_agent(
+                server_host, server_port, web_port, target_os, builder, console
+            )
+
+            return result
+
+        return _json_endpoint(_execute, default_error_status=500)
+
+    @app.get('/api/agent/download/<filename>')
+    def download_agent(filename):
+        """下载构建好的 Agent"""
+        try:
+            file_path = os.path.join(web_service.agent_builder.output_dir, filename)
+            if not os.path.isfile(file_path):
+                return _fail('File not found', 404)
+
+            return send_file(
+                file_path,
+                as_attachment=True,
+                download_name=filename
+            )
+        except Exception as e:
+            return _map_common_error(e)
+
+    @app.delete('/api/agent/cleanup')
+    def cleanup_agent_build():
+        """清理构建临时文件"""
+
+        def _execute():
+            work_dir = (request.json or {}).get('work_dir', '')
+            if work_dir:
+                web_service.cleanup_agent_build(work_dir)
+            return {'cleaned': True}
+
+        return _json_endpoint(_execute)
     return app
 
 

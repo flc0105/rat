@@ -12,6 +12,11 @@ from core.utils.client_util import check_privilege
 from client.connection.server_connection import ServerConnection
 from core.utils.logger import logger
 
+# 强制导入所有平台模块，让 PyInstaller 检测到
+import client.commands.platform.mac
+if os.name=='nt':
+    import client.commands.platform.win
+import client.commands.platform.linux
 
 class Client:
     RECONNECT_INTERVAL = RECONNECT_INTERVAL_SECONDS

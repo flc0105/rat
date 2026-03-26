@@ -7,6 +7,7 @@ import tempfile
 from client.commands.command_context import CommandCancelledError, CommandTimeoutError
 from client.commands.common import CommonCommands
 from client.commands.interrupts import timeout, cancel_policy, interruptible
+
 from client.commands.platform.utils.win_util import get_integrity_level
 from core.utils.client_util import get_executable_path
 from core.utils.decorator import desc
