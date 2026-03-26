@@ -510,3 +510,176 @@ class CommandExecutionMixin:
             subprocess.Popen(restart_command, shell=True)
         self.socket.close()
         sys.exit(0)
+
+    @desc('Get current user ID/name', group='system')
+    @interruptible()
+    def getuid(self):
+        """获取当前用户名"""
+        import getpass
+        return 1, getpass.getuser()
+
+    @desc('Print working directory', group='system')
+    @interruptible()
+    def pwd(self):
+        """显示当前工作目录"""
+        return 1, os.getcwd()
+
+    @desc('Simulate keyboard input', group='system')
+    @interruptible()
+    def keyboard_send(self, text):
+        """模拟键盘输入文字"""
+        try:
+            import pyautogui
+            pyautogui.write(text)
+            return 1, f'Typed: {text}'
+        except ImportError:
+            return 0, 'pyautogui not installed'
+
+    @desc('Get current process ID', group='system')
+    @interruptible()
+    def getpid(self):
+        """获取当前进程PID"""
+        return 1, str(os.getpid())
+
+    @desc('Find processes by name', group='system')
+    @interruptible()
+    def pgrep(self, name):
+        """按进程名查找PID"""
+        import psutil
+        pids = []
+        for proc in psutil.process_iter(['pid', 'name']):
+            try:
+                if name.lower() in proc.info['name'].lower():
+                    pids.append(str(proc.info['pid']))
+            except:
+                continue
+        if pids:
+            return 1, '\n'.join(pids)
+        return 1, 'No matching processes'
+
+    @desc('Terminate processes by name', group='system')
+    @interruptible()
+    def pkill(self, name):
+        """按进程名终止进程"""
+        import psutil
+        killed = []
+        for proc in psutil.process_iter(['pid', 'name']):
+            try:
+                if name.lower() in proc.info['name'].lower():
+                    proc.terminate()
+                    killed.append(str(proc.info['pid']))
+            except:
+                continue
+        if killed:
+            return 1, f'Killed processes: {", ".join(killed)}'
+        return 1, 'No matching processes'
+
+    @desc('Show network IP addresses', group='network')
+    @interruptible()
+    def ip(self):
+        """显示内网IP、外网IP和归属地"""
+        import socket
+        import requests
+        import netifaces
+
+        # 内网IP
+        local_ips = []
+        for iface in netifaces.interfaces():
+            addrs = netifaces.ifaddresses(iface)
+            if netifaces.AF_INET in addrs:
+                for addr in addrs[netifaces.AF_INET]:
+                    ip = addr['addr']
+                    if not ip.startswith('127.'):
+                        local_ips.append(ip)
+
+        # 外网IP和归属地
+        try:
+            resp = requests.get('http://ip-api.com/json/', timeout=5)
+            data = resp.json()
+            public_ip = data.get('query', 'Unknown')
+            city = data.get('city', 'Unknown')
+            region = data.get('regionName', 'Unknown')
+            country = data.get('country', 'Unknown')
+            isp = data.get('isp', 'Unknown')
+            location = f"{city}, {region}, {country} ({isp})"
+        except:
+            public_ip = 'Unable to determine'
+            location = 'Unknown'
+
+        result = f"Local IPs:\n  {chr(10).join(local_ips)}\n\nPublic IP: {public_ip}\nLocation: {location}"
+        return 1, result
+
+    @desc('List system user accounts', group='system')
+    @interruptible()
+    def userenum(self):
+        """列出系统用户账户"""
+        import pwd
+        import os
+
+        users = []
+        current_user = os.getlogin()
+
+        try:
+            for user in pwd.getpwall():
+                # macOS: 普通用户 UID 通常是 501 开始
+                # 包含当前用户和所有 UID >= 500 的用户
+                if user.pw_uid >= 500 or user.pw_name in ['root', 'admin', '_mbsetupuser']:
+                    marker = ' [current]' if user.pw_name == current_user else ''
+                    users.append(f"{user.pw_name} (UID: {user.pw_uid}){marker}")
+        except:
+            # Windows fallback
+            import subprocess
+            result = subprocess.run('net user', shell=True, capture_output=True, text=True)
+            return 1, result.stdout
+
+        return 1, '\n'.join(sorted(users, key=lambda x: x.split('UID:')[1].split(')')[0]))
+
+    @desc('Check if current session is root', group='system')
+    @interruptible()
+    def is_root(self):
+        """检查当前是否为 root 权限"""
+        import os
+        if os.name == 'nt':
+            # Windows: 检查是否为管理员
+            import ctypes
+            is_admin = ctypes.windll.shell32.IsUserAnAdmin() != 0
+            return 1, f'Is admin: {is_admin}'
+        else:
+            # macOS/Linux: 检查 UID
+            is_root = os.geteuid() == 0
+            return 1, f'Is root: {is_root}'
+
+
+
+    @desc('Show system uptime', group='system')
+    @interruptible()
+    def uptime(self):
+        """显示系统运行时间"""
+        import psutil
+        boot_time = psutil.boot_time()
+        from datetime import datetime
+        boot_dt = datetime.fromtimestamp(boot_time)
+        now = datetime.now()
+        uptime_seconds = (now - boot_dt).total_seconds()
+
+        days = int(uptime_seconds // 86400)
+        hours = int((uptime_seconds % 86400) // 3600)
+        minutes = int((uptime_seconds % 3600) // 60)
+
+        return 1, f"Boot time: {boot_dt.strftime('%Y-%m-%d %H:%M:%S')}\nUptime: {days}d {hours}h {minutes}m"
+
+    @desc('Run command with sudo (macOS)', group='system')
+    @interruptible()
+    def sudo_run(self, command):
+        """以 root 权限执行命令 (macOS)"""
+        import subprocess
+        try:
+            result = subprocess.run(
+                ['osascript', '-e', f'do shell script "{command}" with administrator privileges'],
+                capture_output=True, text=True, timeout=30
+            )
+            if result.returncode == 0:
+                return 1, result.stdout
+            return 0, result.stderr
+        except Exception as e:
+            return 0, f'Failed: {e}'

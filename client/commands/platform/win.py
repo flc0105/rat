@@ -152,3 +152,19 @@ class WindowsCommands(CommonCommands):
 
         except Exception as e:
             return 0, f'Failed to get idle time: {e}'
+
+    @desc('Run command as admin (Windows)', group='system')
+    @interruptible()
+    def runasadmin(self, command):
+        """以管理员权限执行命令 (Windows)"""
+        import ctypes
+        import subprocess
+        try:
+            result = ctypes.windll.shell32.ShellExecuteW(
+                None, 'runas', 'cmd.exe', f'/c {command}', None, 1
+            )
+            if result > 32:
+                return 1, f'Executed: {command}'
+            return 0, f'Failed with code: {result}'
+        except Exception as e:
+            return 0, f'Failed: {e}'

