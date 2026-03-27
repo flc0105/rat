@@ -14,6 +14,7 @@ from core.utils.server_util import *
 from server.application.app_facade import ServerWebService
 from server.application.command.alias_manager import AliasManager
 from server.application.command.executor import CommandExecutor
+from server.application.history.history_orchestrator import CommandHistoryOrchestrator
 from server.application.history.history_store import CommandHistoryStore
 from server.config.config import SOCKET_ADDR, HEARTBEAT_INTERVAL_SECONDS
 from server.connection.client_session import ClientSession
@@ -33,6 +34,7 @@ class Server:
         self.connections = ConnectionManager()
         self.alias_manager = AliasManager()
         self.command_history = CommandHistoryStore()
+        self.command_history_orchestrator = CommandHistoryOrchestrator(self.command_history)
 
         # composition root:
         # 由 Server 负责触发应用层装配，再拿到 Facade。
@@ -273,15 +275,11 @@ class Server:
         """
         执行交互模式命令
         """
-        command_text = cmd.strip()
-        should_record = (
-            bool(command_text)
-            and not command_text.startswith('history')
+        entry_id = self.command_history_orchestrator.begin_execution(
+            session,
+            cmd,
+            source='cli'
         )
-
-        entry_id = ''
-        if should_record:
-            entry_id = self.command_history.create_entry_for_connection(session, cmd, source='cli')
 
         final_ok = True
 
@@ -292,14 +290,13 @@ class Server:
                     status = item[0]
                     text = item[1] if len(item) > 1 else ''
 
-                    if entry_id:
-                        self.command_history.append_output_for_connection(
-                            session,
-                            entry_id,
-                            status,
-                            text,
-                            0
-                        )
+                    self.command_history_orchestrator.append_output(
+                        session,
+                        entry_id,
+                        status,
+                        text,
+                        0
+                    )
 
                     if status == 0:
                         final_ok = False
@@ -308,13 +305,12 @@ class Server:
             final_ok = False
             raise
         finally:
-            if entry_id:
-                self.command_history.update_entry_status_for_connection(
-                    session,
-                    entry_id,
-                    'success' if final_ok else 'error',
-                    cwd_end=session.info.get('cwd', '')
-                )
+            self.command_history_orchestrator.finalize_execution(
+                session,
+                entry_id,
+                final_ok,
+                cwd_end=session.info.get('cwd', '')
+            )
 
     def open_connection(self, session: ClientSession):
         """

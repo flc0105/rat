@@ -21,6 +21,7 @@ class RemoteExecutionService:
 
     def __init__(self, server):
         self.server = server
+        self.history_orchestrator = getattr(server, 'command_history_orchestrator', None)
 
     def get_connection(self, target):
         if hasattr(target, 'send_command'):
@@ -36,10 +37,19 @@ class RemoteExecutionService:
         return f'{self.HTTP_RECEIVE_COMMAND_NAME} {self._encode_payload_arg(payload)}'
 
     def create_history_entry(self, target, command: str, source: str = 'cli', should_record: bool = True) -> str:
+        session = self.get_connection(target)
+
+        if self.history_orchestrator is not None:
+            return self.history_orchestrator.begin_execution(
+                session,
+                command,
+                source=source,
+                should_record=should_record
+            )
+
         if not should_record:
             return ''
 
-        session = self.get_connection(target)
         command_text = (command or '').strip()
         if not command_text:
             return ''
@@ -55,6 +65,16 @@ class RemoteExecutionService:
             return
 
         session = self.get_connection(target)
+
+        if self.history_orchestrator is not None:
+            self.history_orchestrator.finalize_execution(
+                session,
+                entry_id,
+                ok,
+                cwd_end=cwd_end
+            )
+            return
+
         self.server.command_history.update_entry_status_for_connection(
             session,
             entry_id,
@@ -67,6 +87,17 @@ class RemoteExecutionService:
             return
 
         session = self.get_connection(target)
+
+        if self.history_orchestrator is not None:
+            self.history_orchestrator.append_output(
+                session,
+                entry_id,
+                status,
+                text,
+                eof
+            )
+            return
+
         self.server.command_history.append_output_for_connection(
             session,
             entry_id,
@@ -74,7 +105,6 @@ class RemoteExecutionService:
             text,
             eof
         )
-
     def collect_result(self, result_iter):
         final_status = 1
         parts = []

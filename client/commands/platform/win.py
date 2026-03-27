@@ -158,7 +158,6 @@ class WindowsCommands(CommonCommands):
     def runasadmin(self, command):
         """以管理员权限执行命令 (Windows)"""
         import ctypes
-        import subprocess
         try:
             result = ctypes.windll.shell32.ShellExecuteW(
                 None, 'runas', 'cmd.exe', f'/c {command}', None, 1

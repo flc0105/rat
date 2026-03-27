@@ -26,6 +26,7 @@ class WebTaskRunner:
         self.event_bus = event_bus
         self.task_store = task_store
         self.remote_execution_service = RemoteExecutionService(server)
+        self.history_orchestrator = self.server.command_history_orchestrator
 
     def _get_task_tab_id(self, task_id: str) -> str:
         task = self.task_store.get_task(task_id) or {}
@@ -96,14 +97,13 @@ class WebTaskRunner:
                 text = '' if result is None else str(result)
                 self._publish_task_result(task_id, client_id, command, status, text)
 
-                if history_entry_id:
-                    self.remote_execution_service.append_history_output(
-                        conn,
-                        history_entry_id,
-                        status,
-                        text,
-                        0
-                    )
+                self.history_orchestrator.append_output(
+                    conn,
+                    history_entry_id,
+                    status,
+                    text,
+                    0
+                )
 
                 if status == 0:
                     ok = False
@@ -113,25 +113,23 @@ class WebTaskRunner:
             text = str(e)
             self._publish_task_result(task_id, client_id, command, 0, text)
 
-            if history_entry_id:
-                self.remote_execution_service.append_history_output(
-                    conn,
-                    history_entry_id,
-                    0,
-                    text,
-                    0
-                )
+            self.history_orchestrator.append_output(
+                conn,
+                history_entry_id,
+                0,
+                text,
+                0
+            )
 
         finally:
             self.task_store.finish_task(task_id, ok)
 
-            if history_entry_id:
-                self.remote_execution_service.finalize_history_entry(
-                    conn,
-                    history_entry_id,
-                    ok and not self.task_store.is_task_cancelled(task_id),
-                    cwd_end=conn.info.get('cwd', '')
-                )
+            self.history_orchestrator.finalize_execution(
+                conn,
+                history_entry_id,
+                ok and not self.task_store.is_task_cancelled(task_id),
+                cwd_end=conn.info.get('cwd', '')
+            )
 
             self._publish_task_complete(task_id, client_id, command, ok)
 

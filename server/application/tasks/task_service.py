@@ -19,21 +19,15 @@ class WebTaskService:
         self.file_service = file_service
         self.task_runner = task_runner
         self.remote_execution_service = RemoteExecutionService(server)
+        self.history_orchestrator = self.server.command_history_orchestrator
 
     def submit_web_command(self, client_id: str, command: str, tab_id: str = ''):
         conn = self.server.get_target_connection_by_client_id(client_id)
 
-        command_text = (command or '').strip()
-        should_record = (
-            bool(command_text)
-            and not command_text.startswith('history')
-        )
-
-        entry_id = self.remote_execution_service.create_history_entry(
+        entry_id = self.history_orchestrator.begin_execution(
             conn,
             command,
-            source='web',
-            should_record=should_record
+            source='web'
         )
 
         task = self.task_store.create_task(client_id, command, tab_id=tab_id)
@@ -99,7 +93,7 @@ class WebTaskService:
         conn = self.server.get_target_connection_by_client_id(client_id)
         command = f'upload {display_name}'
 
-        entry_id = self.remote_execution_service.create_history_entry(
+        entry_id = self.history_orchestrator.begin_execution(
             conn,
             command,
             source='web',
