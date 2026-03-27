@@ -11,6 +11,7 @@ from client.commands.argument_command_registry import (
 from client.commands.command_context import CommandCancelledError, CommandTimeoutError
 from client.commands.common import CommonCommands
 from client.commands.interrupts import interruptible
+from client.commands.platform.services.mac_platform_service import MacPlatformService
 from core.utils.decorator import desc
 from core.utils.formatting import get_time, format_dict, get_size
 from core.utils.logger import logger
@@ -98,40 +99,13 @@ class MacCommands(CommonCommands):
 
     def __init__(self, socket):
         super().__init__(socket)
+        self._mac_platform_service = MacPlatformService(self)
 
     def _run_command_text(self, command: str) -> str:
-        try:
-            result = self._run_shell_command(command, timeout=15)
-            if result.returncode != 0:
-                return ''
-            return (result.stdout or '').strip()
-        except Exception:
-            return ''
+        return self._mac_platform_service.run_command_text(command, timeout=15)
 
     def _build_process_info(self):
-        import platform
-        import psutil
-
-        process = psutil.Process()
-        executable_path = os.path.realpath(sys.executable)
-        script_path = os.path.realpath(''.join(sys.argv))
-
-        return {
-            'hostname': platform.node(),
-            'macos_version': platform.mac_ver()[0],
-            'build_version': self._run_command_text('sw_vers -buildVersion'),
-            'architecture': platform.machine(),
-            'hardware_model': self._run_command_text('sysctl -n hw.model'),
-            'cpu_brand': self._run_command_text('sysctl -n machdep.cpu.brand_string'),
-            'cpu_cores': os.cpu_count(),
-            'memory': f'{round(psutil.virtual_memory().total / (1024 ** 3), 2)} GB',
-            'python_version': platform.python_version(),
-            'process_id': os.getpid(),
-            'current_user': process.username(),
-            'launch_command': f'{executable_path} {script_path}',
-            'process_uptime': f'{round(time.time() - process.create_time(), 2)}s',
-            'cwd': os.getcwd()
-        }
+        return self._mac_platform_service.build_process_info()
 
     def _escape_osascript_text(self, value: str):
         text = str(value or '')

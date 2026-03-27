@@ -1,14 +1,16 @@
-import locale
 import os
-import signal
 import subprocess
 import sys
-import threading
 import time
 
 from client.commands.command_context import CommandCancelledError, CommandTimeoutError
-from client.commands.interrupts import interruptible, cancel_policy, timeout
-from client.commands.python_execution.factory import build_python_execution_strategy
+from client.commands.interrupts import interruptible
+from client.commands.python_execution.factory import (
+    build_python_execution_strategy,
+    get_python_collect_mode,
+    get_python_stream_mode,
+)
+from client.commands.services.process_execution_service import ProcessExecutionService
 from client.config.runtime_config import (
     COMMAND_DEFAULT_SHELL_TIMEOUT,
     COMMAND_DEFAULT_STREAM_TIMEOUT,
@@ -25,7 +27,8 @@ class CommandExecutionMixin:
 
     def __init__(self, *args, **kwargs):
         self._command_runtime = None
-        self._python_execution_strategy = None
+        self._process_execution_service = None
+        self._python_execution_strategy_cache = {}
         super().__init__(*args, **kwargs)
 
     def set_command_runtime(self, runtime):
@@ -45,171 +48,90 @@ class CommandExecutionMixin:
         return None
 
     # ------------------ Python 执行策略 ------------------ #
-    def _get_python_execution_strategy(self):
-        if self._python_execution_strategy is None:
-            self._python_execution_strategy = build_python_execution_strategy(self)
-        return self._python_execution_strategy
+    def _get_python_execution_strategy(self, mode: str = '', default_mode: str = 'inproc'):
+        cache_key = f'{mode or ""}::{default_mode or ""}'
+        if cache_key not in self._python_execution_strategy_cache:
+            self._python_execution_strategy_cache[cache_key] = build_python_execution_strategy(
+                self,
+                mode=mode,
+                default_mode=default_mode,
+            )
+        return self._python_execution_strategy_cache[cache_key]
+
+    # ------------------ 进程执行服务 ------------------ #
+    def _get_process_execution_service(self):
+        if self._process_execution_service is None:
+            self._process_execution_service = ProcessExecutionService(self)
+        return self._process_execution_service
 
     # ------------------ 通用输出/子进程工具 ------------------ #
     def _get_default_encoding(self):
         """
         获取系统默认编码
         """
-        return locale.getdefaultlocale()[1] or 'utf-8'
+        return self._get_process_execution_service().get_default_encoding()
 
-    def _stream_process_output(self, stream):
+    def _stream_process_output(self, stream, status=1):
         """
         持续读取子进程输出流并发送中间结果
         """
-        encoding = self._get_default_encoding()
-        while True:
-            self._ensure_not_interrupted(fallback_timeout=self.DEFAULT_STREAM_TIMEOUT)
-            line = stream.readline()
-            if not line:
-                break
-
-            if isinstance(line, bytes):
-                text = line.decode(encoding, errors='replace').rstrip('\n')
-            else:
-                text = str(line).rstrip('\n')
-
-            self._send_interim_result(1, text)
+        return self._get_process_execution_service().stream_process_output(
+            stream,
+            status=status,
+            timeout=self.DEFAULT_STREAM_TIMEOUT,
+        )
 
     def _build_process_creation_kwargs(self) -> dict:
         """
         构造可被强制终止的一组子进程创建参数
         """
-        kwargs = {}
-
-        if os.name == 'nt':
-            kwargs['creationflags'] = getattr(subprocess, 'CREATE_NEW_PROCESS_GROUP', 0)
-        else:
-            kwargs['start_new_session'] = True
-
-        return kwargs
+        return self._get_process_execution_service().build_process_creation_kwargs()
 
     def _terminate_process(self, process: subprocess.Popen):
         """
         终止子进程；优先杀整个进程组
         """
-        if process is None:
-            return
-
-        try:
-            if process.poll() is not None:
-                return
-        except Exception:
-            return
-
-        try:
-            if os.name == 'nt':
-                process.kill()
-            else:
-                os.killpg(os.getpgid(process.pid), signal.SIGKILL)
-        except Exception:
-            try:
-                process.kill()
-            except Exception:
-                pass
-
-        try:
-            process.wait(timeout=self.PROCESS_KILL_GRACE_SECONDS)
-        except Exception:
-            pass
+        return self._get_process_execution_service().terminate_process(process)
 
     def _wait_process_with_cancel_support(self, process: subprocess.Popen, timeout=None):
-        effective_timeout = self.DEFAULT_STREAM_TIMEOUT if timeout is None else timeout
-
-        while True:
-            try:
-                self._ensure_not_interrupted(fallback_timeout=effective_timeout)
-                return_code = process.poll()
-                if return_code is not None:
-                    return return_code
-                time.sleep(self.PROCESS_WAIT_POLL_INTERVAL)
-            except CommandCancelledError:
-                self._terminate_process(process)
-                raise
-            except CommandTimeoutError:
-                self._terminate_process(process)
-                raise subprocess.TimeoutExpired(process.args, effective_timeout)
+        return self._get_process_execution_service().wait_process_with_cancel_support(
+            process,
+            timeout=timeout,
+        )
 
     def _run_shell_command(self, command, timeout=None):
         """
         执行一次性 shell 命令
         """
-        encoding = self._get_default_encoding()
-        effective_timeout = self.DEFAULT_SHELL_TIMEOUT if timeout is None else timeout
-
-        process = subprocess.Popen(
+        return self._get_process_execution_service().run_shell_command(
             command,
-            shell=True,
-            stdin=subprocess.DEVNULL,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
-            encoding=encoding,
-            errors='replace',
-            **self._build_process_creation_kwargs()
+            timeout=timeout,
         )
-        self._register_cancel_handler(lambda: self._terminate_process(process))
-
-        try:
-            while True:
-                self._ensure_not_interrupted(fallback_timeout=effective_timeout)
-                try:
-                    stdout, stderr = process.communicate(timeout=self.PROCESS_WAIT_POLL_INTERVAL)
-                    return subprocess.CompletedProcess(
-                        args=command,
-                        returncode=process.returncode,
-                        stdout=stdout,
-                        stderr=stderr
-                    )
-                except subprocess.TimeoutExpired:
-                    continue
-        except CommandCancelledError:
-            self._terminate_process(process)
-            raise
-        except CommandTimeoutError:
-            self._terminate_process(process)
-            raise subprocess.TimeoutExpired(process.args, effective_timeout)
-        except Exception:
-            self._terminate_process(process)
-            raise
 
     def _start_stream_process(self, command):
         """
         启动带流式输出的子进程
         """
-        process = subprocess.Popen(
-            command,
-            shell=True,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            stdin=subprocess.DEVNULL,
-            **self._build_process_creation_kwargs()
-        )
-        self._register_cancel_handler(lambda: self._terminate_process(process))
-        return process
+        return self._get_process_execution_service().start_stream_process(command)
 
     def _start_output_threads(self, process):
         """
         为 stdout/stderr 启动输出读取线程
         """
-        stdout_thread = threading.Thread(target=self._stream_process_output, args=(process.stdout,))
-        stderr_thread = threading.Thread(target=self._stream_process_output, args=(process.stderr,))
-        stdout_thread.daemon = True
-        stderr_thread.daemon = True
-        stdout_thread.start()
-        stderr_thread.start()
-        return stdout_thread, stderr_thread
+        return self._get_process_execution_service().start_output_threads(
+            process,
+            timeout=self.DEFAULT_STREAM_TIMEOUT,
+        )
 
     def _wait_stream_process(self, process, timeout=None):
         """
         等待流式子进程结束；超时则强制终止
         """
         effective_timeout = self.DEFAULT_STREAM_TIMEOUT if timeout is None else timeout
-        return self._wait_process_with_cancel_support(process, timeout=effective_timeout)
+        return self._get_process_execution_service().wait_stream_process(
+            process,
+            timeout=effective_timeout,
+        )
 
     def _build_restart_command(self):
         """
@@ -222,30 +144,7 @@ class CommandExecutionMixin:
         """
         启动后台进程并立即返回
         """
-        if os.name == 'nt':
-            creation_flags = 0
-            for attr_name in ('DETACHED_PROCESS', 'CREATE_NEW_PROCESS_GROUP'):
-                creation_flags |= getattr(subprocess, attr_name, 0)
-
-            process = subprocess.Popen(
-                command,
-                shell=True,
-                stdin=subprocess.DEVNULL,
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-                creationflags=creation_flags
-            )
-            return process
-
-        process = subprocess.Popen(
-            command,
-            shell=True,
-            stdin=subprocess.DEVNULL,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-            start_new_session=True
-        )
-        return process
+        return self._get_process_execution_service().spawn_background_process(command)
 
     # ------------------ 基础命令 ------------------ #
     @desc('Change working directory', group='shell')
@@ -320,22 +219,19 @@ class CommandExecutionMixin:
         except Exception as e:
             self._send_final_result(0, f'Failed to execute command: {e}')
 
-    # @desc('Execute Python code', group='shell')
-    # @interruptible()
-    # @cancel_policy(False)
-    # def pyexec(self, code, kwargs=None):
-    #     if kwargs is None:
-    #         kwargs = {}
-    #     output = io.StringIO()
-    #     with contextlib.redirect_stdout(output), contextlib.redirect_stderr(output):
-    #         exec(code, kwargs)
-    #     return 1, output.getvalue()
-
     @desc('Execute Python code', group='shell')
     @interruptible()
     def pyexec(self, code, kwargs=None):
+        """
+        一次性返回版本。
+        后续你可以通过 collect mode 配置它走 inproc 或 subprocess_pipe。
+        """
         try:
-            return self._get_python_execution_strategy().execute_collect(
+            strategy = self._get_python_execution_strategy(
+                mode=get_python_collect_mode(),
+                default_mode='inproc',
+            )
+            return strategy.execute_collect(
                 code,
                 kwargs=kwargs,
                 timeout=self.DEFAULT_STREAM_TIMEOUT,
@@ -351,33 +247,49 @@ class CommandExecutionMixin:
     @interruptible()
     def pyexec_gen(self, code, kwargs=None):
         """
-        执行 Python 代码并生成输出流
+        read stream 版本。
+        后续你可以通过 stream mode 配置它走 inproc 或 subprocess_pipe。
         """
-        return self._get_python_execution_strategy().execute_stream(
-            code,
-            kwargs=kwargs,
-            timeout=self.DEFAULT_STREAM_TIMEOUT,
-        )
+        try:
+            strategy = self._get_python_execution_strategy(
+                mode=get_python_stream_mode(),
+                default_mode='inproc',
+            )
+            return strategy.execute_stream(
+                code,
+                kwargs=kwargs,
+                timeout=self.DEFAULT_STREAM_TIMEOUT,
+            )
+        except CommandCancelledError:
+            return 0, 'Command cancelled'
+        except (CommandTimeoutError, subprocess.TimeoutExpired):
+            return 0, 'Command timed out'
+        except Exception as e:
+            return 0, f'Failed to execute code: {e}'
 
     @desc('Execute Python code in subprocess with streaming output', group='shell')
     @interruptible()
     def pyexec_subprocess_gen(self, code, kwargs=None):
         """
-        在子进程中执行 Python 代码，实时流式输出，支持强制取消
+        read stream 且子进程版本。
+        这个命令强制绑定 subprocess_pipe，保留你独立的“子进程流式入口”。
         """
-        strategy = self._get_python_execution_strategy()
-        if getattr(strategy, 'get_mode_name', lambda: '')() != 'subprocess_pipe':
-            self._set_cancel_policy(
-                supported=False,
-                message='pyexec_subprocess_gen requires subprocess_pipe strategy',
+        try:
+            strategy = self._get_python_execution_strategy(
+                mode='subprocess_pipe',
+                default_mode='subprocess_pipe',
             )
-            return 0, 'Current Python execution mode is not subprocess_pipe'
-
-        return strategy.execute_stream(
-            code,
-            kwargs=kwargs,
-            timeout=self.DEFAULT_STREAM_TIMEOUT,
-        )
+            return strategy.execute_stream(
+                code,
+                kwargs=kwargs,
+                timeout=self.DEFAULT_STREAM_TIMEOUT,
+            )
+        except CommandCancelledError:
+            return 0, 'Command cancelled'
+        except (CommandTimeoutError, subprocess.TimeoutExpired):
+            return 0, 'Command timed out'
+        except Exception as e:
+            return 0, f'Failed to execute code: {e}'
 
     # ------------------ 连接控制 ------------------ #
     @desc('Terminate current session', group='session')
@@ -464,11 +376,9 @@ class CommandExecutionMixin:
     @interruptible()
     def ip(self):
         """显示内网IP、外网IP和归属地"""
-        import socket
         import requests
         import netifaces
 
-        # 内网IP
         local_ips = []
         for iface in netifaces.interfaces():
             addrs = netifaces.ifaddresses(iface)
@@ -478,7 +388,6 @@ class CommandExecutionMixin:
                     if not ip.startswith('127.'):
                         local_ips.append(ip)
 
-        # 外网IP和归属地
         try:
             resp = requests.get('http://ip-api.com/json/', timeout=5)
             data = resp.json()
@@ -500,7 +409,6 @@ class CommandExecutionMixin:
     def userenum(self):
         """列出系统用户账户"""
         import pwd
-        import os
 
         users = []
         current_user = os.getlogin()
@@ -513,8 +421,6 @@ class CommandExecutionMixin:
                     marker = ' [current]' if user.pw_name == current_user else ''
                     users.append(f"{user.pw_name} (UID: {user.pw_uid}){marker}")
         except:
-            # Windows fallback
-            import subprocess
             result = subprocess.run('net user', shell=True, capture_output=True, text=True)
             return 1, result.stdout
 
@@ -524,26 +430,22 @@ class CommandExecutionMixin:
     @interruptible()
     def is_root(self):
         """检查当前是否为 root 权限"""
-        import os
         if os.name == 'nt':
-            # Windows: 检查是否为管理员
             import ctypes
             is_admin = ctypes.windll.shell32.IsUserAnAdmin() != 0
             return 1, f'Is admin: {is_admin}'
         else:
-            # macOS/Linux: 检查 UID
             is_root = os.geteuid() == 0
             return 1, f'Is root: {is_root}'
-
-
 
     @desc('Show system uptime', group='system')
     @interruptible()
     def uptime(self):
         """显示系统运行时间"""
         import psutil
-        boot_time = psutil.boot_time()
         from datetime import datetime
+
+        boot_time = psutil.boot_time()
         boot_dt = datetime.fromtimestamp(boot_time)
         now = datetime.now()
         uptime_seconds = (now - boot_dt).total_seconds()

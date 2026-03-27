@@ -169,21 +169,21 @@ class ProcessExecutionService:
 
             self.owner._send_interim_result(status, text)
 
-    def _start_output_thread(self, stream, status):
+    def _start_output_thread(self, stream, status, timeout=None):
         thread = threading.Thread(
             target=self.stream_process_output,
-            args=(stream, status, getattr(self.owner, 'DEFAULT_STREAM_TIMEOUT', None))
+            args=(stream, status, timeout)
         )
         thread.daemon = True
         thread.start()
         return thread
 
-    def start_output_threads(self, process):
+    def start_output_threads(self, process, timeout=None):
         """
         为 stdout/stderr 启动输出读取线程
         """
-        stdout_thread = self._start_output_thread(process.stdout, 1)
-        stderr_thread = self._start_output_thread(process.stderr, 0)
+        stdout_thread = self._start_output_thread(process.stdout, 1, timeout=timeout)
+        stderr_thread = self._start_output_thread(process.stderr, 0, timeout=timeout)
         return stdout_thread, stderr_thread
 
     def wait_stream_process(self, process, timeout=None):
