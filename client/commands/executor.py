@@ -1,114 +1,42 @@
 import inspect
-import platform
-import threading
 
-from client.commands.argument_command_registry import ArgumentCommandRegistry
-from client.commands.command_context import CommandExecutionContext
+from client.commands.services.command_catalog import CommandCatalog
+from client.commands.services.command_context_store import CommandExecutionContextStore
 from core.utils.parsing import parse
-from client.config.runtime_config import COMMAND_DEFAULT_TIMEOUT
 
 
 class CommandExecutor:
-    PLATFORM_COMMAND_MODULES = {
-        'windows': ('client.commands.platform.win', 'WindowsCommands'),
-        'darwin': ('client.commands.platform.mac', 'MacCommands'),
-        'linux': ('client.commands.platform.linux', 'LinuxCommands'),
-    }
-
     def __init__(self, socket):
         self.socket = socket
-        self.platform_commands = None
-        self.argument_command_registry = None
-
-        self._execution_contexts = {}
-        self._context_lock = threading.RLock()
-
-    # ------------------ 平台命令加载 ------------------ #
-    def _get_platform_name(self) -> str:
-        """
-        获取当前系统平台名称
-        """
-        return platform.system().lower()
-
-    def _load_platform_command_class(self):
-        """
-        根据当前平台动态加载命令类
-        """
-        system = self._get_platform_name()
-        platform_info = self.PLATFORM_COMMAND_MODULES.get(system)
-        if not platform_info:
-            raise NotImplementedError(f"Unsupported OS: {system}")
-
-        module_name, class_name = platform_info
-        module = __import__(module_name, fromlist=[class_name])
-        return getattr(module, class_name)
+        self.catalog = CommandCatalog(socket)
+        self.context_store = CommandExecutionContextStore()
 
     def get_commands(self):
         """
         获取当前平台对应的命令实例（懒加载）
         """
-        if self.platform_commands is None:
-            command_class = self._load_platform_command_class()
-            self.platform_commands = command_class(self.socket)
-        return self.platform_commands
+        return self.catalog.get_commands()
 
-    def _normalize_timeout(self, timeout):
-        if timeout in (None, ''):
-            return None
-
-        try:
-            value = float(timeout)
-        except Exception:
-            return None
-
-        if value <= 0:
-            return None
-        return value
+    def get_argument_command_registry(self):
+        """
+        获取当前平台对应的 acmd 注册表（懒加载）
+        """
+        return self.catalog.get_argument_command_registry()
 
     def _extract_timeout(self, options=None):
-        if not isinstance(options, dict):
-            return None
-
-        return self._normalize_timeout(
-            options.get('_timeout', options.get('timeout', COMMAND_DEFAULT_TIMEOUT))
-        )
+        return self.context_store.extract_timeout(options)
 
     def _get_or_create_execution_context(self, command_id, timeout=None):
-        normalized_timeout = self._normalize_timeout(timeout)
-
-        with self._context_lock:
-            context = self._execution_contexts.get(command_id)
-            if context is None:
-                context = CommandExecutionContext(command_id, timeout=normalized_timeout)
-                self._execution_contexts[command_id] = context
-            elif normalized_timeout is not None:
-                context.set_timeout(normalized_timeout)
-            return context
+        return self.context_store.get_or_create(command_id, timeout=timeout)
 
     def _clear_execution_context(self, command_id):
-        with self._context_lock:
-            context = self._execution_contexts.pop(command_id, None)
-
-        if context is not None:
-            try:
-                context.run_cleanup()
-            except Exception:
-                pass
+        self.context_store.clear(command_id)
 
     def cancel_command(self, command_id: int) -> dict:
         """
         请求取消指定命令
         """
-        with self._context_lock:
-            context = self._execution_contexts.get(command_id)
-
-        if context is None:
-            return {
-                'accepted': False,
-                'message': 'Command is not running',
-            }
-
-        return context.request_cancel()
+        return self.context_store.cancel(command_id)
 
     def _prepare_commands(self, command_id, timeout=None):
         """
@@ -121,14 +49,6 @@ class CommandExecutor:
         else:
             commands.command_id = command_id
         return commands
-
-    def get_argument_command_registry(self):
-        """
-        获取当前平台对应的 acmd 注册表（懒加载）
-        """
-        if self.argument_command_registry is None:
-            self.argument_command_registry = ArgumentCommandRegistry(self.get_commands())
-        return self.argument_command_registry
 
     # ------------------ 命令路由 ------------------ #
     def _resolve_builtin_command(self, commands, name):
@@ -218,6 +138,6 @@ class CommandExecutor:
                 timeout = self._extract_timeout(kwargs)
 
             commands = self._prepare_commands(command_id, timeout=timeout)
-            return commands.pyexec(script_text, kwargs=kwargs)  # TODO 让exec命令支持取消
+            return commands.pyexec(script_text, kwargs=kwargs)
 
         return self._execute_with_cleanup(command_id, _invoke)

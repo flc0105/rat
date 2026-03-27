@@ -25,7 +25,7 @@ EXCLUDE_DIRS = {
     "scripts",
     "builtins",
     "jobs",
-    "platform"
+    # "platform"
 }
 
 # 排除的文件名（可以是完整文件名或文件名不含扩展名）
