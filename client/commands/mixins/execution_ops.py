@@ -668,18 +668,3 @@ class CommandExecutionMixin:
 
         return 1, f"Boot time: {boot_dt.strftime('%Y-%m-%d %H:%M:%S')}\nUptime: {days}d {hours}h {minutes}m"
 
-    @desc('Run command with sudo (macOS)', group='system')
-    @interruptible()
-    def sudo_run(self, command):
-        """以 root 权限执行命令 (macOS)"""
-        import subprocess
-        try:
-            result = subprocess.run(
-                ['osascript', '-e', f'do shell script "{command}" with administrator privileges'],
-                capture_output=True, text=True, timeout=30
-            )
-            if result.returncode == 0:
-                return 1, result.stdout
-            return 0, result.stderr
-        except Exception as e:
-            return 0, f'Failed: {e}'

