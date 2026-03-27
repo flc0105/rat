@@ -1471,9 +1471,9 @@ body {
     height: auto;
   }
 
-  .info-grid {
-    grid-template-columns: 1fr;
-  }
+  /*.info-grid {*/
+  /*  grid-template-columns: 1fr;*/
+  /*}*/
 
   .dialog-head {
     grid-template-columns: 1fr;

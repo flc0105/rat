@@ -143,6 +143,10 @@ class CommandExecutor:
         """
         执行 script 消息
         统一通过 CommandExecutor 入口分发，避免绕过命令执行器
+
+        当前约定：
+        - script 默认只走 stream 语义
+        - 当前进程 / 子进程由 Python execution strategy 决定
         """
         def _invoke():
             timeout = self._extract_timeout(options)
@@ -150,6 +154,6 @@ class CommandExecutor:
                 timeout = self._extract_timeout(kwargs)
 
             commands = self._prepare_commands(command_id, timeout=timeout)
-            return commands.pyexec(script_text, kwargs=kwargs)
+            return commands.execute_script_stream(script_text, kwargs=kwargs)
 
         return self._execute_with_cleanup(command_id, _invoke)

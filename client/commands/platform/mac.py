@@ -108,21 +108,10 @@ class MacCommands(CommonCommands):
         return self._mac_platform_service.build_process_info()
 
     def _escape_osascript_text(self, value: str):
-        text = str(value or '')
-        text = text.replace('\\', '\\\\')
-        text = text.replace('"', '\\"')
-        return text
+        return self._mac_platform_service.escape_osascript_text(value)
 
     def _spawn_osascript(self, applescript: str):
-        process = subprocess.Popen(
-            ['osascript', '-e', applescript],
-            stdin=subprocess.DEVNULL,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-            start_new_session=True
-        )
-        self._register_cancel_handler(lambda: self._terminate_process(process))
-        return process
+        return self._mac_platform_service.spawn_osascript(applescript)
 
     @desc("Capture a screenshot", group='platform')
     @interruptible()

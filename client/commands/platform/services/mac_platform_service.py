@@ -11,14 +11,9 @@ class MacPlatformService:
     """
     macOS 平台能力服务。
 
-    当前先承接两类职责：
+    当前承接两类职责：
     - 系统信息采集
-    - AppleScript/osascript 基础能力
-
-    后续可以继续往这里下沉：
-    - screenshot / webcam
-    - sudo_run / sudo_self
-    - volume / notify / msgbox
+    - AppleScript / osascript 基础能力
     """
 
     def __init__(self, owner):

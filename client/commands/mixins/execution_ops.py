@@ -7,8 +7,7 @@ from client.commands.command_context import CommandCancelledError, CommandTimeou
 from client.commands.interrupts import interruptible
 from client.commands.python_execution.factory import (
     build_python_execution_strategy,
-    get_python_collect_mode,
-    get_python_stream_mode,
+get_python_execution_mode
 )
 from client.commands.services.process_execution_service import ProcessExecutionService
 from client.config.runtime_config import (
@@ -57,6 +56,36 @@ class CommandExecutionMixin:
                 default_mode=default_mode,
             )
         return self._python_execution_strategy_cache[cache_key]
+
+    def _execute_python_collect(self, code, kwargs=None, mode: str = '', default_mode: str = 'inproc'):
+        strategy = self._get_python_execution_strategy(mode=mode, default_mode=default_mode)
+        return strategy.execute_collect(
+            code,
+            kwargs=kwargs,
+            timeout=self.DEFAULT_STREAM_TIMEOUT,
+        )
+
+    def _execute_python_stream(self, code, kwargs=None, mode: str = '', default_mode: str = 'inproc'):
+        strategy = self._get_python_execution_strategy(mode=mode, default_mode=default_mode)
+        return strategy.execute_stream(
+            code,
+            kwargs=kwargs,
+            timeout=self.DEFAULT_STREAM_TIMEOUT,
+        )
+
+    def execute_script_stream(self, code, kwargs=None):
+        """
+        script 内部执行入口：
+        - 对外不单独作为推荐命令暴露
+        - 默认只走 stream
+        - 当前进程 / 子进程由 script strategy 决定
+        """
+        return self._execute_python_stream(
+            code,
+            kwargs=kwargs,
+            mode=get_python_execution_mode(),
+            default_mode='inproc',
+        )
 
     # ------------------ 进程执行服务 ------------------ #
     def _get_process_execution_service(self):
@@ -219,22 +248,18 @@ class CommandExecutionMixin:
         except Exception as e:
             self._send_final_result(0, f'Failed to execute command: {e}')
 
-    @desc('Execute Python code', group='shell')
+    @desc('Execute Python code and collect output', group='shell')
     @interruptible()
-    def pyexec(self, code, kwargs=None):
+    def pyexec_collect(self, code, kwargs=None):
         """
         一次性返回版本。
-        后续你可以通过 collect mode 配置它走 inproc 或 subprocess_pipe。
         """
         try:
-            strategy = self._get_python_execution_strategy(
-                mode=get_python_collect_mode(),
-                default_mode='inproc',
-            )
-            return strategy.execute_collect(
+            return self._execute_python_collect(
                 code,
                 kwargs=kwargs,
-                timeout=self.DEFAULT_STREAM_TIMEOUT,
+                mode=get_python_execution_mode(),
+                default_mode='inproc',
             )
         except CommandCancelledError:
             return 0, 'Command cancelled'
@@ -243,22 +268,18 @@ class CommandExecutionMixin:
         except Exception as e:
             return 0, f'Failed to execute code: {e}'
 
-    @desc('Execute Python code with streaming output (generator)', group='shell')
+    @desc('Execute Python code with streaming output', group='shell')
     @interruptible()
-    def pyexec_gen(self, code, kwargs=None):
+    def pyexec_stream(self, code, kwargs=None):
         """
-        read stream 版本。
-        后续你可以通过 stream mode 配置它走 inproc 或 subprocess_pipe。
+        流式返回版本。
         """
         try:
-            strategy = self._get_python_execution_strategy(
-                mode=get_python_stream_mode(),
-                default_mode='inproc',
-            )
-            return strategy.execute_stream(
+            return self._execute_python_stream(
                 code,
                 kwargs=kwargs,
-                timeout=self.DEFAULT_STREAM_TIMEOUT,
+                mode=get_python_execution_mode(),
+                default_mode='inproc',
             )
         except CommandCancelledError:
             return 0, 'Command cancelled'
@@ -267,29 +288,42 @@ class CommandExecutionMixin:
         except Exception as e:
             return 0, f'Failed to execute code: {e}'
 
-    @desc('Execute Python code in subprocess with streaming output', group='shell')
-    @interruptible()
-    def pyexec_subprocess_gen(self, code, kwargs=None):
-        """
-        read stream 且子进程版本。
-        这个命令强制绑定 subprocess_pipe，保留你独立的“子进程流式入口”。
-        """
-        try:
-            strategy = self._get_python_execution_strategy(
-                mode='subprocess_pipe',
-                default_mode='subprocess_pipe',
-            )
-            return strategy.execute_stream(
-                code,
-                kwargs=kwargs,
-                timeout=self.DEFAULT_STREAM_TIMEOUT,
-            )
-        except CommandCancelledError:
-            return 0, 'Command cancelled'
-        except (CommandTimeoutError, subprocess.TimeoutExpired):
-            return 0, 'Command timed out'
-        except Exception as e:
-            return 0, f'Failed to execute code: {e}'
+    # @desc('Alias of collect', group='shell', suggest=False)
+    # @interruptible()
+    # def pyexec(self, code, kwargs=None):
+    #     """
+    #     兼容旧命令：一次性返回版本
+    #     """
+    #     return self.collect(code, kwargs=kwargs)
+    #
+    # @desc('Alias of stream', group='shell', suggest=False)
+    # @interruptible()
+    # def pyexec_gen(self, code, kwargs=None):
+    #     """
+    #     兼容旧命令：流式返回版本
+    #     """
+    #     return self.stream(code, kwargs=kwargs)
+    #
+    # @desc('Legacy alias of subprocess streaming Python execution', group='shell', suggest=False)
+    # @interruptible()
+    # def pyexec_subprocess_gen(self, code, kwargs=None):
+    #     """
+    #     兼容旧命令：
+    #     强制以 subprocess_pipe 策略执行流式 Python 代码
+    #     """
+    #     try:
+    #         return self._execute_python_stream(
+    #             code,
+    #             kwargs=kwargs,
+    #             mode='subprocess_pipe',
+    #             default_mode='subprocess_pipe',
+    #         )
+    #     except CommandCancelledError:
+    #         return 0, 'Command cancelled'
+    #     except (CommandTimeoutError, subprocess.TimeoutExpired):
+    #         return 0, 'Command timed out'
+    #     except Exception as e:
+    #         return 0, f'Failed to execute code: {e}'
 
     # ------------------ 连接控制 ------------------ #
     @desc('Terminate current session', group='session')
