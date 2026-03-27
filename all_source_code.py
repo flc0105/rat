@@ -23,15 +23,33 @@ EXCLUDE_DIRS = {
     "config",
     "utils",
     "scripts",
+    "builtins",
+    "jobs",
+    "platform"
 }
 
-# INCLUDE_SUFFIXES = {".py", ".css", ".html", ".js"}
+# 排除的文件名（可以是完整文件名或文件名不含扩展名）
+EXCLUDE_FILENAMES = {
+    "__init__",      # 排除所有 __init__.py, __init__.html 等
+    "login.html",    # 排除 login.html
+    "auth.js"        # 排除 auth.js
+}
+
 INCLUDE_SUFFIXES = {".py", ".html", ".js"}
-# INCLUDE_SUFFIXES = {".go"}
 
 
 def should_skip(path: Path) -> bool:
-    return any(part in EXCLUDE_DIRS for part in path.parts)
+    # 排除指定目录
+    if any(part in EXCLUDE_DIRS for part in path.parts):
+        return True
+
+    # 排除指定文件名（检查完整文件名和文件名不含扩展名）
+    if path.name in EXCLUDE_FILENAMES:      # 检查完整文件名（如 login.html）
+        return True
+    if path.stem in EXCLUDE_FILENAMES:      # 检查不含扩展名的文件名（如 login）
+        return True
+
+    return False
 
 
 def main():

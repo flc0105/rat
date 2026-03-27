@@ -699,6 +699,41 @@ def create_app(server_instance):
 
         return _json_endpoint(_execute, default_error_status=500)
 
+    @app.get('/api/connections/<client_id>/apps')
+    def list_apps(client_id):
+        """获取客户端运行的应用列表"""
+
+        def _execute():
+            session = server_instance.get_target_connection_by_client_id(client_id)
+            result_text = server_instance.web_service.remote_execution_service.run_foreground_text_command(
+                client_id,
+                'list_apps',
+                task_type='process',
+                source='web_process',
+            )
+            try:
+                apps = json.loads(result_text)
+                return apps
+            except:
+                return []
+
+        return _json_endpoint(_execute, default_error_status=500)
+
+    @app.post('/api/connections/<client_id>/apps/<int:pid>/kill')
+    def kill_app(client_id, pid):
+        """终止应用"""
+
+        def _execute():
+            session = server_instance.get_target_connection_by_client_id(client_id)
+            result_text = server_instance.web_service.remote_execution_service.run_foreground_text_command(
+                client_id,
+                f'kill_process {pid}',
+                task_type='process',
+                source='web_process',
+            )
+            return {'message': result_text}
+
+        return _json_endpoint(_execute, default_error_status=500)
 
     return app
 

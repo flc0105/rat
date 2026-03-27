@@ -36,6 +36,94 @@ class CommandProcessMixin:
         except Exception as e:
             return 0, f'Failed to list processes: {e}'
 
+    @desc('List running applications (GUI apps only)', group='process', suggest=False)
+    def list_apps(self, arg=''):
+        """
+        列出运行中的应用程序（仅 GUI 应用）
+        """
+        try:
+            apps = []
+
+            if platform.system() == 'Windows':
+                # Windows: 获取有窗口的进程
+                import win32gui
+                import win32process
+
+                def enum_window_callback(hwnd, windows):
+                    if win32gui.IsWindowVisible(hwnd):
+                        _, pid = win32process.GetWindowThreadProcessId(hwnd)
+                        if pid not in windows:
+                            windows.append(pid)
+
+                windows = []
+                win32gui.EnumWindows(enum_window_callback, windows)
+
+                for pid in windows:
+                    try:
+                        proc = psutil.Process(pid)
+                        apps.append({
+                            'pid': pid,
+                            'name': proc.name(),
+                            'username': proc.username(),
+                        })
+                    except:
+                        continue
+
+            elif platform.system() == 'Darwin':
+                # macOS: 使用 Quartz 获取有窗口的应用
+                try:
+                    from Quartz import CGWindowListCopyWindowInfo, kCGWindowListOptionAll, kCGNullWindowID
+
+                    window_list = CGWindowListCopyWindowInfo(kCGWindowListOptionAll, kCGNullWindowID)
+                    app_dict = {}
+
+                    for window in window_list:
+                        pid = window.get('kCGWindowOwnerPID', 0)
+                        if pid == 0:
+                            continue
+                        name = window.get('kCGWindowOwnerName', '')
+                        if not name:
+                            continue
+                        if pid not in app_dict:
+                            try:
+                                proc = psutil.Process(pid)
+                                app_dict[pid] = {
+                                    'pid': pid,
+                                    'name': name,
+                                    'username': proc.username(),
+                                }
+                            except:
+                                pass
+
+                    apps = list(app_dict.values())
+                except ImportError:
+                    # 降级：返回所有进程
+                    for proc in psutil.process_iter(['pid', 'name', 'username']):
+                        try:
+                            apps.append({
+                                'pid': proc.info['pid'],
+                                'name': proc.info['name'] or '',
+                                'username': proc.info['username'] or '',
+                            })
+                        except:
+                            continue
+
+            else:
+                # Linux: 使用 psutil 获取所有进程
+                for proc in psutil.process_iter(['pid', 'name', 'username']):
+                    try:
+                        apps.append({
+                            'pid': proc.info['pid'],
+                            'name': proc.info['name'] or '',
+                            'username': proc.info['username'] or '',
+                        })
+                    except:
+                        continue
+
+            return 1, json.dumps(apps)
+        except Exception as e:
+            return 0, f'Failed to list apps: {e}'
+
     @desc('Kill a process by PID', group='process', suggest=False)
     def kill_process(self, pid: str):
         """
