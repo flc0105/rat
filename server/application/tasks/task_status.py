@@ -32,6 +32,7 @@ class TaskStreamSummary:
 
     NON_FATAL_ERROR_TEXTS = {
         'command does not support cancellation',
+        'current python execution mode does not support cancellation',
     }
 
     def record_chunk(self, status: int, text: str):
