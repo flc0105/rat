@@ -1,19 +1,7 @@
 import os
 
-from server.application.agent.agent_builder import AgentBuilder
-from server.application.artifact.artifact_service import WebArtifactService
-from server.application.artifact.remote_file_service import WebRemoteFileService
+from server.application.assembly import ServerApplicationAssembly
 from server.application.command.executor import CommandExecutor
-from server.application.connection.connection_service import WebConnectionService
-from server.application.execution.remote_execution_service import RemoteExecutionService
-from server.application.jobs.background_job_service import BackgroundJobService
-from server.application.jobs.background_job_store import BackgroundJobStore
-from server.application.script.script_service import ServerJobService
-from server.application.tasks.task_runner import WebTaskRunner
-from server.application.tasks.task_service import WebTaskService
-from server.application.tasks.task_store import WebTaskStore
-from server.web.event_bus import WebEventBus
-from server.config.config import SCRIPT_JOBS_PATH  # 需要在 config 中添加
 
 
 class ServerWebService:
@@ -21,51 +9,39 @@ class ServerWebService:
     Server 的 Web 门面服务。
     """
 
-    def __init__(self, server):
+    def __init__(self, server, assembly=None):
         self.server = server
-        self.event_bus = WebEventBus()
-        self.task_store = WebTaskStore()
+        self.assembly = assembly or ServerApplicationAssembly(server)
 
-        self.artifact_service = WebArtifactService()
-        self.file_service = self.artifact_service
-        self.remote_execution_service = RemoteExecutionService(self.server)
+        # ------------------ 装配后的依赖引用 ------------------ #
+        # 保持原有属性名不变，避免影响现有调用方。
+        self.event_bus = self.assembly.event_bus
+        self.task_store = self.assembly.task_store
 
-        self.remote_file_service = WebRemoteFileService(
-            remote_execution_service=self.remote_execution_service,
-            artifact_service=self.artifact_service,
-        )
+        self.artifact_service = self.assembly.artifact_service
+        self.file_service = self.assembly.file_service
+        self.remote_execution_service = self.assembly.remote_execution_service
+        self.remote_file_service = self.assembly.remote_file_service
+        self.connection_service = self.assembly.connection_service
+        self.task_runner = self.assembly.task_runner
+        self.task_service = self.assembly.task_service
+        self.background_job_store = self.assembly.background_job_store
+        self.background_job_service = self.assembly.background_job_service
+        self.script_service = self.assembly.script_service
+        self.agent_builder = self.assembly.agent_builder
 
-        self.connection_service = WebConnectionService(
-            server=self.server,
-            event_bus=self.event_bus,
-            artifact_service=self.artifact_service,
-        )
+    @classmethod
+    def from_server(cls, server):
+        """
+        默认构建入口：
+        - 先完成 application assembly
+        - 再创建 facade
 
-        self.task_runner = WebTaskRunner(
-            server=self.server,
-            event_bus=self.event_bus,
-            task_store=self.task_store,
-        )
-
-        self.task_service = WebTaskService(
-            server=self.server,
-            task_store=self.task_store,
-            file_service=self.file_service,
-            task_runner=self.task_runner,
-        )
-
-        self.background_job_store = BackgroundJobStore()
-        self.background_job_store.artifact_service = self.artifact_service
-        self.server.command_history.artifact_service = self.artifact_service
-
-        self.background_job_service = BackgroundJobService(
-            event_bus=self.event_bus,
-            job_store=self.background_job_store,
-            remote_execution_service=self.remote_execution_service,
-        )
-
-        self.script_service = ServerJobService(SCRIPT_JOBS_PATH)
-        self.agent_builder = AgentBuilder()
+        这样 ratserver 作为 composition root 只负责触发装配，
+        Facade 本身不再承担依赖创建职责。
+        """
+        assembly = ServerApplicationAssembly(server)
+        return cls(server, assembly=assembly)
 
     def _get_client_command_candidates(self, session):
         payload = session.info.get('command_manifest') or []
@@ -243,6 +219,12 @@ class ServerWebService:
 
     def preview_remote_file(self, client_id: str, path: str):
         return self.remote_file_service.preview_file(client_id, path)
+
+    def read_remote_file_text(self, client_id: str, path: str):
+        return self.remote_file_service.read_file_text(client_id, path)
+
+    def save_remote_file_text(self, client_id: str, path: str, content: str):
+        return self.remote_file_service.save_file_text(client_id, path, content)
 
     def build_connection(self, transport, addr, info: dict):
         return self.create_web_connection(transport, addr, info)

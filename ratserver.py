@@ -33,7 +33,10 @@ class Server:
         self.connections = ConnectionManager()
         self.alias_manager = AliasManager()
         self.command_history = CommandHistoryStore()
-        self.web_service = ServerWebService(self)
+
+        # composition root:
+        # 由 Server 负责触发应用层装配，再拿到 Facade。
+        self.web_service = ServerWebService.from_server(self)
 
     # ------------------ connection lookup ------------------ #
     def get_target_connection_by_client_id(self, client_id) -> ClientSession:
@@ -317,9 +320,8 @@ class Server:
         """
         与会话交互
         """
-        print('[+] Connected to {}'.format(session.address))
-        session.context.is_interactive = True
         self._print_unread_messages(session)
+        session.context.is_interactive = True
 
         command_executor = CommandExecutor(
             session,
