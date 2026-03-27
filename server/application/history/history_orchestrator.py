@@ -7,21 +7,19 @@ class CommandHistoryOrchestrator:
     - 统一创建 history entry
     - 统一追加输出
     - 统一结束/收尾执行状态
-    - 作为服务端 history 写入的单入口 orchestration
+    - 统一管理 command_id <-> history_entry_id 绑定
+    - 统一处理 artifact 回挂到 history entry
 
-    当前先收口：
-    - CLI 交互执行
-    - Web task command/upload 执行
-    - RemoteExecutionService 对 history 的辅助 API
-
-    后续可继续承接：
-    - command_id -> history_entry_id 绑定
-    - artifact -> history_entry 反向绑定
+    当前目标：
+    - CLI / WebTask / RemoteExecution 的 history 写入走单入口
+    - session runtime 只保留绑定存储，不再承担编排职责
+    - web/app.py 不再自己拼 artifact 反向绑定逻辑
     """
 
     def __init__(self, history_store):
         self.history_store = history_store
 
+    # ------------------ record policy ------------------ #
     def should_record_command(self, command: str) -> bool:
         """
         判断命令是否应该进入历史。
@@ -34,6 +32,7 @@ class CommandHistoryOrchestrator:
             return False
         return not command_text.startswith('history')
 
+    # ------------------ history entry lifecycle ------------------ #
     def begin_execution(self, conn, command: str, source: str = 'cli', should_record=None) -> str:
         """
         为一次执行创建 history entry。
@@ -86,3 +85,65 @@ class CommandHistoryOrchestrator:
             'success' if ok else 'error',
             cwd_end=final_cwd
         )
+
+    # ------------------ binding orchestration ------------------ #
+    def bind_command_entry(self, conn, command_id: int, entry_id: str):
+        """
+        绑定 command_id -> history_entry_id。
+        """
+        if conn is None or not command_id or not entry_id:
+            return
+
+        try:
+            conn.bind_history_entry(command_id, entry_id)
+        except Exception:
+            pass
+
+    def get_bound_entry_id(self, conn, command_id: int) -> str:
+        """
+        获取 command_id 当前绑定的 history_entry_id。
+        """
+        if conn is None or not command_id:
+            return ''
+
+        try:
+            return conn.get_history_entry_id(command_id)
+        except Exception:
+            return ''
+
+    def clear_command_entry(self, conn, command_id: int):
+        """
+        清理 command_id -> history_entry_id 绑定。
+        """
+        if conn is None or not command_id:
+            return
+
+        try:
+            conn.clear_history_entry(command_id)
+        except Exception:
+            pass
+
+    # ------------------ artifact binding ------------------ #
+    def bind_uploaded_artifact(self, conn, source_command_id, artifact: dict) -> bool:
+        """
+        将 HTTP 上传产生的 artifact 挂回到对应的 history entry。
+        """
+        if conn is None:
+            return False
+
+        if source_command_id is None:
+            return False
+
+        if not isinstance(artifact, dict) or not artifact:
+            return False
+
+        entry_id = self.get_bound_entry_id(conn, source_command_id)
+        if not entry_id:
+            return False
+
+        self.history_store.append_file_for_connection(
+            conn,
+            entry_id,
+            artifact
+        )
+        return True

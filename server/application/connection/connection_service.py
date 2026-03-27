@@ -79,6 +79,7 @@ class WebConnectionService:
         """
         session = ClientSession(transport, info)
         session.context.command_history = self.server.command_history
+        session.context.command_history_orchestrator = self.server.command_history_orchestrator
         session.context.artifact_service = self.artifact_service
 
         session.context.on_unexpected_message = (

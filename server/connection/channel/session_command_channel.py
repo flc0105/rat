@@ -37,7 +37,15 @@ class ClientSessionCommandChannel:
         data = self.build_command_payload(command, type, extra)
 
         if history_entry_id:
-            self.session.runtime.bind_history_entry(data.get('id'), history_entry_id)
+            history_orchestrator = getattr(self.session.context, 'command_history_orchestrator', None)
+            if history_orchestrator is not None:
+                history_orchestrator.bind_command_entry(
+                    self.session,
+                    data.get('id'),
+                    history_entry_id
+                )
+            else:
+                self.session.runtime.bind_history_entry(data.get('id'), history_entry_id)
 
         bound_task = self.session.runtime.bind_foreground_command_id(data.get('id'))
 

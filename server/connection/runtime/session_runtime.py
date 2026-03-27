@@ -99,6 +99,10 @@ class ClientSessionRuntime:
                     break
         finally:
             try:
-                self.clear_history_entry(command_id)
+                history_orchestrator = getattr(connection.context, 'command_history_orchestrator', None)
+                if history_orchestrator is not None:
+                    history_orchestrator.clear_command_entry(connection, command_id)
+                else:
+                    self.clear_history_entry(command_id)
             except Exception:
                 pass

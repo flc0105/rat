@@ -140,18 +140,10 @@ def create_app(server_instance):
         return hostname, addr
 
     def _bind_uploaded_artifact_to_history(client_id: str, source_command_id, artifact: dict):
-        if not client_id or source_command_id is None:
-            return
-
         try:
-            conn = server_instance.get_target_connection_by_client_id(client_id)
-            entry_id = conn.get_history_entry_id(source_command_id)
-            if not entry_id:
-                return
-
-            server_instance.command_history.append_file_for_connection(
-                conn,
-                entry_id,
+            web_service.bind_uploaded_artifact_to_history(
+                client_id,
+                source_command_id,
                 artifact
             )
         except Exception:

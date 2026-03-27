@@ -122,6 +122,29 @@ class ServerWebService:
             'preview_url': artifact_info.get('preview_url', ''),
         })
 
+    def bind_uploaded_artifact_to_history(self, client_id: str, source_command_id, artifact: dict) -> bool:
+        """
+        将上传完成的 artifact 挂回到对应 history entry。
+        """
+        if not client_id or source_command_id is None:
+            return False
+
+        if not isinstance(artifact, dict) or not artifact:
+            return False
+
+        try:
+            session = self.server.get_target_connection_by_client_id(client_id)
+        except Exception:
+            return False
+
+        return bool(
+            self.server.command_history_orchestrator.bind_uploaded_artifact(
+                session,
+                source_command_id,
+                artifact
+            )
+        )
+
     def get_command_candidates(self, client_id: str):
         session = self.server.get_target_connection_by_client_id(client_id)
 

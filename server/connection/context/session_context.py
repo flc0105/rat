@@ -25,6 +25,7 @@ class ClientSessionContext:
     def __init__(self):
         self.is_interactive = False
         self.command_history = None
+        self.command_history_orchestrator = None
         self.artifact_service = None
         self.on_unexpected_message = None
         self.on_heartbeat_updated = None
