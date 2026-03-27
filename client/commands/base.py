@@ -1,10 +1,13 @@
 from abc import ABC
 
-from client.commands.command_context import CommandCancelledError, CommandTimeoutError
 
-
-class CommandBase(ABC):
-    """命令基类，定义公共接口。"""
+class CommandBindingMixin:
+    """
+    命令绑定能力：
+    - 持有 socket
+    - 持有当前 command_id
+    - 持有当前 execution_context
+    """
 
     def __init__(self, socket):
         self.socket = socket
@@ -17,6 +20,14 @@ class CommandBase(ABC):
         """
         self.command_id = command_id
         self.execution_context = execution_context
+
+
+class CommandResultMixin:
+    """
+    命令结果发送能力：
+    - 负责协议层结果回传
+    - 不负责执行时机/业务逻辑
+    """
 
     def _send_result(self, status, result, eof=1):
         """
@@ -35,6 +46,14 @@ class CommandBase(ABC):
         发送中间结果
         """
         self._send_result(status, result, eof)
+
+
+class CommandRuntimeMixin:
+    """
+    命令运行时能力：
+    - 负责 cancel / timeout / cleanup / interruptible 相关基础设施
+    - 不负责协议层输出
+    """
 
     def _get_execution_context(self):
         return self.execution_context
@@ -120,3 +139,13 @@ class CommandBase(ABC):
     def _write_interruptible(self, file_obj, data, fallback_timeout=None):
         self._ensure_not_interrupted(fallback_timeout=fallback_timeout)
         return file_obj.write(data)
+
+
+class CommandBase(
+    CommandBindingMixin,
+    CommandResultMixin,
+    CommandRuntimeMixin,
+    ABC,
+):
+    """命令基类，定义公共接口。"""
+    pass

@@ -37,3 +37,6 @@ HTTP_DOWNLOAD_CANCEL_UNSUPPORTED_MESSAGE = 'Current HTTP transfer mode is legacy
 
 # ------------------ path / zip traversal ------------------ #
 ZIP_CANCEL_CHECK_INTERVAL = 64
+
+PYTHON_EXECUTION_MODE = 'inproc'
+

@@ -1,3 +1,5 @@
+import threading
+
 from client.commands.command_context import CommandExecutionContext
 from client.config.runtime_config import COMMAND_DEFAULT_TIMEOUT
 
@@ -12,7 +14,6 @@ class CommandExecutionContextStore:
     """
 
     def __init__(self):
-        import threading
         self._execution_contexts = {}
         self._context_lock = threading.RLock()
 

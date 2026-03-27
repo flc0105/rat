@@ -6,6 +6,15 @@ from core.utils.parsing import parse
 
 
 class CommandExecutor:
+    """
+    命令执行器。
+
+    当前职责收口为：
+    - 使用 CommandCatalog 获取平台命令对象 / acmd registry
+    - 使用 CommandExecutionContextStore 管理单次命令生命周期
+    - 只保留命令路由与调用编排
+    """
+
     def __init__(self, socket):
         self.socket = socket
         self.catalog = CommandCatalog(socket)
@@ -15,7 +24,10 @@ class CommandExecutor:
         """
         获取当前平台对应的命令实例（懒加载）
         """
-        return self.catalog.get_commands()
+        commands = self.catalog.get_commands()
+        if hasattr(commands, 'set_command_runtime'):
+            commands.set_command_runtime(self)
+        return commands
 
     def get_argument_command_registry(self):
         """

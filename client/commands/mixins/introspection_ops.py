@@ -1,6 +1,5 @@
 import inspect
 
-from client.commands.argument_command_registry import ArgumentCommandRegistry
 from core.utils.decorator import desc
 
 
@@ -22,6 +21,13 @@ class CommandIntrospectionMixin:
         """
         获取 acmd 注册表
         """
+        getter = getattr(self, 'get_argument_command_registry', None)
+        if callable(getter):
+            registry = getter()
+            if registry is not None:
+                return registry
+
+        from client.commands.argument_command_registry import ArgumentCommandRegistry
         return ArgumentCommandRegistry(self)
 
     def _get_argument_command_manifest_payload(self):
