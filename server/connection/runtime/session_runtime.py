@@ -1,8 +1,7 @@
 from typing import Optional
 
 from core.protocol.message_queue import MessageQueue, PendingCommandQueue
-from server.connection.runtime.foreground_task_guard import ForegroundTaskGuard
-from server.connection.runtime.history_binding_store import HistoryBindingStore
+from server.connection.runtime.session_execution_runtime import SessionExecutionRuntime
 
 
 class ClientSessionRuntime:
@@ -17,42 +16,59 @@ class ClientSessionRuntime:
     当前承载：
     - pending_command_ids
     - message_queue
-    - foreground_task_guard
-    - history_binding_store
+    - execution_runtime
     """
 
     def __init__(self):
         self.pending_command_ids = PendingCommandQueue()
         self.message_queue = MessageQueue()
+        self._execution_runtime = SessionExecutionRuntime()
 
-        self._foreground_task_guard = ForegroundTaskGuard()
-        self._history_binding_store = HistoryBindingStore()
+    # ------------------ unified execution binding ------------------ #
+    def bind_command_execution(
+        self,
+        command_id: int,
+        session=None,
+        history_entry_id: str = '',
+        history_orchestrator=None,
+    ):
+        """
+        在命令实际下发时，统一绑定：
+        - foreground task.command_id
+        - command_id -> history_entry_id
+        """
+        return self._execution_runtime.bind_command_execution(
+            command_id,
+            session=session,
+            history_entry_id=history_entry_id,
+            history_orchestrator=history_orchestrator,
+        )
 
     # ------------------ history binding ------------------ #
     def bind_history_entry(self, command_id: int, entry_id: str):
         """
         绑定 command_id -> history entry_id
         """
-        self._history_binding_store.bind(command_id, entry_id)
+        self._execution_runtime.bind_history_entry(command_id, entry_id)
 
     def get_history_entry_id(self, command_id: int) -> str:
         """
         获取指定 command_id 绑定的 history entry_id
         """
-        return self._history_binding_store.get(command_id)
+        return self._execution_runtime.get_history_entry_id(command_id)
 
     def clear_history_entry(self, command_id: int):
         """
         清理指定 command_id 的历史绑定
         """
-        self._history_binding_store.clear(command_id)
+        self._execution_runtime.clear_history_entry(command_id)
 
     # ------------------ foreground task ------------------ #
     def acquire_foreground_task(self, task_type: str, command: str, source: str = '', task_id: str = '') -> dict:
         """
         尝试占用当前连接的前台执行槽。
         """
-        return self._foreground_task_guard.acquire(
+        return self._execution_runtime.acquire_foreground_task(
             task_type=task_type,
             command=command,
             source=source,
@@ -63,25 +79,25 @@ class ClientSessionRuntime:
         """
         将实际下发的 command_id 绑定到当前前台任务
         """
-        return self._foreground_task_guard.bind_command_id(command_id)
+        return self._execution_runtime.bind_foreground_command_id(command_id)
 
     def request_foreground_task_cancel(self, task_id: str = ''):
         """
         请求取消当前前台任务
         """
-        return self._foreground_task_guard.request_cancel(task_id=task_id)
+        return self._execution_runtime.request_foreground_task_cancel(task_id=task_id)
 
     def release_foreground_task(self, task_id: str = '', command: str = '') -> None:
         """
         释放当前连接的前台执行槽。
         """
-        self._foreground_task_guard.release(task_id=task_id, command=command)
+        self._execution_runtime.release_foreground_task(task_id=task_id, command=command)
 
     def get_foreground_task(self):
         """
-        获取当前连接的前台占用信息快照
+        获取当前前台任务快照
         """
-        return self._foreground_task_guard.snapshot()
+        return self._execution_runtime.get_foreground_task()
 
     # ------------------ result wait ------------------ #
     def wait_for_result(self, connection, command_id: int, command: Optional[str]):

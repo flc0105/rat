@@ -36,19 +36,14 @@ class ClientSessionCommandChannel:
     def send_command(self, command: str, type='command', extra=None, history_entry_id: str = ''):
         data = self.build_command_payload(command, type, extra)
 
-        if history_entry_id:
-            history_orchestrator = getattr(self.session.context, 'command_history_orchestrator', None)
-            if history_orchestrator is not None:
-                history_orchestrator.bind_command_entry(
-                    self.session,
-                    data.get('id'),
-                    history_entry_id
-                )
-            else:
-                self.session.runtime.bind_history_entry(data.get('id'), history_entry_id)
+        history_orchestrator = getattr(self.session.context, 'command_history_orchestrator', None)
 
-        bound_task = self.session.runtime.bind_foreground_command_id(data.get('id'))
-
+        bound_task = self.session.runtime.bind_command_execution(
+            data.get('id'),
+            session=self.session,
+            history_entry_id=history_entry_id,
+            history_orchestrator=history_orchestrator,
+        )
         self.session.send(data)
 
         if bound_task and bound_task.get('cancel_requested'):
