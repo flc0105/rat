@@ -1503,15 +1503,37 @@
     <el-dialog
             v-model="terminalJsonDialogVisible"
             :title="terminalJsonDialogTitle"
-            width="820px"
+            width="980px"
             top="8vh"
             class="fixed-dialog"
     >
-        <div style="max-height: 65vh; overflow: auto;">
-            <pre
-                    style="margin: 0; white-space: pre-wrap; word-break: break-word; font-family: monospace; font-size: 13px; line-height: 1.6;"
-            >{{ terminalJsonText }}</pre>
-        </div>
+        <template v-if="terminalJsonDisplayMode === 'table'">
+            <div style="max-height: 65vh; overflow: auto;">
+                <el-table
+                        :data="terminalJsonTableRows"
+                        border
+                        stripe
+                        style="width: 100%;"
+                >
+                    <el-table-column
+                            v-for="column in terminalJsonTableColumns"
+                            :key="column.prop"
+                            :prop="column.prop"
+                            :label="column.label"
+                            min-width="140"
+                            show-overflow-tooltip
+                    />
+                </el-table>
+            </div>
+        </template>
+
+        <template v-else>
+            <div style="max-height: 65vh; overflow: auto;">
+                <pre
+                        style="margin: 0; white-space: pre-wrap; word-break: break-word; font-family: monospace; font-size: 13px; line-height: 1.6;"
+                >{{ terminalJsonText }}</pre>
+            </div>
+        </template>
     </el-dialog>
 </div>
 

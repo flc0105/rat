@@ -207,11 +207,88 @@ window.AppUtilsModule = {
             return line;
         },
 
+         isTerminalJsonPlainObject(value) {
+            return !!value && typeof value === 'object' && !Array.isArray(value);
+        },
+
+        tryBuildTerminalJsonTableModel(jsonText) {
+            const raw = String(jsonText || '').trim();
+            if (!raw) return null;
+
+            let parsed;
+            try {
+                parsed = JSON.parse(raw);
+            } catch (e) {
+                return null;
+            }
+
+            if (!Array.isArray(parsed) || !parsed.length) {
+                return null;
+            }
+
+            if (!parsed.every(item => this.isTerminalJsonPlainObject(item))) {
+                return null;
+            }
+
+            const firstKeys = Object.keys(parsed[0]);
+            if (!firstKeys.length) {
+                return null;
+            }
+
+            const hasSameStructure = parsed.every((item) => {
+                const keys = Object.keys(item);
+                if (keys.length !== firstKeys.length) return false;
+                for (let i = 0; i < firstKeys.length; i++) {
+                    if (keys[i] !== firstKeys[i]) return false;
+                }
+                return true;
+            });
+
+            if (!hasSameStructure) {
+                return null;
+            }
+
+            return {
+                columns: firstKeys.map((key) => ({
+                    prop: key,
+                    label: key
+                })),
+                rows: parsed.map((item) => {
+                    const row = {};
+                    firstKeys.forEach((key) => {
+                        const value = item[key];
+                        if (value === null || value === undefined) {
+                            row[key] = '';
+                        } else if (typeof value === 'object') {
+                            row[key] = JSON.stringify(value);
+                        } else {
+                            row[key] = String(value);
+                        }
+                    });
+                    return row;
+                })
+            };
+        },
+
         openTerminalJsonDialog(line) {
             if (!line || !line.isJsonMessage) return;
 
+            const jsonText = String(line.jsonText || '').trim();
+            const tableModel = this.tryBuildTerminalJsonTableModel(jsonText);
+
             this.terminalJsonDialogTitle = 'JSON Viewer';
-            this.terminalJsonText = String(line.jsonText || '').trim();
+            this.terminalJsonText = jsonText;
+
+            if (tableModel) {
+                this.terminalJsonDisplayMode = 'table';
+                this.terminalJsonTableColumns = tableModel.columns;
+                this.terminalJsonTableRows = tableModel.rows;
+            } else {
+                this.terminalJsonDisplayMode = 'raw';
+                this.terminalJsonTableColumns = [];
+                this.terminalJsonTableRows = [];
+            }
+
             this.terminalJsonDialogVisible = true;
         },
 

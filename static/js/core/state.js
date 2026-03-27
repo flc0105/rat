@@ -83,9 +83,12 @@ window.AppStateModule = {
                     quickJumpPaths: {},
         quickJumpLoading: false,
 
-                        terminalJsonDialogVisible: false,
+            terminalJsonDialogVisible: false,
             terminalJsonDialogTitle: 'JSON Viewer',
             terminalJsonText: '',
+            terminalJsonDisplayMode: 'raw',
+            terminalJsonTableColumns: [],
+            terminalJsonTableRows: [],
         };
     },
 
@@ -239,10 +242,13 @@ window.AppStateModule = {
 
     watch: {
 
-                terminalJsonDialogVisible(val) {
+        terminalJsonDialogVisible(val) {
             if (!val) {
                 this.terminalJsonDialogTitle = 'JSON Viewer';
                 this.terminalJsonText = '';
+                this.terminalJsonDisplayMode = 'raw';
+                this.terminalJsonTableColumns = [];
+                this.terminalJsonTableRows = [];
             }
         },
         previewDialogVisible(val) {
