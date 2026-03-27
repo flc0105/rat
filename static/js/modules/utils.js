@@ -235,11 +235,24 @@ window.AppUtilsModule = {
                 return null;
             }
 
+            // const hasSameStructure = parsed.every((item) => {
+            //     const keys = Object.keys(item);
+            //     if (keys.length !== firstKeys.length) return false;
+            //     for (let i = 0; i < firstKeys.length; i++) {
+            //         if (keys[i] !== firstKeys[i]) return false;
+            //     }
+            //     return true;
+            // });
+
+                        const sortedFirstKeys = [...firstKeys].sort();
+
             const hasSameStructure = parsed.every((item) => {
                 const keys = Object.keys(item);
                 if (keys.length !== firstKeys.length) return false;
-                for (let i = 0; i < firstKeys.length; i++) {
-                    if (keys[i] !== firstKeys[i]) return false;
+
+                const sortedKeys = [...keys].sort();
+                for (let i = 0; i < sortedFirstKeys.length; i++) {
+                    if (sortedKeys[i] !== sortedFirstKeys[i]) return false;
                 }
                 return true;
             });

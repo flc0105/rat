@@ -788,7 +788,24 @@ body {
   vertical-align: middle;
 }
 
+.table-action-link-aux {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1.7;
+  color: var(--el-color-primary);
+  text-decoration: none;
+  font-size: 13px;
+  white-space: nowrap;
+  vertical-align: middle;
+}
+
 .table-action-link:hover {
+  color: var(--el-color-primary-light-5);
+  text-decoration: underline;
+}
+
+.table-action-link-aux:hover {
   color: var(--el-color-primary-light-5);
   text-decoration: underline;
 }

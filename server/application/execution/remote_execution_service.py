@@ -1,9 +1,9 @@
 import base64
 import json
-import os
 
 from server.application.execution.command_stream_service import CommandStreamService
 from server.application.execution.foreground_execution_service import ForegroundExecutionService
+from server.application.execution.upload_execution_service import UploadExecutionService
 
 
 class RemoteExecutionService:
@@ -22,6 +22,7 @@ class RemoteExecutionService:
     当前重构说明：
     - raw command stream / collect_result 下沉到 CommandStreamService
     - foreground 占槽执行下沉到 ForegroundExecutionService
+    - upload staging / receive_http_upload 下沉到 UploadExecutionService
     - RemoteExecutionService 保留为兼容 facade
     - history 相关统一优先委托给 command_history_orchestrator
     """
@@ -35,6 +36,11 @@ class RemoteExecutionService:
         self.command_stream_service = CommandStreamService(server)
         self.foreground_execution_service = ForegroundExecutionService(
             self.command_stream_service
+        )
+        self.upload_execution_service = UploadExecutionService(
+            server,
+            self.command_stream_service,
+            artifact_service=getattr(getattr(server, 'web_service', None), 'artifact_service', None),
         )
 
     def get_connection(self, target):
@@ -88,11 +94,10 @@ class RemoteExecutionService:
             )
             return
 
-        self.server.command_history.update_entry_status_for_connection(
-            session,
+        self.server.command_history.finish_entry(
             entry_id,
-            'success' if ok else 'error',
-            cwd_end=cwd_end or (getattr(session, 'info', {}) or {}).get('cwd', '')
+            ok=ok,
+            cwd_end=cwd_end or session.info.get('cwd', '')
         )
 
     def append_history_output(self, target, entry_id: str, status: int, text: str, eof: int = 0):
@@ -111,18 +116,14 @@ class RemoteExecutionService:
             )
             return
 
-        self.server.command_history.append_output_for_connection(
-            session,
+        self.server.command_history.append_output(
             entry_id,
             status,
             text,
-            eof
+            eof=eof
         )
 
-    # ------------------ raw stream facade api ------------------ #
-    def collect_result(self, result_iter):
-        return self.command_stream_service.collect_result(result_iter)
-
+    # ------------------ raw command stream api ------------------ #
     def stream_command(
         self,
         target,
@@ -133,23 +134,6 @@ class RemoteExecutionService:
         history_entry_id: str = '',
     ):
         return self.command_stream_service.stream_command(
-            target,
-            command,
-            command_type=command_type,
-            extra=extra,
-            history_entry_id=history_entry_id,
-        )
-
-    def stream_structured_command(
-        self,
-        target,
-        command: str,
-        *,
-        command_type: str,
-        extra,
-        history_entry_id: str = '',
-    ):
-        return self.command_stream_service.stream_structured_command(
             target,
             command,
             command_type=command_type,
@@ -191,7 +175,10 @@ class RemoteExecutionService:
             history_entry_id=history_entry_id,
         )
 
-    # ------------------ foreground guard facade api ------------------ #
+    def collect_result(self, result_iter):
+        return self.command_stream_service.collect_result(result_iter)
+
+    # ------------------ foreground execution api ------------------ #
     def stream_foreground_command(
         self,
         target,
@@ -261,7 +248,7 @@ class RemoteExecutionService:
             task_id=task_id,
         )
 
-    # ------------------ upload ------------------ #
+    # ------------------ upload execution api ------------------ #
     def stream_upload(
         self,
         target,
@@ -270,35 +257,10 @@ class RemoteExecutionService:
         remote_path: str = '',
         history_entry_id: str = '',
     ):
-        session = self.get_connection(target)
-        artifact_service = self.server.web_service.artifact_service
-
-        staged_path = ''
-        try:
-            staged_path, safe_name = artifact_service.stage_local_file(
-                local_path,
-                display_name=os.path.basename(local_path)
-            )
-            relative_url = artifact_service.build_upload_temp_download_relative_url(staged_path)
-
-            command = self._build_http_receive_command({
-                'relative_url': relative_url,
-                'filename': safe_name,
-                'save_dir': remote_path,
-            })
-
-            result_iter = self.stream_command(
-                session,
-                command,
-                command_type='command',
-                extra=None,
-                history_entry_id=history_entry_id
-            )
-
-            for item in result_iter:
-                yield item
-        finally:
-            try:
-                artifact_service.cleanup_upload_temp_file(staged_path)
-            except Exception:
-                pass
+        return self.upload_execution_service.stream_upload(
+            target,
+            local_path,
+            remote_path=remote_path,
+            history_entry_id=history_entry_id,
+            build_http_receive_command=self._build_http_receive_command,
+        )

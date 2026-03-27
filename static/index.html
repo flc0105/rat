@@ -208,8 +208,55 @@
                                         </div>
                                     </div>
 
+                                    <!--                                    <template v-else>-->
+                                    <!--                                        <template v-for="(line, index) in currentOutputLines" :key="index">-->
+                                    <!--                                            <div-->
+                                    <!--                                                    class="terminal-line"-->
+                                    <!--                                                    :class="`line-${line.kind || 'default'}`"-->
+                                    <!--                                            >-->
+                                    <!--                                                <span v-if="line.kind === 'command'" class="terminal-prefix">$</span>-->
+                                    <!--                                                <span class="terminal-text">{{ line.text }}</span>-->
+                                    <!--                                            </div>-->
+
+                                    <!--                                            <div-->
+                                    <!--                                                    v-if="shouldRenderTerminalCommandActions(currentOutputLines, index)"-->
+                                    <!--                                                    class="terminal-line line-default"-->
+                                    <!--                                            >-->
+                                    <!--                                                <a-->
+                                    <!--                                                        v-for="(actionItem, actionIndex) in getTerminalCommandGroupActionItems(currentOutputLines, index)"-->
+                                    <!--                                                        :key="actionItem.key"-->
+                                    <!--                                                        href="#"-->
+                                    <!--                                                        class="table-action-link-aux terminal-text"-->
+                                    <!--                                                        :style="actionIndex > 0 ? 'margin-left: 12px;' : ''"-->
+                                    <!--                                                        @click.prevent.stop="handleTerminalActionClick(actionItem)"-->
+                                    <!--                                                >-->
+                                    <!--                                                    [ {{ actionItem.type === 'preview' ? 'Preview' : 'JSON' }} ]-->
+                                    <!--                                                </a>-->
+                                    <!--                                            </div>-->
+                                    <!--                                        </template>-->
+                                    <!--                                    </template>-->
+
                                     <template v-else>
                                         <template v-for="(line, index) in currentOutputLines" :key="index">
+                                            <div
+                                                    v-if="
+                    (line.text || '').startsWith('[Command finished]')
+                    || (line.text || '').startsWith('[命令结束]')
+                "
+                                                    class="terminal-line line-default"
+                                            >
+                                                <a
+                                                        v-for="(actionItem, actionIndex) in getTerminalCommandGroupActionItems(currentOutputLines, index)"
+                                                        :key="actionItem.key"
+                                                        href="#"
+                                                        class="table-action-link-aux terminal-text"
+                                                        :style="actionIndex > 0 ? 'margin-left: 12px;' : ''"
+                                                        @click.prevent.stop="handleTerminalActionClick(actionItem)"
+                                                >
+                                                    [ {{ actionItem.type === 'preview' ? 'Preview' : 'JSON' }} ]
+                                                </a>
+                                            </div>
+
                                             <div
                                                     class="terminal-line"
                                                     :class="`line-${line.kind || 'default'}`"
@@ -219,22 +266,29 @@
                                             </div>
 
                                             <div
-                                                    v-if="shouldRenderTerminalCommandActions(currentOutputLines, index)"
-                                                    class="terminal-line"
+                                                    v-if="
+                    shouldRenderTerminalCommandActions(currentOutputLines, index)
+                    && !(
+                        (line.text || '').startsWith('[Command finished]')
+                        || (line.text || '').startsWith('[命令结束]')
+                    )
+                "
+                                                    class="terminal-line line-default"
                                             >
                                                 <a
                                                         v-for="(actionItem, actionIndex) in getTerminalCommandGroupActionItems(currentOutputLines, index)"
                                                         :key="actionItem.key"
                                                         href="#"
-                                                        class="table-action-link"
+                                                        class="table-action-link-aux terminal-text"
                                                         :style="actionIndex > 0 ? 'margin-left: 12px;' : ''"
                                                         @click.prevent.stop="handleTerminalActionClick(actionItem)"
                                                 >
-                                                    {{ actionItem.type === 'preview' ? 'Preview' : 'JSON' }}
+                                                    [ {{ actionItem.type === 'preview' ? 'Preview' : 'JSON' }} ]
                                                 </a>
                                             </div>
                                         </template>
                                     </template>
+
 
                                 </div>
                             </div>
