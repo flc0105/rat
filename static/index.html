@@ -209,16 +209,33 @@
                                     </div>
 
                                     <template v-else>
-                                        <div
-                                                v-for="(line, index) in currentOutputLines"
-                                                :key="index"
-                                                class="terminal-line"
-                                                :class="`line-${line.kind || 'default'}`"
-                                        >
-                                            <span v-if="line.kind === 'command'" class="terminal-prefix">$</span>
-                                            <span class="terminal-text">{{ line.text }}</span>
-                                        </div>
+                                        <template v-for="(line, index) in currentOutputLines" :key="index">
+                                            <div
+                                                    class="terminal-line"
+                                                    :class="`line-${line.kind || 'default'}`"
+                                            >
+                                                <span v-if="line.kind === 'command'" class="terminal-prefix">$</span>
+                                                <span class="terminal-text">{{ line.text }}</span>
+                                            </div>
+
+                                            <div
+                                                    v-if="shouldRenderTerminalCommandActions(currentOutputLines, index)"
+                                                    class="terminal-line"
+                                            >
+                                                <a
+                                                        v-for="(actionItem, actionIndex) in getTerminalCommandGroupActionItems(currentOutputLines, index)"
+                                                        :key="actionItem.key"
+                                                        href="#"
+                                                        class="table-action-link"
+                                                        :style="actionIndex > 0 ? 'margin-left: 12px;' : ''"
+                                                        @click.prevent.stop="handleTerminalActionClick(actionItem)"
+                                                >
+                                                    {{ actionItem.type === 'preview' ? 'Preview' : 'JSON' }}
+                                                </a>
+                                            </div>
+                                        </template>
                                     </template>
+
                                 </div>
                             </div>
                         </section>
@@ -1384,61 +1401,70 @@
     </el-dialog>
 
 
+    <el-dialog v-model="processDialogVisible" title="Process Manager" width="1100px" top="5vh"
+               class="fixed-dialog process-dialog" @close="closeProcessDialog">
+        <div class="fixed-dialog-body">
+            <div class="dialog-head">
+                <div class="dialog-head-left">
+                    <el-button size="small" @click="loadProcesses" :loading="processesLoading">Refresh</el-button>
+                    <el-input v-model="processFilterText" placeholder="Filter by PID, name or user" size="small"
+                              style="width: 250px; margin-left: 12px;" clearable/>
+                </div>
+                <div class="dialog-head-right">
+                    <span>Total: {{ filteredProcesses.length }}</span>
+                </div>
+            </div>
 
-<el-dialog v-model="processDialogVisible" title="Process Manager" width="1100px" top="5vh" class="fixed-dialog process-dialog" @close="closeProcessDialog">
-    <div class="fixed-dialog-body">
-        <div class="dialog-head">
-            <div class="dialog-head-left">
-                <el-button size="small" @click="loadProcesses" :loading="processesLoading">Refresh</el-button>
-                <el-input v-model="processFilterText" placeholder="Filter by PID, name or user" size="small" style="width: 250px; margin-left: 12px;" clearable />
-            </div>
-            <div class="dialog-head-right">
-                <span>Total: {{ filteredProcesses.length }}</span>
-            </div>
+            <el-tabs v-model="processActiveTab" style="margin-top: 12px;">
+                <el-tab-pane label="All Processes" name="processes">
+                    <div class="dialog-table-shell" style="height: 450px;">
+                        <el-table :data="filteredProcesses" v-loading="processesLoading" stripe height="100%"
+                                  table-layout="fixed">
+                            <el-table-column prop="pid" label="PID" width="90" align="center"></el-table-column>
+                            <el-table-column prop="name" label="Name" min-width="200"
+                                             show-overflow-tooltip></el-table-column>
+                            <el-table-column prop="username" label="User" min-width="150"
+                                             show-overflow-tooltip></el-table-column>
+                            <el-table-column prop="cpu_percent" label="CPU" width="100" align="center">
+                                <template #default="{ row }">{{ row.cpu_percent }}%</template>
+                            </el-table-column>
+                            <el-table-column prop="memory_percent" label="Memory" width="100" align="center">
+                                <template #default="{ row }">{{ row.memory_percent }}%</template>
+                            </el-table-column>
+                            <el-table-column prop="status" label="Status" width="100" align="center"></el-table-column>
+                            <el-table-column label="Actions" width="100" align="center" fixed="right">
+                                <template #default="{ row }">
+                                    <el-button size="small" type="danger" plain @click="killProcess(row.pid, row.name)">
+                                        Kill
+                                    </el-button>
+                                </template>
+                            </el-table-column>
+                        </el-table>
+                    </div>
+                </el-tab-pane>
+
+                <el-tab-pane label="Applications" name="apps">
+                    <div class="dialog-table-shell" style="height: 450px;">
+                        <el-table :data="filteredApps" v-loading="appsLoading" stripe height="100%"
+                                  table-layout="fixed">
+                            <el-table-column prop="pid" label="PID" width="100" align="center"></el-table-column>
+                            <el-table-column prop="name" label="Application Name" min-width="200"
+                                             show-overflow-tooltip></el-table-column>
+                            <el-table-column prop="username" label="User" min-width="200"
+                                             show-overflow-tooltip></el-table-column>
+                            <el-table-column label="Actions" width="150" align="center" fixed="right">
+                                <template #default="{ row }">
+                                    <el-button size="small" type="danger" plain @click="killApp(row.pid, row.name)">
+                                        Kill
+                                    </el-button>
+                                </template>
+                            </el-table-column>
+                        </el-table>
+                    </div>
+                </el-tab-pane>
+            </el-tabs>
         </div>
-
-        <el-tabs v-model="processActiveTab" style="margin-top: 12px;">
-            <el-tab-pane label="All Processes" name="processes">
-                <div class="dialog-table-shell" style="height: 450px;">
-                    <el-table :data="filteredProcesses" v-loading="processesLoading" stripe height="100%" table-layout="fixed">
-                        <el-table-column prop="pid" label="PID" width="90" align="center"></el-table-column>
-                        <el-table-column prop="name" label="Name" min-width="200" show-overflow-tooltip></el-table-column>
-                        <el-table-column prop="username" label="User" min-width="150" show-overflow-tooltip></el-table-column>
-                        <el-table-column prop="cpu_percent" label="CPU" width="100" align="center">
-                            <template #default="{ row }">{{ row.cpu_percent }}%</template>
-                        </el-table-column>
-                        <el-table-column prop="memory_percent" label="Memory" width="100" align="center">
-                            <template #default="{ row }">{{ row.memory_percent }}%</template>
-                        </el-table-column>
-                        <el-table-column prop="status" label="Status" width="100" align="center"></el-table-column>
-                        <el-table-column label="Actions" width="100" align="center" fixed="right">
-                            <template #default="{ row }">
-                                <el-button size="small" type="danger" plain @click="killProcess(row.pid, row.name)">Kill</el-button>
-                            </template>
-                        </el-table-column>
-                    </el-table>
-                </div>
-            </el-tab-pane>
-
-            <el-tab-pane label="Applications" name="apps">
-                <div class="dialog-table-shell" style="height: 450px;">
-                    <el-table :data="filteredApps" v-loading="appsLoading" stripe height="100%" table-layout="fixed">
-                        <el-table-column prop="pid" label="PID" width="100" align="center"></el-table-column>
-                        <el-table-column prop="name" label="Application Name" min-width="200" show-overflow-tooltip></el-table-column>
-                        <el-table-column prop="username" label="User" min-width="200" show-overflow-tooltip></el-table-column>
-                        <el-table-column label="Actions" width="150" align="center" fixed="right">
-                            <template #default="{ row }">
-                                <el-button size="small" type="danger" plain @click="killApp(row.pid, row.name)">Kill</el-button>
-                            </template>
-                        </el-table-column>
-                    </el-table>
-                </div>
-            </el-tab-pane>
-        </el-tabs>
-    </div>
-</el-dialog>
-
-
+    </el-dialog>
 
 
     <el-dialog v-model="agentBuilderDialogVisible" title="Build Agent" width="600px">
@@ -1471,6 +1497,21 @@
             </el-button>
 
         </template>
+    </el-dialog>
+
+
+    <el-dialog
+            v-model="terminalJsonDialogVisible"
+            :title="terminalJsonDialogTitle"
+            width="820px"
+            top="8vh"
+            class="fixed-dialog"
+    >
+        <div style="max-height: 65vh; overflow: auto;">
+            <pre
+                    style="margin: 0; white-space: pre-wrap; word-break: break-word; font-family: monospace; font-size: 13px; line-height: 1.6;"
+            >{{ terminalJsonText }}</pre>
+        </div>
     </el-dialog>
 </div>
 

@@ -222,11 +222,32 @@ window.AppSseModule = {
                 }
             });
 
-            es.addEventListener('artifact_created', async (event) => {
+                        es.addEventListener('artifact_created', async (event) => {
                 const payload = JSON.parse(event.data || '{}');
                 const fileName = payload.original_name || payload.stored_name || 'file';
 
                 if (!payload.artifact_id) return;
+
+                if (payload.client_id) {
+                    this.appendOutput(
+                        payload.client_id,
+                        `[File Ready] ${fileName}`,
+                        'success',
+                        {
+                            artifactInfo: {
+                                artifact_id: payload.artifact_id,
+                                original_name: payload.original_name || '',
+                                stored_name: payload.stored_name || '',
+                                download_url: payload.download_url || '',
+                                raw_url: payload.raw_url || '',
+                                size: payload.size || 0,
+                                hostname: payload.hostname || '',
+                                category: payload.category || '',
+                                source_type: payload.source_type || ''
+                            }
+                        }
+                    );
+                }
 
                 if (!this.selectedId || payload.client_id === this.selectedId || !payload.client_id) {
                     ElementPlus.ElNotification({
@@ -251,6 +272,36 @@ window.AppSseModule = {
                     await this.loadArtifacts();
                 }
             });
+
+    //         es.addEventListener('artifact_created', async (event) => {
+    //             const payload = JSON.parse(event.data || '{}');
+    //             const fileName = payload.original_name || payload.stored_name || 'file';
+    //
+    //             if (!payload.artifact_id) return;
+    //
+    //             if (!this.selectedId || payload.client_id === this.selectedId || !payload.client_id) {
+    //                 ElementPlus.ElNotification({
+    //                     title: 'File Ready',
+    //                     dangerouslyUseHTMLString: true,
+    //                     message: `
+    //     <div>
+    //       <div>${fileName} has been saved</div>
+    //       <div style="margin-top:6px;">
+    //         <a href="${payload.download_url || `/api/artifacts/${encodeURIComponent(payload.artifact_id)}/download`}" target="_blank" style="color:#409eff;text-decoration:none;">
+    //           Download now
+    //         </a>
+    //       </div>
+    //     </div>
+    // `,
+    //                     type: 'success',
+    //                     duration: 6000
+    //                 });
+    //             }
+    //
+    //             if (this.artifactDialogVisible) {
+    //                 await this.loadArtifacts();
+    //             }
+    //         });
 
             es.onerror = () => {
                 // EventSource reconnects automatically

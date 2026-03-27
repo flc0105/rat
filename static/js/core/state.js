@@ -81,7 +81,11 @@ window.AppStateModule = {
             connectionInfoJobCount: 0,
 
                     quickJumpPaths: {},
-        quickJumpLoading: false
+        quickJumpLoading: false,
+
+                        terminalJsonDialogVisible: false,
+            terminalJsonDialogTitle: 'JSON Viewer',
+            terminalJsonText: '',
         };
     },
 
@@ -234,6 +238,13 @@ window.AppStateModule = {
     },
 
     watch: {
+
+                terminalJsonDialogVisible(val) {
+            if (!val) {
+                this.terminalJsonDialogTitle = 'JSON Viewer';
+                this.terminalJsonText = '';
+            }
+        },
         previewDialogVisible(val) {
             if (!val) this.resetPreviewState();
         },
