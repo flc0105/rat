@@ -105,8 +105,17 @@ class WebTaskRunner:
                     0
                 )
 
+                # if status == 0:
+                #     ok = False
                 if status == 0:
-                    ok = False
+                    normalized_text = text.strip().lower()
+
+                    # 取消请求被拒绝（命令本身不支持取消）只是一条提示信息，
+                    # 不能把整个任务最终状态标记为失败。
+                    if normalized_text not in (
+                        'command does not support cancellation',
+                    ):
+                        ok = False
 
         except Exception as e:
             ok = False
