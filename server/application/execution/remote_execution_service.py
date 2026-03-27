@@ -2,6 +2,9 @@ import base64
 import json
 import os
 
+from server.application.execution.command_stream_service import CommandStreamService
+from server.application.execution.foreground_execution_service import ForegroundExecutionService
+
 
 class RemoteExecutionService:
     """
@@ -15,6 +18,12 @@ class RemoteExecutionService:
     - stream_foreground_command / run_foreground_text_command / run_foreground_json_command：
       在当前方法内部统一占用 foreground task 槽
       适用于前台同步型请求（CLI / remote file / background job 等）
+
+    当前重构说明：
+    - raw command stream / collect_result 下沉到 CommandStreamService
+    - foreground 占槽执行下沉到 ForegroundExecutionService
+    - RemoteExecutionService 保留为兼容 facade
+    - history 相关统一优先委托给 command_history_orchestrator
     """
 
     HTTP_RECEIVE_COMMAND_NAME = 'receive_http_upload'
@@ -23,10 +32,13 @@ class RemoteExecutionService:
         self.server = server
         self.history_orchestrator = getattr(server, 'command_history_orchestrator', None)
 
+        self.command_stream_service = CommandStreamService(server)
+        self.foreground_execution_service = ForegroundExecutionService(
+            self.command_stream_service
+        )
+
     def get_connection(self, target):
-        if hasattr(target, 'send_command'):
-            return target
-        return self.server.get_target_connection_by_client_id(str(target))
+        return self.command_stream_service.get_connection(target)
 
     def _encode_payload_arg(self, payload: dict) -> str:
         raw = json.dumps(payload, ensure_ascii=False).encode('utf-8')
@@ -36,6 +48,7 @@ class RemoteExecutionService:
     def _build_http_receive_command(self, payload: dict) -> str:
         return f'{self.HTTP_RECEIVE_COMMAND_NAME} {self._encode_payload_arg(payload)}'
 
+    # ------------------ history helper api ------------------ #
     def create_history_entry(self, target, command: str, source: str = 'cli', should_record: bool = True) -> str:
         session = self.get_connection(target)
 
@@ -105,18 +118,11 @@ class RemoteExecutionService:
             text,
             eof
         )
+
+    # ------------------ raw stream facade api ------------------ #
     def collect_result(self, result_iter):
-        final_status = 1
-        parts = []
+        return self.command_stream_service.collect_result(result_iter)
 
-        for status, text in result_iter:
-            final_status = status
-            if text is not None:
-                parts.append(str(text))
-
-        return final_status, '\n'.join(part for part in parts if part).strip()
-
-    # ------------------ raw stream api ------------------ #
     def stream_command(
         self,
         target,
@@ -126,12 +132,12 @@ class RemoteExecutionService:
         extra=None,
         history_entry_id: str = '',
     ):
-        session = self.get_connection(target)
-        return session.send_command(
+        return self.command_stream_service.stream_command(
+            target,
             command,
-            type=command_type,
+            command_type=command_type,
             extra=extra,
-            history_entry_id=history_entry_id
+            history_entry_id=history_entry_id,
         )
 
     def stream_structured_command(
@@ -143,7 +149,7 @@ class RemoteExecutionService:
         extra,
         history_entry_id: str = '',
     ):
-        return self.stream_command(
+        return self.command_stream_service.stream_structured_command(
             target,
             command,
             command_type=command_type,
@@ -151,7 +157,41 @@ class RemoteExecutionService:
             history_entry_id=history_entry_id,
         )
 
-    # ------------------ foreground guard api ------------------ #
+    def run_text_command(
+        self,
+        target,
+        command: str,
+        *,
+        command_type: str = 'command',
+        extra=None,
+        history_entry_id: str = '',
+    ) -> str:
+        return self.command_stream_service.run_text_command(
+            target,
+            command,
+            command_type=command_type,
+            extra=extra,
+            history_entry_id=history_entry_id,
+        )
+
+    def run_json_command(
+        self,
+        target,
+        command: str,
+        *,
+        command_type: str = 'command',
+        extra=None,
+        history_entry_id: str = '',
+    ) -> dict:
+        return self.command_stream_service.run_json_command(
+            target,
+            command,
+            command_type=command_type,
+            extra=extra,
+            history_entry_id=history_entry_id,
+        )
+
+    # ------------------ foreground guard facade api ------------------ #
     def stream_foreground_command(
         self,
         target,
@@ -164,86 +204,16 @@ class RemoteExecutionService:
         source: str = 'foreground',
         task_id: str = '',
     ):
-        """
-        统一前台执行入口：
-        凡是前台同步等待 session.send_command() 结果流的请求，都必须走这里。
-        """
-        session = self.get_connection(target)
-
-        acquired_task = session.acquire_foreground_task(
-            task_type=task_type,
-            command=command,
-            source=source,
-            task_id=task_id,
-        )
-
-        effective_task_id = acquired_task.get('task_id', '') if isinstance(acquired_task, dict) else ''
-
-        try:
-            result_iter = session.send_command(
-                command,
-                type=command_type,
-                extra=extra,
-                history_entry_id=history_entry_id
-            )
-            for item in result_iter:
-                yield item
-        finally:
-            session.release_foreground_task(
-                task_id=effective_task_id or task_id,
-                command=command
-            )
-
-    def run_text_command(
-        self,
-        target,
-        command: str,
-        *,
-        command_type: str = 'command',
-        extra=None,
-        history_entry_id: str = '',
-    ) -> str:
-        status, text = self.collect_result(
-            self.stream_command(
-                target,
-                command,
-                command_type=command_type,
-                extra=extra,
-                history_entry_id=history_entry_id,
-            )
-        )
-
-        if status != 1:
-            raise RuntimeError(text or 'Remote command failed')
-
-        return text
-
-    def run_json_command(
-        self,
-        target,
-        command: str,
-        *,
-        command_type: str = 'command',
-        extra=None,
-        history_entry_id: str = '',
-    ) -> dict:
-        text = self.run_text_command(
+        return self.foreground_execution_service.stream_foreground_command(
             target,
             command,
             command_type=command_type,
             extra=extra,
             history_entry_id=history_entry_id,
+            task_type=task_type,
+            source=source,
+            task_id=task_id,
         )
-
-        try:
-            payload = json.loads(text or '{}')
-        except Exception as e:
-            raise RuntimeError(f'Invalid remote JSON payload: {e}')
-
-        if not isinstance(payload, dict):
-            raise RuntimeError('Invalid remote JSON payload: expected object')
-
-        return payload
 
     def run_foreground_text_command(
         self,
@@ -257,23 +227,16 @@ class RemoteExecutionService:
         source: str = 'foreground',
         task_id: str = '',
     ) -> str:
-        status, text = self.collect_result(
-            self.stream_foreground_command(
-                target,
-                command,
-                command_type=command_type,
-                extra=extra,
-                history_entry_id=history_entry_id,
-                task_type=task_type,
-                source=source,
-                task_id=task_id,
-            )
+        return self.foreground_execution_service.run_foreground_text_command(
+            target,
+            command,
+            command_type=command_type,
+            extra=extra,
+            history_entry_id=history_entry_id,
+            task_type=task_type,
+            source=source,
+            task_id=task_id,
         )
-
-        if status != 1:
-            raise RuntimeError(text or 'Remote command failed')
-
-        return text
 
     def run_foreground_json_command(
         self,
@@ -287,7 +250,7 @@ class RemoteExecutionService:
         source: str = 'foreground',
         task_id: str = '',
     ) -> dict:
-        text = self.run_foreground_text_command(
+        return self.foreground_execution_service.run_foreground_json_command(
             target,
             command,
             command_type=command_type,
@@ -297,16 +260,6 @@ class RemoteExecutionService:
             source=source,
             task_id=task_id,
         )
-
-        try:
-            payload = json.loads(text or '{}')
-        except Exception as e:
-            raise RuntimeError(f'Invalid remote JSON payload: {e}')
-
-        if not isinstance(payload, dict):
-            raise RuntimeError('Invalid remote JSON payload: expected object')
-
-        return payload
 
     # ------------------ upload ------------------ #
     def stream_upload(
@@ -334,9 +287,10 @@ class RemoteExecutionService:
                 'save_dir': remote_path,
             })
 
-            result_iter = session.send_command(
+            result_iter = self.stream_command(
+                session,
                 command,
-                type='command',
+                command_type='command',
                 extra=None,
                 history_entry_id=history_entry_id
             )
