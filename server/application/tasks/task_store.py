@@ -2,6 +2,8 @@ import threading
 import uuid
 from datetime import datetime
 
+from server.application.tasks.task_status import WebTaskStatus
+
 
 class WebTaskStore:
     """
@@ -31,7 +33,7 @@ class WebTaskStore:
             'client_id': client_id,
             'command': command,
             'tab_id': (tab_id or '').strip(),
-            'status': 'running',
+            'status': WebTaskStatus.RUNNING,
             'cancel_requested': False,
             'created_at': datetime.now().isoformat(),
             'finished_at': None,
@@ -52,8 +54,8 @@ class WebTaskStore:
                 return None
 
             task['cancel_requested'] = True
-            if task.get('status') == 'running':
-                task['status'] = 'cancelling'
+            if task.get('status') == WebTaskStatus.RUNNING:
+                task['status'] = WebTaskStatus.CANCELLING
             return dict(task)
 
     def append_chunk(self, task_id: str, status: int, text: str) -> None:
@@ -80,7 +82,7 @@ class WebTaskStore:
             return False
         return False
 
-    def finish_task(self, task_id: str, ok: bool) -> None:
+    def finish_task(self, task_id: str, ok: bool, final_status: str = '') -> None:
         """
         标记任务完成
         """
@@ -89,10 +91,14 @@ class WebTaskStore:
             if not task:
                 return
 
-            if task.get('cancel_requested') and self._task_has_cancelled_output(task):
-                task['status'] = 'cancelled'
+            normalized_final_status = str(final_status or '').strip()
+            if normalized_final_status in WebTaskStatus.TERMINAL_STATUSES:
+                task['status'] = normalized_final_status
             else:
-                task['status'] = 'success' if ok else 'error'
+                if task.get('cancel_requested') and self._task_has_cancelled_output(task):
+                    task['status'] = WebTaskStatus.CANCELLED
+                else:
+                    task['status'] = WebTaskStatus.SUCCESS if ok else WebTaskStatus.ERROR
 
             task['finished_at'] = datetime.now().isoformat()
 
@@ -101,7 +107,7 @@ class WebTaskStore:
             task = self._tasks.get(task_id)
             if not task:
                 return False
-            return task.get('status') == 'cancelled'
+            return task.get('status') == WebTaskStatus.CANCELLED
 
     def get_task(self, task_id: str):
         """

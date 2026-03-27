@@ -4,7 +4,7 @@ import sys
 import time
 
 from client.commands.command_context import CommandCancelledError, CommandTimeoutError
-from client.commands.interrupts import interruptible
+from client.commands.interrupts import interruptible, cancel_policy
 from client.commands.python_execution.factory import (
     build_python_execution_strategy,
     get_python_execution_mode
@@ -247,6 +247,12 @@ class CommandExecutionMixin:
             self._send_final_result(0, 'Command timed out and was terminated')
         except Exception as e:
             self._send_final_result(0, f'Failed to execute command: {e}')
+
+    @desc('Run a command with live output (No cancel test)', group='shell')
+    @interruptible()
+    @cancel_policy(False)
+    def read_nocancel(self, command):
+       self.read(command)
 
     @desc('Execute Python code and collect output', group='shell')
     @interruptible()

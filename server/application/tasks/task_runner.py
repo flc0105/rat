@@ -1,9 +1,11 @@
 import os
 import shutil
-from datetime import datetime
 
 from server.application.command.executor import CommandExecutor
 from server.application.execution.remote_execution_service import RemoteExecutionService
+from server.application.tasks.task_event_publisher import WebTaskEventPublisher
+from server.application.tasks.task_history_recorder import WebTaskHistoryRecorder
+from server.application.tasks.task_stream_orchestrator import WebTaskStreamOrchestrator
 
 
 class WebTaskRunner:
@@ -19,6 +21,11 @@ class WebTaskRunner:
 
     新增：
     - 按 task.tab_id 定向推送前台命令结果
+
+    当前进一步拆分：
+    - 结果事件发布：WebTaskEventPublisher
+    - history 记录：WebTaskHistoryRecorder
+    - stream 生命周期编排：WebTaskStreamOrchestrator
     """
 
     def __init__(self, server, event_bus, task_store):
@@ -28,119 +35,19 @@ class WebTaskRunner:
         self.remote_execution_service = RemoteExecutionService(server)
         self.history_orchestrator = self.server.command_history_orchestrator
 
-    def _get_task_tab_id(self, task_id: str) -> str:
-        task = self.task_store.get_task(task_id) or {}
-        return (task.get('tab_id') or '').strip()
-
-    # ------------------ task event publish ------------------ #
-    def _publish_task_result(self, task_id: str, client_id: str, command: str, status: int, text: str):
-        """
-        发布 Web 任务执行中的单条结果，并写入任务记录
-        """
-        self.task_store.append_chunk(task_id, status, text)
-        target_tab_id = self._get_task_tab_id(task_id)
-
-        self.event_bus.publish(
-            'command_result',
-            {
-                'task_id': task_id,
-                'client_id': client_id,
-                'command': command,
-                'status': status,
-                'text': text,
-                'time': datetime.now().isoformat()
-            },
-            target_tab_id=target_tab_id
+        self.event_publisher = WebTaskEventPublisher(
+            event_bus=self.event_bus,
+            task_store=self.task_store,
         )
-
-    def _publish_task_complete(self, task_id: str, client_id: str, command: str, ok: bool):
-        """
-        发布 Web 任务完成事件
-        """
-        target_tab_id = self._get_task_tab_id(task_id)
-        task = self.task_store.get_task(task_id) or {}
-        task_status = task.get('status') or ('success' if ok else 'error')
-
-        self.event_bus.publish(
-            'command_complete',
-            {
-                'task_id': task_id,
-                'client_id': client_id,
-                'command': command,
-                'success': ok,
-                'status': task_status,
-                'cancel_requested': bool(task.get('cancel_requested')),
-                'cancelled': task_status == 'cancelled',
-                'time': datetime.now().isoformat()
-            },
-            target_tab_id=target_tab_id
+        self.history_recorder = WebTaskHistoryRecorder(
+            history_orchestrator=self.history_orchestrator,
+            task_store=self.task_store,
         )
-
-    # ------------------ core stream runner ------------------ #
-    def _run_task_stream(self, conn, task_id: str, command: str, result_iter):
-        """
-        统一执行 Web 任务结果流：
-        - 消费生成器输出
-        - 记录任务分片
-        - 推送 SSE 结果
-        - 统一异常处理
-        - 统一结束收尾
-        """
-        client_id = conn.info.get('id')
-        ok = True
-
-        task = self.task_store.get_task(task_id) or {}
-        history_entry_id = task.get('history_entry_id') or ''
-
-        try:
-            for status, result in result_iter:
-                text = '' if result is None else str(result)
-                self._publish_task_result(task_id, client_id, command, status, text)
-
-                self.history_orchestrator.append_output(
-                    conn,
-                    history_entry_id,
-                    status,
-                    text,
-                    0
-                )
-
-                # if status == 0:
-                #     ok = False
-                if status == 0:
-                    normalized_text = text.strip().lower()
-
-                    # 取消请求被拒绝（命令本身不支持取消）只是一条提示信息，
-                    # 不能把整个任务最终状态标记为失败。
-                    if normalized_text not in (
-                        'command does not support cancellation',
-                    ):
-                        ok = False
-
-        except Exception as e:
-            ok = False
-            text = str(e)
-            self._publish_task_result(task_id, client_id, command, 0, text)
-
-            self.history_orchestrator.append_output(
-                conn,
-                history_entry_id,
-                0,
-                text,
-                0
-            )
-
-        finally:
-            self.task_store.finish_task(task_id, ok)
-
-            self.history_orchestrator.finalize_execution(
-                conn,
-                history_entry_id,
-                ok and not self.task_store.is_task_cancelled(task_id),
-                cwd_end=conn.info.get('cwd', '')
-            )
-
-            self._publish_task_complete(task_id, client_id, command, ok)
+        self.stream_orchestrator = WebTaskStreamOrchestrator(
+            task_store=self.task_store,
+            event_publisher=self.event_publisher,
+            history_recorder=self.history_recorder,
+        )
 
     # ------------------ command ------------------ #
     def run_command_task(self, conn, task_id: str, command: str):
@@ -155,7 +62,7 @@ class WebTaskRunner:
                     raise RuntimeError('Unable to resolve command')
                 yield from func()
 
-            self._run_task_stream(conn, task_id, command, _result_iter())
+            self.stream_orchestrator.run_stream(conn, task_id, command, _result_iter())
         finally:
             conn.release_foreground_task(task_id=task_id, command=command)
 
@@ -167,7 +74,7 @@ class WebTaskRunner:
             task = self.task_store.get_task(task_id) or {}
             history_entry_id = task.get('history_entry_id') or ''
 
-            self._run_task_stream(
+            self.stream_orchestrator.run_stream(
                 conn,
                 task_id,
                 command,
