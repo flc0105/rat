@@ -8,6 +8,11 @@ class WebTaskStatus:
     ERROR = 'error'
     CANCELLED = 'cancelled'
 
+    ACTIVE_STATUSES = {
+        RUNNING,
+        CANCELLING,
+    }
+
     TERMINAL_STATUSES = {
         SUCCESS,
         ERROR,
@@ -45,8 +50,12 @@ class TaskStreamSummary:
         if 'timed out' in normalized_text:
             self.has_timeout_output = True
 
-        if normalized_status == 0 and normalized_text not in self.NON_FATAL_ERROR_TEXTS:
-            self.has_failure = True
+        if normalized_status == 0:
+            if (
+                normalized_text not in self.NON_FATAL_ERROR_TEXTS
+                and 'does not support cancellation' not in normalized_text
+            ):
+                self.has_failure = True
 
     def mark_exception(self):
         self.has_failure = True
