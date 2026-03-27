@@ -4,10 +4,10 @@ import sys
 import time
 
 from client.commands.command_context import CommandCancelledError, CommandTimeoutError
-from client.commands.interrupts import interruptible, cancel_policy
+from client.commands.interrupts import interruptible
 from client.commands.python_execution.factory import (
     build_python_execution_strategy,
-get_python_execution_mode
+    get_python_execution_mode
 )
 from client.commands.services.process_execution_service import ProcessExecutionService
 from client.config.runtime_config import (
@@ -231,27 +231,6 @@ class CommandExecutionMixin:
     @desc('Run a command with live output', group='shell')
     @interruptible()
     def read(self, command):
-        try:
-            process = self._start_stream_process(command)
-            self._start_output_threads(process)
-            self._wait_stream_process(process)
-            time.sleep(0.1)
-
-            if process.returncode == 0:
-                self._send_final_result(1, "Command completed")
-            else:
-                self._send_final_result(0, f'Command exited with code {process.returncode}')
-        except CommandCancelledError:
-            self._send_final_result(0, 'Command cancelled')
-        except (CommandTimeoutError, subprocess.TimeoutExpired):
-            self._send_final_result(0, 'Command timed out and was terminated')
-        except Exception as e:
-            self._send_final_result(0, f'Failed to execute command: {e}')
-
-    @desc('Run a command with live output', group='shell')
-    @interruptible()
-    @cancel_policy(False)
-    def read_nocancel(self, command):
         try:
             process = self._start_stream_process(command)
             self._start_output_threads(process)
