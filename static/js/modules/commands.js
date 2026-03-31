@@ -1,63 +1,63 @@
 window.AppCommandsModule = {
     methods: {
         // static/js/modules/commands.js
-buildConnectionIdentityKey(item) {
-    if (!item) return '';
-    // 直接返回 clientId 作为唯一标识
-    return item.client_id;
-},
+        buildConnectionIdentityKey(item) {
+            if (!item) return '';
+            // 直接返回 clientId 作为唯一标识
+            return item.client_id;
+        },
 
-dedupeConnections(items) {
-    const order = {online: 0, stale: 1, offline: 2};
-    const grouped = new Map();
+        dedupeConnections(items) {
+            const order = {online: 0, stale: 1, offline: 2};
+            const grouped = new Map();
 
-    (Array.isArray(items) ? items : []).forEach((item) => {
-        if (!item || !item.client_id) return;
+            (Array.isArray(items) ? items : []).forEach((item) => {
+                if (!item || !item.client_id) return;
 
-        const key = item.client_id;  // 直接用 clientId
-        const existing = grouped.get(key);
+                const key = item.client_id;  // 直接用 clientId
+                const existing = grouped.get(key);
 
-        if (!existing) {
-            grouped.set(key, {...item});
-            return;
-        }
+                if (!existing) {
+                    grouped.set(key, {...item});
+                    return;
+                }
 
-        const existingState = this.getConnectionDisplayState(existing);
-        const currentState = this.getConnectionDisplayState(item);
+                const existingState = this.getConnectionDisplayState(existing);
+                const currentState = this.getConnectionDisplayState(item);
 
-        const existingOrder = Object.prototype.hasOwnProperty.call(order, existingState) ? order[existingState] : 9;
-        const currentOrder = Object.prototype.hasOwnProperty.call(order, currentState) ? order[currentState] : 9;
+                const existingOrder = Object.prototype.hasOwnProperty.call(order, existingState) ? order[existingState] : 9;
+                const currentOrder = Object.prototype.hasOwnProperty.call(order, currentState) ? order[currentState] : 9;
 
-        if (currentOrder < existingOrder) {
-            grouped.set(key, {...existing, ...item});
-            return;
-        }
+                if (currentOrder < existingOrder) {
+                    grouped.set(key, {...existing, ...item});
+                    return;
+                }
 
-        if (currentOrder > existingOrder) {
-            return;
-        }
+                if (currentOrder > existingOrder) {
+                    return;
+                }
 
-        const existingTime = String(existing.last_seen_at || existing.connected_at || existing.disconnected_at || '');
-        const currentTime = String(item.last_seen_at || item.connected_at || item.disconnected_at || '');
+                const existingTime = String(existing.last_seen_at || existing.connected_at || existing.disconnected_at || '');
+                const currentTime = String(item.last_seen_at || item.connected_at || item.disconnected_at || '');
 
-        if (currentTime >= existingTime) {
-            grouped.set(key, {...existing, ...item});
-        }
-    });
+                if (currentTime >= existingTime) {
+                    grouped.set(key, {...existing, ...item});
+                }
+            });
 
-    return Array.from(grouped.values()).sort((a, b) => {
-        const sa = this.getConnectionDisplayState(a);
-        const sb = this.getConnectionDisplayState(b);
+            return Array.from(grouped.values()).sort((a, b) => {
+                const sa = this.getConnectionDisplayState(a);
+                const sb = this.getConnectionDisplayState(b);
 
-        const oa = Object.prototype.hasOwnProperty.call(order, sa) ? order[sa] : 9;
-        const ob = Object.prototype.hasOwnProperty.call(order, sb) ? order[sb] : 9;
-        if (oa !== ob) return oa - ob;
+                const oa = Object.prototype.hasOwnProperty.call(order, sa) ? order[sa] : 9;
+                const ob = Object.prototype.hasOwnProperty.call(order, sb) ? order[sb] : 9;
+                if (oa !== ob) return oa - ob;
 
-        const ta = String(a.last_seen_at || a.connected_at || a.disconnected_at || '');
-        const tb = String(b.last_seen_at || b.connected_at || b.disconnected_at || '');
-        return tb.localeCompare(ta);
-    });
-},
+                const ta = String(a.last_seen_at || a.connected_at || a.disconnected_at || '');
+                const tb = String(b.last_seen_at || b.connected_at || b.disconnected_at || '');
+                return tb.localeCompare(ta);
+            });
+        },
         // buildConnectionIdentityKey(item) {
         //     if (!item) return '';
         //     const hostname = String(item.hostname || '').trim().toLowerCase();
@@ -119,85 +119,77 @@ dedupeConnections(items) {
         // },
 
 
+        isFileReadyLine(line) {
+            const text = (line?.text || '')
+            return text.startsWith('[File Ready]')
+        },
 
-isCommandFinishedLine(line) {
-    const text = (line?.text || '')
-    return text.startsWith('[Command finished]') || text.startsWith('[命令结束]')
-  },
+        isCommandFinishedLine(line) {
+            const text = (line?.text || '')
+            return text.startsWith('[Command finished]') || text.startsWith('[命令结束]')
+        },
 
-  isFileReadyLine(line) {
-    const text = (line?.text || '')
-    return text.startsWith('[File Ready]')
-  },
+        getTerminalInlineActionItems(lines, index) {
+            const line = lines[index]
+            if (!line) return []
 
-  shouldRenderInlineAction(lines, index) {
-    return this.getTerminalInlineActionItems(lines, index).length > 0
-  },
+            if (!this.isFileReadyLine(line)) return []
 
-  getTerminalInlineActionItems(lines, index) {
-    const line = lines[index]
-    if (!line) return []
+            const groupItems = this.getTerminalCommandGroupActionItems(lines, index) || []
+            const usedKeysBefore = this.getUsedInlineActionKeysBeforeLine(lines, index)
 
-    // 目前只把 preview 优先挂到 [File Ready] 行上
-    if (!this.isFileReadyLine(line)) return []
+            const previewItem = groupItems.find(item => {
+                return item.type === 'preview' && !usedKeysBefore.has(item.key)
+            })
 
-    const groupItems = this.getTerminalCommandGroupActionItems(lines, index) || []
-    const usedKeysBeforeCurrentLine = this.getUsedInlineActionKeysBeforeLine(lines, index)
+            return previewItem ? [previewItem] : []
+        },
 
-    const previewItem = groupItems.find(item => {
-      return item.type === 'preview' && !usedKeysBeforeCurrentLine.has(item.key)
-    })
+        getTerminalTailActionItems(lines, index) {
+            const line = lines[index]
+            if (!line || !this.isCommandFinishedLine(line)) return []
 
-    return previewItem ? [previewItem] : []
-  },
+            const groupItems = this.getTerminalCommandGroupActionItems(lines, index) || []
+            const usedKeysUpToCurrent = this.getUsedInlineActionKeysUpToLine(lines, index)
 
-  getTerminalTailActionItems(lines, index) {
-    const groupItems = this.getTerminalCommandGroupActionItems(lines, index) || []
-    const usedKeysUpToCurrentLine = this.getUsedInlineActionKeysUpToLine(lines, index)
+            return groupItems.filter(item => !usedKeysUpToCurrent.has(item.key))
+        },
 
-    return groupItems.filter(item => !usedKeysUpToCurrentLine.has(item.key))
-  },
+        getUsedInlineActionKeysBeforeLine(lines, endIndexExclusive) {
+            const used = new Set()
 
-  getUsedInlineActionKeysBeforeLine(lines, endIndexExclusive) {
-    const used = new Set()
+            for (let i = 0; i < endIndexExclusive; i += 1) {
+                const line = lines[i]
+                if (!this.isFileReadyLine(line)) continue
 
-    for (let i = 0; i < endIndexExclusive; i += 1) {
-      const line = lines[i]
-      if (!this.isFileReadyLine(line)) continue
+                const groupItems = this.getTerminalCommandGroupActionItems(lines, i) || []
+                const previewItem = groupItems.find(item => item.type === 'preview' && !used.has(item.key))
 
-      const groupItems = this.getTerminalCommandGroupActionItems(lines, i) || []
-      const previewItem = groupItems.find(item => {
-        return item.type === 'preview' && !used.has(item.key)
-      })
+                if (previewItem) {
+                    used.add(previewItem.key)
+                }
+            }
 
-      if (previewItem) {
-        used.add(previewItem.key)
-      }
-    }
+            return used
+        },
 
-    return used
-  },
+        getUsedInlineActionKeysUpToLine(lines, endIndexInclusive) {
+            const used = new Set()
 
-  getUsedInlineActionKeysUpToLine(lines, endIndexInclusive) {
-    const used = new Set()
+            for (let i = 0; i <= endIndexInclusive; i += 1) {
+                const line = lines[i]
+                if (!this.isFileReadyLine(line)) continue
 
-    for (let i = 0; i <= endIndexInclusive; i += 1) {
-      const line = lines[i]
-      if (!this.isFileReadyLine(line)) continue
+                const groupItems = this.getTerminalCommandGroupActionItems(lines, i) || []
+                const previewItem = groupItems.find(item => item.type === 'preview' && !used.has(item.key))
 
-      const groupItems = this.getTerminalCommandGroupActionItems(lines, i) || []
-      const previewItem = groupItems.find(item => {
-        return item.type === 'preview' && !used.has(item.key)
-      })
+                if (previewItem) {
+                    used.add(previewItem.key)
+                }
+            }
 
-      if (previewItem) {
-        used.add(previewItem.key)
-      }
-    }
-
-    return used
-  },
-
+            return used
+        },
 
 
         setActiveTask(clientId, taskId) {
