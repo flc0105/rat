@@ -208,56 +208,60 @@
                                         </div>
                                     </div>
 
-                                    <template v-else>
-  <template v-for="(line, index) in currentOutputLines" :key="index">
-    <!-- 命令结束行 -->
-    <div
-      v-if="isCommandFinishedLine(line)"
-      class="terminal-line line-default"
-    >
-      <a
-        v-for="(actionItem, actionIndex) in getTerminalTailActionItems(currentOutputLines, index)"
-        :key="actionItem.key"
-        href="#"
-        class="table-action-link-aux terminal-text"
-        :style="actionIndex > 0 ? { marginLeft: '12px' } : null"
-        @click.prevent.stop="handleTerminalActionClick(actionItem)"
-      >
-        [ {{ actionItem.type === 'preview' ? 'Preview' : 'View JSON' }} ]
-      </a>
-    </div>
-
-    <!-- 普通行 / File Ready 行 -->
-    <div
-      v-else
-      class="terminal-line"
-      :class="[
-        `line-${line.kind || 'default'}`,
-        { 'terminal-line-with-action': shouldRenderInlineAction(currentOutputLines, index) }
-      ]"
-    >
-      <div class="terminal-line-main">
-        <span v-if="line.kind === 'command'" class="terminal-prefix">$</span>
-        <span class="terminal-text terminal-line-text">{{ line.text }}</span>
-      </div>
-
-      <div
-        v-if="shouldRenderInlineAction(currentOutputLines, index)"
-        class="terminal-line-actions"
-      >
-        <a
-          v-for="(actionItem, actionIndex) in getTerminalInlineActionItems(currentOutputLines, index)"
-          :key="actionItem.key"
-          href="#"
-          class="table-action-link-aux terminal-text"
-          :style="actionIndex > 0 ? { marginLeft: '12px' } : null"
-          @click.prevent.stop="handleTerminalActionClick(actionItem)"
+                                   <template v-else>
+    <template v-for="(line, index) in currentOutputLines" :key="index">
+        <div
+            class="terminal-line"
+            :class="[
+                `line-${line.kind || 'default'}`,
+                { 'terminal-line-with-inline-action': getTerminalInlineActionItems(currentOutputLines, index).length > 0 }
+            ]"
         >
-          [ {{ actionItem.type === 'preview' ? 'Preview' : 'JSON' }} ]
-        </a>
-      </div>
-    </div>
-  </template>
+            <div class="terminal-line-content">
+                <span v-if="line.kind === 'command'" class="terminal-prefix">$</span>
+                <span class="terminal-text">{{ line.text }}</span>
+            </div>
+
+            <div
+                v-if="getTerminalInlineActionItems(currentOutputLines, index).length > 0"
+                class="terminal-line-inline-actions"
+            >
+                <a
+                    v-for="(actionItem, actionIndex) in getTerminalInlineActionItems(currentOutputLines, index)"
+                    :key="actionItem.key"
+                    href="#"
+                    class="table-action-link-aux terminal-text"
+                    :style="actionIndex > 0 ? 'margin-left: 12px;' : ''"
+                    @click.prevent.stop="handleTerminalActionClick(actionItem)"
+                >
+                    [ {{ actionItem.type === 'preview' ? 'Preview' : 'JSON' }} ]
+                </a>
+            </div>
+        </div>
+
+        <div
+            v-if="
+                (
+                    (line.text || '').startsWith('[Command finished]')
+                    || (line.text || '').startsWith('[命令结束]')
+                )
+                && getTerminalTailActionItems(currentOutputLines, index).length > 0
+            "
+            class="terminal-line"
+            :class="`line-${line.kind || 'default'}`"
+        >
+            <a
+                v-for="(actionItem, actionIndex) in getTerminalTailActionItems(currentOutputLines, index)"
+                :key="actionItem.key"
+                href="#"
+                class="table-action-link-aux terminal-text"
+                :style="actionIndex > 0 ? 'margin-left: 12px;' : ''"
+                @click.prevent.stop="handleTerminalActionClick(actionItem)"
+            >
+                [ {{ actionItem.type === 'preview' ? 'Preview' : 'View JSON' }} ]
+            </a>
+        </div>
+    </template>
 </template>
 
 
