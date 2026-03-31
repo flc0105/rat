@@ -1,3 +1,4 @@
+
 import json
 import os
 import queue
@@ -206,6 +207,29 @@ def create_app(server_instance):
     def clear_command_history(client_id):
         return _json_endpoint(
             lambda: web_service.clear_command_history(client_id),
+            default_error_status=500
+        )
+
+    @app.post('/api/connections/<client_id>/command-history/pin')
+    def set_command_history_pinned(client_id):
+        def _execute():
+            payload = _get_json_payload()
+            command = (payload.get('command') or '').strip()
+            if not command:
+                raise ValueError('command is required')
+
+            return web_service.set_command_history_pinned(
+                client_id,
+                command,
+                payload.get('is_pinned', False)
+            )
+
+        return _json_endpoint(_execute, default_error_status=500)
+
+    @app.delete('/api/connections/<client_id>/command-history/full/<entry_id>')
+    def delete_command_execution_history_entry(client_id, entry_id):
+        return _json_endpoint(
+            lambda: web_service.delete_command_execution_history_entry(client_id, entry_id),
             default_error_status=500
         )
 
@@ -728,5 +752,3 @@ def create_app(server_instance):
         return _json_endpoint(_execute, default_error_status=500)
 
     return app
-
-

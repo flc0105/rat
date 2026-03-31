@@ -1,3 +1,4 @@
+
 from server.models.history import HistoryFileRef
 
 
@@ -145,3 +146,65 @@ class HistoryWriteService:
 
         with self.store._lock:
             self.store._write_entries(hostname, [])
+
+    def set_command_pinned_for_connection(self, conn, command: str, is_pinned: bool):
+        """
+        设置指定命令的置顶状态。
+        quick history 是按 command 去重展示，因此这里按 command 维度批量更新。
+        """
+        if conn is None:
+            return False
+
+        command_text = str(command or '').strip()
+        if not command_text:
+            return False
+
+        hostname = self.store._get_hostname_from_conn(conn)
+        pinned = bool(is_pinned)
+        changed = False
+
+        with self.store._lock:
+            entries = self.store._read_entries(hostname)
+
+            for item in entries:
+                self.store._normalize_entry_flags(item)
+                if (item.get('command') or '') != command_text:
+                    continue
+
+                if item.get('is_pinned') == pinned:
+                    continue
+
+                item['is_pinned'] = pinned
+                item['pinned_at'] = self.store._now_text() if pinned else ''
+                changed = True
+
+            if changed:
+                self.store._write_entries(hostname, entries)
+
+        return changed
+
+    def delete_execution_entry_for_connection(self, conn, entry_id: str):
+        """
+        删除指定 execution history 单条记录。
+        """
+        if conn is None:
+            return False
+
+        target_entry_id = str(entry_id or '').strip()
+        if not target_entry_id:
+            return False
+
+        hostname = self.store._get_hostname_from_conn(conn)
+
+        with self.store._lock:
+            entries = self.store._read_entries(hostname)
+            new_entries = [
+                item for item in entries
+                if str(item.get('entry_id') or '').strip() != target_entry_id
+            ]
+
+            if len(new_entries) == len(entries):
+                return False
+
+            self.store._write_entries(hostname, new_entries)
+            return True

@@ -1,3 +1,4 @@
+
 import os
 
 from server.application.assembly import ServerApplicationAssembly
@@ -176,6 +177,27 @@ class ServerWebService:
         session = self.server.get_target_connection_by_client_id(client_id)
         self.server.command_history.clear_history_for_connection(session)
         return None
+
+    def set_command_history_pinned(self, client_id: str, command: str, is_pinned: bool):
+        session = self.server.get_target_connection_by_client_id(client_id)
+        changed = self.server.command_history.set_command_pinned_for_connection(
+            session,
+            command,
+            is_pinned,
+        )
+        return {
+            'command': (command or '').strip(),
+            'is_pinned': bool(is_pinned),
+            'changed': bool(changed),
+        }
+
+    def delete_command_execution_history_entry(self, client_id: str, entry_id: str):
+        session = self.server.get_target_connection_by_client_id(client_id)
+        deleted = self.server.command_history.delete_execution_entry_for_connection(session, entry_id)
+        return {
+            'entry_id': (entry_id or '').strip(),
+            'deleted': bool(deleted),
+        }
 
     def submit_web_command(self, client_id: str, command: str, tab_id: str = ''):
         return self.task_service.submit_web_command(client_id, command, tab_id=tab_id)

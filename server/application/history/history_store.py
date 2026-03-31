@@ -1,3 +1,4 @@
+
 import json
 import os
 import threading
@@ -105,6 +106,9 @@ class CommandHistoryStore:
             'cwd_start': info.get('cwd') or '',
             'cwd_end': '',
 
+            'is_pinned': False,
+            'pinned_at': '',
+
             'has_output': False,
             'output_summary': '',
             'output_line_count': 0,
@@ -176,6 +180,14 @@ class CommandHistoryStore:
 
         entry['duration_ms'] = max(int((end_dt - start_dt).total_seconds() * 1000), 0)
 
+    def _normalize_entry_flags(self, entry: dict) -> dict:
+        if not isinstance(entry, dict):
+            return {}
+
+        entry['is_pinned'] = bool(entry.get('is_pinned', False))
+        entry['pinned_at'] = str(entry.get('pinned_at') or '').strip()
+        return entry
+
     # ------------------ public write api ------------------ #
     def create_entry_for_connection(self, conn, command: str, source: str = 'cli'):
         return self.write_service.create_entry_for_connection(conn, command, source=source)
@@ -191,6 +203,12 @@ class CommandHistoryStore:
 
     def clear_history_for_connection(self, conn):
         return self.write_service.clear_history_for_connection(conn)
+
+    def set_command_pinned_for_connection(self, conn, command: str, is_pinned: bool):
+        return self.write_service.set_command_pinned_for_connection(conn, command, is_pinned)
+
+    def delete_execution_entry_for_connection(self, conn, entry_id: str):
+        return self.write_service.delete_execution_entry_for_connection(conn, entry_id)
 
     # ------------------ public view api ------------------ #
     def get_history_for_connection(self, conn) -> list:

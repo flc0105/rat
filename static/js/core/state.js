@@ -1,3 +1,4 @@
+
 window.AppStateModule = {
     data() {
         return {
@@ -11,8 +12,10 @@ window.AppStateModule = {
             commandHistoryDialogVisible: false,
             commandHistoryLoading: false,
             commandHistoryItems: [],
+            commandHistoryPinningCommand: '',
             commandExecutionHistoryLoading: false,
             commandExecutionItems: [],
+            commandExecutionDeletingEntryId: '',
             commandHistoryActiveTab: 'quick',
             commandExecutionDetailDialogVisible: false,
             selectedCommandExecutionEntryId: '',

@@ -1,3 +1,4 @@
+
 import os
 
 
@@ -68,11 +69,14 @@ class HistoryViewService:
         - 保留所有原始记录
         - 展示时按时间倒序去重
         - 相同 command 只保留最新一条
+        - 置顶命令固定排在最上方
         """
         seen = set()
-        result = []
+        pinned_items = []
+        normal_items = []
 
         for item in reversed(entries):
+            self.store._normalize_entry_flags(item)
             command_text = item.get('command') or ''
             if command_text in seen:
                 continue
@@ -80,7 +84,13 @@ class HistoryViewService:
 
             copied = dict(item)
             copied = self._refresh_file_status_for_view(copied)
-            result.append(copied)
+
+            if copied.get('is_pinned'):
+                pinned_items.append(copied)
+            else:
+                normal_items.append(copied)
+
+        result = pinned_items + normal_items
 
         for index, item in enumerate(result, start=1):
             item['index'] = index
@@ -97,6 +107,7 @@ class HistoryViewService:
         result = []
 
         for item in reversed(entries):
+            self.store._normalize_entry_flags(item)
             copied = self._refresh_file_status_for_view(item)
             copied['output_records'] = list(item.get('output_records') or [])
             result.append(copied)
@@ -118,6 +129,8 @@ class HistoryViewService:
 
         with self.store._lock:
             entries = self.store._read_entries(hostname)
+            for item in entries:
+                self.store._normalize_entry_flags(item)
 
         return self._build_deduplicated_latest_view(entries)
 
@@ -132,6 +145,8 @@ class HistoryViewService:
 
         with self.store._lock:
             entries = self.store._read_entries(hostname)
+            for item in entries:
+                self.store._normalize_entry_flags(item)
 
         return self._build_execution_history_view(entries)
 
@@ -143,5 +158,7 @@ class HistoryViewService:
 
         with self.store._lock:
             entries = self.store._read_entries(hostname_text)
+            for item in entries:
+                self.store._normalize_entry_flags(item)
 
         return self._build_deduplicated_latest_view(entries)

@@ -1,3 +1,4 @@
+
 window.AppCommandsModule = {
     methods: {
         // static/js/modules/commands.js
@@ -511,6 +512,19 @@ window.AppCommandsModule = {
             }
 
             this.commandHistoryDialogVisible = true;
+            await this.reloadCommandHistoryDialogData();
+        },
+
+        async reloadCommandHistoryDialogData(options = {}) {
+            const silent = !!options.silent;
+
+            if (!this.selectedId) {
+                if (!silent) {
+                    ElementPlus.ElMessage.warning('Please select a device');
+                }
+                return;
+            }
+
             this.commandHistoryLoading = true;
             this.commandExecutionHistoryLoading = true;
 
@@ -533,10 +547,20 @@ window.AppCommandsModule = {
 
                 this.commandHistoryItems = Array.isArray(quickJson.data) ? quickJson.data : [];
                 this.commandExecutionItems = Array.isArray(fullJson.data) ? fullJson.data : [];
+
+                if (
+                    this.selectedCommandExecutionEntryId
+                    && !this.commandExecutionItems.some(item => item.entry_id === this.selectedCommandExecutionEntryId)
+                ) {
+                    this.commandExecutionDetailDialogVisible = false;
+                    this.selectedCommandExecutionEntryId = '';
+                }
             } catch (e) {
                 this.commandHistoryItems = [];
                 this.commandExecutionItems = [];
-                ElementPlus.ElMessage.error(e.message || 'Failed to load command history');
+                if (!silent) {
+                    ElementPlus.ElMessage.error(e.message || 'Failed to load command history');
+                }
             } finally {
                 this.commandHistoryLoading = false;
                 this.commandExecutionHistoryLoading = false;
@@ -560,6 +584,84 @@ window.AppCommandsModule = {
             if (!row || !row.entry_id) return;
             this.selectedCommandExecutionEntryId = row.entry_id;
             this.commandExecutionDetailDialogVisible = true;
+        },
+
+        async toggleCommandHistoryPinned(row) {
+            if (!this.selectedId) {
+                ElementPlus.ElMessage.warning('Please select a device');
+                return;
+            }
+            if (!row || !row.command) {
+                return;
+            }
+
+            const commandText = String(row.command || '');
+            this.commandHistoryPinningCommand = commandText;
+
+            try {
+                const res = await fetch(`/api/connections/${encodeURIComponent(this.selectedId)}/command-history/pin`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        command: commandText,
+                        is_pinned: !row.is_pinned,
+                    })
+                });
+
+                const json = await res.json();
+                if (!res.ok || json.code !== 0) {
+                    throw new Error(json.message || 'Failed to update pinned command');
+                }
+
+                await this.reloadCommandHistoryDialogData({ silent: true });
+                ElementPlus.ElMessage.success(row.is_pinned ? 'Removed from pinned commands' : 'Pinned command updated');
+            } catch (e) {
+                ElementPlus.ElMessage.error(e.message || 'Failed to update pinned command');
+            } finally {
+                this.commandHistoryPinningCommand = '';
+            }
+        },
+
+        async deleteCommandExecutionItem(row) {
+            if (!this.selectedId) {
+                ElementPlus.ElMessage.warning('Please select a device');
+                return;
+            }
+            if (!row || !row.entry_id) {
+                return;
+            }
+
+            try {
+                await ElementPlus.ElMessageBox.confirm(
+                    'Delete this execution history entry?',
+                    'Delete Entry',
+                    {
+                        type: 'warning',
+                        confirmButtonText: 'Delete',
+                        cancelButtonText: 'Cancel'
+                    }
+                );
+
+                this.commandExecutionDeletingEntryId = row.entry_id;
+                const res = await fetch(`/api/connections/${encodeURIComponent(this.selectedId)}/command-history/full/${encodeURIComponent(row.entry_id)}`, {
+                    method: 'DELETE'
+                });
+
+                const json = await res.json();
+                if (!res.ok || json.code !== 0) {
+                    throw new Error(json.message || 'Failed to delete execution history entry');
+                }
+
+                await this.reloadCommandHistoryDialogData({ silent: true });
+                ElementPlus.ElMessage.success('Execution history entry deleted');
+            } catch (e) {
+                if (e === 'cancel' || e === 'close' || e?.toString?.().includes('cancel')) return;
+                ElementPlus.ElMessage.error(e.message || 'Failed to delete execution history entry');
+            } finally {
+                this.commandExecutionDeletingEntryId = '';
+            }
         },
 
         async clearCommandHistory() {
@@ -591,6 +693,8 @@ window.AppCommandsModule = {
                 this.commandHistoryItems = [];
                 this.commandExecutionItems = [];
                 this.commandCandidatesLoadedFor = '';
+                this.commandExecutionDetailDialogVisible = false;
+                this.selectedCommandExecutionEntryId = '';
                 await this.loadCommandCandidates(this.selectedId);
                 ElementPlus.ElMessage.success('Command history cleared');
             } catch (e) {
