@@ -2139,3 +2139,52 @@ body {
 .process-dialog .dialog-table-shell {
     height: 500px;
 }
+
+
+
+
+/*.terminal-line-with-action {*/
+/*  display: flex;*/
+/*  align-items: center;*/
+/*  justify-content: space-between;*/
+/*  gap: 12px;*/
+/*}*/
+
+/*.terminal-line-main {*/
+/*  display: flex;*/
+/*  align-items: center;*/
+/*  min-width: 0;*/
+/*  flex: 1 1 auto;*/
+/*}*/
+
+/*.terminal-line-text {*/
+/*  min-width: 0;*/
+/*  overflow-wrap: anywhere;*/
+/*  word-break: break-word;*/
+/*}*/
+
+/*.terminal-line-actions {*/
+/*  display: flex;*/
+/*  align-items: center;*/
+/*  flex: 0 0 auto;*/
+/*  white-space: nowrap;*/
+/*}*/
+
+
+.terminal-line-with-action {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.terminal-line-main {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+
+.terminal-line-actions {
+  display: flex;
+  align-items: center;
+  white-space: nowrap;
+}

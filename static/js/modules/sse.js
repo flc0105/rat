@@ -69,7 +69,6 @@ window.AppSseModule = {
         },
 
 
-
         removeConnection(clientId) {
             const idx = this.connections.findIndex(item => item.client_id === clientId);
             if (idx === -1) return;
@@ -222,7 +221,7 @@ window.AppSseModule = {
                 }
             });
 
-                        es.addEventListener('artifact_created', async (event) => {
+            es.addEventListener('artifact_created', async (event) => {
                 const payload = JSON.parse(event.data || '{}');
                 const fileName = payload.original_name || payload.stored_name || 'file';
 
@@ -273,35 +272,6 @@ window.AppSseModule = {
                 }
             });
 
-    //         es.addEventListener('artifact_created', async (event) => {
-    //             const payload = JSON.parse(event.data || '{}');
-    //             const fileName = payload.original_name || payload.stored_name || 'file';
-    //
-    //             if (!payload.artifact_id) return;
-    //
-    //             if (!this.selectedId || payload.client_id === this.selectedId || !payload.client_id) {
-    //                 ElementPlus.ElNotification({
-    //                     title: 'File Ready',
-    //                     dangerouslyUseHTMLString: true,
-    //                     message: `
-    //     <div>
-    //       <div>${fileName} has been saved</div>
-    //       <div style="margin-top:6px;">
-    //         <a href="${payload.download_url || `/api/artifacts/${encodeURIComponent(payload.artifact_id)}/download`}" target="_blank" style="color:#409eff;text-decoration:none;">
-    //           Download now
-    //         </a>
-    //       </div>
-    //     </div>
-    // `,
-    //                     type: 'success',
-    //                     duration: 6000
-    //                 });
-    //             }
-    //
-    //             if (this.artifactDialogVisible) {
-    //                 await this.loadArtifacts();
-    //             }
-    //         });
 
             es.onerror = () => {
                 // EventSource reconnects automatically

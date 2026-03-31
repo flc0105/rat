@@ -118,6 +118,88 @@ dedupeConnections(items) {
         //     });
         // },
 
+
+
+isCommandFinishedLine(line) {
+    const text = (line?.text || '')
+    return text.startsWith('[Command finished]') || text.startsWith('[命令结束]')
+  },
+
+  isFileReadyLine(line) {
+    const text = (line?.text || '')
+    return text.startsWith('[File Ready]')
+  },
+
+  shouldRenderInlineAction(lines, index) {
+    return this.getTerminalInlineActionItems(lines, index).length > 0
+  },
+
+  getTerminalInlineActionItems(lines, index) {
+    const line = lines[index]
+    if (!line) return []
+
+    // 目前只把 preview 优先挂到 [File Ready] 行上
+    if (!this.isFileReadyLine(line)) return []
+
+    const groupItems = this.getTerminalCommandGroupActionItems(lines, index) || []
+    const usedKeysBeforeCurrentLine = this.getUsedInlineActionKeysBeforeLine(lines, index)
+
+    const previewItem = groupItems.find(item => {
+      return item.type === 'preview' && !usedKeysBeforeCurrentLine.has(item.key)
+    })
+
+    return previewItem ? [previewItem] : []
+  },
+
+  getTerminalTailActionItems(lines, index) {
+    const groupItems = this.getTerminalCommandGroupActionItems(lines, index) || []
+    const usedKeysUpToCurrentLine = this.getUsedInlineActionKeysUpToLine(lines, index)
+
+    return groupItems.filter(item => !usedKeysUpToCurrentLine.has(item.key))
+  },
+
+  getUsedInlineActionKeysBeforeLine(lines, endIndexExclusive) {
+    const used = new Set()
+
+    for (let i = 0; i < endIndexExclusive; i += 1) {
+      const line = lines[i]
+      if (!this.isFileReadyLine(line)) continue
+
+      const groupItems = this.getTerminalCommandGroupActionItems(lines, i) || []
+      const previewItem = groupItems.find(item => {
+        return item.type === 'preview' && !used.has(item.key)
+      })
+
+      if (previewItem) {
+        used.add(previewItem.key)
+      }
+    }
+
+    return used
+  },
+
+  getUsedInlineActionKeysUpToLine(lines, endIndexInclusive) {
+    const used = new Set()
+
+    for (let i = 0; i <= endIndexInclusive; i += 1) {
+      const line = lines[i]
+      if (!this.isFileReadyLine(line)) continue
+
+      const groupItems = this.getTerminalCommandGroupActionItems(lines, i) || []
+      const previewItem = groupItems.find(item => {
+        return item.type === 'preview' && !used.has(item.key)
+      })
+
+      if (previewItem) {
+        used.add(previewItem.key)
+      }
+    }
+
+    return used
+  },
+
+
+
         setActiveTask(clientId, taskId) {
             if (!clientId) return;
 
