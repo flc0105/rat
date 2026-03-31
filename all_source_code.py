@@ -25,7 +25,7 @@ EXCLUDE_DIRS = {
     "scripts",
     "builtins",
     "jobs",
-    # "platform"
+    "platform"
 }
 
 # 排除的文件名（可以是完整文件名或文件名不含扩展名）
@@ -35,7 +35,7 @@ EXCLUDE_FILENAMES = {
     "auth.js"        # 排除 auth.js
 }
 
-INCLUDE_SUFFIXES = {".py", ".html", ".js"}
+INCLUDE_SUFFIXES = {".py", ".html", ".js", ".css"}
 
 
 def should_skip(path: Path) -> bool:
