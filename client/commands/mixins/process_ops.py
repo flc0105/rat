@@ -4,7 +4,7 @@ import os
 import sys
 import json
 import platform
-import psutil
+
 
 from core.utils.decorator import desc
 
@@ -13,6 +13,7 @@ class CommandProcessMixin:
 
     @desc('List running processes', group='process', suggest=False)
     def list_processes(self, arg=''):
+        import psutil
         """
         列出所有运行中的进程
         """
@@ -38,6 +39,7 @@ class CommandProcessMixin:
 
     @desc('List running applications (GUI apps only)', group='process', suggest=False)
     def list_apps(self, arg=''):
+        import psutil
         """
         列出运行中的应用程序（仅 GUI 应用）
         """
@@ -126,6 +128,7 @@ class CommandProcessMixin:
 
     @desc('Kill a process by PID', group='process', suggest=False)
     def kill_process(self, pid: str):
+        import psutil
         """
         终止进程
         """
