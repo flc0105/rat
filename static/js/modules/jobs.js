@@ -13,6 +13,20 @@ window.AppJobsModule = {
             ]);
         },
 
+        normalizeBackgroundJobModule(item = {}) {
+            const rawSource = String(item.source || '').trim().toLowerCase();
+            const source = rawSource === 'server' ? 'server' : 'client';
+            const jobName = String(item.job_name || item.name || item.job_key || '').trim();
+            const displayName = String(item.display_name || jobName || '').trim();
+            return {
+                ...item,
+                source,
+                job_name: jobName,
+                job_key: String(item.job_key || jobName).trim() || jobName,
+                display_name: displayName || jobName,
+            };
+        },
+
 // async loadBackgroundJobModules() {
 //     if (!this.selectedId) return;
 //
@@ -53,27 +67,17 @@ window.AppJobsModule = {
 
             this.backgroundJobModulesLoading = true;
             try {
-                const res = await fetch(`/api/connections/${encodeURIComponent(this.selectedId)}/background-jobs/modules`);
+                const res = await fetch(`/api/connections/${encodeURIComponent(this.selectedId)}/background-jobs/catalog`);
                 const json = await res.json();
 
-                // 加载远程脚本
-                const remoteRes = await fetch('/api/server/jobs/list');
-                const remoteJson = await remoteRes.json();
-
                 if (!res.ok || json.code !== 0) {
-                    throw new Error(json.message || 'Failed to load client job modules');
+                    throw new Error(json.message || 'Failed to load background job catalog');
                 }
 
-                if (!remoteRes.ok || remoteJson.code !== 0) {
-                    throw new Error(json.message || 'Failed to load server job modules');
-                }
-
-                localModules = json.data
-                remoteModules = remoteJson.data
-
-                this.backgroundJobModules = [...localModules, ...remoteModules];
-
-                // this.backgroundJobModules = Array.isArray(json.data) ? json.data : [];
+                const modules = Array.isArray(json.data) ? json.data : [];
+                this.backgroundJobModules = modules
+                    .map(item => this.normalizeBackgroundJobModule(item))
+                    .filter(item => item.job_name);
             } catch (e) {
                 this.backgroundJobModules = [];
                 ElementPlus.ElMessage.error(e.message || 'Failed to load job modules');
@@ -159,8 +163,7 @@ window.AppJobsModule = {
 
         // static/js/modules/jobs.js
 
-        async startBackgroundJob(jobName, source = 'client') {
-            console.log(source)
+        async startBackgroundJob(jobName, source = 'auto') {
             if (!this.selectedId) {
                 ElementPlus.ElMessage.warning('Please select a device');
                 return;
@@ -172,20 +175,15 @@ window.AppJobsModule = {
                 return;
             }
 
-            try {
-                let command;
-                if (source === 'server') {
-                    // 远程脚本用 start_job_remote
-                    command = `start_job_remote ${normalized}`;
-                } else {
-                    // 本地脚本用 start_job
-                    command = `start_job ${normalized}`;
-                }
+            const normalizedSource = ['auto', 'client', 'server'].includes(String(source || '').trim())
+                ? String(source || '').trim()
+                : 'auto';
 
-                const res = await fetch(`/api/connections/${encodeURIComponent(this.selectedId)}/command`, {
+            try {
+                const res = await fetch(`/api/connections/${encodeURIComponent(this.selectedId)}/background-jobs/start`, {
                     method: 'POST',
                     headers: this.getTabScopedHeaders({'Content-Type': 'application/json'}),
-                    body: JSON.stringify({command})
+                    body: JSON.stringify({job_name: normalized, source: normalizedSource})
                 });
 
                 const json = await res.json();
@@ -196,9 +194,9 @@ window.AppJobsModule = {
                 const taskId = json.data && json.data.task_id;
                 this.setActiveTask(this.selectedId, taskId || '');
 
-                ElementPlus.ElMessage.success(`Background job started: ${normalized}`);
+                ElementPlus.ElMessage.success(`Start request submitted: ${normalized}`);
                 this.backgroundJobsActiveTab = 'jobs';
-                await this.loadBackgroundJobs();
+                setTimeout(() => this.loadBackgroundJobs(), 500);
             } catch (e) {
                 ElementPlus.ElMessage.error(e.message || 'Failed to start background job');
             }

@@ -232,7 +232,7 @@ class ServerWebService:
     def list_available_background_jobs(self, client_id: str):
         return self.background_job_service.list_available_jobs(client_id)
 
-    def start_background_job(self, client_id: str, job_name: str):
+    def start_background_job(self, client_id: str, job_name: str, source: str = 'auto'):
         return self.background_job_service.start_job(client_id, job_name)
 
     def stop_background_job(self, client_id: str, job_key: str):

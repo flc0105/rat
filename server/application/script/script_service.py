@@ -1,5 +1,6 @@
 import glob
 import os
+from pathlib import Path
 
 
 class ServerJobService:
@@ -13,22 +14,25 @@ class ServerJobService:
         os.makedirs(self.scripts_root_dir, exist_ok=True)
 
     def list_scripts(self) -> list[dict]:
-        """
-        列出所有可用的脚本
-        """
+        """列出所有可用的脚本。"""
         scripts = []
         pattern = os.path.join(self.scripts_root_dir, '**/*.py')
         for file_path in glob.iglob(pattern, recursive=True):
-            if os.path.isfile(file_path):
-                rel_path = os.path.relpath(file_path, self.scripts_root_dir)
-                name = rel_path.replace('\\', '/')
-                scripts.append({
-                    'job_name': name,
-                    'job_key': name,
-                    'path': file_path,
-                    'size': os.path.getsize(file_path),
-                    'source': 'server'
-                })
+            if not os.path.isfile(file_path):
+                continue
+            rel_path = os.path.relpath(file_path, self.scripts_root_dir)
+            name = rel_path.replace('\\', '/')
+            job_name = name[:-3] if name.endswith('.py') else name
+            scripts.append({
+                'name': job_name,
+                'job_name': job_name,
+                'job_key': job_name,
+                'display_name': name,
+                'path': file_path,
+                'size': os.path.getsize(file_path),
+                'source': 'server',
+                'kind': 'server_script',
+            })
         return sorted(scripts, key=lambda x: x['job_name'])
 
     def get_script_content(self, script_name: str) -> str:
@@ -37,6 +41,8 @@ class ServerJobService:
         """
         # 安全检查：防止路径遍历攻击
         safe_name = self._normalize_script_name(script_name)
+        if not safe_name:
+            raise ValueError('Invalid script name')
         script_path = os.path.join(self.scripts_root_dir, safe_name)
         script_path = os.path.abspath(script_path)
 
@@ -54,21 +60,28 @@ class ServerJobService:
         """
         规范化脚本名称，防止路径遍历
         """
-        # 移除开头的 / 或 \
-        name = name.lstrip('/\\')
-        # 移除 .. 等危险路径
+        name = str(name or '').replace('\\', '/').lstrip('/')
         parts = []
         for part in name.split('/'):
-            if part == '..':
+            part = part.strip()
+            if not part or part in ('.', '..'):
                 continue
             parts.append(part)
-        return '/'.join(parts)
+
+        normalized = '/'.join(parts)
+        if normalized.endswith('.py'):
+            return normalized
+        return normalized + '.py' if normalized else ''
 
     def save_script(self, script_name: str, content: str) -> dict:
         """
         保存脚本（用于前端新建）
         """
         safe_name = self._normalize_script_name(script_name)
+        if not safe_name:
+            raise ValueError('Invalid script name')
+        if not safe_name:
+            raise ValueError('Invalid script name')
         script_path = os.path.join(self.scripts_root_dir, safe_name)
 
         # 确保目录存在

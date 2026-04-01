@@ -80,6 +80,57 @@ def create_background_job_blueprint(server_instance):
             default_error_status=500
         )
 
+    @blueprint.get('/api/connections/<client_id>/background-jobs/catalog')
+    def list_background_job_catalog(client_id):
+        def _execute():
+            client_items = background_job_service.list_available_jobs(client_id) or []
+            server_items = web_service.list_server_jobs() or []
+
+            normalized = []
+            seen = set()
+
+            for item in client_items:
+                if not isinstance(item, dict):
+                    continue
+                job_name = str(item.get('job_name') or item.get('name') or item.get('job_key') or '').strip()
+                if not job_name:
+                    continue
+                source = str(item.get('source') or 'client').strip() or 'client'
+                dedupe_key = (source, job_name)
+                if dedupe_key in seen:
+                    continue
+                seen.add(dedupe_key)
+                normalized.append({
+                    **item,
+                    'job_name': job_name,
+                    'job_key': str(item.get('job_key') or job_name).strip() or job_name,
+                    'display_name': str(item.get('display_name') or job_name).strip() or job_name,
+                    'source': source,
+                })
+
+            for item in server_items:
+                if not isinstance(item, dict):
+                    continue
+                job_name = str(item.get('job_name') or item.get('name') or item.get('job_key') or '').strip()
+                if not job_name:
+                    continue
+                dedupe_key = ('server', job_name)
+                if dedupe_key in seen:
+                    continue
+                seen.add(dedupe_key)
+                normalized.append({
+                    **item,
+                    'job_name': job_name,
+                    'job_key': str(item.get('job_key') or job_name).strip() or job_name,
+                    'display_name': str(item.get('display_name') or item.get('name') or job_name).strip() or job_name,
+                    'source': 'server',
+                })
+
+            normalized.sort(key=lambda item: (item.get('source') != 'client', item.get('job_name', '').lower()))
+            return normalized
+
+        return _json_endpoint(_execute, default_error_status=500)
+
     @blueprint.get('/api/connections/<client_id>/background-jobs')
     def list_background_jobs(client_id):
         return _json_endpoint(
@@ -94,7 +145,20 @@ def create_background_job_blueprint(server_instance):
             job_name = (payload.get('job_name') or '').strip()
             if not job_name:
                 raise ValueError('job_name is required')
-            return background_job_service.start_job(client_id, job_name)
+
+            source = (payload.get('source') or 'auto').strip().lower()
+            if source not in ('auto', 'client', 'server'):
+                source = 'auto'
+
+            command = f'start_job {job_name}'
+            if source == 'server':
+                command = f'start_job_remote {job_name}'
+
+            result = web_service.submit_command(client_id, command)
+            if isinstance(result, dict):
+                result['job_name'] = job_name
+                result['source'] = source
+            return result
 
         return _json_endpoint(_execute, default_error_status=500)
 
