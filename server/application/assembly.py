@@ -88,3 +88,6 @@ class ServerApplicationAssembly:
         self.server.command_history.artifact_service = self.artifact_service
 
 
+
+
+

@@ -756,6 +756,38 @@ body {
   width: 100%;
 }
 
+.command-history-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  flex-wrap: wrap;
+  width: 100%;
+}
+
+.command-history-search-input {
+  width: min(360px, 100%);
+}
+
+.command-history-search-input .el-input__wrapper {
+  min-height: 34px;
+  height: 34px;
+  border-radius: 10px;
+}
+
+.command-history-search-summary {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.command-history-search-summary .el-button {
+  margin: 0;
+}
+
 .dialog-action-group {
   display: flex;
   align-items: center;
@@ -1755,6 +1787,19 @@ body {
     width: 100%;
   }
 
+  .command-history-toolbar {
+    justify-content: flex-start;
+  }
+
+  .command-history-search-input {
+    width: 100%;
+  }
+
+  .command-history-search-summary {
+    width: 100%;
+    justify-content: space-between;
+  }
+
   .dialog-filter-box {
     width: fit-content;
   }
@@ -2360,5 +2405,8 @@ body {
   align-items: center;
   white-space: nowrap;
 }
+
+
+
 
 

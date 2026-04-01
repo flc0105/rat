@@ -576,6 +576,10 @@ handleCommandCandidateSelect(item) {
             await this.reloadCommandHistoryDialogData();
         },
 
+        clearCommandHistorySearch() {
+            this.commandHistorySearchText = '';
+        },
+
         async reloadCommandHistoryDialogData(options = {}) {
             const silent = !!options.silent;
 
@@ -753,6 +757,7 @@ handleCommandCandidateSelect(item) {
 
                 this.commandHistoryItems = [];
                 this.commandExecutionItems = [];
+                this.commandHistorySearchText = '';
                 this.commandCandidatesLoadedFor = '';
                 this.commandExecutionDetailDialogVisible = false;
                 this.selectedCommandExecutionEntryId = '';
@@ -765,6 +770,9 @@ handleCommandCandidateSelect(item) {
         }
     }
 };
+
+
+
 
 
 

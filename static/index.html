@@ -1083,13 +1083,29 @@
                     <el-button size="small" @click="openCommandHistoryDialog">Refresh</el-button>
                     <el-button size="small" type="danger" @click="clearCommandHistory">Clear History</el-button>
                 </div>
+                <div class="dialog-head-right">
+                    <div class="command-history-toolbar">
+                        <el-input
+                                v-model="commandHistorySearchText"
+                                size="small"
+                                clearable
+                                class="command-history-search-input"
+                                placeholder="Search by command name"
+                        />
+                        <div class="command-history-search-summary">
+                            <span>Quick {{ commandHistorySearchSummary.quickVisible }} / {{ commandHistorySearchSummary.quickTotal }}</span>
+                            <span>Execution {{ commandHistorySearchSummary.fullVisible }} / {{ commandHistorySearchSummary.fullTotal }}</span>
+                            <el-button size="small" plain @click="clearCommandHistorySearch" :disabled="!commandHistorySearchText">Clear Search</el-button>
+                        </div>
+                    </div>
+                </div>
             </div>
 
             <el-tabs v-model="commandHistoryActiveTab" class="command-history-tabs">
                 <el-tab-pane label="Quick History" name="quick">
                     <div class="dialog-table-shell quick-history-table-shell">
-                        <el-table :data="commandHistoryItems" v-loading="commandHistoryLoading" stripe width="100%"
-                                  height="100%" empty-text="No command history available" table-layout="fixed"
+                        <el-table :data="filteredCommandHistoryItems" v-loading="commandHistoryLoading" stripe width="100%"
+                                  height="100%" :empty-text="commandHistorySearchText ? 'No matching commands' : 'No command history available'" table-layout="fixed"
                                   @row-dblclick="applyHistoryCommand">
                             <el-table-column prop="index" label="#" width="90" align="center">
                                 <template #default="{ row }">
@@ -1126,11 +1142,11 @@
 
                     <div class="quick-history-mobile-shell">
                         <div class="mobile-file-list" v-loading="commandHistoryLoading">
-                            <div v-if="!commandHistoryItems.length && !commandHistoryLoading" class="empty-state">No
+                            <div v-if="!filteredCommandHistoryItems.length && !commandHistoryLoading" class="empty-state">No
                                 command history available
                             </div>
                             <div v-else class="mobile-file-grid">
-                                <div v-for="row in commandHistoryItems" :key="`${row.index}-${row.command}-${row.time}`"
+                                <div v-for="row in filteredCommandHistoryItems" :key="`${row.index}-${row.command}-${row.time}`"
                                      class="mobile-file-card quick-history-card">
                                     <div class="mobile-file-card-top">
                                         <div class="mobile-file-icon">⌘</div>
@@ -1167,11 +1183,11 @@
 
                 <!--                <el-tab-pane label="Execution History" name="full">-->
                 <!--                    <div class="command-execution-list-shell" v-loading="commandExecutionHistoryLoading">-->
-                <!--                        <div v-if="!commandExecutionItems.length && !commandExecutionHistoryLoading"-->
-                <!--                             class="empty-state">No execution history available-->
+                <!--                        <div v-if="!filteredCommandExecutionItems.length && !commandExecutionHistoryLoading"-->
+                <!--                             class="empty-state">{{ commandHistorySearchText ? 'No matching executions' : 'No execution history available' }}-->
                 <!--                        </div>-->
                 <!--                        <div v-else class="command-execution-list">-->
-                <!--                            <div v-for="item in commandExecutionItems" :key="item.entry_id"-->
+                <!--                            <div v-for="item in filteredCommandExecutionItems" :key="item.entry_id"-->
                 <!--                                 class="command-execution-card">-->
                 <!--                                <div class="command-execution-card-main">-->
                 <!--                                    <div class="command-execution-card-top">-->
@@ -1228,11 +1244,11 @@
                 <!--                </el-tab-pane>-->
                 <el-tab-pane label="Execution History" name="full">
                     <div class="command-execution-list-shell" v-loading="commandExecutionHistoryLoading">
-                        <div v-if="!commandExecutionItems.length && !commandExecutionHistoryLoading"
-                             class="empty-state">No execution history available
+                        <div v-if="!filteredCommandExecutionItems.length && !commandExecutionHistoryLoading"
+                             class="empty-state">{{ commandHistorySearchText ? 'No matching executions' : 'No execution history available' }}
                         </div>
                         <div v-else class="command-execution-list">
-                            <div v-for="item in commandExecutionItems" :key="item.entry_id"
+                            <div v-for="item in filteredCommandExecutionItems" :key="item.entry_id"
                                  class="execution-card">
                                 <!-- 卡片头部：命令和状态 -->
                                 <div class="execution-card-header">
@@ -1624,6 +1640,9 @@
 <script src="https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs/loader.js"></script>
 </body>
 </html>
+
+
+
 
 
 

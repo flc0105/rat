@@ -17,6 +17,7 @@ window.AppStateModule = {
             commandExecutionItems: [],
             commandExecutionDeletingEntryId: '',
             commandHistoryActiveTab: 'quick',
+            commandHistorySearchText: '',
             commandExecutionDetailDialogVisible: false,
             selectedCommandExecutionEntryId: '',
             commandExecutionOutputSortOrder: 'desc',
@@ -134,6 +135,33 @@ window.AppStateModule = {
         hasRunningWebTask() {
             return !!this.currentActiveTaskId;
         },
+        normalizedCommandHistorySearchText() {
+            return String(this.commandHistorySearchText || '').trim().toLowerCase();
+        },
+
+        filteredCommandHistoryItems() {
+            const keyword = this.normalizedCommandHistorySearchText;
+            const items = Array.isArray(this.commandHistoryItems) ? this.commandHistoryItems : [];
+            if (!keyword) return items;
+            return items.filter(item => String(item?.command || '').toLowerCase().includes(keyword));
+        },
+
+        filteredCommandExecutionItems() {
+            const keyword = this.normalizedCommandHistorySearchText;
+            const items = Array.isArray(this.commandExecutionItems) ? this.commandExecutionItems : [];
+            if (!keyword) return items;
+            return items.filter(item => String(item?.command || '').toLowerCase().includes(keyword));
+        },
+
+        commandHistorySearchSummary() {
+            return {
+                quickVisible: this.filteredCommandHistoryItems.length,
+                quickTotal: Array.isArray(this.commandHistoryItems) ? this.commandHistoryItems.length : 0,
+                fullVisible: this.filteredCommandExecutionItems.length,
+                fullTotal: Array.isArray(this.commandExecutionItems) ? this.commandExecutionItems.length : 0,
+            };
+        },
+
 
         displayRemoteFilesEntries() {
             const entries = Array.isArray(this.remoteFilesEntries)
@@ -296,8 +324,17 @@ window.AppStateModule = {
                 this.selectedCommandExecutionEntryId = '';
             }
         },
+
+        commandHistoryDialogVisible(val) {
+            if (!val) {
+                this.commandHistorySearchText = '';
+            }
+        },
     }
 };
+
+
+
 
 
 

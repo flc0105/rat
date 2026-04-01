@@ -69,3 +69,6 @@ class ServerResultDispatcher:
         self.session.runtime.message_queue.put(status, text, end)
 
 
+
+
+

@@ -31,3 +31,6 @@ class HistoryBindingStore:
             self._entry_ids_by_command_id.pop(command_id, None)
 
 
+
+
+
