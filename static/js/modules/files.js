@@ -590,10 +590,10 @@ window.AppFilesModule = {
 
             this.remoteFilesDialogVisible = true;
             this.loadQuickJumpPaths();  // 加载快速跳转路径
-            await this.loadRemoteDirectory('');
+            await this.loadRemoteDirectory('', 1);
         },
 
-        async loadRemoteDirectory(path = '') {
+        async loadRemoteDirectory(path = '', page = 1) {
             if (!this.selectedId) {
                 ElementPlus.ElMessage.warning('Please select a device');
                 return;
@@ -604,6 +604,9 @@ window.AppFilesModule = {
             try {
                 const url = new URL(`/api/connections/${encodeURIComponent(this.selectedId)}/remote-files`, window.location.origin);
                 if (path) url.searchParams.set('path', path);
+                url.searchParams.set('page', String(page || 1));
+                url.searchParams.set('page_size', String(this.remoteFilesPageSize || 50));
+                url.searchParams.set('show_hidden', this.showHiddenFiles ? 'true' : 'false');
 
                 const res = await fetch(url.pathname + url.search);
                 const json = await res.json();
@@ -613,10 +616,20 @@ window.AppFilesModule = {
                 }
 
                 const data = json.data || {};
+                const pagination = data.pagination || {};
+                const summary = data.summary || {};
+
                 this.remoteFilesCurrentPath = data.current_path || '';
                 this.remoteFilesParentPath = data.parent_path || '';
                 this.remoteFilesEntries = data.entries || [];
                 this.remoteFilesPathInput = this.remoteFilesCurrentPath || '';
+                this.remoteFilesPage = Number(pagination.page || page || 1);
+                this.remoteFilesPageSize = Number(pagination.page_size || this.remoteFilesPageSize || 50);
+                this.remoteFilesTotal = Number(pagination.total_visible || 0);
+                this.remoteFilesTotalPages = Number(pagination.total_pages || 1);
+                this.remoteFilesAllTotal = Number(summary.total_all || this.remoteFilesTotal || 0);
+                this.remoteFilesHiddenTotal = Number(summary.total_hidden || 0);
+                this.showHiddenFiles = !!summary.show_hidden;
                 this.remoteSelectedPaths = [];
             } catch (e) {
                 ElementPlus.ElMessage.error(e.message || 'Failed to load remote directory');
@@ -626,12 +639,12 @@ window.AppFilesModule = {
         },
 
         async refreshRemoteDirectory() {
-            await this.loadRemoteDirectory(this.remoteFilesCurrentPath || '');
+            await this.loadRemoteDirectory(this.remoteFilesCurrentPath || '', this.remoteFilesPage || 1);
         },
 
         async goToRemoteParent() {
             if (!this.remoteFilesParentPath) return;
-            await this.loadRemoteDirectory(this.remoteFilesParentPath);
+            await this.loadRemoteDirectory(this.remoteFilesParentPath, 1);
         },
 
         async goToRemotePathInput() {
@@ -640,7 +653,7 @@ window.AppFilesModule = {
                 ElementPlus.ElMessage.warning('Please enter a path');
                 return;
             }
-            await this.loadRemoteDirectory(path);
+            await this.loadRemoteDirectory(path, 1);
         },
 
         async enterRemoteDirectory(row) {
@@ -651,7 +664,21 @@ window.AppFilesModule = {
                 return;
             }
 
-            await this.loadRemoteDirectory(row.path);
+            await this.loadRemoteDirectory(row.path, 1);
+        },
+
+        async handleRemotePageChange(page) {
+            await this.loadRemoteDirectory(this.remoteFilesCurrentPath || '', page || 1);
+        },
+
+        async handleRemotePageSizeChange(pageSize) {
+            this.remoteFilesPageSize = Number(pageSize || 50);
+            await this.loadRemoteDirectory(this.remoteFilesCurrentPath || '', 1);
+        },
+
+        async toggleRemoteHiddenFiles() {
+            this.showHiddenFiles = !this.showHiddenFiles;
+            await this.loadRemoteDirectory(this.remoteFilesCurrentPath || '', 1);
         },
 
         handleRemoteRowDblClick(row) {
@@ -1086,3 +1113,6 @@ window.AppFilesModule = {
         }
     }
 };
+
+
+

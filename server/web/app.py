@@ -272,10 +272,32 @@ def create_app(server_instance):
 
     @app.get('/api/connections/<client_id>/remote-files')
     def browse_remote_files(client_id):
-        return _json_endpoint(
-            lambda: web_service.browse_remote_directory(client_id, _get_optional_remote_path()),
-            default_error_status=500
-        )
+        def _execute():
+            page_raw = (request.args.get('page') or '').strip()
+            page_size_raw = (request.args.get('page_size') or '').strip()
+            show_hidden_raw = (request.args.get('show_hidden') or '').strip().lower()
+
+            try:
+                page = int(page_raw) if page_raw else 1
+            except Exception:
+                page = 1
+
+            try:
+                page_size = int(page_size_raw) if page_size_raw else 100
+            except Exception:
+                page_size = 100
+
+            show_hidden = show_hidden_raw in ('1', 'true', 'yes', 'on')
+
+            return web_service.browse_remote_directory(
+                client_id,
+                _get_optional_remote_path(),
+                page=page,
+                page_size=page_size,
+                show_hidden=show_hidden,
+            )
+
+        return _json_endpoint(_execute, default_error_status=500)
 
     @app.post('/api/connections/<client_id>/remote-files/mkdir')
     def create_remote_directory(client_id):
@@ -752,3 +774,6 @@ def create_app(server_instance):
         return _json_endpoint(_execute, default_error_status=500)
 
     return app
+
+
+

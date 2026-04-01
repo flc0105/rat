@@ -58,3 +58,6 @@ class ClientSessionCommandChannel:
 
     def wait_for_result(self, command_id: int, command: str = ''):
         yield from self.session.runtime.wait_for_result(self.session, command_id, command)
+
+
+

@@ -78,3 +78,6 @@ class ArtifactPreviewService:
             'name': os.path.basename(display_name),
             'artifact_id': artifact.get('artifact_id', ''),
         }
+
+
+

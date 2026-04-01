@@ -29,3 +29,5 @@ class HistoryBindingStore:
     def clear(self, command_id: int):
         with self._lock:
             self._entry_ids_by_command_id.pop(command_id, None)
+
+

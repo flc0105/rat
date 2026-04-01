@@ -67,3 +67,5 @@ class TaskStreamSummary:
         if cancel_requested and (self.has_cancelled_output or self.has_timeout_output):
             return WebTaskStatus.CANCELLED
         return WebTaskStatus.SUCCESS if self.is_success() else WebTaskStatus.ERROR
+
+

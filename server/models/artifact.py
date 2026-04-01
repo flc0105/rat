@@ -89,3 +89,6 @@ class ArtifactRecord:
         payload['is_available'] = bool(is_available)
         payload['status_text'] = status_text or ''
         return payload
+
+
+

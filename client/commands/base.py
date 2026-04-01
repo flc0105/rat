@@ -149,3 +149,5 @@ class CommandBase(
 ):
     """命令基类，定义公共接口。"""
     pass
+
+

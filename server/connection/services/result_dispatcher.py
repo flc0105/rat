@@ -67,3 +67,5 @@ class ServerResultDispatcher:
 
         # 如果非交互态 没开背景消息 收到消息 直接存储到未读消息
         self.session.runtime.message_queue.put(status, text, end)
+
+

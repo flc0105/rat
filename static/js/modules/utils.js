@@ -55,6 +55,12 @@ window.AppUtilsModule = {
             this.remoteFilesParentPath = '';
             this.remoteFilesEntries = [];
             this.remoteFilesPathInput = '';
+            this.remoteFilesPage = 1;
+            this.remoteFilesPageSize = 50;
+            this.remoteFilesTotal = 0;
+            this.remoteFilesTotalPages = 1;
+            this.remoteFilesAllTotal = 0;
+            this.remoteFilesHiddenTotal = 0;
             this.showHiddenFiles = false;
             this.remoteSelectedPaths = [];
             this.remoteZipDownloading = false;
@@ -696,3 +702,5 @@ window.AppUtilsModule = {
         },
     }
 };
+
+

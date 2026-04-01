@@ -162,3 +162,6 @@ class HistoryViewService:
                 self.store._normalize_entry_flags(item)
 
         return self._build_deduplicated_latest_view(entries)
+
+
+

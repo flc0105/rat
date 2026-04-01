@@ -120,3 +120,5 @@ class CommandStreamService:
             raise RuntimeError('Invalid remote JSON payload: expected object')
 
         return payload
+
+

@@ -172,3 +172,5 @@ class CommandHttpFileTransferService:
     def download_file_from_http(self, url: str, target_path: str):
         strategy = self.get_transfer_strategy()
         return strategy.download_file(url, target_path)
+
+

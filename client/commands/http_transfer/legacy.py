@@ -43,3 +43,6 @@ class LegacyHttpTransferStrategy(HttpTransferStrategy):
                     if not chunk:
                         continue
                     file_obj.write(chunk)
+
+
+

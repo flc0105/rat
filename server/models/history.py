@@ -195,3 +195,5 @@ class HistoryEntry:
             'file_count': self.file_count,
             'files': list(self.files),
         }
+
+

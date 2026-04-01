@@ -219,3 +219,6 @@ class CommandHistoryStore:
 
     def get_history_by_hostname(self, hostname: str) -> list:
         return self.view_service.get_history_by_hostname(hostname)
+
+
+

@@ -20,3 +20,5 @@ class CommonCommands(
 ):
     """跨平台通用命令集合"""
     pass
+
+

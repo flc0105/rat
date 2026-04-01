@@ -150,3 +150,6 @@ class WebConnectionService:
             'download_url': artifact_info.get('download_url', ''),
             'preview_url': artifact_info.get('preview_url', ''),
         })
+
+
+

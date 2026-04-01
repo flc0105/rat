@@ -763,6 +763,11 @@ body {
   flex-wrap: wrap;
 }
 
+.remote-files-dialog .dialog-head-left,
+.remote-files-dialog .dialog-action-group {
+  justify-content: center;
+}
+
 /*.dialog-filter-box {*/
 /*  display: inline-flex;*/
 /*  align-items: center;*/
@@ -823,9 +828,9 @@ body {
 }
 
 .remote-files-dialog .dialog-table-shell {
-  height: calc(78vh - 196px);
-  min-height: 320px;
-  max-height: calc(78vh - 196px);
+  height: calc(78vh - 252px);
+  min-height: 280px;
+  max-height: calc(78vh - 252px);
 }
 
 .remote-files-dialog .dialog-table-shell .el-table,
@@ -859,6 +864,61 @@ body {
 .recent-files-dialog .dialog-table-shell .el-table__body-wrapper,
 .quick-history-table-shell .el-table__body-wrapper {
   overflow-y: auto !important;
+}
+
+.dialog-pagination-wrap {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  margin: 14px 0 12px;
+  flex-shrink: 0;
+}
+
+.dialog-pagination-bar {
+  width: 100%;
+  max-width: 980px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  flex-wrap: wrap;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.88);
+  box-shadow: 0 6px 18px rgba(15, 23, 42, 0.05);
+}
+
+.dialog-pagination-meta {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-width: 0;
+  color: var(--muted);
+  font-size: 13px;
+  text-align: center;
+}
+
+.dialog-pagination-bar .el-pagination {
+  justify-content: center;
+}
+
+@media (max-width: 900px) {
+  .remote-files-dialog .dialog-table-shell {
+    height: calc(78vh - 316px);
+    max-height: calc(78vh - 316px);
+    min-height: 240px;
+  }
+
+  .dialog-pagination-bar {
+    padding: 12px;
+  }
+
+  .dialog-pagination-meta {
+    width: 100%;
+  }
 }
 
 .file-cell {
@@ -2300,3 +2360,5 @@ body {
   align-items: center;
   white-space: nowrap;
 }
+
+

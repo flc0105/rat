@@ -474,3 +474,5 @@ class ArtifactRegistryService:
             'hostname': self._normalize_hostname(hostname) if hostname else '',
             'deleted_count': deleted_count,
         }
+
+

@@ -268,3 +268,5 @@ class CommandExecutor:
             'last_heartbeat_id': self.conn.context.last_heartbeat_id if self.conn.context.last_heartbeat_id is not None else '',
         }
         yield 1, format_dict(payload)
+
+

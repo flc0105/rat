@@ -207,3 +207,6 @@ class CommandJobMixin:
             return 1, '\n'.join(lines)
         except Exception as e:
             return 0, f'Failed to fetch remote script list: {e}'
+
+
+

@@ -86,3 +86,5 @@ class ServerApplicationAssembly:
         """
         self.background_job_store.artifact_service = self.artifact_service
         self.server.command_history.artifact_service = self.artifact_service
+
+

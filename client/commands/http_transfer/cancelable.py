@@ -246,3 +246,6 @@ class CancelableHttpTransferStrategy(HttpTransferStrategy):
             except Exception:
                 pass
             session.close()
+
+
+

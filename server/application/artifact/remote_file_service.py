@@ -53,8 +53,20 @@ class WebRemoteFileService:
 
         return artifact
 
-    def browse_directory(self, client_id: str, path: str = '') -> dict:
-        command = self._build_command('browse_dir', {'path': path})
+    def browse_directory(
+        self,
+        client_id: str,
+        path: str = '',
+        page: int = 1,
+        page_size: int = 100,
+        show_hidden: bool = False,
+    ) -> dict:
+        command = self._build_command('browse_dir', {
+            'path': path,
+            'page': page,
+            'page_size': page_size,
+            'show_hidden': show_hidden,
+        })
         payload = self.remote_execution_service.run_foreground_json_command(
             client_id,
             command,
@@ -62,10 +74,25 @@ class WebRemoteFileService:
             source='web_remote_file',
         )
 
+        summary = payload.get('summary') or {}
+        pagination = payload.get('pagination') or {}
+
         return {
             'current_path': payload.get('current_path', ''),
             'parent_path': payload.get('parent_path'),
-            'entries': payload.get('entries', [])
+            'entries': payload.get('entries', []),
+            'summary': {
+                'total_all': summary.get('total_all', len(payload.get('entries', []) or [])),
+                'total_hidden': summary.get('total_hidden', 0),
+                'show_hidden': bool(summary.get('show_hidden', show_hidden)),
+            },
+            'pagination': {
+                'page': pagination.get('page', page),
+                'page_size': pagination.get('page_size', page_size),
+                'total_visible': pagination.get('total_visible', len(payload.get('entries', []) or [])),
+                'total_pages': pagination.get('total_pages', 1),
+                'returned': pagination.get('returned', len(payload.get('entries', []) or [])),
+            }
         }
 
     def delete_path(self, client_id: str, path: str) -> dict:
@@ -280,3 +307,5 @@ class WebRemoteFileService:
             }
         else:
             raise ValueError('File is not a text file or cannot be edited')
+
+

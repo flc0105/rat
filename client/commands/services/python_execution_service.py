@@ -141,3 +141,5 @@ except Exception:
                 self.owner._send_final_result(0, f'Process exited with code {process.returncode}')
         finally:
             self._cleanup_temp_script(temp_path)
+
+

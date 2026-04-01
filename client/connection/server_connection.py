@@ -81,3 +81,6 @@ class ServerConnection(RATSocket):
         except Exception as e:
             logger.error(e, exc_info=True)
             return data.get('id'), 0, f'{e}\n'
+
+
+

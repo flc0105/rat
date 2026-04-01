@@ -208,3 +208,6 @@ class HistoryWriteService:
 
             self.store._write_entries(hostname, new_entries)
             return True
+
+
+

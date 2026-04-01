@@ -59,3 +59,5 @@ class CommandCatalog:
         if self.argument_command_registry is None:
             self.argument_command_registry = ArgumentCommandRegistry(self.get_commands())
         return self.argument_command_registry
+
+

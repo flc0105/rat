@@ -34,6 +34,13 @@ window.AppStateModule = {
             remoteFilesParentPath: '',
             remoteFilesEntries: [],
             remoteFilesPathInput: '',
+            remoteFilesPage: 1,
+            remoteFilesPageSize: 50,
+            remoteFilesPageSizeOptions: [50, 100, 200],
+            remoteFilesTotal: 0,
+            remoteFilesTotalPages: 1,
+            remoteFilesAllTotal: 0,
+            remoteFilesHiddenTotal: 0,
             remoteUploadLoading: false,
             showHiddenFiles: false,
             remoteSelectedPaths: [],
@@ -128,17 +135,12 @@ window.AppStateModule = {
             return !!this.currentActiveTaskId;
         },
 
-        filteredRemoteFilesEntries() {
-            if (this.showHiddenFiles) return this.remoteFilesEntries;
-            return this.remoteFilesEntries.filter(item => !item.is_hidden);
-        },
-
         displayRemoteFilesEntries() {
-            const entries = Array.isArray(this.filteredRemoteFilesEntries)
-                ? [...this.filteredRemoteFilesEntries]
+            const entries = Array.isArray(this.remoteFilesEntries)
+                ? [...this.remoteFilesEntries]
                 : [];
 
-            if (this.remoteFilesParentPath) {
+            if (this.remoteFilesParentPath && this.remoteFilesPage === 1) {
                 entries.unshift({
                     name: '..',
                     path: this.remoteFilesParentPath,
@@ -296,3 +298,6 @@ window.AppStateModule = {
         },
     }
 };
+
+
+

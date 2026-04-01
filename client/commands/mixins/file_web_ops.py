@@ -244,22 +244,87 @@ class CommandFileWebMixin:
     @interruptible()
     def browse_dir(self, path=''):
         try:
-            directory = self._require_existing_directory_from_arg(path)
+            payload = self._decode_structured_arg(path)
+            if isinstance(payload, dict):
+                directory = self._require_existing_directory_from_arg(payload.get('path', ''))
+                page = payload.get('page', 1)
+                page_size = payload.get('page_size', 100)
+                show_hidden = payload.get('show_hidden', False)
+            else:
+                directory = self._require_existing_directory_from_arg(path)
+                page = 1
+                page_size = 100
+                show_hidden = False
 
-            entries = []
+            try:
+                page = int(page)
+            except Exception:
+                page = 1
+
+            try:
+                page_size = int(page_size)
+            except Exception:
+                page_size = 100
+
+            if isinstance(show_hidden, str):
+                show_hidden = show_hidden.strip().lower() in ('1', 'true', 'yes', 'on')
+            else:
+                show_hidden = bool(show_hidden)
+
+            if page <= 0:
+                page = 1
+            if page_size <= 0:
+                page_size = 100
+            if page_size > 500:
+                page_size = 500
+
+            all_entries = []
             with os.scandir(directory) as iterator:
                 for entry in self._iter_interruptible(iterator):
                     try:
-                        entries.append(self._build_directory_entry(entry))
+                        all_entries.append(self._build_directory_entry(entry))
                     except Exception:
                         continue
 
-            entries.sort(key=lambda item: (not item['is_dir'], item['name'].lower()))
+            all_entries.sort(key=lambda item: (not item['is_dir'], item['name'].lower()))
+
+            total_all = len(all_entries)
+            total_hidden = sum(1 for item in all_entries if item.get('is_hidden'))
+
+            if show_hidden:
+                visible_entries = all_entries
+            else:
+                visible_entries = [
+                    item for item in all_entries
+                    if not item.get('is_hidden')
+                ]
+
+            total_visible = len(visible_entries)
+            total_pages = max((total_visible + page_size - 1) // page_size, 1)
+
+            if page > total_pages:
+                page = total_pages
+
+            start_index = (page - 1) * page_size
+            end_index = start_index + page_size
+            paged_entries = visible_entries[start_index:end_index]
 
             payload = {
                 'current_path': directory,
                 'parent_path': self._build_parent_path(directory),
-                'entries': entries
+                'entries': paged_entries,
+                'pagination': {
+                    'page': page,
+                    'page_size': page_size,
+                    'total_visible': total_visible,
+                    'total_pages': total_pages,
+                    'returned': len(paged_entries),
+                },
+                'summary': {
+                    'total_all': total_all,
+                    'total_hidden': total_hidden,
+                    'show_hidden': show_hidden,
+                }
             }
             return 1, __import__('json').dumps(payload, ensure_ascii=False)
         except CommandCancelledError:
@@ -433,3 +498,5 @@ class CommandFileWebMixin:
             return 0, 'Command timed out and was terminated'
         except Exception as e:
             return 0, f'Failed to save file: {e}'
+
+

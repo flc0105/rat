@@ -155,3 +155,5 @@ class BackgroundJobState:
             'messages': list(self.messages),
             'files': list(self.files),
         }
+
+

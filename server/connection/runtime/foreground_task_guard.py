@@ -79,3 +79,6 @@ class ForegroundTaskGuard:
             if self._task is None:
                 return None
             return dict(self._task)
+
+
+

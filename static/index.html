@@ -344,7 +344,7 @@
 
                         <el-button
                                 size="small"
-                                @click="showHiddenFiles = !showHiddenFiles"
+                                @click="toggleRemoteHiddenFiles"
                         >
                             {{ showHiddenFiles ? 'Hide Hidden' : 'Show Hidden' }}
                         </el-button>
@@ -433,6 +433,27 @@
                         </template>
                     </el-table-column>
                 </el-table>
+            </div>
+
+            <div class="dialog-pagination-wrap">
+                <div class="dialog-pagination-bar">
+                    <div class="dialog-pagination-meta">
+                        <span>Visible {{ remoteFilesTotal }} items</span>
+                        <span v-if="!showHiddenFiles && remoteFilesHiddenTotal > 0">· Hidden {{ remoteFilesHiddenTotal }}</span>
+                        <span v-if="remoteFilesAllTotal > remoteFilesTotal">· All {{ remoteFilesAllTotal }}</span>
+                        <span v-if="remoteFilesTotalPages > 1">· Page {{ remoteFilesPage }} / {{ remoteFilesTotalPages }}</span>
+                    </div>
+                    <el-pagination
+                            background
+                            layout="total, sizes, prev, pager, next"
+                            :current-page="remoteFilesPage"
+                            :page-size="remoteFilesPageSize"
+                            :page-sizes="remoteFilesPageSizeOptions"
+                            :total="remoteFilesTotal"
+                            @current-change="handleRemotePageChange"
+                            @size-change="handleRemotePageSizeChange"
+                    />
+                </div>
             </div>
 
             <div class="mobile-file-list-shell">
@@ -1603,3 +1624,6 @@
 <script src="https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs/loader.js"></script>
 </body>
 </html>
+
+
+

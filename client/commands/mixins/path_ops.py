@@ -259,3 +259,5 @@ class CommandPathMixin:
 
     def _extract_archive_to_cwd(self, archive_path: str):
         shutil.unpack_archive(archive_path, os.getcwd())
+
+

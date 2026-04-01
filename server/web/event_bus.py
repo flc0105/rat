@@ -66,3 +66,5 @@ class WebEventBus:
                 q.put_nowait(event_item)
             except Exception:
                 pass
+
+

@@ -136,3 +136,5 @@ class CommandIntrospectionMixin:
             lines.append('')
 
         return 1, '\n'.join(lines).rstrip()
+
+

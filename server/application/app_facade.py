@@ -241,8 +241,21 @@ class ServerWebService:
     def ingest_background_job_report(self, payload: dict):
         return self.background_job_service.ingest_report(payload)
 
-    def browse_remote_directory(self, client_id: str, path: str = ''):
-        return self.remote_file_service.browse_directory(client_id, path)
+    def browse_remote_directory(
+        self,
+        client_id: str,
+        path: str = '',
+        page: int = 1,
+        page_size: int = 100,
+        show_hidden: bool = False,
+    ):
+        return self.remote_file_service.browse_directory(
+            client_id,
+            path,
+            page=page,
+            page_size=page_size,
+            show_hidden=show_hidden,
+        )
 
     def create_remote_directory(self, client_id: str, path: str):
         return self.remote_file_service.create_directory(client_id, path)
@@ -303,3 +316,6 @@ class ServerWebService:
     def cleanup_agent_build(self, work_dir: str):
         """清理构建临时文件"""
         self.agent_builder.cleanup(work_dir)
+
+
+
