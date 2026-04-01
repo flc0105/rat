@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
 import subprocess
-from datetime import datetime
 
 
 def main():
@@ -22,5 +21,4 @@ def main():
             print(f"{user:<12} {tty:<8} {login:<25} {logout:<15}")
 
 
-if __name__ == '__main__':
-    main()
+main()
