@@ -159,26 +159,30 @@
                                 <div class="command-row">
                                     <div class="command-box command-box-full"
                                          style="display: flex; gap: 8px; align-items: center;">
-                                        <input
-                                                ref="commandInputRef"
-                                                v-model="commandText"
-                                                list="commandCandidatesList"
-                                                class="command-input-native"
-                                                type="text"
-                                                autocomplete="off"
-                                                placeholder="Enter a command..."
-                                                @keyup.enter="sendCommand"
-                                                style="flex: 1; min-width: 0;"
-                                        />
-                                        <datalist id="commandCandidatesList">
-                                            <option
-                                                    v-for="item in commandCandidates"
-                                                    :key="item.template"
-                                                    :value="item.template"
-                                            >
-                                                {{ item.help }}
-                                            </option>
-                                        </datalist>
+<div class="command-autocomplete-shell" style="flex: 1; min-width: 0;">
+    <el-autocomplete
+            ref="commandInputRef"
+            v-model="commandText"
+            :fetch-suggestions="queryCommandCandidates"
+            popper-class="command-autocomplete-popper"
+            class="command-autocomplete"
+            value-key="value"
+            placeholder="Enter a command."
+            autocomplete="off"
+            @select="handleCommandCandidateSelect"
+            @keyup.enter="sendCommand"
+    >
+        <template #default="{ item }">
+            <div class="command-autocomplete-item">
+                <div class="command-autocomplete-item-main">
+                    <div class="command-autocomplete-item-name">{{ item.template || item.value || '-' }}</div>
+                    <div v-if="item.help" class="command-autocomplete-item-desc">{{ item.help }}</div>
+                </div>
+                <div v-if="item.groupLabel" class="command-autocomplete-item-group">{{ item.groupLabel }}</div>
+            </div>
+        </template>
+    </el-autocomplete>
+</div>
                                         <button
                                                 class="run-button"
                                                 :disabled="sending || hasRunningWebTask"

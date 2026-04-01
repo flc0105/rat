@@ -446,6 +446,118 @@ body {
   border-color: rgba(96, 165, 250, 0.5);
 }
 
+.command-autocomplete-shell {
+  width: 100%;
+  min-width: 0;
+}
+
+.command-autocomplete,
+.command-autocomplete .el-input,
+.command-autocomplete .el-input__wrapper {
+  width: 100%;
+  min-width: 0;
+}
+
+.command-autocomplete .el-input__wrapper {
+  height: 42px;
+  padding: 0 14px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  outline: none;
+  background: rgba(255, 255, 255, 0.06) !important;
+  box-shadow: none !important;
+}
+
+.command-autocomplete .el-input__wrapper:hover {
+  box-shadow: none !important;
+}
+
+.command-autocomplete .el-input__wrapper.is-focus {
+  border-color: rgba(96, 165, 250, 0.5);
+  box-shadow: none !important;
+}
+
+.command-autocomplete .el-input__inner {
+  height: 100%;
+  color: #f8fafc !important;
+  font-size: 14px;
+  background: transparent !important;
+}
+
+.command-autocomplete .el-input__inner::placeholder {
+  color: #8ea2c0 !important;
+}
+
+.command-autocomplete-popper {
+  background: #0f172a !important;
+  border: 1px solid rgba(255, 255, 255, 0.08) !important;
+  border-radius: 12px !important;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35) !important;
+  overflow: hidden;
+}
+
+.command-autocomplete-popper .el-autocomplete-suggestion__wrap {
+  padding: 8px 0;
+  background: #0f172a !important;
+}
+
+.command-autocomplete-popper .el-scrollbar,
+.command-autocomplete-popper .el-scrollbar__wrap,
+.command-autocomplete-popper .el-scrollbar__view {
+  background: #0f172a !important;
+}
+
+.command-autocomplete-popper li {
+  padding: 0 12px !important;
+  line-height: normal !important;
+  background: #0f172a !important;
+}
+
+.command-autocomplete-popper li:hover,
+.command-autocomplete-popper li.highlighted {
+  background: rgba(96, 165, 250, 0.12) !important;
+}
+
+.command-autocomplete-item {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 10px 2px;
+}
+
+.command-autocomplete-item-main {
+  min-width: 0;
+  flex: 1;
+}
+
+.command-autocomplete-item-name {
+  color: #f8fafc !important;
+  font-size: 14px;
+  line-height: 1.5;
+  font-weight: 600;
+  word-break: break-all;
+}
+
+.command-autocomplete-item-desc {
+  margin-top: 4px;
+  color: #8ea2c0 !important;
+  font-size: 12px;
+  line-height: 1.5;
+  word-break: break-word;
+}
+
+.command-autocomplete-item-group {
+  flex-shrink: 0;
+  align-self: center;
+  color: #60a5fa !important;
+  font-size: 12px;
+  line-height: 1.4;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: rgba(37, 99, 235, 0.12) !important;
+  border: 1px solid rgba(96, 165, 250, 0.18);
+}
 .run-button {
   width: 88px;
   height: 42px;
