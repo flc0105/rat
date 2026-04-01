@@ -27,24 +27,14 @@ class CommandJobMixin:
             f'Use "stop_job {job_key}" to request stop'
         )
 
-    def _list_available_jobs_with_remote(self):
+    def _list_available_local_jobs(self):
         job_manager = self.socket.job_manager
         local_jobs = job_manager.list_available_jobs() or []
-        remote_result = self._list_remote_scripts()
-        remote_text = remote_result[1] if isinstance(remote_result, tuple) and len(remote_result) >= 2 else ''
+        if not local_jobs:
+            return 1, 'No client job modules available'
 
-        lines = []
-        if local_jobs:
-            lines.append('Available client job modules:')
-            lines.extend(f'  {item}' for item in local_jobs)
-
-        if remote_text and not remote_text.startswith('Failed to') and remote_text != 'No remote scripts available':
-            if lines:
-                lines.append('')
-            lines.append(remote_text)
-
-        if not lines:
-            return 1, 'No job modules available'
+        lines = ['Available client job modules:']
+        lines.extend(f'  {item}' for item in local_jobs)
         return 1, '\n'.join(lines)
 
     def _start_remote_job_by_name(self, job_name: str, job_manager):
@@ -74,13 +64,13 @@ class CommandJobMixin:
         启动后台任务。
         - 优先尝试本地 client job module
         - 本地找不到时自动回退到 server-side script
-        - 不传任务名时，同时列出本地与远程可用项
+        - 不传任务名时，仅列出本地 client job module
         """
         normalized = self._normalize_job_name(job_name)
         job_manager = self.socket.job_manager
 
         if not normalized:
-            return self._list_available_jobs_with_remote()
+            return self._list_available_local_jobs()
 
         self._send_interim_result(1, f'Preparing background job: {normalized}')
         try:

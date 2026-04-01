@@ -679,10 +679,10 @@
                         </div>
                         <!-- 修改模块卡片，区分本地和远程 -->
                         <div class="background-job-module-list" v-else>
-                            <div v-for="item in backgroundJobModules" :key="item.job_name"
+                            <div v-for="item in backgroundJobModules" :key="item.module_id || `${item.source}:${item.job_name}`"
                                  class="background-job-module-card">
-                                <div class="background-job-module-name">{{ item.job_name }}</div>
-                                <div class="background-job-module-key mono">{{ item.job_key || '-' }}</div>
+                                <div class="background-job-module-name">{{ item.display_name || item.job_name }}</div>
+                                <div v-if="item.display_name" class="background-job-module-key mono">{{ item.job_name }}</div>
                                 <div class="background-job-module-tags">
                                     <el-tag v-if="item.source === 'server'" size="small" type="success">Server</el-tag>
                                     <el-tag v-else-if="item.source === 'client'" size="small" type="info">Client
@@ -706,7 +706,7 @@
                             </div>
                         </div>
                         <!--                        <div class="background-job-module-list" v-else>-->
-                        <!--                            <div v-for="item in backgroundJobModules" :key="item.job_name"-->
+                        <!--                            <div v-for="item in backgroundJobModules" :key="item.module_id || `${item.source}:${item.job_name}`"-->
                         <!--                                 class="background-job-module-card">-->
                         <!--                                <div class="background-job-module-name">{{ item.job_name }}</div>-->
                         <!--                                <div class="background-job-module-key mono">{{ item.job_key || '-' }}</div>-->

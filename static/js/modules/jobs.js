@@ -17,13 +17,19 @@ window.AppJobsModule = {
             const rawSource = String(item.source || '').trim().toLowerCase();
             const source = rawSource === 'server' ? 'server' : 'client';
             const jobName = String(item.job_name || item.name || item.job_key || '').trim();
-            const displayName = String(item.display_name || jobName || '').trim();
+            const jobKey = String(item.job_key || jobName).trim() || jobName;
+            const displayNameRaw = String(item.display_name || '').trim();
+            const isHeadingLike = /^(available\s+client\s+job\s+modules:?|available\s+remote\s+scripts:?|no\s+remote\s+scripts\s+available)$/i.test(jobName);
+            const looksSyntheticRemoteAlias = source === 'client' && /\s+-\s+server$/i.test(jobName);
+
             return {
                 ...item,
                 source,
                 job_name: jobName,
-                job_key: String(item.job_key || jobName).trim() || jobName,
-                display_name: displayName || jobName,
+                job_key: jobKey,
+                display_name: displayNameRaw && displayNameRaw !== jobName ? displayNameRaw : '',
+                module_id: `${source}:${jobKey || jobName}`,
+                hidden_invalid: !jobName || isHeadingLike || looksSyntheticRemoteAlias,
             };
         },
 
@@ -77,7 +83,7 @@ window.AppJobsModule = {
                 const modules = Array.isArray(json.data) ? json.data : [];
                 this.backgroundJobModules = modules
                     .map(item => this.normalizeBackgroundJobModule(item))
-                    .filter(item => item.job_name);
+                    .filter(item => item.job_name && !item.hidden_invalid);
             } catch (e) {
                 this.backgroundJobModules = [];
                 ElementPlus.ElMessage.error(e.message || 'Failed to load job modules');
