@@ -14,24 +14,53 @@ window.AppJobsModule = {
         },
 
         normalizeBackgroundJobModule(item = {}) {
-            const rawSource = String(item.source || '').trim().toLowerCase();
-            const source = rawSource === 'server' ? 'server' : 'client';
-            const jobName = String(item.job_name || item.name || item.job_key || '').trim();
-            const jobKey = String(item.job_key || jobName).trim() || jobName;
-            const displayNameRaw = String(item.display_name || '').trim();
-            const isHeadingLike = /^(available\s+client\s+job\s+modules:?|available\s+remote\s+scripts:?|no\s+remote\s+scripts\s+available)$/i.test(jobName);
-            const looksSyntheticRemoteAlias = source === 'client' && /\s+-\s+server$/i.test(jobName);
+    const rawSource = String(item.source || '').trim().toLowerCase();
+    const source = rawSource === 'server' ? 'server' : 'client';
 
-            return {
-                ...item,
-                source,
-                job_name: jobName,
-                job_key: jobKey,
-                display_name: displayNameRaw && displayNameRaw !== jobName ? displayNameRaw : '',
-                module_id: `${source}:${jobKey || jobName}`,
-                hidden_invalid: !jobName || isHeadingLike || looksSyntheticRemoteAlias,
-            };
-        },
+    const rawJobName = String(item.job_name || item.name || item.job_key || '').trim();
+    const rawJobKey = String(item.job_key || '').trim();
+    const rawDisplayName = String(item.display_name || '').trim();
+
+    const isHeadingLike = /^(available\s+client\s+job\s+modules:?|available\s+remote\s+scripts:?|no\s+remote\s+scripts\s+available)$/i.test(rawJobName);
+    const looksSyntheticRemoteAlias = source === 'client' && /\s+-\s+server$/i.test(rawJobName);
+
+    const stripPySuffix = (value = '') => String(value).replace(/\.py$/i, '').trim();
+
+    let jobName = rawJobName;
+    let jobKey = rawJobKey || stripPySuffix(rawJobName) || rawJobName;
+    let displayName = rawDisplayName;
+
+    if (source === 'client') {
+        // client 模块：标题保留 .py，副标题显示去掉 .py 的模块名
+        if (!displayName) {
+            displayName = jobName;
+        }
+        if (!jobKey) {
+            jobKey = stripPySuffix(jobName) || jobName;
+        }
+    } else {
+        // server 脚本：标题优先 display_name（通常带 .py），副标题显示 job_key / job_name（通常不带 .py）
+        if (!displayName) {
+            displayName = jobName;
+        }
+        if (!jobKey) {
+            jobKey = stripPySuffix(jobName) || jobName;
+        }
+    }
+
+    const subtitle = jobKey && displayName !== jobKey ? jobKey : '';
+
+    return {
+        ...item,
+        source,
+        job_name: jobName,
+        job_key: jobKey,
+        display_name: displayName,
+        subtitle,
+        module_id: `${source}:${jobKey || jobName}`,
+        hidden_invalid: !jobName || isHeadingLike || looksSyntheticRemoteAlias,
+    };
+},
 
 // async loadBackgroundJobModules() {
 //     if (!this.selectedId) return;
