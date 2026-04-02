@@ -1,3 +1,6 @@
+from server.application.tasks.task_status import WebTaskStatus
+
+
 class WebTaskHistoryRecorder:
     """
     Web 任务历史记录器。
@@ -25,19 +28,11 @@ class WebTaskHistoryRecorder:
             0
         )
 
-    def finalize(self, conn, task_id: str, ok: bool):
+    def finalize(self, conn, task_id: str, final_status: str):
         history_entry_id = self._get_history_entry_id(task_id)
         self.history_orchestrator.finalize_execution(
             conn,
             history_entry_id,
-            ok,
+            final_status == WebTaskStatus.SUCCESS,
             cwd_end=conn.info.get('cwd', '')
         )
-
-
-
-
-
-
-
-

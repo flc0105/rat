@@ -54,6 +54,40 @@ class WebTaskService:
             daemon=True,
         ).start()
 
+    def _resolve_cancellable_task(self, task_id: str):
+        task = self.task_store.get_task(task_id)
+        if not task:
+            raise ValueError('task not found')
+
+        task_status = str(task.get('status') or '').strip()
+        if task_status not in ('running', 'cancelling'):
+            raise ValueError(f'task is not cancellable: {task_status or "unknown"}')
+
+        client_id = task.get('client_id') or ''
+        if not client_id:
+            raise ValueError('task client_id is missing')
+
+        conn = self.server.get_target_connection_by_client_id(client_id)
+        foreground_task = conn.get_foreground_task() or {}
+        current_task_id = (foreground_task.get('task_id') or '').strip()
+        if current_task_id != str(task_id).strip():
+            raise ValueError('task is no longer the active foreground task')
+
+        return task, conn
+
+    def _request_task_cancel(self, conn, task_id: str):
+        self.task_store.request_cancel(task_id)
+
+        cancel_info = conn.request_foreground_task_cancel(task_id=task_id)
+        if not cancel_info:
+            raise RuntimeError('failed to request task cancellation')
+
+        command_id = cancel_info.get('command_id')
+        if command_id:
+            conn.send_cancel(command_id)
+
+        return cancel_info
+
     def submit_web_command(self, client_id: str, command: str, tab_id: str = ''):
         conn = self.server.get_target_connection_by_client_id(client_id)
 
@@ -86,34 +120,10 @@ class WebTaskService:
         }
 
     def cancel_web_task(self, task_id: str):
-        task = self.task_store.get_task(task_id)
-        if not task:
-            raise ValueError('task not found')
-
-        task_status = str(task.get('status') or '').strip()
-        if task_status not in ('running', 'cancelling'):
-            raise ValueError(f'task is not cancellable: {task_status or "unknown"}')
-
+        task, conn = self._resolve_cancellable_task(task_id)
         client_id = task.get('client_id') or ''
-        if not client_id:
-            raise ValueError('task client_id is missing')
-
-        conn = self.server.get_target_connection_by_client_id(client_id)
-        foreground_task = conn.get_foreground_task() or {}
-
-        current_task_id = (foreground_task.get('task_id') or '').strip()
-        if current_task_id != str(task_id).strip():
-            raise ValueError('task is no longer the active foreground task')
-
-        self.task_store.request_cancel(task_id)
-
-        cancel_info = conn.request_foreground_task_cancel(task_id=task_id)
-        if not cancel_info:
-            raise RuntimeError('failed to request task cancellation')
-
+        cancel_info = self._request_task_cancel(conn, task_id)
         command_id = cancel_info.get('command_id')
-        if command_id:
-            conn.send_cancel(command_id)
 
         return {
             'task_id': task_id,
@@ -149,7 +159,7 @@ class WebTaskService:
             local_path,
             display_name,
             remote_path,
-            getattr(self.file_service, 'upload_tmp_dir', ''),
+            getattr(self.file_service, 'upload_tmp_dir', '')
         )
 
         return {

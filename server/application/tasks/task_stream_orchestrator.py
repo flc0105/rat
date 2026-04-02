@@ -16,6 +16,41 @@ class WebTaskStreamOrchestrator:
         self.event_publisher = event_publisher
         self.history_recorder = history_recorder
 
+    def _publish_stream_chunk(self, conn, task_id: str, client_id: str, command: str, status: int, text: str):
+        self.event_publisher.publish_task_result(
+            task_id,
+            client_id,
+            command,
+            status,
+            text
+        )
+        self.history_recorder.append_output(conn, task_id, status, text)
+
+    def _resolve_final_status(self, task_id: str, summary: TaskStreamSummary) -> str:
+        task = self.task_store.get_task(task_id) or {}
+        return summary.resolve_final_status(
+            cancel_requested=bool(task.get('cancel_requested'))
+        )
+
+    def _finalize_stream(self, conn, task_id: str, client_id: str, command: str, final_status: str, summary: TaskStreamSummary):
+        self.task_store.finish_task(
+            task_id,
+            ok=summary.is_success(),
+            final_status=final_status
+        )
+
+        self.history_recorder.finalize(
+            conn,
+            task_id,
+            final_status=final_status
+        )
+
+        self.event_publisher.publish_task_complete(
+            task_id,
+            client_id,
+            command
+        )
+
     def run_stream(self, conn, task_id: str, command: str, result_iter):
         """
         统一执行 Web 任务结果流：
@@ -31,58 +66,14 @@ class WebTaskStreamOrchestrator:
         try:
             for status, result in result_iter:
                 text = '' if result is None else str(result)
-
-                self.event_publisher.publish_task_result(
-                    task_id,
-                    client_id,
-                    command,
-                    status,
-                    text
-                )
-                self.history_recorder.append_output(conn, task_id, status, text)
+                self._publish_stream_chunk(conn, task_id, client_id, command, status, text)
                 summary.record_chunk(status, text)
 
         except Exception as e:
             text = str(e)
             summary.mark_exception()
-
-            self.event_publisher.publish_task_result(
-                task_id,
-                client_id,
-                command,
-                0,
-                text
-            )
-            self.history_recorder.append_output(conn, task_id, 0, text)
+            self._publish_stream_chunk(conn, task_id, client_id, command, 0, text)
 
         finally:
-            task = self.task_store.get_task(task_id) or {}
-            final_status = summary.resolve_final_status(
-                cancel_requested=bool(task.get('cancel_requested'))
-            )
-
-            self.task_store.finish_task(
-                task_id,
-                ok=summary.is_success(),
-                final_status=final_status
-            )
-
-            self.history_recorder.finalize(
-                conn,
-                task_id,
-                ok=final_status == 'success'
-            )
-
-            self.event_publisher.publish_task_complete(
-                task_id,
-                client_id,
-                command
-            )
-
-
-
-
-
-
-
-
+            final_status = self._resolve_final_status(task_id, summary)
+            self._finalize_stream(conn, task_id, client_id, command, final_status, summary)
