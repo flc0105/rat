@@ -62,12 +62,21 @@ class BuiltinCommandHandler:
         },
     ]
 
-    def __init__(self, conn, server, plan_builder, remote_execution_service, history_entry_id_provider):
+    def __init__(
+        self,
+        conn,
+        server,
+        plan_builder,
+        remote_execution_service,
+        history_entry_id_provider,
+        plan_executor_factory,
+    ):
         self.conn = conn
         self.server = server
         self.plan_builder = plan_builder
         self.remote_execution_service = remote_execution_service
         self.history_entry_id_provider = history_entry_id_provider
+        self.plan_executor_factory = plan_executor_factory
 
     def get_command_candidates(self):
         candidates = [dict(item) for item in self.WEB_COMMAND_TEMPLATES]
@@ -91,9 +100,14 @@ class BuiltinCommandHandler:
         return candidates
 
     def resolve_builtin_command(self, name, arg):
-        if hasattr(self, name) and callable(getattr(self, name)):
-            return getattr(self, name)(arg)
-        return None
+        if not hasattr(self, name):
+            return None
+
+        handler = getattr(self, name)
+        if not callable(handler):
+            return None
+
+        return handler(arg)
 
     def upload(self, filename):
         if not os.path.isfile(filename):
@@ -129,9 +143,10 @@ class BuiltinCommandHandler:
     def _build_script_plan(self, script_text: str, script_args: list):
         return self.plan_builder.build_script_plan(script_text, scan_args(script_args))
 
-    def _execute_script_file(self, filename: str, plan_executor):
+    def _execute_script_file(self, filename: str):
         parts = shlex.split(filename)
         script_path = self._resolve_script_path(parts[0])
+        plan_executor = self.plan_executor_factory()
 
         with open(script_path, 'rt', encoding='utf-8') as file_obj:
             try:
@@ -141,12 +156,12 @@ class BuiltinCommandHandler:
             except UnicodeDecodeError:
                 raise RuntimeError(f"Unable to read file: {script_path}")
 
-    def exec(self, filename, plan_executor):
+    def exec(self, filename):
         if not filename:
             yield 1, '\n'.join(self._list_scripts())
             return
 
-        for item in self._execute_script_file(filename, plan_executor):
+        for item in self._execute_script_file(filename):
             yield item
 
     def alias(self, arg):
@@ -170,7 +185,7 @@ class BuiltinCommandHandler:
 
         try:
             self.server.alias_manager.remove_alias(arg)
-            yield 1, f'Alias removed: {arg}'
+            yield 1, f"Alias removed: {arg}"
         except KeyError:
             raise ValueError(f"Alias not found: {arg}")
 

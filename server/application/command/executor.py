@@ -29,6 +29,7 @@ class CommandExecutor:
             plan_builder=self.plan_builder,
             remote_execution_service=self.remote_execution_service,
             history_entry_id_provider=self._get_current_history_entry_id,
+            plan_executor_factory=self._create_plan_executor,
         )
 
     def _get_current_history_entry_id(self) -> str:
@@ -36,6 +37,9 @@ class CommandExecutor:
 
     def _yield_error(self, error):
         yield 0, str(error)
+
+    def _create_plan_executor(self):
+        return self._execute_remote_plan
 
     def _execute_remote_plan(self, plan: dict):
         if self.use_foreground_guard:
