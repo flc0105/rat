@@ -55,6 +55,7 @@ class ServerApplicationAssembly:
             server=self.server,
             event_bus=self.event_bus,
             task_store=self.task_store,
+            remote_execution_service=self.remote_execution_service,
         )
 
         self.task_service = WebTaskService(
@@ -86,11 +87,3 @@ class ServerApplicationAssembly:
         """
         self.background_job_store.artifact_service = self.artifact_service
         self.server.command_history.artifact_service = self.artifact_service
-
-
-
-
-
-
-
-

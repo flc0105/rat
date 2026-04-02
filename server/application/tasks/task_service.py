@@ -1,7 +1,5 @@
 import threading
 
-from server.application.execution.remote_execution_service import RemoteExecutionService
-
 
 class WebTaskService:
     """
@@ -18,20 +16,54 @@ class WebTaskService:
         self.task_store = task_store
         self.file_service = file_service
         self.task_runner = task_runner
-        self.remote_execution_service = RemoteExecutionService(server)
         self.history_orchestrator = self.server.command_history_orchestrator
 
-    def submit_web_command(self, client_id: str, command: str, tab_id: str = ''):
-        conn = self.server.get_target_connection_by_client_id(client_id)
+    def _create_task_with_history(
+        self,
+        conn,
+        client_id: str,
+        command: str,
+        *,
+        tab_id: str = '',
+        source: str = 'web',
+        should_record=None,
+    ):
+        """
+        统一创建 task + history entry。
 
+        这样 submit_web_command / submit_web_upload 使用同一条提交主线：
+        - 先创建 history entry
+        - 再创建 task
+        - 最后把 history_entry_id 回填到 task
+        """
         entry_id = self.history_orchestrator.begin_execution(
             conn,
             command,
-            source='web'
+            source=source,
+            should_record=should_record,
         )
 
         task = self.task_store.create_task(client_id, command, tab_id=tab_id)
         task['history_entry_id'] = entry_id
+        return task
+
+    def _start_task_thread(self, target, *args):
+        threading.Thread(
+            target=target,
+            args=args,
+            daemon=True,
+        ).start()
+
+    def submit_web_command(self, client_id: str, command: str, tab_id: str = ''):
+        conn = self.server.get_target_connection_by_client_id(client_id)
+
+        task = self._create_task_with_history(
+            conn,
+            client_id,
+            command,
+            tab_id=tab_id,
+            source='web',
+        )
 
         conn.acquire_foreground_task(
             task_type='command',
@@ -40,11 +72,12 @@ class WebTaskService:
             task_id=task['task_id']
         )
 
-        threading.Thread(
-            target=self.task_runner.run_command_task,
-            args=(conn, task['task_id'], command),
-            daemon=True
-        ).start()
+        self._start_task_thread(
+            self.task_runner.run_command_task,
+            conn,
+            task['task_id'],
+            command,
+        )
 
         return {
             'task_id': task['task_id'],
@@ -93,15 +126,14 @@ class WebTaskService:
         conn = self.server.get_target_connection_by_client_id(client_id)
         command = f'upload {display_name}'
 
-        entry_id = self.history_orchestrator.begin_execution(
+        task = self._create_task_with_history(
             conn,
+            client_id,
             command,
+            tab_id=tab_id,
             source='web',
-            should_record=True
+            should_record=True,
         )
-
-        task = self.task_store.create_task(client_id, command, tab_id=tab_id)
-        task['history_entry_id'] = entry_id
 
         conn.acquire_foreground_task(
             task_type='upload',
@@ -110,30 +142,18 @@ class WebTaskService:
             task_id=task['task_id']
         )
 
-        threading.Thread(
-            target=self.task_runner.run_upload_task,
-            args=(
-                conn,
-                task['task_id'],
-                local_path,
-                display_name,
-                remote_path,
-                getattr(self.file_service, 'upload_tmp_dir', '')
-            ),
-            daemon=True
-        ).start()
+        self._start_task_thread(
+            self.task_runner.run_upload_task,
+            conn,
+            task['task_id'],
+            local_path,
+            display_name,
+            remote_path,
+            getattr(self.file_service, 'upload_tmp_dir', ''),
+        )
 
         return {
             'task_id': task['task_id'],
             'client_id': client_id,
             'command': command
         }
-
-
-
-
-
-
-
-
-
