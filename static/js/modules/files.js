@@ -292,48 +292,50 @@ window.AppFilesModule = {
         },
 
 
-        // 修改 loadPreviewPayload，加载后初始化编辑器
-        async loadPreviewPayload(fetcher, fallbackTitle = 'File Preview') {
-            this.previewDialogVisible = true;
-            this.previewLoading = true;
-            this.resetPreviewState();
-            this.previewEditMode = false;
-            this.previewSaving = false;
-            this.previewOriginalContent = '';
+       async loadPreviewPayload(fetcher, fallbackTitle = 'File Preview') {
+    this.previewDialogVisible = true;
+    this.previewLoading = true;
+    this.resetPreviewState();
+    this.previewEditMode = false;
+    this.previewSaving = false;
+    this.previewOriginalContent = '';
+    this.previewImageInfo = null;
+    this.previewImageInfoDialogVisible = false;
 
-            try {
-                const res = await fetcher();
-                const json = await res.json();
+    try {
+        const res = await fetcher();
+        const json = await res.json();
 
-                if (!res.ok || json.code !== 0) {
-                    throw new Error(json.message || 'Preview failed');
-                }
+        if (!res.ok || json.code !== 0) {
+            throw new Error(json.message || 'Preview failed');
+        }
 
-                const data = json.data || {};
-                this.previewType = data.type || 'unsupported';
-                this.previewTitle = data.name || fallbackTitle;
+        const data = json.data || {};
+        this.previewType = data.type || 'unsupported';
+        this.previewTitle = data.name || fallbackTitle;
+        this.previewImageInfo = data.image_info || null;
 
-                if (this.previewType === 'image') {
-                    this.previewUrl = data.url || '';
-                } else if (this.previewType === 'text') {
-                    this.previewText = data.content || '';
-                    this.previewTruncated = data.truncated || false;
-                    this.previewOriginalContent = this.previewText;
-                    this.previewFileSize = this.formatBytes(data.size || this.previewText.length);
-                    this.previewFileEncoding = this.detectEncoding(this.previewText);
+        if (this.previewType === 'image') {
+            this.previewUrl = data.url || '';
+        } else if (this.previewType === 'text') {
+            this.previewText = data.content || '';
+            this.previewTruncated = data.truncated || false;
+            this.previewOriginalContent = this.previewText;
+            this.previewFileSize = this.formatBytes(data.size || this.previewText.length);
+            this.previewFileEncoding = this.detectEncoding(this.previewText);
 
-                    // 等待 DOM 渲染完成后初始化编辑器
-                    this.$nextTick(() => {
-                        this.initMonacoEditor(this.previewText, true);
-                    });
-                }
-            } catch (e) {
-                this.previewDialogVisible = false;
-                ElementPlus.ElMessage.error(e.message || 'Preview failed');
-            } finally {
-                this.previewLoading = false;
-            }
-        },
+            // 等待 DOM 渲染完成后初始化编辑器
+            this.$nextTick(() => {
+                this.initMonacoEditor(this.previewText, true);
+            });
+        }
+    } catch (e) {
+        this.previewDialogVisible = false;
+        ElementPlus.ElMessage.error(e.message || 'Preview failed');
+    } finally {
+        this.previewLoading = false;
+    }
+},
 
         detectEncoding(text) {
             // 简单的编码检测
@@ -368,6 +370,23 @@ window.AppFilesModule = {
                 ElementPlus.ElMessage.error('Failed to copy content');
             }
         },
+
+        openPreviewImageInfoDialog() {
+    if (!this.previewImageInfo) {
+        ElementPlus.ElMessage.warning('No image info available');
+        return;
+    }
+    this.previewImageInfoDialogVisible = true;
+},
+
+formatPreviewImageInfo(info) {
+    if (!info) return '';
+    try {
+        return JSON.stringify(info, null, 2);
+    } catch (e) {
+        return String(info);
+    }
+},
 
         openPreviewOriginal() {
             if (!this.previewUrl) {

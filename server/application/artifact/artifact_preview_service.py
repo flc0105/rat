@@ -1,11 +1,26 @@
 import mimetypes
 import os
+from fractions import Fraction
 
 
 class ArtifactPreviewService:
     """
     Artifact 预览服务。
     """
+
+    IMAGE_EXIF_TAGS = {
+        271: 'make',
+        272: 'model',
+        305: 'software',
+        33434: 'exposure_time',
+        33437: 'f_number',
+        34855: 'iso',
+        36867: 'datetime_original',
+        37386: 'focal_length',
+        37510: 'user_comment',
+        40961: 'color_space',
+        42036: 'lens_model',
+    }
 
     def __init__(self, artifact_service):
         self.artifact_service = artifact_service
@@ -33,6 +48,81 @@ class ArtifactPreviewService:
 
         return 'unsupported'
 
+    def _normalize_image_info_value(self, value, tag=None):
+        """
+        将图片 EXIF 值转换为可读、可 JSON 序列化的基础类型
+        """
+        if isinstance(value, bytes):
+            return value.decode('utf-8', errors='replace')
+
+        if isinstance(value, tuple):
+            return [self._normalize_image_info_value(item, tag=tag) for item in value]
+
+        if tag == 40961:
+            return 'sRGB' if value == 1 else 'Uncalibrated'
+
+        try:
+            if isinstance(value, Fraction):
+                if value.denominator == 1:
+                    return value.numerator
+                return float(value)
+        except Exception:
+            pass
+
+        if hasattr(value, 'numerator') and hasattr(value, 'denominator'):
+            try:
+                numerator = value.numerator
+                denominator = value.denominator
+                if denominator == 1:
+                    return int(numerator)
+                return float(value)
+            except Exception:
+                return str(value)
+
+        if isinstance(value, (str, int, float, bool)) or value is None:
+            return value
+
+        return str(value)
+
+    def _build_image_info_payload(self, file_path: str, display_name: str, artifact: dict) -> dict | None:
+        """
+        基于 preview artifact 本地文件提取图片信息。
+        注意：这里不让图片预览因为元信息提取失败而整体失败。
+        """
+        try:
+            from PIL import Image
+        except ImportError:
+            return None
+
+        try:
+            with Image.open(file_path) as img:
+                info = {
+                    'name': os.path.basename(display_name),
+                    'width': img.width,
+                    'height': img.height,
+                    'size': f'{img.width}x{img.height}',
+                    'format': img.format,
+                    'mode': img.mode,
+                    'file_size_bytes': os.path.getsize(file_path),
+                    'artifact_id': artifact.get('artifact_id', ''),
+                }
+
+                exif_data = None
+                if hasattr(img, '_getexif'):
+                    try:
+                        exif_data = img._getexif()
+                    except Exception:
+                        exif_data = None
+
+                if exif_data:
+                    for tag, value in exif_data.items():
+                        if tag in self.IMAGE_EXIF_TAGS:
+                            info[self.IMAGE_EXIF_TAGS[tag]] = self._normalize_image_info_value(value, tag=tag)
+
+                return info
+        except Exception:
+            return None
+
     def build_preview_payload(self, artifact_id: str) -> dict:
         artifact = self.artifact_service.registry_service.get_artifact_by_id(artifact_id)
         file_path = artifact.get('saved_path', '')
@@ -49,6 +139,7 @@ class ArtifactPreviewService:
                 'name': os.path.basename(display_name),
                 'url': artifact.get('raw_url', ''),
                 'artifact_id': artifact.get('artifact_id', ''),
+                'image_info': self._build_image_info_payload(file_path, display_name, artifact),
             }
 
         if preview_type == 'text':
@@ -78,12 +169,3 @@ class ArtifactPreviewService:
             'name': os.path.basename(display_name),
             'artifact_id': artifact.get('artifact_id', ''),
         }
-
-
-
-
-
-
-
-
-

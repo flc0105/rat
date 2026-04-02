@@ -39,16 +39,18 @@ window.AppUtilsModule = {
             this.commandExecutionOutputSortOrder = this.commandExecutionOutputSortOrder === 'asc' ? 'desc' : 'asc';
         },
 
-        resetPreviewState() {
-            this.previewType = '';
-            this.previewTitle = '';
-            this.previewUrl = '';
-            this.previewText = '';
-            this.previewOriginalContent = '';
-            this.previewEditMode = false;
-            this.previewSaving = false;
-            this.previewArtifactInfo = null;
-        },
+  resetPreviewState() {
+    this.previewType = '';
+    this.previewTitle = '';
+    this.previewUrl = '';
+    this.previewText = '';
+    this.previewOriginalContent = '';
+    this.previewEditMode = false;
+    this.previewSaving = false;
+    this.previewArtifactInfo = null;
+    this.previewImageInfo = null;
+    this.previewImageInfoDialogVisible = false;
+},
 
         resetRemoteFilesState() {
             this.remoteFilesCurrentPath = '';

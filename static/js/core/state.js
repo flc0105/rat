@@ -69,8 +69,10 @@ window.AppStateModule = {
             previewTruncated: false,     // 是否被截断
             previewFileSize: '',         // 文件大小显示
             previewFileEncoding: 'UTF-8', // 文件编码
-            previewSource: '',  // 'remote_file' 或 'artifact'
-            previewArtifactInfo: null,
+  previewSource: '',  // 'remote_file' 或 'artifact'
+previewArtifactInfo: null,
+previewImageInfo: null,
+previewImageInfoDialogVisible: false,
 
 
             pendingRemoteUploadRefresh: null,

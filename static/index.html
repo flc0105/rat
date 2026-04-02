@@ -946,11 +946,18 @@
                             </el-button>
                         </template>
                     </template>
-                    <template v-if="previewType === 'image' && previewUrl">
-                        <el-button size="small" @click="openPreviewOriginal">
-                            Open Original
-                        </el-button>
-                    </template>
+      <template v-if="previewType === 'image' && previewUrl">
+    <el-button
+            v-if="previewImageInfo"
+            size="small"
+            @click="openPreviewImageInfoDialog"
+    >
+        Image Info
+    </el-button>
+    <el-button size="small" @click="openPreviewOriginal">
+        Open Original
+    </el-button>
+</template>
                 </div>
 
                 <div class="preview-toolbar-right">
@@ -1614,6 +1621,19 @@
             </div>
         </template>
     </el-dialog>
+    <el-dialog
+        v-model="previewImageInfoDialogVisible"
+        title="Image Info"
+        width="760px"
+        top="8vh"
+        class="fixed-dialog"
+>
+    <div style="max-height: 65vh; overflow: auto;">
+        <pre
+                style="margin: 0; white-space: pre-wrap; word-break: break-word; font-family: monospace; font-size: 13px; line-height: 1.6;"
+        >{{ formatPreviewImageInfo(previewImageInfo) }}</pre>
+    </div>
+</el-dialog>
 </div>
 
 <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
