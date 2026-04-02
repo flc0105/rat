@@ -1,10 +1,9 @@
-import os
-
 from server.application.command.builtin_command_support import (
     AliasBuiltinSupport,
     HistoryBuiltinSupport,
     RttBuiltinSupport,
     ScriptBuiltinSupport,
+    UploadBuiltinSupport,
 )
 
 
@@ -79,6 +78,11 @@ class BuiltinCommandHandler:
         self.history_entry_id_provider = history_entry_id_provider
         self.plan_executor_factory = plan_executor_factory
 
+        self.upload_support = UploadBuiltinSupport(
+            conn=self.conn,
+            remote_execution_service=self.remote_execution_service,
+            history_entry_id_provider=self.history_entry_id_provider,
+        )
         self.script_support = ScriptBuiltinSupport(
             plan_builder=self.plan_builder,
             plan_executor_factory=self.plan_executor_factory,
@@ -126,16 +130,8 @@ class BuiltinCommandHandler:
         return handler(arg)
 
     def upload(self, filename):
-        if not os.path.isfile(filename):
-            raise FileNotFoundError(f"File does not exist: {filename}")
-
-        history_entry_id = self.history_entry_id_provider()
-        yield from self.remote_execution_service.stream_upload(
-            self.conn,
-            filename,
-            remote_path='',
-            history_entry_id=history_entry_id
-        )
+        for item in self.upload_support.upload(filename):
+            yield item
 
     def exec(self, filename):
         if not filename:

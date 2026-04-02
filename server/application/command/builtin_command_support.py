@@ -7,6 +7,29 @@ from core.utils.parsing import scan_args
 from server.config.config import SCRIPT_PATH
 
 
+class UploadBuiltinSupport:
+    """
+    upload 相关内建命令支持。
+    """
+
+    def __init__(self, conn, remote_execution_service, history_entry_id_provider):
+        self.conn = conn
+        self.remote_execution_service = remote_execution_service
+        self.history_entry_id_provider = history_entry_id_provider
+
+    def upload(self, filename):
+        if not os.path.isfile(filename):
+            raise FileNotFoundError(f"File does not exist: {filename}")
+
+        history_entry_id = self.history_entry_id_provider()
+        yield from self.remote_execution_service.stream_upload(
+            self.conn,
+            filename,
+            remote_path='',
+            history_entry_id=history_entry_id
+        )
+
+
 class ScriptBuiltinSupport:
     """
     script/exec 相关内建命令支持。
