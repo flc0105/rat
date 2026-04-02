@@ -117,7 +117,7 @@ def create_remote_files_blueprint(server_instance):
             if not path:
                 raise ValueError('path is required')
 
-            return web_service.remote_file_service.save_file_content(
+            return web_service.save_remote_file(
                 client_id, path, content, encoding
             )
 

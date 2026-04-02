@@ -139,7 +139,7 @@ def create_background_job_blueprint(server_instance):
             # if source == 'server':
             #     command = f'start_job_remote {job_name}'
 
-            result = web_service.submit_command(client_id, command)
+            result = web_service.submit_web_command(client_id, command)
             if isinstance(result, dict):
                 result['job_name'] = job_name
                 result['source'] = source
