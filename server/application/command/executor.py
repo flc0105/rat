@@ -56,12 +56,20 @@ class CommandExecutor:
         },
     ]
 
-    def __init__(self, conn, server, use_foreground_guard: bool = False, foreground_source: str = 'cli'):
+    def __init__(
+        self,
+        conn,
+        server,
+        remote_execution_service=None,
+        plan_builder=None,
+        use_foreground_guard: bool = False,
+        foreground_source: str = 'cli'
+    ):
         self.conn = conn
         self.server = server
         self.current_history_entry_id = ''
-        self.remote_execution_service = RemoteExecutionService(server)
-        self.plan_builder = CommandPlanBuilder(server.alias_manager)
+        self.remote_execution_service = remote_execution_service or RemoteExecutionService(server)
+        self.plan_builder = plan_builder or CommandPlanBuilder(server.alias_manager)
         self.use_foreground_guard = bool(use_foreground_guard)
         self.foreground_source = (foreground_source or '').strip() or 'cli'
 
@@ -268,11 +276,3 @@ class CommandExecutor:
             'last_heartbeat_id': self.conn.context.last_heartbeat_id if self.conn.context.last_heartbeat_id is not None else '',
         }
         yield 1, format_dict(payload)
-
-
-
-
-
-
-
-

@@ -1,6 +1,7 @@
 from server.application.agent.agent_builder import AgentBuilder
 from server.application.artifact.artifact_service import WebArtifactService
 from server.application.artifact.remote_file_service import WebRemoteFileService
+from server.application.command.command_executor_factory import CommandExecutorFactory
 from server.application.connection.connection_service import WebConnectionService
 from server.application.execution.remote_execution_service import RemoteExecutionService
 from server.application.jobs.background_job_service import BackgroundJobService
@@ -40,6 +41,10 @@ class ServerApplicationAssembly:
         self.file_service = self.artifact_service
 
         self.remote_execution_service = RemoteExecutionService(self.server)
+        self.command_executor_factory = CommandExecutorFactory(
+            server=self.server,
+            remote_execution_service=self.remote_execution_service,
+        )
         self.foreground_task_coordinator = ForegroundTaskCoordinator()
 
         self.remote_file_service = WebRemoteFileService(
@@ -59,6 +64,7 @@ class ServerApplicationAssembly:
             task_store=self.task_store,
             remote_execution_service=self.remote_execution_service,
             foreground_task_coordinator=self.foreground_task_coordinator,
+            command_executor_factory=self.command_executor_factory,
         )
 
         self.task_service = WebTaskService(

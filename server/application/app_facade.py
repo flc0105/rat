@@ -1,8 +1,6 @@
-
 import os
 
 from server.application.assembly import ServerApplicationAssembly
-from server.application.command.executor import CommandExecutor
 
 
 class ServerWebService:
@@ -24,6 +22,7 @@ class ServerWebService:
         self.remote_execution_service = self.assembly.remote_execution_service
         self.remote_file_service = self.assembly.remote_file_service
         self.connection_service = self.assembly.connection_service
+        self.command_executor_factory = self.assembly.command_executor_factory
         self.task_runner = self.assembly.task_runner
         self.task_service = self.assembly.task_service
         self.background_job_store = self.assembly.background_job_store
@@ -150,7 +149,7 @@ class ServerWebService:
         session = self.server.get_target_connection_by_client_id(client_id)
 
         client_candidates = self._get_client_command_candidates(session)
-        server_candidates = CommandExecutor(session, self.server).get_command_candidates()
+        server_candidates = self.command_executor_factory.create(session).get_command_candidates()
 
         merged = []
         seen = set()
@@ -205,8 +204,14 @@ class ServerWebService:
     def cancel_web_task(self, task_id: str):
         return self.task_service.cancel_web_task(task_id)
 
-    def submit_web_upload(self, client_id: str, local_path: str, display_name: str, remote_path: str = '',
-                          tab_id: str = ''):
+    def submit_web_upload(
+        self,
+        client_id: str,
+        local_path: str,
+        display_name: str,
+        remote_path: str = '',
+        tab_id: str = '',
+    ):
         return self.task_service.submit_web_upload(
             client_id,
             local_path,
@@ -244,6 +249,7 @@ class ServerWebService:
     def ingest_background_job_report(self, payload: dict):
         return self.background_job_service.ingest_report(payload)
 
+    # ------------------ remote file api ------------------ #
     def browse_remote_directory(
         self,
         client_id: str,
@@ -269,62 +275,158 @@ class ServerWebService:
     def delete_remote_path(self, client_id: str, path: str):
         return self.remote_file_service.delete_path(client_id, path)
 
-    def download_remote_file(self, client_id: str, path: str):
-        return self.remote_file_service.download_file(client_id, path)
+    def download_remote_file(
+        self,
+        client_id: str,
+        path: str,
+        history_entry_id: str = '',
+    ):
+        return self.remote_file_service.download_file(
+            client_id,
+            path,
+            history_entry_id=history_entry_id,
+        )
 
-    def download_remote_paths_as_zip(self, client_id: str, paths: list[str], archive_name: str = ''):
-        return self.remote_file_service.download_paths_as_zip(client_id, paths, archive_name)
+    def download_remote_paths_as_zip(
+        self,
+        client_id: str,
+        paths: list[str],
+        archive_name: str = '',
+        history_entry_id: str = '',
+    ):
+        return self.remote_file_service.download_paths_as_zip(
+            client_id,
+            paths,
+            archive_name=archive_name,
+            history_entry_id=history_entry_id,
+        )
 
     def delete_remote_paths(self, client_id: str, paths: list[str]):
         return self.remote_file_service.delete_paths(client_id, paths)
 
-    def preview_remote_file(self, client_id: str, path: str):
-        return self.remote_file_service.preview_file(client_id, path)
+    def preview_remote_file(
+        self,
+        client_id: str,
+        path: str,
+        history_entry_id: str = '',
+    ):
+        return self.remote_file_service.preview_file(
+            client_id,
+            path,
+            history_entry_id=history_entry_id,
+        )
 
-    def read_remote_file_text(self, client_id: str, path: str):
-        return self.remote_file_service.read_file_text(client_id, path)
+    def read_remote_file(
+        self,
+        client_id: str,
+        path: str,
+        encoding: str = 'utf-8',
+        max_bytes: int = 200000,
+    ):
+        """
+        兼容旧接口名。
 
-    def save_remote_file_text(self, client_id: str, path: str, content: str):
-        return self.remote_file_service.save_file_text(client_id, path, content)
+        当前远程文件编辑链路实际走 preview_file -> artifact preview。
+        encoding / max_bytes 保留参数位，避免旧调用方报错。
+        """
+        return self.remote_file_service.get_file_content(client_id, path)
 
+    def save_remote_file(
+        self,
+        client_id: str,
+        path: str,
+        content: str,
+        encoding: str = 'utf-8',
+    ):
+        """
+        兼容旧接口名。
+        """
+        return self.remote_file_service.save_file_content(
+            client_id,
+            path,
+            content,
+            encoding=encoding,
+        )
+
+    def remove_remote_file(self, client_id: str, path: str):
+        """
+        兼容旧接口名。
+        """
+        return self.remote_file_service.delete_path(client_id, path)
+
+    def build_agent(
+        self,
+        server_host: str,
+        server_port: int,
+        web_port: int = None,
+        target_os: str = 'mac',
+        builder: str = 'pyinstaller',
+        target_arch: str = 'auto',
+    ):
+        return self.agent_builder.build_agent(
+            server_host=server_host,
+            server_port=server_port,
+            web_port=web_port,
+            target_os=target_os,
+            builder=builder,
+            target_arch=target_arch,
+        )
+
+    def cleanup_agent_build(self, work_dir: str):
+        if not work_dir:
+            return
+        self.agent_builder.cleanup_build_dir(work_dir)
+
+    # ------------------ compatibility api ------------------ #
     def build_connection(self, transport, addr, info: dict):
         return self.create_web_connection(transport, addr, info)
 
     def on_connection_registered(self, session):
-        self.handle_connection_registered(session)
+        return self.handle_connection_registered(session)
 
     def on_connection_closed(self, session):
-        self.handle_connection_closed(session)
+        return self.handle_connection_closed(session)
 
     def submit_command(self, client_id: str, command: str, tab_id: str = ''):
         return self.submit_web_command(client_id, command, tab_id=tab_id)
 
-    def submit_upload(self, client_id: str, local_path: str, display_name: str, remote_path: str = '',
-                      tab_id: str = ''):
-        return self.submit_web_upload(
+    def submit_upload(
+        self,
+        client_id: str,
+        local_path: str,
+        display_name: str,
+        remote_path: str = '',
+        tab_id: str = '',
+    ):
+        return self.submit_web_upload(client_id, local_path, display_name, remote_path, tab_id=tab_id)
+
+    def delete_artifact_by_id(self, artifact_id: str):
+        return self.delete_artifact(artifact_id)
+
+    def get_artifact_preview(self, artifact_id: str):
+        return self.build_artifact_preview_payload(artifact_id)
+
+    def get_file_path(self, artifact_id: str):
+        return self.get_artifact_file_path(artifact_id)
+
+    def get_artifact(self, artifact_id: str):
+        return self.get_artifact_by_id(artifact_id)
+
+    def publish_file_created(self, artifact_info: dict):
+        return self.publish_artifact_created(artifact_info)
+
+    def browse_directory(
+        self,
+        client_id: str,
+        path: str = '',
+        page: int = 1,
+        page_size: int = 100,
+        show_hidden: bool = False,
+    ):
+        return self.browse_remote_directory(
             client_id,
-            local_path,
-            display_name,
-            remote_path,
-            tab_id=tab_id
+            path,
+            page=page,
+            page_size=page_size,
+            show_hidden=show_hidden,
         )
-
-    def build_agent(self, server_host: str, server_port: int, web_port,
-                    target_os: str, builder: str, target_arch: str = 'auto') -> dict:
-        """构建 Agent"""
-        return self.agent_builder.build_agent(
-            server_host, server_port, web_port, target_os, builder, target_arch
-        )
-
-    def cleanup_agent_build(self, work_dir: str):
-        """清理构建临时文件"""
-        self.agent_builder.cleanup(work_dir)
-
-
-
-
-
-
-
-
-

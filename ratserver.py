@@ -13,7 +13,6 @@ from core.utils.parsing import parse
 from core.utils.server_util import *
 from server.application.app_facade import ServerWebService
 from server.application.command.alias_manager import AliasManager
-from server.application.command.executor import CommandExecutor
 from server.application.history.history_orchestrator import CommandHistoryOrchestrator
 from server.application.history.history_store import CommandHistoryStore
 from server.config.config import SOCKET_ADDR, HEARTBEAT_INTERVAL_SECONDS
@@ -218,89 +217,67 @@ class Server:
         print_table(headers, data)
 
     def get_last_connection(self) -> ClientSession:
-        """
-        获取最新连接
-        """
         try:
-            return self.connections.last()
-        except IndexError:
-            raise Exception('No active session available')
+            return self.connections.all()[-1]
+        except Exception:
+            return None
 
-    def get_target_connection(self, id) -> ClientSession:
+    def get_connection(self, target: str = '') -> ClientSession:
         """
-        根据 id 获取连接
+        获取目标会话
         """
-        try:
-            return self.connections[int(id)]
-        except (ValueError, IndexError):
-            raise Exception('Not a valid selection')
+        if target == '':
+            return self.get_last_connection()
+        else:
+            return self.connections.find(target)
 
-    def kill_connection(self, id):
-        """
-        关闭连接
-        """
-        session = self.get_target_connection(id)
-        if session:
-            session.send_command('kill')
-
-    # ------------------ 交互会话 ------------------ #
+    # ------------------ 交互辅助 ------------------ #
     def _print_unread_messages(self, session: ClientSession):
         """
-        输出会话未读消息
+        打印该连接上次交互后积压的消息
         """
-        while not session.runtime.message_queue.empty():
-            logger.info('[UNREAD] ' + str(session.runtime.message_queue.get()[1]))
+        unread = session.runtime.unread_message_manager.drain()
+        for item in unread:
+            level = item.get('level', 'info')
+            text = item.get('text', '')
+            if level == 'error':
+                print_error(text)
+            else:
+                print(text)
 
     def _handle_interactive_control_command(self, session: ClientSession, cmd: str) -> bool:
         """
-        处理交互模式下的控制命令
+        处理交互期本地控制命令
+        返回 True 表示应该退出当前连接交互
         """
-        if cmd in ['kill', 'reset']:
-            session.send_command(cmd)
+        if cmd in ['bg', 'background', 'exit']:
             return True
 
-        if cmd in ['exit', 'quit']:
-            return True
-
-        if cmd == 'q':
-            latest = self.get_last_connection()
-            if latest == session:
-                return False
-            self.open_connection(latest)
-            return True
+        if cmd == 'clear':
+            clear()
+            return False
 
         return False
 
-    def _execute_interactive_command(self, session: ClientSession, command_executor: CommandExecutor, cmd: str):
+    def _execute_interactive_command(self, session: ClientSession, command_executor, cmd: str):
         """
-        执行交互模式命令
+        执行交互命令并输出结果
         """
         entry_id = self.command_history_orchestrator.begin_execution(
             session,
             cmd,
-            source='cli'
+            source='cli',
         )
 
         final_ok = True
 
         try:
             func = command_executor.process_command(cmd, history_entry_id=entry_id)
-            if func:
-                for item in func():
-                    status = item[0]
-                    text = item[1] if len(item) > 1 else ''
-
-                    self.command_history_orchestrator.append_output(
-                        session,
-                        entry_id,
-                        status,
-                        text,
-                        0
-                    )
-
-                    if status == 0:
-                        final_ok = False
-                    write(*item)
+            for item in func():
+                status = item[0]
+                write(*item)
+                if status == 0:
+                    final_ok = False
         except Exception:
             final_ok = False
             raise
@@ -319,9 +296,8 @@ class Server:
         self._print_unread_messages(session)
         session.context.is_interactive = True
 
-        command_executor = CommandExecutor(
+        command_executor = self.web_service.command_executor_factory.create(
             session,
-            self,
             use_foreground_guard=True,
             foreground_source='cli'
         )
@@ -359,66 +335,37 @@ class Server:
             self.list_connections()
             return
 
-        if cmd == 'q':
-            self.open_connection(self.get_last_connection())
+        if name == 'i':
+            session = self.get_connection(arg)
+            self.open_connection(session)
             return
 
-        if name in ['s', 'select']:
-            self.open_connection(self.get_target_connection(arg))
-            return
+        raise ValueError('Invalid command')
 
-        if name in ['k', 'kill']:
-            self.kill_connection(arg)
-            return
-
-        if cmd in ['quit', 'exit']:
-            self.socket.close()
-            sys.exit(0)
-
-        if cmd in ['cls', 'clear']:
-            subprocess.call(cmd, shell=True)
-            return
-
-        if name == 'cd':
-            print(cd(arg))
-            return
-
-        try:
-            self.open_connection(self.get_target_connection(cmd))
-        except Exception:
-            raise Exception('Command not recognized')
-
-    def cmdloop(self):
+    def _serve_console_loop(self):
         """
-        命令行交互
+        主控台循环
         """
         while 1:
             try:
-                cmd = colored_input('flc> ')
-                if not cmd.strip():
-                    continue
+                cmd = colored_input('server> ')
                 self._handle_console_command(cmd)
             except KeyboardInterrupt:
                 print(Colors.RESET)
-                self.socket.close()
                 sys.exit(0)
             except Exception as e:
-                write(0, f'[-] {type(e).__name__}: {e}')
-            finally:
-                print()
+                print_error('{}: {}'.format(e.__class__.__name__, e))
 
 
-if __name__ == '__main__':
-    os.system('')  # 初始化颜色显示
+if __name__ == "__main__":
     server = Server(SOCKET_ADDR)
-    threading.Thread(target=server.serve, daemon=True).start()
-    threading.Thread(target=server.heartbeat_loop, daemon=True).start()
-    server.cmdloop()
 
+    heartbeat_thread = threading.Thread(target=server.heartbeat_loop)
+    heartbeat_thread.daemon = True
+    heartbeat_thread.start()
 
+    server_thread = threading.Thread(target=server.serve)
+    server_thread.daemon = True
+    server_thread.start()
 
-
-
-
-
-
+    server._serve_console_loop()

@@ -1,7 +1,6 @@
 import os
 import shutil
 
-from server.application.command.executor import CommandExecutor
 from server.application.tasks.task_event_publisher import WebTaskEventPublisher
 from server.application.tasks.task_history_recorder import WebTaskHistoryRecorder
 from server.application.tasks.task_stream_orchestrator import WebTaskStreamOrchestrator
@@ -27,12 +26,13 @@ class WebTaskRunner:
     - stream 生命周期编排：WebTaskStreamOrchestrator
     """
 
-    def __init__(self, server, event_bus, task_store, remote_execution_service, foreground_task_coordinator):
+    def __init__(self, server, event_bus, task_store, remote_execution_service, foreground_task_coordinator, command_executor_factory):
         self.server = server
         self.event_bus = event_bus
         self.task_store = task_store
         self.remote_execution_service = remote_execution_service
         self.foreground_task_coordinator = foreground_task_coordinator
+        self.command_executor_factory = command_executor_factory
         self.history_orchestrator = self.server.command_history_orchestrator
 
         self.event_publisher = WebTaskEventPublisher(
@@ -56,7 +56,7 @@ class WebTaskRunner:
     def _build_command_result_iter(self, conn, task_id: str, command: str):
         history_entry_id = self._get_history_entry_id(task_id)
 
-        executor = CommandExecutor(conn, self.server)
+        executor = self.command_executor_factory.create(conn)
         func = executor.process_command(command, history_entry_id=history_entry_id)
         if not func:
             raise RuntimeError('Unable to resolve command')
