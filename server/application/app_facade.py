@@ -310,10 +310,10 @@ class ServerWebService:
         )
 
     def build_agent(self, server_host: str, server_port: int, web_port,
-                    target_os: str, builder: str) -> dict:
+                    target_os: str, builder: str, target_arch: str = 'auto') -> dict:
         """构建 Agent"""
         return self.agent_builder.build_agent(
-            server_host, server_port, web_port, target_os, builder
+            server_host, server_port, web_port, target_os, builder, target_arch
         )
 
     def cleanup_agent_build(self, work_dir: str):

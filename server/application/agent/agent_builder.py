@@ -1,8 +1,8 @@
 import os
+import platform
 import shutil
 import subprocess
 import tempfile
-import platform
 
 from core.utils.logger import logger
 
@@ -15,6 +15,7 @@ class AgentBuilder:
     EXCLUDE_EXTENSIONS = {'.pyc', '.pyo', '.pyd'}
     SUPPORTED_TARGETS = {'win', 'mac', 'linux'}
     SUPPORTED_BUILDERS = {'pyinstaller', 'go'}
+    SUPPORTED_GO_ARCHES = {'auto', 'amd64', 'arm64'}
     PYINSTALLER_PLATFORM_MAP = {
         'Windows': 'win',
         'Darwin': 'mac',
@@ -36,18 +37,22 @@ class AgentBuilder:
 
     def build_agent(self, server_host: str, server_port: int,
                     web_port: int, target_os: str = 'mac',
-                    builder: str = 'pyinstaller') -> dict:
+                    builder: str = 'pyinstaller', target_arch: str = 'auto') -> dict:
         """
         构建 Agent
         """
         target_os = (target_os or 'mac').strip().lower()
         builder = (builder or 'pyinstaller').strip().lower()
+        target_arch = (target_arch or 'auto').strip().lower()
 
         if target_os not in self.SUPPORTED_TARGETS:
             raise ValueError(f'Unsupported target OS: {target_os}')
 
         if builder not in self.SUPPORTED_BUILDERS:
             raise ValueError(f'Unsupported builder: {builder}')
+
+        if target_arch not in self.SUPPORTED_GO_ARCHES:
+            raise ValueError(f'Unsupported target arch: {target_arch}')
 
         work_dir = tempfile.mkdtemp(prefix='agent_build_')
 
@@ -58,7 +63,8 @@ class AgentBuilder:
                     server_host=server_host,
                     server_port=server_port,
                     web_port=web_port,
-                    target_os=target_os
+                    target_os=target_os,
+                    target_arch=target_arch
                 )
             else:
                 result = self._build_with_go(
@@ -66,7 +72,8 @@ class AgentBuilder:
                     server_host=server_host,
                     server_port=server_port,
                     web_port=web_port,
-                    target_os=target_os
+                    target_os=target_os,
+                    target_arch=target_arch
                 )
 
             # 复制产物到输出目录
@@ -85,6 +92,7 @@ class AgentBuilder:
                 'builder': builder,
                 'target_os': target_os,
                 'warnings': warnings,
+                'target_arch': result.get('target_arch', target_arch),
             }
 
         except Exception:
@@ -141,7 +149,7 @@ var UPLOAD_BASE_URL = SERVER_WEB_SCHEME + "://" + SERVER_WEB_HOST + ":" + "{web_
             f.write(template)
 
     def _build_with_pyinstaller(self, work_dir: str, server_host: str, server_port: int,
-                                web_port: int, target_os: str) -> dict:
+                                web_port: int, target_os: str, target_arch: str = 'auto') -> dict:
         current_target = self._get_current_pyinstaller_target()
         if current_target != target_os:
             current_label = self._describe_target(current_target)
@@ -149,7 +157,6 @@ var UPLOAD_BASE_URL = SERVER_WEB_SCHEME + "://" + SERVER_WEB_HOST + ":" + "{web_
             raise ValueError(
                 'PyInstaller 仅支持与当前服务端相同平台的打包。'
                 f' 当前服务端平台：{current_label}，你选择的是：{target_label}。'
-                ' 如需跨平台构建，请改用 go（基础版），或在目标平台机器上运行服务端后再使用 PyInstaller。'
             )
 
         # 复制客户端源码（排除无用目录）
@@ -169,12 +176,13 @@ var UPLOAD_BASE_URL = SERVER_WEB_SCHEME + "://" + SERVER_WEB_HOST + ":" + "{web_
             result = self._build_macos(client_copy, work_dir)
 
         result['warnings'] = [
-            'PyInstaller 产物与当前服务端平台一致，若要打包其它平台请使用 go（基础版）。'
+            'PyInstaller 产物与当前服务端平台一致。'
         ]
+        result['target_arch'] = target_arch
         return result
 
     def _build_with_go(self, work_dir: str, server_host: str, server_port: int,
-                       web_port: int, target_os: str) -> dict:
+                       web_port: int, target_os: str, target_arch: str = 'auto') -> dict:
         go_project_dir = os.path.join(self.source_dir, 'client-go')
         if not os.path.isdir(go_project_dir):
             raise FileNotFoundError('client-go directory not found')
@@ -186,9 +194,8 @@ var UPLOAD_BASE_URL = SERVER_WEB_SCHEME + "://" + SERVER_WEB_HOST + ":" + "{web_
         self._inject_go_config(client_copy, server_host, server_port, web_port)
 
         go_target = self.GO_TARGET_MAP[target_os]
-        current_goarch = os.environ.get('GOARCH', '').strip() or platform.machine().lower()
-        normalized_arch = self._normalize_goarch(current_goarch)
-        output_name = f'ratclient_go_{go_target["label"]}{go_target["suffix"]}'
+        normalized_arch = self._resolve_goarch_for_target(target_os, target_arch)
+        output_name = f'ratclient_go_{go_target["label"]}_{normalized_arch}{go_target["suffix"]}'
         output_path = os.path.join(client_copy, 'client-go', output_name)
 
         env = os.environ.copy()
@@ -224,17 +231,21 @@ var UPLOAD_BASE_URL = SERVER_WEB_SCHEME + "://" + SERVER_WEB_HOST + ":" + "{web_
             os.chmod(output_path, 0o755)
 
         warnings = [
-            f'go（基础版）已按目标平台 {self._describe_target(target_os)} 构建，使用当前服务端架构 {normalized_arch}。'
+            f'Go 已按目标平台 {self._describe_target(target_os)} 构建，目标架构为 {normalized_arch}。'
         ]
-        if normalized_arch not in {'amd64', 'arm64'}:
+        if target_os == 'win':
+            warnings.append('Windows 默认优先打包为 amd64；如果目标机器是 Windows on ARM，请在前台将架构切换为 arm64。')
+        elif target_os == 'linux':
+            warnings.append('Linux 默认优先打包为 amd64；如果目标机器是 ARM 设备，请在前台将架构切换为 arm64。')
+        elif target_os == 'mac':
             warnings.append(
-                f'当前自动识别的 GOARCH 为 {normalized_arch}，如目标机器架构不同，产物可能无法运行。'
-            )
+                'macOS 默认会优先选择当前服务端更匹配的架构；如果目标机器架构不同，请在前台手动改为 amd64 或 arm64。')
 
         return {
             'file_path': output_path,
             'file_name': output_name,
             'warnings': warnings,
+            'target_arch': normalized_arch,
         }
 
     def _build_macos(self, client_dir: str, work_dir: str) -> dict:
@@ -343,6 +354,37 @@ var UPLOAD_BASE_URL = SERVER_WEB_SCHEME + "://" + SERVER_WEB_HOST + ":" + "{web_
             'x64': 'amd64',
         }
         return aliases.get(value, value or 'amd64')
+
+    def _resolve_goarch_for_target(self, target_os: str, target_arch: str = 'auto') -> str:
+        """
+        根据目标平台和前台选择推导最终 GOARCH
+
+        规则：
+        - 前台明确选择 amd64 / arm64 时，直接使用该值
+        - auto 模式下：
+          - Windows 默认优先 amd64
+          - Linux 默认优先 amd64
+          - macOS 默认优先当前服务端更匹配的架构
+        """
+        normalized_target_arch = self._normalize_goarch(target_arch)
+        if normalized_target_arch in {'amd64', 'arm64'} and target_arch != 'auto':
+            return normalized_target_arch
+
+        current_goarch = os.environ.get('GOARCH', '').strip() or platform.machine().lower()
+        normalized_current_arch = self._normalize_goarch(current_goarch)
+
+        if target_os == 'win':
+            return 'amd64'
+
+        if target_os == 'linux':
+            return 'amd64'
+
+        if target_os == 'mac':
+            if normalized_current_arch in {'amd64', 'arm64'}:
+                return normalized_current_arch
+            return 'arm64'
+
+        return 'amd64'
 
     def _describe_target(self, target_os: str) -> str:
         mapping = {

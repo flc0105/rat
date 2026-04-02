@@ -638,6 +638,7 @@ def create_app(server_instance):
             web_port = payload.get('web_port')
             target_os = (payload.get('target_os') or 'mac').strip()
             builder = (payload.get('builder') or 'pyinstaller').strip()
+            target_arch = (payload.get('target_arch') or 'auto').strip()
 
             if not server_host:
                 raise ValueError('server_host is required')
@@ -650,7 +651,7 @@ def create_app(server_instance):
                 raise ValueError('server_port must be integer')
 
             result = web_service.build_agent(
-                server_host, server_port, web_port, target_os, builder
+                server_host, server_port, web_port, target_os, builder, target_arch
             )
 
             return result

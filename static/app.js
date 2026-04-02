@@ -13,10 +13,12 @@ createApp({
     computed: {
         ...window.AppStateModule.computed,
          ...window.AppProcessModule.computed,
+        ...window.AppAgentModule.computed,
     },
 
     watch: {
         ...window.AppStateModule.watch,
+        ...window.AppAgentModule.watch,
     },
 
     mounted() {

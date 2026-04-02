@@ -9,31 +9,32 @@ window.AppAgentModule = {
                 web_port: 8085,
                 target_os: 'mac',
                 builder: 'pyinstaller',
+                target_arch: 'auto',
             }
         };
     },
 
     computed: {
-        agentBuilderAlertType() {
-            return this.agentForm.builder === 'pyinstaller' ? 'warning' : 'info';
-        },
-
-        agentBuilderAlertTitle() {
-            return this.agentForm.builder === 'pyinstaller'
-                ? 'PyInstaller 限制说明'
-                : 'Go（基础版）说明';
-        },
+        // agentBuilderAlertType() {
+        //     return this.agentForm.builder === 'pyinstaller' ? 'warning' : 'info';
+        // },
+        //
+        // agentBuilderAlertTitle() {
+        //     return this.agentForm.builder === 'pyinstaller'
+        //         ? 'PyInstaller 限制说明'
+        //         : 'Go（基础版）说明';
+        // },
 
         agentBuilderAlertText() {
             if (this.agentForm.builder === 'pyinstaller') {
-                return 'PyInstaller 只能打包与当前服务端相同的平台。\n'
-                    + '如果当前服务端跑在 macOS，就只能打 macOS；跑在 Windows，就只能打 Windows；跑在 Linux，就只能打 Linux。\n'
-                    + '若你需要跨平台构建，请改用 Go（基础版）。';
+                return 'PyInstaller only builds for the current server platform. Architecture selection applies only to Go.';
             }
 
-            return 'Go（基础版）会打包项目目录下的 client-go，并按你当前选择的目标平台构建。\n'
-                + '连接地址会使用本窗口填写的 Server IP / Server Port / Web Port。\n'
-                + '基础版能力较少，但适合快速跨平台生成。';
+            return 'Windows defaults to amd64, Linux defaults to amd64, and macOS uses the best-matching server architecture by default.';
+        },
+
+        isGoBuilder() {
+            return this.agentForm.builder === 'go';
         }
     },
 
@@ -43,6 +44,26 @@ window.AppAgentModule = {
             this.agentForm.server_host = window.location.hostname || '127.0.0.1';
             this.agentForm.server_port = 9999;
             this.agentForm.web_port = 8085;
+            this.applyRecommendedAgentArch();
+        },
+
+        applyRecommendedAgentArch() {
+            if (this.agentForm.builder !== 'go') {
+                this.agentForm.target_arch = 'auto';
+                return;
+            }
+
+            if (this.agentForm.target_os === 'win') {
+                this.agentForm.target_arch = 'amd64';
+                return;
+            }
+
+            if (this.agentForm.target_os === 'linux') {
+                this.agentForm.target_arch = 'amd64';
+                return;
+            }
+
+            this.agentForm.target_arch = 'auto';
         },
 
         async buildAgent() {
@@ -99,6 +120,16 @@ window.AppAgentModule = {
             } finally {
                 this.agentBuilding = false;
             }
+        }
+    },
+
+    watch: {
+        'agentForm.builder'() {
+            this.applyRecommendedAgentArch();
+        },
+
+        'agentForm.target_os'() {
+            this.applyRecommendedAgentArch();
         }
     }
 };
