@@ -97,12 +97,13 @@ previewImageInfoDialogVisible: false,
         quickJumpLoading: false,
             serverJobUploadLoading: false,
 
-            terminalJsonDialogVisible: false,
-            terminalJsonDialogTitle: 'JSON Viewer',
-            terminalJsonText: '',
-            terminalJsonDisplayMode: 'raw',
-            terminalJsonTableColumns: [],
-            terminalJsonTableRows: [],
+terminalJsonDialogVisible: false,
+terminalJsonDialogTitle: 'JSON Viewer',
+terminalJsonText: '',
+terminalJsonDisplayMode: 'raw',
+terminalJsonTableColumns: [],
+terminalJsonTableRows: [],
+terminalJsonFlatRows: [],
         };
     },
 
@@ -280,11 +281,12 @@ previewImageInfoDialogVisible: false,
 
         terminalJsonDialogVisible(val) {
             if (!val) {
-                this.terminalJsonDialogTitle = 'JSON Viewer';
-                this.terminalJsonText = '';
-                this.terminalJsonDisplayMode = 'raw';
-                this.terminalJsonTableColumns = [];
-                this.terminalJsonTableRows = [];
+ this.terminalJsonDialogTitle = 'JSON Viewer';
+this.terminalJsonText = '';
+this.terminalJsonDisplayMode = 'raw';
+this.terminalJsonTableColumns = [];
+this.terminalJsonTableRows = [];
+this.terminalJsonFlatRows = [];
             }
         },
         previewDialogVisible(val) {

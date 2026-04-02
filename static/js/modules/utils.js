@@ -291,27 +291,71 @@ window.AppUtilsModule = {
             };
         },
 
-        openTerminalJsonDialog(line) {
-            if (!line || !line.isJsonMessage) return;
+        tryBuildTerminalJsonFlatModel(jsonText) {
+    const raw = String(jsonText || '').trim();
+    if (!raw) return null;
 
-            const jsonText = String(line.jsonText || '').trim();
-            const tableModel = this.tryBuildTerminalJsonTableModel(jsonText);
+    let parsed;
+    try {
+        parsed = JSON.parse(raw);
+    } catch (e) {
+        return null;
+    }
 
-            this.terminalJsonDialogTitle = 'JSON Viewer';
-            this.terminalJsonText = jsonText;
+    if (!this.isTerminalJsonPlainObject(parsed)) {
+        return null;
+    }
 
-            if (tableModel) {
-                this.terminalJsonDisplayMode = 'table';
-                this.terminalJsonTableColumns = tableModel.columns;
-                this.terminalJsonTableRows = tableModel.rows;
-            } else {
-                this.terminalJsonDisplayMode = 'raw';
-                this.terminalJsonTableColumns = [];
-                this.terminalJsonTableRows = [];
+    const formatValue = (value) => {
+        if (value === null || value === undefined) {
+            return '';
+        }
+        if (typeof value === 'object') {
+            try {
+                return JSON.stringify(value);
+            } catch (e) {
+                return String(value);
             }
+        }
+        return String(value);
+    };
 
-            this.terminalJsonDialogVisible = true;
-        },
+    return Object.keys(parsed).map((key) => ({
+        key,
+        label: key,
+        value: formatValue(parsed[key]),
+    }));
+},
+
+        openTerminalJsonDialog(line) {
+    if (!line || !line.isJsonMessage) return;
+
+    const jsonText = String(line.jsonText || '').trim();
+    const tableModel = this.tryBuildTerminalJsonTableModel(jsonText);
+    const flatModel = tableModel ? null : this.tryBuildTerminalJsonFlatModel(jsonText);
+
+    this.terminalJsonDialogTitle = 'JSON Viewer';
+    this.terminalJsonText = jsonText;
+
+    if (tableModel) {
+        this.terminalJsonDisplayMode = 'table';
+        this.terminalJsonTableColumns = tableModel.columns;
+        this.terminalJsonTableRows = tableModel.rows;
+        this.terminalJsonFlatRows = [];
+    } else if (flatModel) {
+        this.terminalJsonDisplayMode = 'flat';
+        this.terminalJsonTableColumns = [];
+        this.terminalJsonTableRows = [];
+        this.terminalJsonFlatRows = flatModel;
+    } else {
+        this.terminalJsonDisplayMode = 'raw';
+        this.terminalJsonTableColumns = [];
+        this.terminalJsonTableRows = [];
+        this.terminalJsonFlatRows = [];
+    }
+
+    this.terminalJsonDialogVisible = true;
+},
 
         previewTerminalArtifact(line) {
             if (!line || !line.artifactInfo || !line.artifactInfo.artifact_id) {
