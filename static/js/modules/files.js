@@ -1132,6 +1132,55 @@ window.AppFilesModule = {
             }
         },
 
+
+        async deleteRemoteScript(scriptName) {
+            const normalizedScriptName = this.normalizeServerJobFilename(scriptName);
+            if (!normalizedScriptName) {
+                ElementPlus.ElMessage.warning('Invalid script name');
+                return;
+            }
+
+            try {
+                await ElementPlus.ElMessageBox.confirm(
+                    `Delete "${normalizedScriptName}"? This action cannot be undone.`,
+                    'Delete Server Job',
+                    {
+                        type: 'warning',
+                        confirmButtonText: 'Delete',
+                        cancelButtonText: 'Cancel',
+                    }
+                );
+
+                const res = await fetch('/api/server/jobs/delete', {
+                    method: 'DELETE',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({name: normalizedScriptName})
+                });
+                const json = await res.json();
+
+                if (!res.ok || json.code !== 0) {
+                    throw new Error(json.message || 'Failed to delete script');
+                }
+
+                if (this.previewDialogVisible && this.previewSource === 'server_job') {
+                    const currentPreviewName = this.normalizeServerJobFilename(this.previewFilePath || this.previewTitle || '');
+                    if (currentPreviewName === normalizedScriptName) {
+                        this.previewDialogVisible = false;
+                        this.destroyMonacoEditor();
+                    }
+                }
+
+                ElementPlus.ElMessage.success(`Deleted: ${normalizedScriptName}`);
+
+                if (this.backgroundJobsDialogVisible) {
+                    await this.loadBackgroundJobModules();
+                }
+            } catch (e) {
+                if (e === 'cancel' || e === 'close') return;
+                ElementPlus.ElMessage.error(e.message || 'Failed to delete script');
+            }
+        },
+
         async createRemoteJobPrompt() {
             if (!this.selectedId) {
                 ElementPlus.ElMessage.warning('Please select a device');

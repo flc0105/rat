@@ -706,6 +706,10 @@
                                                @click="openRemoteJobEditor(item.display_name || item.job_name)">
                                         Edit
                                     </el-button>
+                                       <el-button v-if="item.source === 'server'" size="small" type="danger" plain
+               @click="deleteRemoteScript(item.display_name || item.job_name)">
+        Delete
+    </el-button>
                                     <!--                                    <el-button v-if="item.source === 'server'" size="small" type="danger" plain-->
                                     <!--                                               @click="deleteRemoteScript(item.job_name)">-->
                                     <!--                                        Delete-->

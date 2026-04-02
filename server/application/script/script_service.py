@@ -126,6 +126,38 @@ class ServerJobService:
             'size': os.path.getsize(script_path),
         }
 
+    def _resolve_script_path(self, script_name: str) -> tuple[str, str]:
+        """
+        解析脚本路径（读取/删除用）
+        """
+        safe_name = self._normalize_script_name(script_name)
+        if not safe_name:
+            raise ValueError('Invalid script name')
+
+        script_path = os.path.abspath(os.path.join(self.scripts_root_dir, safe_name))
+        if not script_path.startswith(self.scripts_root_dir + os.sep):
+            raise ValueError('Invalid script path')
+
+        return safe_name, script_path
+
+    def delete_script(self, script_name: str) -> dict:
+        """
+        删除一个 server-side job 脚本
+        """
+        safe_name, script_path = self._resolve_script_path(script_name)
+
+        if not os.path.isfile(script_path):
+            raise FileNotFoundError(f'Script not found: {script_name}')
+
+        os.remove(script_path)
+
+        return {
+            'name': safe_name[:-3] if safe_name.endswith('.py') else safe_name,
+            'display_name': safe_name,
+            'path': script_path,
+            'deleted': True,
+        }
+
 
 
 

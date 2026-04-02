@@ -1,5 +1,7 @@
 from flask import Blueprint, jsonify, request, Response
 
+from server.application.script import script_service
+
 
 def create_background_job_blueprint(server_instance):
     blueprint = Blueprint('background_jobs', __name__)
@@ -188,6 +190,18 @@ def create_background_job_blueprint(server_instance):
         def _execute():
             payload = _json_payload()
             return background_job_service.ingest_report(payload)
+
+        return _json_endpoint(_execute, default_error_status=500)
+
+    @blueprint.delete('/api/server/jobs/delete')
+    def delete_server_job():
+        def _execute():
+            payload = _json_payload()
+            name = (payload.get('name') or '').strip()
+            if not name:
+                raise ValueError('job name is required')
+
+            return web_service.script_service.delete_script(name)
 
         return _json_endpoint(_execute, default_error_status=500)
 
