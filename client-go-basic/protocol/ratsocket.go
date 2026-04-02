@@ -3,7 +3,6 @@ package protocol
 import (
 	"encoding/binary"
 	"encoding/json"
-	"io"
 	"net"
 )
 
@@ -16,10 +15,7 @@ func NewRATSocket(conn net.Conn) *RATSocket {
 }
 
 func (r *RATSocket) Send(data map[string]interface{}) error {
-	bytes, err := json.Marshal(data)
-	if err != nil {
-		return err
-	}
+	bytes, _ := json.Marshal(data)
 
 	header := make([]byte, 4)
 	binary.LittleEndian.PutUint32(header, uint32(len(bytes)))
@@ -27,33 +23,24 @@ func (r *RATSocket) Send(data map[string]interface{}) error {
 	if _, err := r.conn.Write(header); err != nil {
 		return err
 	}
-	_, err = r.conn.Write(bytes)
+	_, err := r.conn.Write(bytes)
 	return err
 }
 
 func (r *RATSocket) Recv() (map[string]interface{}, error) {
 	header := make([]byte, 4)
-	if _, err := io.ReadFull(r.conn, header); err != nil {
+	if _, err := r.conn.Read(header); err != nil {
 		return nil, err
 	}
 
 	length := binary.LittleEndian.Uint32(header)
 	body := make([]byte, length)
 
-	if _, err := io.ReadFull(r.conn, body); err != nil {
+	if _, err := r.conn.Read(body); err != nil {
 		return nil, err
 	}
 
 	var result map[string]interface{}
-	if err := json.Unmarshal(body, &result); err != nil {
-		return nil, err
-	}
+	json.Unmarshal(body, &result)
 	return result, nil
-}
-
-func (r *RATSocket) Close() error {
-	if r == nil || r.conn == nil {
-		return nil
-	}
-	return r.conn.Close()
 }

