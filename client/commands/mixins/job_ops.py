@@ -70,7 +70,8 @@ class CommandJobMixin:
         job_manager = self.socket.job_manager
 
         if not normalized:
-            return self._list_available_local_jobs()
+            return 0, 'Usage: start_job <job_name>'
+            # return self._list_available_local_jobs()
 
         self._send_interim_result(1, f'Preparing background job: {normalized}')
         try:
@@ -116,7 +117,7 @@ class CommandJobMixin:
             return 0, f'Failed to stop background job: {e}'
 
     @desc('List running background jobs', group='job')
-    def jobs(self):
+    def jobs_ps(self):
         """
         列出当前运行中的后台任务。
         """
@@ -125,6 +126,11 @@ class CommandJobMixin:
         if not running_jobs:
             return 1, 'No background jobs are currently running'
         return 1, '\n'.join(running_jobs)
+
+    @desc("List available jobs", group='job')
+    def jobs(self):
+        jobs=self._list_available_local_jobs()
+        return jobs
 
     @desc('Show background job status', group='job')
     def job_status(self, job_name: str):
@@ -156,23 +162,23 @@ class CommandJobMixin:
         except Exception as e:
             return 0, f'Failed to stop background jobs: {e}'
 
-    @desc('Start a background job from server-script', group='job')
-    def start_job_remote(self, job_name: str, extra: dict = None):
-        """
-        兼容旧入口：强制从服务端脚本启动。
-        """
-        normalized = self._normalize_job_name(job_name)
-        job_manager = self.socket.job_manager
-
-        if not normalized:
-            return self._list_remote_scripts()
-
-        try:
-            runtime = self._start_remote_job_by_name(normalized, job_manager)
-            self._send_final_result(1, self._format_runtime_start_message(runtime, 'Background job started'))
-            return None
-        except Exception as e:
-            return 0, f'Failed to start remote job: {e}'
+    # @desc('Start a background job from server-script', group='job')
+    # def start_job_remote(self, job_name: str, extra: dict = None):
+    #     """
+    #     兼容旧入口：强制从服务端脚本启动。
+    #     """
+    #     normalized = self._normalize_job_name(job_name)
+    #     job_manager = self.socket.job_manager
+    #
+    #     if not normalized:
+    #         return self._list_remote_scripts()
+    #
+    #     try:
+    #         runtime = self._start_remote_job_by_name(normalized, job_manager)
+    #         self._send_final_result(1, self._format_runtime_start_message(runtime, 'Background job started'))
+    #         return None
+    #     except Exception as e:
+    #         return 0, f'Failed to start remote job: {e}'
 
     def _start_from_script_content(self, script_content: str, script_name: str, job_manager):
         """
