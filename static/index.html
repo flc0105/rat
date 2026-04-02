@@ -1470,19 +1470,30 @@
     <el-dialog v-model="processDialogVisible" title="Process Manager" width="1100px" top="5vh"
                class="fixed-dialog process-dialog" @close="closeProcessDialog">
         <div class="fixed-dialog-body">
-            <div class="dialog-head">
-                <div class="dialog-head-left">
-                    <el-button size="small" @click="loadProcesses" :loading="processesLoading">Refresh</el-button>
-                    <el-input v-model="processFilterText" placeholder="Filter by PID, name or user" size="small"
-                              style="width: 250px; margin-left: 12px;" clearable/>
-                </div>
-                <div class="dialog-head-right">
-                    <span>Total: {{ filteredProcesses.length }}</span>
-                </div>
-            </div>
+            <div class="dialog-head process-dialog-head">
+    <div class="dialog-head-left process-dialog-head-left">
+        <el-button
+                size="small"
+                @click="refreshProcessManager"
+                :loading="processActiveTab === 'apps' ? appsLoading : processesLoading"
+        >
+            Refresh
+        </el-button>
+        <el-input
+                v-model="processFilterText"
+                placeholder="Filter by PID, name or user"
+                size="small"
+                class="process-dialog-filter-input"
+                clearable
+        />
+    </div>
+    <div class="dialog-head-right process-dialog-head-right">
+        <span class="process-count">{{ processManagerSummaryText }}</span>
+    </div>
+</div>
 
             <el-tabs v-model="processActiveTab" style="margin-top: 12px;">
-                <el-tab-pane label="All Processes" name="processes">
+<el-tab-pane :label="processTabLabel" name="processes">
                     <div class="dialog-table-shell" style="height: 450px;">
                         <el-table :data="filteredProcesses" v-loading="processesLoading" stripe height="100%"
                                   table-layout="fixed">
@@ -1514,8 +1525,7 @@
                     </div>
                 </el-tab-pane>
 
-                <el-tab-pane label="Applications" name="apps">
-                    <div class="dialog-table-shell" style="height: 450px;">
+<el-tab-pane :label="appTabLabel" name="apps">                    <div class="dialog-table-shell" style="height: 450px;">
                         <el-table :data="filteredApps" v-loading="appsLoading" stripe height="100%"
                                   table-layout="fixed">
                             <el-table-column prop="pid" label="PID" width="100" align="center"></el-table-column>

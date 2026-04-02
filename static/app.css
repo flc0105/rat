@@ -2346,6 +2346,7 @@ body {
 .process-count {
     font-size: 13px;
     color: #666;
+    white-space: nowrap;
 }
 
 .cpu-high {
@@ -2355,6 +2356,50 @@ body {
 
 .process-dialog .dialog-table-shell {
     height: 500px;
+}
+
+.process-dialog-head {
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 12px;
+    align-items: center;
+}
+
+.process-dialog-head-left {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: nowrap;
+    min-width: 0;
+}
+
+.process-dialog-head-right {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    min-width: 0;
+}
+
+.process-dialog-filter-input {
+    width: 280px;
+    max-width: 100%;
+}
+
+.process-dialog-filter-input .el-input__wrapper {
+    min-height: 34px;
+    height: 34px;
+    border-radius: 10px;
+}
+
+.process-action-buttons {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    flex-wrap: nowrap;
+}
+
+.process-action-buttons .el-button {
+    margin: 0;
 }
 
 

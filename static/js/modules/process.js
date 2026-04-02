@@ -19,6 +19,33 @@ window.AppProcessModule = {
     },
 
     computed: {
+
+
+processManagerVisibleCount() {
+    return this.processActiveTab === 'apps'
+        ? this.filteredApps.length
+        : this.filteredProcesses.length;
+},
+processManagerTotalCount() {
+    return this.processActiveTab === 'apps'
+        ? this.apps.length
+        : this.processes.length;
+},
+processManagerSummaryText() {
+    if (this.processActiveTab === 'apps') {
+        return `Showing ${this.processManagerVisibleCount} / ${this.processManagerTotalCount} applications`;
+    }
+    return `Showing ${this.processManagerVisibleCount} / ${this.processManagerTotalCount} processes`;
+},
+processTabLabel() {
+    return `All Processes (${this.filteredProcesses.length})`;
+},
+appTabLabel() {
+    return `Applications (${this.filteredApps.length})`;
+},
+
+
+
         filteredProcesses() {
             if (!this.processes.length) return [];
             if (!this.processFilterText) return this.processes;
@@ -68,6 +95,16 @@ window.AppProcessModule = {
     },
 
     methods: {
+
+async refreshProcessManager() {
+    if (this.processActiveTab === 'apps') {
+        await this.loadApps();
+        return;
+    }
+    await this.loadProcesses();
+},
+
+
         openProcessDialog() {
             if (!this.selectedId) {
                 ElementPlus.ElMessage.warning('Please select a device first');
