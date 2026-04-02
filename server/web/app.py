@@ -13,6 +13,7 @@ from server.web.request_parsers import (
     get_required_command,
     get_required_upload,
 )
+from server.web.routes.agent import create_agent_blueprint
 from server.web.routes.artifacts import create_artifacts_blueprint
 from server.web.routes.background_jobs import create_background_job_blueprint
 from server.web.routes.command_history import create_command_history_blueprint
@@ -32,6 +33,7 @@ def create_app(server_instance):
     app.register_blueprint(create_system_inspection_blueprint(server_instance))
     app.register_blueprint(create_command_history_blueprint(server_instance))
     app.register_blueprint(create_artifacts_blueprint(server_instance))
+    app.register_blueprint(create_agent_blueprint(server_instance))
     app.config['MAX_CONTENT_LENGTH'] = WEB_HTTP_UPLOAD_MAX_BYTES
 
     @app.get('/')
@@ -135,64 +137,5 @@ def create_app(server_instance):
     @app.errorhandler(413)
     def file_too_large(_):
         return responder.fail('File is too large', 413)
-
-    @app.post('/api/agent/build')
-    def build_agent():
-        """构建 Agent"""
-
-        def _execute():
-            payload = get_json_payload()
-            server_host = (payload.get('server_host') or '').strip()
-            server_port = payload.get('server_port')
-            web_port = payload.get('web_port')
-            target_os = (payload.get('target_os') or 'mac').strip()
-            builder = (payload.get('builder') or 'pyinstaller').strip()
-            target_arch = (payload.get('target_arch') or 'auto').strip()
-
-            if not server_host:
-                raise ValueError('server_host is required')
-            if not server_port:
-                raise ValueError('server_port is required')
-
-            try:
-                server_port = int(server_port)
-            except ValueError:
-                raise ValueError('server_port must be integer')
-
-            result = web_service.build_agent(
-                server_host, server_port, web_port, target_os, builder, target_arch
-            )
-
-            return result
-
-        return responder.json_endpoint(_execute, default_error_status=500)
-
-    @app.get('/api/agent/download/<filename>')
-    def download_agent(filename):
-        """下载构建好的 Agent"""
-        try:
-            file_path = os.path.join(web_service.agent_builder.output_dir, filename)
-            if not os.path.isfile(file_path):
-                return responder.fail('File not found', 404)
-
-            return send_file(
-                file_path,
-                as_attachment=True,
-                download_name=filename
-            )
-        except Exception as e:
-            return responder.map_common_error(e)
-
-    @app.delete('/api/agent/cleanup')
-    def cleanup_agent_build():
-        """清理构建临时文件"""
-
-        def _execute():
-            work_dir = (request.json or {}).get('work_dir', '')
-            if work_dir:
-                web_service.cleanup_agent_build(work_dir)
-            return {'cleaned': True}
-
-        return responder.json_endpoint(_execute)
 
     return app
