@@ -1582,13 +1582,25 @@
                 <el-radio-group v-model="agentForm.target_os">
                     <el-radio label="mac">macOS</el-radio>
                     <el-radio label="win">Windows</el-radio>
+                    <el-radio label="linux">Linux</el-radio>
                 </el-radio-group>
             </el-form-item>
             <el-form-item label="Builder">
                 <el-radio-group v-model="agentForm.builder">
                     <el-radio label="pyinstaller">PyInstaller</el-radio>
+                    <el-radio label="go">Go（基础版）</el-radio>
                 </el-radio-group>
             </el-form-item>
+            <el-alert
+                    :title="agentBuilderAlertTitle"
+                    :type="agentBuilderAlertType"
+                    :closable="false"
+                    show-icon
+            >
+                <template #default>
+                    <div style="line-height: 1.7; white-space: pre-line;">{{ agentBuilderAlertText }}</div>
+                </template>
+            </el-alert>
         </el-form>
         <template #footer>
             <el-button @click="agentBuilderDialogVisible = false">Cancel</el-button>

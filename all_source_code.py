@@ -26,13 +26,14 @@ EXCLUDE_DIRS = {
     "builtins",
     # "jobs",
     "platform",
+    "client-go",
     #
-    "protocol",
-    "python_execution",
-    "http_transfer",
-    "artifact",
-    "history",
-    "agent"
+    # "protocol",
+    # "python_execution",
+    # "http_transfer",
+    # "artifact",
+    # "history",
+    # "agent"
 }
 
 # 排除的文件名（可以是完整文件名或文件名不含扩展名）
@@ -40,12 +41,12 @@ EXCLUDE_FILENAMES = {
     "__init__",      # 排除所有 __init__.py, __init__.html 等
     "login.html",    # 排除 login.html
     "auth.js",        # 排除 auth.js
-    "execution_ops.py",
-    "file_cli_ops.py",
-    "argument_command_registry.py",
-    "agent.js",
-    "process.js",
-    "process_ops.py"
+    # "execution_ops.py",
+    # "file_cli_ops.py",
+    # "argument_command_registry.py",
+    # "agent.js",
+    # "process.js",
+    # "process_ops.py"
 
 }
 
