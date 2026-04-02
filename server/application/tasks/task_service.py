@@ -11,11 +11,12 @@ class WebTaskService:
     - 启动 runner 真正执行
     """
 
-    def __init__(self, server, task_store, file_service, task_runner):
+    def __init__(self, server, task_store, file_service, task_runner, foreground_task_coordinator):
         self.server = server
         self.task_store = task_store
         self.file_service = file_service
         self.task_runner = task_runner
+        self.foreground_task_coordinator = foreground_task_coordinator
         self.history_orchestrator = self.server.command_history_orchestrator
 
     def _create_task_with_history(
@@ -68,25 +69,12 @@ class WebTaskService:
             raise ValueError('task client_id is missing')
 
         conn = self.server.get_target_connection_by_client_id(client_id)
-        foreground_task = conn.get_foreground_task() or {}
-        current_task_id = (foreground_task.get('task_id') or '').strip()
-        if current_task_id != str(task_id).strip():
-            raise ValueError('task is no longer the active foreground task')
-
+        self.foreground_task_coordinator.ensure_active_task(conn, task_id)
         return task, conn
 
     def _request_task_cancel(self, conn, task_id: str):
         self.task_store.request_cancel(task_id)
-
-        cancel_info = conn.request_foreground_task_cancel(task_id=task_id)
-        if not cancel_info:
-            raise RuntimeError('failed to request task cancellation')
-
-        command_id = cancel_info.get('command_id')
-        if command_id:
-            conn.send_cancel(command_id)
-
-        return cancel_info
+        return self.foreground_task_coordinator.request_cancel(conn, task_id)
 
     def submit_web_command(self, client_id: str, command: str, tab_id: str = ''):
         conn = self.server.get_target_connection_by_client_id(client_id)
@@ -99,11 +87,11 @@ class WebTaskService:
             source='web',
         )
 
-        conn.acquire_foreground_task(
-            task_type='command',
-            command=command,
+        self.foreground_task_coordinator.acquire_command_task(
+            conn,
+            task['task_id'],
+            command,
             source='web',
-            task_id=task['task_id']
         )
 
         self._start_task_thread(
@@ -145,11 +133,11 @@ class WebTaskService:
             should_record=True,
         )
 
-        conn.acquire_foreground_task(
-            task_type='upload',
-            command=command,
+        self.foreground_task_coordinator.acquire_upload_task(
+            conn,
+            task['task_id'],
+            command,
             source='web',
-            task_id=task['task_id']
         )
 
         self._start_task_thread(

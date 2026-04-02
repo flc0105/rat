@@ -6,6 +6,7 @@ from server.application.execution.remote_execution_service import RemoteExecutio
 from server.application.jobs.background_job_service import BackgroundJobService
 from server.application.jobs.background_job_store import BackgroundJobStore
 from server.application.script.script_service import ServerJobService
+from server.application.tasks.foreground_task_coordinator import ForegroundTaskCoordinator
 from server.application.tasks.task_runner import WebTaskRunner
 from server.application.tasks.task_service import WebTaskService
 from server.application.tasks.task_store import WebTaskStore
@@ -39,6 +40,7 @@ class ServerApplicationAssembly:
         self.file_service = self.artifact_service
 
         self.remote_execution_service = RemoteExecutionService(self.server)
+        self.foreground_task_coordinator = ForegroundTaskCoordinator()
 
         self.remote_file_service = WebRemoteFileService(
             remote_execution_service=self.remote_execution_service,
@@ -56,6 +58,7 @@ class ServerApplicationAssembly:
             event_bus=self.event_bus,
             task_store=self.task_store,
             remote_execution_service=self.remote_execution_service,
+            foreground_task_coordinator=self.foreground_task_coordinator,
         )
 
         self.task_service = WebTaskService(
@@ -63,6 +66,7 @@ class ServerApplicationAssembly:
             task_store=self.task_store,
             file_service=self.file_service,
             task_runner=self.task_runner,
+            foreground_task_coordinator=self.foreground_task_coordinator,
         )
 
         self.background_job_store = BackgroundJobStore()
