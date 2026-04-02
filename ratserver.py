@@ -94,10 +94,10 @@ class Server:
         return {**{'addr': f'{addr[0]}:{addr[1]}'}, **info}
 
     def _register_connection(self, transport: ClientTransport, addr, info: dict) -> ClientSession:
-        session = self.web_service.build_connection(transport, addr, info)
+        session = self.web_service.create_web_connection(transport, addr, info)
         self.connections.add(session)
         logger.info('Connection has been established: {}'.format(addr))
-        self.web_service.on_connection_registered(session)
+        self.web_service.handle_connection_registered(session)
         return session
 
     def _accept_connection(self):
@@ -167,7 +167,7 @@ class Server:
         处理连接关闭后的清理逻辑
         """
         logger.error(f'Connection closed: {session.address}')
-        self.web_service.on_connection_closed(session)
+        self.web_service.handle_connection_closed(session)
         self._notify_connection_closed(session)
         self._remove_connection(session)
 

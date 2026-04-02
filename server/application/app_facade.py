@@ -6,6 +6,11 @@ from server.application.assembly import ServerApplicationAssembly
 class ServerWebService:
     """
     Server 的 Web 门面服务。
+
+    约束：
+    - 这里只保留正式接口名
+    - 不再保留内部兼容别名
+    - 调用方必须显式迁移到正式方法
     """
 
     def __init__(self, server, assembly=None):
@@ -13,7 +18,6 @@ class ServerWebService:
         self.assembly = assembly or ServerApplicationAssembly(server)
 
         # ------------------ 装配后的依赖引用 ------------------ #
-        # 保持原有属性名不变，避免影响现有调用方。
         self.event_bus = self.assembly.event_bus
         self.task_store = self.assembly.task_store
 
@@ -36,9 +40,6 @@ class ServerWebService:
         默认构建入口：
         - 先完成 application assembly
         - 再创建 facade
-
-        这样 ratserver 作为 composition root 只负责触发装配，
-        Facade 本身不再承担依赖创建职责。
         """
         assembly = ServerApplicationAssembly(server)
         return cls(server, assembly=assembly)
@@ -70,6 +71,7 @@ class ServerWebService:
 
         return result
 
+    # ------------------ connection api ------------------ #
     def get_connections_payload(self):
         return self.connection_service.get_connections_payload()
 
@@ -82,6 +84,7 @@ class ServerWebService:
     def handle_connection_closed(self, session):
         self.connection_service.handle_connection_closed(session)
 
+    # ------------------ artifact api ------------------ #
     def list_artifacts(self, artifact_type: str = '', hostname: str = ''):
         return {
             'items': self.artifact_service.list_artifacts(artifact_type=artifact_type, hostname=hostname),
@@ -145,6 +148,7 @@ class ServerWebService:
             )
         )
 
+    # ------------------ command/history api ------------------ #
     def get_command_candidates(self, client_id: str):
         session = self.server.get_target_connection_by_client_id(client_id)
 
@@ -220,12 +224,11 @@ class ServerWebService:
             tab_id=tab_id
         )
 
+    # ------------------ server job api ------------------ #
     def list_server_jobs(self) -> list[dict]:
-        """列出所有可用的远程脚本"""
         return self.script_service.list_scripts()
 
     def get_server_job_content(self, script_name: str) -> str:
-        """获取远程脚本内容"""
         return self.script_service.get_script_content(script_name)
 
     def save_server_job_content(self, script_name, content):
@@ -234,6 +237,7 @@ class ServerWebService:
     def upload_server_job(self, file_storage):
         return self.script_service.upload_script(file_storage)
 
+    # ------------------ background job api ------------------ #
     def list_background_jobs(self, client_id: str):
         return self.background_job_service.list_jobs(client_id)
 
@@ -275,6 +279,21 @@ class ServerWebService:
     def delete_remote_path(self, client_id: str, path: str):
         return self.remote_file_service.delete_path(client_id, path)
 
+    def delete_remote_paths(self, client_id: str, paths: list[str]):
+        return self.remote_file_service.delete_paths(client_id, paths)
+
+    def preview_remote_file(
+        self,
+        client_id: str,
+        path: str,
+        history_entry_id: str = '',
+    ):
+        return self.remote_file_service.preview_file(
+            client_id,
+            path,
+            history_entry_id=history_entry_id,
+        )
+
     def download_remote_file(
         self,
         client_id: str,
@@ -301,21 +320,6 @@ class ServerWebService:
             history_entry_id=history_entry_id,
         )
 
-    def delete_remote_paths(self, client_id: str, paths: list[str]):
-        return self.remote_file_service.delete_paths(client_id, paths)
-
-    def preview_remote_file(
-        self,
-        client_id: str,
-        path: str,
-        history_entry_id: str = '',
-    ):
-        return self.remote_file_service.preview_file(
-            client_id,
-            path,
-            history_entry_id=history_entry_id,
-        )
-
     def read_remote_file(
         self,
         client_id: str,
@@ -323,9 +327,6 @@ class ServerWebService:
         encoding: str = 'utf-8',
         max_bytes: int = 200000,
     ):
-        """
-        兼容旧接口名。
-        """
         return self.remote_file_service.get_file_content(client_id, path)
 
     def save_remote_file(
@@ -335,9 +336,6 @@ class ServerWebService:
         content: str,
         encoding: str = 'utf-8',
     ):
-        """
-        兼容旧接口名。
-        """
         return self.remote_file_service.save_file_content(
             client_id,
             path,
@@ -345,12 +343,7 @@ class ServerWebService:
             encoding=encoding,
         )
 
-    def remove_remote_file(self, client_id: str, path: str):
-        """
-        兼容旧接口名。
-        """
-        return self.remote_file_service.delete_path(client_id, path)
-
+    # ------------------ agent api ------------------ #
     def build_agent(
         self,
         server_host: str,
@@ -373,57 +366,3 @@ class ServerWebService:
         if not work_dir:
             return
         self.agent_builder.cleanup_build_dir(work_dir)
-
-    # ------------------ compatibility api ------------------ #
-    def build_connection(self, transport, addr, info: dict):
-        return self.create_web_connection(transport, addr, info)
-
-    def on_connection_registered(self, session):
-        return self.handle_connection_registered(session)
-
-    def on_connection_closed(self, session):
-        return self.handle_connection_closed(session)
-
-    def submit_command(self, client_id: str, command: str, tab_id: str = ''):
-        return self.submit_web_command(client_id, command, tab_id=tab_id)
-
-    def submit_upload(
-        self,
-        client_id: str,
-        local_path: str,
-        display_name: str,
-        remote_path: str = '',
-        tab_id: str = '',
-    ):
-        return self.submit_web_upload(client_id, local_path, display_name, remote_path, tab_id=tab_id)
-
-    def delete_artifact_by_id(self, artifact_id: str):
-        return self.delete_artifact(artifact_id)
-
-    def get_artifact_preview(self, artifact_id: str):
-        return self.build_artifact_preview_payload(artifact_id)
-
-    def get_file_path(self, artifact_id: str):
-        return self.get_artifact_file_path(artifact_id)
-
-    def get_artifact(self, artifact_id: str):
-        return self.get_artifact_by_id(artifact_id)
-
-    def publish_file_created(self, artifact_info: dict):
-        return self.publish_artifact_created(artifact_info)
-
-    def browse_directory(
-        self,
-        client_id: str,
-        path: str = '',
-        page: int = 1,
-        page_size: int = 100,
-        show_hidden: bool = False,
-    ):
-        return self.browse_remote_directory(
-            client_id,
-            path,
-            page=page,
-            page_size=page_size,
-            show_hidden=show_hidden,
-        )

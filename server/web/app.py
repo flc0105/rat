@@ -8,7 +8,6 @@ from flask import Flask, Response, request, send_file, send_from_directory, stre
 from server.config.config import WEB_HTTP_UPLOAD_MAX_BYTES
 from server.web.api_response import WebApiResponder
 from server.web.request_parsers import (
-    get_json_payload,
     get_optional_tab_id,
     get_required_command,
     get_required_upload,
@@ -47,7 +46,7 @@ def create_app(server_instance):
     @app.post('/api/connections/<client_id>/command')
     def send_command(client_id):
         def _execute():
-            return web_service.submit_command(
+            return web_service.submit_web_command(
                 client_id,
                 get_required_command(),
                 tab_id=get_optional_tab_id()
@@ -84,7 +83,7 @@ def create_app(server_instance):
             target_path = (request.form.get('target_path') or '').strip()
 
             temp_path, safe_name = artifact_service.create_upload_temp_file(upload)
-            return web_service.submit_upload(
+            return web_service.submit_web_upload(
                 client_id,
                 temp_path,
                 safe_name,
