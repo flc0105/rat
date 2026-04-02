@@ -1521,8 +1521,16 @@
                             <el-table-column prop="pid" label="PID" width="100" align="center"></el-table-column>
                             <el-table-column prop="name" label="Application Name" min-width="200"
                                              show-overflow-tooltip></el-table-column>
-                            <el-table-column prop="username" label="User" min-width="200"
+                            <el-table-column prop="username" label="User" min-width="120"
                                              show-overflow-tooltip></el-table-column>
+                            <el-table-column prop="status" label="Status" min-width="120"
+                                             show-overflow-tooltip></el-table-column>
+
+                            <el-table-column prop="exe" label="Executable Path" min-width="500"
+                 show-overflow-tooltip></el-table-column>
+
+
+
                             <el-table-column label="Actions" width="220" align="center" fixed="right">
                                 <template #default="{ row }">
                                     <el-space>

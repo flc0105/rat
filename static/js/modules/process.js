@@ -85,7 +85,7 @@ window.AppProcessModule = {
                         this.loadAppsSilent();
                     });
                 }
-            }, 5000); //5秒刷新一次
+            }, 10000); //10秒刷新一次
         },
 
         async loadProcesses() {

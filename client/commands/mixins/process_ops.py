@@ -149,6 +149,14 @@ class CommandProcessMixin:
         try:
             apps = []
 
+            def _safe_proc_value(getter, default=None):
+                try:
+                    return getter()
+                except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
+                    return default
+                except Exception:
+                    return default
+
             if platform.system() == 'Windows':
                 # Windows: 获取有窗口的进程
                 import win32gui
@@ -168,50 +176,195 @@ class CommandProcessMixin:
                         proc = psutil.Process(pid)
                         apps.append({
                             'pid': pid,
-                            'name': proc.name(),
-                            'username': proc.username(),
+                            'name': _safe_proc_value(proc.name, '') or '',
+                            'username': _safe_proc_value(proc.username, '') or '',
+                            'exe': _safe_proc_value(proc.exe, '') or '',
+                            'cwd': _safe_proc_value(proc.cwd, '') or '',
+                            'cmdline': _safe_proc_value(proc.cmdline, []) or [],
+                            'status': _safe_proc_value(proc.status, '') or '',
                         })
-                    except:
+                    except Exception:
                         continue
 
             elif platform.system() == 'Darwin':
-                # macOS: 使用 Quartz 获取有窗口的应用
+                # macOS: 优先使用 System Events 获取真正的 GUI 应用进程（非 background only）
+                import subprocess
+
+                exclude_names = {
+                    'Finder',
+                    'Dock',
+                    'SystemUIServer',
+                    'NotificationCenter',
+                    'Spotlight',
+                    'Siri',
+                }
+
+                apple_script = r'''
+                tell application "System Events"
+                    set outputLines to {}
+                    set appProcs to every application process whose background only is false
+                    repeat with proc in appProcs
+                        try
+                            set procPid to unix id of proc
+                            set procName to name of proc
+                            set procFrontmost to frontmost of proc
+                            set end of outputLines to ((procFrontmost as text) & tab & (procPid as text) & tab & procName)
+                        end try
+                    end repeat
+                    return outputLines
+                end tell
+                '''
+
+                parsed_apps = []
                 try:
-                    from Quartz import CGWindowListCopyWindowInfo, kCGWindowListOptionAll, kCGNullWindowID
+                    result = subprocess.run(
+                        ['osascript', '-e', apple_script],
+                        capture_output=True,
+                        text=True,
+                        timeout=5
+                    )
 
-                    window_list = CGWindowListCopyWindowInfo(kCGWindowListOptionAll, kCGNullWindowID)
-                    app_dict = {}
+                    stdout = (result.stdout or '').strip()
+                    if stdout:
+                        raw_lines = [item.strip() for item in stdout.split(',') if item.strip()]
+                        seen_pid = set()
 
-                    for window in window_list:
-                        pid = window.get('kCGWindowOwnerPID', 0)
-                        if pid == 0:
-                            continue
-                        name = window.get('kCGWindowOwnerName', '')
-                        if not name:
-                            continue
-                        if pid not in app_dict:
+                        for line in raw_lines:
+                            parts = [part.strip().strip('"') for part in line.split('\t')]
+                            if len(parts) < 3:
+                                continue
+
+                            frontmost_text, pid_text, proc_name = parts[0], parts[1], parts[2]
+
+                            try:
+                                pid = int(pid_text)
+                            except Exception:
+                                continue
+
+                            if pid in seen_pid:
+                                continue
+                            seen_pid.add(pid)
+
+                            if not proc_name or proc_name in exclude_names or proc_name.startswith('com.'):
+                                continue
+
                             try:
                                 proc = psutil.Process(pid)
-                                app_dict[pid] = {
-                                    'pid': pid,
-                                    'name': name,
-                                    'username': proc.username(),
-                                }
-                            except:
-                                pass
+                            except Exception:
+                                continue
 
-                    apps = list(app_dict.values())
-                except ImportError:
-                    # 降级：返回所有进程
-                    for proc in psutil.process_iter(['pid', 'name', 'username']):
-                        try:
-                            apps.append({
-                                'pid': proc.info['pid'],
-                                'name': proc.info['name'] or '',
-                                'username': proc.info['username'] or '',
+                            parsed_apps.append({
+                                'pid': pid,
+                                'name': proc_name,
+                                'username': _safe_proc_value(proc.username, '') or '',
+                                'exe': _safe_proc_value(proc.exe, '') or '',
+                                'cwd': _safe_proc_value(proc.cwd, '') or '',
+                                'cmdline': _safe_proc_value(proc.cmdline, []) or [],
+                                'status': _safe_proc_value(proc.status, '') or '',
+                                'frontmost': str(frontmost_text).lower() == 'true',
                             })
-                        except:
-                            continue
+
+                    if parsed_apps:
+                        parsed_apps.sort(
+                            key=lambda item: (
+                                0 if item.get('frontmost') else 1,
+                                (item.get('name') or '').lower(),
+                                item.get('pid') or 0,
+                            )
+                        )
+                        apps = parsed_apps
+                    else:
+                        # 降级：Quartz 获取有窗口的应用
+                        try:
+                            from Quartz import CGWindowListCopyWindowInfo, kCGWindowListOptionAll, kCGNullWindowID
+
+                            window_list = CGWindowListCopyWindowInfo(kCGWindowListOptionAll, kCGNullWindowID)
+                            app_dict = {}
+
+                            for window in window_list:
+                                pid = window.get('kCGWindowOwnerPID', 0)
+                                if pid == 0:
+                                    continue
+                                name = window.get('kCGWindowOwnerName', '')
+                                if not name or name in exclude_names:
+                                    continue
+                                if pid not in app_dict:
+                                    try:
+                                        proc = psutil.Process(pid)
+                                        app_dict[pid] = {
+                                            'pid': pid,
+                                            'name': name,
+                                            'username': _safe_proc_value(proc.username, '') or '',
+                                            'exe': _safe_proc_value(proc.exe, '') or '',
+                                            'cwd': _safe_proc_value(proc.cwd, '') or '',
+                                            'cmdline': _safe_proc_value(proc.cmdline, []) or [],
+                                            'status': _safe_proc_value(proc.status, '') or '',
+                                        }
+                                    except Exception:
+                                        pass
+
+                            apps = list(app_dict.values())
+                        except ImportError:
+                            # 最后降级：返回所有进程
+                            for proc in psutil.process_iter(['pid', 'name', 'username']):
+                                try:
+                                    apps.append({
+                                        'pid': proc.info['pid'],
+                                        'name': proc.info['name'] or '',
+                                        'username': proc.info['username'] or '',
+                                        'exe': _safe_proc_value(proc.exe, '') or '',
+                                        'cwd': _safe_proc_value(proc.cwd, '') or '',
+                                        'cmdline': _safe_proc_value(proc.cmdline, []) or [],
+                                        'status': _safe_proc_value(proc.status, '') or '',
+                                    })
+                                except Exception:
+                                    continue
+
+                except Exception:
+                    # AppleScript 失败时直接走 Quartz 降级
+                    try:
+                        from Quartz import CGWindowListCopyWindowInfo, kCGWindowListOptionAll, kCGNullWindowID
+
+                        window_list = CGWindowListCopyWindowInfo(kCGWindowListOptionAll, kCGNullWindowID)
+                        app_dict = {}
+
+                        for window in window_list:
+                            pid = window.get('kCGWindowOwnerPID', 0)
+                            if pid == 0:
+                                continue
+                            name = window.get('kCGWindowOwnerName', '')
+                            if not name or name in exclude_names:
+                                continue
+                            if pid not in app_dict:
+                                try:
+                                    proc = psutil.Process(pid)
+                                    app_dict[pid] = {
+                                        'pid': pid,
+                                        'name': name,
+                                        'username': _safe_proc_value(proc.username, '') or '',
+                                        'exe': _safe_proc_value(proc.exe, '') or '',
+                                        'cwd': _safe_proc_value(proc.cwd, '') or '',
+                                        'cmdline': _safe_proc_value(proc.cmdline, []) or [],
+                                        'status': _safe_proc_value(proc.status, '') or '',
+                                    }
+                                except Exception:
+                                    pass
+
+                        apps = list(app_dict.values())
+                    except Exception:
+                        for proc in psutil.process_iter(['pid', 'name', 'username']):
+                            try:
+                                apps.append({
+                                    'pid': proc.info['pid'],
+                                    'name': proc.info['name'] or '',
+                                    'username': proc.info['username'] or '',
+                                    'exe': _safe_proc_value(proc.exe, '') or '',
+                                    'cwd': _safe_proc_value(proc.cwd, '') or '',
+                                    'cmdline': _safe_proc_value(proc.cmdline, []) or [],
+                                    'status': _safe_proc_value(proc.status, '') or '',
+                                })
+                            except Exception:
+                                continue
 
             else:
                 # Linux: 使用 psutil 获取所有进程
@@ -221,13 +374,106 @@ class CommandProcessMixin:
                             'pid': proc.info['pid'],
                             'name': proc.info['name'] or '',
                             'username': proc.info['username'] or '',
+                            'exe': _safe_proc_value(proc.exe, '') or '',
+                            'cwd': _safe_proc_value(proc.cwd, '') or '',
+                            'cmdline': _safe_proc_value(proc.cmdline, []) or [],
+                            'status': _safe_proc_value(proc.status, '') or '',
                         })
-                    except:
+                    except Exception:
                         continue
 
             return 1, json.dumps(apps)
         except Exception as e:
             return 0, f'Failed to list apps: {e}'
+
+    # @desc('List running applications (GUI apps only)', group='process', suggest=False)
+    # def list_windows(self, arg=''):
+    #     import psutil
+    #     """
+    #     列出运行中的应用程序（仅 GUI 应用）
+    #     """
+    #     try:
+    #         apps = []
+    #
+    #         if platform.system() == 'Windows':
+    #             # Windows: 获取有窗口的进程
+    #             import win32gui
+    #             import win32process
+    #
+    #             def enum_window_callback(hwnd, windows):
+    #                 if win32gui.IsWindowVisible(hwnd):
+    #                     _, pid = win32process.GetWindowThreadProcessId(hwnd)
+    #                     if pid not in windows:
+    #                         windows.append(pid)
+    #
+    #             windows = []
+    #             win32gui.EnumWindows(enum_window_callback, windows)
+    #
+    #             for pid in windows:
+    #                 try:
+    #                     proc = psutil.Process(pid)
+    #                     apps.append({
+    #                         'pid': pid,
+    #                         'name': proc.name(),
+    #                         'username': proc.username(),
+    #                     })
+    #                 except:
+    #                     continue
+    #
+    #         elif platform.system() == 'Darwin':
+    #             # macOS: 使用 Quartz 获取有窗口的应用
+    #             try:
+    #                 from Quartz import CGWindowListCopyWindowInfo, kCGWindowListOptionAll, kCGNullWindowID
+    #
+    #                 window_list = CGWindowListCopyWindowInfo(kCGWindowListOptionAll, kCGNullWindowID)
+    #                 app_dict = {}
+    #
+    #                 for window in window_list:
+    #                     pid = window.get('kCGWindowOwnerPID', 0)
+    #                     if pid == 0:
+    #                         continue
+    #                     name = window.get('kCGWindowOwnerName', '')
+    #                     if not name:
+    #                         continue
+    #                     if pid not in app_dict:
+    #                         try:
+    #                             proc = psutil.Process(pid)
+    #                             app_dict[pid] = {
+    #                                 'pid': pid,
+    #                                 'name': name,
+    #                                 'username': proc.username(),
+    #                             }
+    #                         except:
+    #                             pass
+    #
+    #                 apps = list(app_dict.values())
+    #             except ImportError:
+    #                 # 降级：返回所有进程
+    #                 for proc in psutil.process_iter(['pid', 'name', 'username']):
+    #                     try:
+    #                         apps.append({
+    #                             'pid': proc.info['pid'],
+    #                             'name': proc.info['name'] or '',
+    #                             'username': proc.info['username'] or '',
+    #                         })
+    #                     except:
+    #                         continue
+    #
+    #         else:
+    #             # Linux: 使用 psutil 获取所有进程
+    #             for proc in psutil.process_iter(['pid', 'name', 'username']):
+    #                 try:
+    #                     apps.append({
+    #                         'pid': proc.info['pid'],
+    #                         'name': proc.info['name'] or '',
+    #                         'username': proc.info['username'] or '',
+    #                     })
+    #                 except:
+    #                     continue
+    #
+    #         return 1, json.dumps(apps)
+    #     except Exception as e:
+    #         return 0, f'Failed to list apps: {e}'
 
     @desc('Kill a process by PID', group='process', suggest=False)
     def kill_process(self, pid: str):
