@@ -226,6 +226,9 @@ class ServerWebService:
     def save_server_job_content(self, script_name, content):
         return self.script_service.save_script(script_name, content)
 
+    def upload_server_job(self, file_storage):
+        return self.script_service.upload_script(file_storage)
+
     def list_background_jobs(self, client_id: str):
         return self.background_job_service.list_jobs(client_id)
 
@@ -316,6 +319,9 @@ class ServerWebService:
     def cleanup_agent_build(self, work_dir: str):
         """清理构建临时文件"""
         self.agent_builder.cleanup(work_dir)
+
+
+
 
 
 

@@ -668,9 +668,17 @@
                         <el-button size="small" @click="loadBackgroundJobModules"
                                    :loading="backgroundJobModulesLoading">Refresh Modules
                         </el-button>
-                        <!--                        <el-button size="small" type="primary" @click="openJobCreatorDialog()">-->
-                        <!--                            + New Remote Job-->
-                        <!--                        </el-button>-->
+                        <el-button size="small" @click="triggerServerJobUpload"
+                                   :loading="serverJobUploadLoading">Upload Script
+                        </el-button>
+                        <el-button size="small" type="primary" plain @click="createRemoteJobPrompt()">
+                            New Script
+                        </el-button>
+                        <input id="server-job-upload-input"
+                               type="file"
+                               accept=".py,text/x-python"
+                               style="display: none"
+                               @change="handleServerJobUpload">
                     </div>
                     <div class="background-jobs-modules panel-lite">
                         <div class="background-jobs-section-title">Available Modules</div>
@@ -1640,6 +1648,9 @@
 <script src="https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs/loader.js"></script>
 </body>
 </html>
+
+
+
 
 
 

@@ -210,3 +210,5 @@ class Job(ABC):
 
     def stop(self, notify: bool = True):
         self.request_stop(notify=notify)
+
+

@@ -167,3 +167,5 @@ class BackgroundJobStore:
 
     def get_jobs_for_client(self, client_id: str) -> list[dict]:
         return self.view_service.get_jobs_for_client(client_id)
+
+

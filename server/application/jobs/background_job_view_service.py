@@ -53,3 +53,5 @@ class BackgroundJobViewService:
 
         items.sort(key=lambda item: item.get('updated_at', ''), reverse=True)
         return items
+
+

@@ -27,3 +27,5 @@ class JobRuntime:
 
     def mark_stopped(self):
         self.stopped_at = datetime.now()
+
+

@@ -93,6 +93,7 @@ window.AppStateModule = {
 
                     quickJumpPaths: {},
         quickJumpLoading: false,
+            serverJobUploadLoading: false,
 
             terminalJsonDialogVisible: false,
             terminalJsonDialogTitle: 'JSON Viewer',
@@ -332,6 +333,9 @@ window.AppStateModule = {
         },
     }
 };
+
+
+
 
 
 

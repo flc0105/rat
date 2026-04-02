@@ -60,18 +60,28 @@ def create_background_job_blueprint(server_instance):
 
     @blueprint.post('/api/server/jobs/save')
     def save_server_job():
-        payload = _json_payload()
-        name = (payload.get('name') or '').strip()
-        content = payload.get('content', '')
+        def _execute():
+            payload = _json_payload()
+            name = (payload.get('name') or '').strip()
+            content = payload.get('content', '')
 
-        if not name:
-            raise ValueError('job name is required')
-        if not content:
-            raise ValueError('job content is required')
-        return _json_endpoint(
-            lambda: web_service.save_server_job_content(name, content),
-            default_error_status=500
-        )
+            if not name:
+                raise ValueError('job name is required')
+            if content is None:
+                raise ValueError('job content is required')
+            return web_service.save_server_job_content(name, content)
+
+        return _json_endpoint(_execute, default_error_status=500)
+
+    @blueprint.post('/api/server/jobs/upload')
+    def upload_server_job():
+        def _execute():
+            file_obj = request.files.get('file')
+            if file_obj is None:
+                raise ValueError('file is required')
+            return web_service.upload_server_job(file_obj)
+
+        return _json_endpoint(_execute, default_error_status=500)
 
     @blueprint.get('/api/connections/<client_id>/background-jobs/modules')
     def list_available_background_jobs(client_id):
@@ -182,6 +192,9 @@ def create_background_job_blueprint(server_instance):
         return _json_endpoint(_execute, default_error_status=500)
 
     return blueprint
+
+
+
 
 
 

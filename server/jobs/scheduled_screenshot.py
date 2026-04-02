@@ -69,3 +69,6 @@ class ScheduledScreenshot(Job):
     def stop(self, notify: bool = True):
         schedule.clear()
         self.request_stop(notify=notify)
+
+
+

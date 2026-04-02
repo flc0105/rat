@@ -2,6 +2,8 @@ import glob
 import os
 from pathlib import Path
 
+from werkzeug.utils import secure_filename
+
 
 class ServerJobService:
 
@@ -73,19 +75,23 @@ class ServerJobService:
             return normalized
         return normalized + '.py' if normalized else ''
 
-    def save_script(self, script_name: str, content: str) -> dict:
-        """
-        保存脚本（用于前端新建）
-        """
+    def _resolve_script_path_for_write(self, script_name: str) -> tuple[str, str]:
         safe_name = self._normalize_script_name(script_name)
         if not safe_name:
             raise ValueError('Invalid script name')
-        if not safe_name:
-            raise ValueError('Invalid script name')
-        script_path = os.path.join(self.scripts_root_dir, safe_name)
 
-        # 确保目录存在
+        script_path = os.path.abspath(os.path.join(self.scripts_root_dir, safe_name))
+        if not script_path.startswith(self.scripts_root_dir + os.sep):
+            raise ValueError('Invalid script path')
+
         os.makedirs(os.path.dirname(script_path), exist_ok=True)
+        return safe_name, script_path
+
+    def save_script(self, script_name: str, content: str) -> dict:
+        """
+        保存脚本（用于前端编辑 / 新建）
+        """
+        safe_name, script_path = self._resolve_script_path_for_write(script_name)
 
         with open(script_path, 'w', encoding='utf-8') as f:
             f.write(content)
@@ -95,6 +101,33 @@ class ServerJobService:
             'path': script_path,
             'size': os.path.getsize(script_path),
         }
+
+    def upload_script(self, file_storage) -> dict:
+        """上传一个 .py 脚本到 server jobs 目录。"""
+        if file_storage is None:
+            raise ValueError('file is required')
+
+        original_name = str(getattr(file_storage, 'filename', '') or '').strip()
+        if not original_name:
+            raise ValueError('filename is required')
+
+        safe_filename = secure_filename(Path(original_name).name)
+        if not safe_filename:
+            raise ValueError('Invalid filename')
+        if not safe_filename.lower().endswith('.py'):
+            raise ValueError('Only .py files are supported')
+
+        safe_name, script_path = self._resolve_script_path_for_write(safe_filename)
+        file_storage.save(script_path)
+
+        return {
+            'name': safe_name,
+            'path': script_path,
+            'size': os.path.getsize(script_path),
+        }
+
+
+
 
 
 
