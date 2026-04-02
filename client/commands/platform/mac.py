@@ -118,9 +118,9 @@ class MacCommands(CommonCommands):
 
     @desc('Show system information', group='platform')
     @interruptible()
-    def getinfo(self):
+    def getinfo(self, arg=''):
         try:
-            return self._mac_platform_service.collect_system_info()
+            return self._mac_platform_service.collect_system_info(arg)
         except Exception as e:
             logger.error(e, exc_info=True)
             return 0, f'Failed to collect system information: {e}'

@@ -21,7 +21,9 @@ def get_installed_apps():
                 app_info = {
                     "name": app.stem,
                     "path": str(app),
-                    "location": path
+                    "location": path,
+                    "bundle_id": '',
+                    "version": ''
                 }
 
                 # 尝试读取Info.plist获取更多信息

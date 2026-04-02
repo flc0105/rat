@@ -1,4 +1,5 @@
 import glob
+import json
 import os
 import shlex
 
@@ -156,7 +157,7 @@ class RttBuiltinSupport:
     def __init__(self, conn):
         self.conn = conn
 
-    def rtt(self):
+    def rtt(self, arg=''):
         payload = {
             'connection_state': self.conn.context.connected_at and (
                 'offline' if self.conn.context.disconnected_at else 'online'
@@ -168,4 +169,12 @@ class RttBuiltinSupport:
             'last_rtt_ms': self.conn.context.last_rtt_ms if self.conn.context.last_rtt_ms is not None else '',
             'last_heartbeat_id': self.conn.context.last_heartbeat_id if self.conn.context.last_heartbeat_id is not None else '',
         }
+        arg_text = str(arg or '').strip().lower()
+        output_json = arg_text in ('json', '--json')
+
+        if output_json:
+            yield 1, json.dumps(payload, ensure_ascii=False, indent=2)
+            return
+
         yield 1, format_dict(payload, width=25)
+        # yield 1, format_dict(payload, width=25)

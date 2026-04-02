@@ -153,6 +153,6 @@ class BuiltinCommandHandler:
         for item in self.history_support.history(arg):
             yield item
 
-    def rtt(self, _arg=''):
-        for item in self.rtt_support.rtt():
+    def rtt(self, arg=''):
+        for item in self.rtt_support.rtt(arg):
             yield item

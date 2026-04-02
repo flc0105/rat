@@ -68,6 +68,7 @@ def get_launch_items():
             for item in login_items:
                 items.append({
                     "name": item,
+                    "path": "",
                     "type": "LoginItem",
                     "scope": "user"
                 })
