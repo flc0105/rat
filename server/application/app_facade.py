@@ -325,9 +325,6 @@ class ServerWebService:
     ):
         """
         兼容旧接口名。
-
-        当前远程文件编辑链路实际走 preview_file -> artifact preview。
-        encoding / max_bytes 保留参数位，避免旧调用方报错。
         """
         return self.remote_file_service.get_file_content(client_id, path)
 
