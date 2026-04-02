@@ -2,6 +2,7 @@ package executor
 
 import (
 	"fmt"
+	"reflect"
 	"sort"
 	"strings"
 	"sync"
@@ -18,30 +19,136 @@ type CommandSpec struct {
 	Handler CommandHandler
 }
 
+type CommandOption func(*CommandSpec)
+
 var (
 	commandRegistryMu sync.RWMutex
 	commandRegistry   = map[string]CommandSpec{}
+
+	sessionPtrType    = reflect.TypeOf((*Session)(nil))
+	stringSliceType   = reflect.TypeOf([]string(nil))
+	commandHandlerTyp = reflect.TypeOf((CommandHandler)(nil))
 )
 
-func MustRegisterCommand(spec CommandSpec) {
-	name := strings.TrimSpace(strings.ToLower(spec.Name))
-	if name == "" {
-		panic("command name is required")
-	}
-	if spec.Handler == nil {
-		panic(fmt.Sprintf("command handler is required: %s", name))
+func Register(name string, parts ...interface{}) struct{} {
+	spec := CommandSpec{
+		Name:  strings.TrimSpace(strings.ToLower(name)),
+		Group: "misc",
 	}
 
-	spec.Name = name
+	if spec.Name == "" {
+		panic("command name is required")
+	}
+
+	for _, part := range parts {
+		switch v := part.(type) {
+		case CommandOption:
+			v(&spec)
+
+		case CommandHandler:
+			if spec.Handler != nil {
+				panic(fmt.Sprintf("duplicate handler for command: %s", spec.Name))
+			}
+			spec.Handler = v
+
+		default:
+			handler, ok := tryConvertHandler(part)
+			if ok {
+				if spec.Handler != nil {
+					panic(fmt.Sprintf("duplicate handler for command: %s", spec.Name))
+				}
+				spec.Handler = handler
+				continue
+			}
+
+			panic(fmt.Sprintf("unsupported register part for command %s: %T", spec.Name, part))
+		}
+	}
+
+	if spec.Handler == nil {
+		panic(fmt.Sprintf("command handler is required: %s", spec.Name))
+	}
+
 	spec.Group = normalizeGroup(spec.Group)
 
 	commandRegistryMu.Lock()
 	defer commandRegistryMu.Unlock()
 
-	if _, exists := commandRegistry[name]; exists {
-		panic(fmt.Sprintf("duplicate command registration: %s", name))
+	if _, exists := commandRegistry[spec.Name]; exists {
+		panic(fmt.Sprintf("duplicate command registration: %s", spec.Name))
 	}
-	commandRegistry[name] = spec
+	commandRegistry[spec.Name] = spec
+
+	return struct{}{}
+}
+
+func tryConvertHandler(part interface{}) (CommandHandler, bool) {
+	if part == nil {
+		return nil, false
+	}
+
+	value := reflect.ValueOf(part)
+	typ := value.Type()
+
+	if typ.Kind() != reflect.Func {
+		return nil, false
+	}
+
+	if !isValidHandlerFuncType(typ) {
+		return nil, false
+	}
+
+	converted := value.Convert(commandHandlerTyp)
+	handler, ok := converted.Interface().(CommandHandler)
+	return handler, ok
+}
+
+func isValidHandlerFuncType(t reflect.Type) bool {
+	if t.NumIn() != 2 || t.NumOut() != 2 {
+		return false
+	}
+
+	if t.In(0) != sessionPtrType {
+		return false
+	}
+
+	if t.In(1) != stringSliceType {
+		return false
+	}
+
+	if t.Out(0).Kind() != reflect.Int {
+		return false
+	}
+
+	if t.Out(1).Kind() != reflect.String {
+		return false
+	}
+
+	return true
+}
+
+func Usage(value string) CommandOption {
+	return func(spec *CommandSpec) {
+		spec.Usage = strings.TrimSpace(value)
+	}
+}
+
+func Help(value string) CommandOption {
+	return func(spec *CommandSpec) {
+		spec.Help = strings.TrimSpace(value)
+	}
+}
+
+func Group(value string) CommandOption {
+	return func(spec *CommandSpec) {
+		spec.Group = strings.TrimSpace(strings.ToLower(value))
+	}
+}
+
+func Suggest() CommandOption {
+	return func(spec *CommandSpec) {
+		spec.Suggest = true
+	}
 }
 
 func LookupCommand(name string) (CommandSpec, bool) {

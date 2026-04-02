@@ -7,43 +7,43 @@ import (
 	"strings"
 )
 
-func init() {
-	MustRegisterCommand(CommandSpec{
-		Name:    "help",
-		Usage:   "help",
-		Help:    "Show available commands",
-		Group:   "session",
-		Suggest: true,
-		Handler: cmdHelp,
-	})
+var (
+	_ = Register(
+		"help",
+		Usage("help"),
+		Help("Show available commands"),
+		Group("session"),
+		Suggest(),
+		cmdHelp,
+	)
 
-	MustRegisterCommand(CommandSpec{
-		Name:    "kill",
-		Usage:   "kill",
-		Help:    "Terminate current session",
-		Group:   "session",
-		Suggest: true,
-		Handler: cmdKill,
-	})
+	_ = Register(
+		"kill",
+		Usage("kill"),
+		Help("Terminate current session"),
+		Group("session"),
+		Suggest(),
+		cmdKill,
+	)
 
-	MustRegisterCommand(CommandSpec{
-		Name:    "cd",
-		Usage:   "cd <path>",
-		Help:    "Change current working directory",
-		Group:   "session",
-		Suggest: true,
-		Handler: cmdCd,
-	})
+	_ = Register(
+		"cd",
+		Usage("cd <path>"),
+		Help("Change current working directory"),
+		Group("session"),
+		Suggest(),
+		cmdCd,
+	)
 
-	MustRegisterCommand(CommandSpec{
-		Name:    "pwd",
-		Usage:   "pwd",
-		Help:    "Print current working directory",
-		Group:   "session",
-		Suggest: true,
-		Handler: cmdPwd,
-	})
-}
+	_ = Register(
+		"pwd",
+		Usage("pwd"),
+		Help("Print current working directory"),
+		Group("session"),
+		Suggest(),
+		cmdPwd,
+	)
+)
 
 func cmdHelp(_ *Session, _ []string) (int, string) {
 	return 1, RenderHelpText()

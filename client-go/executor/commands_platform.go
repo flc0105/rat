@@ -11,34 +11,34 @@ import (
 	"time"
 )
 
-func init() {
-	MustRegisterCommand(CommandSpec{
-		Name:    "getinfo",
-		Usage:   "getinfo",
-		Help:    "Get system information",
-		Group:   "platform",
-		Suggest: true,
-		Handler: cmdGetinfo,
-	})
+var (
+	_ = Register(
+		"getinfo",
+		Usage("getinfo"),
+		Help("Get system information"),
+		Group("platform"),
+		Suggest(),
+		cmdGetinfo,
+	)
 
-	MustRegisterCommand(CommandSpec{
-		Name:    "screenshot",
-		Usage:   "screenshot",
-		Help:    "Capture screenshot and upload",
-		Group:   "platform",
-		Suggest: true,
-		Handler: cmdScreenshot,
-	})
+	_ = Register(
+		"screenshot",
+		Usage("screenshot"),
+		Help("Capture screenshot and upload"),
+		Group("platform"),
+		Suggest(),
+		cmdScreenshot,
+	)
 
-	MustRegisterCommand(CommandSpec{
-		Name:    "download",
-		Usage:   "download <file>",
-		Help:    "Upload a local file to server",
-		Group:   "file",
-		Suggest: true,
-		Handler: cmdDownload,
-	})
-}
+	_ = Register(
+		"download",
+		Usage("download <file>"),
+		Help("Upload a local file to server"),
+		Group("file"),
+		Suggest(),
+		cmdDownload,
+	)
+)
 
 func cmdGetinfo(s *Session, _ []string) (int, string) {
 	host, _ := os.Hostname()
