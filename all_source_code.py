@@ -24,15 +24,23 @@ EXCLUDE_DIRS = {
     "utils",
     "scripts",
     "builtins",
-    "jobs",
-    "platform"
+    # "jobs",
+    "platform",
+    #
+    "protocol",
+    "python_execution",
+    "http_transfer"
 }
 
 # 排除的文件名（可以是完整文件名或文件名不含扩展名）
 EXCLUDE_FILENAMES = {
     "__init__",      # 排除所有 __init__.py, __init__.html 等
     "login.html",    # 排除 login.html
-    "auth.js"        # 排除 auth.js
+    "auth.js",        # 排除 auth.js
+    "execution_ops.py",
+    "file_cli_ops.py",
+    "argument_command_registry.py",
+
 }
 
 INCLUDE_SUFFIXES = {".py", ".html", ".js", ".css"}

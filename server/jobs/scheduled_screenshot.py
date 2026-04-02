@@ -13,7 +13,7 @@ from core.utils.logger import logger
 class ScheduledScreenshot(Job):
     def __init__(self):
         super().__init__()
-        self.interval_seconds = 10
+        self.interval_seconds = 20
 
     def _capture_screenshot(self, filename: str):
         if os.name == 'nt':

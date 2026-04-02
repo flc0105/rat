@@ -1026,39 +1026,48 @@ window.AppFilesModule = {
         },
 
         async openRemoteJobEditor(scriptName) {
-            if (!this.selectedId) {
-                ElementPlus.ElMessage.warning('Please select a device');
-                return;
-            }
+    if (!this.selectedId) {
+        ElementPlus.ElMessage.warning('Please select a device');
+        return;
+    }
 
-            // 从远程服务器加载脚本内容
-            try {
-                const res = await fetch(`/api/server/jobs/download?name=${encodeURIComponent(scriptName)}`);
-                if (!res.ok) {
-                    throw new Error(`Failed to load script: ${res.statusText}`);
-                }
-                const content = await res.text();
+    let normalizedScriptName = String(scriptName || '').trim();
+    if (!normalizedScriptName) {
+        ElementPlus.ElMessage.warning('Invalid script name');
+        return;
+    }
 
-                this.previewSource = 'server_job';
-                this.previewFilePath = scriptName;
-                this.previewTitle = scriptName;
-                this.previewText = content;
-                this.previewOriginalContent = content;
-                this.previewType = 'text';
-                this.previewTruncated = false;
-                this.previewFileSize = this.formatBytes(content.length);
-                this.previewFileEncoding = 'UTF-8';
-                this.previewEditMode = true;  // 直接进入编辑模式
+    if (!/\.py$/i.test(normalizedScriptName)) {
+        normalizedScriptName = `${normalizedScriptName}.py`;
+    }
 
-                this.previewDialogVisible = true;
+    try {
+        const res = await fetch(`/api/server/jobs/download?name=${encodeURIComponent(normalizedScriptName)}`);
+        if (!res.ok) {
+            throw new Error(`Failed to load script: ${res.statusText}`);
+        }
+        const content = await res.text();
 
-                this.$nextTick(() => {
-                    this.initMonacoEditor(content, false);  // 可编辑模式
-                });
-            } catch (e) {
-                ElementPlus.ElMessage.error(e.message || 'Failed to load script');
-            }
-        },
+        this.previewSource = 'server_job';
+        this.previewFilePath = normalizedScriptName;
+        this.previewTitle = normalizedScriptName;
+        this.previewText = content;
+        this.previewOriginalContent = content;
+        this.previewType = 'text';
+        this.previewTruncated = false;
+        this.previewFileSize = this.formatBytes(content.length);
+        this.previewFileEncoding = 'UTF-8';
+        this.previewEditMode = true;
+
+        this.previewDialogVisible = true;
+
+        this.$nextTick(() => {
+            this.initMonacoEditor(content, false);
+        });
+    } catch (e) {
+        ElementPlus.ElMessage.error(e.message || 'Failed to load script');
+    }
+},
 
         async loadQuickJumpPaths() {
             if (!this.selectedId) return;

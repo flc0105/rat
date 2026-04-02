@@ -695,7 +695,7 @@
                                         Start
                                     </el-button>
                                     <el-button v-if="item.source === 'server'" size="small" plain
-                                               @click="openRemoteJobEditor(item.job_name)">
+                                               @click="openRemoteJobEditor(item.display_name || item.job_name)">
                                         Edit
                                     </el-button>
                                     <!--                                    <el-button v-if="item.source === 'server'" size="small" type="danger" plain-->
