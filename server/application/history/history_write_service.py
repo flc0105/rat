@@ -19,6 +19,11 @@ class HistoryWriteService:
     def create_entry_for_connection(self, conn, command: str, source: str = 'cli'):
         """
         为指定连接创建一条命令历史，并返回 entry_id
+
+        修复：
+        - quick history 是按 command 去重展示最新一条
+        - 如果同一 command 之前已被 pin，新建执行记录时需要继承 pin 状态
+        - 否则最新一条会变成未 pin，看起来像 pin 丢失
         """
         if conn is None:
             return ''
@@ -31,7 +36,23 @@ class HistoryWriteService:
 
         with self.store._lock:
             entries = self.store._read_entries(hostname)
+
+            inherited_is_pinned = False
+            inherited_pinned_at = ''
+
+            for item in reversed(entries):
+                self.store._normalize_entry_flags(item)
+                if (item.get('command') or '') != command_text:
+                    continue
+                if item.get('is_pinned'):
+                    inherited_is_pinned = True
+                    inherited_pinned_at = str(item.get('pinned_at') or '').strip()
+                    break
+
             entry = self.store._build_entry(conn, command_text, source)
+            entry['is_pinned'] = inherited_is_pinned
+            entry['pinned_at'] = inherited_pinned_at if inherited_is_pinned else ''
+
             entries.append(entry)
             entries = self.store._trim_entries(entries)
             self.store._write_entries(hostname, entries)
