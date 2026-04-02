@@ -237,6 +237,9 @@ class ServerWebService:
     def upload_server_job(self, file_storage):
         return self.script_service.upload_script(file_storage)
 
+    def delete_server_job(self, script_name: str):
+        return self.script_service.delete_script(script_name)
+
     # ------------------ background job api ------------------ #
     def list_background_jobs(self, client_id: str):
         return self.background_job_service.list_jobs(client_id)

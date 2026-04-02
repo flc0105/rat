@@ -58,6 +58,18 @@ def create_background_job_blueprint(server_instance):
 
         return responder.json_endpoint(_execute, default_error_status=500)
 
+    @blueprint.delete('/api/server/jobs/delete')
+    def delete_server_job():
+        def _execute():
+            payload = get_json_payload()
+            name = (payload.get('name') or '').strip()
+            if not name:
+                raise ValueError('job name is required')
+
+            return web_service.delete_server_job(name)
+
+        return responder.json_endpoint(_execute, default_error_status=500)
+
     @blueprint.get('/api/connections/<client_id>/background-jobs/modules')
     def list_available_background_jobs(client_id):
         return responder.json_endpoint(
@@ -166,16 +178,6 @@ def create_background_job_blueprint(server_instance):
 
         return responder.json_endpoint(_execute, default_error_status=500)
 
-    @blueprint.delete('/api/server/jobs/delete')
-    def delete_server_job():
-        def _execute():
-            payload = get_json_payload()
-            name = (payload.get('name') or '').strip()
-            if not name:
-                raise ValueError('job name is required')
 
-            return web_service.script_service.delete_script(name)
-
-        return responder.json_endpoint(_execute, default_error_status=500)
 
     return blueprint
