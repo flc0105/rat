@@ -4,7 +4,7 @@ import os
 import sys
 import json
 import platform
-
+from datetime import datetime
 
 from core.utils.decorator import desc
 
@@ -36,6 +36,109 @@ class CommandProcessMixin:
             return 1, json.dumps(processes)
         except Exception as e:
             return 0, f'Failed to list processes: {e}'
+
+    @desc('Get process detail by PID', group='process', suggest=False)
+    def get_process_detail(self, arg=''):
+        import psutil
+        """
+        获取单个进程详情，包括：
+        - 基本信息
+        - 文件路径 / 启动参数 / 工作目录
+        - 网络连接
+        - 打开的文件
+        """
+        try:
+            pid = int(str(arg or '').strip())
+        except Exception:
+            return 0, 'PID is required'
+
+        def _safe_call(getter, default=None):
+            try:
+                return getter()
+            except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
+                return default
+            except Exception:
+                return default
+
+        def _normalize_address(addr):
+            if not addr:
+                return ''
+            if isinstance(addr, tuple):
+                if len(addr) >= 2:
+                    return f'{addr[0]}:{addr[1]}'
+                return str(addr)
+            ip = getattr(addr, 'ip', '')
+            port = getattr(addr, 'port', '')
+            if ip and port != '':
+                return f'{ip}:{port}'
+            if ip:
+                return str(ip)
+            return str(addr)
+
+        try:
+            proc = psutil.Process(pid)
+            with proc.oneshot():
+                name = _safe_call(proc.name, '') or ''
+                username = _safe_call(proc.username, '') or ''
+                status = _safe_call(proc.status, '') or ''
+                ppid = _safe_call(proc.ppid, None)
+                exe = _safe_call(proc.exe, '') or ''
+                cwd = _safe_call(proc.cwd, '') or ''
+                cmdline = _safe_call(proc.cmdline, []) or []
+                create_time = _safe_call(proc.create_time, None)
+                cpu_percent = _safe_call(proc.cpu_percent, 0.0) or 0.0
+                memory_percent = _safe_call(proc.memory_percent, 0.0) or 0.0
+                num_threads = _safe_call(proc.num_threads, None)
+                num_fds = _safe_call(lambda: getattr(proc, 'num_fds')(), None)
+                num_handles = _safe_call(lambda: getattr(proc, 'num_handles')(), None)
+
+            open_files = []
+            for item in (_safe_call(proc.open_files, []) or []):
+                open_files.append({
+                    'path': getattr(item, 'path', '') or '',
+                    'fd': getattr(item, 'fd', None),
+                    'position': getattr(item, 'position', None),
+                    'mode': getattr(item, 'mode', '') or '',
+                    'flags': getattr(item, 'flags', None),
+                })
+
+            connections = []
+            net_connections = _safe_call(lambda: proc.net_connections(kind='inet'), None)
+            if net_connections is None:
+                net_connections = _safe_call(lambda: proc.connections(kind='inet'), []) or []
+            for conn in net_connections:
+                connections.append({
+                    'fd': getattr(conn, 'fd', None),
+                    'family': str(getattr(conn, 'family', '')),
+                    'type': str(getattr(conn, 'type', '')),
+                    'local_address': _normalize_address(getattr(conn, 'laddr', None)),
+                    'remote_address': _normalize_address(getattr(conn, 'raddr', None)),
+                    'status': getattr(conn, 'status', '') or '',
+                })
+
+            detail = {
+                'pid': pid,
+                'name': name,
+                'username': username,
+                'status': status,
+                'ppid': ppid,
+                'exe': exe,
+                'cwd': cwd,
+                'cmdline': cmdline,
+                'create_time': datetime.fromtimestamp(create_time).strftime('%Y-%m-%d %H:%M:%S'),
+                'cpu_percent': round(cpu_percent, 1),
+                'memory_percent': round(memory_percent, 1),
+                'num_threads': num_threads,
+                'num_fds': num_fds,
+                'num_handles': num_handles,
+                'open_files': open_files,
+                'connections': connections,
+            }
+            return 1, json.dumps(detail)
+        except psutil.NoSuchProcess:
+            return 0, f'Process {pid} not found'
+        except Exception as e:
+            return 0, f'Failed to get process detail: {e}'
 
     @desc('List running applications (GUI apps only)', group='process', suggest=False)
     def list_apps(self, arg=''):
@@ -149,11 +252,3 @@ class CommandProcessMixin:
             return 0, f'Access denied to kill process {pid}'
         except Exception as e:
             return 0, f'Failed to kill process {pid}: {e}'
-
-
-
-
-
-
-
-

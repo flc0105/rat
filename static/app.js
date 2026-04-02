@@ -19,6 +19,7 @@ createApp({
     watch: {
         ...window.AppStateModule.watch,
         ...window.AppAgentModule.watch,
+        ...window.AppProcessModule.watch,
     },
 
     mounted() {

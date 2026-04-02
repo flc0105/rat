@@ -42,6 +42,26 @@ def create_system_inspection_blueprint(server_instance):
 
         return responder.json_endpoint(_execute, default_error_status=500)
 
+    @blueprint.get('/api/connections/<client_id>/processes/<int:pid>/detail')
+    def get_process_detail(client_id, pid):
+        """获取客户端进程详情"""
+
+        def _execute():
+            session = server_instance.get_target_connection_by_client_id(client_id)
+            result_text = server_instance.web_service.remote_execution_service.run_foreground_text_command(
+                client_id,
+                f'get_process_detail {pid}',
+                task_type='process',
+                source='web_process',
+            )
+
+            try:
+                return json.loads(result_text)
+            except Exception:
+                return {}
+
+        return responder.json_endpoint(_execute, default_error_status=500)
+
     @blueprint.post('/api/connections/<client_id>/processes/<int:pid>/kill')
     def kill_process(client_id, pid):
         """终止进程"""
