@@ -365,7 +365,48 @@ class MacPlatformService:
     def acmd_image_info(self, args_dict, payload=None):
         """获取图片信息"""
         try:
+            from fractions import Fraction
+
             from PIL import Image
+
+            def _normalize_exif_value(value, tag=None):
+                """
+                将 EXIF 值转换为可读、可 JSON 序列化的基础类型
+                """
+                if isinstance(value, bytes):
+                    return value.decode('utf-8', errors='replace')
+
+                if isinstance(value, tuple):
+                    return [_normalize_exif_value(item, tag=tag) for item in value]
+
+                if tag == 40961:
+                    return 'sRGB' if value == 1 else 'Uncalibrated'
+
+                # 兼容 Pillow 的 IFDRational / 其他 Rational 类型
+                try:
+                    if isinstance(value, Fraction):
+                        if value.denominator == 1:
+                            return value.numerator
+                        return float(value)
+                except Exception:
+                    pass
+
+                # 某些 IFDRational 不是 Fraction 子类，这里再兜一层
+                if hasattr(value, 'numerator') and hasattr(value, 'denominator'):
+                    try:
+                        numerator = value.numerator
+                        denominator = value.denominator
+                        if denominator == 1:
+                            return int(numerator)
+                        return float(value)
+                    except Exception:
+                        return str(value)
+
+                # 兜底：保证 json.dumps 不炸
+                if isinstance(value, (str, int, float, bool)) or value is None:
+                    return value
+
+                return str(value)
 
             img_path = args_dict.get('path', '')
             output_json = args_dict.get('json', False)
@@ -407,14 +448,7 @@ class MacPlatformService:
                 raw_exif = img._getexif()
                 for tag, value in raw_exif.items():
                     if tag in exif_tags:
-                        if isinstance(value, tuple):
-                            value = f'{value[0]}/{value[1]}'
-                        elif isinstance(value, bytes):
-                            value = value.decode('utf-8', errors='replace')
-                        elif tag == 40961:
-                            value = 'sRGB' if value == 1 else 'Uncalibrated'
-
-                        info[exif_tags[tag]] = value
+                        info[exif_tags[tag]] = _normalize_exif_value(value, tag=tag)
 
             img.close()
 

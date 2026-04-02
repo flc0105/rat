@@ -61,7 +61,7 @@ IMAGE_INFO_SPEC = ArgumentCommandSpec(
     name='image_info',
     description='Show image metadata (size, resolution, color mode, EXIF)',
     options=[
-        ArgumentOptionSpec(name='path', option_type='str', required=True, help_text='Image file path'),
+        ArgumentOptionSpec(name='path', option_type='str', required=True, help_text='Image file path', positional_index=0),
         ArgumentOptionSpec(name='json', option_type='flag', required=False, default=False,
                            help_text='Output as JSON'),
         ArgumentOptionSpec(name='help', option_type='flag', required=False, default=False,
@@ -73,7 +73,7 @@ IMPORT_CHECK_SPEC = ArgumentCommandSpec(
     name='import_check',
     description='Check Python package/module status',
     options=[
-        ArgumentOptionSpec(name='module', option_type='str', required=True, help_text='Module name'),
+        ArgumentOptionSpec(name='module', option_type='str', required=True, help_text='Module name', positional_index=0),
         ArgumentOptionSpec(name='help', option_type='flag', required=False, default=False,
                            help_text='Show this help message'),
     ]

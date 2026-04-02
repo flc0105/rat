@@ -21,10 +21,15 @@ class ArgumentOptionSpec:
     default: Any = None
     allow_empty: bool = True
     help_text: str = ''
+    positional_index: int | None = None
 
     @property
     def is_flag(self) -> bool:
         return self.option_type == 'flag'
+
+    @property
+    def is_positional(self) -> bool:
+        return self.positional_index is not None
 
 
 @dataclass
@@ -65,7 +70,7 @@ class ArgumentCommandHelpBuilder:
     }
 
     def build(self, spec: ArgumentCommandSpec) -> str:
-        lines = [f'acmd {spec.name}']
+        lines = [self._build_usage_line(spec)]
 
         if spec.description:
             lines.append('')
@@ -80,6 +85,7 @@ class ArgumentCommandHelpBuilder:
                 type_label = self.TYPE_LABELS.get(option.option_type, option.option_type)
                 required_label = 'required' if option.required else 'optional'
                 default_label = ''
+                positional_label = ''
 
                 if option.default not in (None, '') and option.option_type != 'flag':
                     default_label = f' default={option.default}'
@@ -88,10 +94,12 @@ class ArgumentCommandHelpBuilder:
                     option_usage = f'--{option.name}'
                 else:
                     option_usage = f'--{option.name} <value>'
+                    if option.is_positional:
+                        positional_label = f' positional[{option.positional_index}]'
 
                 lines.append(
                     f'  {option_usage:<22} {type_label:<7} {required_label:<8} '
-                    f'{option.help_text}{default_label}'
+                    f'{option.help_text}{default_label}{positional_label}'
                 )
 
         return '\n'.join(lines).rstrip()
@@ -122,6 +130,35 @@ class ArgumentCommandHelpBuilder:
         lines.append('Use "acmd help <command>" to show command details')
         return '\n'.join(lines).rstrip()
 
+    def _build_usage_line(self, spec: ArgumentCommandSpec) -> str:
+        parts = [f'acmd {spec.name}']
+
+        positional_options = [
+            option for option in spec.options
+            if option.is_positional and option.option_type != 'flag'
+        ]
+        positional_options.sort(key=lambda item: item.positional_index)
+
+        for option in positional_options:
+            token = f'<{option.name}>'
+            if option.required:
+                parts.append(token)
+            else:
+                parts.append(f'[{token}]')
+
+        for option in spec.options:
+            if option.is_positional and option.option_type != 'flag':
+                continue
+
+            if option.option_type == 'flag':
+                parts.append(f'[--{option.name}]')
+            elif option.required:
+                parts.append(f'[--{option.name} <value>]')
+            else:
+                parts.append(f'[--{option.name} <value>]')
+
+        return ' '.join(parts)
+
 
 class ArgumentCommandValidator:
     """
@@ -140,9 +177,19 @@ class ArgumentCommandValidator:
 
         self._validate_unknown_options(option_map, raw_args)
 
+        positional_args = raw_args.get('_args') or []
+        if positional_args and not isinstance(positional_args, list):
+            raise ArgumentCommandValidationError('Invalid positional args payload')
+
         for option_name, option_spec in option_map.items():
             has_value = option_name in raw_args
             raw_value = raw_args.get(option_name)
+
+            if not has_value and option_spec.is_positional:
+                positional_index = option_spec.positional_index
+                if positional_index is not None and positional_index < len(positional_args):
+                    raw_value = positional_args[positional_index]
+                    has_value = True
 
             if not has_value:
                 if option_spec.required and option_spec.default is None:
@@ -163,9 +210,6 @@ class ArgumentCommandValidator:
             normalized[option_name] = normalized_value
 
         if '_args' in raw_args:
-            positional_args = raw_args.get('_args') or []
-            if not isinstance(positional_args, list):
-                raise ArgumentCommandValidationError('Invalid positional args payload')
             normalized['_args'] = positional_args
 
         return normalized
@@ -438,8 +482,3 @@ class ArgumentCommandRegistry:
             return handler(args_dict, payload)
 
         return handler(args_dict)
-
-
-
-
-
