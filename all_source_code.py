@@ -24,10 +24,10 @@ EXCLUDE_DIRS = {
     "utils",
     "scripts",
     "builtins",
-    # "jobs",
-    "platform",
     "client-go",
-    #
+    "client-go-basic",
+    "jobs",
+    # "platform",
     # "protocol",
     # "python_execution",
     # "http_transfer",
@@ -41,16 +41,9 @@ EXCLUDE_FILENAMES = {
     "__init__",      # 排除所有 __init__.py, __init__.html 等
     "login.html",    # 排除 login.html
     "auth.js",        # 排除 auth.js
-    # "execution_ops.py",
-    # "file_cli_ops.py",
-    # "argument_command_registry.py",
-    # "agent.js",
-    # "process.js",
-    # "process_ops.py"
-
 }
 
-INCLUDE_SUFFIXES = {".py", ".html", ".js", ".css"}
+INCLUDE_SUFFIXES = {".py", ".html", ".js" } #".css"
 
 
 def should_skip(path: Path) -> bool:
