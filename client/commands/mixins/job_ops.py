@@ -27,15 +27,41 @@ class CommandJobMixin:
             f'Use "stop_job {job_key}" to request stop'
         )
 
-    def _list_available_local_jobs(self):
+    def _list_local_job_names(self) -> list[str]:
         job_manager = self.socket.job_manager
-        local_jobs = job_manager.list_available_jobs() or []
-        if not local_jobs:
-            return 1, 'No client job modules available'
+        items = job_manager.list_available_jobs() or []
+        result = []
+        for item in items:
+            text = str(item or '').strip()
+            if text:
+                result.append(text)
+        return result
 
-        lines = ['Available client job modules:']
-        lines.extend(f'  {item}' for item in local_jobs)
-        return 1, '\n'.join(lines)
+    def _list_remote_script_names(self) -> list[str]:
+        """
+        仅返回远程脚本名字列表（纯净，一行一个的语义数据），不给标题/描述。
+        """
+        import requests
+
+        url = f'{UPLOAD_BASE_URL.rstrip("/")}/api/server/jobs/list'
+
+        response = requests.get(url, timeout=10)
+        if response.status_code != 200:
+            raise RuntimeError('Failed to fetch remote script list')
+
+        data = response.json()
+        payload = data.get('data') or []
+        scripts = payload.get('scripts', []) if isinstance(payload, dict) else payload
+
+        result = []
+        for script in scripts:
+            if not isinstance(script, dict):
+                continue
+            raw_name = script.get('name') or script.get('job_name') or script.get('job_key') or ''
+            normalized_name = self._normalize_script_job_name(raw_name)
+            if normalized_name:
+                result.append(normalized_name)
+        return result
 
     def _start_remote_job_by_name(self, job_name: str, job_manager):
         normalized = self._normalize_job_name(job_name)
@@ -64,14 +90,13 @@ class CommandJobMixin:
         启动后台任务。
         - 优先尝试本地 client job module
         - 本地找不到时自动回退到 server-side script
-        - 不传任务名时，仅列出本地 client job module
+        - 必须传任务名
         """
         normalized = self._normalize_job_name(job_name)
         job_manager = self.socket.job_manager
 
         if not normalized:
             return 0, 'Usage: start_job <job_name>'
-            # return self._list_available_local_jobs()
 
         self._send_interim_result(1, f'Preparing background job: {normalized}')
         try:
@@ -116,6 +141,48 @@ class CommandJobMixin:
         except Exception as e:
             return 0, f'Failed to stop background job: {e}'
 
+    @desc('List client local background jobs', group='job')
+    def jobs_local(self):
+        """
+        仅列出 client 本地可用 job。
+        返回纯文本列表：一行一个，无标题，无缩进。
+        """
+        items = self._list_local_job_names()
+        return 1, '\n'.join(items)
+
+    @desc('List all available background jobs', group='job')
+    def jobs(self):
+        """
+        列出全部可用 job：server + client。
+        返回分组纯文本。
+        """
+        try:
+            local_items = self._list_local_job_names()
+        except Exception:
+            local_items = []
+
+        try:
+            remote_items = self._list_remote_script_names()
+        except Exception:
+            remote_items = []
+
+        lines = []
+
+        if remote_items:
+            lines.append('[server]')
+            lines.extend(item for item in remote_items if str(item).strip())
+
+        if local_items:
+            if lines:
+                lines.append('')
+            lines.append('[client]')
+            lines.extend(item for item in local_items if str(item).strip())
+
+        if not lines:
+            return 1, 'No background jobs available'
+
+        return 1, '\n'.join(lines)
+
     @desc('List running background jobs', group='job')
     def jobs_ps(self):
         """
@@ -126,11 +193,6 @@ class CommandJobMixin:
         if not running_jobs:
             return 1, 'No background jobs are currently running'
         return 1, '\n'.join(running_jobs)
-
-    @desc("List available jobs", group='job')
-    def jobs(self):
-        jobs=self._list_available_local_jobs()
-        return jobs
 
     @desc('Show background job status', group='job')
     def job_status(self, job_name: str):
@@ -161,24 +223,6 @@ class CommandJobMixin:
             return 1, 'Stop request sent for:\n' + '\n'.join(stopped_jobs)
         except Exception as e:
             return 0, f'Failed to stop background jobs: {e}'
-
-    # @desc('Start a background job from server-script', group='job')
-    # def start_job_remote(self, job_name: str, extra: dict = None):
-    #     """
-    #     兼容旧入口：强制从服务端脚本启动。
-    #     """
-    #     normalized = self._normalize_job_name(job_name)
-    #     job_manager = self.socket.job_manager
-    #
-    #     if not normalized:
-    #         return self._list_remote_scripts()
-    #
-    #     try:
-    #         runtime = self._start_remote_job_by_name(normalized, job_manager)
-    #         self._send_final_result(1, self._format_runtime_start_message(runtime, 'Background job started'))
-    #         return None
-    #     except Exception as e:
-    #         return 0, f'Failed to start remote job: {e}'
 
     def _start_from_script_content(self, script_content: str, script_name: str, job_manager):
         """
@@ -230,39 +274,3 @@ class CommandJobMixin:
             raise RuntimeError(f'Failed to download script: {response.text}')
 
         return response.text
-
-    def _list_remote_scripts(self) -> tuple[int, str]:
-        """
-        列出服务端可用的远程脚本。
-        """
-        import requests
-
-        url = f'{UPLOAD_BASE_URL.rstrip("/")}/api/server/jobs/list'
-
-        try:
-            response = requests.get(url, timeout=10)
-            if response.status_code != 200:
-                return 0, 'Failed to fetch remote script list'
-
-            data = response.json()
-            payload = data.get('data') or []
-            scripts = payload.get('scripts', []) if isinstance(payload, dict) else payload
-
-            if not scripts:
-                return 1, 'No remote scripts available'
-
-            lines = ['Available remote scripts:']
-            for script in scripts:
-                if not isinstance(script, dict):
-                    continue
-                raw_name = script.get('name') or script.get('job_name') or script.get('job_key') or ''
-                normalized_name = self._normalize_script_job_name(raw_name)
-                description = script.get('description') or script.get('source') or 'server script'
-                if normalized_name:
-                    lines.append(f'  {normalized_name} - {description}')
-            return 1, '\n'.join(lines)
-        except Exception as e:
-            return 0, f'Failed to fetch remote script list: {e}'
-
-
-

@@ -42,7 +42,7 @@ class BackgroundJobService:
     def list_available_jobs(self, client_id: str) -> list[dict]:
         text = self.remote_execution_service.run_foreground_text_command(
             client_id,
-            'jobs',
+            'jobs_local',
             task_type='job_control',
             source='web_background_job',
         )

@@ -29,7 +29,10 @@ EXCLUDE_DIRS = {
     #
     "protocol",
     "python_execution",
-    "http_transfer"
+    "http_transfer",
+    "artifact",
+    "history",
+    "agent"
 }
 
 # 排除的文件名（可以是完整文件名或文件名不含扩展名）
@@ -40,6 +43,9 @@ EXCLUDE_FILENAMES = {
     "execution_ops.py",
     "file_cli_ops.py",
     "argument_command_registry.py",
+    "agent.js",
+    "process.js",
+    "process_ops.py"
 
 }
 
