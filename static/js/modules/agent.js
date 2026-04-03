@@ -15,16 +15,6 @@ window.AppAgentModule = {
     },
 
     computed: {
-        // agentBuilderAlertType() {
-        //     return this.agentForm.builder === 'pyinstaller' ? 'warning' : 'info';
-        // },
-        //
-        // agentBuilderAlertTitle() {
-        //     return this.agentForm.builder === 'pyinstaller'
-        //         ? 'PyInstaller 限制说明'
-        //         : 'Go（基础版）说明';
-        // },
-
         agentBuilderAlertText() {
             if (this.agentForm.builder === 'pyinstaller') {
                 return 'PyInstaller only builds for the current server platform. Architecture selection applies only to Go.';

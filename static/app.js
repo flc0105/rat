@@ -6,7 +6,6 @@ createApp({
             ...window.AppStateModule.data(),
             ...window.AppAgentModule.data(),
             ...window.AppProcessModule.data(),
-
         }
     },
 
@@ -22,6 +21,20 @@ createApp({
         ...window.AppProcessModule.watch,
     },
 
+    methods: {
+        ...window.AppUtilsModule.methods,
+        ...window.AppCommandsModule.methods,
+        ...window.AppFilesModule.methods,
+        ...window.AppJobsModule.methods,
+        ...window.AppSseModule.methods,
+        ...window.AppAgentModule.methods,
+        ...window.AppProcessModule.methods,
+        ...window.AppConnectionModule.methods,
+        ...window.AppTaskModule.methods,
+        ...window.AppTerminalModule.methods,
+        ...window.AppCandidatesModule.methods,
+
+    },
     mounted() {
         this.ensureTabId();
         this.loadConnections();
@@ -44,17 +57,7 @@ createApp({
         }
     },
 
-    methods: {
-        ...window.AppUtilsModule.methods,
-        ...window.AppCommandsModule.methods,
-        ...window.AppFilesModule.methods,
-        ...window.AppJobsModule.methods,
-        ...window.AppSseModule.methods,
-        ...window.AppAgentModule.methods,
-        ...window.AppProcessModule.methods,
 
-
-    }
 }).use(ElementPlus).mount('#app');
 
 
