@@ -367,6 +367,20 @@ buildCommonOpsCandidates() {
     ];
 },
 
+                sortQuickHistoryShortcutCandidates(items) {
+            const list = Array.isArray(items) ? [...items] : [];
+
+            return list.sort((a, b) => {
+                const ai = Number.parseInt(a && a.quickHistoryIndex, 10);
+                const bi = Number.parseInt(b && b.quickHistoryIndex, 10);
+
+                const av = Number.isInteger(ai) ? ai : Number.MAX_SAFE_INTEGER;
+                const bv = Number.isInteger(bi) ? bi : Number.MAX_SAFE_INTEGER;
+
+                return av - bv;
+            });
+        },
+
         buildQuickHistoryShortcutCandidates(historyItems) {
             const items = Array.isArray(historyItems) ? historyItems : [];
 
@@ -410,7 +424,9 @@ buildCommonOpsCandidates() {
     const keyword = String(queryString || '').trim().toLowerCase();
     const sourceList = Array.isArray(this.commandCandidates) ? this.commandCandidates : [];
 
-    const quickHistoryShortcutCandidates = sourceList.filter(item => item && item.source === 'quick_history_shortcut');
+    const quickHistoryShortcutCandidates = this.sortQuickHistoryShortcutCandidates(
+        sourceList.filter(item => item && item.source === 'quick_history_shortcut')
+    );
     const normalCandidates = sourceList.filter(item => !(item && item.source === 'quick_history_shortcut'));
 
     if (!keyword) {
@@ -448,7 +464,11 @@ buildCommonOpsCandidates() {
             }
         });
 
-        callback([...exactMatches, ...prefixMatches, ...textMatches]);
+        callback([
+            ...this.sortQuickHistoryShortcutCandidates(exactMatches),
+            ...this.sortQuickHistoryShortcutCandidates(prefixMatches),
+            ...this.sortQuickHistoryShortcutCandidates(textMatches)
+        ]);
         return;
     }
 

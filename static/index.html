@@ -1163,18 +1163,29 @@
                             </el-table-column>
                             <el-table-column label="Actions" width="220" align="center" fixed="right">
                                 <template #default="{ row }">
-                                                                        <div class="table-actions table-actions-links">
-                                        <a href="#" class="table-action-link" @click.prevent="applyHistoryCommand(row)">Use</a>
-                                        <a href="#" class="table-action-link"
-                                           @click.prevent="toggleCommandHistoryPinned(row)">{{ row.is_pinned ? 'Unpin' :
-                                            'Pin' }}</a>
-                                        <template v-if="row.is_pinned">
-                                            <a v-if="row.can_move_up" href="#" class="table-action-link"
-                                               @click.prevent="moveCommandHistoryPinned(row, 'up')">Up</a>
-                                            <a v-if="row.can_move_down" href="#" class="table-action-link"
-                                               @click.prevent="moveCommandHistoryPinned(row, 'down')">Down</a>
-                                        </template>
-                                    </div>
+<div class="table-actions table-actions-links history-actions-row">
+    <div class="history-actions-group">
+        <a href="#" class="table-action-link" @click.prevent="applyHistoryCommand(row)">Use</a>
+        <a href="#" class="table-action-link"
+           @click.prevent="toggleCommandHistoryPinned(row)">{{ row.is_pinned ? 'Unpin' : 'Pin' }}</a>
+    </div>
+
+    <template v-if="row.is_pinned">
+        <span class="history-actions-divider"></span>
+
+        <div class="history-actions-move-group">
+            <a href="#"
+               class="table-action-link"
+               :class="{ 'history-action-disabled': !row.can_move_up }"
+               @click.prevent="row.can_move_up && moveCommandHistoryPinned(row, 'up')">Up</a>
+
+            <a href="#"
+               class="table-action-link"
+               :class="{ 'history-action-disabled': !row.can_move_down }"
+               @click.prevent="row.can_move_down && moveCommandHistoryPinned(row, 'down')">Down</a>
+        </div>
+    </template>
+</div>
                                 </template>
                             </el-table-column>
                         </el-table>
@@ -1209,23 +1220,35 @@
                                                     <div class="mobile-file-meta-value">{{ row.time || '-' }}</div>
                                                 </div>
                                             </div>
-                                                                   <div class="mobile-file-actions">
-                                                <el-button size="small" type="primary" plain
-                                                           @click="applyHistoryCommand(row)">Use
-                                                </el-button>
-                                                <el-button size="small" plain
-                                                           @click="toggleCommandHistoryPinned(row)">{{ row.is_pinned ?
-                                                    'Unpin' : 'Pin' }}
-                                                </el-button>
-                                                <template v-if="row.is_pinned">
-                                                    <el-button v-if="row.can_move_up" size="small" plain
-                                                               @click="moveCommandHistoryPinned(row, 'up')">Up
-                                                    </el-button>
-                                                    <el-button v-if="row.can_move_down" size="small" plain
-                                                               @click="moveCommandHistoryPinned(row, 'down')">Down
-                                                    </el-button>
-                                                </template>
-                                            </div>
+                                                                  <div class="mobile-file-actions mobile-history-actions-row">
+    <el-button size="small" type="primary" plain
+               @click="applyHistoryCommand(row)">Use
+    </el-button>
+
+    <el-button size="small" plain
+               @click="toggleCommandHistoryPinned(row)">{{ row.is_pinned ? 'Unpin' : 'Pin' }}
+    </el-button>
+
+    <template v-if="row.is_pinned">
+        <span class="mobile-history-actions-divider"></span>
+
+        <div class="mobile-history-move-group">
+            <el-button size="small" plain
+                       class="mobile-history-disabled-btn"
+                       :class="{ 'is-disabled': !row.can_move_up }"
+                       :disabled="!row.can_move_up"
+                       @click="row.can_move_up && moveCommandHistoryPinned(row, 'up')">Up
+            </el-button>
+
+            <el-button size="small" plain
+                       class="mobile-history-disabled-btn"
+                       :class="{ 'is-disabled': !row.can_move_down }"
+                       :disabled="!row.can_move_down"
+                       @click="row.can_move_down && moveCommandHistoryPinned(row, 'down')">Down
+            </el-button>
+        </div>
+    </template>
+</div>
                                         </div>
                                     </div>
                                 </div>

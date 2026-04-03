@@ -1764,6 +1764,12 @@ body {
   border: 1px solid #e0e7ff;
 }
 
+.action-btn-danger {
+  background: #dc2626;
+  color: #ffffff;
+  /*border: 1px solid #e0e7ff;*/
+}
+
 .action-btn-primary:hover {
   background: #e0e7ff;
   border-color: #c7d2fe;
@@ -2179,4 +2185,71 @@ body {
     flex: 1 1 calc(50% - 6px);
     justify-content: center;
   }
+}
+.history-actions-row {
+    display: inline-flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 0;
+    white-space: nowrap;
+}
+
+.history-actions-group {
+    display: inline-flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.history-actions-divider {
+    display: inline-block;
+    width: 1px;
+    height: 14px;
+    margin: 0 12px;
+    background: #dcdfe6;
+    vertical-align: middle;
+}
+
+.history-actions-move-group {
+    display: inline-grid;
+    grid-template-columns: 28px 42px;
+    align-items: center;
+    column-gap: 0px;
+}
+
+.history-action-disabled {
+    color: #c0c4cc !important;
+    cursor: not-allowed !important;
+    pointer-events: none !important;
+    text-decoration: none !important;
+}
+
+.mobile-history-actions-row {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 4px;
+}
+
+.mobile-history-actions-divider {
+    width: 1px;
+    align-self: stretch;
+    background: #dcdfe6;
+    margin: 0 2px;
+}
+
+.mobile-history-move-group {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.mobile-history-move-group .el-button {
+    min-width: 56px;
+}
+
+.mobile-history-disabled-btn.is-disabled,
+.mobile-history-disabled-btn.is-disabled:hover,
+.mobile-history-disabled-btn.is-disabled:focus {
+    opacity: 0.45;
+    cursor: not-allowed;
 }
