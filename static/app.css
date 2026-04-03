@@ -55,31 +55,6 @@ body {
   overflow: hidden;
 }
 
-.mono {
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-  font-size: 12px;
-}
-
-.hidden-file-input {
-  display: none;
-}
-
-.empty-state {
-  color: var(--muted-2);
-  text-align: center;
-  padding: 24px;
-}
-
-.empty-state.compact {
-  padding: 12px;
-}
-
-.ellipsis {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
 /* ========== 顶部 Banner ========== */
 .banner {
   display: flex;
@@ -181,13 +156,6 @@ body {
   min-height: 0;
 }
 
-.main-body {
-  flex: 1;
-  min-height: 0;
-  display: grid;
-  grid-template-rows: auto minmax(0, 1fr);
-}
-
 /* ========== 设备列表 ========== */
 .device-item {
   padding: 14px;
@@ -209,13 +177,9 @@ body {
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(239, 246, 255, 0.96));
 }
 
-.device-item-top,
-.device-status-row {
+.device-item-top {
   display: flex;
   align-items: center;
-}
-
-.device-item-top {
   gap: 12px;
 }
 
@@ -224,26 +188,10 @@ body {
   flex: 1;
 }
 
-.device-name,
-.mobile-file-name,
-.background-job-module-name,
-.background-job-summary-title,
-.background-job-title {
-  font-weight: 700;
-  color: var(--text);
-  word-break: break-word;
-}
-
 .device-name {
   font-size: 14px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.device-os,
-.device-ip {
-  font-size: 12px;
+  font-weight: 700;
+  color: var(--text);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -251,16 +199,26 @@ body {
 
 .device-os {
   margin-top: 4px;
+  font-size: 12px;
   color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .device-ip {
   margin-top: 9px;
+  font-size: 12px;
   color: var(--muted-2);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .device-status-row {
   margin-top: 7px;
+  display: flex;
+  align-items: center;
   gap: 6px;
   flex-wrap: wrap;
   font-size: 12px;
@@ -275,15 +233,11 @@ body {
   color: var(--muted-2);
 }
 
-.device-dot,
-.dot {
-  border-radius: 50%;
-  flex-shrink: 0;
-}
-
 .device-dot {
   width: 9px;
   height: 9px;
+  border-radius: 50%;
+  flex-shrink: 0;
 }
 
 .device-dot-online {
@@ -299,6 +253,13 @@ body {
 }
 
 /* ========== 主面板信息区 ========== */
+.main-body {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+}
+
 .info-grid {
   padding: 18px 20px 14px;
   border-bottom: 1px solid var(--line);
@@ -320,18 +281,10 @@ body {
   grid-column: span 2;
 }
 
-.info-label,
-.mobile-file-meta-label,
-.background-job-stat-label,
-.command-execution-detail-label,
-.command-execution-stat-label {
+.info-label {
   font-size: 11px;
   color: var(--muted-2);
   text-transform: uppercase;
-  letter-spacing: 0.04em;
-}
-
-.info-label {
   letter-spacing: 0.06em;
 }
 
@@ -343,6 +296,11 @@ body {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 12px;
 }
 
 /* ========== 终端面板 ========== */
@@ -363,24 +321,9 @@ body {
   box-shadow: 0 18px 34px rgba(15, 23, 42, 0.18);
 }
 
-.terminal-topbar,
-.terminal-topbar-left,
-.terminal-tools,
-.command-autocomplete-item,
-.command-row,
-.terminal-line-with-action,
-.terminal-line-main,
-.terminal-line-actions {
-  display: flex;
-}
-
-.terminal-topbar,
-.terminal-topbar-left,
-.terminal-tools {
-  align-items: center;
-}
-
 .terminal-topbar {
+  display: flex;
+  align-items: center;
   justify-content: space-between;
   gap: 12px;
   padding: 12px 15px;
@@ -390,6 +333,8 @@ body {
 }
 
 .terminal-topbar-left {
+  display: flex;
+  align-items: center;
   gap: 10px;
   min-width: 0;
   flex-shrink: 0;
@@ -398,6 +343,7 @@ body {
 .dot {
   width: 10px;
   height: 10px;
+  border-radius: 50%;
 }
 
 .dot-red {
@@ -421,6 +367,8 @@ body {
 }
 
 .terminal-tools {
+  display: flex;
+  align-items: center;
   justify-content: flex-end;
   gap: 8px;
   flex-wrap: wrap;
@@ -441,10 +389,10 @@ body {
   padding-inline: 10px;
   font-size: 12px;
   border-radius: 10px;
-  margin: 0;
   background: rgba(255, 255, 255, 0.04);
   border-color: rgba(255, 255, 255, 0.08);
   color: #dbe4f3;
+  margin: 0;
 }
 
 .tool-btn.tool-btn-accent.el-button {
@@ -479,7 +427,11 @@ body {
   width: 100%;
 }
 
-.command-autocomplete-shell,
+.command-autocomplete-shell {
+  width: 100%;
+  min-width: 0;
+}
+
 .command-autocomplete,
 .command-autocomplete .el-input,
 .command-autocomplete .el-input__wrapper {
@@ -497,13 +449,13 @@ body {
   box-shadow: none !important;
 }
 
-.command-autocomplete .el-input__wrapper:hover,
-.command-autocomplete .el-input__wrapper.is-focus {
+.command-autocomplete .el-input__wrapper:hover {
   box-shadow: none !important;
 }
 
 .command-autocomplete .el-input__wrapper.is-focus {
   border-color: rgba(96, 165, 250, 0.5);
+  box-shadow: none !important;
 }
 
 .command-autocomplete .el-input__inner {
@@ -517,16 +469,8 @@ body {
   color: #8ea2c0 !important;
 }
 
-.command-autocomplete-popper,
-.command-autocomplete-popper .el-autocomplete-suggestion__wrap,
-.command-autocomplete-popper .el-scrollbar,
-.command-autocomplete-popper .el-scrollbar__wrap,
-.command-autocomplete-popper .el-scrollbar__view,
-.command-autocomplete-popper li {
-  background: #0f172a !important;
-}
-
 .command-autocomplete-popper {
+  background: #0f172a !important;
   border: 1px solid rgba(255, 255, 255, 0.08) !important;
   border-radius: 12px !important;
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35) !important;
@@ -535,11 +479,19 @@ body {
 
 .command-autocomplete-popper .el-autocomplete-suggestion__wrap {
   padding: 8px 0;
+  background: #0f172a !important;
+}
+
+.command-autocomplete-popper .el-scrollbar,
+.command-autocomplete-popper .el-scrollbar__wrap,
+.command-autocomplete-popper .el-scrollbar__view {
+  background: #0f172a !important;
 }
 
 .command-autocomplete-popper li {
   padding: 0 12px !important;
   line-height: normal !important;
+  background: #0f172a !important;
 }
 
 .command-autocomplete-popper li:hover,
@@ -548,17 +500,14 @@ body {
 }
 
 .command-autocomplete-item {
+  display: flex;
   align-items: flex-start;
   justify-content: space-between;
   gap: 16px;
   padding: 10px 2px;
 }
 
-.command-autocomplete-item-main,
-.background-job-summary-main,
-.background-job-summary-title-wrap,
-.background-job-detail-head-left,
-.background-job-file-main {
+.command-autocomplete-item-main {
   min-width: 0;
   flex: 1;
 }
@@ -640,18 +589,14 @@ body {
   background: rgba(148, 163, 184, 0.48);
 }
 
-.terminal-empty,
-.main-empty {
+.terminal-empty {
+  min-height: 100%;
   display: flex;
   align-items: center;
   justify-content: center;
   flex-direction: column;
-  text-align: center;
-}
-
-.terminal-empty {
-  min-height: 100%;
   color: #8ea2c0;
+  text-align: center;
 }
 
 .terminal-empty-title {
@@ -660,8 +605,7 @@ body {
   color: #d7e2f2;
 }
 
-.terminal-empty-text,
-.main-empty-text {
+.terminal-empty-text {
   margin-top: 8px;
   max-width: 420px;
   line-height: 1.7;
@@ -706,29 +650,16 @@ body {
   color: var(--terminal-text);
 }
 
-.terminal-line-with-action {
-  align-items: center;
-  gap: 12px;
-}
-
-.terminal-line-main,
-.terminal-line-actions {
-  align-items: center;
-}
-
-.terminal-line-main {
-  min-width: 0;
-}
-
-.terminal-line-actions {
-  white-space: nowrap;
-}
-
-/* ========== 空状态 ========== */
+/* ========== 通用空状态与基础工具类 ========== */
 .main-empty {
   flex: 1;
   min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
   color: var(--muted-2);
+  text-align: center;
   padding: 32px;
 }
 
@@ -736,6 +667,26 @@ body {
   font-size: 20px;
   font-weight: 700;
   color: var(--text);
+}
+
+.main-empty-text {
+  margin-top: 8px;
+  max-width: 420px;
+  line-height: 1.7;
+}
+
+.hidden-file-input {
+  display: none;
+}
+
+.empty-state {
+  color: var(--muted-2);
+  text-align: center;
+  padding: 24px;
+}
+
+.empty-state.compact {
+  padding: 12px;
 }
 
 /* ========== 通用对话框 ========== */
@@ -759,14 +710,19 @@ body {
   padding-bottom: 12px;
 }
 
-.fixed-dialog-body,
-.remote-files-dialog .fixed-dialog-body,
-.recent-files-dialog .fixed-dialog-body {
+.fixed-dialog-body {
   height: 100%;
   min-height: 0;
   overflow: hidden;
   display: flex;
   flex-direction: column;
+}
+
+.remote-files-dialog .fixed-dialog-body,
+.recent-files-dialog .fixed-dialog-body {
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
 }
 
 .dialog-head {
@@ -778,30 +734,11 @@ body {
   flex-shrink: 0;
 }
 
-.dialog-head-left,
-.dialog-action-group,
-.background-jobs-toolbar,
-.execution-badges,
-.execution-stats,
-.execution-actions,
-.background-job-summary-actions,
-.background-job-card-head-right,
-.background-job-file-actions,
-.mobile-file-tags,
-.mobile-file-actions,
-.preview-toolbar-left,
-.preview-toolbar-right,
-.preview-info-tags,
-.process-action-buttons,
-.command-history-search-summary,
-.command-history-toolbar {
+.dialog-head-left {
   display: flex;
+  gap: 10px;
   align-items: center;
   flex-wrap: wrap;
-}
-
-.dialog-head-left {
-  gap: 10px;
   min-width: 0;
 }
 
@@ -810,8 +747,44 @@ body {
   width: 100%;
 }
 
+/* ========== 命令历史对话框 ========== */
+.command-history-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  flex-wrap: wrap;
+  width: 100%;
+}
+
+.command-history-search-input {
+  width: min(360px, 100%);
+}
+
+.command-history-search-input .el-input__wrapper {
+  min-height: 34px;
+  height: 34px;
+  border-radius: 10px;
+}
+
+.command-history-search-summary {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.command-history-search-summary .el-button {
+  margin: 0;
+}
+
 .dialog-action-group {
+  display: flex;
+  align-items: center;
   gap: 8px;
+  flex-wrap: wrap;
 }
 
 .remote-files-dialog .dialog-head-left,
@@ -836,57 +809,7 @@ body {
   grid-template-columns: minmax(0, 1fr);
 }
 
-/* ========== 命令历史对话框 ========== */
-.command-history-toolbar {
-  justify-content: flex-end;
-  gap: 10px;
-  width: 100%;
-}
-
-.command-history-search-input {
-  width: min(360px, 100%);
-}
-
-.command-history-search-input .el-input__wrapper,
-.process-dialog-filter-input .el-input__wrapper {
-  min-height: 34px;
-  height: 34px;
-  border-radius: 10px;
-}
-
-.command-history-search-summary {
-  gap: 10px;
-  color: var(--muted);
-  font-size: 12px;
-}
-
-.command-history-search-summary .el-button,
-.process-action-buttons .el-button {
-  margin: 0;
-}
-
-.background-jobs-tabs,
-.command-history-tabs {
-  min-height: 0;
-  height: 100%;
-  display: flex;
-  flex-direction: column;
-}
-
-.background-jobs-tabs .el-tabs__content,
-.command-history-tabs .el-tabs__content {
-  flex: 1 1 auto;
-  min-height: 0;
-  overflow: hidden;
-}
-
-.background-jobs-tabs .el-tab-pane,
-.command-history-tabs .el-tab-pane {
-  height: 100%;
-  min-height: 0;
-}
-
-/* ========== 文件管理器 / 表格区域 ========== */
+/* ========== 文件表格与分页 ========== */
 .dialog-table-shell {
   min-height: 0;
   overflow: hidden;
@@ -913,7 +836,10 @@ body {
 
 .remote-files-dialog .dialog-table-shell .el-table__inner-wrapper,
 .recent-files-dialog .dialog-table-shell .el-table__inner-wrapper,
-.quick-history-table-shell .el-table__inner-wrapper,
+.quick-history-table-shell .el-table__inner-wrapper {
+  height: 100% !important;
+}
+
 .remote-files-dialog .dialog-table-shell .el-scrollbar,
 .recent-files-dialog .dialog-table-shell .el-scrollbar,
 .quick-history-table-shell .el-scrollbar {
@@ -973,26 +899,23 @@ body {
   justify-content: center;
 }
 
-.file-cell,
-.table-actions,
-.table-action-link,
-.table-action-link-aux {
+.file-cell {
   display: flex;
   align-items: center;
-}
-
-.file-cell {
   gap: 8px;
   min-width: 0;
 }
 
-.file-cell-text {
+.file-cell-text,
+.ellipsis {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .table-actions {
+  display: flex;
+  align-items: center;
   justify-content: center;
   flex-wrap: nowrap;
   min-height: 28px;
@@ -1003,26 +926,35 @@ body {
   gap: 10px;
 }
 
-.table-action-link,
-.table-action-link-aux {
+.table-action-link {
+  display: inline-flex;
+  align-items: center;
   justify-content: center;
+  line-height: 1;
   color: var(--el-color-primary);
   text-decoration: none;
+  font-size: 12px;
   white-space: nowrap;
   vertical-align: middle;
 }
 
-.table-action-link {
-  line-height: 1;
-  font-size: 12px;
-}
-
 .table-action-link-aux {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   line-height: 1.7;
+  color: var(--el-color-primary);
+  text-decoration: none;
   font-size: 13px;
+  white-space: nowrap;
+  vertical-align: middle;
 }
 
-.table-action-link:hover,
+.table-action-link:hover {
+  color: var(--el-color-primary-light-5);
+  text-decoration: underline;
+}
+
 .table-action-link-aux:hover {
   color: var(--el-color-primary-light-5);
   text-decoration: underline;
@@ -1036,66 +968,10 @@ body {
   margin-left: 0 !important;
 }
 
-.el-table th.el-table__cell {
-  background: #f8fafc !important;
-  color: #475569;
-  font-weight: 700;
-}
-
-.el-table tr {
-  background: #fff;
-}
-
-.el-table .cell {
-  line-height: 1.5;
-}
-
-/* ========== 预览对话框 ========== */
+/* ========== 文件预览 ========== */
 .preview-wrap {
   min-height: 280px;
   height: 100%;
-}
-
-.preview-toolbar {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 16px;
-  padding-bottom: 12px;
-  border-bottom: 1px solid var(--line);
-  flex-wrap: wrap;
-  gap: 12px;
-}
-
-.preview-toolbar-left {
-  gap: 4px;
-}
-
-.preview-toolbar-right,
-.preview-info-tags {
-  gap: 8px;
-}
-
-.preview-info-tags .el-tag {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 0 8px;
-  height: 28px;
-  line-height: 28px;
-}
-
-.preview-info-tags .el-tag .el-icon,
-.preview-toolbar-left .el-button .el-icon {
-  font-size: 14px;
-}
-
-.preview-toolbar-left .el-button {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 6px 16px;
-  height: 28px;
 }
 
 .image-preview-box {
@@ -1116,22 +992,18 @@ body {
   border-radius: 12px;
 }
 
-.edit-text-area {
-  min-height: 400px;
+.el-table th.el-table__cell {
+  background: #f8fafc !important;
+  color: #475569;
+  font-weight: 700;
 }
 
-.monaco-editor-container {
-  width: 100%;
-  height: 65vh;
-  min-height: 400px;
-  border: 1px solid var(--line);
-  border-radius: 12px;
-  overflow: hidden;
+.el-table tr {
+  background: #fff;
 }
 
-.monaco-editor-container .monaco-editor,
-.monaco-editor-container .monaco-scrollable-element {
-  border-radius: 12px;
+.el-table .cell {
+  line-height: 1.5;
 }
 
 /* ========== 移动端文件卡片 ========== */
@@ -1172,18 +1044,24 @@ body {
   margin-top: 2px;
 }
 
-.mobile-file-main,
-.mobile-file-meta-item {
-  min-width: 0;
-}
-
 .mobile-file-main {
+  min-width: 0;
   flex: 1;
 }
 
 .mobile-file-name {
   font-size: 14px;
+  font-weight: 700;
+  color: var(--text);
   line-height: 1.4;
+  word-break: break-word;
+}
+
+.mobile-file-tags {
+  margin-top: 10px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
 }
 
 .mobile-file-meta {
@@ -1193,7 +1071,14 @@ body {
   gap: 6px 10px;
 }
 
+.mobile-file-meta-item {
+  min-width: 0;
+}
+
 .mobile-file-meta-label {
+  font-size: 11px;
+  color: var(--muted-2);
+  text-transform: uppercase;
   letter-spacing: 0.04em;
 }
 
@@ -1207,6 +1092,8 @@ body {
 
 .mobile-file-actions {
   margin-top: 12px;
+  display: flex;
+  flex-wrap: wrap;
   gap: 8px;
 }
 
@@ -1255,7 +1142,9 @@ body {
 
 .background-jobs-toolbar {
   margin-bottom: 10px;
+  display: flex;
   gap: 8px;
+  flex-wrap: wrap;
 }
 
 .background-jobs-section-title {
@@ -1265,91 +1154,90 @@ body {
   margin-bottom: 12px;
 }
 
+.background-jobs-tabs,
+.command-history-tabs {
+  min-height: 0;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.background-jobs-tabs .el-tabs__content,
+.command-history-tabs .el-tabs__content {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.background-jobs-tabs .el-tab-pane,
+.command-history-tabs .el-tab-pane {
+  height: 100%;
+  min-height: 0;
+}
+
 .background-job-module-list {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-  gap: 16px;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 12px;
 }
 
 .background-job-module-card {
+  border: 1px solid rgba(15, 23, 42, 0.06);
+  border-radius: 12px;
+  padding: 12px;
+  background: #fafcff;
   display: flex;
   flex-direction: column;
   gap: 8px;
-  background: white;
-  border: 1px solid rgba(15, 23, 42, 0.06);
-  border-radius: 12px;
-  padding: 16px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-  transition: all 0.2s;
-}
-
-.background-job-module-card:hover {
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
 }
 
 .background-job-module-name {
-  font-size: 16px;
-  font-weight: 600;
-  margin-bottom: 6px;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text);
+  word-break: break-word;
 }
 
 .background-job-module-key {
-  font-size: 12px;
-  color: #666;
-  margin-bottom: 12px;
-  word-break: break-all;
-}
-
-.background-job-module-tags,
-.background-job-module-actions {
-  margin-bottom: 12px;
-}
-
-.background-job-module-actions {
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
+  color: var(--muted);
 }
 
 .background-jobs-list-shell {
   min-height: 0;
 }
 
-.background-jobs-list,
-.command-execution-list {
+.background-jobs-list {
   display: flex;
   flex-direction: column;
+  gap: 12px;
+  max-height: 52vh;
   overflow-y: auto;
   padding-right: 2px;
 }
 
-.background-jobs-list {
-  gap: 12px;
-  max-height: 52vh;
-}
-
 .background-job-summary-card {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 12px;
-  align-items: center;
   border: 1px solid rgba(15, 23, 42, 0.06);
   border-radius: 14px;
   padding: 14px;
   background: #fff;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
 }
 
-.background-job-summary-top,
-.background-job-detail-head,
-.command-output-panel-title {
+.background-job-summary-main,
+.background-job-summary-title-wrap,
+.background-job-detail-head-left,
+.background-job-file-main {
+  min-width: 0;
+}
+
+.background-job-summary-top {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
   gap: 12px;
-}
-
-.background-job-detail-head {
-  margin-bottom: 14px;
 }
 
 .background-job-summary-title-line,
@@ -1363,6 +1251,9 @@ body {
 .background-job-summary-title,
 .background-job-title {
   font-size: 15px;
+  font-weight: 700;
+  color: var(--text);
+  word-break: break-word;
 }
 
 .background-job-summary-subtitle,
@@ -1382,10 +1273,19 @@ body {
 }
 
 .background-job-summary-actions,
-.background-job-card-head-right,
-.background-job-file-actions {
+.background-job-card-head-right {
+  display: flex;
   gap: 8px;
+  flex-wrap: wrap;
   flex-shrink: 0;
+}
+
+.background-job-detail-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
 }
 
 .background-job-stats {
@@ -1399,6 +1299,15 @@ body {
   border-radius: 12px;
   background: #f8fafc;
   border: 1px solid rgba(15, 23, 42, 0.05);
+}
+
+.background-job-stat-label,
+.command-execution-detail-label,
+.command-execution-stat-label {
+  font-size: 11px;
+  color: var(--muted-2);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
 }
 
 .background-job-stat-value {
@@ -1459,8 +1368,7 @@ body {
   border-color: rgba(37, 99, 235, 0.16);
 }
 
-.background-job-message-time,
-.background-job-full-message-time {
+.background-job-message-time {
   font-size: 11px;
   color: var(--muted-2);
   margin-bottom: 6px;
@@ -1509,6 +1417,13 @@ body {
   color: var(--muted);
 }
 
+.background-job-file-actions {
+  margin-top: 10px;
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
 .background-job-full-message-time {
   font-size: 12px;
   color: var(--muted);
@@ -1545,7 +1460,111 @@ body {
   word-break: break-word;
 }
 
-/* ========== Execution History ========== */
+.command-execution-detail-section {
+  margin-top: 14px;
+}
+
+.command-execution-detail-label {
+  display: block;
+  margin-bottom: 6px;
+}
+
+.command-execution-detail-summary {
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.command-output-panel-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+/* 预览对话框 */
+.preview-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--line);
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.preview-toolbar-left {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.preview-toolbar-right {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.preview-info-tags {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.preview-info-tags .el-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0 8px;
+  height: 28px;
+  line-height: 28px;
+}
+
+.preview-info-tags .el-tag .el-icon {
+  font-size: 14px;
+}
+
+.preview-toolbar-left .el-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 16px;
+  height: 28px;
+}
+
+.preview-toolbar-left .el-button .el-icon {
+  font-size: 14px;
+}
+
+.edit-text-area {
+  min-height: 400px;
+}
+
+.monaco-editor-container {
+  width: 100%;
+  height: 65vh;
+  min-height: 400px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.monaco-editor-container .monaco-editor {
+  border-radius: 12px;
+}
+
+.monaco-editor-container .monaco-scrollable-element {
+  border-radius: 12px;
+}
+
+/* Execution History 卡片 */
 .command-execution-list-shell {
   height: calc(78vh - 170px);
   min-height: 320px;
@@ -1554,6 +1573,9 @@ body {
 
 .command-execution-list {
   height: 100%;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
   gap: 16px;
   padding: 4px 2px 4px 0;
 }
@@ -1590,8 +1612,13 @@ body {
   flex: 1;
 }
 
-.execution-status,
-.execution-badge {
+.execution-badges {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.execution-status {
   display: inline-block;
   padding: 2px 8px;
   font-size: 11px;
@@ -1618,6 +1645,15 @@ body {
 .status-unknown {
   background: #f5f5f5;
   color: #616161;
+}
+
+.execution-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  font-size: 11px;
+  font-weight: 500;
+  border-radius: 20px;
+  line-height: 18px;
 }
 
 .badge-files {
@@ -1648,6 +1684,8 @@ body {
 }
 
 .execution-stats {
+  display: flex;
+  flex-wrap: wrap;
   gap: 16px;
   margin-bottom: 12px;
   padding: 10px 0;
@@ -1682,27 +1720,18 @@ body {
   white-space: nowrap;
 }
 
-.execution-summary,
-.command-execution-detail-summary {
-  font-size: 13px;
-  line-height: 1.6;
-  color: var(--text);
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
 .execution-summary {
   font-size: 12px;
   color: #4b5563;
+  line-height: 1.5;
   margin-bottom: 14px;
-  white-space: nowrap;
-}
-
-.command-execution-detail-summary {
+  overflow: hidden;
+  text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .execution-actions {
+  display: flex;
   gap: 12px;
   justify-content: flex-end;
 }
@@ -1740,13 +1769,46 @@ body {
   border-color: #c7d2fe;
 }
 
-.command-execution-detail-section {
-  margin-top: 14px;
+/* ========== 后台任务模块 ========== */
+.background-job-module-card {
+  background: white;
+  border-radius: 12px;
+  padding: 16px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  transition: all 0.2s;
 }
 
-.command-execution-detail-label {
-  display: block;
+.background-job-module-card:hover {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.background-job-module-name {
+  font-weight: 600;
+  font-size: 16px;
   margin-bottom: 6px;
+}
+
+.background-job-module-key {
+  font-size: 12px;
+  color: #666;
+  margin-bottom: 12px;
+  word-break: break-all;
+}
+
+.background-job-module-tags {
+  margin-bottom: 12px;
+}
+
+.background-job-module-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.background-job-module-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 16px;
 }
 
 /* ========== 进程管理器对话框 ========== */
@@ -1766,20 +1828,17 @@ body {
   align-items: center;
 }
 
-.process-dialog-head-left,
-.process-dialog-head-right,
-.process-action-buttons {
+.process-dialog-head-left {
   display: flex;
   align-items: center;
-}
-
-.process-dialog-head-left {
   gap: 12px;
   flex-wrap: nowrap;
   min-width: 0;
 }
 
 .process-dialog-head-right {
+  display: flex;
+  align-items: center;
   justify-content: flex-end;
   min-width: 0;
 }
@@ -1789,10 +1848,41 @@ body {
   max-width: 100%;
 }
 
+.process-dialog-filter-input .el-input__wrapper {
+  min-height: 34px;
+  height: 34px;
+  border-radius: 10px;
+}
+
 .process-action-buttons {
+  display: inline-flex;
+  align-items: center;
   justify-content: center;
   gap: 8px;
   flex-wrap: nowrap;
+}
+
+.process-action-buttons .el-button {
+  margin: 0;
+}
+
+/* ========== 终端行内操作 ========== */
+.terminal-line-with-action {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.terminal-line-main {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+
+.terminal-line-actions {
+  display: flex;
+  align-items: center;
+  white-space: nowrap;
 }
 
 /* ========== 响应式 ========== */
@@ -1873,7 +1963,8 @@ body {
     max-height: calc(84vh - 196px);
   }
 
-  .background-job-summary-card {
+  .background-job-summary-card,
+  .command-execution-card {
     grid-template-columns: 1fr;
   }
 
@@ -1954,10 +2045,7 @@ body {
     justify-content: flex-start;
   }
 
-  .command-history-search-input,
-  .preview-toolbar-left,
-  .preview-toolbar-right,
-  .dialog-action-group {
+  .command-history-search-input {
     width: 100%;
   }
 
@@ -1981,16 +2069,23 @@ body {
   }
 
   .background-job-detail-head,
-  .command-output-panel-title,
-  .preview-toolbar,
-  .execution-card-header {
+  .command-output-panel-title {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .background-job-card-head-right {
+    justify-content: flex-start;
+  }
+
+  .preview-toolbar {
     flex-direction: column;
     align-items: flex-start;
   }
 
-  .background-job-card-head-right,
-  .execution-actions {
-    justify-content: flex-start;
+  .preview-toolbar-left,
+  .preview-toolbar-right {
+    width: 100%;
   }
 
   .preview-info-tags {
@@ -1999,6 +2094,11 @@ body {
 
   .execution-card {
     padding: 14px 16px;
+  }
+
+  .execution-card-header {
+    flex-direction: column;
+    align-items: flex-start;
   }
 
   .execution-badges {
@@ -2016,6 +2116,10 @@ body {
   .execution-summary {
     white-space: normal;
     word-break: break-word;
+  }
+
+  .execution-actions {
+    justify-content: flex-start;
   }
 }
 
