@@ -61,6 +61,39 @@ def get_executable_path_for_shell():
         return executable, None
 
 
+def get_exec_and_args():
+    """
+    返回 (executable, params)
+
+    - 开发模式:
+        executable = python.exe
+        params = "script.py" args...
+
+    - 打包模式:
+        executable = exe
+        params = args...
+    """
+    executable = os.path.realpath(sys.executable)
+
+    if getattr(sys, 'frozen', False):
+        # 👉 打包模式
+        args = sys.argv[1:]
+        params = ' '.join(wrap_path(arg) for arg in args) if args else None
+        return executable, params
+
+    else:
+        # 👉 开发模式
+        script_path = os.path.realpath(sys.argv[0])
+        args = sys.argv[1:]
+
+        params_parts = [wrap_path(script_path)]
+        if args:
+            params_parts.extend(wrap_path(arg) for arg in args)
+
+        params = ' '.join(params_parts)
+        return executable, params
+
+
 def get_system_paths():
     # 获取系统路径
     system_paths = {}

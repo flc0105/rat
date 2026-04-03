@@ -35,9 +35,9 @@ def register_startup_intercept(intercept_target, launch_path):
 
 
 # intercept_target：被拦截启动的程序名
-intercept_target = kwargs.get('intercept_target', '')
+intercept_target = kwargs.get('intercept', '')
 
 # launch_path：真正被执行的程序路径
-launch_path = kwargs.get('launch_path', '')
+launch_path = kwargs.get('launch', '')
 
 register_startup_intercept(intercept_target, launch_path)
