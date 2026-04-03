@@ -1,4 +1,3 @@
-
 window.AppCommandsModule = {
     methods: {
         // static/js/modules/commands.js
@@ -368,16 +367,92 @@ buildCommonOpsCandidates() {
     ];
 },
 
+        buildQuickHistoryShortcutCandidates(historyItems) {
+            const items = Array.isArray(historyItems) ? historyItems : [];
+
+            return items
+                .map((item) => {
+                    const indexValue = Number.parseInt(item && item.index, 10);
+                    const commandText = String((item && item.command) || '').trim();
+
+                    if (!Number.isInteger(indexValue) || indexValue <= 0 || !commandText) {
+                        return null;
+                    }
+
+                    const shortcutText = `!${indexValue}`;
+                    return {
+                        name: shortcutText,
+                        value: shortcutText,
+                        template: shortcutText,
+                        help: commandText,
+                        source: 'quick_history_shortcut',
+                        group: 'quick_history',
+                        groupLabel: 'quick_history',
+                        quickHistoryIndex: indexValue,
+                        quickHistoryCommand: commandText,
+                        searchText: [
+                            shortcutText,
+                            `! ${indexValue}`,
+                            String(indexValue),
+                            commandText,
+                            'quick history',
+                            'history shortcut'
+                        ]
+                            .filter(Boolean)
+                            .join(' ')
+                            .toLowerCase()
+                    };
+                })
+                .filter(Boolean);
+        },
+
         queryCommandCandidates(queryString, callback) {
     const keyword = String(queryString || '').trim().toLowerCase();
     const sourceList = Array.isArray(this.commandCandidates) ? this.commandCandidates : [];
 
+    const quickHistoryShortcutCandidates = sourceList.filter(item => item && item.source === 'quick_history_shortcut');
+    const normalCandidates = sourceList.filter(item => !(item && item.source === 'quick_history_shortcut'));
+
     if (!keyword) {
-        callback(sourceList);
+        callback(normalCandidates);
         return;
     }
 
-    const result = sourceList.filter(item => {
+    if (keyword.startsWith('!')) {
+        if (keyword === '!') {
+            callback(quickHistoryShortcutCandidates);
+            return;
+        }
+
+        const exactMatches = [];
+        const prefixMatches = [];
+        const textMatches = [];
+
+        quickHistoryShortcutCandidates.forEach(item => {
+            const shortcutText = String(item.template || item.value || '').trim().toLowerCase();
+            const commandText = String(item.quickHistoryCommand || item.help || '').trim().toLowerCase();
+            const searchText = String(item.searchText || '').toLowerCase();
+
+            if (shortcutText === keyword) {
+                exactMatches.push(item);
+                return;
+            }
+
+            if (shortcutText.startsWith(keyword)) {
+                prefixMatches.push(item);
+                return;
+            }
+
+            if (commandText.includes(keyword) || searchText.includes(keyword)) {
+                textMatches.push(item);
+            }
+        });
+
+        callback([...exactMatches, ...prefixMatches, ...textMatches]);
+        return;
+    }
+
+    const result = normalCandidates.filter(item => {
         const searchText = String(item.searchText || '').toLowerCase();
         return searchText.includes(keyword);
     });
@@ -492,6 +567,10 @@ handleCommandCandidateSelect(item) {
                 source: 'history',
                 group: 'history'
             }));
+        });
+
+        this.buildQuickHistoryShortcutCandidates(historyItems).forEach((item) => {
+            merged.push(item);
         });
 
         this.commandCandidates = merged;
@@ -620,6 +699,8 @@ handleCommandCandidateSelect(item) {
                     this.commandExecutionDetailDialogVisible = false;
                     this.selectedCommandExecutionEntryId = '';
                 }
+
+                await this.loadCommandCandidates(this.selectedId);
             } catch (e) {
                 this.commandHistoryItems = [];
                 this.commandExecutionItems = [];
@@ -813,12 +894,3 @@ handleCommandCandidateSelect(item) {
         }
     }
 };
-
-
-
-
-
-
-
-
-
