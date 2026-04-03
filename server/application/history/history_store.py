@@ -107,6 +107,7 @@ class CommandHistoryStore:
 
             'is_pinned': False,
             'pinned_at': '',
+            'pin_order': 0,
 
             'has_output': False,
             'output_summary': '',
@@ -185,7 +186,61 @@ class CommandHistoryStore:
 
         entry['is_pinned'] = bool(entry.get('is_pinned', False))
         entry['pinned_at'] = str(entry.get('pinned_at') or '').strip()
+
+        try:
+            entry['pin_order'] = int(entry.get('pin_order', 0) or 0)
+        except Exception:
+            entry['pin_order'] = 0
+
         return entry
+
+    def _find_latest_pinned_metadata(self, entries: list, command_text: str, skip_entry=None):
+        """
+        查找同 command 最近一次有效的 pin 元数据。
+
+        返回：
+        - is_pinned
+        - pinned_at
+        - pin_order
+        """
+        inherited_is_pinned = False
+        inherited_pinned_at = ''
+        inherited_pin_order = 0
+
+        for item in reversed(entries):
+            if item is skip_entry:
+                continue
+
+            self._normalize_entry_flags(item)
+            if (item.get('command') or '') != command_text:
+                continue
+            if not item.get('is_pinned'):
+                continue
+
+            inherited_is_pinned = True
+            inherited_pinned_at = str(item.get('pinned_at') or '').strip()
+            inherited_pin_order = int(item.get('pin_order', 0) or 0)
+            break
+
+        return inherited_is_pinned, inherited_pinned_at, inherited_pin_order
+
+    def _next_pin_order(self, entries: list) -> int:
+        """
+        为新的 pinned command 分配固定顺序号。
+
+        这里不复用空洞，直接单调递增：
+        - 实现简单稳定
+        - 不会因为删除/取消 pin 导致其他 pinned 位置抖动
+        """
+        max_pin_order = 0
+
+        for item in entries:
+            self._normalize_entry_flags(item)
+            if not item.get('is_pinned'):
+                continue
+            max_pin_order = max(max_pin_order, int(item.get('pin_order', 0) or 0))
+
+        return max_pin_order + 1
 
     # ------------------ public write api ------------------ #
     def create_entry_for_connection(self, conn, command: str, source: str = 'cli'):

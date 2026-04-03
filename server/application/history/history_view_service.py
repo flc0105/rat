@@ -1,4 +1,3 @@
-
 import os
 
 
@@ -63,6 +62,32 @@ class HistoryViewService:
         copied['has_files'] = len(files) > 0
         return copied
 
+    def _sort_pinned_items(self, pinned_items: list) -> list:
+        """
+        pinned 区采用固定顺序：
+        - 先按 pin_order 升序
+        - 老数据没有 pin_order 时，再退化到 pinned_at
+        - 最后再用 command 兜底，确保排序稳定
+        """
+        def sort_key(item):
+            self.store._normalize_entry_flags(item)
+
+            pin_order = int(item.get('pin_order', 0) or 0)
+            pinned_at = str(item.get('pinned_at') or '').strip()
+            command_text = str(item.get('command') or '')
+
+            has_pin_order = 0 if pin_order > 0 else 1
+            fallback_time = pinned_at or '9999-12-31 23:59:59'
+
+            return (
+                has_pin_order,
+                pin_order if pin_order > 0 else 0,
+                fallback_time,
+                command_text,
+            )
+
+        return sorted(pinned_items, key=sort_key)
+
     def _build_deduplicated_latest_view(self, entries: list) -> list:
         """
         构造默认展示视图：
@@ -70,6 +95,7 @@ class HistoryViewService:
         - 展示时按时间倒序去重
         - 相同 command 只保留最新一条
         - 置顶命令固定排在最上方
+        - pinned 区内部按 pin_order 固定，不再随执行时间漂移
         """
         seen = set()
         pinned_items = []
@@ -90,6 +116,7 @@ class HistoryViewService:
             else:
                 normal_items.append(copied)
 
+        pinned_items = self._sort_pinned_items(pinned_items)
         result = pinned_items + normal_items
 
         for index, item in enumerate(result, start=1):
@@ -162,12 +189,3 @@ class HistoryViewService:
                 self.store._normalize_entry_flags(item)
 
         return self._build_deduplicated_latest_view(entries)
-
-
-
-
-
-
-
-
-

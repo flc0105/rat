@@ -23,6 +23,7 @@ class HistoryWriteService:
         - quick history 是按 command 去重展示最新一条
         - 如果同一 command 之前已被 pin，新建执行记录时需要继承 pin 状态
         - 否则最新一条会变成未 pin，看起来像 pin 丢失
+        - pin 位置应固定，因此还要继承 pin_order
         """
         if conn is None:
             return ''
@@ -36,21 +37,14 @@ class HistoryWriteService:
         with self.store._lock:
             entries = self.store._read_entries(hostname)
 
-            inherited_is_pinned = False
-            inherited_pinned_at = ''
-
-            for item in reversed(entries):
-                self.store._normalize_entry_flags(item)
-                if (item.get('command') or '') != command_text:
-                    continue
-                if item.get('is_pinned'):
-                    inherited_is_pinned = True
-                    inherited_pinned_at = str(item.get('pinned_at') or '').strip()
-                    break
+            inherited_is_pinned, inherited_pinned_at, inherited_pin_order = (
+                self.store._find_latest_pinned_metadata(entries, command_text)
+            )
 
             entry = self.store._build_entry(conn, command_text, source)
             entry['is_pinned'] = inherited_is_pinned
             entry['pinned_at'] = inherited_pinned_at if inherited_is_pinned else ''
+            entry['pin_order'] = inherited_pin_order if inherited_is_pinned else 0
 
             entries.append(entry)
             entries = self.store._trim_entries(entries)
@@ -133,11 +127,12 @@ class HistoryWriteService:
 
         用途：
         - CLI 先以原始输入创建 history entry
-        - 后续如果 executor 将 !<index> 展开成真实命令
-        - 这里把 entry 同步成真实命令，避免历史里保留 !数字
+        - 后续如果 executor 将 !<index> / history run 展开成真实命令
+        - 这里把 entry 同步成真实命令，避免历史里保留元命令文本
 
         兼容处理：
         - 重新按真实命令继承 pin 状态
+        - pinned 位置应固定，因此需要一并继承 pin_order
         - 避免 quick history 因 command 维度错误而出现异常去重/排序
         """
         if conn is None or not entry_id:
@@ -160,24 +155,14 @@ class HistoryWriteService:
             if current_command == command_text:
                 return False
 
-            inherited_is_pinned = False
-            inherited_pinned_at = ''
-
-            for item in reversed(entries):
-                if item is entry:
-                    continue
-
-                self.store._normalize_entry_flags(item)
-                if (item.get('command') or '') != command_text:
-                    continue
-                if item.get('is_pinned'):
-                    inherited_is_pinned = True
-                    inherited_pinned_at = str(item.get('pinned_at') or '').strip()
-                    break
+            inherited_is_pinned, inherited_pinned_at, inherited_pin_order = (
+                self.store._find_latest_pinned_metadata(entries, command_text, skip_entry=entry)
+            )
 
             entry['command'] = command_text
             entry['is_pinned'] = inherited_is_pinned
             entry['pinned_at'] = inherited_pinned_at if inherited_is_pinned else ''
+            entry['pin_order'] = inherited_pin_order if inherited_is_pinned else 0
             changed = True
 
             if changed:
@@ -229,6 +214,11 @@ class HistoryWriteService:
         """
         设置指定命令的置顶状态。
         quick history 是按 command 去重展示，因此这里按 command 维度批量更新。
+
+        新规则：
+        - pin 时为该 command 分配固定 pin_order
+        - 后续再次执行同命令时继承 pin_order，不再因为执行时间改变位置
+        - unpin 时清空 pin_order
         """
         if conn is None:
             return False
@@ -244,16 +234,36 @@ class HistoryWriteService:
         with self.store._lock:
             entries = self.store._read_entries(hostname)
 
+            current_pin_order = 0
+            for item in entries:
+                self.store._normalize_entry_flags(item)
+                if (item.get('command') or '') != command_text:
+                    continue
+                if item.get('is_pinned') and int(item.get('pin_order', 0) or 0) > 0:
+                    current_pin_order = int(item.get('pin_order', 0) or 0)
+                    break
+
+            if pinned and current_pin_order <= 0:
+                current_pin_order = self.store._next_pin_order(entries)
+
             for item in entries:
                 self.store._normalize_entry_flags(item)
                 if (item.get('command') or '') != command_text:
                     continue
 
-                if item.get('is_pinned') == pinned:
+                target_pinned_at = self.store._now_text() if pinned and not item.get('is_pinned') else str(item.get('pinned_at') or '').strip()
+                target_pin_order = current_pin_order if pinned else 0
+
+                if (
+                    item.get('is_pinned') == pinned and
+                    str(item.get('pinned_at') or '').strip() == (target_pinned_at if pinned else '') and
+                    int(item.get('pin_order', 0) or 0) == target_pin_order
+                ):
                     continue
 
                 item['is_pinned'] = pinned
-                item['pinned_at'] = self.store._now_text() if pinned else ''
+                item['pinned_at'] = target_pinned_at if pinned else ''
+                item['pin_order'] = target_pin_order
                 changed = True
 
             if changed:
