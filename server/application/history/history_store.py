@@ -1,4 +1,3 @@
-
 import json
 import os
 import threading
@@ -198,6 +197,9 @@ class CommandHistoryStore:
     def append_file_for_connection(self, conn, entry_id: str, file_info: dict):
         return self.write_service.append_file_for_connection(conn, entry_id, file_info)
 
+    def update_entry_command_for_connection(self, conn, entry_id: str, command: str):
+        return self.write_service.update_entry_command_for_connection(conn, entry_id, command)
+
     def update_entry_status_for_connection(self, conn, entry_id: str, status: str, cwd_end: str = ''):
         return self.write_service.update_entry_status_for_connection(conn, entry_id, status, cwd_end=cwd_end)
 
@@ -219,12 +221,3 @@ class CommandHistoryStore:
 
     def get_history_by_hostname(self, hostname: str) -> list:
         return self.view_service.get_history_by_hostname(hostname)
-
-
-
-
-
-
-
-
-

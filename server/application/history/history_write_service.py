@@ -1,4 +1,3 @@
-
 from server.models.history import HistoryFileRef
 
 
@@ -128,6 +127,64 @@ class HistoryWriteService:
             entry['output_summary'] = self.store._build_output_summary(entry)
             self.store._write_entries(hostname, entries)
 
+    def update_entry_command_for_connection(self, conn, entry_id: str, command: str):
+        """
+        将指定历史记录的 command 更新为新的命令文本。
+
+        用途：
+        - CLI 先以原始输入创建 history entry
+        - 后续如果 executor 将 !<index> 展开成真实命令
+        - 这里把 entry 同步成真实命令，避免历史里保留 !数字
+
+        兼容处理：
+        - 重新按真实命令继承 pin 状态
+        - 避免 quick history 因 command 维度错误而出现异常去重/排序
+        """
+        if conn is None or not entry_id:
+            return False
+
+        command_text = str(command or '').strip()
+        if not command_text:
+            return False
+
+        hostname = self.store._get_hostname_from_conn(conn)
+        changed = False
+
+        with self.store._lock:
+            entries = self.store._read_entries(hostname)
+            entry = self.store._find_entry(entries, entry_id)
+            if entry is None:
+                return False
+
+            current_command = str(entry.get('command') or '').strip()
+            if current_command == command_text:
+                return False
+
+            inherited_is_pinned = False
+            inherited_pinned_at = ''
+
+            for item in reversed(entries):
+                if item is entry:
+                    continue
+
+                self.store._normalize_entry_flags(item)
+                if (item.get('command') or '') != command_text:
+                    continue
+                if item.get('is_pinned'):
+                    inherited_is_pinned = True
+                    inherited_pinned_at = str(item.get('pinned_at') or '').strip()
+                    break
+
+            entry['command'] = command_text
+            entry['is_pinned'] = inherited_is_pinned
+            entry['pinned_at'] = inherited_pinned_at if inherited_is_pinned else ''
+            changed = True
+
+            if changed:
+                self.store._write_entries(hostname, entries)
+
+        return changed
+
     def update_entry_status_for_connection(self, conn, entry_id: str, status: str, cwd_end: str = ''):
         """
         更新指定历史记录的状态，并补全结束时间 / 耗时 / cwd_end
@@ -229,12 +286,3 @@ class HistoryWriteService:
 
             self.store._write_entries(hostname, new_entries)
             return True
-
-
-
-
-
-
-
-
-
