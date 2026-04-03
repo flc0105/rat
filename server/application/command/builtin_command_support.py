@@ -1,6 +1,7 @@
 import glob
 import json
 import os
+import re
 import shlex
 
 from core.utils.formatting import format_dict
@@ -118,17 +119,96 @@ class HistoryBuiltinSupport:
     history 相关内建命令支持。
     """
 
-    def __init__(self, command_history, conn):
+    HISTORY_RUN_PATTERN = re.compile(r'^run\s+(\d+)$', re.IGNORECASE)
+    HISTORY_SHORTCUT_PATTERN = re.compile(r'^!(\d+)$')
+
+    def __init__(self, command_history, conn, history_entry_id_provider, command_processor_factory):
         self.command_history = command_history
         self.conn = conn
+        self.history_entry_id_provider = history_entry_id_provider
+        self.command_processor_factory = command_processor_factory
+
+    def _is_meta_history_command(self, command_text: str) -> bool:
+        text = str(command_text or '').strip()
+        if not text:
+            return False
+        if self.HISTORY_SHORTCUT_PATTERN.fullmatch(text):
+            return True
+        if self.HISTORY_RUN_PATTERN.fullmatch(text):
+            return True
+        return False
+
+    def _get_resolvable_quick_history(self) -> list:
+        """
+        获取可用于 history run 的 quick history 视图。
+
+        这里会过滤掉 history run / !index 这类“元命令”，避免：
+        - 当前正在执行的 history run 把 quick history index 顶掉
+        - history replay 命令本身污染可执行历史列表
+        """
+        entries = self.command_history.get_history_for_connection(self.conn) or []
+        filtered = []
+
+        for item in entries:
+            command_text = str(item.get('command') or '').strip()
+            if self._is_meta_history_command(command_text):
+                continue
+
+            cloned = dict(item)
+            cloned['index'] = len(filtered) + 1
+            filtered.append(cloned)
+
+        return filtered
+
+    def _resolve_history_command_by_index(self, history_index: int) -> str:
+        entries = self._get_resolvable_quick_history()
+
+        for item in entries:
+            current_index = int(item.get('index', 0) or 0)
+            if current_index != history_index:
+                continue
+
+            command_text = str(item.get('command') or '').strip()
+            if command_text:
+                return command_text
+            break
+
+        raise ValueError(f'History index not found: {history_index}')
+
+    def _rewrite_current_history_entry(self, resolved_command: str):
+        """
+        当前这次交互在 ratserver 中已经预先创建了 history entry。
+        当用户执行 history run / !index 时，这里把当前 entry 改写成真实命令，
+        避免历史最终保留元命令文本。
+        """
+        entry_id = (self.history_entry_id_provider() or '').strip()
+        if not entry_id:
+            return
+
+        self.command_history.update_entry_command_for_connection(
+            self.conn,
+            entry_id,
+            resolved_command,
+        )
+
+    def _run_history_item(self, history_index: int):
+        resolved_command = self._resolve_history_command_by_index(history_index)
+        self._rewrite_current_history_entry(resolved_command)
+
+        yield 1, f'sending command: {resolved_command}'
+
+        command_processor = self.command_processor_factory()
+        executor = command_processor(resolved_command)
+        for item in executor():
+            yield item
 
     def history(self, arg):
         arg_text = (arg or '').strip()
 
         if not arg_text:
-            entries = self.command_history.get_history_for_connection(self.conn)
+            entries = self._get_resolvable_quick_history()
             if not entries:
-                yield 1, 'No command history available'
+                yield 1, 'No command history available\n\nTip: use history run <index> or !<index> to run a history item quickly'
                 return
 
             lines = []
@@ -138,6 +218,8 @@ class HistoryBuiltinSupport:
                     f'{item.get("command", "")}'
                 )
 
+            lines.append('')
+            lines.append('Tip: use history run <index> or !<index> to run a history item quickly')
             yield 1, '\n'.join(lines)
             return
 
@@ -146,7 +228,14 @@ class HistoryBuiltinSupport:
             yield 1, 'Command history cleared'
             return
 
-        raise ValueError('Usage: history | history clear')
+        matched = self.HISTORY_RUN_PATTERN.fullmatch(arg_text)
+        if matched is not None:
+            history_index = int(matched.group(1))
+            for item in self._run_history_item(history_index):
+                yield item
+            return
+
+        raise ValueError('Usage: history | history clear | history run <index> | !<index>')
 
 
 class RttBuiltinSupport:

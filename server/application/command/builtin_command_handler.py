@@ -45,7 +45,13 @@ class BuiltinCommandHandler:
         {
             'name': 'history',
             'template': 'history',
-            'help': 'Show de-duplicated command history for the current host',
+            'help': 'Show de-duplicated command history for the current host. Use history run <index> or !<index> to run an item quickly',
+            'source': 'server'
+        },
+        {
+            'name': 'history',
+            'template': 'history run ',
+            'help': 'history run <index> | Run an item from quick history by index',
             'source': 'server'
         },
         {
@@ -70,6 +76,7 @@ class BuiltinCommandHandler:
         remote_execution_service,
         history_entry_id_provider,
         plan_executor_factory,
+        command_processor_factory,
     ):
         self.conn = conn
         self.server = server
@@ -77,6 +84,7 @@ class BuiltinCommandHandler:
         self.remote_execution_service = remote_execution_service
         self.history_entry_id_provider = history_entry_id_provider
         self.plan_executor_factory = plan_executor_factory
+        self.command_processor_factory = command_processor_factory
 
         self.upload_support = UploadBuiltinSupport(
             conn=self.conn,
@@ -93,6 +101,8 @@ class BuiltinCommandHandler:
         self.history_support = HistoryBuiltinSupport(
             command_history=self.server.command_history,
             conn=self.conn,
+            history_entry_id_provider=self.history_entry_id_provider,
+            command_processor_factory=self.command_processor_factory,
         )
         self.rtt_support = RttBuiltinSupport(
             conn=self.conn,
