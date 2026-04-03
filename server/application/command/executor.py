@@ -104,14 +104,52 @@ class CommandExecutor:
         history_index = matched.group(1)
         return f'history run {history_index}'
 
+    def _resolve_alias_preview_command(self, cmd: str) -> str:
+        """
+        为 alias 命令做一层发送前预览。
+
+        这里只用于展示 sending command: xxx，
+        不在这里真正执行 alias 展开，真正路由仍然交给原有 command router / plan builder。
+        """
+        command_text = (cmd or '').strip()
+        if not command_text:
+            return ''
+
+        name, arg = parse(command_text)
+        alias_map = self.server.alias_manager.list_aliases() or {}
+        mapped_command = str(alias_map.get(name) or '').strip()
+
+        if not mapped_command:
+            return ''
+
+        if arg:
+            return f'{mapped_command} {arg}'.strip()
+
+        return mapped_command
+
+    def _wrap_with_prefix_message(self, executor, display_message: str):
+        if not display_message:
+            return executor
+
+        def wrapped():
+            yield 1, display_message
+            for item in executor():
+                yield item
+
+        return wrapped
+
     def process_command(self, cmd, history_entry_id: str = ''):
         self.current_history_entry_id = (history_entry_id or '').strip()
 
         normalized_command = self._rewrite_history_shortcut(cmd)
+        alias_preview_command = self._resolve_alias_preview_command(normalized_command)
+        display_message = f'sending command: {alias_preview_command}' if alias_preview_command else ''
+
         name, arg = parse(normalized_command)
 
         builtin_handler = self._resolve_builtin_command(name, arg)
         if builtin_handler:
-            return builtin_handler
+            return self._wrap_with_prefix_message(builtin_handler, display_message)
 
-        return self.command_router.resolve(normalized_command, name, arg)
+        resolved_executor = self.command_router.resolve(normalized_command, name, arg)
+        return self._wrap_with_prefix_message(resolved_executor, display_message)

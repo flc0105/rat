@@ -89,13 +89,23 @@ class AliasBuiltinSupport:
         return self.alias_manager.list_aliases()
 
     def alias(self, arg):
-        if not arg:
+        arg_text = str(arg or '').strip()
+
+        if not arg_text:
             yield 1, format_dict(self.alias_manager.list_aliases())
             return
 
+        if arg_text in ('--json', 'json'):
+            yield 1, json.dumps(
+                self.alias_manager.list_aliases(),
+                ensure_ascii=False,
+                indent=2
+            )
+            return
+
         try:
-            if '=' in arg:
-                alias_name, command_text = [part.strip() for part in arg.split('=', 1)]
+            if '=' in arg_text:
+                alias_name, command_text = [part.strip() for part in arg_text.split('=', 1)]
                 self.alias_manager.add_alias(alias_name, command_text)
                 yield 1, f'Alias saved: {alias_name} -> {command_text}'
             else:
