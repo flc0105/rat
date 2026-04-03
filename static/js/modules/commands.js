@@ -689,6 +689,49 @@ handleCommandCandidateSelect(item) {
             }
         },
 
+                async moveCommandHistoryPinned(row, direction) {
+            if (!this.selectedId) {
+                ElementPlus.ElMessage.warning('Please select a device');
+                return;
+            }
+            if (!row || !row.command || !row.is_pinned) {
+                return;
+            }
+
+            const directionText = String(direction || '').trim().toLowerCase();
+            if (!['up', 'down'].includes(directionText)) {
+                return;
+            }
+            if (directionText === 'up' && !row.can_move_up) {
+                return;
+            }
+            if (directionText === 'down' && !row.can_move_down) {
+                return;
+            }
+
+            try {
+                const res = await fetch(`/api/connections/${encodeURIComponent(this.selectedId)}/command-history/pin/move`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        command: String(row.command || ''),
+                        direction: directionText,
+                    })
+                });
+
+                const json = await res.json();
+                if (!res.ok || json.code !== 0) {
+                    throw new Error(json.message || 'Failed to move pinned command');
+                }
+
+                await this.reloadCommandHistoryDialogData({ silent: true });
+            } catch (e) {
+                ElementPlus.ElMessage.error(e.message || 'Failed to move pinned command');
+            }
+        },
+
         async deleteCommandExecutionItem(row) {
             if (!this.selectedId) {
                 ElementPlus.ElMessage.warning('Please select a device');

@@ -271,6 +271,135 @@ class HistoryWriteService:
 
         return changed
 
+    def _build_pinned_snapshot_items(self, entries: list) -> list:
+        """
+        构造当前 pinned commands 的去重快照。
+
+        规则与 quick history 保持一致：
+        - 相同 command 只取最新一条代表项
+        - 只保留 pinned 项
+        - 最终按固定 pin 排序返回
+        """
+        seen = set()
+        pinned_items = []
+
+        for item in reversed(entries):
+            self.store._normalize_entry_flags(item)
+            command_text = str(item.get('command') or '').strip()
+            if not command_text or command_text in seen:
+                continue
+            seen.add(command_text)
+
+            if item.get('is_pinned'):
+                pinned_items.append(dict(item))
+
+        return self.store._sort_pinned_snapshot_items(pinned_items)
+
+    def _apply_pin_order_to_command_entries(self, entries: list, command_text: str, pin_order: int) -> bool:
+        changed = False
+
+        for item in entries:
+            self.store._normalize_entry_flags(item)
+            if (item.get('command') or '') != command_text:
+                continue
+            if not item.get('is_pinned'):
+                continue
+
+            if int(item.get('pin_order', 0) or 0) == int(pin_order):
+                continue
+
+            item['pin_order'] = int(pin_order)
+            changed = True
+
+        return changed
+
+    def _normalize_pinned_command_orders(self, entries: list, pinned_items: list) -> bool:
+        """
+        将当前 pinned 区顺序压实为 1..N。
+
+        好处：
+        - 老数据没有 pin_order 时可自动补齐
+        - 移动时只需要交换相邻 command 的顺序号
+        - 避免 pin_order 留下过多历史空洞导致理解困难
+        """
+        changed = False
+
+        for index, item in enumerate(pinned_items, start=1):
+            command_text = str(item.get('command') or '').strip()
+            if not command_text:
+                continue
+
+            if self._apply_pin_order_to_command_entries(entries, command_text, index):
+                changed = True
+
+        return changed
+
+    def move_pinned_command_for_connection(self, conn, command: str, direction: str):
+        """
+        在 quick history 的 pinned 区内移动指定命令。
+
+        规则：
+        - 仅允许移动 pinned command
+        - 只做相邻交换，避免一次移动跨越多项
+        - up / down 以当前 quick history pinned 展示顺序为准
+        - 边界项移动时直接返回 False，不抛异常
+        """
+        if conn is None:
+            return False
+
+        command_text = str(command or '').strip()
+        direction_text = str(direction or '').strip().lower()
+
+        if not command_text:
+            raise ValueError('command is required')
+        if direction_text not in ('up', 'down'):
+            raise ValueError('direction must be up or down')
+
+        hostname = self.store._get_hostname_from_conn(conn)
+
+        with self.store._lock:
+            entries = self.store._read_entries(hostname)
+            pinned_items = self._build_pinned_snapshot_items(entries)
+
+            if not pinned_items:
+                return False
+
+            command_list = [str(item.get('command') or '').strip() for item in pinned_items]
+            if command_text not in command_list:
+                raise ValueError('Only pinned commands can be moved')
+
+            changed = self._normalize_pinned_command_orders(entries, pinned_items)
+
+            current_index = command_list.index(command_text)
+            if direction_text == 'up':
+                if current_index <= 0:
+                    if changed:
+                        self.store._write_entries(hostname, entries)
+                    return False
+                target_index = current_index - 1
+            else:
+                if current_index >= len(command_list) - 1:
+                    if changed:
+                        self.store._write_entries(hostname, entries)
+                    return False
+                target_index = current_index + 1
+
+            current_command = command_list[current_index]
+            target_command = command_list[target_index]
+
+            current_order = current_index + 1
+            target_order = target_index + 1
+
+            if self._apply_pin_order_to_command_entries(entries, current_command, target_order):
+                changed = True
+            if self._apply_pin_order_to_command_entries(entries, target_command, current_order):
+                changed = True
+
+            if changed:
+                self.store._write_entries(hostname, entries)
+
+            return True
+
     def delete_execution_entry_for_connection(self, conn, entry_id: str):
         """
         删除指定 execution history 单条记录。

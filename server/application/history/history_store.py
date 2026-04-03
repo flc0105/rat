@@ -242,6 +242,34 @@ class CommandHistoryStore:
 
         return max_pin_order + 1
 
+    def _sort_pinned_snapshot_items(self, pinned_items: list) -> list:
+        """
+        对 pinned 快照项做稳定排序。
+
+        规则：
+        - 先按 pin_order 升序
+        - 老数据没有 pin_order 时，再退化到 pinned_at
+        - 最后再用 command 兜底，确保排序稳定
+        """
+        def sort_key(item):
+            self._normalize_entry_flags(item)
+
+            pin_order = int(item.get('pin_order', 0) or 0)
+            pinned_at = str(item.get('pinned_at') or '').strip()
+            command_text = str(item.get('command') or '')
+
+            has_pin_order = 0 if pin_order > 0 else 1
+            fallback_time = pinned_at or '9999-12-31 23:59:59'
+
+            return (
+                has_pin_order,
+                pin_order if pin_order > 0 else 0,
+                fallback_time,
+                command_text,
+            )
+
+        return sorted(pinned_items, key=sort_key)
+
     # ------------------ public write api ------------------ #
     def create_entry_for_connection(self, conn, command: str, source: str = 'cli'):
         return self.write_service.create_entry_for_connection(conn, command, source=source)
@@ -263,6 +291,9 @@ class CommandHistoryStore:
 
     def set_command_pinned_for_connection(self, conn, command: str, is_pinned: bool):
         return self.write_service.set_command_pinned_for_connection(conn, command, is_pinned)
+
+    def move_pinned_command_for_connection(self, conn, command: str, direction: str):
+        return self.write_service.move_pinned_command_for_connection(conn, command, direction)
 
     def delete_execution_entry_for_connection(self, conn, entry_id: str):
         return self.write_service.delete_execution_entry_for_connection(conn, entry_id)

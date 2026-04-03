@@ -62,31 +62,23 @@ class HistoryViewService:
         copied['has_files'] = len(files) > 0
         return copied
 
-    def _sort_pinned_items(self, pinned_items: list) -> list:
+    def _apply_quick_history_move_flags(self, pinned_items: list, normal_items: list):
         """
-        pinned 区采用固定顺序：
-        - 先按 pin_order 升序
-        - 老数据没有 pin_order 时，再退化到 pinned_at
-        - 最后再用 command 兜底，确保排序稳定
+        为 quick history 视图补充 pinned 移动能力标记。
+
+        规则：
+        - 只有 pinned 项才允许显示上移/下移菜单
+        - pinned 第一项不能再上移
+        - pinned 最后一项不能再下移
+        - 非 pinned 项统一为不可移动
         """
-        def sort_key(item):
-            self.store._normalize_entry_flags(item)
+        for index, item in enumerate(pinned_items):
+            item['can_move_up'] = index > 0
+            item['can_move_down'] = index < len(pinned_items) - 1
 
-            pin_order = int(item.get('pin_order', 0) or 0)
-            pinned_at = str(item.get('pinned_at') or '').strip()
-            command_text = str(item.get('command') or '')
-
-            has_pin_order = 0 if pin_order > 0 else 1
-            fallback_time = pinned_at or '9999-12-31 23:59:59'
-
-            return (
-                has_pin_order,
-                pin_order if pin_order > 0 else 0,
-                fallback_time,
-                command_text,
-            )
-
-        return sorted(pinned_items, key=sort_key)
+        for item in normal_items:
+            item['can_move_up'] = False
+            item['can_move_down'] = False
 
     def _build_deduplicated_latest_view(self, entries: list) -> list:
         """
@@ -116,7 +108,8 @@ class HistoryViewService:
             else:
                 normal_items.append(copied)
 
-        pinned_items = self._sort_pinned_items(pinned_items)
+        pinned_items = self.store._sort_pinned_snapshot_items(pinned_items)
+        self._apply_quick_history_move_flags(pinned_items, normal_items)
         result = pinned_items + normal_items
 
         for index, item in enumerate(result, start=1):

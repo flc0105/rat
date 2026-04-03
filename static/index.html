@@ -1163,11 +1163,17 @@
                             </el-table-column>
                             <el-table-column label="Actions" width="220" align="center" fixed="right">
                                 <template #default="{ row }">
-                                    <div class="table-actions table-actions-links">
+                                                                        <div class="table-actions table-actions-links">
                                         <a href="#" class="table-action-link" @click.prevent="applyHistoryCommand(row)">Use</a>
                                         <a href="#" class="table-action-link"
                                            @click.prevent="toggleCommandHistoryPinned(row)">{{ row.is_pinned ? 'Unpin' :
                                             'Pin' }}</a>
+                                        <template v-if="row.is_pinned">
+                                            <a v-if="row.can_move_up" href="#" class="table-action-link"
+                                               @click.prevent="moveCommandHistoryPinned(row, 'up')">Up</a>
+                                            <a v-if="row.can_move_down" href="#" class="table-action-link"
+                                               @click.prevent="moveCommandHistoryPinned(row, 'down')">Down</a>
+                                        </template>
                                     </div>
                                 </template>
                             </el-table-column>
@@ -1203,7 +1209,7 @@
                                                     <div class="mobile-file-meta-value">{{ row.time || '-' }}</div>
                                                 </div>
                                             </div>
-                                            <div class="mobile-file-actions">
+                                                                   <div class="mobile-file-actions">
                                                 <el-button size="small" type="primary" plain
                                                            @click="applyHistoryCommand(row)">Use
                                                 </el-button>
@@ -1211,6 +1217,14 @@
                                                            @click="toggleCommandHistoryPinned(row)">{{ row.is_pinned ?
                                                     'Unpin' : 'Pin' }}
                                                 </el-button>
+                                                <template v-if="row.is_pinned">
+                                                    <el-button v-if="row.can_move_up" size="small" plain
+                                                               @click="moveCommandHistoryPinned(row, 'up')">Up
+                                                    </el-button>
+                                                    <el-button v-if="row.can_move_down" size="small" plain
+                                                               @click="moveCommandHistoryPinned(row, 'down')">Down
+                                                    </el-button>
+                                                </template>
                                             </div>
                                         </div>
                                     </div>

@@ -46,6 +46,26 @@ def create_command_history_blueprint(server_instance):
 
         return responder.json_endpoint(_execute, default_error_status=500)
 
+    @blueprint.post('/api/connections/<client_id>/command-history/pin/move')
+    def move_command_history_pinned(client_id):
+        def _execute():
+            payload = get_json_payload()
+            command = (payload.get('command') or '').strip()
+            direction = (payload.get('direction') or '').strip().lower()
+
+            if not command:
+                raise ValueError('command is required')
+            if direction not in ('up', 'down'):
+                raise ValueError('direction must be up or down')
+
+            return web_service.move_command_history_pinned(
+                client_id,
+                command,
+                direction,
+            )
+
+        return responder.json_endpoint(_execute, default_error_status=500)
+
     @blueprint.delete('/api/connections/<client_id>/command-history/full/<entry_id>')
     def delete_command_execution_history_entry(client_id, entry_id):
         return responder.json_endpoint(

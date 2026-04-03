@@ -194,6 +194,19 @@ class ServerWebService:
             'changed': bool(changed),
         }
 
+    def move_command_history_pinned(self, client_id: str, command: str, direction: str):
+        session = self.server.get_target_connection_by_client_id(client_id)
+        changed = self.server.command_history.move_pinned_command_for_connection(
+            session,
+            command,
+            direction,
+        )
+        return {
+            'command': (command or '').strip(),
+            'direction': (direction or '').strip().lower(),
+            'changed': bool(changed),
+        }
+
     def delete_command_execution_history_entry(self, client_id: str, entry_id: str):
         session = self.server.get_target_connection_by_client_id(client_id)
         deleted = self.server.command_history.delete_execution_entry_for_connection(session, entry_id)
