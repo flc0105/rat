@@ -1,22 +1,11 @@
 window.AppFormattersUtil = {
     methods: {
-        formatOsLabel(osType, osVer) {
-            const type = osType || 'Unknown';
-            return osVer ? `${type}` : type;
-        },
 
-        formatAddress(addr) {
-            if (!addr) return '-';
-            const raw = String(addr);
-            const parts = raw.split(':');
-            if (parts.length >= 2) return parts.slice(0, -1).join(':') || raw;
-            return raw;
-        },
 
-        buildPromptLabel(conn) {
-            if (!conn) return '$';
-            return conn.hostname || 'host';
-        },
+        // buildPromptLabel(conn) {
+        //     if (!conn) return '$';
+        //     return conn.hostname || 'host';
+        // },
 
         formatBytes(size) {
             const value = Number(size || 0);

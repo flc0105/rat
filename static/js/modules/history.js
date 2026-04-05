@@ -246,6 +246,62 @@ window.AppHistoryModule = {
                 if (e === 'cancel' || e === 'close' || e?.toString?.().includes('cancel')) return;
                 ElementPlus.ElMessage.error(e.message || 'Failed to clear command history');
             }
-        }
+        },
+
+        buildCommandExecutionStatusTagType(status) {
+            const value = String(status || '').toLowerCase();
+            if (value === 'success') return 'success';
+            if (value === 'error') return 'danger';
+            if (value === 'running') return 'warning';
+            return 'info';
+        },
+
+        formatCommandExecutionDuration(durationMs) {
+            const ms = Number(durationMs || 0);
+            if (!ms) return '0ms';
+
+            if (ms < 1000) return `${ms}ms`;
+
+            const totalSeconds = Math.floor(ms / 1000);
+            const hours = Math.floor(totalSeconds / 3600);
+            const minutes = Math.floor((totalSeconds % 3600) / 60);
+            const seconds = totalSeconds % 60;
+
+            const parts = [];
+            if (hours) parts.push(`${hours}h`);
+            if (minutes) parts.push(`${minutes}m`);
+            if (seconds || !parts.length) parts.push(`${seconds}s`);
+            return parts.join(' ');
+        },
+
+        buildCommandExecutionSummary(item) {
+            const summary = String(item && item.output_summary || '').trim();
+            if (summary) return summary;
+            if (item && item.has_files) return `Produced ${item.file_count || 0} file(s)`;
+            return 'No output';
+        },
+
+        formatCommandExecutionRecordText(text) {
+            return String(text || '');
+        },
+
+        getCommandExecutionDisplayCwd(item) {
+            if (!item) return '-';
+            return item.cwd_end || item.cwd_start || '-';
+        },
+
+        buildCommandExecutionSingleLineSummary(item) {
+            return this.buildCommandExecutionSummary(item);
+        },
+
+        getCommandExecutionFileStatusText(file) {
+            if (!file) return '';
+            return file.is_available ? '' : (file.status_text || 'File removed');
+        },
+
+        toggleCommandExecutionOutputSort() {
+            this.commandExecutionOutputSortOrder = this.commandExecutionOutputSortOrder === 'asc' ? 'desc' : 'asc';
+        },
+
     }
 }

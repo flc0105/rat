@@ -1,5 +1,35 @@
 window.AppJobsModule = {
     methods: {
+
+        buildBackgroundJobStateTagType(state) {
+            const value = String(state || '').toLowerCase();
+            if (value === 'running') return 'success';
+            if (value === 'stopping') return 'warning';
+            if (value === 'error') return 'danger';
+            return 'info';
+        },
+
+        formatBackgroundJobDuration(totalSeconds) {
+            const seconds = Number(totalSeconds || 0);
+            if (!seconds) return '0s';
+
+            const hours = Math.floor(seconds / 3600);
+            const minutes = Math.floor((seconds % 3600) / 60);
+            const remain = seconds % 60;
+
+            const parts = [];
+            if (hours) parts.push(`${hours}h`);
+            if (minutes) parts.push(`${minutes}m`);
+            if (remain || !parts.length) parts.push(`${remain}s`);
+
+            return parts.join(' ');
+        },
+
+        formatBackgroundJobMessageText(text) {
+            const raw = String(text || '').trim();
+            return raw.replace(/^\[[^\]]*?client=[^\]]*?\]\s*/, '');
+        },
+
         async openBackgroundJobsDialog() {
             if (!this.selectedId) {
                 ElementPlus.ElMessage.warning('Please select a device');
@@ -14,88 +44,53 @@ window.AppJobsModule = {
         },
 
         normalizeBackgroundJobModule(item = {}) {
-    const rawSource = String(item.source || '').trim().toLowerCase();
-    const source = rawSource === 'server' ? 'server' : 'client';
+            const rawSource = String(item.source || '').trim().toLowerCase();
+            const source = rawSource === 'server' ? 'server' : 'client';
 
-    const rawJobName = String(item.job_name || item.name || item.job_key || '').trim();
-    const rawJobKey = String(item.job_key || '').trim();
-    const rawDisplayName = String(item.display_name || '').trim();
+            const rawJobName = String(item.job_name || item.name || item.job_key || '').trim();
+            const rawJobKey = String(item.job_key || '').trim();
+            const rawDisplayName = String(item.display_name || '').trim();
 
-    const isHeadingLike = /^(available\s+client\s+job\s+modules:?|available\s+remote\s+scripts:?|no\s+remote\s+scripts\s+available)$/i.test(rawJobName);
-    const looksSyntheticRemoteAlias = source === 'client' && /\s+-\s+server$/i.test(rawJobName);
+            const isHeadingLike = /^(available\s+client\s+job\s+modules:?|available\s+remote\s+scripts:?|no\s+remote\s+scripts\s+available)$/i.test(rawJobName);
+            const looksSyntheticRemoteAlias = source === 'client' && /\s+-\s+server$/i.test(rawJobName);
 
-    const stripPySuffix = (value = '') => String(value).replace(/\.py$/i, '').trim();
+            const stripPySuffix = (value = '') => String(value).replace(/\.py$/i, '').trim();
 
-    let jobName = rawJobName;
-    let jobKey = rawJobKey || stripPySuffix(rawJobName) || rawJobName;
-    let displayName = rawDisplayName;
+            let jobName = rawJobName;
+            let jobKey = rawJobKey || stripPySuffix(rawJobName) || rawJobName;
+            let displayName = rawDisplayName;
 
-    if (source === 'client') {
-        // client 模块：标题保留 .py，副标题显示去掉 .py 的模块名
-        if (!displayName) {
-            displayName = jobName;
-        }
-        if (!jobKey) {
-            jobKey = stripPySuffix(jobName) || jobName;
-        }
-    } else {
-        // server 脚本：标题优先 display_name（通常带 .py），副标题显示 job_key / job_name（通常不带 .py）
-        if (!displayName) {
-            displayName = jobName;
-        }
-        if (!jobKey) {
-            jobKey = stripPySuffix(jobName) || jobName;
-        }
-    }
+            if (source === 'client') {
+                // client 模块：标题保留 .py，副标题显示去掉 .py 的模块名
+                if (!displayName) {
+                    displayName = jobName;
+                }
+                if (!jobKey) {
+                    jobKey = stripPySuffix(jobName) || jobName;
+                }
+            } else {
+                // server 脚本：标题优先 display_name（通常带 .py），副标题显示 job_key / job_name（通常不带 .py）
+                if (!displayName) {
+                    displayName = jobName;
+                }
+                if (!jobKey) {
+                    jobKey = stripPySuffix(jobName) || jobName;
+                }
+            }
 
-    const subtitle = jobKey && displayName !== jobKey ? jobKey : '';
+            const subtitle = jobKey && displayName !== jobKey ? jobKey : '';
 
-    return {
-        ...item,
-        source,
-        job_name: jobName,
-        job_key: jobKey,
-        display_name: displayName,
-        subtitle,
-        module_id: `${source}:${jobKey || jobName}`,
-        hidden_invalid: !jobName || isHeadingLike || looksSyntheticRemoteAlias,
-    };
-},
-
-// async loadBackgroundJobModules() {
-//     if (!this.selectedId) return;
-//
-//     this.backgroundJobModulesLoading = true;
-//     try {
-//         // 加载本地模块
-//         const localRes = await fetch(`/api/connections/${encodeURIComponent(this.selectedId)}/background-jobs/modules`);
-//         const localJson = await localRes.json();
-//
-//         // 加载远程脚本
-//         const remoteRes = await fetch('/api/server/jobs/list');
-//         const remoteJson = await remoteRes.json();
-//
-//         const localModules = localRes.ok && localJson.code === 0 && Array.isArray(localJson.data)
-//             ? localJson.data.map(item => ({ ...item, source: 'local' }))
-//             : [];
-//
-//         const remoteModules = remoteRes.ok && remoteJson.code === 0 && Array.isArray(remoteJson.data?.scripts)
-//             ? remoteJson.data.scripts.map(item => ({
-//                 ...item,
-//                 source: 'remote',  // 关键：标记为 remote
-//                 job_name: item.name,
-//                 job_key: item.name.replace(/\.py$/, '')
-//               }))
-//             : [];
-//
-//         this.backgroundJobModules = [...localModules, ...remoteModules];
-//     } catch (e) {
-//         this.backgroundJobModules = [];
-//         ElementPlus.ElMessage.error(e.message || 'Failed to load job modules');
-//     } finally {
-//         this.backgroundJobModulesLoading = false;
-//     }
-// },
+            return {
+                ...item,
+                source,
+                job_name: jobName,
+                job_key: jobKey,
+                display_name: displayName,
+                subtitle,
+                module_id: `${source}:${jobKey || jobName}`,
+                hidden_invalid: !jobName || isHeadingLike || looksSyntheticRemoteAlias,
+            };
+        },
 
         async loadBackgroundJobModules() {
             if (!this.selectedId) return;
@@ -163,40 +158,6 @@ window.AppJobsModule = {
                 this.loadBackgroundJobs();
             }, 200);
         },
-
-        // async startBackgroundJob(jobName) {
-        //     if (!this.selectedId) {
-        //         ElementPlus.ElMessage.warning('Please select a device');
-        //         return;
-        //     }
-        //
-        //     const normalized = String(jobName || '').trim();
-        //     if (!normalized) {
-        //         ElementPlus.ElMessage.warning('Invalid job name');
-        //         return;
-        //     }
-        //
-        //     try {
-        //         const res = await fetch(`/api/connections/${encodeURIComponent(this.selectedId)}/background-jobs/start`, {
-        //             method: 'POST',
-        //             headers: {'Content-Type': 'application/json'},
-        //             body: JSON.stringify({job_name: normalized})
-        //         });
-        //
-        //         const json = await res.json();
-        //         if (!res.ok || json.code !== 0) {
-        //             throw new Error(json.message || 'Failed to start background job');
-        //         }
-        //
-        //         ElementPlus.ElMessage.success(`Background job started: ${normalized}`);
-        //         this.backgroundJobsActiveTab = 'jobs';
-        //         await this.loadBackgroundJobs();
-        //     } catch (e) {
-        //         ElementPlus.ElMessage.error(e.message || 'Failed to start background job');
-        //     }
-        // },
-
-        // static/js/modules/jobs.js
 
         async startBackgroundJob(jobName, source = 'auto') {
             if (!this.selectedId) {
@@ -283,7 +244,160 @@ window.AppJobsModule = {
         openBackgroundJobMessageDialog(message) {
             this.selectedBackgroundJobMessage = message || {};
             this.backgroundJobMessageDialogVisible = true;
-        }
+        },
+
+        normalizeServerJobFilename(scriptName, fallbackName = 'new_server_job.py') {
+            let normalized = String(scriptName || '').trim().replace(/\\/g, '/').replace(/^\/+/, '');
+            if (!normalized) {
+                normalized = fallbackName;
+            }
+            if (!/\.py$/i.test(normalized)) {
+                normalized = `${normalized}.py`;
+            }
+            return normalized;
+        },
+
+        buildServerJobTemplate(scriptName = 'new_server_job.py') {
+            const normalizedScriptName = this.normalizeServerJobFilename(scriptName);
+            const classBaseName = normalizedScriptName
+                .replace(/\.py$/i, '')
+                .split('/')
+                .pop()
+                .split(/[^a-zA-Z0-9]+/)
+                .filter(Boolean)
+                .map(part => part.charAt(0).toUpperCase() + part.slice(1))
+                .join('') || 'NewServerJob';
+
+            return `import time\n\nfrom client.jobs.core.job import Job\n\n\nclass ${classBaseName}(Job):\n    def __init__(self):\n        super().__init__()\n        self.interval = 10\n\n    def run(self):\n        self.mark_running()\n        self.send_to_server(1, "${normalizedScriptName} started")\n\n        try:\n            while not self.stop_event.is_set():\n                self.send_to_server(1, f"heartbeat: {time.strftime('%Y-%m-%d %H:%M:%S')}")\n                time.sleep(self.interval)\n        finally:\n            self.send_to_server(1, "${normalizedScriptName} stopped")\n            self.mark_stopped()\n\n    def stop(self, notify=True):\n        self.request_stop(notify=notify)\n`;
+        },
+
+        triggerServerJobUpload() {
+            if (!this.selectedId) {
+                ElementPlus.ElMessage.warning('Please select a device');
+                return;
+            }
+
+            const input = document.getElementById('server-job-upload-input');
+            if (input) {
+                input.value = '';
+                input.click();
+            }
+        },
+
+        async handleServerJobUpload(event) {
+            const input = event && event.target;
+            const file = input && input.files && input.files[0];
+            if (!file) {
+                return;
+            }
+
+            if (!/\.py$/i.test(file.name || '')) {
+                ElementPlus.ElMessage.warning('Only .py files are supported');
+                input.value = '';
+                return;
+            }
+
+            this.serverJobUploadLoading = true;
+            try {
+                const formData = new FormData();
+                formData.append('file', file, file.name);
+
+                const res = await fetch('/api/server/jobs/upload', {
+                    method: 'POST',
+                    body: formData
+                });
+                const json = await res.json();
+                if (!res.ok || json.code !== 0) {
+                    throw new Error(json.message || 'Failed to upload script');
+                }
+
+                const uploadedName = this.normalizeServerJobFilename(json.data?.name || file.name);
+                ElementPlus.ElMessage.success(`Script uploaded: ${uploadedName}`);
+
+                if (this.backgroundJobsDialogVisible) {
+                    await this.loadBackgroundJobModules();
+                }
+
+                await this.openRemoteJobEditor(uploadedName);
+            } catch (e) {
+                ElementPlus.ElMessage.error(e.message || 'Failed to upload script');
+            } finally {
+                this.serverJobUploadLoading = false;
+                if (input) input.value = '';
+            }
+        },
+
+        async deleteRemoteScript(scriptName) {
+            const normalizedScriptName = this.normalizeServerJobFilename(scriptName);
+            if (!normalizedScriptName) {
+                ElementPlus.ElMessage.warning('Invalid script name');
+                return;
+            }
+
+            try {
+                await ElementPlus.ElMessageBox.confirm(
+                    `Delete "${normalizedScriptName}"? This action cannot be undone.`,
+                    'Delete Server Job',
+                    {
+                        type: 'warning',
+                        confirmButtonText: 'Delete',
+                        cancelButtonText: 'Cancel',
+                    }
+                );
+
+                const res = await fetch('/api/server/jobs/delete', {
+                    method: 'DELETE',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({name: normalizedScriptName})
+                });
+                const json = await res.json();
+
+                if (!res.ok || json.code !== 0) {
+                    throw new Error(json.message || 'Failed to delete script');
+                }
+
+                if (this.previewDialogVisible && this.previewSource === 'server_job') {
+                    const currentPreviewName = this.normalizeServerJobFilename(this.previewFilePath || this.previewTitle || '');
+                    if (currentPreviewName === normalizedScriptName) {
+                        this.previewDialogVisible = false;
+                        this.destroyMonacoEditor();
+                    }
+                }
+
+                ElementPlus.ElMessage.success(`Deleted: ${normalizedScriptName}`);
+
+                if (this.backgroundJobsDialogVisible) {
+                    await this.loadBackgroundJobModules();
+                }
+            } catch (e) {
+                if (e === 'cancel' || e === 'close') return;
+                ElementPlus.ElMessage.error(e.message || 'Failed to delete script');
+            }
+        },
+
+        async createRemoteJobPrompt() {
+            if (!this.selectedId) {
+                ElementPlus.ElMessage.warning('Please select a device');
+                return;
+            }
+
+            try {
+                const {value} = await ElementPlus.ElMessageBox.prompt(
+                    'Enter the new server-side job filename',
+                    'New Server Job',
+                    {
+                        confirmButtonText: 'Create',
+                        cancelButtonText: 'Cancel',
+                        inputValue: 'new_server_job.py',
+                        inputPlaceholder: 'new_server_job.py',
+                    }
+                );
+
+                this.openNewRemoteJobEditor(value || 'new_server_job.py');
+            } catch (e) {
+                if (e === 'cancel' || e === 'close') return;
+            }
+        },
     }
 };
 
