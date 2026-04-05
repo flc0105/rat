@@ -143,7 +143,7 @@ class Job(ABC):
         category=None,
         *,
         artifact_type: str = 'files',
-        source_type: str = 'job_output',
+        source_type: str = 'client_upload',
         related_path: str = '',
         extra: dict | None = None,
     ):
@@ -155,7 +155,7 @@ class Job(ABC):
             'job_id': self.job_id,
             'job_name': self.job_name,
             'job_key': self.job_key,
-            'source_type': (source_type or 'job_output').strip() or 'job_output',
+            'source_type': (source_type or 'client_upload').strip() or 'client_upload',
             'source_command_id': self.command_id if self.command_id is not None else '',
             'related_path': (related_path or '').strip(),
         }

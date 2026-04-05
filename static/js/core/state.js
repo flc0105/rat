@@ -1,4 +1,3 @@
-
 window.AppStateModule = {
     data() {
         return {
@@ -47,13 +46,7 @@ window.AppStateModule = {
             remoteSelectedPaths: [],
             remoteZipDownloading: false,
 
-            artifactDialogVisible: false,
-            artifactLoading: false,
-            artifactItems: [],
-            artifactHostnames: [],
-            artifactActiveTab: 'files',
-            artifactHostnameFilter: '',
-            artifactClearing: false,
+
 
             previewDialogVisible: false,
             previewLoading: false,
@@ -69,10 +62,10 @@ window.AppStateModule = {
             previewTruncated: false,     // 是否被截断
             previewFileSize: '',         // 文件大小显示
             previewFileEncoding: 'UTF-8', // 文件编码
-  previewSource: '',  // 'remote_file' 或 'artifact'
-previewArtifactInfo: null,
-previewImageInfo: null,
-previewImageInfoDialogVisible: false,
+            previewSource: '',  // 'remote_file' 或 'artifact'
+            previewArtifactInfo: null,
+            previewImageInfo: null,
+            previewImageInfoDialogVisible: false,
 
 
             pendingRemoteUploadRefresh: null,
@@ -93,17 +86,17 @@ previewImageInfoDialogVisible: false,
             connectionInfoLoading: false,
             connectionInfoJobCount: 0,
 
-                    quickJumpPaths: {},
-        quickJumpLoading: false,
+            quickJumpPaths: {},
+            quickJumpLoading: false,
             serverJobUploadLoading: false,
 
-terminalJsonDialogVisible: false,
-terminalJsonDialogTitle: 'JSON Viewer',
-terminalJsonText: '',
-terminalJsonDisplayMode: 'raw',
-terminalJsonTableColumns: [],
-terminalJsonTableRows: [],
-terminalJsonFlatRows: [],
+            terminalJsonDialogVisible: false,
+            terminalJsonDialogTitle: 'JSON Viewer',
+            terminalJsonText: '',
+            terminalJsonDisplayMode: 'raw',
+            terminalJsonTableColumns: [],
+            terminalJsonTableRows: [],
+            terminalJsonFlatRows: [],
         };
     },
 
@@ -281,12 +274,12 @@ terminalJsonFlatRows: [],
 
         terminalJsonDialogVisible(val) {
             if (!val) {
- this.terminalJsonDialogTitle = 'JSON Viewer';
-this.terminalJsonText = '';
-this.terminalJsonDisplayMode = 'raw';
-this.terminalJsonTableColumns = [];
-this.terminalJsonTableRows = [];
-this.terminalJsonFlatRows = [];
+                this.terminalJsonDialogTitle = 'JSON Viewer';
+                this.terminalJsonText = '';
+                this.terminalJsonDisplayMode = 'raw';
+                this.terminalJsonTableColumns = [];
+                this.terminalJsonTableRows = [];
+                this.terminalJsonFlatRows = [];
             }
         },
         previewDialogVisible(val) {

@@ -1,5 +1,48 @@
 window.AppArtifactsModule = {
+    data() {
+        return {
+            artifactDialogVisible: false,
+            artifactLoading: false,
+            artifactItems: [],
+            artifactHostnames: [],
+            artifactActiveTab: 'files',
+            artifactHostnameFilter: '',
+            artifactClearing: false,
+        };
+    },
     methods: {
+        async openArtifactDialog() {
+            this.artifactDialogVisible = true;
+            await this.loadArtifacts();
+        },
+
+        async loadArtifacts() {
+            this.artifactLoading = true;
+
+            try {
+                const url = new URL('/api/artifacts', window.location.origin);
+                const hostname = String(this.artifactHostnameFilter || '').trim();
+
+                if (hostname) url.searchParams.set('hostname', hostname);
+
+                const res = await fetch(url.pathname + url.search);
+                const json = await res.json();
+
+                if (!res.ok || json.code !== 0) {
+                    throw new Error(json.message || 'Failed to load artifacts');
+                }
+
+                const data = json.data || {};
+                this.artifactItems = Array.isArray(data.items) ? data.items : [];
+                this.artifactHostnames = Array.isArray(data.hostnames) ? data.hostnames : [];
+            } catch (e) {
+                this.artifactItems = [];
+                this.artifactHostnames = [];
+                ElementPlus.ElMessage.error(e.message || 'Failed to load artifacts');
+            } finally {
+                this.artifactLoading = false;
+            }
+        },
 
         async deleteArtifact(row) {
             if (!row || !row.artifact_id) {
@@ -32,39 +75,6 @@ window.AppArtifactsModule = {
             } catch (e) {
                 if (e === 'cancel' || e === 'close' || e?.toString?.().includes('cancel')) return;
                 ElementPlus.ElMessage.error(e.message || 'Delete failed');
-            }
-        },
-
-        async openArtifactDialog() {
-            this.artifactDialogVisible = true;
-            await this.loadArtifacts();
-        },
-
-        async loadArtifacts() {
-            this.artifactLoading = true;
-
-            try {
-                const url = new URL('/api/artifacts', window.location.origin);
-                const hostname = String(this.artifactHostnameFilter || '').trim();
-
-                if (hostname) url.searchParams.set('hostname', hostname);
-
-                const res = await fetch(url.pathname + url.search);
-                const json = await res.json();
-
-                if (!res.ok || json.code !== 0) {
-                    throw new Error(json.message || 'Failed to load artifacts');
-                }
-
-                const data = json.data || {};
-                this.artifactItems = Array.isArray(data.items) ? data.items : [];
-                this.artifactHostnames = Array.isArray(data.hostnames) ? data.hostnames : [];
-            } catch (e) {
-                this.artifactItems = [];
-                this.artifactHostnames = [];
-                ElementPlus.ElMessage.error(e.message || 'Failed to load artifacts');
-            } finally {
-                this.artifactLoading = false;
             }
         },
 
@@ -110,14 +120,6 @@ window.AppArtifactsModule = {
             } finally {
                 this.artifactClearing = false;
             }
-        },
-
-        buildArtifactTypeLabel(item) {
-            const artifactType = String(item && item.artifact_type || '').trim();
-            if (artifactType === 'http_uploads') return 'http_uploads';
-            if (artifactType === 'downloads') return 'downloads';
-            if (artifactType === 'previews') return 'previews';
-            return artifactType || '-';
         },
 
         formatArtifactSourceLabel(item) {

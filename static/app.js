@@ -4,6 +4,7 @@ createApp({
     data() {
         return {
             ...window.AppStateModule.data(),
+            ...window.AppArtifactsModule.data(),
             ...window.AppAgentModule.data(),
             ...window.AppProcessModule.data(),
         }
@@ -11,7 +12,7 @@ createApp({
 
     computed: {
         ...window.AppStateModule.computed,
-         ...window.AppProcessModule.computed,
+        ...window.AppProcessModule.computed,
         ...window.AppAgentModule.computed,
     },
 
@@ -34,8 +35,6 @@ createApp({
         ...window.AppTerminalModule.methods,
         ...window.AppCandidatesModule.methods,
         ...window.AppHistoryModule.methods,
-        ...window.AppTabContextUtil.methods,
-        ...window.AppFormattersUtil.methods,
         ...window.AppArtifactsModule.methods,
         ...window.AppPreviewModule.methods,
 
