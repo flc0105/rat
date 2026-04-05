@@ -113,5 +113,32 @@ window.AppConnectionModule = {
                 this.loadBackgroundJobs();
             }
         },
+
+        async openConnectionInfoDialog() {
+            if (!this.selectedId) {
+                ElementPlus.ElMessage.warning('Please select a device');
+                return;
+            }
+
+            this.connectionInfoDialogVisible = true;
+            this.connectionInfoLoading = true;
+            this.connectionInfoJobCount = 0;
+
+            try {
+                if (this.commandCandidatesLoadedFor !== this.selectedId || !this.commandCandidates.length) {
+                    await this.loadCommandCandidates(this.selectedId);
+                }
+
+                const res = await fetch(`/api/connections/${encodeURIComponent(this.selectedId)}/background-jobs`);
+                const json = await res.json();
+
+                if (res.ok && json.code === 0 && Array.isArray(json.data)) {
+                    this.connectionInfoJobCount = json.data.length;
+                }
+            } catch (e) {
+            } finally {
+                this.connectionInfoLoading = false;
+            }
+        },
     }
 }

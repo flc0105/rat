@@ -33,6 +33,9 @@ createApp({
         ...window.AppTaskModule.methods,
         ...window.AppTerminalModule.methods,
         ...window.AppCandidatesModule.methods,
+        ...window.AppHistoryModule.methods,
+        ...window.AppTabContextUtil.methods,
+        ...window.AppFormattersUtil.methods,
 
     },
     mounted() {
