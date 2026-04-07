@@ -63,6 +63,10 @@ def parse_kwargs(kwargs: Sequence[Tuple[Sequence[str], dict]], arg_split: Sequen
     return arg_dict
 
 
+# add exec kwargs flag参数识别 2026-04-07 00:00
+def _is_flag_option(option_name):
+    return option_name in {'topmost'}
+
 def scan_args(arg_split: Sequence[str]) -> dict:
     arg_dict = {}
     current_option = None
@@ -74,7 +78,10 @@ def scan_args(arg_split: Sequence[str]) -> dict:
             return
 
         if not current_values:
-            arg_dict[current_option] = True
+            if _is_flag_option(current_option):
+                arg_dict[current_option] = True
+            else:
+                arg_dict[current_option] = ''
         else:
             arg_dict[current_option] = _coerce_scan_arg_value(' '.join(current_values))
 

@@ -115,3 +115,25 @@ def get_system_paths():
         system_paths['executable'] = os.path.dirname(argv)
 
     return system_paths
+
+# add exec脚本参数异常 2026-04-07 00:00
+class ScriptArgError(Exception):
+    pass
+
+
+# add exec脚本必填参数读取 2026-04-07 00:00
+def require_kwarg(kwargs, name, default='', allow_empty=False, error_prefix='[参数异常]'):
+    value = kwargs.get(name, default)
+
+    if allow_empty:
+        return value
+
+    if value is None:
+        print(f'{error_prefix} 缺少必要参数: {name}')
+        raise ScriptArgError(f'缺少必要参数: {name}')
+
+    if isinstance(value, str) and not value.strip():
+        print(f'{error_prefix} 缺少必要参数: {name}')
+        raise ScriptArgError(f'缺少必要参数: {name}')
+
+    return value
