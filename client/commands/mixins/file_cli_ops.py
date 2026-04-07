@@ -1,4 +1,7 @@
 import os
+import shutil
+from datetime import datetime
+from pathlib import Path
 
 from client.commands.interrupts import interruptible
 from client.config.config import UPLOAD_BASE_URL
@@ -108,9 +111,23 @@ class CommandFileCliMixin:
         except Exception as e:
             return 0, f'Failed to extract archive: {e}'
 
+    @desc('Create a backup copy of a file', group='file')
+    def bp(self, path):
+        try:
+            suffix = f".bak.{datetime.now().strftime('%Y%m%d')}"
+            src_path = Path(path).expanduser()
+            if not src_path.exists():
+                return 0, 'source file does not exist'
 
+            if not src_path.is_file():
+                return 0, 'source path is not a file'
 
+            dst_path = Path(f'{src_path}{suffix}')
+            if dst_path.exists():
+                return 0, 'backup target already exists'
 
+            shutil.copy2(src_path, dst_path)
 
-
-
+            return 1, f'success: {str(src_path)} -> {str(dst_path)}'
+        except Exception as e:
+            return 0, str(e)
