@@ -121,22 +121,5 @@ window.AppArtifactsModule = {
                 this.artifactClearing = false;
             }
         },
-
-        formatArtifactSourceLabel(item) {
-            if (!item) return '-';
-
-            const sourceType = String(item.source_type || '').trim();
-            const category = String(item.category || '').trim();
-
-            if (category && sourceType) {
-                return `${sourceType} / ${category}`;
-            }
-
-            if (category) {
-                return category;
-            }
-
-            return sourceType || '-';
-        },
     },
 }

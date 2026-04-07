@@ -222,7 +222,8 @@ class AppScreenshotMonitor(Job):
                 self.send_to_server(1, f'{mode_text} captured ({file_size} bytes)', 0)
 
                 filename = f'{self.target_app}_screenshot_{get_time()}.png'
-                self.upload_file_via_http(screenshot_path, f'{self.target_app}_screenshots')
+                # self.upload_file_via_http(screenshot_path, f'{self.target_app}_screenshots')
+                self.upload_file_via_http(screenshot_path, f'app_screenshot')
 
                 self.screenshot_count += 1
                 self.send_to_server(1, f'Uploaded (total: {self.screenshot_count})', 0)

@@ -84,7 +84,7 @@ class ClipboardMonitor(Job):
                 )
 
                 try:
-                    self.upload_file_via_http(file_name, 'clipboard_images')
+                    self.upload_file_via_http(file_name, 'clipboard_image')
                     self.send_to_server(1, f'Clipboard image uploaded successfully: {file_name}', 0)
                 finally:
                     try:

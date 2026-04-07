@@ -590,9 +590,9 @@
                             <div class="ellipsis">{{ row.hostname || '-' }}</div>
                         </template>
                     </el-table-column>
-                    <el-table-column label="Source / Category" min-width="160" show-overflow-tooltip>
+                    <el-table-column label="Category" min-width="160" show-overflow-tooltip>
                         <template #default="{ row }">
-                            <div class="ellipsis">{{ formatArtifactSourceLabel(row) }}</div>
+                            <div class="ellipsis">{{ row.category || '-' }}</div>
                         </template>
                     </el-table-column>
                     <el-table-column label="Size" width="110" align="center">
@@ -633,7 +633,7 @@
                                     <div class="mobile-file-meta">
                                         <div class="mobile-file-meta-item">
                                             <div class="mobile-file-meta-label">Source / Category</div>
-                                            <div class="mobile-file-meta-value">{{ formatArtifactSourceLabel(row) }}
+                                            <div class="mobile-file-meta-value">{{ row.hostname || '-' }}
                                             </div>
                                         </div>
                                         <div class="mobile-file-meta-item">
