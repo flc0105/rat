@@ -122,4 +122,45 @@ window.AppArtifactsModule = {
             }
         },
     },
+
+    computed: {
+        filteredArtifactItems() {
+            const activeType = String(this.artifactActiveTab || '').trim();
+            const hostname = String(this.artifactHostnameFilter || '').trim();
+
+            return (this.artifactItems || []).filter(item => {
+                if (activeType && item.artifact_type !== activeType) return false;
+                if (hostname && item.hostname !== hostname) return false;
+                return true;
+            });
+        },
+
+        artifactCountMap() {
+            const hostname = String(this.artifactHostnameFilter || '').trim();
+            const counts = {
+                files: 0,
+                previews: 0,
+            };
+
+            (this.artifactItems || []).forEach(item => {
+                if (!item) return;
+                if (hostname && item.hostname !== hostname) return false;
+
+                const type = String(item.artifact_type || '').trim();
+                if (Object.prototype.hasOwnProperty.call(counts, type)) {
+                    counts[type] += 1;
+                }
+            });
+
+            return counts;
+        },
+    },
+
+    watch: {
+        artifactDialogVisible(val) {
+            if (!val) {
+                this.artifactHostnameFilter = '';
+            }
+        },
+    }
 }

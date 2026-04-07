@@ -1,4 +1,11 @@
 window.AppCommandsModule = {
+    data() {
+        return {
+            commandText: '',
+            sending: false,
+        }
+    },
+
     methods: {
         async sendCommand() {
             const command = (this.commandText || '').trim();

@@ -8,6 +8,15 @@ createApp({
             ...window.AppAgentModule.data(),
             ...window.AppProcessModule.data(),
             ...window.AppFilesModule.data(),
+            ...window.AppPreviewModule.data(),
+            ...window.AppJobsModule.data(),
+            ...window.AppCandidatesModule.data(),
+            ...window.AppHistoryModule.data(),
+            ...window.AppTerminalModule.data(),
+            ...window.AppConnectionModule.data(),
+            ...window.AppCommandsModule.data(),
+            ...window.AppTaskModule.data(),
+            ...window.AppSseModule.data(),
         }
     },
 
@@ -15,12 +24,26 @@ createApp({
         ...window.AppStateModule.computed,
         ...window.AppProcessModule.computed,
         ...window.AppAgentModule.computed,
+        ...window.AppPreviewModule.computed,
+        ...window.AppConnectionModule.computed,
+        ...window.AppTerminalModule.computed,
+        ...window.AppTaskModule.computed,
+        ...window.AppHistoryModule.computed,
+        ...window.AppFilesModule.computed,
+        ...window.AppArtifactsModule.computed,
+        ...window.AppJobsModule.computed,
     },
 
     watch: {
         ...window.AppStateModule.watch,
         ...window.AppAgentModule.watch,
         ...window.AppProcessModule.watch,
+        ...window.AppTerminalModule.watch,
+        ...window.AppPreviewModule.watch,
+        ...window.AppFilesModule.watch,
+        ...window.AppArtifactsModule.watch,
+        ...window.AppJobsModule.watch,
+        ...window.AppHistoryModule.watch,
     },
 
     methods: {

@@ -1,4 +1,14 @@
 window.AppConnectionModule = {
+    data() {
+        return {
+            connections: [],
+            selectedId: '',
+            connectionInfoDialogVisible: false,
+            connectionInfoLoading: false,
+            connectionInfoJobCount: 0,
+        }
+    },
+
     methods: {
         buildConnectionIdentityKey(item) {
             if (!item) return '';
@@ -114,6 +124,89 @@ window.AppConnectionModule = {
             }
         },
 
+        upsertConnection(conn) {
+            if (!conn || !conn.client_id) return;
+
+            const identityKey = this.buildConnectionIdentityKey(conn);
+            const incomingState = this.getConnectionDisplayState(conn);
+
+            const duplicates = [];
+            this.connections.forEach((item, index) => {
+                if (!item) return;
+
+                const sameClientId = item.client_id === conn.client_id;
+                const sameIdentity = identityKey && this.buildConnectionIdentityKey(item) === identityKey;
+
+                if (sameClientId || sameIdentity) {
+                    duplicates.push({index, item});
+                }
+            });
+
+            if (!duplicates.length) {
+                this.connections.unshift(conn);
+                this.connections = this.dedupeConnections(this.connections);
+                return;
+            }
+
+            let best = duplicates[0];
+            duplicates.forEach((entry) => {
+                const currentState = this.getConnectionDisplayState(entry.item);
+                const currentRank = currentState === 'online' ? 0 : (currentState === 'stale' ? 1 : 2);
+                const bestState = this.getConnectionDisplayState(best.item);
+                const bestRank = bestState === 'online' ? 0 : (bestState === 'stale' ? 1 : 2);
+
+                if (currentRank < bestRank) {
+                    best = entry;
+                    return;
+                }
+
+                if (currentRank === bestRank) {
+                    const currentTime = String(entry.item.last_seen_at || entry.item.connected_at || entry.item.disconnected_at || '');
+                    const bestTime = String(best.item.last_seen_at || best.item.connected_at || best.item.disconnected_at || '');
+                    if (currentTime > bestTime) {
+                        best = entry;
+                    }
+                }
+            });
+
+            const merged = {
+                ...best.item,
+                ...conn
+            };
+
+            if (incomingState === 'online') {
+                merged.disconnected_at = '';
+            }
+
+            this.connections.splice(best.index, 1, merged);
+
+            const removeIndexes = duplicates
+                .map(entry => entry.index)
+                .filter(index => index !== best.index)
+                .sort((a, b) => b - a);
+
+            removeIndexes.forEach(index => {
+                this.connections.splice(index, 1);
+            });
+
+            this.connections = this.dedupeConnections(this.connections);
+        },
+
+        removeConnection(clientId) {
+            const idx = this.connections.findIndex(item => item.client_id === clientId);
+            if (idx === -1) return;
+
+            const oldItem = this.connections[idx];
+            this.connections[idx] = {
+                ...oldItem,
+                connection_state: 'offline',
+                disconnected_at: oldItem.disconnected_at || new Date().toISOString(),
+                is_transfer_active: false,
+            };
+
+            this.connections = this.dedupeConnections(this.connections);
+        },
+
         async openConnectionInfoDialog() {
             if (!this.selectedId) {
                 ElementPlus.ElMessage.warning('Please select a device');
@@ -225,7 +318,7 @@ window.AppConnectionModule = {
             return `${value} ms`;
         },
 
-                formatOsLabel(osType, osVer) {
+        formatOsLabel(osType, osVer) {
             const type = osType || 'Unknown';
             return osVer ? `${type}` : type;
         },
@@ -236,6 +329,15 @@ window.AppConnectionModule = {
             const parts = raw.split(':');
             if (parts.length >= 2) return parts.slice(0, -1).join(':') || raw;
             return raw;
+        },
+    },
+    computed: {
+        currentConnection() {
+            return this.connections.find(item => item.client_id === this.selectedId) || null;
+        },
+
+        connectionInfoClientCommands() {
+            return (this.commandCandidates || []).filter(item => item && item.source === 'client');
         },
     }
 }

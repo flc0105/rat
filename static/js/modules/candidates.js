@@ -1,4 +1,11 @@
 window.AppCandidatesModule = {
+    data() {
+        return {
+            commandCandidates: [],
+            commandCandidatesLoadedFor: '',
+        }
+    },
+
     methods: {
         buildCommonOpsCandidates() {
             return [
@@ -31,59 +38,6 @@ window.AppCandidatesModule = {
                     group: 'common_ops'
                 },
             ];
-        },
-
-        sortQuickHistoryShortcutCandidates(items) {
-            const list = Array.isArray(items) ? [...items] : [];
-
-            return list.sort((a, b) => {
-                const ai = Number.parseInt(a && a.quickHistoryIndex, 10);
-                const bi = Number.parseInt(b && b.quickHistoryIndex, 10);
-
-                const av = Number.isInteger(ai) ? ai : Number.MAX_SAFE_INTEGER;
-                const bv = Number.isInteger(bi) ? bi : Number.MAX_SAFE_INTEGER;
-
-                return av - bv;
-            });
-        },
-
-        buildQuickHistoryShortcutCandidates(historyItems) {
-            const items = Array.isArray(historyItems) ? historyItems : [];
-
-            return items
-                .map((item) => {
-                    const indexValue = Number.parseInt(item && item.index, 10);
-                    const commandText = String((item && item.command) || '').trim();
-
-                    if (!Number.isInteger(indexValue) || indexValue <= 0 || !commandText) {
-                        return null;
-                    }
-
-                    const shortcutText = `!${indexValue}`;
-                    return {
-                        name: shortcutText,
-                        value: shortcutText,
-                        template: shortcutText,
-                        help: commandText,
-                        source: 'quick_history_shortcut',
-                        group: 'quick_history',
-                        groupLabel: 'quick_history',
-                        quickHistoryIndex: indexValue,
-                        quickHistoryCommand: commandText,
-                        searchText: [
-                            shortcutText,
-                            `! ${indexValue}`,
-                            String(indexValue),
-                            commandText,
-                            'quick history',
-                            'history shortcut'
-                        ]
-                            .filter(Boolean)
-                            .join(' ')
-                            .toLowerCase()
-                    };
-                })
-                .filter(Boolean);
         },
 
         queryCommandCandidates(queryString, callback) {
@@ -267,5 +221,57 @@ window.AppCandidatesModule = {
             }
         },
 
+        sortQuickHistoryShortcutCandidates(items) {
+            const list = Array.isArray(items) ? [...items] : [];
+
+            return list.sort((a, b) => {
+                const ai = Number.parseInt(a && a.quickHistoryIndex, 10);
+                const bi = Number.parseInt(b && b.quickHistoryIndex, 10);
+
+                const av = Number.isInteger(ai) ? ai : Number.MAX_SAFE_INTEGER;
+                const bv = Number.isInteger(bi) ? bi : Number.MAX_SAFE_INTEGER;
+
+                return av - bv;
+            });
+        },
+
+        buildQuickHistoryShortcutCandidates(historyItems) {
+            const items = Array.isArray(historyItems) ? historyItems : [];
+
+            return items
+                .map((item) => {
+                    const indexValue = Number.parseInt(item && item.index, 10);
+                    const commandText = String((item && item.command) || '').trim();
+
+                    if (!Number.isInteger(indexValue) || indexValue <= 0 || !commandText) {
+                        return null;
+                    }
+
+                    const shortcutText = `!${indexValue}`;
+                    return {
+                        name: shortcutText,
+                        value: shortcutText,
+                        template: shortcutText,
+                        help: commandText,
+                        source: 'quick_history_shortcut',
+                        group: 'quick_history',
+                        groupLabel: 'quick_history',
+                        quickHistoryIndex: indexValue,
+                        quickHistoryCommand: commandText,
+                        searchText: [
+                            shortcutText,
+                            `! ${indexValue}`,
+                            String(indexValue),
+                            commandText,
+                            'quick history',
+                            'history shortcut'
+                        ]
+                            .filter(Boolean)
+                            .join(' ')
+                            .toLowerCase()
+                    };
+                })
+                .filter(Boolean);
+        },
     }
 }

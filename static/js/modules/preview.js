@@ -1,4 +1,25 @@
 window.AppPreviewModule = {
+    data() {
+        return {
+            previewDialogVisible: false,
+            previewLoading: false,
+            previewType: '',
+            previewTitle: '',
+            previewUrl: '',
+            previewText: '',
+            previewEditMode: false,  // 是否处于编辑模式
+            previewSaving: false,    // 保存中状态
+            previewFilePath: '',     // 当前编辑的文件路径
+            previewOriginalContent: '',  // 原始内容副本（用于取消编辑时恢复）
+            previewTruncated: false,     // 是否被截断
+            previewFileSize: '',         // 文件大小显示
+            previewFileEncoding: 'UTF-8', // 文件编码
+            previewSource: '',  // 'remote_file' 或 'artifact'
+            previewArtifactInfo: null,
+            previewImageInfo: null,
+            previewImageInfoDialogVisible: false,
+        }
+    },
     methods: {
         monacoEditor: null,
 
@@ -91,7 +112,6 @@ window.AppPreviewModule = {
             }
         },
 
-
         enterEditMode() {
             this.previewOriginalContent = this.previewText;
             this.previewEditMode = true;
@@ -109,6 +129,75 @@ window.AppPreviewModule = {
             this.previewOriginalContent = '';
             // 切换编辑器为只读模式
             this.setMonacoEditorReadOnly(true);
+        },
+
+        async previewRemoteEntry(row) {
+            if (!row || !row.path || row.is_dir || row.is_parent_entry) {
+                ElementPlus.ElMessage.warning('Please select a file');
+                return;
+            }
+
+            // 记录文件路径
+            this.previewFilePath = row.path;
+            this.previewSource = 'remote_file';  // 标记来源
+
+
+            await this.loadPreviewPayload(
+                () => fetch(`/api/connections/${encodeURIComponent(this.selectedId)}/remote-files/preview`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({path: row.path})
+                }),
+                row.name || 'File Preview'
+            );
+
+            // 重置编辑模式
+            this.previewEditMode = false;
+        },
+
+        async previewArtifact(row) {
+            if (!row || !row.artifact_id) {
+                ElementPlus.ElMessage.warning('Invalid artifact');
+                return;
+            }
+
+            this.previewSource = 'artifact';  // 标记来源
+            this.previewFilePath = row.artifact_id;  // 存储 artifact_id 而不是路径
+            this.previewArtifactInfo = row;  // 保存 artifact 信息，用于后续刷新
+
+
+            await this.loadPreviewPayload(
+                () => fetch(`/api/artifacts/${encodeURIComponent(row.artifact_id)}/preview`),
+                row.original_name || row.stored_name || 'Artifact Preview'
+            );
+
+            this.previewEditMode = false;
+
+        },
+
+        async previewBackgroundJobFile(file) {
+            if (!file) {
+                ElementPlus.ElMessage.warning('No preview available');
+                return;
+            }
+
+            if (file.artifact_id) {
+                await this.loadPreviewPayload(
+                    () => fetch(`/api/artifacts/${encodeURIComponent(file.artifact_id)}/preview`),
+                    file.original_name || file.stored_name || 'Job File Preview'
+                );
+                return;
+            }
+
+            if (!file.preview_url) {
+                ElementPlus.ElMessage.warning('No preview available');
+                return;
+            }
+
+            await this.loadPreviewPayload(
+                () => fetch(file.preview_url),
+                file.original_name || file.stored_name || 'Job File Preview'
+            );
         },
 
         async saveEditedContent() {
@@ -262,30 +351,6 @@ window.AppPreviewModule = {
             } finally {
                 this.previewSaving = false;
             }
-        },
-
-        async previewRemoteEntry(row) {
-            if (!row || !row.path || row.is_dir || row.is_parent_entry) {
-                ElementPlus.ElMessage.warning('Please select a file');
-                return;
-            }
-
-            // 记录文件路径
-            this.previewFilePath = row.path;
-            this.previewSource = 'remote_file';  // 标记来源
-
-
-            await this.loadPreviewPayload(
-                () => fetch(`/api/connections/${encodeURIComponent(this.selectedId)}/remote-files/preview`, {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({path: row.path})
-                }),
-                row.name || 'File Preview'
-            );
-
-            // 重置编辑模式
-            this.previewEditMode = false;
         },
 
         async loadPreviewPayload(fetcher, fallbackTitle = 'File Preview') {
@@ -472,26 +537,6 @@ window.AppPreviewModule = {
             window.open(this.previewUrl, '_blank');
         },
 
-        async previewArtifact(row) {
-            if (!row || !row.artifact_id) {
-                ElementPlus.ElMessage.warning('Invalid artifact');
-                return;
-            }
-
-            this.previewSource = 'artifact';  // 标记来源
-            this.previewFilePath = row.artifact_id;  // 存储 artifact_id 而不是路径
-            this.previewArtifactInfo = row;  // 保存 artifact 信息，用于后续刷新
-
-
-            await this.loadPreviewPayload(
-                () => fetch(`/api/artifacts/${encodeURIComponent(row.artifact_id)}/preview`),
-                row.original_name || row.stored_name || 'Artifact Preview'
-            );
-
-            this.previewEditMode = false;
-
-        },
-
         openNewRemoteJobEditor(scriptName = 'new_server_job.py') {
             if (!this.selectedId) {
                 ElementPlus.ElMessage.warning('Please select a device');
@@ -558,31 +603,6 @@ window.AppPreviewModule = {
             }
         },
 
-        async previewBackgroundJobFile(file) {
-            if (!file) {
-                ElementPlus.ElMessage.warning('No preview available');
-                return;
-            }
-
-            if (file.artifact_id) {
-                await this.loadPreviewPayload(
-                    () => fetch(`/api/artifacts/${encodeURIComponent(file.artifact_id)}/preview`),
-                    file.original_name || file.stored_name || 'Job File Preview'
-                );
-                return;
-            }
-
-            if (!file.preview_url) {
-                ElementPlus.ElMessage.warning('No preview available');
-                return;
-            }
-
-            await this.loadPreviewPayload(
-                () => fetch(file.preview_url),
-                file.original_name || file.stored_name || 'Job File Preview'
-            );
-        },
-
         resetPreviewState() {
             this.previewType = '';
             this.previewTitle = '';
@@ -595,7 +615,27 @@ window.AppPreviewModule = {
             this.previewImageInfo = null;
             this.previewImageInfoDialogVisible = false;
         },
-
-
     },
+
+    computed: {
+        previewSourceLabel() {
+            if (this.previewSource === 'remote_file') {
+                return 'Remote File';
+            }
+            if (this.previewSource === 'artifact') {
+                return 'Artifact';
+            }
+            if (this.previewSource === 'server_job') {
+                return 'Server Job';
+            }
+            return 'Unknown';
+        },
+    },
+
+    watch: {
+         previewDialogVisible(val) {
+            if (!val) this.resetPreviewState();
+        },
+
+    }
 }

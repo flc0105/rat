@@ -1,6 +1,19 @@
 window.AppTerminalModule = {
-    methods: {
+    data() {
+        return {
+            outputs: {},
+            terminalJsonDialogVisible: false,
+            terminalJsonDialogTitle: 'JSON Viewer',
+            terminalJsonText: '',
+            terminalJsonDisplayMode: 'raw',
+            terminalJsonTableColumns: [],
+            terminalJsonTableRows: [],
+            terminalJsonFlatRows: [],
+        }
+    },
 
+
+    methods: {
         isFileReadyLine(line) {
             const text = (line?.text || '')
             return text.startsWith('[File Ready]')
@@ -357,20 +370,6 @@ window.AppTerminalModule = {
             return safeLines.slice(startIndex, endIndex + 1);
         },
 
-        shouldRenderTerminalCommandActions(lines, index) {
-            const safeLines = Array.isArray(lines) ? lines : [];
-            if (!safeLines.length || index < 0 || index >= safeLines.length) return false;
-
-            const isLastLine = index === safeLines.length - 1;
-            const nextIsCommand = !isLastLine && safeLines[index + 1] && safeLines[index + 1].kind === 'command';
-
-            if (!isLastLine && !nextIsCommand) {
-                return false;
-            }
-
-            return this.getTerminalCommandGroupActionItems(safeLines, index).length > 0;
-        },
-
         getTerminalCommandGroupActionItems(lines, endIndex) {
             const groupLines = this.getTerminalCommandGroupLines(lines, endIndex);
             const result = [];
@@ -415,7 +414,6 @@ window.AppTerminalModule = {
             if (!clientId) return;
             if (!this.outputs[clientId]) this.outputs[clientId] = [];
         },
-
 
         appendOutput(clientId, text, kind = '', meta = null) {
             if (!clientId) return;
@@ -520,5 +518,24 @@ window.AppTerminalModule = {
                 if (el) el.scrollTop = el.scrollHeight;
             });
         },
-    }
+    },
+
+    computed: {
+        currentOutputLines() {
+            return this.outputs[this.selectedId] || [];
+        },
+    },
+
+    watch: {
+        terminalJsonDialogVisible(val) {
+            if (!val) {
+                this.terminalJsonDialogTitle = 'JSON Viewer';
+                this.terminalJsonText = '';
+                this.terminalJsonDisplayMode = 'raw';
+                this.terminalJsonTableColumns = [];
+                this.terminalJsonTableRows = [];
+                this.terminalJsonFlatRows = [];
+            }
+        },
+    },
 }

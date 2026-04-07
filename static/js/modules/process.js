@@ -19,31 +19,28 @@ window.AppProcessModule = {
     },
 
     computed: {
-
-
-processManagerVisibleCount() {
-    return this.processActiveTab === 'apps'
-        ? this.filteredApps.length
-        : this.filteredProcesses.length;
-},
-processManagerTotalCount() {
-    return this.processActiveTab === 'apps'
-        ? this.apps.length
-        : this.processes.length;
-},
-processManagerSummaryText() {
-    if (this.processActiveTab === 'apps') {
-        return `Showing ${this.processManagerVisibleCount} / ${this.processManagerTotalCount} applications`;
-    }
-    return `Showing ${this.processManagerVisibleCount} / ${this.processManagerTotalCount} processes`;
-},
-processTabLabel() {
-    return `All Processes (${this.filteredProcesses.length})`;
-},
-appTabLabel() {
-    return `Applications (${this.filteredApps.length})`;
-},
-
+        processManagerVisibleCount() {
+            return this.processActiveTab === 'apps'
+                ? this.filteredApps.length
+                : this.filteredProcesses.length;
+        },
+        processManagerTotalCount() {
+            return this.processActiveTab === 'apps'
+                ? this.apps.length
+                : this.processes.length;
+        },
+        processManagerSummaryText() {
+            if (this.processActiveTab === 'apps') {
+                return `Showing ${this.processManagerVisibleCount} / ${this.processManagerTotalCount} applications`;
+            }
+            return `Showing ${this.processManagerVisibleCount} / ${this.processManagerTotalCount} processes`;
+        },
+        processTabLabel() {
+            return `All Processes (${this.filteredProcesses.length})`;
+        },
+        appTabLabel() {
+            return `Applications (${this.filteredApps.length})`;
+        },
 
 
         filteredProcesses() {
@@ -85,7 +82,7 @@ appTabLabel() {
             ];
             return fieldMap
                 .filter(([key]) => detail[key] !== undefined && detail[key] !== null && detail[key] !== '')
-                .map(([key, label]) => ({ key, label, value: this.formatProcessDetailValue(detail[key]) }));
+                .map(([key, label]) => ({key, label, value: this.formatProcessDetailValue(detail[key])}));
         },
         processDetailCommandLineText() {
             const cmdline = (this.processDetail && this.processDetail.cmdline) || [];
@@ -96,13 +93,13 @@ appTabLabel() {
 
     methods: {
 
-async refreshProcessManager() {
-    if (this.processActiveTab === 'apps') {
-        await this.loadApps();
-        return;
-    }
-    await this.loadProcesses();
-},
+        async refreshProcessManager() {
+            if (this.processActiveTab === 'apps') {
+                await this.loadApps();
+                return;
+            }
+            await this.loadProcesses();
+        },
 
 
         openProcessDialog() {
@@ -216,9 +213,9 @@ async refreshProcessManager() {
                 await ElementPlus.ElMessageBox.confirm(
                     `Kill "${name}" (PID: ${pid})?`,
                     'Confirm',
-                    { type: 'warning' }
+                    {type: 'warning'}
                 );
-                const res = await fetch(`/api/connections/${this.selectedId}/processes/${pid}/kill`, { method: 'POST' });
+                const res = await fetch(`/api/connections/${this.selectedId}/processes/${pid}/kill`, {method: 'POST'});
                 const json = await res.json();
                 if (res.ok && json.code === 0) {
                     ElementPlus.ElMessage.success(`Process ${pid} killed`);
@@ -236,9 +233,9 @@ async refreshProcessManager() {
                 await ElementPlus.ElMessageBox.confirm(
                     `Force quit "${name}" (PID: ${pid})?`,
                     'Confirm',
-                    { type: 'warning' }
+                    {type: 'warning'}
                 );
-                const res = await fetch(`/api/connections/${this.selectedId}/apps/${pid}/kill`, { method: 'POST' });
+                const res = await fetch(`/api/connections/${this.selectedId}/apps/${pid}/kill`, {method: 'POST'});
                 const json = await res.json();
                 if (res.ok && json.code === 0) {
                     ElementPlus.ElMessage.success(`${name} force quit`);

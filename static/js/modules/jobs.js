@@ -1,35 +1,22 @@
 window.AppJobsModule = {
+    data() {
+        return {
+            backgroundJobsDialogVisible: false,
+            backgroundJobsLoading: false,
+            backgroundJobModulesLoading: false,
+            backgroundJobModules: [],
+            backgroundJobs: [],
+            backgroundJobsRefreshTimer: null,
+            backgroundJobDetailDialogVisible: false,
+            selectedBackgroundJobId: '',
+            backgroundJobsActiveTab: 'modules',
+            backgroundJobMessageDialogVisible: false,
+            selectedBackgroundJobMessage: {},
+            serverJobUploadLoading: false,
+        }
+    },
+
     methods: {
-
-        buildBackgroundJobStateTagType(state) {
-            const value = String(state || '').toLowerCase();
-            if (value === 'running') return 'success';
-            if (value === 'stopping') return 'warning';
-            if (value === 'error') return 'danger';
-            return 'info';
-        },
-
-        formatBackgroundJobDuration(totalSeconds) {
-            const seconds = Number(totalSeconds || 0);
-            if (!seconds) return '0s';
-
-            const hours = Math.floor(seconds / 3600);
-            const minutes = Math.floor((seconds % 3600) / 60);
-            const remain = seconds % 60;
-
-            const parts = [];
-            if (hours) parts.push(`${hours}h`);
-            if (minutes) parts.push(`${minutes}m`);
-            if (remain || !parts.length) parts.push(`${remain}s`);
-
-            return parts.join(' ');
-        },
-
-        formatBackgroundJobMessageText(text) {
-            const raw = String(text || '').trim();
-            return raw.replace(/^\[[^\]]*?client=[^\]]*?\]\s*/, '');
-        },
-
         async openBackgroundJobsDialog() {
             if (!this.selectedId) {
                 ElementPlus.ElMessage.warning('Please select a device');
@@ -396,6 +383,83 @@ window.AppJobsModule = {
                 this.openNewRemoteJobEditor(value || 'new_server_job.py');
             } catch (e) {
                 if (e === 'cancel' || e === 'close') return;
+            }
+        },
+
+        buildBackgroundJobStateTagType(state) {
+            const value = String(state || '').toLowerCase();
+            if (value === 'running') return 'success';
+            if (value === 'stopping') return 'warning';
+            if (value === 'error') return 'danger';
+            return 'info';
+        },
+
+        formatBackgroundJobDuration(totalSeconds) {
+            const seconds = Number(totalSeconds || 0);
+            if (!seconds) return '0s';
+
+            const hours = Math.floor(seconds / 3600);
+            const minutes = Math.floor((seconds % 3600) / 60);
+            const remain = seconds % 60;
+
+            const parts = [];
+            if (hours) parts.push(`${hours}h`);
+            if (minutes) parts.push(`${minutes}m`);
+            if (remain || !parts.length) parts.push(`${remain}s`);
+
+            return parts.join(' ');
+        },
+
+        formatBackgroundJobMessageText(text) {
+            const raw = String(text || '').trim();
+            return raw.replace(/^\[[^\]]*?client=[^\]]*?\]\s*/, '');
+        },
+    },
+
+    computed: {
+        selectedBackgroundJob() {
+            return this.backgroundJobs.find(item => item.job_id === this.selectedBackgroundJobId) || null;
+        },
+
+        sortedBackgroundJobs() {
+            return [...this.backgroundJobs].sort((a, b) => {
+                const ta = String(a.updated_at || a.started_at || a.created_at || '');
+                const tb = String(b.updated_at || b.started_at || b.created_at || '');
+                return tb.localeCompare(ta);
+            });
+        },
+
+        selectedBackgroundJobMessagesDesc() {
+            const messages = this.selectedBackgroundJob && Array.isArray(this.selectedBackgroundJob.messages)
+                ? this.selectedBackgroundJob.messages
+                : [];
+
+            return [...messages].sort((a, b) => {
+                const ta = String(a.time || '');
+                const tb = String(b.time || '');
+                return tb.localeCompare(ta);
+            });
+        },
+    },
+    watch: {
+        backgroundJobsDialogVisible(val) {
+            if (!val) {
+                if (this.backgroundJobsRefreshTimer) {
+                    clearTimeout(this.backgroundJobsRefreshTimer);
+                    this.backgroundJobsRefreshTimer = null;
+                }
+            }
+        },
+
+        backgroundJobDetailDialogVisible(val) {
+            if (!val) {
+                this.selectedBackgroundJobId = '';
+            }
+        },
+
+        backgroundJobMessageDialogVisible(val) {
+            if (!val) {
+                this.selectedBackgroundJobMessage = {};
             }
         },
     }

@@ -1,4 +1,11 @@
 window.AppTaskModule = {
+    data() {
+        return {
+            activeTaskIds: {},
+            cancellingTaskIds: {},
+        }
+    },
+
     methods: {
         setActiveTask(clientId, taskId) {
             if (!clientId) return;
@@ -82,5 +89,19 @@ window.AppTaskModule = {
                 ElementPlus.ElMessage.error(e.message || 'Cancel failed');
             }
         },
-    }
+    },
+
+    computed: {
+        currentActiveTaskId() {
+            return this.activeTaskIds[this.selectedId] || '';
+        },
+
+        currentTaskIsCancelling() {
+            return !!this.cancellingTaskIds[this.selectedId];
+        },
+
+        hasRunningWebTask() {
+            return !!this.currentActiveTaskId;
+        },
+    },
 }

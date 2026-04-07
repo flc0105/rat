@@ -15,9 +15,12 @@ window.AppFilesModule = {
             remoteFilesAllTotal: 0,
             remoteFilesHiddenTotal: 0,
             remoteUploadLoading: false,
+            pendingRemoteUploadRefresh: null,
             showHiddenFiles: false,
             remoteSelectedPaths: [],
             remoteZipDownloading: false,
+            quickJumpPaths: {},
+            quickJumpLoading: false,
         }
     },
 
@@ -579,6 +582,44 @@ window.AppFilesModule = {
             this.showHiddenFiles = false;
             this.remoteSelectedPaths = [];
             this.remoteZipDownloading = false;
+        },
+    },
+
+    computed: {
+        displayRemoteFilesEntries() {
+            const entries = Array.isArray(this.remoteFilesEntries)
+                ? [...this.remoteFilesEntries]
+                : [];
+
+            if (this.remoteFilesParentPath && this.remoteFilesPage === 1) {
+                entries.unshift({
+                    name: '..',
+                    path: this.remoteFilesParentPath,
+                    is_dir: true,
+                    is_symlink: false,
+                    is_hidden: false,
+                    size: 0,
+                    modified_at: '',
+                    is_parent_entry: true,
+                });
+            }
+
+            return entries;
+        },
+
+        selectedRemoteEntries() {
+            const selectedSet = new Set(this.remoteSelectedPaths);
+            return this.remoteFilesEntries.filter(item => selectedSet.has(item.path));
+        },
+
+        hasRemoteSelection() {
+            return this.remoteSelectedPaths.length > 0;
+        },
+    },
+
+    watch: {
+         remoteFilesDialogVisible(val) {
+            if (!val) this.resetRemoteFilesState();
         },
     }
 };
