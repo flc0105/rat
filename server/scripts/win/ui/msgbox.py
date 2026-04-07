@@ -56,5 +56,5 @@ icon = kwargs.get('icon', 'none')
 buttons = kwargs.get('buttons', 'ok')
 topmost = kwargs.get('topmost', False)
 
-print(topmost)
+print(kwargs)
 show_message(title, text, buttons, icon, topmost=topmost)

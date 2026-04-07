@@ -1,6 +1,6 @@
 import argparse
 import shlex
-from typing import Iterable, List, Sequence, Tuple
+from typing import Sequence, Tuple
 
 
 class SafeArgumentParser(argparse.ArgumentParser):
@@ -64,21 +64,42 @@ def parse_kwargs(kwargs: Sequence[Tuple[Sequence[str], dict]], arg_split: Sequen
 
 
 def scan_args(arg_split: Sequence[str]) -> dict:
-    parser = SafeArgumentParser()
-    options = [item for item in arg_split if item.startswith('--')]
+    arg_dict = {}
+    current_option = None
+    current_values = []
 
-    for option in options:
-        parser.add_argument(option, nargs='*')
+    def flush_current():
+        nonlocal current_option, current_values
+        if current_option is None:
+            return
 
-    arg_dict = vars(parser.parse_args(arg_split))
-    for option, value in arg_dict.items():
-        joined_value = ' '.join(value)
-        arg_dict[option] = _coerce_scan_arg_value(joined_value)
+        if not current_values:
+            arg_dict[current_option] = True
+        else:
+            arg_dict[current_option] = _coerce_scan_arg_value(' '.join(current_values))
+
+        current_option = None
+        current_values = []
+
+    for item in arg_split:
+        if item.startswith('--'):
+            flush_current()
+            current_option = item.lstrip('-')
+            current_values = []
+        else:
+            if current_option is None:
+                raise ValueError(f'Unexpected argument without option: {item}')
+            current_values.append(item)
+
+    flush_current()
     return arg_dict
 
 
-# add exec kwargs boolean解析 2026-04-07 00:00
+# add exec kwargs flag和boolean解析 2026-04-07 00:00
 def _coerce_scan_arg_value(value):
+    if value is True:
+        return True
+
     if not isinstance(value, str):
         return value
 
