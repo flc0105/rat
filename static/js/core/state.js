@@ -28,23 +28,7 @@ window.AppStateModule = {
             statusNowTick: Date.now(),
             statusTickTimer: null,
 
-            remoteFilesDialogVisible: false,
-            remoteFilesLoading: false,
-            remoteFilesCurrentPath: '',
-            remoteFilesParentPath: '',
-            remoteFilesEntries: [],
-            remoteFilesPathInput: '',
-            remoteFilesPage: 1,
-            remoteFilesPageSize: 50,
-            remoteFilesPageSizeOptions: [50, 100, 200],
-            remoteFilesTotal: 0,
-            remoteFilesTotalPages: 1,
-            remoteFilesAllTotal: 0,
-            remoteFilesHiddenTotal: 0,
-            remoteUploadLoading: false,
-            showHiddenFiles: false,
-            remoteSelectedPaths: [],
-            remoteZipDownloading: false,
+
 
 
 

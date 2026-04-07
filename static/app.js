@@ -7,6 +7,7 @@ createApp({
             ...window.AppArtifactsModule.data(),
             ...window.AppAgentModule.data(),
             ...window.AppProcessModule.data(),
+            ...window.AppFilesModule.data(),
         }
     },
 
