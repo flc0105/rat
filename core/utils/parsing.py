@@ -72,5 +72,23 @@ def scan_args(arg_split: Sequence[str]) -> dict:
 
     arg_dict = vars(parser.parse_args(arg_split))
     for option, value in arg_dict.items():
-        arg_dict[option] = ' '.join(value)
+        joined_value = ' '.join(value)
+        arg_dict[option] = _coerce_scan_arg_value(joined_value)
     return arg_dict
+
+
+# add exec kwargs boolean解析 2026-04-07 00:00
+def _coerce_scan_arg_value(value):
+    if not isinstance(value, str):
+        return value
+
+    normalized = value.strip()
+    lowered = normalized.lower()
+
+    if lowered == 'true':
+        return True
+
+    if lowered == 'false':
+        return False
+
+    return value

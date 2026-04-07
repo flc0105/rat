@@ -12,7 +12,7 @@ from core.utils.logger import logger
 class ScheduledScreenshot(Job):
     def __init__(self):
         super().__init__()
-        self.interval_seconds = 20
+        self.interval_seconds = 30  # 30秒一次
 
     def _capture_screenshot(self, filename: str):
         if os.name == 'nt':
@@ -68,6 +68,3 @@ class ScheduledScreenshot(Job):
     def stop(self, notify: bool = True):
         schedule.clear()
         self.request_stop(notify=notify)
-
-
-
