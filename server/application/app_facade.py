@@ -44,6 +44,7 @@ class ServerWebService:
         self.artifact_api = self.assembly.artifact_api
         self.remote_file_api = self.assembly.remote_file_api
         self.agent_api = self.assembly.agent_api
+        self.system_api = self.assembly.system_api
 
     @classmethod
     def from_server(cls, server):

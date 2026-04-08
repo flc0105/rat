@@ -16,6 +16,7 @@ from server.application.web.command_api import WebCommandApi
 from server.application.web.connection_api import WebConnectionApi
 from server.application.web.job_api import WebJobApi
 from server.application.web.remote_file_api import WebRemoteFileApi
+from server.application.web.system_api import WebSystemInspectionApi
 from server.config.config import SCRIPT_JOBS_PATH
 from server.web.event_bus import WebEventBus
 
@@ -118,6 +119,11 @@ class ServerApplicationAssembly:
 
         self.agent_api = WebAgentApi(
             agent_builder=self.agent_builder,
+        )
+
+        self.system_api = WebSystemInspectionApi(
+            server=self.server,
+            remote_execution_service=self.remote_execution_service,
         )
 
         self._wire_cross_dependencies()
