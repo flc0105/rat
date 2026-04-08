@@ -1,9 +1,8 @@
 import os
 import shutil
+from datetime import datetime
 
-from server.application.tasks.task_event_publisher import WebTaskEventPublisher
-from server.application.tasks.task_history_recorder import WebTaskHistoryRecorder
-from server.application.tasks.task_stream_orchestrator import WebTaskStreamOrchestrator
+from server.application.tasks.task_status import TaskStreamSummary, WebTaskStatus
 
 
 class WebTaskRunner:
@@ -19,11 +18,6 @@ class WebTaskRunner:
 
     新增：
     - 按 task.tab_id 定向推送前台命令结果
-
-    当前进一步拆分：
-    - 结果事件发布：WebTaskEventPublisher
-    - history 记录：WebTaskHistoryRecorder
-    - stream 生命周期编排：WebTaskStreamOrchestrator
     """
 
     def __init__(self, server, event_bus, task_store, remote_execution_service, foreground_task_coordinator, command_executor_factory):
@@ -35,23 +29,134 @@ class WebTaskRunner:
         self.command_executor_factory = command_executor_factory
         self.history_orchestrator = self.server.command_history_orchestrator
 
-        self.event_publisher = WebTaskEventPublisher(
-            event_bus=self.event_bus,
-            task_store=self.task_store,
-        )
-        self.history_recorder = WebTaskHistoryRecorder(
-            history_orchestrator=self.history_orchestrator,
-            task_store=self.task_store,
-        )
-        self.stream_orchestrator = WebTaskStreamOrchestrator(
-            task_store=self.task_store,
-            event_publisher=self.event_publisher,
-            history_recorder=self.history_recorder,
-        )
+    def _get_task(self, task_id: str) -> dict:
+        return self.task_store.get_task(task_id) or {}
 
     def _get_history_entry_id(self, task_id: str) -> str:
-        task = self.task_store.get_task(task_id) or {}
+        task = self._get_task(task_id)
         return task.get('history_entry_id') or ''
+
+    def _get_task_tab_id(self, task_id: str) -> str:
+        task = self._get_task(task_id)
+        return (task.get('tab_id') or '').strip()
+
+    def _append_history_output(self, conn, task_id: str, status: int, text: str):
+        history_entry_id = self._get_history_entry_id(task_id)
+        self.history_orchestrator.append_output(
+            conn,
+            history_entry_id,
+            status,
+            text,
+            0
+        )
+
+    def _finalize_history(self, conn, task_id: str, final_status: str):
+        history_entry_id = self._get_history_entry_id(task_id)
+        self.history_orchestrator.finalize_execution(
+            conn,
+            history_entry_id,
+            final_status == WebTaskStatus.SUCCESS,
+            cwd_end=conn.info.get('cwd', '')
+        )
+
+    def _publish_task_result(self, task_id: str, client_id: str, command: str, status: int, text: str):
+        self.task_store.append_chunk(task_id, status, text)
+        target_tab_id = self._get_task_tab_id(task_id)
+
+        self.event_bus.publish(
+            'command_result',
+            {
+                'task_id': task_id,
+                'client_id': client_id,
+                'command': command,
+                'status': status,
+                'text': text,
+                'time': datetime.now().isoformat()
+            },
+            target_tab_id=target_tab_id
+        )
+
+    def _publish_task_complete(self, task_id: str, client_id: str, command: str):
+        target_tab_id = self._get_task_tab_id(task_id)
+        task = self._get_task(task_id)
+        task_status = task.get('status') or WebTaskStatus.ERROR
+
+        self.event_bus.publish(
+            'command_complete',
+            {
+                'task_id': task_id,
+                'client_id': client_id,
+                'command': command,
+                'success': task_status == WebTaskStatus.SUCCESS,
+                'status': task_status,
+                'cancel_requested': bool(task.get('cancel_requested')),
+                'cancelled': task_status == WebTaskStatus.CANCELLED,
+                'time': datetime.now().isoformat()
+            },
+            target_tab_id=target_tab_id
+        )
+
+    def _publish_stream_chunk(self, conn, task_id: str, client_id: str, command: str, status: int, text: str):
+        self._publish_task_result(
+            task_id,
+            client_id,
+            command,
+            status,
+            text
+        )
+        self._append_history_output(conn, task_id, status, text)
+
+    def _resolve_final_status(self, task_id: str, summary: TaskStreamSummary) -> str:
+        task = self._get_task(task_id)
+        return summary.resolve_final_status(
+            cancel_requested=bool(task.get('cancel_requested'))
+        )
+
+    def _finalize_stream(self, conn, task_id: str, client_id: str, command: str, final_status: str, summary: TaskStreamSummary):
+        self.task_store.finish_task(
+            task_id,
+            ok=summary.is_success(),
+            final_status=final_status
+        )
+
+        self._finalize_history(
+            conn,
+            task_id,
+            final_status=final_status
+        )
+
+        self._publish_task_complete(
+            task_id,
+            client_id,
+            command
+        )
+
+    def _run_stream(self, conn, task_id: str, command: str, result_iter):
+        """
+        统一执行 Web 任务结果流：
+        - 消费生成器输出
+        - 记录任务分片
+        - 推送 SSE 结果
+        - 统一异常处理
+        - 统一结束收尾
+        """
+        client_id = conn.info.get('id')
+        summary = TaskStreamSummary()
+
+        try:
+            for status, result in result_iter:
+                text = '' if result is None else str(result)
+                self._publish_stream_chunk(conn, task_id, client_id, command, status, text)
+                summary.record_chunk(status, text)
+
+        except Exception as e:
+            text = str(e)
+            summary.mark_exception()
+            self._publish_stream_chunk(conn, task_id, client_id, command, 0, text)
+
+        finally:
+            final_status = self._resolve_final_status(task_id, summary)
+            self._finalize_stream(conn, task_id, client_id, command, final_status, summary)
 
     def _build_command_result_iter(self, conn, task_id: str, command: str):
         history_entry_id = self._get_history_entry_id(task_id)
@@ -81,7 +186,7 @@ class WebTaskRunner:
     # ------------------ command ------------------ #
     def run_command_task(self, conn, task_id: str, command: str):
         try:
-            self.stream_orchestrator.run_stream(
+            self._run_stream(
                 conn,
                 task_id,
                 command,
@@ -95,7 +200,7 @@ class WebTaskRunner:
         command = f'upload {display_name}'
 
         try:
-            self.stream_orchestrator.run_stream(
+            self._run_stream(
                 conn,
                 task_id,
                 command,
