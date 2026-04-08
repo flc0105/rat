@@ -82,7 +82,7 @@ class AliasBuiltinSupport:
     alias / unalias 相关内建命令支持。
     """
 
-    PLATFORM_OPTION_PATTERN = re.compile(r'^(?:--platform|-p)\s+(common|win|mac)\b', re.IGNORECASE)
+    PLATFORM_OPTION_PATTERN = re.compile(r'^(?:--platform|-p)\s+(all|common|win|mac)\b', re.IGNORECASE)
 
     def __init__(self, alias_manager, conn):
         self.alias_manager = alias_manager
@@ -108,17 +108,12 @@ class AliasBuiltinSupport:
         target_platform = platform_name or 'common'
 
         if not remaining_text:
-            yield 1, format_dict(self.alias_manager.list_aliases(conn=self.conn))
+            payload = self.alias_manager.list_aliases_for_platform(platform_name, conn=self.conn)
+            yield 1, format_dict(payload)
             return
 
         if remaining_text in ('--json', 'json'):
-            if platform_name:
-                payload = {
-                    target_platform: self.alias_manager.list_aliases_grouped().get(target_platform, {})
-                }
-            else:
-                payload = self.alias_manager.list_aliases(conn=self.conn)
-
+            payload = self.alias_manager.list_aliases_for_platform(platform_name, conn=self.conn)
             yield 1, json.dumps(
                 payload,
                 ensure_ascii=False,
@@ -128,6 +123,9 @@ class AliasBuiltinSupport:
 
         try:
             if '=' in remaining_text:
+                if target_platform == 'all':
+                    raise ValueError("Platform all is query-only and cannot be used to save alias")
+
                 alias_name, command_text = [part.strip() for part in remaining_text.split('=', 1)]
                 self.alias_manager.add_alias(alias_name, command_text, platform=target_platform)
                 yield 1, f'Alias saved [{target_platform}]: {alias_name} -> {command_text}'
@@ -146,11 +144,9 @@ class AliasBuiltinSupport:
             raise ValueError("Missing alias name")
 
         try:
-            self.alias_manager.remove_alias(alias_name, platform=platform_name)
-            if platform_name:
-                yield 1, f"Alias removed [{platform_name}]: {alias_name}"
-            else:
-                yield 1, f"Alias removed: {alias_name}"
+            target_platform = platform_name or 'common'
+            self.alias_manager.remove_alias(alias_name, platform=target_platform)
+            yield 1, f"Alias removed [{target_platform}]: {alias_name}"
         except KeyError:
             raise ValueError(f"Alias not found: {alias_name}")
 
@@ -259,9 +255,8 @@ class HistoryBuiltinSupport:
                     f'{item.get("command", "")}'
                 )
 
-            lines.append('')
-            lines.append('Tip: use history run <index> or !<index> to run a history item quickly')
             yield 1, '\n'.join(lines)
+            yield 1, '\nTip: use history run <index> or !<index> to run a history item quickly'
             return
 
         if arg_text == 'clear':
@@ -270,36 +265,36 @@ class HistoryBuiltinSupport:
             return
 
         matched = self.HISTORY_RUN_PATTERN.fullmatch(arg_text)
-        if matched is not None:
+        if matched:
             history_index = int(matched.group(1))
             for item in self._run_history_item(history_index):
                 yield item
             return
 
-        raise ValueError('Usage: history | history clear | history run <index> | !<index>')
+        raise ValueError('Unsupported history command. Use: history | history run <index> | history clear')
 
 
 class RttBuiltinSupport:
     """
-    rtt 相关内建命令支持。
+    RTT / last seen 状态相关内建命令支持。
     """
 
     def __init__(self, conn):
         self.conn = conn
 
-    def rtt(self, arg=''):
-        payload = {
-            'client_id': getattr(getattr(self.conn, 'session_info', None), 'client_id', ''),
-            'hostname': getattr(getattr(self.conn, 'session_info', None), 'hostname', ''),
-            'last_seen_at': getattr(getattr(self.conn, 'context', None), 'last_seen_at', ''),
-            'last_heartbeat_sent_at': getattr(getattr(self.conn, 'context', None), 'last_heartbeat_sent_at', ''),
-            'last_heartbeat_ack_at': getattr(getattr(self.conn, 'context', None), 'last_heartbeat_ack_at', ''),
-            'last_rtt_ms': getattr(getattr(self.conn, 'context', None), 'last_rtt_ms', ''),
-        }
-
-        output_json = arg in ('json', '--json')
-        if output_json:
-            yield 1, json.dumps(payload, ensure_ascii=False, indent=2)
+    def rtt(self):
+        session_info = getattr(self.conn, 'session_info', None)
+        if not session_info:
+            yield 1, 'No session info available'
             return
 
-        yield 1, format_dict(payload)
+        heartbeat_rtt = getattr(session_info, 'heartbeat_rtt_ms', None)
+        last_seen = getattr(session_info, 'last_seen_at', '') or ''
+        online = bool(getattr(session_info, 'online', False))
+
+        lines = [
+            f'online: {online}',
+            f'heartbeat_rtt_ms: {heartbeat_rtt if heartbeat_rtt is not None else "unknown"}',
+            f'last_seen_at: {last_seen or "unknown"}'
+        ]
+        yield 1, '\n'.join(lines)

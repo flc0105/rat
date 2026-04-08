@@ -15,6 +15,7 @@ class AliasManager:
         'mac': 'mac',
         'macos': 'mac',
     }
+    QUERY_PLATFORMS = SUPPORTED_PLATFORMS + ('all',)
 
     def __init__(self):
         self.alias_path = ALIAS_PATH
@@ -44,7 +45,7 @@ class AliasManager:
             json.dump(aliases, file_obj, indent=2, ensure_ascii=False)
 
     # add alias平台归一化 2026-04-08
-    def _normalize_platform(self, platform_name: str, allow_empty: bool = False) -> str:
+    def _normalize_platform(self, platform_name: str, allow_empty: bool = False, allow_all: bool = False) -> str:
         text = str(platform_name or '').strip().lower()
         if not text:
             if allow_empty:
@@ -52,6 +53,10 @@ class AliasManager:
             return 'common'
 
         normalized = self.OS_PLATFORM_MAP.get(text, text)
+
+        if allow_all and normalized == 'all':
+            return 'all'
+
         if normalized not in self.SUPPORTED_PLATFORMS:
             raise ValueError(f'Unsupported platform: {platform_name}')
         return normalized
@@ -151,6 +156,15 @@ class AliasManager:
     def list_aliases(self, conn=None):
         """返回格式化的别名列表"""
         return self.get_effective_aliases(conn)
+
+    # add alias全平台查询视图 2026-04-08
+    def list_aliases_for_platform(self, platform: str, conn=None) -> dict:
+        platform_name = self._normalize_platform(platform, allow_empty=True, allow_all=True)
+        if platform_name == 'all':
+            return self.list_aliases_grouped()
+        if not platform_name:
+            return self.list_aliases(conn=conn)
+        return dict(self.aliases.get(platform_name) or {})
 
     # add alias全量配置读取 2026-04-08
     def list_aliases_grouped(self):
