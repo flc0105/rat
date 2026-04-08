@@ -2253,3 +2253,35 @@ body {
     opacity: 0.45;
     cursor: not-allowed;
 }
+
+
+.command-autocomplete-item-main {
+    min-width: 0;
+    flex: 1;
+}
+
+.command-autocomplete-item-name,
+.command-autocomplete-item-desc {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.command-autocomplete-item-name {
+    max-width: 520px;
+}
+
+.command-autocomplete-item-desc {
+    max-width: 640px;
+}
+
+.command-autocomplete-item {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.command-autocomplete-item-group {
+    flex-shrink: 0;
+}

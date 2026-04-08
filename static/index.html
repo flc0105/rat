@@ -174,12 +174,19 @@
                                                 <template #default="{ item }">
                                                     <div class="command-autocomplete-item">
                                                         <div class="command-autocomplete-item-main">
-                                                            <div class="command-autocomplete-item-name">{{ item.template
-                                                                || item.value || '-' }}
-                                                            </div>
-                                                            <div v-if="item.help"
-                                                                 class="command-autocomplete-item-desc">{{ item.help }}
-                                                            </div>
+                                                            <div
+    class="command-autocomplete-item-name"
+    :title="item.template || item.value || '-'"
+>
+    {{ item.template || item.value || '-' }}
+</div>
+<div
+    v-if="item.help"
+    class="command-autocomplete-item-desc"
+    :title="item.help"
+>
+    {{ item.help }}
+</div>
                                                         </div>
                                                         <div v-if="item.groupLabel"
                                                              class="command-autocomplete-item-group">{{ item.groupLabel
