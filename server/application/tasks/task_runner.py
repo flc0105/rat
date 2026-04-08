@@ -20,12 +20,11 @@ class WebTaskRunner:
     - 按 task.tab_id 定向推送前台命令结果
     """
 
-    def __init__(self, server, event_bus, task_store, remote_execution_service, foreground_task_coordinator, command_executor_factory):
+    def __init__(self, server, event_bus, task_store, remote_execution_service, command_executor_factory):
         self.server = server
         self.event_bus = event_bus
         self.task_store = task_store
         self.remote_execution_service = remote_execution_service
-        self.foreground_task_coordinator = foreground_task_coordinator
         self.command_executor_factory = command_executor_factory
         self.history_orchestrator = self.server.command_history_orchestrator
 
@@ -183,6 +182,9 @@ class WebTaskRunner:
             history_entry_id=history_entry_id,
         )
 
+    def _release_task(self, conn, task_id: str = '', command: str = '') -> None:
+        conn.release_foreground_task(task_id=task_id, command=command)
+
     # ------------------ command ------------------ #
     def run_command_task(self, conn, task_id: str, command: str):
         try:
@@ -193,7 +195,7 @@ class WebTaskRunner:
                 self._build_command_result_iter(conn, task_id, command),
             )
         finally:
-            self.foreground_task_coordinator.release_task(conn, task_id=task_id, command=command)
+            self._release_task(conn, task_id=task_id, command=command)
 
     # ------------------ upload ------------------ #
     def run_upload_task(self, conn, task_id: str, local_path: str, display_name: str, remote_path: str = '', upload_tmp_dir: str = ''):
@@ -212,7 +214,7 @@ class WebTaskRunner:
                 ),
             )
         finally:
-            self.foreground_task_coordinator.release_task(conn, task_id=task_id, command=command)
+            self._release_task(conn, task_id=task_id, command=command)
 
             try:
                 if os.path.exists(local_path):

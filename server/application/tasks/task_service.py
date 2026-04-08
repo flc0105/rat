@@ -11,12 +11,11 @@ class WebTaskService:
     - 启动 runner 真正执行
     """
 
-    def __init__(self, server, task_store, file_service, task_runner, foreground_task_coordinator):
+    def __init__(self, server, task_store, file_service, task_runner):
         self.server = server
         self.task_store = task_store
         self.file_service = file_service
         self.task_runner = task_runner
-        self.foreground_task_coordinator = foreground_task_coordinator
         self.history_orchestrator = self.server.command_history_orchestrator
 
     def _create_task_with_history(
@@ -55,6 +54,43 @@ class WebTaskService:
             daemon=True,
         ).start()
 
+    def _acquire_command_task(self, conn, task_id: str, command: str, source: str = 'web'):
+        return conn.acquire_foreground_task(
+            task_type='command',
+            command=command,
+            source=source,
+            task_id=task_id,
+        )
+
+    def _acquire_upload_task(self, conn, task_id: str, command: str, source: str = 'web'):
+        return conn.acquire_foreground_task(
+            task_type='upload',
+            command=command,
+            source=source,
+            task_id=task_id,
+        )
+
+    def _ensure_active_task(self, conn, task_id: str):
+        foreground_task = conn.get_foreground_task() or {}
+        current_task_id = (foreground_task.get('task_id') or '').strip()
+        if current_task_id != str(task_id).strip():
+            raise ValueError('task is no longer the active foreground task')
+        return foreground_task
+
+    def _request_task_cancel(self, conn, task_id: str):
+        self.task_store.request_cancel(task_id)
+        self._ensure_active_task(conn, task_id)
+
+        cancel_info = conn.request_foreground_task_cancel(task_id=task_id)
+        if not cancel_info:
+            raise RuntimeError('failed to request task cancellation')
+
+        command_id = cancel_info.get('command_id')
+        if command_id:
+            conn.send_cancel(command_id)
+
+        return cancel_info
+
     def _resolve_cancellable_task(self, task_id: str):
         task = self.task_store.get_task(task_id)
         if not task:
@@ -69,12 +105,8 @@ class WebTaskService:
             raise ValueError('task client_id is missing')
 
         conn = self.server.get_target_connection_by_client_id(client_id)
-        self.foreground_task_coordinator.ensure_active_task(conn, task_id)
+        self._ensure_active_task(conn, task_id)
         return task, conn
-
-    def _request_task_cancel(self, conn, task_id: str):
-        self.task_store.request_cancel(task_id)
-        return self.foreground_task_coordinator.request_cancel(conn, task_id)
 
     def submit_web_command(self, client_id: str, command: str, tab_id: str = ''):
         conn = self.server.get_target_connection_by_client_id(client_id)
@@ -87,7 +119,7 @@ class WebTaskService:
             source='web',
         )
 
-        self.foreground_task_coordinator.acquire_command_task(
+        self._acquire_command_task(
             conn,
             task['task_id'],
             command,
@@ -133,7 +165,7 @@ class WebTaskService:
             should_record=True,
         )
 
-        self.foreground_task_coordinator.acquire_upload_task(
+        self._acquire_upload_task(
             conn,
             task['task_id'],
             command,
