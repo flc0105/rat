@@ -6,7 +6,7 @@ from server.application.connection.connection_service import WebConnectionServic
 from server.application.execution.remote_execution_service import RemoteExecutionService
 from server.application.jobs.background_job_service import BackgroundJobService
 from server.application.jobs.background_job_store import BackgroundJobStore
-from server.application.script.script_service import JobCatalogService
+from server.application.jobs.job_catalog_service import JobCatalogService
 from server.application.tasks.task_runner import WebTaskRunner
 from server.application.tasks.task_service import WebTaskService
 from server.application.tasks.task_store import WebTaskStore

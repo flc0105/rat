@@ -1,3 +1,6 @@
+import os
+
+
 class WebJobApi:
     """
     Web 后台任务子外观。
@@ -41,11 +44,11 @@ class WebJobApi:
     def list_available_background_jobs(self, client_id: str):
         return self.background_job_service.list_available_jobs(client_id)
 
-    def start_background_job(self, client_id: str, job_name: str):
-        result = self.command_api.submit_web_command(client_id, f'start_job {job_name}')
-        if isinstance(result, dict):
-            result['job_name'] = job_name
-        return result
+    # def start_background_job(self, client_id: str, job_name: str):
+    #     result = self.command_api.submit_web_command(client_id, f'start_job {job_name}')
+    #     if isinstance(result, dict):
+    #         result['job_name'] = job_name
+    #     return result
 
     def stop_background_job(self, client_id: str, job_key: str):
         return self.background_job_service.stop_job(client_id, job_key)
@@ -81,3 +84,23 @@ class WebJobApi:
 
         normalized.sort(key=lambda item: item.get('job_name', '').lower())
         return normalized
+
+    def _normalize_job_key(self, value: str) -> str:
+        text = str(value or '').strip().replace('\\', '/')
+        if text.endswith('.py'):
+            text = text[:-3]
+        return os.path.basename(text)
+
+    def start_background_job(self, client_id: str, job_name: str):
+        normalized_job_name = (job_name or '').strip()
+        if not normalized_job_name:
+            raise ValueError('job_name is required')
+
+        if self.background_job_service.has_active_job(client_id, normalized_job_name):
+            job_key = self._normalize_job_key(normalized_job_name)
+            raise ValueError(f'Job is already running: {job_key}')
+
+        result = self.command_api.submit_web_command(client_id, f'start_job {normalized_job_name}')
+        if isinstance(result, dict):
+            result['job_name'] = normalized_job_name
+        return result
