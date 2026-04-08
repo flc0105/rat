@@ -1,6 +1,10 @@
 import shlex
 from functools import partial
-
+from server.application.command.command_types import (
+    COMMAND_TYPE_ACMD,
+    COMMAND_TYPE_COMMAND,
+    COMMAND_TYPE_SCRIPT,
+)
 
 class CommandPlanner:
     """
@@ -114,7 +118,7 @@ class CommandPlanner:
         return {
             'kind': 'remote_command',
             'command': expanded_cmd,
-            'command_type': 'command',
+            'command_type': COMMAND_TYPE_COMMAND,
             'extra': None,
         }
 
@@ -122,7 +126,7 @@ class CommandPlanner:
         return {
             'kind': 'remote_command',
             'command': raw_command,
-            'command_type': 'command',
+            'command_type': COMMAND_TYPE_COMMAND,
             'extra': None,
         }
 
@@ -131,7 +135,7 @@ class CommandPlanner:
         return {
             'kind': 'remote_command',
             'command': raw_command,
-            'command_type': 'acmd',
+            'command_type': COMMAND_TYPE_ACMD,
             'extra': payload,
         }
 
@@ -139,7 +143,7 @@ class CommandPlanner:
         return {
             'kind': 'remote_command',
             'command': script_text,
-            'command_type': 'script',
+            'command_type': COMMAND_TYPE_SCRIPT,
             'extra': script_args_extra,
         }
 

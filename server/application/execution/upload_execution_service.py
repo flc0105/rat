@@ -1,5 +1,5 @@
 import os
-
+from server.application.command.command_types import COMMAND_TYPE_COMMAND
 
 class UploadExecutionService:
     """
@@ -79,7 +79,7 @@ class UploadExecutionService:
             result_iter = self.command_stream_service.stream_command(
                 session,
                 command,
-                command_type='command',
+                command_type=COMMAND_TYPE_COMMAND,
                 extra=None,
                 history_entry_id=history_entry_id
             )

@@ -1,5 +1,6 @@
 import json
-
+from server.application.command.command_types import COMMAND_TYPE_COMMAND
+from server.application.tasks.task_types import TASK_TYPE_COMMAND
 
 class ForegroundExecutionService:
     """
@@ -23,10 +24,10 @@ class ForegroundExecutionService:
         target,
         command: str,
         *,
-        command_type: str = 'command',
+        command_type: str = COMMAND_TYPE_COMMAND,
         extra=None,
         history_entry_id: str = '',
-        task_type: str = 'command',
+        task_type: str = TASK_TYPE_COMMAND,
         source: str = 'foreground',
         task_id: str = '',
     ):
@@ -66,10 +67,10 @@ class ForegroundExecutionService:
         target,
         command: str,
         *,
-        command_type: str = 'command',
+        command_type: str = COMMAND_TYPE_COMMAND,
         extra=None,
         history_entry_id: str = '',
-        task_type: str = 'command',
+        task_type: str = TASK_TYPE_COMMAND,
         source: str = 'foreground',
         task_id: str = '',
     ) -> str:

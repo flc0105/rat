@@ -1,5 +1,5 @@
 import threading
-
+from server.application.tasks.task_types import TASK_TYPE_COMMAND, TASK_TYPE_UPLOAD
 
 class WebTaskService:
     """
@@ -56,7 +56,7 @@ class WebTaskService:
 
     def _acquire_command_task(self, conn, task_id: str, command: str, source: str = 'web'):
         return conn.acquire_foreground_task(
-            task_type='command',
+            task_type=TASK_TYPE_COMMAND,
             command=command,
             source=source,
             task_id=task_id,
@@ -64,7 +64,7 @@ class WebTaskService:
 
     def _acquire_upload_task(self, conn, task_id: str, command: str, source: str = 'web'):
         return conn.acquire_foreground_task(
-            task_type='upload',
+            task_type=TASK_TYPE_UPLOAD,
             command=command,
             source=source,
             task_id=task_id,

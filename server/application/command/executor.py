@@ -5,7 +5,8 @@ from core.utils.parsing import parse
 from server.application.command.builtin_command_handler import BuiltinCommandHandler
 from server.application.command.command_planner import CommandPlanner
 from server.application.execution.remote_execution_service import RemoteExecutionService
-
+from server.application.command.command_types import COMMAND_TYPE_COMMAND
+from server.application.tasks.task_types import TASK_TYPE_COMMAND
 
 class CommandExecutor:
     def __init__(
@@ -60,10 +61,10 @@ class CommandExecutor:
                 self.remote_execution_service.stream_foreground_command,
                 self.conn,
                 plan.get('command', ''),
-                command_type=plan.get('command_type', 'command'),
+                command_type=plan.get('command_type', COMMAND_TYPE_COMMAND),
                 extra=plan.get('extra'),
                 history_entry_id=self.current_history_entry_id,
-                task_type='command',
+                task_type=TASK_TYPE_COMMAND,
                 source=self.foreground_source,
             )
 
@@ -71,7 +72,7 @@ class CommandExecutor:
             self.remote_execution_service.stream_command,
             self.conn,
             plan.get('command', ''),
-            command_type=plan.get('command_type', 'command'),
+            command_type=plan.get('command_type', COMMAND_TYPE_COMMAND),
             extra=plan.get('extra'),
             history_entry_id=self.current_history_entry_id
         )

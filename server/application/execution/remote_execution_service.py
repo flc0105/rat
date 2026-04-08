@@ -4,7 +4,8 @@ import json
 from server.application.execution.command_stream_service import CommandStreamService
 from server.application.execution.foreground_execution_service import ForegroundExecutionService
 from server.application.execution.upload_execution_service import UploadExecutionService
-
+from server.application.command.command_types import COMMAND_TYPE_COMMAND
+from server.application.tasks.task_types import TASK_TYPE_COMMAND
 
 class RemoteExecutionService:
     """
@@ -129,7 +130,7 @@ class RemoteExecutionService:
         target,
         command: str,
         *,
-        command_type: str = 'command',
+        command_type: str = COMMAND_TYPE_COMMAND,
         extra=None,
         history_entry_id: str = '',
     ):
@@ -146,7 +147,7 @@ class RemoteExecutionService:
         target,
         command: str,
         *,
-        command_type: str = 'command',
+        command_type: str = COMMAND_TYPE_COMMAND,
         extra=None,
         history_entry_id: str = '',
     ) -> str:
@@ -163,7 +164,7 @@ class RemoteExecutionService:
         target,
         command: str,
         *,
-        command_type: str = 'command',
+        command_type: str = COMMAND_TYPE_COMMAND,
         extra=None,
         history_entry_id: str = '',
     ) -> dict:
@@ -184,10 +185,10 @@ class RemoteExecutionService:
         target,
         command: str,
         *,
-        command_type: str = 'command',
+        command_type: str = COMMAND_TYPE_COMMAND,
         extra=None,
         history_entry_id: str = '',
-        task_type: str = 'command',
+        task_type: str = TASK_TYPE_COMMAND,
         source: str = 'foreground',
         task_id: str = '',
     ):
@@ -207,10 +208,10 @@ class RemoteExecutionService:
         target,
         command: str,
         *,
-        command_type: str = 'command',
+        command_type: str = COMMAND_TYPE_COMMAND,
         extra=None,
         history_entry_id: str = '',
-        task_type: str = 'command',
+        task_type: str = TASK_TYPE_COMMAND,
         source: str = 'foreground',
         task_id: str = '',
     ) -> str:
@@ -230,10 +231,10 @@ class RemoteExecutionService:
         target,
         command: str,
         *,
-        command_type: str = 'command',
+        command_type: str = COMMAND_TYPE_COMMAND,
         extra=None,
         history_entry_id: str = '',
-        task_type: str = 'command',
+        task_type: str = TASK_TYPE_COMMAND,
         source: str = 'foreground',
         task_id: str = '',
     ) -> dict:

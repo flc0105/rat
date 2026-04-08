@@ -1,5 +1,7 @@
 import json
 
+from server.application.command.command_types import COMMAND_TYPE_COMMAND
+
 
 class CommandStreamService:
     """
@@ -41,7 +43,7 @@ class CommandStreamService:
         target,
         command: str,
         *,
-        command_type: str = 'command',
+        command_type: str = COMMAND_TYPE_COMMAND,
         extra=None,
         history_entry_id: str = '',
     ):
@@ -75,7 +77,7 @@ class CommandStreamService:
         target,
         command: str,
         *,
-        command_type: str = 'command',
+        command_type: str = COMMAND_TYPE_COMMAND,
         extra=None,
         history_entry_id: str = '',
     ) -> str:
@@ -99,7 +101,7 @@ class CommandStreamService:
         target,
         command: str,
         *,
-        command_type: str = 'command',
+        command_type: str = COMMAND_TYPE_COMMAND,
         extra=None,
         history_entry_id: str = '',
     ) -> dict:
