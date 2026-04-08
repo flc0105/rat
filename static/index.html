@@ -703,8 +703,13 @@
                                     <el-tag size="small" type="success">Job</el-tag>
                                 </div>
                                 <div class="background-job-module-actions">
-                                    <el-button size="small" type="primary" plain
-                                               @click="startBackgroundJob(item.job_name)">
+                                    <el-button
+                                        size="small"
+                                        type="primary"
+                                        plain
+                                        @click="startBackgroundJob(item.job_name)"
+                                        :disabled="isBackgroundJobStartDisabled(item)"
+                                    >
                                         Start
                                     </el-button>
                                     <el-button size="small" plain

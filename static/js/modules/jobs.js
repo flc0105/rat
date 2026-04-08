@@ -403,6 +403,14 @@ window.AppJobsModule = {
             const raw = String(text || '').trim();
             return raw.replace(/^\[[^\]]*?client=[^\]]*?\]\s*/, '');
         },
+
+        isBackgroundJobStartDisabled(item) {
+            const rawKey = String(item?.job_key || item?.job_name || '').trim()
+                .replace(/\\/g, '/')
+                .replace(/\.py$/i, '');
+            const key = rawKey.split('/').pop();
+            return !!key && this.activeBackgroundJobKeySet.has(key);
+        },
     },
 
     computed: {
@@ -428,6 +436,21 @@ window.AppJobsModule = {
                 const tb = String(b.time || '');
                 return tb.localeCompare(ta);
             });
+        },
+
+        activeBackgroundJobKeySet() {
+            const set = new Set();
+            for (const job of this.backgroundJobs || []) {
+                const state = String(job?.state || '').trim().toLowerCase();
+                if (!['running', 'stopping'].includes(state)) continue;
+
+                const rawKey = String(job?.job_key || job?.job_name || '').trim()
+                    .replace(/\\/g, '/')
+                    .replace(/\.py$/i, '');
+                const key = rawKey.split('/').pop();
+                if (key) set.add(key);
+            }
+            return set;
         },
     },
 
