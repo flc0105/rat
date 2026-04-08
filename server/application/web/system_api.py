@@ -40,7 +40,7 @@ class WebSystemInspectionApi:
 
     def get_system_paths(self, client_id: str):
         session = self._get_session(client_id)
-        return session.info.get('system_paths', {})
+        return session.session_info.system_paths
 
     def list_processes(self, client_id: str):
         self._get_session(client_id)

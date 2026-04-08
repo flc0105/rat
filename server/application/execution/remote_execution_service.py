@@ -97,7 +97,7 @@ class RemoteExecutionService:
         self.server.command_history.finish_entry(
             entry_id,
             ok=ok,
-            cwd_end=cwd_end or session.info.get('cwd', '')
+            cwd_end=cwd_end or session.session_info.cwd
         )
 
     def append_history_output(self, target, entry_id: str, status: int, text: str, eof: int = 0):

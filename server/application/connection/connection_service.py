@@ -50,15 +50,15 @@ class WebConnectionService:
 
     # ------------------ payload ------------------ #
     def serialize_connection(self, session: ClientSession) -> dict:
-        info = session.info or {}
+        info = session.session_info
         return {
-            'client_id': info.get('id'),
-            'addr': info.get('addr', ''),
-            'os_type': info.get('os_type', 'Unknown'),
-            'os_ver': info.get('os_ver', 'Unknown'),
-            'hostname': info.get('hostname', 'Unknown'),
-            'integrity': info.get('integrity', '?'),
-            'cwd': info.get('cwd', ''),
+            'client_id': info.client_id,
+            'addr': info.addr,
+            'os_type': info.os_type,
+            'os_ver': info.os_ver,
+            'hostname': info.hostname,
+            'integrity': info.integrity,
+            'cwd': info.cwd,
             'connected_at': session.context.connected_at,
             'disconnected_at': session.context.disconnected_at,
             'last_seen_at': session.context.last_seen_at,
@@ -113,7 +113,7 @@ class WebConnectionService:
 
     def publish_connection_offline(self, session: ClientSession):
         self.event_bus.publish('connection_offline', {
-            'client_id': session.info.get('id'),
+            'client_id': session.session_info.client_id,
             'connection': self.serialize_connection(session),
             'time': datetime.now().isoformat()
         })
@@ -126,7 +126,7 @@ class WebConnectionService:
 
     def publish_background_message(self, session: ClientSession, status, text, end):
         self.event_bus.publish('background_message', {
-            'client_id': session.info.get('id'),
+            'client_id': session.session_info.client_id,
             'status': status,
             'text': text,
             'eof': end,

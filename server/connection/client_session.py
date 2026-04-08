@@ -3,12 +3,14 @@ from server.connection.context.session_context import ClientSessionContext
 from server.connection.runtime.session_runtime import ClientSessionRuntime
 from server.connection.services.session_services import ClientSessionServices
 from server.connection.transport.client_transport import ClientTransport
+from server.models.session_info import SessionInfo
 
 
 class ClientSession:
     def __init__(self, transport: ClientTransport, info=None):
         self.transport = transport
-        self.info = info or {}
+        self.session_info = SessionInfo.from_dict(info)
+        self.info = self.session_info.to_dict()
 
         self.runtime = ClientSessionRuntime()
         self.context = ClientSessionContext()
@@ -18,6 +20,16 @@ class ClientSession:
     @property
     def address(self):
         return self.transport.address
+
+    # add SessionInfo 同步 dict 镜像 2026-04-08
+    def refresh_info_dict(self):
+        self.info = self.session_info.to_dict()
+
+    # add SessionInfo 更新 cwd 2026-04-08
+    def update_current_workdir(self, cwd: str):
+        if cwd:
+            self.session_info.cwd = str(cwd)
+            self.refresh_info_dict()
 
     def send(self, data: dict):
         self.transport.send(data)
@@ -73,12 +85,3 @@ class ClientSession:
 
     def get_foreground_task(self):
         return self.runtime.get_foreground_task()
-
-
-
-
-
-
-
-
-

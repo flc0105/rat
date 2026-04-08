@@ -55,7 +55,7 @@ class WebTaskRunner:
             conn,
             history_entry_id,
             final_status == WebTaskStatus.SUCCESS,
-            cwd_end=conn.info.get('cwd', '')
+            cwd_end=conn.session_info.cwd
         )
 
     def _publish_task_result(self, task_id: str, client_id: str, command: str, status: int, text: str):
@@ -139,7 +139,7 @@ class WebTaskRunner:
         - 统一异常处理
         - 统一结束收尾
         """
-        client_id = conn.info.get('id')
+        client_id = conn.session_info.client_id
         summary = TaskStreamSummary()
 
         try:

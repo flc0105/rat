@@ -206,11 +206,11 @@ class Server:
         data = [
             [
                 str(i),
-                session.info.get('addr', 'N/A'),
-                session.info.get('os_type', 'Unknown'),
-                session.info.get('os_ver', 'Unknown'),
-                session.info.get('hostname', 'Unknown'),
-                session.info.get('integrity', '?')
+                session.session_info.addr or 'N/A',
+                session.session_info.os_type,
+                session.session_info.os_ver,
+                session.session_info.hostname,
+                session.session_info.integrity
             ]
             for i, session in enumerate(connection_list)
         ]
@@ -286,7 +286,7 @@ class Server:
                 session,
                 entry_id,
                 final_ok,
-                cwd_end=session.info.get('cwd', '')
+                cwd_end=session.session_info.cwd
             )
 
     def open_connection(self, session: ClientSession):
@@ -304,7 +304,7 @@ class Server:
         try:
             while 1:
                 try:
-                    cmd = colored_input('{}> '.format(session.info['cwd']))
+                    cmd = colored_input('{}> '.format(session.session_info.cwd))
                     if not cmd.strip():
                         continue
 

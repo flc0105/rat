@@ -100,9 +100,9 @@ class WebArtifactApi:
 
         try:
             conn = self.server.get_target_connection_by_client_id(client_id)
-            conn_info = getattr(conn, 'info', {}) or {}
-            hostname = conn_info.get('hostname', '') or ''
-            addr = conn_info.get('addr', '') or ''
+            conn_info = getattr(conn, 'session_info', None)
+            hostname = getattr(conn_info, 'hostname', '') or ''
+            addr = getattr(conn_info, 'addr', '') or ''
         except Exception:
             pass
 

@@ -35,7 +35,7 @@ class ConnectionManager:
     def get_by_client_id(self, client_id):
         with self._lock:
             for conn in self._connections:
-                if conn.info.get('id') == client_id:
+                if conn.session_info.client_id == client_id:
                     return conn
         raise KeyError(f'Connection not found: {client_id}')
 

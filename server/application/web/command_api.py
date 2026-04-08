@@ -19,7 +19,7 @@ class WebCommandApi:
         self.task_service = task_service
 
     def _get_client_command_candidates(self, session):
-        payload = session.info.get('command_manifest') or []
+        payload = session.session_info.command_manifest or []
         if not isinstance(payload, list):
             return []
 
