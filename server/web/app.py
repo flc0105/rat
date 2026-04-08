@@ -24,6 +24,7 @@ def create_app(server_instance):
     app = Flask(__name__, static_folder='../../static', static_url_path='')
 
     web_service = server_instance.web_service
+    command_web_service = web_service.command_web_service
     artifact_service = web_service.artifact_service
     responder = WebApiResponder()
 
@@ -46,7 +47,7 @@ def create_app(server_instance):
     @app.post('/api/connections/<client_id>/command')
     def send_command(client_id):
         def _execute():
-            return web_service.submit_web_command(
+            return command_web_service.submit_web_command(
                 client_id,
                 get_required_command(),
                 tab_id=get_optional_tab_id()
@@ -57,14 +58,14 @@ def create_app(server_instance):
     @app.post('/api/tasks/<task_id>/cancel')
     def cancel_task(task_id):
         return responder.json_endpoint(
-            lambda: web_service.cancel_web_task(task_id),
+            lambda: command_web_service.cancel_web_task(task_id),
             default_error_status=500
         )
 
     @app.get('/api/connections/<client_id>/command-candidates')
     def get_command_candidates(client_id):
         return responder.json_endpoint(
-            lambda: web_service.get_command_candidates(client_id),
+            lambda: command_web_service.get_command_candidates(client_id),
             default_error_status=500
         )
 
@@ -83,7 +84,7 @@ def create_app(server_instance):
             target_path = (request.form.get('target_path') or '').strip()
 
             temp_path, safe_name = artifact_service.create_upload_temp_file(upload)
-            return web_service.submit_web_upload(
+            return command_web_service.submit_web_upload(
                 client_id,
                 temp_path,
                 safe_name,

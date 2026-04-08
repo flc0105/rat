@@ -7,6 +7,7 @@ from server.web.request_parsers import get_json_payload
 def create_background_job_blueprint(server_instance):
     blueprint = Blueprint('background_jobs', __name__)
     web_service = server_instance.web_service
+    command_web_service = web_service.command_web_service
     background_job_service = web_service.background_job_service
     responder = WebApiResponder()
 
@@ -151,7 +152,7 @@ def create_background_job_blueprint(server_instance):
             # if source == 'server':
             #     command = f'start_job_remote {job_name}'
 
-            result = web_service.submit_web_command(client_id, command)
+            result = command_web_service.submit_web_command(client_id, command)
             if isinstance(result, dict):
                 result['job_name'] = job_name
                 result['source'] = source
@@ -177,7 +178,5 @@ def create_background_job_blueprint(server_instance):
             return background_job_service.ingest_report(payload)
 
         return responder.json_endpoint(_execute, default_error_status=500)
-
-
 
     return blueprint
