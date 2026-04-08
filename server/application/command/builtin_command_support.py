@@ -109,7 +109,16 @@ class AliasBuiltinSupport:
 
         if not remaining_text:
             payload = self.alias_manager.list_aliases_for_platform(platform_name, conn=self.conn)
-            yield 1, format_dict(payload)
+            # yield 1, format_dict(payload)
+            if platform_name == 'all':
+                yield 1, self._format_grouped_aliases(payload)
+            else:
+                yield 1, format_dict(payload)
+            return
+
+        if remaining_text.lower() == 'reload':
+            self.alias_manager.load_aliases()
+            yield 1, 'Aliases reloaded'
             return
 
         if remaining_text in ('--json', 'json'):
@@ -133,6 +142,19 @@ class AliasBuiltinSupport:
                 raise ValueError("Expected format: alias [--platform win|mac|common] name = command")
         except Exception as e:
             raise ValueError(f'Failed to save alias: {e}')
+
+    def _format_grouped_aliases(self, payload: dict) -> str:
+        lines = []
+        for platform_name in ('common', 'win', 'mac'):
+            alias_map = payload.get(platform_name) or {}
+            lines.append(f'[{platform_name}]')
+            if not alias_map:
+                lines.append('(empty)')
+            else:
+                for alias_name, command_text in alias_map.items():
+                    lines.append(f'{alias_name} = {command_text}')
+            lines.append('')
+        return '\n'.join(lines).rstrip()
 
     def unalias(self, arg):
         if not arg:
