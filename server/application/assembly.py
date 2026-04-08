@@ -6,7 +6,7 @@ from server.application.connection.connection_service import WebConnectionServic
 from server.application.execution.remote_execution_service import RemoteExecutionService
 from server.application.jobs.background_job_service import BackgroundJobService
 from server.application.jobs.background_job_store import BackgroundJobStore
-from server.application.script.script_service import ServerJobService
+from server.application.script.script_service import JobCatalogService
 from server.application.tasks.task_runner import WebTaskRunner
 from server.application.tasks.task_service import WebTaskService
 from server.application.tasks.task_store import WebTaskStore
@@ -80,14 +80,15 @@ class ServerApplicationAssembly:
         )
 
         self.background_job_store = BackgroundJobStore()
+        self.job_catalog_service = JobCatalogService(SCRIPT_JOBS_PATH)
 
         self.background_job_service = BackgroundJobService(
             event_bus=self.event_bus,
             job_store=self.background_job_store,
             remote_execution_service=self.remote_execution_service,
+            job_catalog_service=self.job_catalog_service,
         )
 
-        self.script_service = ServerJobService(SCRIPT_JOBS_PATH)
         self.agent_builder = AgentBuilder()
 
         # ------------------ web sub facades / apis ------------------ #
@@ -104,7 +105,7 @@ class ServerApplicationAssembly:
         self.job_api = WebJobApi(
             command_api=self.command_api,
             background_job_service=self.background_job_service,
-            script_service=self.script_service,
+            job_catalog_service=self.job_catalog_service,
         )
 
         self.artifact_api = WebArtifactApi(

@@ -34,7 +34,6 @@ class ServerWebService:
         self.task_service = self.assembly.task_service
         self.background_job_store = self.assembly.background_job_store
         self.background_job_service = self.assembly.background_job_service
-        self.script_service = self.assembly.script_service
         self.agent_builder = self.assembly.agent_builder
 
         # ------------------ sub facades / apis ------------------ #

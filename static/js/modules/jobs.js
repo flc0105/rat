@@ -31,51 +31,35 @@ window.AppJobsModule = {
         },
 
         normalizeBackgroundJobModule(item = {}) {
-            const rawSource = String(item.source || '').trim().toLowerCase();
-            const source = rawSource === 'server' ? 'server' : 'client';
-
             const rawJobName = String(item.job_name || item.name || item.job_key || '').trim();
             const rawJobKey = String(item.job_key || '').trim();
             const rawDisplayName = String(item.display_name || '').trim();
 
             const isHeadingLike = /^(available\s+client\s+job\s+modules:?|available\s+remote\s+scripts:?|no\s+remote\s+scripts\s+available)$/i.test(rawJobName);
-            const looksSyntheticRemoteAlias = source === 'client' && /\s+-\s+server$/i.test(rawJobName);
-
             const stripPySuffix = (value = '') => String(value).replace(/\.py$/i, '').trim();
 
             let jobName = rawJobName;
             let jobKey = rawJobKey || stripPySuffix(rawJobName) || rawJobName;
             let displayName = rawDisplayName;
 
-            if (source === 'client') {
-                // client 模块：标题保留 .py，副标题显示去掉 .py 的模块名
-                if (!displayName) {
-                    displayName = jobName;
-                }
-                if (!jobKey) {
-                    jobKey = stripPySuffix(jobName) || jobName;
-                }
-            } else {
-                // server 脚本：标题优先 display_name（通常带 .py），副标题显示 job_key / job_name（通常不带 .py）
-                if (!displayName) {
-                    displayName = jobName;
-                }
-                if (!jobKey) {
-                    jobKey = stripPySuffix(jobName) || jobName;
-                }
+            if (!displayName) {
+                displayName = jobName;
+            }
+            if (!jobKey) {
+                jobKey = stripPySuffix(jobName) || jobName;
             }
 
             const subtitle = jobKey && displayName !== jobKey ? jobKey : '';
 
             return {
                 ...item,
-                source,
+                source: 'job',
                 job_name: jobName,
                 job_key: jobKey,
                 display_name: displayName,
                 subtitle,
-                module_id: `${source}:${jobKey || jobName}`,
-                hidden_invalid: !jobName || isHeadingLike || looksSyntheticRemoteAlias,
+                module_id: `job:${jobKey || jobName}`,
+                hidden_invalid: !jobName || isHeadingLike,
             };
         },
 
@@ -146,7 +130,7 @@ window.AppJobsModule = {
             }, 200);
         },
 
-        async startBackgroundJob(jobName, source = 'auto') {
+        async startBackgroundJob(jobName) {
             if (!this.selectedId) {
                 ElementPlus.ElMessage.warning('Please select a device');
                 return;
@@ -158,15 +142,11 @@ window.AppJobsModule = {
                 return;
             }
 
-            const normalizedSource = ['auto', 'client', 'server'].includes(String(source || '').trim())
-                ? String(source || '').trim()
-                : 'auto';
-
             try {
                 const res = await fetch(`/api/connections/${encodeURIComponent(this.selectedId)}/background-jobs/start`, {
                     method: 'POST',
                     headers: this.getTabScopedHeaders({'Content-Type': 'application/json'}),
-                    body: JSON.stringify({job_name: normalized, source: normalizedSource})
+                    body: JSON.stringify({job_name: normalized})
                 });
 
                 const json = await res.json();
@@ -233,7 +213,7 @@ window.AppJobsModule = {
             this.backgroundJobMessageDialogVisible = true;
         },
 
-        normalizeServerJobFilename(scriptName, fallbackName = 'new_server_job.py') {
+        normalizeServerJobFilename(scriptName, fallbackName = 'new_job.py') {
             let normalized = String(scriptName || '').trim().replace(/\\/g, '/').replace(/^\/+/, '');
             if (!normalized) {
                 normalized = fallbackName;
@@ -244,7 +224,7 @@ window.AppJobsModule = {
             return normalized;
         },
 
-        buildServerJobTemplate(scriptName = 'new_server_job.py') {
+        buildServerJobTemplate(scriptName = 'new_job.py') {
             const normalizedScriptName = this.normalizeServerJobFilename(scriptName);
             const classBaseName = normalizedScriptName
                 .replace(/\.py$/i, '')
@@ -253,7 +233,7 @@ window.AppJobsModule = {
                 .split(/[^a-zA-Z0-9]+/)
                 .filter(Boolean)
                 .map(part => part.charAt(0).toUpperCase() + part.slice(1))
-                .join('') || 'NewServerJob';
+                .join('') || 'NewBackgroundJob';
 
             return `import time\n\nfrom client.jobs.core.job import Job\n\n\nclass ${classBaseName}(Job):\n    def __init__(self):\n        super().__init__()\n        self.interval = 10\n\n    def run(self):\n        self.mark_running()\n        self.send_to_server(1, "${normalizedScriptName} started")\n\n        try:\n            while not self.stop_event.is_set():\n                self.send_to_server(1, f"heartbeat: {time.strftime('%Y-%m-%d %H:%M:%S')}")\n                time.sleep(self.interval)\n        finally:\n            self.send_to_server(1, "${normalizedScriptName} stopped")\n            self.mark_stopped()\n\n    def stop(self, notify=True):\n        self.request_stop(notify=notify)\n`;
         },
@@ -289,25 +269,27 @@ window.AppJobsModule = {
                 const formData = new FormData();
                 formData.append('file', file, file.name);
 
-                const res = await fetch('/api/server/jobs/upload', {
+                const res = await fetch('/api/jobs/upload', {
                     method: 'POST',
                     body: formData
                 });
                 const json = await res.json();
                 if (!res.ok || json.code !== 0) {
-                    throw new Error(json.message || 'Failed to upload script');
+                    throw new Error(json.message || 'Failed to upload job');
                 }
 
                 const uploadedName = this.normalizeServerJobFilename(json.data?.name || file.name);
-                ElementPlus.ElMessage.success(`Script uploaded: ${uploadedName}`);
+                ElementPlus.ElMessage.success(`Job uploaded: ${uploadedName}`);
 
                 if (this.backgroundJobsDialogVisible) {
                     await this.loadBackgroundJobModules();
                 }
 
-                await this.openRemoteJobEditor(uploadedName);
+                if (typeof this.openRemoteJobEditor === 'function') {
+                    await this.openRemoteJobEditor(uploadedName);
+                }
             } catch (e) {
-                ElementPlus.ElMessage.error(e.message || 'Failed to upload script');
+                ElementPlus.ElMessage.error(e.message || 'Failed to upload job');
             } finally {
                 this.serverJobUploadLoading = false;
                 if (input) input.value = '';
@@ -317,14 +299,14 @@ window.AppJobsModule = {
         async deleteRemoteScript(scriptName) {
             const normalizedScriptName = this.normalizeServerJobFilename(scriptName);
             if (!normalizedScriptName) {
-                ElementPlus.ElMessage.warning('Invalid script name');
+                ElementPlus.ElMessage.warning('Invalid job name');
                 return;
             }
 
             try {
                 await ElementPlus.ElMessageBox.confirm(
                     `Delete "${normalizedScriptName}"? This action cannot be undone.`,
-                    'Delete Server Job',
+                    'Delete Job',
                     {
                         type: 'warning',
                         confirmButtonText: 'Delete',
@@ -332,7 +314,7 @@ window.AppJobsModule = {
                     }
                 );
 
-                const res = await fetch('/api/server/jobs/delete', {
+                const res = await fetch('/api/jobs/delete', {
                     method: 'DELETE',
                     headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify({name: normalizedScriptName})
@@ -340,14 +322,19 @@ window.AppJobsModule = {
                 const json = await res.json();
 
                 if (!res.ok || json.code !== 0) {
-                    throw new Error(json.message || 'Failed to delete script');
+                    throw new Error(json.message || 'Failed to delete job');
                 }
 
-                if (this.previewDialogVisible && this.previewSource === 'server_job') {
+                if (
+                    this.previewDialogVisible &&
+                    (this.previewSource === 'server_job' || this.previewSource === 'background_job')
+                ) {
                     const currentPreviewName = this.normalizeServerJobFilename(this.previewFilePath || this.previewTitle || '');
                     if (currentPreviewName === normalizedScriptName) {
                         this.previewDialogVisible = false;
-                        this.destroyMonacoEditor();
+                        if (typeof this.destroyMonacoEditor === 'function') {
+                            this.destroyMonacoEditor();
+                        }
                     }
                 }
 
@@ -358,7 +345,7 @@ window.AppJobsModule = {
                 }
             } catch (e) {
                 if (e === 'cancel' || e === 'close') return;
-                ElementPlus.ElMessage.error(e.message || 'Failed to delete script');
+                ElementPlus.ElMessage.error(e.message || 'Failed to delete job');
             }
         },
 
@@ -370,17 +357,19 @@ window.AppJobsModule = {
 
             try {
                 const {value} = await ElementPlus.ElMessageBox.prompt(
-                    'Enter the new server-side job filename',
-                    'New Server Job',
+                    'Enter the new job filename',
+                    'New Job',
                     {
                         confirmButtonText: 'Create',
                         cancelButtonText: 'Cancel',
-                        inputValue: 'new_server_job.py',
-                        inputPlaceholder: 'new_server_job.py',
+                        inputValue: 'new_job.py',
+                        inputPlaceholder: 'new_job.py',
                     }
                 );
 
-                this.openNewRemoteJobEditor(value || 'new_server_job.py');
+                if (typeof this.openNewRemoteJobEditor === 'function') {
+                    this.openNewRemoteJobEditor(value || 'new_job.py');
+                }
             } catch (e) {
                 if (e === 'cancel' || e === 'close') return;
             }
@@ -441,6 +430,7 @@ window.AppJobsModule = {
             });
         },
     },
+
     watch: {
         backgroundJobsDialogVisible(val) {
             if (!val) {
@@ -464,11 +454,3 @@ window.AppJobsModule = {
         },
     }
 };
-
-
-
-
-
-
-
-

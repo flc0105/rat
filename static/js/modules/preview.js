@@ -208,14 +208,14 @@ window.AppPreviewModule = {
                 await this.saveToRemoteFile(currentContent);
             } else if (this.previewSource === 'artifact') {
                 await this.saveToArtifact(currentContent);
-            } else if (this.previewSource === 'server_job') {
-                await this.saveToServerJob(currentContent);
+            } else if (this.previewSource === 'background_job') {
+                await this.saveToBackgroundJob(currentContent);
             } else {
                 ElementPlus.ElMessage.warning('Unknown preview source');
             }
         },
 
-        async saveToServerJob(content) {
+        async saveToBackgroundJob(content) {
             if (!this.previewFilePath) {
                 ElementPlus.ElMessage.warning('Invalid job name');
                 return;
@@ -224,7 +224,7 @@ window.AppPreviewModule = {
             this.previewSaving = true;
 
             try {
-                const res = await fetch('/api/server/jobs/save', {
+                const res = await fetch('/api/jobs/save', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify({
@@ -537,7 +537,7 @@ window.AppPreviewModule = {
             window.open(this.previewUrl, '_blank');
         },
 
-        openNewRemoteJobEditor(scriptName = 'new_server_job.py') {
+        openNewRemoteJobEditor(scriptName = 'new_job.py') {
             if (!this.selectedId) {
                 ElementPlus.ElMessage.warning('Please select a device');
                 return;
@@ -546,7 +546,7 @@ window.AppPreviewModule = {
             const normalizedScriptName = this.normalizeServerJobFilename(scriptName);
             const content = this.buildServerJobTemplate(normalizedScriptName);
 
-            this.previewSource = 'server_job';
+            this.previewSource = 'background_job';
             this.previewFilePath = normalizedScriptName;
             this.previewTitle = normalizedScriptName;
             this.previewText = content;
@@ -569,20 +569,20 @@ window.AppPreviewModule = {
                 return;
             }
 
-            let normalizedScriptName = this.normalizeServerJobFilename(scriptName, 'new_server_job.py');
+            let normalizedScriptName = this.normalizeServerJobFilename(scriptName, 'new_job.py');
             if (!normalizedScriptName) {
                 ElementPlus.ElMessage.warning('Invalid script name');
                 return;
             }
 
             try {
-                const res = await fetch(`/api/server/jobs/download?name=${encodeURIComponent(normalizedScriptName)}`);
+                const res = await fetch(`/api/jobs/download?name=${encodeURIComponent(normalizedScriptName)}`);
                 if (!res.ok) {
-                    throw new Error(`Failed to load script: ${res.statusText}`);
+                    throw new Error(`Failed to load job: ${res.statusText}`);
                 }
                 const content = await res.text();
 
-                this.previewSource = 'server_job';
+                this.previewSource = 'background_job';
                 this.previewFilePath = normalizedScriptName;
                 this.previewTitle = normalizedScriptName;
                 this.previewText = content;
@@ -599,7 +599,7 @@ window.AppPreviewModule = {
                     this.initMonacoEditor(content, false);
                 });
             } catch (e) {
-                ElementPlus.ElMessage.error(e.message || 'Failed to load script');
+                ElementPlus.ElMessage.error(e.message || 'Failed to load job');
             }
         },
 
@@ -625,8 +625,8 @@ window.AppPreviewModule = {
             if (this.previewSource === 'artifact') {
                 return 'Artifact';
             }
-            if (this.previewSource === 'server_job') {
-                return 'Server Job';
+            if (this.previewSource === 'background_job') {
+                return 'Background Job';
             }
             return 'Unknown';
         },

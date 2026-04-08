@@ -9,10 +9,7 @@ from core.utils.formatting import format_dict
 
 class CommandJobMixin:
     def _normalize_job_name(self, job_name: str) -> str:
-        return str(job_name or '').strip()
-
-    def _normalize_script_job_name(self, script_name: str) -> str:
-        name = str(script_name or '').strip().replace('\\', '/')
+        name = str(job_name or '').strip().replace('\\', '/')
         if name.endswith('.py'):
             name = name[:-3]
         return name.strip('/').strip()
@@ -27,38 +24,26 @@ class CommandJobMixin:
             f'Use "stop_job {job_key}" to request stop'
         )
 
-    def _list_local_job_names(self) -> list[str]:
-        job_manager = self.socket.job_manager
-        items = job_manager.list_available_jobs() or []
-        result = []
-        for item in items:
-            text = str(item or '').strip()
-            if text:
-                result.append(text)
-        return result
-
-    def _list_remote_script_names(self) -> list[str]:
-        """
-        仅返回远程脚本名字列表（纯净，一行一个的语义数据），不给标题/描述。
-        """
+    # add remove client side job 2026-04-08 11:40
+    def _list_remote_job_names(self) -> list[str]:
         import requests
 
-        url = f'{UPLOAD_BASE_URL.rstrip("/")}/api/server/jobs/list'
+        url = f'{UPLOAD_BASE_URL.rstrip("/")}/api/jobs/list'
 
         response = requests.get(url, timeout=10)
         if response.status_code != 200:
-            raise RuntimeError('Failed to fetch remote script list')
+            raise RuntimeError('Failed to fetch job list')
 
         data = response.json()
         payload = data.get('data') or []
-        scripts = payload.get('scripts', []) if isinstance(payload, dict) else payload
+        jobs = payload.get('jobs', []) if isinstance(payload, dict) else payload
 
         result = []
-        for script in scripts:
-            if not isinstance(script, dict):
+        for job in jobs:
+            if not isinstance(job, dict):
                 continue
-            raw_name = script.get('name') or script.get('job_name') or script.get('job_key') or ''
-            normalized_name = self._normalize_script_job_name(raw_name)
+            raw_name = job.get('name') or job.get('job_name') or job.get('job_key') or ''
+            normalized_name = self._normalize_job_name(raw_name)
             if normalized_name:
                 result.append(normalized_name)
         return result
@@ -68,18 +53,18 @@ class CommandJobMixin:
         if not normalized:
             raise ValueError('job name is required')
 
-        self._send_interim_result(1, f'Fetching remote script: {normalized}')
-        script_content = self._fetch_remote_script(normalized)
+        self._send_interim_result(1, f'Fetching job: {normalized}')
+        script_content = self._fetch_remote_job(normalized)
         return self._start_from_script_content(script_content, normalized, job_manager)
 
-    def _attach_remote_runtime_metadata(self, runtime, temp_path: str, script_name: str):
-        normalized_job_name = self._normalize_script_job_name(script_name)
+    def _attach_remote_runtime_metadata(self, runtime, temp_path: str, job_name: str):
+        normalized_job_name = self._normalize_job_name(job_name)
         for target in (runtime, getattr(runtime, 'job_instance', None)):
             if target is None:
                 continue
             try:
                 target._temp_script_path = temp_path
-                target._remote_job_source = 'server'
+                target._remote_job_source = 'job_api'
                 target._remote_script_name = normalized_job_name
             except Exception:
                 pass
@@ -88,8 +73,7 @@ class CommandJobMixin:
     def start_job(self, job_name: str):
         """
         启动后台任务。
-        - 优先尝试本地 client job module
-        - 本地找不到时自动回退到 server-side script
+        仅支持从服务端拉取 job 后运行。
         - 必须传任务名
         """
         normalized = self._normalize_job_name(job_name)
@@ -100,25 +84,11 @@ class CommandJobMixin:
 
         self._send_interim_result(1, f'Preparing background job: {normalized}')
         try:
-            runtime = job_manager.start_job(normalized, self.command_id)
+            runtime = self._start_remote_job_by_name(normalized, job_manager)
             self._send_final_result(1, self._format_runtime_start_message(runtime, 'Background job started'))
             return None
-        except Exception as local_error:
-            self._send_interim_result(
-                1,
-                f'Local job not found or failed to start, falling back to remote script: {normalized}',
-                0,
-            )
-            try:
-                runtime = self._start_remote_job_by_name(normalized, job_manager)
-                self._send_final_result(1, self._format_runtime_start_message(runtime, 'Background job started'))
-                return None
-            except Exception as remote_error:
-                return 0, (
-                    f'Failed to start background job: {normalized}\n'
-                    f'Local error: {local_error}\n'
-                    f'Remote error: {remote_error}'
-                )
+        except Exception as e:
+            return 0, f'Failed to start background job: {normalized}\nError: {e}'
 
     @desc('Stop a background job', group='job')
     def stop_job(self, job_name: str):
@@ -141,47 +111,21 @@ class CommandJobMixin:
         except Exception as e:
             return 0, f'Failed to stop background job: {e}'
 
-    @desc('List client local background jobs', group='job')
-    def jobs_local(self):
-        """
-        仅列出 client 本地可用 job。
-        返回纯文本列表：一行一个，无标题，无缩进。
-        """
-        items = self._list_local_job_names()
-        return 1, '\n'.join(items)
-
-    @desc('List all available background jobs', group='job')
+    @desc('List available background jobs', group='job')
     def jobs(self):
         """
-        列出全部可用 job：server + client。
-        返回分组纯文本。
+        列出全部可用 job。
+        返回纯文本列表：一行一个，无标题，无缩进。
         """
         try:
-            local_items = self._list_local_job_names()
-        except Exception:
-            local_items = []
+            items = self._list_remote_job_names()
+        except Exception as e:
+            return 0, f'Failed to list background jobs: {e}'
 
-        try:
-            remote_items = self._list_remote_script_names()
-        except Exception:
-            remote_items = []
-
-        lines = []
-
-        if remote_items:
-            lines.append('[server]')
-            lines.extend(item for item in remote_items if str(item).strip())
-
-        if local_items:
-            if lines:
-                lines.append('')
-            lines.append('[client]')
-            lines.extend(item for item in local_items if str(item).strip())
-
-        if not lines:
+        if not items:
             return 1, 'No background jobs available'
 
-        return 1, '\n'.join(lines)
+        return 1, '\n'.join(items)
 
     @desc('List running background jobs', group='job')
     def jobs_ps(self):
@@ -229,7 +173,7 @@ class CommandJobMixin:
         从脚本内容启动任务。
         """
         temp_path = ''
-        normalized_job_name = self._normalize_script_job_name(script_name)
+        normalized_job_name = self._normalize_job_name(script_name)
         display_script_name = normalized_job_name + '.py' if normalized_job_name else 'remote_job.py'
 
         try:
@@ -240,9 +184,9 @@ class CommandJobMixin:
             with open(temp_path, 'w', encoding='utf-8') as f:
                 f.write(script_content)
 
-            self._send_interim_result(1, f'Preparing background job from remote script: {display_script_name}')
+            self._send_interim_result(1, f'Preparing background job from remote job: {display_script_name}')
 
-            runtime = job_manager.start_job_rem(temp_path, normalized_job_name, self.command_id)
+            runtime = job_manager.start_job(temp_path, normalized_job_name, self.command_id)
             self._attach_remote_runtime_metadata(runtime, temp_path, normalized_job_name)
             return runtime
         except Exception:
@@ -253,17 +197,17 @@ class CommandJobMixin:
                     pass
             raise
 
-    def _fetch_remote_script(self, script_name: str) -> str:
+    def _fetch_remote_job(self, job_name: str) -> str:
         """
-        从服务端 API 获取脚本内容。
+        从服务端 API 获取 job 内容。
         """
         import requests
 
-        normalized_name = self._normalize_job_name(script_name)
+        normalized_name = self._normalize_job_name(job_name)
         if not normalized_name:
-            raise ValueError('script name is required')
+            raise ValueError('job name is required')
 
-        url = f'{UPLOAD_BASE_URL.rstrip("/")}/api/server/jobs/download'
+        url = f'{UPLOAD_BASE_URL.rstrip("/")}/api/jobs/download'
         response = requests.get(
             url,
             params={'name': normalized_name},
@@ -271,6 +215,6 @@ class CommandJobMixin:
         )
 
         if response.status_code != 200:
-            raise RuntimeError(f'Failed to download script: {response.text}')
+            raise RuntimeError(f'Failed to download job: {response.text}')
 
         return response.text

@@ -10,31 +10,31 @@ def create_background_job_blueprint(server_instance):
     job_api = web_service.job_api
     responder = WebApiResponder()
 
-    @blueprint.get('/api/server/jobs/list')
-    def list_server_jobs():
-        """列出所有可用的远程脚本"""
+    @blueprint.get('/api/jobs/list')
+    def list_jobs():
+        """列出所有可用的任务"""
         return responder.json_endpoint(
-            lambda: job_api.list_server_jobs(),
+            lambda: job_api.list_jobs(),
             default_error_status=500,
         )
 
-    @blueprint.get('/api/server/jobs/download')
-    def download_server_job():
-        """下载脚本内容（供 Client 使用）"""
-        script_name = request.args.get('name', '').strip()
-        if not script_name:
-            return responder.fail('script name is required', 400)
+    @blueprint.get('/api/jobs/download')
+    def download_job():
+        """下载任务内容（供 Client 使用）"""
+        job_name = request.args.get('name', '').strip()
+        if not job_name:
+            return responder.fail('job name is required', 400)
 
         try:
-            content = job_api.get_server_job_content(script_name)
+            content = job_api.get_job_content(job_name)
             return Response(content, mimetype='text/plain')
         except FileNotFoundError as e:
             return responder.fail(str(e), 404)
         except Exception as e:
             return responder.fail(str(e), 500)
 
-    @blueprint.post('/api/server/jobs/save')
-    def save_server_job():
+    @blueprint.post('/api/jobs/save')
+    def save_job():
         def _execute():
             payload = get_json_payload()
             name = (payload.get('name') or '').strip()
@@ -45,29 +45,29 @@ def create_background_job_blueprint(server_instance):
             if content is None:
                 raise ValueError('job content is required')
 
-            return job_api.save_server_job_content(name, content)
+            return job_api.save_job_content(name, content)
 
         return responder.json_endpoint(_execute, default_error_status=500)
 
-    @blueprint.post('/api/server/jobs/upload')
-    def upload_server_job():
+    @blueprint.post('/api/jobs/upload')
+    def upload_job():
         def _execute():
             file_obj = request.files.get('file')
             if file_obj is None:
                 raise ValueError('file is required')
-            return job_api.upload_server_job(file_obj)
+            return job_api.upload_job(file_obj)
 
         return responder.json_endpoint(_execute, default_error_status=500)
 
-    @blueprint.delete('/api/server/jobs/delete')
-    def delete_server_job():
+    @blueprint.delete('/api/jobs/delete')
+    def delete_job():
         def _execute():
             payload = get_json_payload()
             name = (payload.get('name') or '').strip()
             if not name:
                 raise ValueError('job name is required')
 
-            return job_api.delete_server_job(name)
+            return job_api.delete_job(name)
 
         return responder.json_endpoint(_execute, default_error_status=500)
 
@@ -100,8 +100,7 @@ def create_background_job_blueprint(server_instance):
             if not job_name:
                 raise ValueError('job_name is required')
 
-            source = (payload.get('source') or 'auto').strip().lower()
-            return job_api.start_background_job(client_id, job_name, source=source)
+            return job_api.start_background_job(client_id, job_name)
 
         return responder.json_endpoint(_execute, default_error_status=500)
 

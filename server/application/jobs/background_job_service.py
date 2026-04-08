@@ -1,4 +1,3 @@
-import os
 from datetime import datetime
 
 
@@ -16,37 +15,32 @@ class BackgroundJobService:
     - 这里触发的前台远程命令统一走 foreground task 槽
     """
 
-    def __init__(self, event_bus, job_store, remote_execution_service):
+    def __init__(self, event_bus, job_store, remote_execution_service, job_catalog_service):
         self.event_bus = event_bus
         self.job_store = job_store
         self.remote_execution_service = remote_execution_service
+        self.job_catalog_service = job_catalog_service
 
-    def _serialize_available_job(self, job_name: str) -> dict:
-        normalized = str(job_name or '').strip()
+    # add remove client side job 2026-04-08 11:40
+    def _serialize_available_job(self, job_item: dict) -> dict:
+        job_name = str(job_item.get('job_name') or job_item.get('name') or job_item.get('job_key') or '').strip()
+        display_name = str(job_item.get('display_name') or job_name).strip() or job_name
+        job_key = str(job_item.get('job_key') or job_name).strip() or job_name
+
         return {
-            'job_name': normalized,
-            'job_key': os.path.splitext(os.path.basename(normalized))[0] if normalized else '',
-            'source': 'client'
+            'job_name': job_name,
+            'job_key': job_key,
+            'display_name': display_name,
+            'source': 'job',
         }
 
-    def _parse_available_jobs_text(self, text: str) -> list[dict]:
-        lines = [line.strip() for line in str(text or '').splitlines() if line.strip()]
-        if not lines:
-            return []
-
-        if len(lines) == 1 and lines[0] == 'No job modules available':
-            return []
-
-        return [self._serialize_available_job(line) for line in lines]
-
     def list_available_jobs(self, client_id: str) -> list[dict]:
-        text = self.remote_execution_service.run_foreground_text_command(
-            client_id,
-            'jobs_local',
-            task_type='job_control',
-            source='web_background_job',
-        )
-        return self._parse_available_jobs_text(text)
+        del client_id
+        return [
+            self._serialize_available_job(item)
+            for item in self.job_catalog_service.list_jobs()
+            if isinstance(item, dict)
+        ]
 
     def start_job(self, client_id: str, job_name: str) -> dict:
         job_name = (job_name or '').strip()
@@ -153,5 +147,3 @@ class BackgroundJobService:
             return serialized
 
         raise ValueError(f'Unsupported event_type: {event_type}')
-
-

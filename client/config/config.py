@@ -4,7 +4,6 @@ import sys
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 CLIENT_DIR = os.path.dirname(BASE_DIR)
-JOB_PATH = os.path.join(CLIENT_DIR, 'jobs', 'builtins')
 
 PROFILE_DIR = os.path.join(BASE_DIR, 'profiles')
 
