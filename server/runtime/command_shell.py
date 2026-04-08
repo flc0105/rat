@@ -1,0 +1,257 @@
+import socket
+import sys
+import time
+
+from core.utils.formatting import print_table
+from core.utils.parsing import parse
+from core.utils.server_util import *
+from server.connection.client_session import ClientSession
+
+
+class ServerCommandShell:
+    def __init__(self, server):
+        self.server = server
+
+    def list_connections(self):
+        """
+        显示连接列表
+        """
+        # add 恢复主控台连接列表体验 2026-04-08
+        connection_list = self.server.connections.all()
+        if not connection_list:
+            print("No active sessions")
+            return
+
+        headers = ['ID', 'Address', 'OS', 'OS Version', 'Hostname', 'Integrity']
+        data = [
+            [
+                str(i),
+                session.session_info.addr or 'N/A',
+                session.session_info.os_type,
+                session.session_info.os_ver,
+                session.session_info.hostname,
+                session.session_info.integrity
+            ]
+            for i, session in enumerate(connection_list)
+        ]
+        print_table(headers, data)
+
+    def get_last_connection(self) -> ClientSession:
+        """
+        获取最新连接
+        """
+        # add 恢复最新连接选择 2026-04-08
+        try:
+            return self.server.connections.last()
+        except Exception:
+            raise Exception('No active session available')
+
+    def get_target_connection(self, target: str) -> ClientSession:
+        """
+        根据索引或 client_id 获取连接
+        """
+        # add 恢复索引和 client_id 混合选择 2026-04-08
+        try:
+            return self.server.connections.find(target)
+        except Exception:
+            raise Exception('Not a valid selection')
+
+    def _clear_screen(self):
+        """
+        清屏，不依赖外部 clear/cls 命令
+        """
+        # add 修复 clear cls 不依赖 TERM 2026-04-08
+        sys.stdout.write('\033[2J\033[H')
+        sys.stdout.flush()
+
+    def _print_unread_messages(self, session: ClientSession):
+        """
+        输出连接的未读消息
+
+        说明：
+        - 当前这份基线里 runtime 可能没有 unread_message_manager
+        - 为避免进入交互直接崩，这里做安全降级
+        """
+        # add 修复 unread_message_manager 崩溃 2026-04-08
+        unread_manager = getattr(session.runtime, 'unread_message_manager', None)
+        if unread_manager is None:
+            return
+
+        try:
+            unread = unread_manager.drain()
+        except Exception:
+            return
+
+        for item in unread:
+            level = item.get('level', 'info')
+            text = item.get('text', '')
+            if level == 'error':
+                print_error(text)
+            else:
+                print(text)
+
+    def _execute_interactive_command(self, session: ClientSession, command_executor, cmd: str):
+        """
+        执行交互命令并输出结果
+        """
+        # add 保留交互执行历史编排 2026-04-08
+        entry_id = self.server.command_history_orchestrator.begin_execution(
+            session,
+            cmd,
+            source='cli',
+        )
+
+        final_ok = True
+
+        try:
+            func = command_executor.process_command(cmd, history_entry_id=entry_id)
+            if func:
+                for item in func():
+                    status = item[0]
+                    write(*item)
+                    if status == 0:
+                        final_ok = False
+        except Exception:
+            final_ok = False
+            raise
+        finally:
+            self.server.command_history_orchestrator.finalize_execution(
+                session,
+                entry_id,
+                final_ok,
+                cwd_end=session.session_info.cwd
+            )
+
+    def _open_latest_from_interactive(self, current_session: ClientSession):
+        """
+        交互态快速切到最新连接
+        - 如果当前已经是最新连接：留在当前会话，不退出
+        - 如果有更新连接：切过去，并结束当前会话
+        """
+        # add 修复交互态 q 最新连接切换 2026-04-08
+        latest_session = self.get_last_connection()
+        if latest_session is current_session:
+            return 'stay'
+
+        self.open_connection(latest_session)
+        return 'switched'
+
+    def open_connection(self, session: ClientSession):
+        """
+        与会话交互
+        """
+        # add 恢复交互会话体验 2026-04-08
+        print('[+] Connected to {}'.format(session.address))
+        self._print_unread_messages(session)
+        session.context.is_interactive = True
+
+        command_executor = self.server.web_service.command_executor_factory.create(
+            session,
+            use_foreground_guard=True,
+            foreground_source='cli'
+        )
+
+        try:
+            while 1:
+                try:
+                    cmd = colored_input('{}> '.format(session.session_info.cwd))
+                    cmd = (cmd or '').strip()
+
+                    if not cmd:
+                        continue
+
+                    if cmd in ['clear', 'cls']:
+                        self._clear_screen()
+                        continue
+
+                    if cmd in ['bg', 'background', 'exit', 'quit']:
+                        return
+
+                    if cmd == 'q':
+                        action = self._open_latest_from_interactive(session)
+                        if action == 'stay':
+                            continue
+                        if action == 'switched':
+                            return
+                        continue
+
+                    if cmd in ['kill', 'reset']:
+                        session.send_command(cmd)
+                        return
+
+                    self._execute_interactive_command(session, command_executor, cmd)
+                except Exception as e:
+                    print_error(f'{e.__class__.__name__}: {e}')
+        except socket.error:
+            print_error('[-] Connection closed')
+        except KeyboardInterrupt:
+            print(Colors.RESET)
+            time.sleep(0.1)
+        except Exception as e:
+            print_error(f'{e.__class__.__name__}: {e}')
+        finally:
+            session.context.is_interactive = False
+
+    def _handle_console_command(self, cmd: str):
+        """
+        处理主控台命令
+        """
+        # add 恢复主控台命令集 2026-04-08
+        name, arg = parse(cmd)
+
+        if cmd in ['l', 'ls', 'list']:
+            self.list_connections()
+            return
+
+        if cmd == 'q':
+            self.open_connection(self.get_last_connection())
+            return
+
+        if name in ['i', 's', 'select']:
+            target = arg.strip() if arg else ''
+            if target:
+                self.open_connection(self.get_target_connection(target))
+            else:
+                self.open_connection(self.get_last_connection())
+            return
+
+        if cmd in ['quit', 'exit']:
+            self.server.socket.close()
+            sys.exit(0)
+
+        if cmd in ['cls', 'clear']:
+            self._clear_screen()
+            return
+
+        if name == 'cd':
+            print(cd(arg))
+            return
+
+        try:
+            self.open_connection(self.get_target_connection(cmd))
+            return
+        except Exception:
+            raise Exception('Command not recognized')
+
+    def serve_console_loop(self):
+        """
+        主控台循环
+        """
+        # add 修复主控台空行和错误输出体验 2026-04-08
+        while 1:
+            try:
+                cmd = colored_input('server> ')
+                cmd = (cmd or '').strip()
+
+                if not cmd:
+                    continue
+
+                self._handle_console_command(cmd)
+            except KeyboardInterrupt:
+                print(Colors.RESET)
+                self.server.socket.close()
+                sys.exit(0)
+            except Exception as e:
+                write(0, f'[-] {type(e).__name__}: {e}')
+            finally:
+                print()
