@@ -108,6 +108,14 @@ class WebArtifactApi:
 
         return hostname, addr
 
+    # add 收口 upload tmp 到 artifact api 2026-04-08
+    def create_upload_temp_file(self, upload):
+        return self.artifact_service.create_upload_temp_file(upload)
+
+    # add 收口 upload tmp 下载到 artifact api 2026-04-08
+    def get_upload_temp_file_path(self, temp_id: str, filename: str):
+        return self.artifact_service.get_upload_temp_file_path(temp_id, filename)
+
     def save_http_uploaded_file(
         self,
         upload,

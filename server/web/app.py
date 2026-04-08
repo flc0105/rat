@@ -26,7 +26,7 @@ def create_app(server_instance):
     web_service = server_instance.web_service
     connection_api = web_service.connection_api
     command_api = web_service.command_api
-    artifact_service = web_service.artifact_service
+    artifact_api = web_service.artifact_api
     responder = WebApiResponder()
 
     app.register_blueprint(create_background_job_blueprint(server_instance))
@@ -84,7 +84,7 @@ def create_app(server_instance):
             upload = get_required_upload()
             target_path = (request.form.get('target_path') or '').strip()
 
-            temp_path, safe_name = artifact_service.create_upload_temp_file(upload)
+            temp_path, safe_name = artifact_api.create_upload_temp_file(upload)
             return command_api.submit_web_upload(
                 client_id,
                 temp_path,
@@ -98,7 +98,7 @@ def create_app(server_instance):
     @app.get('/api/upload-tmp/<temp_id>/<filename>')
     def download_upload_tmp_file(temp_id, filename):
         try:
-            file_path = artifact_service.get_upload_temp_file_path(temp_id, filename)
+            file_path = artifact_api.get_upload_temp_file_path(temp_id, filename)
             return send_file(
                 file_path,
                 as_attachment=True,
