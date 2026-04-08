@@ -1,3 +1,12 @@
+from core.protocol.message_types import (
+    MSG_TYPE_ACMD,
+    MSG_TYPE_CANCEL,
+    MSG_TYPE_COMMAND,
+    MSG_TYPE_HEARTBEAT,
+    MSG_TYPE_HEARTBEAT_ACK,
+    MSG_TYPE_SCRIPT,
+)
+
 class ClientInboundMessageDispatcher:
     """
     Client 侧入站消息调度器。
@@ -8,8 +17,8 @@ class ClientInboundMessageDispatcher:
     - 返回接收线程是否需要立即 send_result
     """
 
-    IMMEDIATE_MESSAGE_TYPES = {'heartbeat', 'heartbeat_ack', 'cancel'}
-    DEFERRED_MESSAGE_TYPES = {'command', 'script', 'acmd'}
+    IMMEDIATE_MESSAGE_TYPES = {MSG_TYPE_HEARTBEAT, MSG_TYPE_HEARTBEAT_ACK, MSG_TYPE_CANCEL}
+    DEFERRED_MESSAGE_TYPES = {MSG_TYPE_COMMAND, MSG_TYPE_SCRIPT, MSG_TYPE_ACMD}
 
     def __init__(self, connection):
         self.connection = connection

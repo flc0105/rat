@@ -1,5 +1,7 @@
 from datetime import datetime
 
+from core.protocol.message_types import MSG_TYPE_HEARTBEAT
+
 
 class SessionHeartbeatService:
     def __init__(self, session):
@@ -25,7 +27,7 @@ class SessionHeartbeatService:
         self.session.context.last_heartbeat_sent_at = now_iso
 
         self.session.send({
-            'type': 'heartbeat',
+            'type': MSG_TYPE_HEARTBEAT,
             'id': heartbeat_id,
             'ts': now_iso,
         })

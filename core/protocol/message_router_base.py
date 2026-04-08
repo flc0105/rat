@@ -1,3 +1,14 @@
+from core.protocol.message_types import (
+    MSG_TYPE_ACMD,
+    MSG_TYPE_CANCEL,
+    MSG_TYPE_COMMAND,
+    MSG_TYPE_HEARTBEAT,
+    MSG_TYPE_HEARTBEAT_ACK,
+    MSG_TYPE_RESULT,
+    MSG_TYPE_SCRIPT,
+)
+
+
 class BaseMessageRouter:
     """
     消息分发基类。
@@ -9,25 +20,25 @@ class BaseMessageRouter:
     def dispatch(self, data: dict):
         message_type = data.get('type')
 
-        if message_type == 'result':
+        if message_type == MSG_TYPE_RESULT:
             return self.handle_result_message(data)
 
-        if message_type == 'command':
+        if message_type == MSG_TYPE_COMMAND:
             return self.handle_command_message(data)
 
-        if message_type == 'script':
+        if message_type == MSG_TYPE_SCRIPT:
             return self.handle_script_message(data)
 
-        if message_type == 'acmd':
+        if message_type == MSG_TYPE_ACMD:
             return self.handle_acmd_message(data)
 
-        if message_type == 'cancel':
+        if message_type == MSG_TYPE_CANCEL:
             return self.handle_cancel_message(data)
 
-        if message_type == 'heartbeat':
+        if message_type == MSG_TYPE_HEARTBEAT:
             return self.handle_heartbeat_message(data)
 
-        if message_type == 'heartbeat_ack':
+        if message_type == MSG_TYPE_HEARTBEAT_ACK:
             return self.handle_heartbeat_ack_message(data)
 
         return self.handle_unknown_message(data)
@@ -55,9 +66,3 @@ class BaseMessageRouter:
 
     def handle_unknown_message(self, data: dict):
         return None
-
-
-
-
-
-

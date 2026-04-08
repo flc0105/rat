@@ -1,3 +1,6 @@
+from core.protocol.message_types import MSG_TYPE_HEARTBEAT_ACK, MSG_TYPE_RESULT
+
+
 class ServerInboundMessageDispatcher:
     """
     Server 侧入站消息调度器。
@@ -7,7 +10,7 @@ class ServerInboundMessageDispatcher:
     - heartbeat_ack
     """
 
-    IMMEDIATE_MESSAGE_TYPES = {'result', 'heartbeat_ack'}
+    IMMEDIATE_MESSAGE_TYPES = {MSG_TYPE_RESULT, MSG_TYPE_HEARTBEAT_ACK}
 
     def __init__(self, session):
         self.session = session
@@ -25,12 +28,3 @@ class ServerInboundMessageDispatcher:
 
     def _dispatch_unknown_message(self, data: dict):
         return None
-
-
-
-
-
-
-
-
-

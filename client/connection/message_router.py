@@ -2,6 +2,7 @@ import os
 import time
 
 from core.protocol.message_router_base import BaseMessageRouter
+from core.protocol.message_types import MSG_TYPE_CANCEL_ACK, MSG_TYPE_HEARTBEAT_ACK
 
 
 class ClientInboundMessageRouter(BaseMessageRouter):
@@ -53,7 +54,7 @@ class ClientInboundMessageRouter(BaseMessageRouter):
             self.connection.send_result(target_command_id, 0, message or 'Command does not support cancellation', 0)
 
         self.connection.send({
-            'type': 'cancel_ack',
+            'type': MSG_TYPE_CANCEL_ACK,
             'id': data.get('id'),
             'target_id': target_command_id,
             'accepted': accepted,
@@ -65,7 +66,7 @@ class ClientInboundMessageRouter(BaseMessageRouter):
 
     def handle_heartbeat_message(self, data: dict):
         self.connection.send({
-            'type': 'heartbeat_ack',
+            'type': MSG_TYPE_HEARTBEAT_ACK,
             'id': data.get('id'),
             'server_ts': data.get('ts'),
             'client_ts': time.time(),

@@ -5,6 +5,7 @@ from client.commands.executor import CommandExecutor
 from client.connection.message_dispatcher import ClientInboundMessageDispatcher
 from client.connection.message_router import ClientInboundMessageRouter
 from client.jobs.core.manager import JobManager
+from core.protocol.message_types import MSG_TYPE_RESULT
 from core.protocol.ratsocket import RATSocket
 from core.utils.logger import logger
 
@@ -50,7 +51,7 @@ class ServerConnection(RATSocket):
 
     def send_result(self, id: int, status: int, result: str, eof: int = 1):
         data = {
-            'type': 'result',
+            'type': MSG_TYPE_RESULT,
             'id': id,
             'status': status,
             'text': result,
