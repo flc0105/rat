@@ -82,34 +82,57 @@ class AliasBuiltinSupport:
     alias / unalias 相关内建命令支持。
     """
 
-    def __init__(self, alias_manager):
+    PLATFORM_OPTION_PATTERN = re.compile(r'^(?:--platform|-p)\s+(common|win|mac)\b', re.IGNORECASE)
+
+    def __init__(self, alias_manager, conn):
         self.alias_manager = alias_manager
+        self.conn = conn
+
+    # add alias平台选项解析 2026-04-08
+    def _parse_platform_option(self, arg_text: str) -> tuple[str, str]:
+        text = str(arg_text or '').strip()
+        matched = self.PLATFORM_OPTION_PATTERN.match(text)
+        if matched is None:
+            return '', text
+
+        platform_name = matched.group(1).lower()
+        remaining = text[matched.end():].strip()
+        return platform_name, remaining
 
     def list_aliases(self):
-        return self.alias_manager.list_aliases()
+        return self.alias_manager.list_aliases(conn=self.conn)
 
     def alias(self, arg):
         arg_text = str(arg or '').strip()
+        platform_name, remaining_text = self._parse_platform_option(arg_text)
+        target_platform = platform_name or 'common'
 
-        if not arg_text:
-            yield 1, format_dict(self.alias_manager.list_aliases())
+        if not remaining_text:
+            yield 1, format_dict(self.alias_manager.list_aliases(conn=self.conn))
             return
 
-        if arg_text in ('--json', 'json'):
+        if remaining_text in ('--json', 'json'):
+            if platform_name:
+                payload = {
+                    target_platform: self.alias_manager.list_aliases_grouped().get(target_platform, {})
+                }
+            else:
+                payload = self.alias_manager.list_aliases(conn=self.conn)
+
             yield 1, json.dumps(
-                self.alias_manager.list_aliases(),
+                payload,
                 ensure_ascii=False,
                 indent=2
             )
             return
 
         try:
-            if '=' in arg_text:
-                alias_name, command_text = [part.strip() for part in arg_text.split('=', 1)]
-                self.alias_manager.add_alias(alias_name, command_text)
-                yield 1, f'Alias saved: {alias_name} -> {command_text}'
+            if '=' in remaining_text:
+                alias_name, command_text = [part.strip() for part in remaining_text.split('=', 1)]
+                self.alias_manager.add_alias(alias_name, command_text, platform=target_platform)
+                yield 1, f'Alias saved [{target_platform}]: {alias_name} -> {command_text}'
             else:
-                raise ValueError("Expected format: alias name = command")
+                raise ValueError("Expected format: alias [--platform win|mac|common] name = command")
         except Exception as e:
             raise ValueError(f'Failed to save alias: {e}')
 
@@ -117,11 +140,19 @@ class AliasBuiltinSupport:
         if not arg:
             raise ValueError("Missing alias name")
 
+        platform_name, remaining_text = self._parse_platform_option(arg)
+        alias_name = remaining_text.strip()
+        if not alias_name:
+            raise ValueError("Missing alias name")
+
         try:
-            self.alias_manager.remove_alias(arg)
-            yield 1, f"Alias removed: {arg}"
+            self.alias_manager.remove_alias(alias_name, platform=platform_name)
+            if platform_name:
+                yield 1, f"Alias removed [{platform_name}]: {alias_name}"
+            else:
+                yield 1, f"Alias removed: {alias_name}"
         except KeyError:
-            raise ValueError(f"Alias not found: {arg}")
+            raise ValueError(f"Alias not found: {alias_name}")
 
 
 class HistoryBuiltinSupport:
@@ -258,22 +289,17 @@ class RttBuiltinSupport:
 
     def rtt(self, arg=''):
         payload = {
-            'connection_state': self.conn.context.connected_at and (
-                'offline' if self.conn.context.disconnected_at else 'online'
-            ) or 'unknown',
-            'connected_at': self.conn.context.connected_at or '',
-            'last_seen_at': self.conn.context.last_seen_at or '',
-            'last_heartbeat_sent_at': self.conn.context.last_heartbeat_sent_at or '',
-            'last_heartbeat_ack_at': self.conn.context.last_heartbeat_ack_at or '',
-            'last_rtt_ms': self.conn.context.last_rtt_ms if self.conn.context.last_rtt_ms is not None else '',
-            'last_heartbeat_id': self.conn.context.last_heartbeat_id if self.conn.context.last_heartbeat_id is not None else '',
+            'client_id': getattr(getattr(self.conn, 'session_info', None), 'client_id', ''),
+            'hostname': getattr(getattr(self.conn, 'session_info', None), 'hostname', ''),
+            'last_seen_at': getattr(getattr(self.conn, 'context', None), 'last_seen_at', ''),
+            'last_heartbeat_sent_at': getattr(getattr(self.conn, 'context', None), 'last_heartbeat_sent_at', ''),
+            'last_heartbeat_ack_at': getattr(getattr(self.conn, 'context', None), 'last_heartbeat_ack_at', ''),
+            'last_rtt_ms': getattr(getattr(self.conn, 'context', None), 'last_rtt_ms', ''),
         }
-        arg_text = str(arg or '').strip().lower()
-        output_json = arg_text in ('json', '--json')
 
+        output_json = arg in ('json', '--json')
         if output_json:
             yield 1, json.dumps(payload, ensure_ascii=False, indent=2)
             return
 
-        yield 1, format_dict(payload, width=25)
-        # yield 1, format_dict(payload, width=25)
+        yield 1, format_dict(payload)

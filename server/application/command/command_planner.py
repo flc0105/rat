@@ -23,10 +23,12 @@ class CommandPlanner:
 
     ACMD_PREFIX = 'acmd'
 
-    def __init__(self, alias_manager, plan_executor, error_executor):
+    def __init__(self, alias_manager, plan_executor, error_executor, conn=None, alias_resolved_callback=None):
         self.alias_manager = alias_manager
         self.plan_executor = plan_executor
         self.error_executor = error_executor
+        self.conn = conn
+        self.alias_resolved_callback = alias_resolved_callback
 
     def _wrap_error(self, error):
         return partial(self.error_executor, error)
@@ -110,16 +112,18 @@ class CommandPlanner:
         }
 
     def build_alias_plan(self, name: str, arg: str) -> dict | None:
-        alias_cmd = self.alias_manager.aliases.get(name)
-        if not alias_cmd:
+        try:
+            alias_payload = self.alias_manager.resolve_alias(name, arg, conn=self.conn)
+        except KeyError:
             return None
 
-        expanded_cmd = self.alias_manager.get_alias_command(name, arg)
         return {
             'kind': 'remote_command',
-            'command': expanded_cmd,
+            'command': alias_payload['command'],
             'command_type': COMMAND_TYPE_COMMAND,
             'extra': None,
+            'alias_name': alias_payload['alias'],
+            'alias_platform': alias_payload['platform'],
         }
 
     def build_default_plan(self, raw_command: str) -> dict:
@@ -147,12 +151,27 @@ class CommandPlanner:
             'extra': script_args_extra,
         }
 
+    # add alias发送前提示包装 2026-04-08
+    def _wrap_alias_executor(self, alias_plan: dict):
+        remote_executor = self.plan_executor(alias_plan)
+        callback = self.alias_resolved_callback
+
+        def runner():
+            if callable(callback):
+                for item in callback(alias_plan):
+                    yield item
+
+            for item in remote_executor():
+                yield item
+
+        return runner
+
     def _resolve_alias_command(self, name, arg):
         try:
             plan = self.build_alias_plan(name, arg)
             if not plan:
                 return None
-            return self.plan_executor(plan)
+            return self._wrap_alias_executor(plan)
         except Exception as e:
             return self._wrap_error(e)
 

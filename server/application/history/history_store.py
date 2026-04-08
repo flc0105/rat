@@ -95,6 +95,7 @@ class CommandHistoryStore:
             'duration_ms': 0,
 
             'command': command,
+            'raw_command': command,
             'source': source,
             'status': 'running',
             'final_status': '',

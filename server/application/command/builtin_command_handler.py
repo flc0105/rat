@@ -33,13 +33,13 @@ class BuiltinCommandHandler:
         {
             'name': 'alias',
             'template': 'alias ',
-            'help': 'alias <name> = <command> | Save a command alias',
+            'help': 'alias [--platform win|mac|common] <name> = <command> | Save a command alias',
             'source': 'server'
         },
         {
             'name': 'unalias',
             'template': 'unalias ',
-            'help': 'unalias <name> | Remove a command alias',
+            'help': 'unalias [--platform win|mac|common] <name> | Remove a command alias',
             'source': 'server'
         },
         {
@@ -97,6 +97,7 @@ class BuiltinCommandHandler:
         )
         self.alias_support = AliasBuiltinSupport(
             alias_manager=self.server.alias_manager,
+            conn=self.conn,
         )
         self.history_support = HistoryBuiltinSupport(
             command_history=self.server.command_history,

@@ -29,6 +29,8 @@ class CommandExecutor:
             alias_manager=server.alias_manager,
             plan_executor=self._execute_remote_plan,
             error_executor=self._yield_error,
+            conn=self.conn,
+            alias_resolved_callback=self._on_alias_resolved,
         )
 
         self.builtin_handler = BuiltinCommandHandler(
@@ -43,6 +45,24 @@ class CommandExecutor:
 
     def _get_current_history_entry_id(self) -> str:
         return self.current_history_entry_id
+
+    # add alias展开历史改写与提示 2026-04-08
+    def _on_alias_resolved(self, alias_plan: dict):
+        resolved_command = str(alias_plan.get('command') or '').strip()
+        alias_name = str(alias_plan.get('alias_name') or '').strip()
+        alias_platform = str(alias_plan.get('alias_platform') or '').strip()
+        entry_id = self._get_current_history_entry_id()
+
+        if entry_id and resolved_command:
+            self.server.command_history.update_entry_command_for_connection(
+                self.conn,
+                entry_id,
+                resolved_command,
+            )
+
+        if resolved_command:
+            platform_suffix = f' [{alias_platform}]' if alias_platform else ''
+            yield 1, f'alias {alias_name}{platform_suffix} -> {resolved_command}'
 
     def _yield_error(self, error):
         yield 0, str(error)

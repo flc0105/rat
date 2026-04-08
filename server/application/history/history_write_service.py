@@ -161,6 +161,8 @@ class HistoryWriteService:
 
             entry['command'] = command_text
             entry['is_pinned'] = inherited_is_pinned
+            if not str(entry.get('raw_command') or '').strip():
+                entry['raw_command'] = current_command
             entry['pinned_at'] = inherited_pinned_at if inherited_is_pinned else ''
             entry['pin_order'] = inherited_pin_order if inherited_is_pinned else 0
             changed = True
