@@ -1,4 +1,3 @@
-from server.application.command.command_plan_builder import CommandPlanBuilder
 from server.application.command.executor import CommandExecutor
 
 
@@ -19,14 +18,12 @@ class CommandExecutorFactory:
     def __init__(self, server, remote_execution_service):
         self.server = server
         self.remote_execution_service = remote_execution_service
-        self.plan_builder = CommandPlanBuilder(server.alias_manager)
 
     def create(self, conn, *, use_foreground_guard: bool = False, foreground_source: str = 'cli'):
         return CommandExecutor(
             conn,
             self.server,
             remote_execution_service=self.remote_execution_service,
-            plan_builder=self.plan_builder,
             use_foreground_guard=use_foreground_guard,
             foreground_source=foreground_source,
         )

@@ -3,8 +3,7 @@ import re
 
 from core.utils.parsing import parse
 from server.application.command.builtin_command_handler import BuiltinCommandHandler
-from server.application.command.command_plan_builder import CommandPlanBuilder
-from server.application.command.command_router import CommandRouter
+from server.application.command.command_planner import CommandPlanner
 from server.application.execution.remote_execution_service import RemoteExecutionService
 
 
@@ -14,7 +13,7 @@ class CommandExecutor:
         conn,
         server,
         remote_execution_service=None,
-        plan_builder=None,
+        planner=None,
         use_foreground_guard: bool = False,
         foreground_source: str = 'cli'
     ):
@@ -22,23 +21,23 @@ class CommandExecutor:
         self.server = server
         self.current_history_entry_id = ''
         self.remote_execution_service = remote_execution_service or RemoteExecutionService(server)
-        self.plan_builder = plan_builder or CommandPlanBuilder(server.alias_manager)
         self.use_foreground_guard = bool(use_foreground_guard)
         self.foreground_source = (foreground_source or '').strip() or 'cli'
+
+        self.planner = planner or CommandPlanner(
+            alias_manager=server.alias_manager,
+            plan_executor=self._execute_remote_plan,
+            error_executor=self._yield_error,
+        )
 
         self.builtin_handler = BuiltinCommandHandler(
             conn=self.conn,
             server=self.server,
-            plan_builder=self.plan_builder,
+            plan_builder=self.planner,
             remote_execution_service=self.remote_execution_service,
             history_entry_id_provider=self._get_current_history_entry_id,
             plan_executor_factory=self._create_plan_executor,
             command_processor_factory=self._create_nested_command_processor,
-        )
-        self.command_router = CommandRouter(
-            plan_builder=self.plan_builder,
-            plan_executor=self._execute_remote_plan,
-            error_executor=self._yield_error,
         )
 
     def _get_current_history_entry_id(self) -> str:
@@ -114,4 +113,4 @@ class CommandExecutor:
         if builtin_handler:
             return builtin_handler
 
-        return self.command_router.resolve(normalized_command, name, arg)
+        return self.planner.resolve(normalized_command, name, arg)

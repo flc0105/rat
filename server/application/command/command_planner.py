@@ -1,20 +1,31 @@
 import shlex
+from functools import partial
 
 
-class CommandPlanBuilder:
+class CommandPlanner:
     """
-    命令执行计划构造器。
+    命令规划器。
 
     职责：
     - 解析 acmd
     - 构造 alias / default / script / acmd 的远程执行参数
-    - 不直接发送命令
+    - 决定非 builtin 命令如何分流
+    - 不负责具体执行，只负责把 plan 交给 plan_executor
+
+    说明：
+    - builtin 命令仍由 BuiltinCommandHandler 处理
+    - 这里聚焦的是“远程计划型命令”的规划与路由决策
     """
 
     ACMD_PREFIX = 'acmd'
 
-    def __init__(self, alias_manager):
+    def __init__(self, alias_manager, plan_executor, error_executor):
         self.alias_manager = alias_manager
+        self.plan_executor = plan_executor
+        self.error_executor = error_executor
+
+    def _wrap_error(self, error):
+        return partial(self.error_executor, error)
 
     def is_argument_command(self, cmd: str) -> bool:
         parts = shlex.split(cmd or '')
@@ -132,10 +143,29 @@ class CommandPlanBuilder:
             'extra': script_args_extra,
         }
 
+    def _resolve_alias_command(self, name, arg):
+        try:
+            plan = self.build_alias_plan(name, arg)
+            if not plan:
+                return None
+            return self.plan_executor(plan)
+        except Exception as e:
+            return self._wrap_error(e)
 
+    def _resolve_default_command(self, raw_command):
+        plan = self.build_default_plan(raw_command)
+        return self.plan_executor(plan)
 
+    def _resolve_argument_command(self, raw_command):
+        plan = self.build_argument_command_plan(raw_command)
+        return self.plan_executor(plan)
 
+    def resolve(self, raw_command: str, name: str, arg: str):
+        if self.is_argument_command(raw_command):
+            return self._resolve_argument_command(raw_command)
 
+        alias_handler = self._resolve_alias_command(name, arg)
+        if alias_handler:
+            return alias_handler
 
-
-
+        return self._resolve_default_command(raw_command)
