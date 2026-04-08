@@ -1,6 +1,4 @@
-import os
-
-from flask import Blueprint, request, send_file
+from flask import Blueprint, send_file
 
 from server.web.api_response import WebApiResponder
 from server.web.request_parsers import get_json_payload
@@ -9,6 +7,7 @@ from server.web.request_parsers import get_json_payload
 def create_agent_blueprint(server_instance):
     blueprint = Blueprint('agent', __name__)
     web_service = server_instance.web_service
+    agent_api = web_service.agent_api
     responder = WebApiResponder()
 
     @blueprint.post('/api/agent/build')
@@ -34,7 +33,7 @@ def create_agent_blueprint(server_instance):
             except ValueError:
                 raise ValueError('server_port must be integer')
 
-            return web_service.build_agent(
+            return agent_api.build_agent(
                 server_host,
                 server_port,
                 web_port,
@@ -49,15 +48,14 @@ def create_agent_blueprint(server_instance):
     def download_agent(filename):
         """下载构建好的 Agent"""
         try:
-            file_path = os.path.join(web_service.agent_builder.output_dir, filename)
-            if not os.path.isfile(file_path):
-                return responder.fail('File not found', 404)
-
+            file_path = agent_api.get_built_agent_file_path(filename)
             return send_file(
                 file_path,
                 as_attachment=True,
-                download_name=filename
+                download_name=filename,
             )
+        except FileNotFoundError as e:
+            return responder.fail(str(e), 404)
         except Exception as e:
             return responder.map_common_error(e)
 
@@ -68,9 +66,7 @@ def create_agent_blueprint(server_instance):
         def _execute():
             payload = get_json_payload()
             work_dir = (payload.get('work_dir') or '').strip()
-            if work_dir:
-                web_service.cleanup_agent_build(work_dir)
-            return {'cleaned': True}
+            return agent_api.cleanup_agent_build(work_dir)
 
         return responder.json_endpoint(_execute)
 

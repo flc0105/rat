@@ -24,7 +24,8 @@ def create_app(server_instance):
     app = Flask(__name__, static_folder='../../static', static_url_path='')
 
     web_service = server_instance.web_service
-    command_web_service = web_service.command_web_service
+    connection_api = web_service.connection_api
+    command_api = web_service.command_api
     artifact_service = web_service.artifact_service
     responder = WebApiResponder()
 
@@ -42,15 +43,15 @@ def create_app(server_instance):
 
     @app.get('/api/connections')
     def get_connections():
-        return responder.ok(web_service.get_connections_payload())
+        return responder.ok(connection_api.get_connections_payload())
 
     @app.post('/api/connections/<client_id>/command')
     def send_command(client_id):
         def _execute():
-            return command_web_service.submit_web_command(
+            return command_api.submit_web_command(
                 client_id,
                 get_required_command(),
-                tab_id=get_optional_tab_id()
+                tab_id=get_optional_tab_id(),
             )
 
         return responder.json_endpoint(_execute, default_error_status=500)
@@ -58,15 +59,15 @@ def create_app(server_instance):
     @app.post('/api/tasks/<task_id>/cancel')
     def cancel_task(task_id):
         return responder.json_endpoint(
-            lambda: command_web_service.cancel_web_task(task_id),
-            default_error_status=500
+            lambda: command_api.cancel_web_task(task_id),
+            default_error_status=500,
         )
 
     @app.get('/api/connections/<client_id>/command-candidates')
     def get_command_candidates(client_id):
         return responder.json_endpoint(
-            lambda: command_web_service.get_command_candidates(client_id),
-            default_error_status=500
+            lambda: command_api.get_command_candidates(client_id),
+            default_error_status=500,
         )
 
     @app.post('/api/connections/<client_id>/kill')
@@ -84,12 +85,12 @@ def create_app(server_instance):
             target_path = (request.form.get('target_path') or '').strip()
 
             temp_path, safe_name = artifact_service.create_upload_temp_file(upload)
-            return command_web_service.submit_web_upload(
+            return command_api.submit_web_upload(
                 client_id,
                 temp_path,
                 safe_name,
                 target_path,
-                tab_id=get_optional_tab_id()
+                tab_id=get_optional_tab_id(),
             )
 
         return responder.json_endpoint(_execute, default_error_status=500)
@@ -101,7 +102,7 @@ def create_app(server_instance):
             return send_file(
                 file_path,
                 as_attachment=True,
-                download_name=os.path.basename(file_path)
+                download_name=os.path.basename(file_path),
             )
         except Exception as e:
             return responder.map_common_error(e)
@@ -131,7 +132,7 @@ def create_app(server_instance):
                 'Cache-Control': 'no-cache',
                 'Connection': 'keep-alive',
                 'X-Accel-Buffering': 'no',
-            }
+            },
         )
 
     @app.errorhandler(413)

@@ -7,13 +7,14 @@ from server.web.request_parsers import get_json_payload, get_optional_remote_pat
 def create_remote_files_blueprint(server_instance):
     blueprint = Blueprint('remote_files', __name__)
     web_service = server_instance.web_service
+    remote_file_api = web_service.remote_file_api
     responder = WebApiResponder()
 
     @blueprint.get('/api/connections/<client_id>/remote-files')
     def browse_remote_files(client_id):
         def _execute():
             paging = parse_paging_args(default_page=1, default_page_size=100)
-            return web_service.browse_remote_directory(
+            return remote_file_api.browse_remote_directory(
                 client_id,
                 get_optional_remote_path(),
                 page=paging['page'],
@@ -30,7 +31,7 @@ def create_remote_files_blueprint(server_instance):
             path = (payload.get('path') or '').strip()
             if not path:
                 raise ValueError('path is required')
-            return web_service.create_remote_directory(client_id, path)
+            return remote_file_api.create_remote_directory(client_id, path)
 
         return responder.json_endpoint(_execute, default_error_status=500)
 
@@ -46,7 +47,7 @@ def create_remote_files_blueprint(server_instance):
             if not new_name:
                 raise ValueError('new_name is required')
 
-            return web_service.rename_remote_path(client_id, old_path, new_name)
+            return remote_file_api.rename_remote_path(client_id, old_path, new_name)
 
         return responder.json_endpoint(_execute, default_error_status=500)
 
@@ -56,7 +57,7 @@ def create_remote_files_blueprint(server_instance):
             path = get_optional_remote_path()
             if not path:
                 raise ValueError('path is required')
-            return web_service.delete_remote_path(client_id, path)
+            return remote_file_api.delete_remote_path(client_id, path)
 
         return responder.json_endpoint(_execute, default_error_status=500)
 
@@ -66,7 +67,7 @@ def create_remote_files_blueprint(server_instance):
             path = get_optional_remote_path()
             if not path:
                 raise ValueError('path is required')
-            return web_service.download_remote_file(client_id, path)
+            return remote_file_api.download_remote_file(client_id, path)
 
         return responder.json_endpoint(_execute, default_error_status=500)
 
@@ -80,7 +81,7 @@ def create_remote_files_blueprint(server_instance):
             if not isinstance(paths, list) or not paths:
                 raise ValueError('paths is required')
 
-            return web_service.download_remote_paths_as_zip(client_id, paths, archive_name)
+            return remote_file_api.download_remote_paths_as_zip(client_id, paths, archive_name)
 
         return responder.json_endpoint(_execute, default_error_status=500)
 
@@ -91,7 +92,7 @@ def create_remote_files_blueprint(server_instance):
             paths = payload.get('paths') or []
             if not isinstance(paths, list) or not paths:
                 raise ValueError('paths is required and must be a non-empty list')
-            return web_service.delete_remote_paths(client_id, paths)
+            return remote_file_api.delete_remote_paths(client_id, paths)
 
         return responder.json_endpoint(_execute, default_error_status=500)
 
@@ -102,7 +103,7 @@ def create_remote_files_blueprint(server_instance):
             path = (payload.get('path') or '').strip()
             if not path:
                 raise ValueError('path is required')
-            return web_service.preview_remote_file(client_id, path)
+            return remote_file_api.preview_remote_file(client_id, path)
 
         return responder.json_endpoint(_execute, default_error_status=500)
 
@@ -117,8 +118,11 @@ def create_remote_files_blueprint(server_instance):
             if not path:
                 raise ValueError('path is required')
 
-            return web_service.save_remote_file(
-                client_id, path, content, encoding
+            return remote_file_api.save_remote_file(
+                client_id,
+                path,
+                content,
+                encoding,
             )
 
         return responder.json_endpoint(_execute, default_error_status=500)

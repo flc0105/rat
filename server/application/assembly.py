@@ -10,6 +10,12 @@ from server.application.script.script_service import ServerJobService
 from server.application.tasks.task_runner import WebTaskRunner
 from server.application.tasks.task_service import WebTaskService
 from server.application.tasks.task_store import WebTaskStore
+from server.application.web.agent_api import WebAgentApi
+from server.application.web.artifact_api import WebArtifactApi
+from server.application.web.command_api import WebCommandApi
+from server.application.web.connection_api import WebConnectionApi
+from server.application.web.job_api import WebJobApi
+from server.application.web.remote_file_api import WebRemoteFileApi
 from server.config.config import SCRIPT_JOBS_PATH
 from server.web.event_bus import WebEventBus
 
@@ -21,7 +27,8 @@ class ServerApplicationAssembly:
     职责：
     - 统一实例化应用层依赖
     - 统一处理跨 service/store 的依赖绑定
-    - 为 Application Facade 提供已经组装完成的依赖对象
+    - 统一装配 Web 子外观对象
+    - 为 root facade 提供已经组装完成的依赖对象
 
     说明：
     - 这里不承载具体业务逻辑
@@ -81,6 +88,37 @@ class ServerApplicationAssembly:
 
         self.script_service = ServerJobService(SCRIPT_JOBS_PATH)
         self.agent_builder = AgentBuilder()
+
+        # ------------------ web sub facades / apis ------------------ #
+        self.connection_api = WebConnectionApi(
+            connection_service=self.connection_service,
+        )
+
+        self.command_api = WebCommandApi(
+            server=self.server,
+            command_executor_factory=self.command_executor_factory,
+            task_service=self.task_service,
+        )
+
+        self.job_api = WebJobApi(
+            command_api=self.command_api,
+            background_job_service=self.background_job_service,
+            script_service=self.script_service,
+        )
+
+        self.artifact_api = WebArtifactApi(
+            server=self.server,
+            event_bus=self.event_bus,
+            artifact_service=self.artifact_service,
+        )
+
+        self.remote_file_api = WebRemoteFileApi(
+            remote_file_service=self.remote_file_service,
+        )
+
+        self.agent_api = WebAgentApi(
+            agent_builder=self.agent_builder,
+        )
 
         self._wire_cross_dependencies()
 
