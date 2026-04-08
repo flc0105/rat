@@ -64,3 +64,17 @@ class SessionInfo:
         }
         data.update(self.extras or {})
         return data
+
+    # add SessionInfo 兼容读取入口 2026-04-08
+    def get(self, key: str, default=None):
+        return self.to_dict().get(key, default)
+
+    # add SessionInfo 额外字段读取 2026-04-08
+    def get_extra(self, key: str, default=None):
+        return (self.extras or {}).get(key, default)
+
+    # add SessionInfo 额外字段写入 2026-04-08
+    def set_extra(self, key: str, value):
+        if self.extras is None:
+            self.extras = {}
+        self.extras[key] = value

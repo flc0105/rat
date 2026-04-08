@@ -31,6 +31,15 @@ class ClientSession:
             self.session_info.cwd = str(cwd)
             self.refresh_info_dict()
 
+    # add SessionInfo 额外字段写入 2026-04-08
+    def set_info_extra(self, key: str, value):
+        self.session_info.set_extra(key, value)
+        self.refresh_info_dict()
+
+    # add SessionInfo 额外字段读取 2026-04-08
+    def get_info_extra(self, key: str, default=None):
+        return self.session_info.get_extra(key, default)
+
     def send(self, data: dict):
         self.transport.send(data)
 

@@ -188,7 +188,7 @@ class HistoryWriteService:
                     item['status'] = status
                     item['final_status'] = status
                     item['finished_at'] = self.store._now_text()
-                    item['cwd_end'] = cwd_end or (getattr(conn, 'info', {}) or {}).get('cwd', '') or item.get('cwd_end', '')
+                    item['cwd_end'] = cwd_end or getattr(getattr(conn, 'session_info', None), 'cwd', '') or item.get('cwd_end', '')
                     item['time'] = item.get('time') or self.store._now_text()
                     self.store._update_duration(item)
                     item['output_summary'] = self.store._build_output_summary(item)

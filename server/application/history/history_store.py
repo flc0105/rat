@@ -84,7 +84,7 @@ class CommandHistoryStore:
             return None
 
     def _build_entry(self, conn, command: str, source: str) -> dict:
-        info = getattr(conn, 'info', {}) or {}
+        session_info = getattr(conn, 'session_info', None)
         started_text = self._now_text()
 
         return {
@@ -99,10 +99,10 @@ class CommandHistoryStore:
             'status': 'running',
             'final_status': '',
 
-            'hostname': info.get('hostname') or 'unknown_host',
-            'client_id': info.get('id') or '',
-            'addr': info.get('addr') or '',
-            'cwd_start': info.get('cwd') or '',
+            'hostname': getattr(session_info, 'hostname', '') or 'unknown_host',
+            'client_id': getattr(session_info, 'client_id', '') or '',
+            'addr': getattr(session_info, 'addr', '') or '',
+            'cwd_start': getattr(session_info, 'cwd', '') or '',
             'cwd_end': '',
 
             'is_pinned': False,
@@ -130,8 +130,8 @@ class CommandHistoryStore:
         return entries
 
     def _get_hostname_from_conn(self, conn) -> str:
-        info = getattr(conn, 'info', {}) or {}
-        return info.get('hostname') or 'unknown_host'
+        session_info = getattr(conn, 'session_info', None)
+        return getattr(session_info, 'hostname', '') or 'unknown_host'
 
     def _find_entry(self, entries: list, entry_id: str):
         for item in reversed(entries):

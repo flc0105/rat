@@ -78,7 +78,7 @@ class CommandHistoryOrchestrator:
         if conn is None or not entry_id:
             return
 
-        final_cwd = cwd_end or (getattr(conn, 'info', {}) or {}).get('cwd', '')
+        final_cwd = cwd_end or getattr(getattr(conn, 'session_info', None), 'cwd', '')
         self.history_store.update_entry_status_for_connection(
             conn,
             entry_id,
