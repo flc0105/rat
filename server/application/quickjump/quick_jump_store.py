@@ -139,6 +139,44 @@ class QuickJumpStore:
             self._write_payload(hostname, normalized_items)
             return dict(matched_item)
 
+    # add quick jump 管理编辑 2026-04-09 16:20
+    def update_item(self, hostname: str, original_display_name: str, display_name: str, path: str) -> dict:
+        original_name_text = str(original_display_name or '').strip()
+        display_name_text = str(display_name or '').strip()
+        path_text = str(path or '').strip()
+        if not original_name_text:
+            raise ValueError('original_display_name is required')
+        if not display_name_text:
+            raise ValueError('display_name is required')
+        if not path_text:
+            raise ValueError('path is required')
+
+        with self._lock:
+            items = self._read_payload(hostname)
+            matched_item = None
+            duplicate_item = None
+            for item in items:
+                item_name = str(item.get('display_name') or '').strip()
+                if item_name == original_name_text:
+                    matched_item = item
+                elif item_name == display_name_text:
+                    duplicate_item = item
+
+            if matched_item is None:
+                raise KeyError(f'Quick jump not found: {original_name_text}')
+            if duplicate_item is not None and duplicate_item is not matched_item:
+                raise ValueError(f'Quick jump already exists: {display_name_text}')
+
+            now_text = self._now_text()
+            matched_item['display_name'] = display_name_text
+            matched_item['path'] = path_text
+            matched_item['updated_at'] = now_text
+
+            normalized_items = [self._normalize_entry(item) for item in items]
+            normalized_items = [item for item in normalized_items if item]
+            self._write_payload(hostname, normalized_items)
+            return dict(matched_item)
+
     # add hostname quick jump 存储 2026-04-09 15:30
     def delete_item(self, hostname: str, display_name: str) -> dict:
         display_name_text = str(display_name or '').strip()

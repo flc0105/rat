@@ -23,6 +23,7 @@ window.AppFilesModule = {
             quickJumpLoading: false,
             remotePinnedJumpItems: [],
             remotePinnedJumpLoading: false,
+            remotePinManagerDialogVisible: false,
             remoteClipboardPaths: [],
             remoteClipboardMode: '',
             remoteClipboardSourcePath: '',
@@ -662,7 +663,7 @@ window.AppFilesModule = {
             }
         },
 
-        // add hostname 收藏 quick jump 2026-04-09 15:30
+        // add quick jump 管理编辑 2026-04-09 16:20
         async promptSavePinnedQuickJump() {
             if (!this.selectedId) {
                 ElementPlus.ElMessage.warning('Please select a device');
@@ -678,6 +679,7 @@ window.AppFilesModule = {
             const currentItems = Array.isArray(this.remotePinnedJumpItems)
                 ? this.remotePinnedJumpItems
                 : [];
+            const currentPinnedItem = this.currentPinnedQuickJumpItem;
             const currentDirectoryName = currentPath
                 .replace(/[\\/]+$/, '')
                 .split(/[\\/]/)
@@ -687,12 +689,12 @@ window.AppFilesModule = {
             try {
                 const {value} = await ElementPlus.ElMessageBox.prompt(
                     `Current path:<br><span style="word-break: break-all; color: var(--muted);">${this.escapeRemoteHtml(currentPath)}</span>`,
-                    'Pin Quick Jump',
+                    currentPinnedItem ? 'Edit Pinned Quick Jump' : 'Pin Quick Jump',
                     {
-                        confirmButtonText: 'Save',
+                        confirmButtonText: currentPinnedItem ? 'Update' : 'Save',
                         cancelButtonText: 'Cancel',
                         dangerouslyUseHTMLString: true,
-                        inputValue: currentDirectoryName,
+                        inputValue: currentPinnedItem?.display_name || currentDirectoryName,
                         inputPattern: /.+/,
                         inputErrorMessage: 'Display name is required'
                     }
@@ -702,7 +704,7 @@ window.AppFilesModule = {
                 if (!displayName) return;
 
                 const exists = currentItems.find(item => (item?.display_name || '').trim() === displayName);
-                if (exists) {
+                if (exists && (!currentPinnedItem || (exists.display_name || '').trim() !== (currentPinnedItem.display_name || '').trim())) {
                     await ElementPlus.ElMessageBox.confirm(
                         `A pinned quick jump named "${this.escapeRemoteHtml(displayName)}" already exists. Update it to the current path?`,
                         'Overwrite Quick Jump',
@@ -715,13 +717,22 @@ window.AppFilesModule = {
                     );
                 }
 
-                const res = await fetch(`/api/connections/${encodeURIComponent(this.selectedId)}/quick-jumps`, {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({
+                const method = currentPinnedItem ? 'PUT' : 'POST';
+                const body = currentPinnedItem
+                    ? {
+                        original_display_name: currentPinnedItem.display_name,
                         display_name: displayName,
                         path: currentPath,
-                    })
+                    }
+                    : {
+                        display_name: displayName,
+                        path: currentPath,
+                    };
+
+                const res = await fetch(`/api/connections/${encodeURIComponent(this.selectedId)}/quick-jumps`, {
+                    method,
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify(body)
                 });
 
                 const json = await res.json();
@@ -737,6 +748,120 @@ window.AppFilesModule = {
                 if (e === 'cancel' || e === 'close' || e?.toString?.().includes('cancel')) return;
                 ElementPlus.ElMessage.error(e.message || 'Failed to save quick jump');
             }
+        },
+
+        // add quick jump 管理编辑 2026-04-09 16:20
+        async deletePinnedQuickJump(item, options = {}) {
+            if (!this.selectedId || !item?.display_name) return false;
+
+            const shouldConfirm = options.confirm !== false;
+            try {
+                if (shouldConfirm) {
+                    await ElementPlus.ElMessageBox.confirm(
+                        `Remove pinned quick jump "${this.escapeRemoteHtml(item.display_name)}"?`,
+                        'Delete Quick Jump',
+                        {
+                            confirmButtonText: 'Delete',
+                            cancelButtonText: 'Cancel',
+                            type: 'warning',
+                            dangerouslyUseHTMLString: true,
+                        }
+                    );
+                }
+
+                const res = await fetch(`/api/connections/${encodeURIComponent(this.selectedId)}/quick-jumps`, {
+                    method: 'DELETE',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({display_name: item.display_name})
+                });
+                const json = await res.json();
+                if (!res.ok || json.code !== 0) {
+                    throw new Error(json.message || 'Failed to delete quick jump');
+                }
+
+                this.remotePinnedJumpItems = Array.isArray(json.data?.items) ? json.data.items : [];
+                if (options.toast !== false) {
+                    ElementPlus.ElMessage.success(json.data?.message || 'Quick jump removed');
+                }
+                return true;
+            } catch (e) {
+                if (e === 'cancel' || e === 'close' || e?.toString?.().includes('cancel')) return false;
+                ElementPlus.ElMessage.error(e.message || 'Failed to delete quick jump');
+                return false;
+            }
+        },
+
+        // add quick jump 管理编辑 2026-04-09 16:20
+        async promptEditPinnedQuickJump(item) {
+            if (!this.selectedId || !item?.display_name) return;
+
+            try {
+                const {value: displayNameValue} = await ElementPlus.ElMessageBox.prompt(
+                    `Edit display name for:<br><span style="word-break: break-all; color: var(--muted);">${this.escapeRemoteHtml(item.path || '')}</span>`,
+                    'Edit Pinned Quick Jump',
+                    {
+                        confirmButtonText: 'Next',
+                        cancelButtonText: 'Cancel',
+                        dangerouslyUseHTMLString: true,
+                        inputValue: item.display_name || '',
+                        inputPattern: /.+/,
+                        inputErrorMessage: 'Display name is required'
+                    }
+                );
+
+                const displayName = String(displayNameValue || '').trim();
+                if (!displayName) return;
+
+                const {value: pathValue} = await ElementPlus.ElMessageBox.prompt(
+                    'Edit target path',
+                    'Edit Pinned Quick Jump',
+                    {
+                        confirmButtonText: 'Save',
+                        cancelButtonText: 'Cancel',
+                        inputValue: item.path || '',
+                        inputPattern: /.+/,
+                        inputErrorMessage: 'Path is required'
+                    }
+                );
+
+                const path = String(pathValue || '').trim();
+                if (!path) return;
+
+                const res = await fetch(`/api/connections/${encodeURIComponent(this.selectedId)}/quick-jumps`, {
+                    method: 'PUT',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        original_display_name: item.display_name,
+                        display_name: displayName,
+                        path,
+                    })
+                });
+                const json = await res.json();
+                if (!res.ok || json.code !== 0) {
+                    throw new Error(json.message || 'Failed to update quick jump');
+                }
+
+                this.remotePinnedJumpItems = Array.isArray(json.data?.items) ? json.data.items : [];
+                ElementPlus.ElMessage.success(json.data?.message || 'Quick jump updated');
+            } catch (e) {
+                if (e === 'cancel' || e === 'close' || e?.toString?.().includes('cancel')) return;
+                ElementPlus.ElMessage.error(e.message || 'Failed to update quick jump');
+            }
+        },
+
+        // add quick jump 管理编辑 2026-04-09 16:20
+        async toggleCurrentPinnedQuickJump() {
+            const currentItem = this.currentPinnedQuickJumpItem;
+            if (currentItem) {
+                await this.deletePinnedQuickJump(currentItem);
+                return;
+            }
+            await this.promptSavePinnedQuickJump();
+        },
+
+        // add quick jump 管理编辑 2026-04-09 16:20
+        openPinnedQuickJumpManager() {
+            this.remotePinManagerDialogVisible = true;
         },
 
         // add hostname 收藏 quick jump 2026-04-09 15:30
@@ -780,6 +905,11 @@ window.AppFilesModule = {
                         return;
                     }
                     await this.loadRemoteDirectory(path, 1);
+                    return;
+                }
+
+                if (command.type === 'manage_pins') {
+                    this.openPinnedQuickJumpManager();
                     return;
                 }
             }
@@ -886,6 +1016,7 @@ window.AppFilesModule = {
             this.remoteZipDownloading = false;
             this.remotePinnedJumpItems = [];
             this.remotePinnedJumpLoading = false;
+            this.remotePinManagerDialogVisible = false;
             this.clearRemoteClipboard();
         },
     },
@@ -941,6 +1072,18 @@ window.AppFilesModule = {
         // add hostname 收藏 quick jump 2026-04-09 15:30
         hasPinnedQuickJumps() {
             return Array.isArray(this.remotePinnedJumpItems) && this.remotePinnedJumpItems.length > 0;
+        },
+
+        // add quick jump 管理编辑 2026-04-09 16:20
+        currentPinnedQuickJumpItem() {
+            const currentPath = String(this.remoteFilesCurrentPath || '').trim();
+            if (!currentPath) return null;
+            return (this.remotePinnedJumpItems || []).find(item => String(item?.path || '').trim() === currentPath) || null;
+        },
+
+        // add quick jump 管理编辑 2026-04-09 16:20
+        remotePinButtonText() {
+            return this.currentPinnedQuickJumpItem ? 'Unpin' : 'Pin';
         },
     },
 

@@ -40,6 +40,17 @@ class WebQuickJumpApi:
             'message': f'Saved quick jump: {item.get("display_name", "")}',
         }
 
+    # add quick jump 管理编辑 2026-04-09 16:20
+    def update_quick_jump(self, client_id: str, original_display_name: str, display_name: str, path: str) -> dict:
+        hostname = self._get_hostname(client_id)
+        item = self.quick_jump_store.update_item(hostname, original_display_name, display_name, path)
+        return {
+            'hostname': hostname,
+            'item': item,
+            'items': self.quick_jump_store.list_items(hostname),
+            'message': f'Updated quick jump: {item.get("display_name", "")}',
+        }
+
     # add hostname quick jump 存储 2026-04-09 15:30
     def delete_quick_jump(self, client_id: str, display_name: str) -> dict:
         hostname = self._get_hostname(client_id)

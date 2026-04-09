@@ -360,10 +360,17 @@
                                         >
                                             {{ item.display_name }}
                                         </el-dropdown-item>
+                                        <el-dropdown-item
+                                                v-if="hasPinnedQuickJumps"
+                                                divided
+                                                :command="{ type: 'manage_pins' }"
+                                        >
+                                            Manage Pins
+                                        </el-dropdown-item>
                                     </el-dropdown-menu>
                                 </template>
                             </el-dropdown>
-                            <el-button size="small" @click="promptSavePinnedQuickJump">Pin</el-button>
+                            <el-button size="small" @click="toggleCurrentPinnedQuickJump">{{ remotePinButtonText }}</el-button>
                         </div>
 
                         <span class="remote-toolbar-divider"></span>
@@ -604,6 +611,45 @@
 
         </div>
     </el-dialog>
+
+<el-dialog v-model="remotePinManagerDialogVisible" title="Manage Pinned Quick Jumps" width="760px" top="6vh"
+           class="fixed-dialog">
+    <div class="fixed-dialog-body">
+        <div class="dialog-table-shell" style="height: 420px; min-height: 220px;">
+            <el-table
+                    :data="remotePinnedJumpItems"
+                    stripe
+                    width="100%"
+                    height="100%"
+                    empty-text="No pinned quick jumps"
+                    table-layout="fixed"
+            >
+                <el-table-column
+                        prop="display_name"
+                        label="Display Name"
+                        min-width="180"
+                        show-overflow-tooltip
+                ></el-table-column>
+
+                <el-table-column
+                        prop="path"
+                        label="Path"
+                        min-width="360"
+                        show-overflow-tooltip
+                ></el-table-column>
+
+                <el-table-column label="Actions" width="160" align="center" fixed="right">
+                    <template #default="{ row }">
+                        <div class="table-actions table-actions-links">
+                            <el-button size="small" link type="primary" @click="promptEditPinnedQuickJump(row)">Edit</el-button>
+                            <el-button size="small" link type="danger" @click="deletePinnedQuickJump(row)">Delete</el-button>
+                        </div>
+                    </template>
+                </el-table-column>
+            </el-table>
+        </div>
+    </div>
+</el-dialog>
 
     <el-dialog v-model="artifactDialogVisible" title="Artifact Manager" width="1160px" top="5vh"
                class="fixed-dialog recent-files-dialog artifact-dialog">
