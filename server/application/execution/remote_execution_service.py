@@ -21,12 +21,8 @@ class RemoteExecutionService:
       在当前方法内部统一占用 foreground task 槽
       适用于前台同步型请求（CLI / remote file / background job 等）
 
-    当前重构说明：
-    - raw command stream / collect_result 下沉到 CommandStreamService
-    - foreground 占槽执行下沉到 ForegroundExecutionService
-    - upload staging / receive_http_upload 下沉到 UploadExecutionService
-    - RemoteExecutionService 保留为兼容 facade
-    - history 相关统一优先委托给 command_history_orchestrator
+    - upload：
+      统一走事件流接口 iter_upload_events，不再保留旧 tuple 流兼容层
     """
 
     HTTP_RECEIVE_COMMAND_NAME = 'receive_http_upload'
@@ -56,7 +52,6 @@ class RemoteExecutionService:
     def _build_http_receive_command(self, payload: dict) -> str:
         return f'{self.HTTP_RECEIVE_COMMAND_NAME} {self._encode_payload_arg(payload)}'
 
-    # ------------------ history helper api ------------------ #
     def create_history_entry(self, target, command: str, source: str = 'cli', should_record: bool = True) -> str:
         session = self.get_connection(target)
 
@@ -125,7 +120,6 @@ class RemoteExecutionService:
             eof=eof
         )
 
-    # ------------------ raw command stream api ------------------ #
     def stream_command(
         self,
         target,
@@ -180,7 +174,6 @@ class RemoteExecutionService:
     def collect_result(self, result_iter):
         return self.command_stream_service.collect_result(result_iter)
 
-    # ------------------ foreground execution api ------------------ #
     def stream_foreground_command(
         self,
         target,
@@ -248,23 +241,6 @@ class RemoteExecutionService:
             task_type=task_type,
             source=source,
             task_id=task_id,
-        )
-
-    # ------------------ upload execution api ------------------ #
-    def stream_upload(
-        self,
-        target,
-        local_path: str,
-        *,
-        remote_path: str = '',
-        history_entry_id: str = '',
-    ):
-        return self.upload_execution_service.stream_upload(
-            target,
-            local_path,
-            remote_path=remote_path,
-            history_entry_id=history_entry_id,
-            build_http_receive_command=self._build_http_receive_command,
         )
 
     def iter_upload_events(

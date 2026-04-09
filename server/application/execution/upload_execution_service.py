@@ -11,13 +11,7 @@ class UploadExecutionService:
     职责：
     - 负责 server -> client 上传链路的 staging / cleanup
     - 负责构建 receive_http_upload 命令负载
-    - 负责把“上传”转换成普通远程命令流或结构化事件流
-
-    说明：
-    - 不负责 foreground 占槽
-    - 不负责 history begin/finalize
-    - 不负责 task/event publish
-    - 只负责 upload 这条执行链路本身
+    - 负责把上传执行转换成结构化事件流
     """
 
     def __init__(self, server, command_stream_service, artifact_service=None):
@@ -58,48 +52,6 @@ class UploadExecutionService:
         except Exception:
             pass
 
-    def stream_upload(
-        self,
-        target,
-        local_path: str,
-        *,
-        remote_path: str = '',
-        history_entry_id: str = '',
-        build_http_receive_command,
-    ):
-        """
-        执行上传流。
-
-        流程：
-        1. 将 server 本地文件 stage 到 artifact 临时区
-        2. 生成 client 可访问的临时 relative_url
-        3. 下发 receive_http_upload 远程命令
-        4. 将远程命令结果流原样透传
-        5. 最后清理 stage 临时文件
-        """
-        artifact_service, staged_path, safe_name, relative_url = self._stage_upload(local_path)
-        session = self.get_connection(target)
-
-        try:
-            command = build_http_receive_command({
-                'relative_url': relative_url,
-                'filename': safe_name,
-                'save_dir': remote_path,
-            })
-
-            result_iter = self.command_stream_service.stream_command(
-                session,
-                command,
-                command_type=COMMAND_TYPE_COMMAND,
-                extra=None,
-                history_entry_id=history_entry_id
-            )
-
-            for item in result_iter:
-                yield item
-        finally:
-            self._cleanup_staged_upload(artifact_service, staged_path)
-
     def iter_upload_events(
         self,
         target,
@@ -115,7 +67,7 @@ class UploadExecutionService:
         """
         执行上传事件流。
 
-        当前仍然复用 receive_http_upload 命令链路，但对外统一产出结构化事件：
+        对外统一产出：
         - started
         - progress
         - chunk

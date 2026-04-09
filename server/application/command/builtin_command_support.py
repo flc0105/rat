@@ -24,13 +24,41 @@ class UploadBuiltinSupport:
             raise FileNotFoundError(f"File does not exist: {filename}")
 
         history_entry_id = self.history_entry_id_provider()
-        yield from self.remote_execution_service.stream_upload(
+
+        event_iter = self.remote_execution_service.iter_upload_events(
             self.conn,
             filename,
             remote_path='',
-            history_entry_id=history_entry_id
+            history_entry_id=history_entry_id,
+            source='cli',
+            task_id='',
+            command=f'upload {os.path.basename(filename)}',
         )
 
+        for event in event_iter:
+            if event.event_type == 'started':
+                continue
+
+            if event.event_type == 'completed':
+                continue
+
+            if event.event_type == 'progress':
+                if event.text:
+                    yield 1, event.text
+                continue
+
+            if event.event_type == 'chunk':
+                yield event.status, event.text
+                continue
+
+            if event.event_type == 'error':
+                yield 0, event.text
+                continue
+
+            if event.event_type == 'cancelled':
+                if event.payload.get('terminal'):
+                    continue
+                yield 0, event.text or 'cancelled'
 
 class ScriptBuiltinSupport:
     """
