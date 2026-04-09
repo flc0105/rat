@@ -2,6 +2,7 @@ import os
 import shutil
 from datetime import datetime
 
+from server.application.command.command_execution_pipeline import CommandExecutionPipeline
 from server.application.tasks.task_status import TaskStreamSummary, WebTaskStatus
 
 
@@ -27,6 +28,11 @@ class WebTaskRunner:
         self.remote_execution_service = remote_execution_service
         self.command_executor_factory = command_executor_factory
         self.history_orchestrator = self.server.command_history_orchestrator
+        # add web命令执行链并入统一pipeline 2026-04-09
+        self.command_execution_pipeline = CommandExecutionPipeline(
+            command_history_orchestrator=self.history_orchestrator,
+            output_writer=lambda *_: None,
+        )
 
     def _get_task(self, task_id: str) -> dict:
         return self.task_store.get_task(task_id) or {}
@@ -157,15 +163,42 @@ class WebTaskRunner:
             final_status = self._resolve_final_status(task_id, summary)
             self._finalize_stream(conn, task_id, client_id, command, final_status, summary)
 
-    def _build_command_result_iter(self, conn, task_id: str, command: str):
+    # add web命令执行chunk回调 2026-04-09
+    def _build_command_output_writer(self, conn, task_id: str, command: str, summary: TaskStreamSummary):
+        client_id = conn.session_info.client_id
+
+        def writer(status: int, result):
+            text = '' if result is None else str(result)
+            self._publish_stream_chunk(conn, task_id, client_id, command, status, text)
+            summary.record_chunk(status, text)
+
+        return writer
+
+    # add web命令执行统一pipeline入口 2026-04-09
+    def _run_command_pipeline(self, conn, task_id: str, command: str):
         history_entry_id = self._get_history_entry_id(task_id)
-
         executor = self.command_executor_factory.create(conn)
-        func = executor.process_command(command, history_entry_id=history_entry_id)
-        if not func:
-            raise RuntimeError('Unable to resolve command')
+        summary = TaskStreamSummary()
 
-        return func()
+        self.command_execution_pipeline.execute_bound(
+            conn,
+            executor,
+            command,
+            history_entry_id=history_entry_id,
+            output_writer=self._build_command_output_writer(conn, task_id, command, summary),
+            finalize_history=False,
+            swallow_exception=True,
+        )
+
+        final_status = self._resolve_final_status(task_id, summary)
+        self._finalize_stream(
+            conn,
+            task_id,
+            conn.session_info.client_id,
+            command,
+            final_status,
+            summary,
+        )
 
     def _build_upload_result_iter(
         self,
@@ -188,12 +221,7 @@ class WebTaskRunner:
     # ------------------ command ------------------ #
     def run_command_task(self, conn, task_id: str, command: str):
         try:
-            self._run_stream(
-                conn,
-                task_id,
-                command,
-                self._build_command_result_iter(conn, task_id, command),
-            )
+            self._run_command_pipeline(conn, task_id, command)
         finally:
             self._release_task(conn, task_id=task_id, command=command)
 
