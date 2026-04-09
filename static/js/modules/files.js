@@ -176,6 +176,54 @@ window.AppFilesModule = {
             await this.loadRemoteDirectory(path, 1);
         },
 
+        // add 面包糠导航 2026-04-09 12:00
+        buildRemoteBreadcrumbs(path) {
+            const rawPath = String(path || '').trim();
+            if (!rawPath) {
+                return [{label: 'Root', path: ''}];
+            }
+
+            const windowsMatch = rawPath.match(/^([A-Za-z]:)([\\/].*)?$/);
+            if (windowsMatch) {
+                const drive = windowsMatch[1];
+                const rest = String(windowsMatch[2] || '');
+                const segments = rest.split(/[\\/]+/).filter(Boolean);
+                const crumbs = [{label: drive, path: `${drive}\\`}];
+                let currentPath = `${drive}\\`;
+
+                segments.forEach(segment => {
+                    currentPath = currentPath.replace(/[\\/]+$/, '') + '\\' + segment;
+                    crumbs.push({label: segment, path: currentPath});
+                });
+
+                return crumbs;
+            }
+
+            if (rawPath.startsWith('/')) {
+                const segments = rawPath.split('/').filter(Boolean);
+                const crumbs = [{label: '/', path: '/'}];
+                let currentPath = '';
+
+                segments.forEach(segment => {
+                    currentPath += '/' + segment;
+                    crumbs.push({label: segment, path: currentPath || '/'});
+                });
+
+                return crumbs;
+            }
+
+            return rawPath.split(/[\\/]+/).filter(Boolean).map((segment, index, arr) => ({
+                label: segment,
+                path: arr.slice(0, index + 1).join('/'),
+            }));
+        },
+
+        // add 面包糠导航 2026-04-09 12:00
+        async goToRemoteBreadcrumb(item) {
+            if (!item) return;
+            await this.loadRemoteDirectory(item.path || '', 1);
+        },
+
         async enterRemoteDirectory(row) {
             if (!row || !row.is_dir) return;
 
@@ -721,6 +769,11 @@ window.AppFilesModule = {
 
         remoteClipboardActionText() {
             return this.remoteClipboardMode === 'move' ? 'Cut' : 'Copy';
+        },
+
+        // add 面包糠导航 2026-04-09 12:00
+        remoteBreadcrumbs() {
+            return this.buildRemoteBreadcrumbs(this.remoteFilesCurrentPath || '');
         },
     },
 

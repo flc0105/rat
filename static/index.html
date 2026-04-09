@@ -316,79 +316,110 @@
                class="fixed-dialog remote-files-dialog">
         <div class="fixed-dialog-body">
             <div class="dialog-head">
-                <div class="dialog-head-left">
-                    <div class="dialog-action-group">
+                <div class="dialog-head-left remote-toolbar-grid">
+                    <div class="dialog-action-group remote-toolbar-group">
+                        <div class="remote-toolbar-group-title">Navigate</div>
+                        <div class="remote-toolbar-group-actions">
+                            <el-button size="small" @click="refreshRemoteDirectory">Refresh</el-button>
+                            <el-button size="small" :disabled="!remoteFilesParentPath" @click="goToRemoteParent">Up</el-button>
+                            <el-dropdown @command="jumpToPath" :loading="quickJumpLoading">
+                                <el-button size="small">
+                                    Quick Jump
+                                </el-button>
+                                <template #dropdown>
+                                    <el-dropdown-menu>
+                                        <el-dropdown-item command="root">Root (/)</el-dropdown-item>
+                                        <el-dropdown-item command="home">Home (~)</el-dropdown-item>
+                                        <el-dropdown-item command="desktop">Desktop</el-dropdown-item>
+                                        <el-dropdown-item command="documents">Documents</el-dropdown-item>
+                                        <el-dropdown-item command="downloads">Downloads</el-dropdown-item>
+                                        <el-dropdown-item command="executable">Program Directory</el-dropdown-item>
+                                    </el-dropdown-menu>
+                                </template>
+                            </el-dropdown>
+                        </div>
+                    </div>
 
-
-                        <el-button size="small" @click="refreshRemoteDirectory">Refresh</el-button>
-                        <el-button size="small" @click="createRemoteDirectory">New Folder</el-button>
-                        <el-button size="small" :loading="remoteUploadLoading" @click="triggerRemoteUpload">Upload
-                        </el-button>
-                        <el-button size="small" type="primary" :disabled="!hasRemoteSelection"
-                                   :loading="remoteZipDownloading" @click="downloadSelectedRemoteEntries">
-                            Download Selected<span
-                                v-if="remoteSelectedPaths.length"> ({{ remoteSelectedPaths.length }})</span>
-                        </el-button>
-                        <el-button size="small" type="danger" :disabled="!hasRemoteSelection"
-                                   @click="deleteSelectedRemoteEntries">
-                            Delete Selected<span
-                                v-if="remoteSelectedPaths.length"> ({{ remoteSelectedPaths.length }})</span>
-                        </el-button>
-                        <el-button size="small" :disabled="!hasRemoteSelection" @click="copySelectedRemoteEntries">
-                            Copy Selected<span
-                                v-if="remoteSelectedPaths.length"> ({{ remoteSelectedPaths.length }})</span>
-                        </el-button>
-                        <el-button size="small" :disabled="!hasRemoteSelection" @click="cutSelectedRemoteEntries">
-                            Cut Selected<span
-                                v-if="remoteSelectedPaths.length"> ({{ remoteSelectedPaths.length }})</span>
-                        </el-button>
-                        <el-button size="small" type="primary" plain :disabled="!hasRemoteClipboard" @click="pasteRemoteClipboard">
-                            Paste<span
-                                v-if="hasRemoteClipboard"> ({{ remoteClipboardPaths.length }})</span>
-                        </el-button>
-                        <el-button size="small" :disabled="!hasRemoteSelection" @click="clearRemoteSelection">Clear
-                            Selection
-                        </el-button>
-                        <el-button size="small" plain :disabled="!hasRemoteClipboard" @click="clearRemoteClipboard">
-                            Clear Clipboard
-                        </el-button>
-
-                        <el-dropdown @command="jumpToPath" :loading="quickJumpLoading">
-                            <el-button size="small">
-                                Quick Jump
+                    <div class="dialog-action-group remote-toolbar-group">
+                        <div class="remote-toolbar-group-title">Create & Transfer</div>
+                        <div class="remote-toolbar-group-actions">
+                            <el-button size="small" @click="createRemoteDirectory">New Folder</el-button>
+                            <el-button size="small" :loading="remoteUploadLoading" @click="triggerRemoteUpload">Upload
                             </el-button>
-                            <template #dropdown>
-                                <el-dropdown-menu>
-                                    <el-dropdown-item command="root">Root (/)</el-dropdown-item>
-                                    <el-dropdown-item command="home">Home (~)</el-dropdown-item>
-                                    <el-dropdown-item command="desktop">Desktop</el-dropdown-item>
-                                    <el-dropdown-item command="documents">Documents</el-dropdown-item>
-                                    <el-dropdown-item command="downloads">Downloads</el-dropdown-item>
-                                    <el-dropdown-item command="executable">Program Directory</el-dropdown-item>
-                                </el-dropdown-menu>
-                            </template>
-                        </el-dropdown>
+                            <el-button size="small" type="primary" :disabled="!hasRemoteSelection"
+                                       :loading="remoteZipDownloading" @click="downloadSelectedRemoteEntries">
+                                Download Selected<span
+                                    v-if="remoteSelectedPaths.length"> ({{ remoteSelectedPaths.length }})</span>
+                            </el-button>
+                        </div>
+                    </div>
 
+                    <div class="dialog-action-group remote-toolbar-group">
+                        <div class="remote-toolbar-group-title">Clipboard</div>
+                        <div class="remote-toolbar-group-actions">
+                            <el-button size="small" :disabled="!hasRemoteSelection" @click="copySelectedRemoteEntries">
+                                Copy Selected<span
+                                    v-if="remoteSelectedPaths.length"> ({{ remoteSelectedPaths.length }})</span>
+                            </el-button>
+                            <el-button size="small" :disabled="!hasRemoteSelection" @click="cutSelectedRemoteEntries">
+                                Cut Selected<span
+                                    v-if="remoteSelectedPaths.length"> ({{ remoteSelectedPaths.length }})</span>
+                            </el-button>
+                            <el-button size="small" type="primary" plain :disabled="!hasRemoteClipboard" @click="pasteRemoteClipboard">
+                                Paste<span
+                                    v-if="hasRemoteClipboard"> ({{ remoteClipboardPaths.length }})</span>
+                            </el-button>
+                            <el-button size="small" plain :disabled="!hasRemoteClipboard" @click="clearRemoteClipboard">
+                                Clear Clipboard
+                            </el-button>
+                        </div>
+                    </div>
 
-                        <el-button
-                                size="small"
-                                @click="toggleRemoteHiddenFiles"
-                        >
-                            {{ showHiddenFiles ? 'Hide Hidden' : 'Show Hidden' }}
-                        </el-button>
+                    <div class="dialog-action-group remote-toolbar-group">
+                        <div class="remote-toolbar-group-title">Selection & View</div>
+                        <div class="remote-toolbar-group-actions">
+                            <el-button size="small" :disabled="!hasRemoteSelection" @click="clearRemoteSelection">Clear
+                                Selection
+                            </el-button>
+                            <el-button size="small" type="danger" :disabled="!hasRemoteSelection"
+                                       @click="deleteSelectedRemoteEntries">
+                                Delete Selected<span
+                                    v-if="remoteSelectedPaths.length"> ({{ remoteSelectedPaths.length }})</span>
+                            </el-button>
+                            <el-button
+                                    size="small"
+                                    @click="toggleRemoteHiddenFiles"
+                            >
+                                {{ showHiddenFiles ? 'Hide Hidden' : 'Show Hidden' }}
+                            </el-button>
+                        </div>
                     </div>
                 </div>
             </div>
 
 
-            <div class="dialog-path-row">
-                <div v-if="hasRemoteClipboard" class="dialog-pagination-meta" style="margin-bottom: 8px;">
+            <div class="dialog-path-row remote-path-stack">
+                <div v-if="hasRemoteClipboard" class="dialog-pagination-meta remote-clipboard-meta">
                     Clipboard: {{ remoteClipboardActionText }} {{ remoteClipboardPaths.length }} item(s)
                     <span v-if="remoteClipboardSourcePath"> · From {{ remoteClipboardSourcePath }}</span>
                 </div>
-                <div class="dialog-path-box">
+                <div class="remote-breadcrumb-bar">
+                    <div class="remote-breadcrumb-list" v-if="remoteBreadcrumbs.length">
+                        <template v-for="(item, index) in remoteBreadcrumbs" :key="`${item.path || 'root'}-${index}`">
+                            <el-button link type="primary" class="remote-breadcrumb-btn"
+                                       :disabled="index === remoteBreadcrumbs.length - 1"
+                                       @click="goToRemoteBreadcrumb(item)">
+                                {{ item.label }}
+                            </el-button>
+                            <span v-if="index < remoteBreadcrumbs.length - 1" class="remote-breadcrumb-separator">/</span>
+                        </template>
+                    </div>
+                    <div v-else class="remote-breadcrumb-empty">Root</div>
+                </div>
+                <div class="dialog-path-box remote-path-box-row">
                     <el-input v-model="remoteFilesPathInput" placeholder="Enter a path and jump"
                               @keyup.enter="goToRemotePathInput"/>
+                    <el-button size="small" type="primary" plain @click="goToRemotePathInput">Go</el-button>
                 </div>
             </div>
 
