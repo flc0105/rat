@@ -124,6 +124,7 @@ class CommandExecutor:
         history_index = matched.group(1)
         return f'history run {history_index}'
 
+    # add command执行主链入口标记 2026-04-09
     def process_command(self, cmd, history_entry_id: str = ''):
         self.current_history_entry_id = (history_entry_id or '').strip()
 

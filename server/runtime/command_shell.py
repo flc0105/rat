@@ -6,11 +6,17 @@ from core.utils.formatting import print_table
 from core.utils.parsing import parse
 from core.utils.server_util import *
 from server.connection.client_session import ClientSession
+from server.application.command.command_execution_pipeline import CommandExecutionPipeline
 
 
 class ServerCommandShell:
     def __init__(self, server):
         self.server = server
+        # add command执行主链统一编排接入 2026-04-09
+        self.command_execution_pipeline = CommandExecutionPipeline(
+            command_history_orchestrator=server.command_history_orchestrator,
+            output_writer=write,
+        )
 
     def list_connections(self):
         """
@@ -94,33 +100,14 @@ class ServerCommandShell:
         """
         执行交互命令并输出结果
         """
-        # add 保留交互执行历史编排 2026-04-08
-        entry_id = self.server.command_history_orchestrator.begin_execution(
+        # add command执行主链统一编排接入 2026-04-09
+        self.command_execution_pipeline.execute(
             session,
+            command_executor,
             cmd,
             source='cli',
+            cwd_end_provider=lambda: session.session_info.cwd,
         )
-
-        final_ok = True
-
-        try:
-            func = command_executor.process_command(cmd, history_entry_id=entry_id)
-            if func:
-                for item in func():
-                    status = item[0]
-                    write(*item)
-                    if status == 0:
-                        final_ok = False
-        except Exception:
-            final_ok = False
-            raise
-        finally:
-            self.server.command_history_orchestrator.finalize_execution(
-                session,
-                entry_id,
-                final_ok,
-                cwd_end=session.session_info.cwd
-            )
 
     def _open_latest_from_interactive(self, current_session: ClientSession):
         """
