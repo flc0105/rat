@@ -5,14 +5,15 @@ import time
 from core.utils.formatting import print_table
 from core.utils.parsing import parse
 from core.utils.server_util import *
-from server.connection.client_session import ClientSession
+from server.application.command.command_execution_event import CommandExecutionEvent
 from server.application.command.command_execution_pipeline import CommandExecutionPipeline
+from server.application.execution.execution_context import ExecutionContext
+from server.connection.client_session import ClientSession
 
 
 class ServerCommandShell:
     def __init__(self, server):
         self.server = server
-        # add command执行主链统一编排接入 2026-04-09
         self.command_execution_pipeline = CommandExecutionPipeline(
             command_history_orchestrator=server.command_history_orchestrator,
             output_writer=write,
@@ -22,7 +23,6 @@ class ServerCommandShell:
         """
         显示连接列表
         """
-        # add 恢复主控台连接列表体验 2026-04-08
         connection_list = self.server.connections.all()
         if not connection_list:
             print("No active sessions")
@@ -46,7 +46,6 @@ class ServerCommandShell:
         """
         获取最新连接
         """
-        # add 恢复最新连接选择 2026-04-08
         try:
             return self.server.connections.last()
         except Exception:
@@ -56,7 +55,6 @@ class ServerCommandShell:
         """
         根据索引或 client_id 获取连接
         """
-        # add 恢复索引和 client_id 混合选择 2026-04-08
         try:
             return self.server.connections.find(target)
         except Exception:
@@ -66,7 +64,6 @@ class ServerCommandShell:
         """
         清屏，不依赖外部 clear/cls 命令
         """
-        # add 修复 clear cls 不依赖 TERM 2026-04-08
         sys.stdout.write('\033[2J\033[H')
         sys.stdout.flush()
 
@@ -78,7 +75,6 @@ class ServerCommandShell:
         - 当前这份基线里 runtime 可能没有 unread_message_manager
         - 为避免进入交互直接崩，这里做安全降级
         """
-        # add 修复 unread_message_manager 崩溃 2026-04-08
         unread_manager = getattr(session.runtime, 'unread_message_manager', None)
         if unread_manager is None:
             return
@@ -96,18 +92,55 @@ class ServerCommandShell:
             else:
                 print(text)
 
+    def _emit_cli_event(self, event: CommandExecutionEvent):
+        if event.event_type == CommandExecutionEvent.STARTED:
+            return
+        if event.event_type == CommandExecutionEvent.COMPLETED:
+            return
+        if event.event_type == CommandExecutionEvent.CANCELLED and event.payload.get('terminal'):
+            return
+        if event.event_type == CommandExecutionEvent.CHUNK:
+            write(event.status, event.text)
+            return
+        if event.event_type == CommandExecutionEvent.ERROR:
+            write(0, event.text)
+            return
+        if event.event_type == CommandExecutionEvent.CANCELLED:
+            write(0, event.text or 'cancelled')
+            return
+        if event.event_type == CommandExecutionEvent.PROGRESS and event.text:
+            write(1, event.text)
+
     def _execute_interactive_command(self, session: ClientSession, command_executor, cmd: str):
         """
-        执行交互命令并输出结果
+        执行交互命令并输出结果。
         """
-        # add command执行主链统一编排接入 2026-04-09
-        self.command_execution_pipeline.execute(
+        context = ExecutionContext.from_session(
             session,
-            command_executor,
             cmd,
             source='cli',
-            cwd_end_provider=lambda: session.session_info.cwd,
+            task_type='command',
         )
+        final_ok = True
+
+        for event in self.command_execution_pipeline.iter_events(
+            context,
+            command_executor,
+            cwd_end_provider=lambda: session.session_info.cwd,
+            finalize_history=True,
+            swallow_exception=False,
+        ):
+            if event.event_type == CommandExecutionEvent.COMPLETED:
+                final_ok = bool(event.ok)
+                continue
+
+            if event.event_type == CommandExecutionEvent.CANCELLED and event.payload.get('terminal'):
+                final_ok = False
+                continue
+
+            self._emit_cli_event(event)
+
+        return final_ok
 
     def _open_latest_from_interactive(self, current_session: ClientSession):
         """
@@ -115,7 +148,6 @@ class ServerCommandShell:
         - 如果当前已经是最新连接：留在当前会话，不退出
         - 如果有更新连接：切过去，并结束当前会话
         """
-        # add 修复交互态 q 最新连接切换 2026-04-08
         latest_session = self.get_last_connection()
         if latest_session is current_session:
             return 'stay'
@@ -127,7 +159,6 @@ class ServerCommandShell:
         """
         与会话交互
         """
-        # add 恢复交互会话体验 2026-04-08
         print('[+] Connected to {}'.format(session.address))
         self._print_unread_messages(session)
         session.context.is_interactive = True
@@ -183,7 +214,6 @@ class ServerCommandShell:
         """
         处理主控台命令
         """
-        # add 恢复主控台命令集 2026-04-08
         name, arg = parse(cmd)
 
         if cmd in ['l', 'ls', 'list']:
@@ -224,7 +254,6 @@ class ServerCommandShell:
         """
         主控台循环
         """
-        # add 修复主控台空行和错误输出体验 2026-04-08
         while 1:
             try:
                 cmd = colored_input('server> ')

@@ -209,56 +209,32 @@ class WebTaskRunner:
         )
 
     def _iter_upload_events(self, context: TaskExecutionContext):
-        history_entry_id = self._get_history_entry_id(context)
-
-        yield CommandExecutionEvent.started(
-            context.command,
-            payload={
-                'source': context.source,
-                'task_id': context.task_id,
-                'history_entry_id': history_entry_id,
-            },
-        )
-
-        try:
-            result_iter = self.remote_execution_service.stream_upload(
-                context.session,
-                context.metadata.get('local_path') or '',
-                remote_path=context.metadata.get('remote_path') or '',
-                history_entry_id=history_entry_id,
-            )
-
-            for status, result in result_iter:
-                if int(status or 0) == 0:
-                    yield CommandExecutionEvent.error(
-                        '' if result is None else str(result),
-                        payload={'task_id': context.task_id},
-                    )
-                else:
-                    yield CommandExecutionEvent.chunk(
-                        int(status),
-                        '' if result is None else str(result),
-                        payload={'task_id': context.task_id},
-                    )
-
-        except Exception as exc:
-            self.logger.exception(
-                'Upload task event stream failed: task_id=%s command=%r',
-                context.task_id,
-                context.command,
-            )
-            yield CommandExecutionEvent.error(str(exc), payload={'task_id': context.task_id})
-
-        yield CommandExecutionEvent.completed(
-            True,
-            payload={
-                'task_id': context.task_id,
-                'history_entry_id': history_entry_id,
-            },
+        context.history_entry_id = self._get_history_entry_id(context)
+        yield from self.remote_execution_service.iter_upload_events(
+            context.session,
+            context.metadata.get('local_path') or '',
+            remote_path=context.metadata.get('remote_path') or '',
+            history_entry_id=context.history_entry_id,
+            source=context.source,
+            task_id=context.task_id,
+            command=context.command,
         )
 
     def _release_task(self, context: TaskExecutionContext) -> None:
         context.session.release_foreground_task(task_id=context.task_id, command=context.command)
+
+    def _cleanup_upload_local_temp(self, context: TaskExecutionContext):
+        local_path = context.metadata.get('local_path') or ''
+        upload_tmp_dir = context.metadata.get('upload_tmp_dir') or ''
+
+        try:
+            if os.path.exists(local_path):
+                os.remove(local_path)
+            parent_dir = os.path.dirname(local_path)
+            if upload_tmp_dir and parent_dir.startswith(upload_tmp_dir) and os.path.isdir(parent_dir):
+                shutil.rmtree(parent_dir, ignore_errors=True)
+        except Exception:
+            pass
 
     def run_command_task(self, context: TaskExecutionContext):
         try:
@@ -267,19 +243,8 @@ class WebTaskRunner:
             self._release_task(context)
 
     def run_upload_task(self, context: TaskExecutionContext):
-        local_path = context.metadata.get('local_path') or ''
-        upload_tmp_dir = context.metadata.get('upload_tmp_dir') or ''
-
         try:
             self._run_task_events(context, self._iter_upload_events(context))
         finally:
             self._release_task(context)
-
-            try:
-                if os.path.exists(local_path):
-                    os.remove(local_path)
-                parent_dir = os.path.dirname(local_path)
-                if upload_tmp_dir and parent_dir.startswith(upload_tmp_dir) and os.path.isdir(parent_dir):
-                    shutil.rmtree(parent_dir, ignore_errors=True)
-            except Exception:
-                pass
+            self._cleanup_upload_local_temp(context)

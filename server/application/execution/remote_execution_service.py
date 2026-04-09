@@ -1,11 +1,12 @@
 import base64
 import json
 
+from server.application.command.command_types import COMMAND_TYPE_COMMAND
 from server.application.execution.command_stream_service import CommandStreamService
 from server.application.execution.foreground_execution_service import ForegroundExecutionService
 from server.application.execution.upload_execution_service import UploadExecutionService
-from server.application.command.command_types import COMMAND_TYPE_COMMAND
 from server.application.tasks.task_types import TASK_TYPE_COMMAND
+
 
 class RemoteExecutionService:
     """
@@ -266,10 +267,24 @@ class RemoteExecutionService:
             build_http_receive_command=self._build_http_receive_command,
         )
 
-
-
-
-
-
-
-
+    def iter_upload_events(
+        self,
+        target,
+        local_path: str,
+        *,
+        remote_path: str = '',
+        history_entry_id: str = '',
+        source: str = 'web',
+        task_id: str = '',
+        command: str = '',
+    ):
+        return self.upload_execution_service.iter_upload_events(
+            target,
+            local_path,
+            remote_path=remote_path,
+            history_entry_id=history_entry_id,
+            build_http_receive_command=self._build_http_receive_command,
+            source=source,
+            task_id=task_id,
+            command=command,
+        )
