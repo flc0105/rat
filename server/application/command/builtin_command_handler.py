@@ -165,5 +165,5 @@ class BuiltinCommandHandler:
             yield item
 
     def rtt(self, arg=''):
-        for item in self.rtt_support.rtt(arg):
+        for item in self.rtt_support.rtt():
             yield item

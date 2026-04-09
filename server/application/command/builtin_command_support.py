@@ -325,27 +325,56 @@ class HistoryBuiltinSupport:
         raise ValueError('Unsupported history command. Use: history | history run <index> | history clear')
 
 
+# class RttBuiltinSupport:
+#     """
+#     RTT / last seen 状态相关内建命令支持。
+#     """
+#
+#     def __init__(self, conn):
+#         self.conn = conn
+#
+#     def rtt(self):
+#         session_info = getattr(self.conn, 'session_info', None)
+#         if not session_info:
+#             yield 1, 'No session info available'
+#             return
+#
+#         heartbeat_rtt = getattr(session_info, 'heartbeat_rtt_ms', None)
+#         last_seen = getattr(session_info, 'last_seen_at', '') or ''
+#         online = bool(getattr(session_info, 'online', False))
+#
+#         lines = [
+#             f'online: {online}',
+#             f'heartbeat_rtt_ms: {heartbeat_rtt if heartbeat_rtt is not None else "unknown"}',
+#             f'last_seen_at: {last_seen or "unknown"}'
+#         ]
+#         yield 1, '\n'.join(lines)
+
 class RttBuiltinSupport:
     """
-    RTT / last seen 状态相关内建命令支持。
+    rtt 相关内建命令支持。
     """
 
     def __init__(self, conn):
         self.conn = conn
 
-    def rtt(self):
-        session_info = getattr(self.conn, 'session_info', None)
-        if not session_info:
-            yield 1, 'No session info available'
+    def rtt(self, arg=''):
+        payload = {
+            'connection_state': self.conn.context.connected_at and (
+                'offline' if self.conn.context.disconnected_at else 'online'
+            ) or 'unknown',
+            'connected_at': self.conn.context.connected_at or '',
+            'last_seen_at': self.conn.context.last_seen_at or '',
+            'last_heartbeat_sent_at': self.conn.context.last_heartbeat_sent_at or '',
+            'last_heartbeat_ack_at': self.conn.context.last_heartbeat_ack_at or '',
+            'last_rtt_ms': self.conn.context.last_rtt_ms if self.conn.context.last_rtt_ms is not None else '',
+            'last_heartbeat_id': self.conn.context.last_heartbeat_id if self.conn.context.last_heartbeat_id is not None else '',
+        }
+        arg_text = str(arg or '').strip().lower()
+        output_json = arg_text in ('json', '--json')
+
+        if output_json:
+            yield 1, json.dumps(payload, ensure_ascii=False, indent=2)
             return
 
-        heartbeat_rtt = getattr(session_info, 'heartbeat_rtt_ms', None)
-        last_seen = getattr(session_info, 'last_seen_at', '') or ''
-        online = bool(getattr(session_info, 'online', False))
-
-        lines = [
-            f'online: {online}',
-            f'heartbeat_rtt_ms: {heartbeat_rtt if heartbeat_rtt is not None else "unknown"}',
-            f'last_seen_at: {last_seen or "unknown"}'
-        ]
-        yield 1, '\n'.join(lines)
+        yield 1, format_dict(payload, width=25)
