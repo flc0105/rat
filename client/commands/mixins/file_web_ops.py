@@ -449,6 +449,90 @@ class CommandFileWebMixin:
         except Exception as e:
             return 0, f'Failed to rename path: {e}'
 
+    # add 复制移动文件 2026-04-09 12:00
+    def _is_sub_path(self, parent_path: str, target_path: str) -> bool:
+        try:
+            common = os.path.commonpath([os.path.abspath(parent_path), os.path.abspath(target_path)])
+            return common == os.path.abspath(parent_path)
+        except Exception:
+            return False
+
+    # add 复制移动文件 2026-04-09 12:00
+    def _copy_or_move_single_path(self, source_path: str, destination_dir: str, operation: str):
+        source_abs = os.path.abspath(source_path)
+        destination_dir_abs = os.path.abspath(destination_dir)
+        target_path = os.path.join(destination_dir_abs, os.path.basename(source_abs))
+
+        if source_abs == target_path:
+            raise ValueError(f'Source and target are the same: {source_abs}')
+
+        if os.path.exists(target_path):
+            raise FileExistsError(f'Target already exists: {target_path}')
+
+        if os.path.isdir(source_abs) and self._is_sub_path(source_abs, destination_dir_abs):
+            raise ValueError(f'Cannot {operation} a directory into itself or its subdirectory: {source_abs}')
+
+        if operation == 'copy':
+            if os.path.isdir(source_abs):
+                shutil.copytree(source_abs, target_path)
+            else:
+                shutil.copy2(source_abs, target_path)
+        elif operation == 'move':
+            shutil.move(source_abs, target_path)
+        else:
+            raise ValueError(f'Unsupported operation: {operation}')
+
+        return target_path
+
+    @desc('Paste copied or moved files into a directory', group='file_path', suggest=False)
+    @interruptible()
+    def paste_paths(self, arg=''):
+        try:
+            payload = self._decode_structured_arg(arg)
+            if not isinstance(payload, dict):
+                return 0, 'Invalid paste payload'
+
+            raw_paths = payload.get('paths') or []
+            destination_dir = self._require_existing_directory_from_arg(payload.get('destination_dir', ''))
+            operation = str(payload.get('operation', 'copy') or 'copy').strip().lower()
+
+            if operation not in ('copy', 'move'):
+                return 0, 'operation must be copy or move'
+
+            if not isinstance(raw_paths, list) or not raw_paths:
+                return 0, 'paths is required and must be a non-empty list'
+
+            resolved_paths = self._require_existing_paths_from_list(raw_paths)
+            success_count = 0
+            errors = []
+
+            for source_path in resolved_paths:
+                try:
+                    self._copy_or_move_single_path(source_path, destination_dir, operation)
+                    success_count += 1
+                except Exception as e:
+                    errors.append(f'{source_path}: {e}')
+
+            action_text = 'Pasted'
+            if operation == 'move':
+                action_text = 'Moved'
+            elif operation == 'copy':
+                action_text = 'Copied'
+
+            result_msg = f'{action_text} {success_count} of {len(resolved_paths)} items to: {destination_dir}'
+            if errors:
+                result_msg += '\nErrors:\n  ' + '\n  '.join(errors)
+
+            if success_count > 0:
+                return 1, result_msg
+            return 0, result_msg
+        except CommandCancelledError:
+            return 0, 'Command cancelled'
+        except CommandTimeoutError:
+            return 0, 'Command timed out and was terminated'
+        except Exception as e:
+            return 0, f'Failed to paste paths: {e}'
+
     @desc('Save content to a file', group='file_path', suggest=False)
     @interruptible()
     def save_file_content(self, arg=''):

@@ -334,8 +334,23 @@
                             Delete Selected<span
                                 v-if="remoteSelectedPaths.length"> ({{ remoteSelectedPaths.length }})</span>
                         </el-button>
+                        <el-button size="small" :disabled="!hasRemoteSelection" @click="copySelectedRemoteEntries">
+                            Copy Selected<span
+                                v-if="remoteSelectedPaths.length"> ({{ remoteSelectedPaths.length }})</span>
+                        </el-button>
+                        <el-button size="small" :disabled="!hasRemoteSelection" @click="cutSelectedRemoteEntries">
+                            Cut Selected<span
+                                v-if="remoteSelectedPaths.length"> ({{ remoteSelectedPaths.length }})</span>
+                        </el-button>
+                        <el-button size="small" type="primary" plain :disabled="!hasRemoteClipboard" @click="pasteRemoteClipboard">
+                            Paste<span
+                                v-if="hasRemoteClipboard"> ({{ remoteClipboardPaths.length }})</span>
+                        </el-button>
                         <el-button size="small" :disabled="!hasRemoteSelection" @click="clearRemoteSelection">Clear
                             Selection
+                        </el-button>
+                        <el-button size="small" plain :disabled="!hasRemoteClipboard" @click="clearRemoteClipboard">
+                            Clear Clipboard
                         </el-button>
 
                         <el-dropdown @command="jumpToPath" :loading="quickJumpLoading">
@@ -367,6 +382,10 @@
 
 
             <div class="dialog-path-row">
+                <div v-if="hasRemoteClipboard" class="dialog-pagination-meta" style="margin-bottom: 8px;">
+                    Clipboard: {{ remoteClipboardActionText }} {{ remoteClipboardPaths.length }} item(s)
+                    <span v-if="remoteClipboardSourcePath"> · From {{ remoteClipboardSourcePath }}</span>
+                </div>
                 <div class="dialog-path-box">
                     <el-input v-model="remoteFilesPathInput" placeholder="Enter a path and jump"
                               @keyup.enter="goToRemotePathInput"/>
@@ -436,6 +455,8 @@
                                         <template #dropdown>
                                             <el-dropdown-menu>
                                                 <el-dropdown-item command="rename">Rename</el-dropdown-item>
+                                                <el-dropdown-item command="copy">Copy</el-dropdown-item>
+                                                <el-dropdown-item command="cut">Cut</el-dropdown-item>
                                                 <el-dropdown-item command="copy_path">Copy Path</el-dropdown-item>
                                                 <el-dropdown-item command="delete">Delete</el-dropdown-item>
                                             </el-dropdown-menu>
@@ -536,6 +557,10 @@
                                                            @click="downloadRemoteEntry(row)">Download
                                                 </el-button>
                                             </template>
+                                            <el-button size="small" plain @click="remoteSelectedPaths = [row.path]; copySelectedRemoteEntries()">Copy
+                                            </el-button>
+                                            <el-button size="small" plain @click="remoteSelectedPaths = [row.path]; cutSelectedRemoteEntries()">Cut
+                                            </el-button>
                                             <el-button size="small" plain @click="renameRemoteEntry(row)">Rename
                                             </el-button>
                                             <el-button size="small" plain @click="copyRemotePath(row)">Copy Path

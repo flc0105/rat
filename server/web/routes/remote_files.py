@@ -96,6 +96,25 @@ def create_remote_files_blueprint(server_instance):
 
         return responder.json_endpoint(_execute, default_error_status=500)
 
+    @blueprint.post('/api/connections/<client_id>/remote-files/paste')
+    def paste_remote_files(client_id):
+        def _execute():
+            payload = get_json_payload()
+            paths = payload.get('paths') or []
+            destination_dir = (payload.get('destination_dir') or '').strip()
+            operation = (payload.get('operation') or 'copy').strip().lower()
+
+            if not isinstance(paths, list) or not paths:
+                raise ValueError('paths is required and must be a non-empty list')
+            if not destination_dir:
+                raise ValueError('destination_dir is required')
+            if operation not in ('copy', 'move'):
+                raise ValueError('operation must be copy or move')
+
+            return remote_file_api.paste_remote_paths(client_id, paths, destination_dir, operation)
+
+        return responder.json_endpoint(_execute, default_error_status=500)
+
     @blueprint.post('/api/connections/<client_id>/remote-files/preview')
     def preview_remote_file(client_id):
         def _execute():

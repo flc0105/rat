@@ -21,6 +21,9 @@ window.AppFilesModule = {
             remoteZipDownloading: false,
             quickJumpPaths: {},
             quickJumpLoading: false,
+            remoteClipboardPaths: [],
+            remoteClipboardMode: '',
+            remoteClipboardSourcePath: '',
         }
     },
 
@@ -258,6 +261,91 @@ window.AppFilesModule = {
             }
         },
 
+        // add 复制移动文件 2026-04-09 12:00
+        cacheRemoteClipboard(mode) {
+            const paths = [...this.remoteSelectedPaths];
+            if (!paths.length) {
+                ElementPlus.ElMessage.warning('Please select at least one file or folder');
+                return;
+            }
+
+            this.remoteClipboardPaths = paths;
+            this.remoteClipboardMode = mode === 'move' ? 'move' : 'copy';
+            this.remoteClipboardSourcePath = this.remoteFilesCurrentPath || '';
+
+            const actionText = this.remoteClipboardMode === 'move' ? 'Cut' : 'Copied';
+            ElementPlus.ElMessage.success(`${actionText} ${paths.length} item(s)`);
+        },
+
+        // add 复制移动文件 2026-04-09 12:00
+        copySelectedRemoteEntries() {
+            this.cacheRemoteClipboard('copy');
+        },
+
+        // add 复制移动文件 2026-04-09 12:00
+        cutSelectedRemoteEntries() {
+            this.cacheRemoteClipboard('move');
+        },
+
+        // add 复制移动文件 2026-04-09 12:00
+        clearRemoteClipboard() {
+            this.remoteClipboardPaths = [];
+            this.remoteClipboardMode = '';
+            this.remoteClipboardSourcePath = '';
+        },
+
+        // add 复制移动文件 2026-04-09 12:00
+        async pasteRemoteClipboard() {
+            if (!this.selectedId) {
+                ElementPlus.ElMessage.warning('Please select a device');
+                return;
+            }
+
+            if (!this.remoteFilesCurrentPath) {
+                ElementPlus.ElMessage.warning('Current directory is empty');
+                return;
+            }
+
+            const paths = [...this.remoteClipboardPaths];
+            if (!paths.length || !this.remoteClipboardMode) {
+                ElementPlus.ElMessage.warning('Clipboard is empty');
+                return;
+            }
+
+            try {
+                const res = await fetch(`/api/connections/${encodeURIComponent(this.selectedId)}/remote-files/paste`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        paths,
+                        destination_dir: this.remoteFilesCurrentPath,
+                        operation: this.remoteClipboardMode,
+                    })
+                });
+
+                const json = await res.json();
+                if (!res.ok || json.code !== 0) {
+                    throw new Error(json.message || 'Paste failed');
+                }
+
+                const actionText = this.remoteClipboardMode === 'move' ? 'Moved' : 'Copied';
+                const message = json.data?.message || `${actionText} ${paths.length} item(s)`;
+
+                ElementPlus.ElMessage.success(`${actionText} ${paths.length} item(s)`);
+                await this.refreshRemoteDirectory();
+
+                if (this.remoteClipboardMode === 'move') {
+                    this.clearRemoteClipboard();
+                }
+
+                if (message && !message.startsWith(`${actionText} ${paths.length} item(s)`)) {
+                    ElementPlus.ElMessage.info(message);
+                }
+            } catch (e) {
+                ElementPlus.ElMessage.error(e.message || 'Paste failed');
+            }
+        },
+
         handleRemoteMoreAction(command, row) {
             if (!row || row.is_parent_entry) return;
 
@@ -267,6 +355,16 @@ window.AppFilesModule = {
             }
             if (command === 'copy_path') {
                 this.copyRemotePath(row);
+                return;
+            }
+            if (command === 'copy') {
+                this.remoteSelectedPaths = row.path ? [row.path] : [];
+                this.copySelectedRemoteEntries();
+                return;
+            }
+            if (command === 'cut') {
+                this.remoteSelectedPaths = row.path ? [row.path] : [];
+                this.cutSelectedRemoteEntries();
                 return;
             }
             if (command === 'delete') {
@@ -582,6 +680,7 @@ window.AppFilesModule = {
             this.showHiddenFiles = false;
             this.remoteSelectedPaths = [];
             this.remoteZipDownloading = false;
+            this.clearRemoteClipboard();
         },
     },
 
@@ -614,6 +713,14 @@ window.AppFilesModule = {
 
         hasRemoteSelection() {
             return this.remoteSelectedPaths.length > 0;
+        },
+
+        hasRemoteClipboard() {
+            return this.remoteClipboardPaths.length > 0 && !!this.remoteClipboardMode;
+        },
+
+        remoteClipboardActionText() {
+            return this.remoteClipboardMode === 'move' ? 'Cut' : 'Copy';
         },
     },
 

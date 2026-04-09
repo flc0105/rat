@@ -240,6 +240,45 @@ class WebRemoteFileService:
             'message': result_text
         }
 
+    # add 复制移动文件 2026-04-09 12:00
+    def paste_paths(self, client_id: str, paths: list[str], destination_dir: str, operation: str = 'copy') -> dict:
+        if not isinstance(paths, list) or not paths:
+            raise ValueError('paths is required and must be a non-empty list')
+        if not (destination_dir or '').strip():
+            raise ValueError('destination_dir is required')
+
+        normalized_paths = [
+            str(item or '').strip()
+            for item in paths
+            if str(item or '').strip()
+        ]
+        if not normalized_paths:
+            raise ValueError('paths is required and must contain valid paths')
+
+        normalized_destination_dir = destination_dir.strip()
+        normalized_operation = str(operation or 'copy').strip().lower()
+        if normalized_operation not in ('copy', 'move'):
+            raise ValueError('operation must be copy or move')
+
+        command = self._build_command('paste_paths', {
+            'paths': normalized_paths,
+            'destination_dir': normalized_destination_dir,
+            'operation': normalized_operation,
+        })
+        result_text = self.remote_execution_service.run_foreground_text_command(
+            client_id,
+            command,
+            task_type='remote_file',
+            source='web_remote_file',
+        )
+
+        return {
+            'paths': normalized_paths,
+            'destination_dir': normalized_destination_dir,
+            'operation': normalized_operation,
+            'message': result_text,
+        }
+
     def preview_file(self, client_id: str, path: str, history_entry_id: str = '') -> dict:
         if not (path or '').strip():
             raise ValueError('path is required')
