@@ -1,6 +1,7 @@
 from server.application.command.builtin_command_support import (
     AliasBuiltinSupport,
     HistoryBuiltinSupport,
+    QuickJumpBuiltinSupport,
     RttBuiltinSupport,
     ScriptBuiltinSupport,
     UploadBuiltinSupport,
@@ -61,6 +62,12 @@ class BuiltinCommandHandler:
             'source': 'server'
         },
         {
+            'name': 'gopin',
+            'template': 'gopin ',
+            'help': 'gopin <display_name> | Jump to a saved quick jump path for the current host',
+            'source': 'server'
+        },
+        {
             'name': 'rtt',
             'template': 'rtt',
             'help': 'Show current heartbeat RTT / last seen state',
@@ -105,6 +112,13 @@ class BuiltinCommandHandler:
             history_entry_id_provider=self.history_entry_id_provider,
             command_processor_factory=self.command_processor_factory,
         )
+        self.quick_jump_support = QuickJumpBuiltinSupport(
+            quick_jump_store=self.server.web_service.quick_jump_api.quick_jump_store,
+            command_history=self.server.command_history,
+            conn=self.conn,
+            history_entry_id_provider=self.history_entry_id_provider,
+            command_processor_factory=self.command_processor_factory,
+        )
         self.rtt_support = RttBuiltinSupport(
             conn=self.conn,
         )
@@ -126,6 +140,18 @@ class BuiltinCommandHandler:
                 'template': alias_name,
                 'help': f'Alias -> {alias_command}',
                 'source': 'alias'
+            })
+
+        for item in self.quick_jump_support.list_quick_jumps():
+            display_name = item.get('display_name', '')
+            target_path = item.get('path', '')
+            if not display_name or not target_path:
+                continue
+            candidates.append({
+                'name': 'gopin',
+                'template': f'gopin {display_name}',
+                'help': f'Quick jump -> {target_path}',
+                'source': 'quick_jump'
             })
 
         return candidates
@@ -162,6 +188,10 @@ class BuiltinCommandHandler:
 
     def history(self, arg):
         for item in self.history_support.history(arg):
+            yield item
+
+    def gopin(self, arg=''):
+        for item in self.quick_jump_support.gopin(arg):
             yield item
 
     def rtt(self, arg=''):

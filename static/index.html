@@ -339,7 +339,7 @@
                         <div class="remote-toolbar-group">
                             <el-button size="small" @click="refreshRemoteDirectory">Refresh</el-button>
                             <el-button size="small" @click="goToRemoteParent" :disabled="!remoteFilesParentPath">Up</el-button>
-                            <el-dropdown @command="jumpToPath" :loading="quickJumpLoading">
+                            <el-dropdown @command="jumpToPath" :loading="quickJumpLoading || remotePinnedJumpLoading">
                                 <el-button size="small">
                                     Quick Jump
                                 </el-button>
@@ -352,9 +352,18 @@
                                         <el-dropdown-item command="downloads">Downloads</el-dropdown-item>
                                         <el-dropdown-item command="executable">Program Directory</el-dropdown-item>
                                         <el-dropdown-item divided command="input_navigate">Input Navigate</el-dropdown-item>
+                                        <el-dropdown-item v-if="hasPinnedQuickJumps" divided disabled>Pinned</el-dropdown-item>
+                                        <el-dropdown-item
+                                                v-for="item in remotePinnedJumpItems"
+                                                :key="`pinned-jump-${item.display_name}-${item.path}`"
+                                                :command="{ type: 'pinned_jump', display_name: item.display_name, path: item.path }"
+                                        >
+                                            {{ item.display_name }}
+                                        </el-dropdown-item>
                                     </el-dropdown-menu>
                                 </template>
                             </el-dropdown>
+                            <el-button size="small" @click="promptSavePinnedQuickJump">Pin</el-button>
                         </div>
 
                         <span class="remote-toolbar-divider"></span>

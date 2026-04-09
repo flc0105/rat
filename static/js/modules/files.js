@@ -21,6 +21,8 @@ window.AppFilesModule = {
             remoteZipDownloading: false,
             quickJumpPaths: {},
             quickJumpLoading: false,
+            remotePinnedJumpItems: [],
+            remotePinnedJumpLoading: false,
             remoteClipboardPaths: [],
             remoteClipboardMode: '',
             remoteClipboardSourcePath: '',
@@ -110,6 +112,7 @@ window.AppFilesModule = {
 
             this.remoteFilesDialogVisible = true;
             this.loadQuickJumpPaths();  // 加载快速跳转路径
+            this.loadPinnedQuickJumps();
             await this.loadRemoteDirectory('', 1);
         },
 
@@ -639,6 +642,113 @@ window.AppFilesModule = {
             }
         },
 
+        // add hostname 收藏 quick jump 2026-04-09 15:30
+        async loadPinnedQuickJumps() {
+            if (!this.selectedId) return;
+
+            this.remotePinnedJumpLoading = true;
+            try {
+                const res = await fetch(`/api/connections/${encodeURIComponent(this.selectedId)}/quick-jumps`);
+                const json = await res.json();
+                if (res.ok && json.code === 0 && json.data) {
+                    this.remotePinnedJumpItems = Array.isArray(json.data.items)
+                        ? json.data.items
+                        : [];
+                }
+            } catch (e) {
+                console.error('Failed to load pinned quick jumps:', e);
+            } finally {
+                this.remotePinnedJumpLoading = false;
+            }
+        },
+
+        // add hostname 收藏 quick jump 2026-04-09 15:30
+        async promptSavePinnedQuickJump() {
+            if (!this.selectedId) {
+                ElementPlus.ElMessage.warning('Please select a device');
+                return;
+            }
+
+            const currentPath = String(this.remoteFilesCurrentPath || '').trim();
+            if (!currentPath) {
+                ElementPlus.ElMessage.warning('Current directory is empty');
+                return;
+            }
+
+            const currentItems = Array.isArray(this.remotePinnedJumpItems)
+                ? this.remotePinnedJumpItems
+                : [];
+            const currentDirectoryName = currentPath
+                .replace(/[\\/]+$/, '')
+                .split(/[\\/]/)
+                .filter(Boolean)
+                .pop() || 'Pinned Path';
+
+            try {
+                const {value} = await ElementPlus.ElMessageBox.prompt(
+                    `Current path:<br><span style="word-break: break-all; color: var(--muted);">${this.escapeRemoteHtml(currentPath)}</span>`,
+                    'Pin Quick Jump',
+                    {
+                        confirmButtonText: 'Save',
+                        cancelButtonText: 'Cancel',
+                        dangerouslyUseHTMLString: true,
+                        inputValue: currentDirectoryName,
+                        inputPattern: /.+/,
+                        inputErrorMessage: 'Display name is required'
+                    }
+                );
+
+                const displayName = String(value || '').trim();
+                if (!displayName) return;
+
+                const exists = currentItems.find(item => (item?.display_name || '').trim() === displayName);
+                if (exists) {
+                    await ElementPlus.ElMessageBox.confirm(
+                        `A pinned quick jump named "${this.escapeRemoteHtml(displayName)}" already exists. Update it to the current path?`,
+                        'Overwrite Quick Jump',
+                        {
+                            confirmButtonText: 'Overwrite',
+                            cancelButtonText: 'Cancel',
+                            type: 'warning',
+                            dangerouslyUseHTMLString: true,
+                        }
+                    );
+                }
+
+                const res = await fetch(`/api/connections/${encodeURIComponent(this.selectedId)}/quick-jumps`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        display_name: displayName,
+                        path: currentPath,
+                    })
+                });
+
+                const json = await res.json();
+                if (!res.ok || json.code !== 0) {
+                    throw new Error(json.message || 'Failed to save quick jump');
+                }
+
+                this.remotePinnedJumpItems = Array.isArray(json.data?.items)
+                    ? json.data.items
+                    : [];
+                ElementPlus.ElMessage.success(json.data?.message || 'Quick jump saved');
+            } catch (e) {
+                if (e === 'cancel' || e === 'close' || e?.toString?.().includes('cancel')) return;
+                ElementPlus.ElMessage.error(e.message || 'Failed to save quick jump');
+            }
+        },
+
+        // add hostname 收藏 quick jump 2026-04-09 15:30
+        escapeRemoteHtml(text) {
+            return String(text || '')
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+        },
+
         async loadQuickJumpPaths() {
             if (!this.selectedId) return;
 
@@ -657,10 +767,21 @@ window.AppFilesModule = {
         },
 
         async jumpToPath(command) {
-            // command 是 'root', 'home', 'desktop' 等
             if (command === 'input_navigate') {
                 await this.promptRemotePathNavigate();
                 return;
+            }
+
+            if (command && typeof command === 'object') {
+                if (command.type === 'pinned_jump') {
+                    const path = String(command.path || '').trim();
+                    if (!path) {
+                        ElementPlus.ElMessage.warning('Path not available');
+                        return;
+                    }
+                    await this.loadRemoteDirectory(path, 1);
+                    return;
+                }
             }
 
             const path = this.quickJumpPaths[command];
@@ -668,7 +789,7 @@ window.AppFilesModule = {
                 ElementPlus.ElMessage.warning('Path not available');
                 return;
             }
-            await this.loadRemoteDirectory(path);
+            await this.loadRemoteDirectory(path, 1);
         },
 
         // add 面包糠导航优化 2026-04-09 12:00
@@ -763,6 +884,8 @@ window.AppFilesModule = {
             this.showHiddenFiles = false;
             this.remoteSelectedPaths = [];
             this.remoteZipDownloading = false;
+            this.remotePinnedJumpItems = [];
+            this.remotePinnedJumpLoading = false;
             this.clearRemoteClipboard();
         },
     },
@@ -813,6 +936,11 @@ window.AppFilesModule = {
                 ...item,
                 isCurrent: item.path === (this.remoteFilesCurrentPath || '')
             }));
+        },
+
+        // add hostname 收藏 quick jump 2026-04-09 15:30
+        hasPinnedQuickJumps() {
+            return Array.isArray(this.remotePinnedJumpItems) && this.remotePinnedJumpItems.length > 0;
         },
     },
 

@@ -24,6 +24,7 @@ BACKGROUND_MESSAGE_LOG_FILE = 'session_messages.log'
 # ------------------ history ------------------ #
 COMMAND_HISTORY_ROOT_DIR = os.path.abspath(os.path.join('runtime', 'command_history'))
 COMMAND_HISTORY_MAX_ENTRIES_PER_HOST = 300
+QUICK_JUMP_ROOT_DIR = os.path.abspath(os.path.join('runtime', 'quickjump'))
 
 # ------------------ web files ------------------ #
 WEB_FILES_ROOT_DIR = os.path.abspath(os.path.join('runtime', 'web_files'))

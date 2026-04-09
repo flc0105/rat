@@ -42,6 +42,7 @@ class ServerWebService:
         self.job_api = self.assembly.job_api
         self.artifact_api = self.assembly.artifact_api
         self.remote_file_api = self.assembly.remote_file_api
+        self.quick_jump_api = self.assembly.quick_jump_api
         self.agent_api = self.assembly.agent_api
         self.system_api = self.assembly.system_api
 
