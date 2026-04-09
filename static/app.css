@@ -747,6 +747,90 @@ body {
   width: 100%;
 }
 
+.remote-files-head {
+  display: block;
+  margin-bottom: 10px;
+}
+
+.remote-files-head-main {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+  width: 100%;
+}
+
+.remote-breadcrumb-bar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 2px;
+  min-height: 28px;
+  padding: 0 2px;
+}
+
+.remote-breadcrumb-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: none;
+  background: transparent;
+  color: var(--muted-2);
+  padding: 3px 6px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 13px;
+}
+
+.remote-breadcrumb-item:hover {
+  background: rgba(148, 163, 184, 0.12);
+  color: var(--text);
+}
+
+.remote-breadcrumb-item.active {
+  color: var(--text);
+  font-weight: 600;
+  cursor: default;
+}
+
+.remote-breadcrumb-item:disabled {
+  opacity: 1;
+}
+
+.remote-breadcrumb-sep {
+  color: var(--muted-2);
+  margin-right: 2px;
+}
+
+.remote-breadcrumb-empty {
+  color: var(--muted-2);
+  font-size: 13px;
+}
+
+.remote-files-toolbar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.remote-toolbar-group {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.remote-toolbar-divider {
+  width: 1px;
+  height: 18px;
+  background: rgba(148, 163, 184, 0.25);
+}
+
+.remote-files-meta-row {
+  margin-bottom: 8px;
+}
+
 /* ========== 命令历史对话框 ========== */
 .command-history-toolbar {
   display: flex;
@@ -803,90 +887,6 @@ body {
 .dialog-path-row {
   margin-bottom: 12px;
   flex-shrink: 0;
-}
-
-.remote-toolbar-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
-  width: 100%;
-}
-
-.remote-toolbar-group {
-  display: flex;
-  flex-direction: column;
-  align-items: stretch;
-  justify-content: flex-start;
-  gap: 10px;
-  padding: 12px;
-  border: 1px solid var(--line);
-  border-radius: 14px;
-  background: var(--panel-soft);
-}
-
-.remote-toolbar-group-title {
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--muted);
-  line-height: 1;
-}
-
-.remote-toolbar-group-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-.remote-path-stack {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.remote-clipboard-meta {
-  margin-bottom: 0;
-}
-
-.remote-breadcrumb-bar {
-  display: flex;
-  align-items: center;
-  min-height: 38px;
-  padding: 0 12px;
-  border: 1px solid var(--line);
-  border-radius: 12px;
-  background: var(--panel-soft);
-  overflow-x: auto;
-}
-
-.remote-breadcrumb-list {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  flex-wrap: nowrap;
-  white-space: nowrap;
-}
-
-.remote-breadcrumb-btn {
-  padding: 0;
-  min-height: auto;
-  height: auto;
-  border-radius: 0;
-}
-
-.remote-breadcrumb-separator,
-.remote-breadcrumb-empty {
-  color: var(--muted);
-  font-size: 12px;
-}
-
-.remote-path-box-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.remote-path-box-row .el-input {
-  flex: 1 1 auto;
 }
 
 .artifact-filter-box {
@@ -2131,18 +2131,6 @@ body {
     width: 100%;
   }
 
-  .remote-toolbar-grid {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
-  .remote-path-box-row {
-    flex-wrap: wrap;
-  }
-
-  .remote-path-box-row .el-button {
-    width: 100%;
-  }
-
   .command-history-toolbar {
     justify-content: flex-start;
   }
@@ -2380,4 +2368,14 @@ body {
 
 .command-autocomplete-item-group {
     flex-shrink: 0;
+}
+
+@media (max-width: 960px) {
+  .remote-toolbar-divider {
+    display: none;
+  }
+
+  .remote-files-toolbar {
+    gap: 6px 10px;
+  }
 }

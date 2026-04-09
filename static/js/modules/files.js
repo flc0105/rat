@@ -176,54 +176,6 @@ window.AppFilesModule = {
             await this.loadRemoteDirectory(path, 1);
         },
 
-        // add 面包糠导航 2026-04-09 12:00
-        buildRemoteBreadcrumbs(path) {
-            const rawPath = String(path || '').trim();
-            if (!rawPath) {
-                return [{label: 'Root', path: ''}];
-            }
-
-            const windowsMatch = rawPath.match(/^([A-Za-z]:)([\\/].*)?$/);
-            if (windowsMatch) {
-                const drive = windowsMatch[1];
-                const rest = String(windowsMatch[2] || '');
-                const segments = rest.split(/[\\/]+/).filter(Boolean);
-                const crumbs = [{label: drive, path: `${drive}\\`}];
-                let currentPath = `${drive}\\`;
-
-                segments.forEach(segment => {
-                    currentPath = currentPath.replace(/[\\/]+$/, '') + '\\' + segment;
-                    crumbs.push({label: segment, path: currentPath});
-                });
-
-                return crumbs;
-            }
-
-            if (rawPath.startsWith('/')) {
-                const segments = rawPath.split('/').filter(Boolean);
-                const crumbs = [{label: '/', path: '/'}];
-                let currentPath = '';
-
-                segments.forEach(segment => {
-                    currentPath += '/' + segment;
-                    crumbs.push({label: segment, path: currentPath || '/'});
-                });
-
-                return crumbs;
-            }
-
-            return rawPath.split(/[\\/]+/).filter(Boolean).map((segment, index, arr) => ({
-                label: segment,
-                path: arr.slice(0, index + 1).join('/'),
-            }));
-        },
-
-        // add 面包糠导航 2026-04-09 12:00
-        async goToRemoteBreadcrumb(item) {
-            if (!item) return;
-            await this.loadRemoteDirectory(item.path || '', 1);
-        },
-
         async enterRemoteDirectory(row) {
             if (!row || !row.is_dir) return;
 
@@ -706,12 +658,95 @@ window.AppFilesModule = {
 
         async jumpToPath(command) {
             // command 是 'root', 'home', 'desktop' 等
+            if (command === 'input_navigate') {
+                await this.promptRemotePathNavigate();
+                return;
+            }
+
             const path = this.quickJumpPaths[command];
             if (!path) {
                 ElementPlus.ElMessage.warning('Path not available');
                 return;
             }
             await this.loadRemoteDirectory(path);
+        },
+
+        // add 面包糠导航优化 2026-04-09 12:00
+        async promptRemotePathNavigate() {
+            try {
+                const {value} = await ElementPlus.ElMessageBox.prompt(
+                    'Enter the target path',
+                    'Input Navigate',
+                    {
+                        confirmButtonText: 'Go',
+                        cancelButtonText: 'Cancel',
+                        inputValue: this.remoteFilesCurrentPath || this.remoteFilesPathInput || '',
+                        inputPattern: /.+/,
+                        inputErrorMessage: 'Path is required'
+                    }
+                );
+
+                const path = String(value || '').trim();
+                if (!path) return;
+
+                this.remoteFilesPathInput = path;
+                await this.loadRemoteDirectory(path, 1);
+            } catch (e) {
+                if (e === 'cancel' || e === 'close' || e?.toString?.().includes('cancel')) return;
+                ElementPlus.ElMessage.error(e.message || 'Navigate failed');
+            }
+        },
+
+        // add 面包糠导航优化 2026-04-09 12:00
+        buildRemoteBreadcrumbItems(path) {
+            const currentPath = String(path || '').trim();
+            if (!currentPath) return [];
+
+            const windowsMatch = currentPath.match(/^([A-Za-z]:)([\\/].*)?$/);
+            if (windowsMatch) {
+                const drive = windowsMatch[1];
+                const rest = String(windowsMatch[2] || '').replace(/^[\\/]+/, '');
+                const parts = rest ? rest.split(/[\\/]+/).filter(Boolean) : [];
+                const items = [{label: drive, path: `${drive}\\`}];
+                let accumulated = `${drive}\\`;
+
+                parts.forEach(part => {
+                    accumulated = accumulated.replace(/[\\/]+$/, '') + '\\' + part;
+                    items.push({label: part, path: accumulated});
+                });
+
+                return items;
+            }
+
+            const isAbsolute = currentPath.startsWith('/');
+            const parts = currentPath.split('/').filter(Boolean);
+            const items = [];
+
+            if (isAbsolute) {
+                items.push({label: 'Root', path: '/'});
+            }
+
+            let accumulated = '';
+            parts.forEach(part => {
+                if (isAbsolute) {
+                    accumulated += `/${part}`;
+                } else {
+                    accumulated = accumulated ? `${accumulated}/${part}` : part;
+                }
+                items.push({label: part, path: accumulated});
+            });
+
+            if (!items.length && isAbsolute) {
+                items.push({label: 'Root', path: '/'});
+            }
+
+            return items;
+        },
+
+        // add 面包糠导航优化 2026-04-09 12:00
+        async goToRemoteBreadcrumb(item) {
+            if (!item || !item.path || item.isCurrent) return;
+            await this.loadRemoteDirectory(item.path, 1);
         },
 
         resetRemoteFilesState() {
@@ -771,9 +806,13 @@ window.AppFilesModule = {
             return this.remoteClipboardMode === 'move' ? 'Cut' : 'Copy';
         },
 
-        // add 面包糠导航 2026-04-09 12:00
-        remoteBreadcrumbs() {
-            return this.buildRemoteBreadcrumbs(this.remoteFilesCurrentPath || '');
+        // add 面包糠导航优化 2026-04-09 12:00
+        remoteBreadcrumbItems() {
+            const items = this.buildRemoteBreadcrumbItems(this.remoteFilesCurrentPath || '');
+            return items.map(item => ({
+                ...item,
+                isCurrent: item.path === (this.remoteFilesCurrentPath || '')
+            }));
         },
     },
 
