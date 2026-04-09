@@ -114,20 +114,27 @@ class ServerCommandShell:
         """
         执行交互命令并输出结果。
         """
+        entry_id = self.server.command_history_orchestrator.begin_execution(
+            session,
+            cmd,
+            source='cli',
+        )
+
         context = ExecutionContext.from_session(
             session,
             cmd,
             source='cli',
             task_type='command',
+            history_entry_id=entry_id,
         )
         final_ok = True
 
         for event in self.command_execution_pipeline.iter_events(
-            context,
-            command_executor,
-            cwd_end_provider=lambda: session.session_info.cwd,
-            finalize_history=True,
-            swallow_exception=False,
+                context,
+                command_executor,
+                cwd_end_provider=lambda: session.session_info.cwd,
+                finalize_history=True,
+                swallow_exception=False,
         ):
             if event.event_type == CommandExecutionEvent.COMPLETED:
                 final_ok = bool(event.ok)

@@ -53,16 +53,16 @@ class UploadExecutionService:
             pass
 
     def iter_upload_events(
-        self,
-        target,
-        local_path: str,
-        *,
-        remote_path: str = '',
-        history_entry_id: str = '',
-        build_http_receive_command,
-        source: str = 'web',
-        task_id: str = '',
-        command: str = '',
+            self,
+            target,
+            local_path: str,
+            *,
+            remote_path: str = '',
+            history_entry_id: str = '',
+            build_http_receive_command,
+            source: str = 'web',
+            task_id: str = '',
+            command: str = '',
     ):
         """
         执行上传事件流。
@@ -74,30 +74,38 @@ class UploadExecutionService:
         - error
         - completed
         """
-        artifact_service, staged_path, safe_name, relative_url = self._stage_upload(local_path)
-        session = self.get_connection(target)
+        artifact_service = None
+        staged_path = ''
+        safe_name = ''
+        relative_url = ''
+        ok = True
+
         effective_command = (command or f'upload {os.path.basename(local_path)}').strip()
 
-        yield CommandExecutionEvent.started(
-            effective_command,
-            payload={
-                'source': source,
-                'task_id': task_id,
-                'history_entry_id': history_entry_id,
-                'filename': safe_name,
-            },
-        )
-        yield CommandExecutionEvent.progress(
-            f'Staged upload file: {safe_name}',
-            payload={
-                'stage': 'staged',
-                'task_id': task_id,
-                'history_entry_id': history_entry_id,
-                'filename': safe_name,
-            },
-        )
-
         try:
+            artifact_service, staged_path, safe_name, relative_url = self._stage_upload(local_path)
+            session = self.get_connection(target)
+
+            yield CommandExecutionEvent.started(
+                effective_command,
+                payload={
+                    'source': source,
+                    'task_id': task_id,
+                    'history_entry_id': history_entry_id,
+                    'filename': safe_name,
+                },
+            )
+
+            yield CommandExecutionEvent.progress(
+                f'Staged upload file: {safe_name}',
+                payload={
+                    'stage': 'staged',
+                    'task_id': task_id,
+                    'history_entry_id': history_entry_id,
+                    'filename': safe_name,
+                },
+            )
+
             command_text = build_http_receive_command({
                 'relative_url': relative_url,
                 'filename': safe_name,
@@ -114,7 +122,9 @@ class UploadExecutionService:
 
             for status, result in result_iter:
                 text = '' if result is None else str(result)
+
                 if int(status or 0) == 0:
+                    ok = False
                     yield CommandExecutionEvent.error(
                         text,
                         payload={
@@ -133,7 +143,9 @@ class UploadExecutionService:
                             'filename': safe_name,
                         },
                     )
+
         except Exception as exc:
+            ok = False
             yield CommandExecutionEvent.error(
                 str(exc),
                 payload={
@@ -142,11 +154,13 @@ class UploadExecutionService:
                     'filename': safe_name,
                 },
             )
+
         finally:
-            self._cleanup_staged_upload(artifact_service, staged_path)
+            if artifact_service is not None and staged_path:
+                self._cleanup_staged_upload(artifact_service, staged_path)
 
         yield CommandExecutionEvent.completed(
-            True,
+            ok,
             payload={
                 'task_id': task_id,
                 'history_entry_id': history_entry_id,

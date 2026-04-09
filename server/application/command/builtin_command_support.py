@@ -7,6 +7,7 @@ import shlex
 from core.utils.formatting import format_dict
 from core.utils.parsing import scan_args
 from server.config.config import SCRIPT_PATH
+from server.application.command.command_execution_event import CommandExecutionEvent
 
 
 class UploadBuiltinSupport:
@@ -36,26 +37,26 @@ class UploadBuiltinSupport:
         )
 
         for event in event_iter:
-            if event.event_type == 'started':
+            if event.event_type == CommandExecutionEvent.STARTED:
                 continue
 
-            if event.event_type == 'completed':
+            if event.event_type == CommandExecutionEvent.COMPLETED:
                 continue
 
-            if event.event_type == 'progress':
+            if event.event_type == CommandExecutionEvent.PROGRESS:
                 if event.text:
                     yield 1, event.text
                 continue
 
-            if event.event_type == 'chunk':
+            if event.event_type == CommandExecutionEvent.CHUNK:
                 yield event.status, event.text
                 continue
 
-            if event.event_type == 'error':
+            if event.event_type == CommandExecutionEvent.ERROR:
                 yield 0, event.text
                 continue
 
-            if event.event_type == 'cancelled':
+            if event.event_type == CommandExecutionEvent.CANCELLED:
                 if event.payload.get('terminal'):
                     continue
                 yield 0, event.text or 'cancelled'
