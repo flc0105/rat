@@ -37,16 +37,34 @@ class WebTaskRunner:
     def _get_task(self, task_id: str) -> dict:
         return self.task_store.get_task(task_id) or {}
 
-    def _get_history_entry_id(self, task_id: str) -> str:
+    def _get_runtime_task_context(self, conn, task_id: str) -> dict:
+        current = conn.get_foreground_task() or {}
+        if (current.get('task_id') or '').strip() == (task_id or '').strip():
+            return current
+        return {}
+
+    def _get_history_entry_id(self, conn, task_id: str) -> str:
+        runtime_task = self._get_runtime_task_context(conn, task_id)
+        if runtime_task.get('history_entry_id'):
+            return runtime_task.get('history_entry_id') or ''
+
         task = self._get_task(task_id)
         return task.get('history_entry_id') or ''
+
+    def _get_task_cancel_requested(self, conn, task_id: str) -> bool:
+        runtime_task = self._get_runtime_task_context(conn, task_id)
+        if runtime_task:
+            return bool(runtime_task.get('cancel_requested'))
+
+        task = self._get_task(task_id)
+        return bool(task.get('cancel_requested'))
 
     def _get_task_tab_id(self, task_id: str) -> str:
         task = self._get_task(task_id)
         return (task.get('tab_id') or '').strip()
 
     def _append_history_output(self, conn, task_id: str, status: int, text: str):
-        history_entry_id = self._get_history_entry_id(task_id)
+        history_entry_id = self._get_history_entry_id(conn, task_id)
         self.history_orchestrator.append_output(
             conn,
             history_entry_id,
@@ -56,7 +74,7 @@ class WebTaskRunner:
         )
 
     def _finalize_history(self, conn, task_id: str, final_status: str):
-        history_entry_id = self._get_history_entry_id(task_id)
+        history_entry_id = self._get_history_entry_id(conn, task_id)
         self.history_orchestrator.finalize_execution(
             conn,
             history_entry_id,
@@ -81,7 +99,7 @@ class WebTaskRunner:
             target_tab_id=target_tab_id
         )
 
-    def _publish_task_complete(self, task_id: str, client_id: str, command: str):
+    def _publish_task_complete(self, conn, task_id: str, client_id: str, command: str):
         target_tab_id = self._get_task_tab_id(task_id)
         task = self._get_task(task_id)
         task_status = task.get('status') or WebTaskStatus.ERROR
@@ -94,7 +112,7 @@ class WebTaskRunner:
                 'command': command,
                 'success': task_status == WebTaskStatus.SUCCESS,
                 'status': task_status,
-                'cancel_requested': bool(task.get('cancel_requested')),
+                'cancel_requested': self._get_task_cancel_requested(conn, task_id),
                 'cancelled': task_status == WebTaskStatus.CANCELLED,
                 'time': datetime.now().isoformat()
             },
@@ -111,10 +129,45 @@ class WebTaskRunner:
         )
         self._append_history_output(conn, task_id, status, text)
 
-    def _resolve_final_status(self, task_id: str, summary: TaskStreamSummary) -> str:
-        task = self._get_task(task_id)
+    # add 统一chunk记录入口 2026-04-09
+    def _record_stream_chunk(
+        self,
+        conn,
+        task_id: str,
+        client_id: str,
+        command: str,
+        status: int,
+        result,
+        summary: TaskStreamSummary,
+    ):
+        text = '' if result is None else str(result)
+        self._publish_stream_chunk(conn, task_id, client_id, command, status, text)
+        summary.record_chunk(status, text)
+
+    # add 统一结果流消费 2026-04-09
+    def _consume_result_iter(
+        self,
+        conn,
+        task_id: str,
+        client_id: str,
+        command: str,
+        result_iter,
+        summary: TaskStreamSummary,
+    ):
+        for status, result in result_iter:
+            self._record_stream_chunk(
+                conn,
+                task_id,
+                client_id,
+                command,
+                status,
+                result,
+                summary,
+            )
+
+    def _resolve_final_status(self, conn, task_id: str, summary: TaskStreamSummary) -> str:
         return summary.resolve_final_status(
-            cancel_requested=bool(task.get('cancel_requested'))
+            cancel_requested=self._get_task_cancel_requested(conn, task_id)
         )
 
     def _finalize_stream(self, conn, task_id: str, client_id: str, command: str, final_status: str, summary: TaskStreamSummary):
@@ -131,6 +184,7 @@ class WebTaskRunner:
         )
 
         self._publish_task_complete(
+            conn,
             task_id,
             client_id,
             command
@@ -149,18 +203,29 @@ class WebTaskRunner:
         summary = TaskStreamSummary()
 
         try:
-            for status, result in result_iter:
-                text = '' if result is None else str(result)
-                self._publish_stream_chunk(conn, task_id, client_id, command, status, text)
-                summary.record_chunk(status, text)
+            self._consume_result_iter(
+                conn,
+                task_id,
+                client_id,
+                command,
+                result_iter,
+                summary,
+            )
 
         except Exception as e:
-            text = str(e)
             summary.mark_exception()
-            self._publish_stream_chunk(conn, task_id, client_id, command, 0, text)
+            self._record_stream_chunk(
+                conn,
+                task_id,
+                client_id,
+                command,
+                0,
+                str(e),
+                summary,
+            )
 
         finally:
-            final_status = self._resolve_final_status(task_id, summary)
+            final_status = self._resolve_final_status(conn, task_id, summary)
             self._finalize_stream(conn, task_id, client_id, command, final_status, summary)
 
     # add web命令执行chunk回调 2026-04-09
@@ -168,15 +233,21 @@ class WebTaskRunner:
         client_id = conn.session_info.client_id
 
         def writer(status: int, result):
-            text = '' if result is None else str(result)
-            self._publish_stream_chunk(conn, task_id, client_id, command, status, text)
-            summary.record_chunk(status, text)
+            self._record_stream_chunk(
+                conn,
+                task_id,
+                client_id,
+                command,
+                status,
+                result,
+                summary,
+            )
 
         return writer
 
     # add web命令执行统一pipeline入口 2026-04-09
     def _run_command_pipeline(self, conn, task_id: str, command: str):
-        history_entry_id = self._get_history_entry_id(task_id)
+        history_entry_id = self._get_history_entry_id(conn, task_id)
         executor = self.command_executor_factory.create(conn)
         summary = TaskStreamSummary()
 
@@ -190,7 +261,7 @@ class WebTaskRunner:
             swallow_exception=True,
         )
 
-        final_status = self._resolve_final_status(task_id, summary)
+        final_status = self._resolve_final_status(conn, task_id, summary)
         self._finalize_stream(
             conn,
             task_id,
@@ -207,7 +278,7 @@ class WebTaskRunner:
         local_path: str,
         remote_path: str = '',
     ):
-        history_entry_id = self._get_history_entry_id(task_id)
+        history_entry_id = self._get_history_entry_id(conn, task_id)
         return self.remote_execution_service.stream_upload(
             conn,
             local_path,

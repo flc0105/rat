@@ -23,12 +23,20 @@ class SessionExecutionRuntime:
         self._entry_ids_by_command_id = {}
 
     # ------------------ foreground task ------------------ #
-    def acquire_foreground_task(self, task_type: str, command: str, source: str = '', task_id: str = '') -> dict:
+    def acquire_foreground_task(
+        self,
+        task_type: str,
+        command: str,
+        source: str = '',
+        task_id: str = '',
+        history_entry_id: str = '',
+    ) -> dict:
         task_info = {
             'task_type': task_type,
             'command': (command or '').strip(),
             'source': (source or '').strip(),
             'task_id': (task_id or '').strip(),
+            'history_entry_id': (history_entry_id or '').strip(),
             'command_id': None,
             'cancel_requested': False,
         }
@@ -122,6 +130,8 @@ class SessionExecutionRuntime:
         - 如果存在 history_orchestrator，则优先通过 orchestrator 绑定
         - 否则直接写入本地 history binding store
         """
+        resolved_history_entry_id = (history_entry_id or '').strip()
+
         with self._lock:
             bound_task = None
 
@@ -129,15 +139,18 @@ class SessionExecutionRuntime:
                 self._task['command_id'] = command_id
                 bound_task = dict(self._task)
 
-        if history_entry_id:
+                if not resolved_history_entry_id:
+                    resolved_history_entry_id = (self._task.get('history_entry_id') or '').strip()
+
+        if resolved_history_entry_id:
             if history_orchestrator is not None and session is not None:
                 history_orchestrator.bind_command_entry(
                     session,
                     command_id,
-                    history_entry_id
+                    resolved_history_entry_id
                 )
             else:
-                self.bind_history_entry(command_id, history_entry_id)
+                self.bind_history_entry(command_id, resolved_history_entry_id)
 
         return bound_task
 

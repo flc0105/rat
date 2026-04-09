@@ -64,7 +64,14 @@ class ClientSessionRuntime:
         self._execution_runtime.clear_history_entry(command_id)
 
     # ------------------ foreground task ------------------ #
-    def acquire_foreground_task(self, task_type: str, command: str, source: str = '', task_id: str = '') -> dict:
+    def acquire_foreground_task(
+        self,
+        task_type: str,
+        command: str,
+        source: str = '',
+        task_id: str = '',
+        history_entry_id: str = '',
+    ) -> dict:
         """
         尝试占用当前连接的前台执行槽。
         """
@@ -73,6 +80,7 @@ class ClientSessionRuntime:
             command=command,
             source=source,
             task_id=task_id,
+            history_entry_id=history_entry_id,
         )
 
     def bind_foreground_command_id(self, command_id: int):

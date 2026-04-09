@@ -54,20 +54,22 @@ class WebTaskService:
             daemon=True,
         ).start()
 
-    def _acquire_command_task(self, conn, task_id: str, command: str, source: str = 'web'):
+    def _acquire_command_task(self, conn, task_id: str, command: str, history_entry_id: str = '', source: str = 'web'):
         return conn.acquire_foreground_task(
             task_type=TASK_TYPE_COMMAND,
             command=command,
             source=source,
             task_id=task_id,
+            history_entry_id=history_entry_id,
         )
 
-    def _acquire_upload_task(self, conn, task_id: str, command: str, source: str = 'web'):
+    def _acquire_upload_task(self, conn, task_id: str, command: str, history_entry_id: str = '', source: str = 'web'):
         return conn.acquire_foreground_task(
             task_type=TASK_TYPE_UPLOAD,
             command=command,
             source=source,
             task_id=task_id,
+            history_entry_id=history_entry_id,
         )
 
     def _ensure_active_task(self, conn, task_id: str):
@@ -79,7 +81,7 @@ class WebTaskService:
 
     def _request_task_cancel(self, conn, task_id: str):
         self.task_store.request_cancel(task_id)
-        self._ensure_active_task(conn, task_id)
+        foreground_task = self._ensure_active_task(conn, task_id)
 
         cancel_info = conn.request_foreground_task_cancel(task_id=task_id)
         if not cancel_info:
@@ -89,7 +91,10 @@ class WebTaskService:
         if command_id:
             conn.send_cancel(command_id)
 
-        return cancel_info
+        result = dict(cancel_info)
+        if not result.get('history_entry_id'):
+            result['history_entry_id'] = foreground_task.get('history_entry_id') or ''
+        return result
 
     def _resolve_cancellable_task(self, task_id: str):
         task = self.task_store.get_task(task_id)
@@ -123,6 +128,7 @@ class WebTaskService:
             conn,
             task['task_id'],
             command,
+            history_entry_id=task.get('history_entry_id') or '',
             source='web',
         )
 
@@ -150,6 +156,7 @@ class WebTaskService:
             'client_id': client_id,
             'status': 'cancelling',
             'command_id': command_id,
+            'history_entry_id': cancel_info.get('history_entry_id') or '',
         }
 
     def submit_web_upload(self, client_id: str, local_path: str, display_name: str, remote_path: str = '', tab_id: str = ''):
@@ -169,6 +176,7 @@ class WebTaskService:
             conn,
             task['task_id'],
             command,
+            history_entry_id=task.get('history_entry_id') or '',
             source='web',
         )
 

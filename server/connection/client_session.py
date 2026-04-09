@@ -78,12 +78,20 @@ class ClientSession:
         if result:
             raise RuntimeError(f'Unexpected recv_message result: {result}')
 
-    def acquire_foreground_task(self, task_type: str, command: str, source: str = '', task_id: str = '') -> dict:
+    def acquire_foreground_task(
+        self,
+        task_type: str,
+        command: str,
+        source: str = '',
+        task_id: str = '',
+        history_entry_id: str = '',
+    ) -> dict:
         return self.runtime.acquire_foreground_task(
             task_type=task_type,
             command=command,
             source=source,
-            task_id=task_id
+            task_id=task_id,
+            history_entry_id=history_entry_id
         )
 
     def request_foreground_task_cancel(self, task_id: str = ''):
