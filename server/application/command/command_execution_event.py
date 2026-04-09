@@ -4,6 +4,7 @@ from dataclasses import dataclass, field
 @dataclass
 class CommandExecutionEvent:
     STARTED = 'started'
+    PROGRESS = 'progress'
     CHUNK = 'chunk'
     ERROR = 'error'
     COMPLETED = 'completed'
@@ -18,6 +19,10 @@ class CommandExecutionEvent:
     @classmethod
     def started(cls, command: str, payload: dict | None = None):
         return cls(cls.STARTED, payload={'command': command, **dict(payload or {})})
+
+    @classmethod
+    def progress(cls, text: str = '', payload: dict | None = None):
+        return cls(cls.PROGRESS, status=1, text=str(text or ''), payload=dict(payload or {}))
 
     @classmethod
     def chunk(cls, status: int, text: str, payload: dict | None = None):

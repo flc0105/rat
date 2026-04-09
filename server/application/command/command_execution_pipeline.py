@@ -38,16 +38,38 @@ class CommandExecutionPipeline:
         )
 
     def _build_output_event(self, status: int, result) -> CommandExecutionEvent:
+        """
+        结果转标准事件。
+
+        约定：
+        - 优先支持结构化事件 payload
+        - 不再依赖纯文本字符串推断 cancelled
+        - 旧的 (status, text) 输出仍兼容
+        """
+        status = int(status or 0)
+
+        if isinstance(result, dict):
+            event_type = str(result.get('event_type') or '').strip().lower()
+            text = str(result.get('text') or result.get('message') or '')
+
+            if event_type == CommandExecutionEvent.CANCELLED:
+                return CommandExecutionEvent.cancelled(text, payload=result)
+
+            if event_type == CommandExecutionEvent.PROGRESS:
+                return CommandExecutionEvent.progress(text, payload=result)
+
+            if event_type == CommandExecutionEvent.ERROR:
+                return CommandExecutionEvent.error(text, payload=result)
+
+            if event_type == CommandExecutionEvent.CHUNK:
+                return CommandExecutionEvent.chunk(status or 1, text, payload=result)
+
         text = '' if result is None else str(result)
-        normalized_text = text.strip().lower()
 
-        if normalized_text == 'cancelled' or 'command cancelled' in normalized_text:
-            return CommandExecutionEvent.cancelled(text or 'cancelled')
-
-        if int(status or 0) == 0:
+        if status == 0:
             return CommandExecutionEvent.error(text)
 
-        return CommandExecutionEvent.chunk(int(status), text)
+        return CommandExecutionEvent.chunk(status, text)
 
     def iter_events(
         self,
@@ -112,9 +134,22 @@ class CommandExecutionPipeline:
                 )
 
         if cancelled:
-            yield CommandExecutionEvent.cancelled('cancelled', payload={'terminal': True})
+            yield CommandExecutionEvent.cancelled(
+                'cancelled',
+                payload={
+                    'terminal': True,
+                    'task_id': context.task_id,
+                    'history_entry_id': context.history_entry_id,
+                },
+            )
         else:
-            yield CommandExecutionEvent.completed(final_ok)
+            yield CommandExecutionEvent.completed(
+                final_ok,
+                payload={
+                    'task_id': context.task_id,
+                    'history_entry_id': context.history_entry_id,
+                },
+            )
 
     def _emit_legacy_output(self, event: CommandExecutionEvent, writer):
         if event.event_type == CommandExecutionEvent.CHUNK:
@@ -123,6 +158,9 @@ class CommandExecutionPipeline:
             writer(0, event.text)
         elif event.event_type == CommandExecutionEvent.CANCELLED and not event.payload.get('terminal'):
             writer(0, event.text or 'cancelled')
+        elif event.event_type == CommandExecutionEvent.PROGRESS:
+            if event.text:
+                writer(1, event.text)
 
     def execute_bound(
         self,
@@ -141,6 +179,10 @@ class CommandExecutionPipeline:
         tab_id: str = '',
         metadata: dict | None = None,
     ) -> bool:
+        """
+        兼容旧调用方式的适配层。
+        核心接口应优先使用 iter_events(...)。
+        """
         writer = output_writer or self.output_writer
         context = ExecutionContext.from_session(
             session,
