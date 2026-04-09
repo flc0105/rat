@@ -180,6 +180,8 @@ class CommandExecutionMixin:
     @interruptible()
     def cd(self, path):
         try:
+            if not path.strip():
+                return 1, os.getcwd()
             os.chdir(path)
             return 1, ""
         except CommandCancelledError:
