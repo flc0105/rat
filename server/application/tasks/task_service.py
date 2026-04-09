@@ -1,5 +1,8 @@
 import threading
+
+from server.application.execution.execution_context import TaskExecutionContext
 from server.application.tasks.task_types import TASK_TYPE_COMMAND, TASK_TYPE_UPLOAD
+
 
 class WebTaskService:
     """
@@ -28,14 +31,6 @@ class WebTaskService:
         source: str = 'web',
         should_record=None,
     ):
-        """
-        统一创建 task + history entry。
-
-        这样 submit_web_command / submit_web_upload 使用同一条提交主线：
-        - 先创建 history entry
-        - 再创建 task
-        - 最后把 history_entry_id 回填到 task
-        """
         entry_id = self.history_orchestrator.begin_execution(
             conn,
             command,
@@ -47,6 +42,15 @@ class WebTaskService:
         task['history_entry_id'] = entry_id
         return task
 
+    def _build_task_context(self, conn, task: dict, command: str, *, task_type: str, source: str = 'web') -> TaskExecutionContext:
+        return TaskExecutionContext.from_task(
+            conn,
+            task,
+            command,
+            source=source,
+            task_type=task_type,
+        )
+
     def _start_task_thread(self, target, *args):
         threading.Thread(
             target=target,
@@ -54,22 +58,13 @@ class WebTaskService:
             daemon=True,
         ).start()
 
-    def _acquire_command_task(self, conn, task_id: str, command: str, history_entry_id: str = '', source: str = 'web'):
-        return conn.acquire_foreground_task(
-            task_type=TASK_TYPE_COMMAND,
-            command=command,
-            source=source,
-            task_id=task_id,
-            history_entry_id=history_entry_id,
-        )
-
-    def _acquire_upload_task(self, conn, task_id: str, command: str, history_entry_id: str = '', source: str = 'web'):
-        return conn.acquire_foreground_task(
-            task_type=TASK_TYPE_UPLOAD,
-            command=command,
-            source=source,
-            task_id=task_id,
-            history_entry_id=history_entry_id,
+    def _acquire_task(self, context: TaskExecutionContext):
+        return context.session.acquire_foreground_task(
+            task_type=context.task_type,
+            command=context.command,
+            source=context.source,
+            task_id=context.task_id,
+            history_entry_id=context.history_entry_id,
         )
 
     def _ensure_active_task(self, conn, task_id: str):
@@ -124,25 +119,21 @@ class WebTaskService:
             source='web',
         )
 
-        self._acquire_command_task(
+        context = self._build_task_context(
             conn,
-            task['task_id'],
+            task,
             command,
-            history_entry_id=task.get('history_entry_id') or '',
+            task_type=TASK_TYPE_COMMAND,
             source='web',
         )
 
-        self._start_task_thread(
-            self.task_runner.run_command_task,
-            conn,
-            task['task_id'],
-            command,
-        )
+        self._acquire_task(context)
+        self._start_task_thread(self.task_runner.run_command_task, context)
 
         return {
-            'task_id': task['task_id'],
+            'task_id': context.task_id,
             'client_id': client_id,
-            'command': command
+            'command': command,
         }
 
     def cancel_web_task(self, task_id: str):
@@ -172,26 +163,23 @@ class WebTaskService:
             should_record=True,
         )
 
-        self._acquire_upload_task(
+        context = self._build_task_context(
             conn,
-            task['task_id'],
+            task,
             command,
-            history_entry_id=task.get('history_entry_id') or '',
+            task_type=TASK_TYPE_UPLOAD,
             source='web',
         )
+        context.metadata['local_path'] = local_path
+        context.metadata['display_name'] = display_name
+        context.metadata['remote_path'] = remote_path
+        context.metadata['upload_tmp_dir'] = getattr(self.file_service, 'upload_tmp_dir', '')
 
-        self._start_task_thread(
-            self.task_runner.run_upload_task,
-            conn,
-            task['task_id'],
-            local_path,
-            display_name,
-            remote_path,
-            getattr(self.file_service, 'upload_tmp_dir', '')
-        )
+        self._acquire_task(context)
+        self._start_task_thread(self.task_runner.run_upload_task, context)
 
         return {
-            'task_id': task['task_id'],
+            'task_id': context.task_id,
             'client_id': client_id,
-            'command': command
+            'command': command,
         }

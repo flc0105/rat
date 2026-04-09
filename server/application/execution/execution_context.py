@@ -4,9 +4,7 @@ from typing import Any
 
 @dataclass
 class ExecutionContext:
-    """
-    统一命令执行上下文。
-    """
+    """统一命令执行上下文。"""
 
     session: Any
     command: str

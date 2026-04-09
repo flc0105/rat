@@ -1,8 +1,11 @@
+import logging
 import os
 import shutil
 from datetime import datetime
 
+from server.application.command.command_execution_event import CommandExecutionEvent
 from server.application.command.command_execution_pipeline import CommandExecutionPipeline
+from server.application.execution.execution_context import TaskExecutionContext
 from server.application.tasks.task_status import TaskStreamSummary, WebTaskStatus
 
 
@@ -16,9 +19,6 @@ class WebTaskRunner:
     - 推送 SSE
     - 写 history
     - 统一结束收尾
-
-    新增：
-    - 按 task.tab_id 定向推送前台命令结果
     """
 
     def __init__(self, server, event_bus, task_store, remote_execution_service, command_executor_factory):
@@ -28,292 +28,213 @@ class WebTaskRunner:
         self.remote_execution_service = remote_execution_service
         self.command_executor_factory = command_executor_factory
         self.history_orchestrator = self.server.command_history_orchestrator
-        # add web命令执行链并入统一pipeline 2026-04-09
+        self.logger = logging.getLogger(__name__)
         self.command_execution_pipeline = CommandExecutionPipeline(
             command_history_orchestrator=self.history_orchestrator,
             output_writer=lambda *_: None,
+            error_logger=self.logger,
         )
 
     def _get_task(self, task_id: str) -> dict:
         return self.task_store.get_task(task_id) or {}
 
-    def _get_runtime_task_context(self, conn, task_id: str) -> dict:
-        current = conn.get_foreground_task() or {}
-        if (current.get('task_id') or '').strip() == (task_id or '').strip():
+    def _get_runtime_task_context(self, context: TaskExecutionContext) -> dict:
+        current = context.session.get_foreground_task() or {}
+        if (current.get('task_id') or '').strip() == (context.task_id or '').strip():
             return current
         return {}
 
-    def _get_history_entry_id(self, conn, task_id: str) -> str:
-        runtime_task = self._get_runtime_task_context(conn, task_id)
+    def _get_history_entry_id(self, context: TaskExecutionContext) -> str:
+        runtime_task = self._get_runtime_task_context(context)
         if runtime_task.get('history_entry_id'):
             return runtime_task.get('history_entry_id') or ''
 
-        task = self._get_task(task_id)
+        if context.history_entry_id:
+            return context.history_entry_id
+
+        task = self._get_task(context.task_id)
         return task.get('history_entry_id') or ''
 
-    def _get_task_cancel_requested(self, conn, task_id: str) -> bool:
-        runtime_task = self._get_runtime_task_context(conn, task_id)
+    def _get_task_cancel_requested(self, context: TaskExecutionContext) -> bool:
+        runtime_task = self._get_runtime_task_context(context)
         if runtime_task:
             return bool(runtime_task.get('cancel_requested'))
 
-        task = self._get_task(task_id)
+        task = self._get_task(context.task_id)
         return bool(task.get('cancel_requested'))
 
-    def _get_task_tab_id(self, task_id: str) -> str:
-        task = self._get_task(task_id)
+    def _get_task_tab_id(self, context: TaskExecutionContext) -> str:
+        if context.tab_id:
+            return context.tab_id
+
+        task = self._get_task(context.task_id)
         return (task.get('tab_id') or '').strip()
 
-    def _append_history_output(self, conn, task_id: str, status: int, text: str):
-        history_entry_id = self._get_history_entry_id(conn, task_id)
+    def _append_history_output(self, context: TaskExecutionContext, status: int, text: str):
+        history_entry_id = self._get_history_entry_id(context)
         self.history_orchestrator.append_output(
-            conn,
+            context.session,
             history_entry_id,
             status,
             text,
-            0
+            0,
         )
 
-    def _finalize_history(self, conn, task_id: str, final_status: str):
-        history_entry_id = self._get_history_entry_id(conn, task_id)
+    def _finalize_history(self, context: TaskExecutionContext, final_status: str):
+        history_entry_id = self._get_history_entry_id(context)
         self.history_orchestrator.finalize_execution(
-            conn,
+            context.session,
             history_entry_id,
             final_status == WebTaskStatus.SUCCESS,
-            cwd_end=conn.session_info.cwd
+            cwd_end=context.session.session_info.cwd,
         )
 
-    def _publish_task_result(self, task_id: str, client_id: str, command: str, status: int, text: str):
-        self.task_store.append_chunk(task_id, status, text)
-        target_tab_id = self._get_task_tab_id(task_id)
+    def _publish_task_result(self, context: TaskExecutionContext, status: int, text: str):
+        self.task_store.append_chunk(context.task_id, status, text)
+        target_tab_id = self._get_task_tab_id(context)
 
         self.event_bus.publish(
             'command_result',
             {
-                'task_id': task_id,
-                'client_id': client_id,
-                'command': command,
+                'task_id': context.task_id,
+                'client_id': context.client_id,
+                'command': context.command,
                 'status': status,
                 'text': text,
-                'time': datetime.now().isoformat()
+                'time': datetime.now().isoformat(),
             },
-            target_tab_id=target_tab_id
+            target_tab_id=target_tab_id,
         )
 
-    def _publish_task_complete(self, conn, task_id: str, client_id: str, command: str):
-        target_tab_id = self._get_task_tab_id(task_id)
-        task = self._get_task(task_id)
+    def _publish_task_complete(self, context: TaskExecutionContext):
+        target_tab_id = self._get_task_tab_id(context)
+        task = self._get_task(context.task_id)
         task_status = task.get('status') or WebTaskStatus.ERROR
 
         self.event_bus.publish(
             'command_complete',
             {
-                'task_id': task_id,
-                'client_id': client_id,
-                'command': command,
+                'task_id': context.task_id,
+                'client_id': context.client_id,
+                'command': context.command,
                 'success': task_status == WebTaskStatus.SUCCESS,
                 'status': task_status,
-                'cancel_requested': self._get_task_cancel_requested(conn, task_id),
+                'cancel_requested': self._get_task_cancel_requested(context),
                 'cancelled': task_status == WebTaskStatus.CANCELLED,
-                'time': datetime.now().isoformat()
+                'time': datetime.now().isoformat(),
             },
-            target_tab_id=target_tab_id
+            target_tab_id=target_tab_id,
         )
 
-    def _publish_stream_chunk(self, conn, task_id: str, client_id: str, command: str, status: int, text: str):
-        self._publish_task_result(
-            task_id,
-            client_id,
-            command,
-            status,
-            text
-        )
-        self._append_history_output(conn, task_id, status, text)
+    def _publish_stream_chunk(self, context: TaskExecutionContext, status: int, text: str):
+        self._publish_task_result(context, status, text)
+        self._append_history_output(context, status, text)
 
-    # add 统一chunk记录入口 2026-04-09
-    def _record_stream_chunk(
-        self,
-        conn,
-        task_id: str,
-        client_id: str,
-        command: str,
-        status: int,
-        result,
-        summary: TaskStreamSummary,
-    ):
+    def _record_stream_chunk(self, context: TaskExecutionContext, status: int, result, summary: TaskStreamSummary):
         text = '' if result is None else str(result)
-        self._publish_stream_chunk(conn, task_id, client_id, command, status, text)
+        self._publish_stream_chunk(context, status, text)
         summary.record_chunk(status, text)
 
-    # add 统一结果流消费 2026-04-09
-    def _consume_result_iter(
-        self,
-        conn,
-        task_id: str,
-        client_id: str,
-        command: str,
-        result_iter,
-        summary: TaskStreamSummary,
-    ):
+    def _consume_result_iter(self, context: TaskExecutionContext, result_iter, summary: TaskStreamSummary):
         for status, result in result_iter:
-            self._record_stream_chunk(
-                conn,
-                task_id,
-                client_id,
-                command,
-                status,
-                result,
-                summary,
-            )
+            self._record_stream_chunk(context, status, result, summary)
 
-    def _resolve_final_status(self, conn, task_id: str, summary: TaskStreamSummary) -> str:
+    def _resolve_final_status(self, context: TaskExecutionContext, summary: TaskStreamSummary) -> str:
         return summary.resolve_final_status(
-            cancel_requested=self._get_task_cancel_requested(conn, task_id)
+            cancel_requested=self._get_task_cancel_requested(context)
         )
 
-    def _finalize_stream(self, conn, task_id: str, client_id: str, command: str, final_status: str, summary: TaskStreamSummary):
+    def _finalize_stream(self, context: TaskExecutionContext, final_status: str, summary: TaskStreamSummary):
         self.task_store.finish_task(
-            task_id,
+            context.task_id,
             ok=summary.is_success(),
-            final_status=final_status
+            final_status=final_status,
         )
 
-        self._finalize_history(
-            conn,
-            task_id,
-            final_status=final_status
-        )
+        self._finalize_history(context, final_status=final_status)
+        self._publish_task_complete(context)
 
-        self._publish_task_complete(
-            conn,
-            task_id,
-            client_id,
-            command
-        )
-
-    def _run_stream(self, conn, task_id: str, command: str, result_iter):
-        """
-        统一执行 Web 任务结果流：
-        - 消费生成器输出
-        - 记录任务分片
-        - 推送 SSE 结果
-        - 统一异常处理
-        - 统一结束收尾
-        """
-        client_id = conn.session_info.client_id
+    def _run_stream(self, context: TaskExecutionContext, result_iter):
         summary = TaskStreamSummary()
 
         try:
-            self._consume_result_iter(
-                conn,
-                task_id,
-                client_id,
-                command,
-                result_iter,
-                summary,
+            self._consume_result_iter(context, result_iter, summary)
+        except Exception as exc:
+            self.logger.exception(
+                'WebTaskRunner stream failed: task_id=%s command=%r task_type=%s',
+                context.task_id,
+                context.command,
+                context.task_type,
             )
-
-        except Exception as e:
             summary.mark_exception()
-            self._record_stream_chunk(
-                conn,
-                task_id,
-                client_id,
-                command,
-                0,
-                str(e),
-                summary,
-            )
-
+            self._record_stream_chunk(context, 0, str(exc), summary)
         finally:
-            final_status = self._resolve_final_status(conn, task_id, summary)
-            self._finalize_stream(conn, task_id, client_id, command, final_status, summary)
+            final_status = self._resolve_final_status(context, summary)
+            self._finalize_stream(context, final_status, summary)
 
-    # add web命令执行chunk回调 2026-04-09
-    def _build_command_output_writer(self, conn, task_id: str, command: str, summary: TaskStreamSummary):
-        client_id = conn.session_info.client_id
+    def _record_pipeline_event(self, context: TaskExecutionContext, event: CommandExecutionEvent, summary: TaskStreamSummary):
+        if event.event_type == CommandExecutionEvent.STARTED:
+            return
 
-        def writer(status: int, result):
-            self._record_stream_chunk(
-                conn,
-                task_id,
-                client_id,
-                command,
-                status,
-                result,
-                summary,
-            )
+        if event.event_type == CommandExecutionEvent.CHUNK:
+            self._record_stream_chunk(context, event.status, event.text, summary)
+            return
 
-        return writer
+        if event.event_type == CommandExecutionEvent.ERROR:
+            self._record_stream_chunk(context, 0, event.text, summary)
+            return
 
-    # add web命令执行统一pipeline入口 2026-04-09
-    def _run_command_pipeline(self, conn, task_id: str, command: str):
-        history_entry_id = self._get_history_entry_id(conn, task_id)
-        executor = self.command_executor_factory.create(conn)
+        if event.event_type == CommandExecutionEvent.CANCELLED:
+            if event.payload.get('terminal'):
+                return
+            self._record_stream_chunk(context, 0, event.text or 'cancelled', summary)
+            return
+
+        if event.event_type == CommandExecutionEvent.COMPLETED:
+            return
+
+    def _run_command_pipeline(self, context: TaskExecutionContext):
+        context.history_entry_id = self._get_history_entry_id(context)
+        executor = self.command_executor_factory.create(context.session)
         summary = TaskStreamSummary()
 
-        self.command_execution_pipeline.execute_bound(
-            conn,
+        for event in self.command_execution_pipeline.iter_events(
+            context,
             executor,
-            command,
-            history_entry_id=history_entry_id,
-            output_writer=self._build_command_output_writer(conn, task_id, command, summary),
             finalize_history=False,
             swallow_exception=True,
-        )
+        ):
+            self._record_pipeline_event(context, event, summary)
 
-        final_status = self._resolve_final_status(conn, task_id, summary)
-        self._finalize_stream(
-            conn,
-            task_id,
-            conn.session_info.client_id,
-            command,
-            final_status,
-            summary,
-        )
+        final_status = self._resolve_final_status(context, summary)
+        self._finalize_stream(context, final_status, summary)
 
-    def _build_upload_result_iter(
-        self,
-        conn,
-        task_id: str,
-        local_path: str,
-        remote_path: str = '',
-    ):
-        history_entry_id = self._get_history_entry_id(conn, task_id)
+    def _build_upload_result_iter(self, context: TaskExecutionContext):
+        history_entry_id = self._get_history_entry_id(context)
         return self.remote_execution_service.stream_upload(
-            conn,
-            local_path,
-            remote_path=remote_path,
+            context.session,
+            context.metadata.get('local_path') or '',
+            remote_path=context.metadata.get('remote_path') or '',
             history_entry_id=history_entry_id,
         )
 
-    def _release_task(self, conn, task_id: str = '', command: str = '') -> None:
-        conn.release_foreground_task(task_id=task_id, command=command)
+    def _release_task(self, context: TaskExecutionContext) -> None:
+        context.session.release_foreground_task(task_id=context.task_id, command=context.command)
 
-    # ------------------ command ------------------ #
-    def run_command_task(self, conn, task_id: str, command: str):
+    def run_command_task(self, context: TaskExecutionContext):
         try:
-            self._run_command_pipeline(conn, task_id, command)
+            self._run_command_pipeline(context)
         finally:
-            self._release_task(conn, task_id=task_id, command=command)
+            self._release_task(context)
 
-    # ------------------ upload ------------------ #
-    def run_upload_task(self, conn, task_id: str, local_path: str, display_name: str, remote_path: str = '', upload_tmp_dir: str = ''):
-        command = f'upload {display_name}'
+    def run_upload_task(self, context: TaskExecutionContext):
+        local_path = context.metadata.get('local_path') or ''
+        upload_tmp_dir = context.metadata.get('upload_tmp_dir') or ''
 
         try:
-            self._run_stream(
-                conn,
-                task_id,
-                command,
-                self._build_upload_result_iter(
-                    conn,
-                    task_id,
-                    local_path,
-                    remote_path=remote_path,
-                ),
-            )
+            self._run_stream(context, self._build_upload_result_iter(context))
         finally:
-            self._release_task(conn, task_id=task_id, command=command)
+            self._release_task(context)
 
             try:
                 if os.path.exists(local_path):
