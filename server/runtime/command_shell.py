@@ -16,7 +16,6 @@ class ServerCommandShell:
         self.server = server
         self.command_execution_pipeline = CommandExecutionPipeline(
             command_history_orchestrator=server.command_history_orchestrator,
-            output_writer=write,
         )
 
     def list_connections(self):

@@ -9,15 +9,13 @@ class CommandExecutionPipeline:
     统一命令执行编排入口。
 
     职责：
-    - 创建执行历史
     - 调用 command executor
     - 产出标准化执行事件
     - 统一 finalize history
     """
 
-    def __init__(self, command_history_orchestrator, output_writer=None, error_logger=None):
+    def __init__(self, command_history_orchestrator, error_logger=None):
         self.command_history_orchestrator = command_history_orchestrator
-        self.output_writer = output_writer or (lambda *_: None)
         self.error_logger = error_logger or logging.getLogger(__name__)
 
     def _resolve_cwd_end(self, cwd_end_provider=None) -> str:
@@ -150,93 +148,3 @@ class CommandExecutionPipeline:
                     'history_entry_id': context.history_entry_id,
                 },
             )
-
-    def _emit_legacy_output(self, event: CommandExecutionEvent, writer):
-        if event.event_type == CommandExecutionEvent.CHUNK:
-            writer(event.status, event.text)
-        elif event.event_type == CommandExecutionEvent.ERROR:
-            writer(0, event.text)
-        elif event.event_type == CommandExecutionEvent.CANCELLED and not event.payload.get('terminal'):
-            writer(0, event.text or 'cancelled')
-        elif event.event_type == CommandExecutionEvent.PROGRESS:
-            if event.text:
-                writer(1, event.text)
-
-    def execute_bound(
-        self,
-        session,
-        command_executor,
-        cmd: str,
-        *,
-        history_entry_id: str = '',
-        output_writer=None,
-        cwd_end_provider=None,
-        finalize_history: bool = True,
-        swallow_exception: bool = False,
-        source: str = 'cli',
-        task_type: str = 'command',
-        task_id: str = '',
-        tab_id: str = '',
-        metadata: dict | None = None,
-    ) -> bool:
-        """
-        兼容旧调用方式的适配层。
-        核心接口应优先使用 iter_events(...)。
-        """
-        writer = output_writer or self.output_writer
-        context = ExecutionContext.from_session(
-            session,
-            cmd,
-            source=source,
-            task_type=task_type,
-            task_id=task_id,
-            history_entry_id=history_entry_id,
-            tab_id=tab_id,
-            metadata=metadata,
-        )
-        final_ok = True
-
-        for event in self.iter_events(
-            context,
-            command_executor,
-            cwd_end_provider=cwd_end_provider,
-            finalize_history=finalize_history,
-            swallow_exception=swallow_exception,
-        ):
-            if event.event_type == CommandExecutionEvent.COMPLETED:
-                final_ok = bool(event.ok)
-                continue
-
-            if event.event_type == CommandExecutionEvent.CANCELLED and event.payload.get('terminal'):
-                final_ok = False
-                continue
-
-            self._emit_legacy_output(event, writer)
-
-        return final_ok
-
-    def execute(
-        self,
-        session,
-        command_executor,
-        cmd: str,
-        *,
-        source: str = 'cli',
-        cwd_end_provider=None,
-    ) -> bool:
-        entry_id = self.command_history_orchestrator.begin_execution(
-            session,
-            cmd,
-            source=source,
-        )
-
-        return self.execute_bound(
-            session,
-            command_executor,
-            cmd,
-            history_entry_id=entry_id,
-            cwd_end_provider=cwd_end_provider,
-            finalize_history=True,
-            swallow_exception=False,
-            source=source,
-        )

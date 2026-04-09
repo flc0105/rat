@@ -31,7 +31,6 @@ class WebTaskRunner:
         self.logger = logging.getLogger(__name__)
         self.command_execution_pipeline = CommandExecutionPipeline(
             command_history_orchestrator=self.history_orchestrator,
-            output_writer=lambda *_: None,
             error_logger=self.logger,
         )
 
