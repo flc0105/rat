@@ -4,10 +4,10 @@ import threading
 from datetime import datetime
 
 from core.utils.files import secure_filename
-from server.config.config import QUICK_JUMP_ROOT_DIR
+from server.config.config import PINNED_PATHS_ROOT_DIR
 
 
-class QuickJumpStore:
+class PinnedPathStore:
     """
     服务端 hostname 级快速跳转收藏存储。
 
@@ -19,7 +19,7 @@ class QuickJumpStore:
     TIME_FORMAT = '%Y-%m-%d %H:%M:%S'
 
     def __init__(self):
-        self.root_dir = QUICK_JUMP_ROOT_DIR
+        self.root_dir = PINNED_PATHS_ROOT_DIR
         self._lock = threading.RLock()
         self._prepare_dirs()
 
@@ -163,9 +163,9 @@ class QuickJumpStore:
                     duplicate_item = item
 
             if matched_item is None:
-                raise KeyError(f'Quick jump not found: {original_name_text}')
+                raise KeyError(f'Pinned path not found: {original_name_text}')
             if duplicate_item is not None and duplicate_item is not matched_item:
-                raise ValueError(f'Quick jump already exists: {display_name_text}')
+                raise ValueError(f'Pinned path already exists: {display_name_text}')
 
             now_text = self._now_text()
             matched_item['display_name'] = display_name_text
@@ -195,7 +195,7 @@ class QuickJumpStore:
                 kept_items.append(item)
 
             if removed_item is None:
-                raise KeyError(f'Quick jump not found: {display_name_text}')
+                raise KeyError(f'Pinned path not found: {display_name_text}')
 
             normalized_items = [self._normalize_entry(item) for item in kept_items]
             normalized_items = [item for item in normalized_items if item]

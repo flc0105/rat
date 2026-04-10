@@ -7,7 +7,7 @@ from server.application.execution.remote_execution_service import RemoteExecutio
 from server.application.jobs.background_job_service import BackgroundJobService
 from server.application.jobs.background_job_store import BackgroundJobStore
 from server.application.jobs.job_catalog_service import JobCatalogService
-from server.application.quickjump.quick_jump_store import QuickJumpStore
+from server.application.pinned_paths.pinned_path_store import PinnedPathStore
 from server.application.tasks.task_runner import WebTaskRunner
 from server.application.tasks.task_service import WebTaskService
 from server.application.tasks.task_store import WebTaskStore
@@ -16,7 +16,7 @@ from server.application.web.artifact_api import WebArtifactApi
 from server.application.web.command_api import WebCommandApi
 from server.application.web.connection_api import WebConnectionApi
 from server.application.web.job_api import WebJobApi
-from server.application.web.quick_jump_api import WebQuickJumpApi
+from server.application.web.pinned_path_api import PinnedPathApi
 from server.application.web.remote_file_api import WebRemoteFileApi
 from server.application.web.system_api import WebSystemInspectionApi
 from server.config.config import SCRIPT_JOBS_PATH
@@ -91,7 +91,7 @@ class ServerApplicationAssembly:
             job_catalog_service=self.job_catalog_service,
         )
 
-        self.quick_jump_store = QuickJumpStore()
+        self.pinned_path_store = PinnedPathStore()
         self.agent_builder = AgentBuilder()
 
         # ------------------ web sub facades / apis ------------------ #
@@ -121,9 +121,9 @@ class ServerApplicationAssembly:
             remote_file_service=self.remote_file_service,
         )
 
-        self.quick_jump_api = WebQuickJumpApi(
+        self.pinned_path_api = PinnedPathApi(
             server=self.server,
-            quick_jump_store=self.quick_jump_store,
+            pinned_path_store=self.pinned_path_store,
         )
 
         self.agent_api = WebAgentApi(
