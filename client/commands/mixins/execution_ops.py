@@ -16,7 +16,7 @@ from client.config.runtime_config import (
     COMMAND_DEFAULT_STREAM_TIMEOUT,
     COMMAND_PROCESS_WAIT_POLL_INTERVAL,
 )
-from core.utils.client_util import reset
+from core.utils.client_util import reset, spawn_new_instance
 from core.utils.decorator import desc
 
 
@@ -392,6 +392,14 @@ class CommandExecutionMixin:
             raise RuntimeError('Empty restart argv')
 
         os.execv(argv[0], argv)
+
+
+    @desc('Start a new client instance without exiting current process', group='session')
+    @interruptible()
+    def spawn_instance(self):
+        # add 启动新实例不退出当前进程 2026-04-10 00:00
+        process = spawn_new_instance()
+        return 1, f'New client instance started, pid={process.pid}'
 
     @desc('Get current user ID/name', group='system')
     @interruptible()

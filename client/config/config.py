@@ -16,7 +16,7 @@ DEFAULT_CONFIG = {
     'reconnect_interval_seconds': 5,
     'remote_http_watchdog_enabled': True,
     'remote_http_watchdog_interval_seconds': 15,
-    'local_watchdog_enabled': True,
+    'local_watchdog_enabled': False,
     'local_watchdog_heartbeat_interval_seconds': 5,
     'local_watchdog_timeout_seconds': 15,
 }
