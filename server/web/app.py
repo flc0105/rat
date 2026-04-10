@@ -19,7 +19,7 @@ from server.web.routes.command_history import create_command_history_blueprint
 from server.web.routes.pinned_paths import create_pinned_path_blueprint
 from server.web.routes.remote_files import create_remote_files_blueprint
 from server.web.routes.system_inspection import create_system_inspection_blueprint
-
+from server.application.connection.control_command_store import ControlCommandStore
 
 def create_app(server_instance):
     app = Flask(__name__, static_folder='../../static', static_url_path='')
@@ -29,6 +29,7 @@ def create_app(server_instance):
     command_api = web_service.command_api
     artifact_api = web_service.artifact_api
     responder = WebApiResponder()
+    control_command_store = ControlCommandStore()
 
     app.register_blueprint(create_background_job_blueprint(server_instance))
     app.register_blueprint(create_remote_files_blueprint(server_instance))
@@ -77,6 +78,27 @@ def create_app(server_instance):
         def _execute():
             server_instance.kill_connection_by_client_id(client_id)
             return None
+
+        return responder.json_endpoint(_execute, default_error_status=500)
+
+    @app.route('/api/connections/<client_id>/control', methods=['GET', 'POST'])
+    def connection_control(client_id):
+        def _execute():
+            if request.method == 'POST':
+                payload = request.get_json(silent=True) or {}
+                command = str(payload.get('command') or '').strip().lower()
+
+                if command not in ('kill', 'reset'):
+                    raise ValueError('command must be kill or reset')
+
+                server_instance.get_target_connection_by_client_id(client_id)
+                return control_command_store.set_pending_command(client_id, command)
+
+            data = control_command_store.pop_pending_command(client_id)
+            if data is None:
+                return {'command': ''}
+
+            return data
 
         return responder.json_endpoint(_execute, default_error_status=500)
 

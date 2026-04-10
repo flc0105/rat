@@ -1,4 +1,5 @@
 import os
+import shlex
 import subprocess
 import sys
 import time
@@ -15,6 +16,7 @@ from client.config.runtime_config import (
     COMMAND_DEFAULT_STREAM_TIMEOUT,
     COMMAND_PROCESS_WAIT_POLL_INTERVAL,
 )
+from core.utils.client_util import reset
 from core.utils.decorator import desc
 
 
@@ -340,16 +342,104 @@ class CommandExecutionMixin:
         self.socket.close()
         sys.exit(0)
 
+    # @desc('Restart client process and reconnect', group='session')
+    # @interruptible()
+    # def reset(self):
+    #     restart_command = self._build_restart_command()
+    #     if os.name == 'nt':
+    #         subprocess.Popen(restart_command)
+    #     elif os.name == 'posix':
+    #         subprocess.Popen(restart_command, shell=True)
+    #     self.socket.close()
+    #     sys.exit(0)
+
     @desc('Restart client process and reconnect', group='session')
     @interruptible()
     def reset(self):
-        restart_command = self._build_restart_command()
+        reset(self.socket)
+        # import shlex
+        #
+        # from core.utils.client_util import get_executable_path
+        #
+        # # add clean reset relaunch 2026-04-10 00:00
+        # restart_command = get_executable_path()
+        #
+        # if getattr(sys, 'frozen', False):
+        #     launch_cwd = os.path.dirname(os.path.realpath(sys.executable))
+        # else:
+        #     launch_cwd = os.path.dirname(os.path.realpath(sys.argv[0]))
+        #
+        # popen_kwargs = {
+        #     'cwd': launch_cwd,
+        #     'env': dict(os.environ),
+        #     'stdin': subprocess.DEVNULL,
+        #     'stdout': subprocess.DEVNULL,
+        #     'stderr': subprocess.DEVNULL,
+        #     'close_fds': True,
+        # }
+        #
+        # if os.name == 'nt':
+        #     creationflags = 0
+        #     creationflags |= getattr(subprocess, 'CREATE_NEW_PROCESS_GROUP', 0)
+        #     creationflags |= getattr(subprocess, 'DETACHED_PROCESS', 0)
+        #
+        #     subprocess.Popen(
+        #         restart_command,
+        #         shell=False,
+        #         creationflags=creationflags,
+        #         **popen_kwargs,
+        #     )
+        # elif os.name == 'posix':
+        #     subprocess.Popen(
+        #         shlex.split(restart_command),
+        #         shell=False,
+        #         start_new_session=True,
+        #         **popen_kwargs,
+        #     )
+        # else:
+        #     raise RuntimeError(f'Unsupported os.name: {os.name}')
+        #
+        # try:
+        #     self.socket.close()
+        # except Exception:
+        #     pass
+        #
+        # os._exit(0)
+
+    @desc('Restart current process by exec replacement', group='session')
+    @interruptible()
+    def reexec_restart(self):
+        from core.utils.client_util import get_executable_path
+
+        # add exec replacement restart 2026-04-10 00:00
+        restart_command = get_executable_path()
+
+        try:
+            self.socket.close()
+        except Exception:
+            pass
+
+        if getattr(sys, 'frozen', False):
+            launch_cwd = os.path.dirname(os.path.realpath(sys.executable))
+        else:
+            launch_cwd = os.path.dirname(os.path.realpath(sys.argv[0]))
+
+        try:
+            os.chdir(launch_cwd)
+        except Exception:
+            pass
+
         if os.name == 'nt':
-            subprocess.Popen(restart_command)
+            argv = shlex.split(restart_command, posix=False)
         elif os.name == 'posix':
-            subprocess.Popen(restart_command, shell=True)
-        self.socket.close()
-        sys.exit(0)
+            argv = shlex.split(restart_command)
+        else:
+            raise RuntimeError(f'Unsupported os.name: {os.name}')
+
+        if not argv:
+            raise RuntimeError('Empty restart argv')
+
+        os.execv(argv[0], argv)
 
     @desc('Get current user ID/name', group='system')
     @interruptible()
