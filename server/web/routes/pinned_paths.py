@@ -10,14 +10,14 @@ def create_pinned_path_blueprint(server_instance):
     pinned_path_api = web_service.pinned_path_api
     responder = WebApiResponder()
 
-    @blueprint.get('/api/connections/<client_id>/quick-jumps')
+    @blueprint.get('/api/connections/<client_id>/pinned_paths')
     def list_pinned_paths(client_id):
         return responder.json_endpoint(
             lambda: pinned_path_api.list_pinned_paths(client_id),
             default_error_status=500,
         )
 
-    @blueprint.post('/api/connections/<client_id>/quick-jumps')
+    @blueprint.post('/api/connections/<client_id>/pinned_paths')
     def save_pinned_paths(client_id):
         def _execute():
             payload = get_json_payload()
@@ -33,7 +33,7 @@ def create_pinned_path_blueprint(server_instance):
 
         return responder.json_endpoint(_execute, default_error_status=500)
 
-    @blueprint.put('/api/connections/<client_id>/quick-jumps')
+    @blueprint.put('/api/connections/<client_id>/pinned_paths')
     def update_pinned_path(client_id):
         def _execute():
             payload = get_json_payload()
@@ -52,7 +52,7 @@ def create_pinned_path_blueprint(server_instance):
 
         return responder.json_endpoint(_execute, default_error_status=500)
 
-    @blueprint.delete('/api/connections/<client_id>/quick-jumps')
+    @blueprint.delete('/api/connections/<client_id>/pinned_paths')
     def delete_pinned_path(client_id):
         def _execute():
             payload = get_json_payload()

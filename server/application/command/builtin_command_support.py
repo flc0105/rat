@@ -202,13 +202,13 @@ class AliasBuiltinSupport:
             raise ValueError(f"Alias not found: {alias_name}")
 
 
-class QuickJumpBuiltinSupport:
+class PinnedPathBuiltinSupport:
     """
     gopin 相关内建命令支持。
     """
 
-    def __init__(self, quick_jump_store, command_history, conn, history_entry_id_provider, command_processor_factory):
-        self.quick_jump_store = quick_jump_store
+    def __init__(self, pinned_path_store, command_history, conn, history_entry_id_provider, command_processor_factory):
+        self.pinned_path_store = pinned_path_store
         self.command_history = command_history
         self.conn = conn
         self.history_entry_id_provider = history_entry_id_provider
@@ -235,8 +235,8 @@ class QuickJumpBuiltinSupport:
         )
 
     # add gopin 快速跳转 2026-04-09 15:30
-    def list_quick_jumps(self) -> list[dict]:
-        return self.quick_jump_store.list_items(self._get_hostname())
+    def list_pinned_paths(self) -> list[dict]:
+        return self.pinned_path_store.list_items(self._get_hostname())
 
     # add gopin 快速跳转 2026-04-09 15:30
     def _build_cd_command(self, path: str) -> str:
@@ -245,11 +245,11 @@ class QuickJumpBuiltinSupport:
     # add gopin 快速跳转 2026-04-09 15:30
     def gopin(self, arg=''):
         name = str(arg or '').strip()
-        items = self.list_quick_jumps()
+        items = self.list_pinned_paths()
 
         if not name:
             if not items:
-                yield 1, 'No saved quick jumps for current host'
+                yield 1, 'No saved pinned paths for current host'
                 return
 
             lines = [f'[{self._get_hostname()}]']
@@ -258,9 +258,9 @@ class QuickJumpBuiltinSupport:
             yield 1, '\n'.join(lines)
             return
 
-        matched_item = self.quick_jump_store.get_item_by_name(self._get_hostname(), name)
+        matched_item = self.pinned_path_store.get_item_by_name(self._get_hostname(), name)
         if matched_item is None:
-            raise ValueError(f'Quick jump not found: {name}')
+            raise ValueError(f'Pinned path not found: {name}')
 
         target_path = str(matched_item.get('path') or '').strip()
         resolved_command = self._build_cd_command(target_path)

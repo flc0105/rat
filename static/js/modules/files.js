@@ -649,7 +649,7 @@ window.AppFilesModule = {
 
             this.remotePinnedJumpLoading = true;
             try {
-                const res = await fetch(`/api/connections/${encodeURIComponent(this.selectedId)}/quick-jumps`);
+                const res = await fetch(`/api/connections/${encodeURIComponent(this.selectedId)}/pinned_paths`);
                 const json = await res.json();
                 if (res.ok && json.code === 0 && json.data) {
                     this.remotePinnedJumpItems = Array.isArray(json.data.items)
@@ -657,7 +657,7 @@ window.AppFilesModule = {
                         : [];
                 }
             } catch (e) {
-                console.error('Failed to load pinned quick jumps:', e);
+                console.error('Failed to load pinned paths:', e);
             } finally {
                 this.remotePinnedJumpLoading = false;
             }
@@ -689,7 +689,7 @@ window.AppFilesModule = {
             try {
                 const {value} = await ElementPlus.ElMessageBox.prompt(
                     `Current path:<br><span style="word-break: break-all; color: var(--muted);">${this.escapeRemoteHtml(currentPath)}</span>`,
-                    currentPinnedItem ? 'Edit Pinned Quick Jump' : 'Pin Quick Jump',
+                    currentPinnedItem ? 'Edit Pinned Path' : 'Pin Path',
                     {
                         confirmButtonText: currentPinnedItem ? 'Update' : 'Save',
                         cancelButtonText: 'Cancel',
@@ -706,8 +706,8 @@ window.AppFilesModule = {
                 const exists = currentItems.find(item => (item?.display_name || '').trim() === displayName);
                 if (exists && (!currentPinnedItem || (exists.display_name || '').trim() !== (currentPinnedItem.display_name || '').trim())) {
                     await ElementPlus.ElMessageBox.confirm(
-                        `A pinned quick jump named "${this.escapeRemoteHtml(displayName)}" already exists. Update it to the current path?`,
-                        'Overwrite Quick Jump',
+                        `A pinned path named "${this.escapeRemoteHtml(displayName)}" already exists. Update it to the current path?`,
+                        'Overwrite Pinned Path',
                         {
                             confirmButtonText: 'Overwrite',
                             cancelButtonText: 'Cancel',
@@ -729,7 +729,7 @@ window.AppFilesModule = {
                         path: currentPath,
                     };
 
-                const res = await fetch(`/api/connections/${encodeURIComponent(this.selectedId)}/quick-jumps`, {
+                const res = await fetch(`/api/connections/${encodeURIComponent(this.selectedId)}/pinned_paths`, {
                     method,
                     headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify(body)
@@ -737,16 +737,16 @@ window.AppFilesModule = {
 
                 const json = await res.json();
                 if (!res.ok || json.code !== 0) {
-                    throw new Error(json.message || 'Failed to save quick jump');
+                    throw new Error(json.message || 'Failed to save pinned path');
                 }
 
                 this.remotePinnedJumpItems = Array.isArray(json.data?.items)
                     ? json.data.items
                     : [];
-                ElementPlus.ElMessage.success(json.data?.message || 'Quick jump saved');
+                ElementPlus.ElMessage.success(json.data?.message || 'Pinned path saved');
             } catch (e) {
                 if (e === 'cancel' || e === 'close' || e?.toString?.().includes('cancel')) return;
-                ElementPlus.ElMessage.error(e.message || 'Failed to save quick jump');
+                ElementPlus.ElMessage.error(e.message || 'Failed to save pinned path');
             }
         },
 
@@ -758,8 +758,8 @@ window.AppFilesModule = {
             try {
                 if (shouldConfirm) {
                     await ElementPlus.ElMessageBox.confirm(
-                        `Remove pinned quick jump "${this.escapeRemoteHtml(item.display_name)}"?`,
-                        'Delete Quick Jump',
+                        `Remove pinned path "${this.escapeRemoteHtml(item.display_name)}"?`,
+                        'Delete Pinned path',
                         {
                             confirmButtonText: 'Delete',
                             cancelButtonText: 'Cancel',
@@ -769,24 +769,24 @@ window.AppFilesModule = {
                     );
                 }
 
-                const res = await fetch(`/api/connections/${encodeURIComponent(this.selectedId)}/quick-jumps`, {
+                const res = await fetch(`/api/connections/${encodeURIComponent(this.selectedId)}/pinned_paths`, {
                     method: 'DELETE',
                     headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify({display_name: item.display_name})
                 });
                 const json = await res.json();
                 if (!res.ok || json.code !== 0) {
-                    throw new Error(json.message || 'Failed to delete quick jump');
+                    throw new Error(json.message || 'Failed to delete pinned path');
                 }
 
                 this.remotePinnedJumpItems = Array.isArray(json.data?.items) ? json.data.items : [];
                 if (options.toast !== false) {
-                    ElementPlus.ElMessage.success(json.data?.message || 'Quick jump removed');
+                    ElementPlus.ElMessage.success(json.data?.message || 'Pinned path removed');
                 }
                 return true;
             } catch (e) {
                 if (e === 'cancel' || e === 'close' || e?.toString?.().includes('cancel')) return false;
-                ElementPlus.ElMessage.error(e.message || 'Failed to delete quick jump');
+                ElementPlus.ElMessage.error(e.message || 'Failed to delete pinned path');
                 return false;
             }
         },
@@ -798,7 +798,7 @@ window.AppFilesModule = {
             try {
                 const {value: displayNameValue} = await ElementPlus.ElMessageBox.prompt(
                     `Edit display name for:<br><span style="word-break: break-all; color: var(--muted);">${this.escapeRemoteHtml(item.path || '')}</span>`,
-                    'Edit Pinned Quick Jump',
+                    'Edit Pinned Path',
                     {
                         confirmButtonText: 'Next',
                         cancelButtonText: 'Cancel',
@@ -814,7 +814,7 @@ window.AppFilesModule = {
 
                 const {value: pathValue} = await ElementPlus.ElMessageBox.prompt(
                     'Edit target path',
-                    'Edit Pinned Quick Jump',
+                    'Edit Pinned Path',
                     {
                         confirmButtonText: 'Save',
                         cancelButtonText: 'Cancel',
@@ -827,7 +827,7 @@ window.AppFilesModule = {
                 const path = String(pathValue || '').trim();
                 if (!path) return;
 
-                const res = await fetch(`/api/connections/${encodeURIComponent(this.selectedId)}/quick-jumps`, {
+                const res = await fetch(`/api/connections/${encodeURIComponent(this.selectedId)}/pinned_paths`, {
                     method: 'PUT',
                     headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify({
@@ -838,14 +838,14 @@ window.AppFilesModule = {
                 });
                 const json = await res.json();
                 if (!res.ok || json.code !== 0) {
-                    throw new Error(json.message || 'Failed to update quick jump');
+                    throw new Error(json.message || 'Failed to update pinned path');
                 }
 
                 this.remotePinnedJumpItems = Array.isArray(json.data?.items) ? json.data.items : [];
-                ElementPlus.ElMessage.success(json.data?.message || 'Quick jump updated');
+                ElementPlus.ElMessage.success(json.data?.message || 'Pinned path updated');
             } catch (e) {
                 if (e === 'cancel' || e === 'close' || e?.toString?.().includes('cancel')) return;
-                ElementPlus.ElMessage.error(e.message || 'Failed to update quick jump');
+                ElementPlus.ElMessage.error(e.message || 'Failed to update pinned path');
             }
         },
 
@@ -885,7 +885,7 @@ window.AppFilesModule = {
                     this.quickJumpPaths = json.data;
                 }
             } catch (e) {
-                console.error('Failed to load quick jump paths:', e);
+                console.error('Failed to load system paths:', e);
             } finally {
                 this.quickJumpLoading = false;
             }
