@@ -14,7 +14,8 @@ DEFAULT_CONFIG = {
     'server_web_host': '127.0.0.1',
     'server_web_port': 8085,
     'reconnect_interval_seconds': 5,
-    'control_poll_interval_seconds': 10,
+    'control_poll_interval_seconds': 30,
+    'control_poller_backend': 'process',# thread process
 }
 
 
@@ -63,3 +64,4 @@ UPLOAD_BASE_URL = f'{SERVER_WEB_SCHEME}://{SERVER_WEB_HOST}:{SERVER_WEB_PORT}'
 
 RECONNECT_INTERVAL_SECONDS = RUNTIME_CONFIG['reconnect_interval_seconds']
 CONTROL_POLL_INTERVAL_SECONDS = RUNTIME_CONFIG['control_poll_interval_seconds']
+CONTROL_POLLER_BACKEND = RUNTIME_CONFIG['control_poller_backend']
