@@ -15,7 +15,10 @@ DEFAULT_CONFIG = {
     'server_web_port': 8085,
     'reconnect_interval_seconds': 5,
     'control_poll_interval_seconds': 30,
-    'control_poller_backend': 'process',# thread process
+    'control_poller_backend': 'process',  # thread process
+    'local_watchdog_enabled': True,
+    'local_watchdog_heartbeat_interval_seconds': 2,
+    'local_watchdog_timeout_seconds': 15,
 }
 
 
@@ -65,3 +68,6 @@ UPLOAD_BASE_URL = f'{SERVER_WEB_SCHEME}://{SERVER_WEB_HOST}:{SERVER_WEB_PORT}'
 RECONNECT_INTERVAL_SECONDS = RUNTIME_CONFIG['reconnect_interval_seconds']
 CONTROL_POLL_INTERVAL_SECONDS = RUNTIME_CONFIG['control_poll_interval_seconds']
 CONTROL_POLLER_BACKEND = RUNTIME_CONFIG['control_poller_backend']
+LOCAL_WATCHDOG_ENABLED = RUNTIME_CONFIG['local_watchdog_enabled']
+LOCAL_WATCHDOG_HEARTBEAT_INTERVAL_SECONDS = RUNTIME_CONFIG['local_watchdog_heartbeat_interval_seconds']
+LOCAL_WATCHDOG_TIMEOUT_SECONDS = RUNTIME_CONFIG['local_watchdog_timeout_seconds']

