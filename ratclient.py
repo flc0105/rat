@@ -1,32 +1,21 @@
-import json
 import os
 import platform
 import queue
 import socket
 import sys
-import tempfile
 import threading
 import time
 import uuid
 
 from client.commands.services.session_control_service import SessionControlService
 from client.config.config import (
-    CONTROL_POLLER_BACKEND,
-    CONTROL_POLL_INTERVAL_SECONDS,
-    LOCAL_WATCHDOG_ENABLED,
-    LOCAL_WATCHDOG_HEARTBEAT_INTERVAL_SECONDS,
-    LOCAL_WATCHDOG_TIMEOUT_SECONDS,
     RECONNECT_INTERVAL_SECONDS,
     SERVER_ADDR,
-    UPLOAD_BASE_URL,
 )
-from core.utils.client_util import check_privilege, get_system_paths
-from client.connection.http_control_poller import HttpControlPoller
-from client.connection.http_control_watchdog_process import (
-    HttpControlWatchdogProcess,
-    run_watchdog_worker_from_argv,
-)
+from client.connection.client_guard_manager import ClientGuardManager
+from client.connection.http_control_watchdog_process import run_remote_watchdog_worker_from_argv
 from client.connection.server_connection import ServerConnection
+from core.utils.client_util import check_privilege, get_system_paths
 from core.utils.logger import logger
 
 # 强制导入所有平台模块，让 PyInstaller 检测到
@@ -50,15 +39,13 @@ class Client:
         self._receiver_error = None
         self._receiver_error_lock = threading.Lock()
 
-        self._control_stop_event = threading.Event()
-        self._control_poller = None
-        self._control_watchdog_process = None
-
-        self._watchdog_heartbeat_stop_event = threading.Event()
-        self._watchdog_heartbeat_thread = None
+        self.guard_manager = ClientGuardManager(
+            client_id=self.client_id,
+            remote_control_command_handler=self._handle_remote_control_command,
+        )
 
         self._create_connection()
-        self._start_control_poller()
+        self.guard_manager.start()
 
     def _create_connection(self):
         """
@@ -105,112 +92,10 @@ class Client:
         self._clear_receiver_error()
         self._receiver_thread = None
 
-    # add 本地watchdog心跳 2026-04-10 00:00
-    def _build_watchdog_heartbeat_file_path(self):
-        return os.path.join(tempfile.gettempdir(), f'client_watchdog_heartbeat_{self.client_id}.json')
-
-    # add 本地watchdog心跳 2026-04-10 00:00
-    def _build_watchdog_log_file_path(self):
-        return os.path.join(tempfile.gettempdir(), f'client_watchdog_{self.client_id}.log')
-
-    # add 本地watchdog心跳 2026-04-10 00:00
-    def _write_watchdog_heartbeat(self):
-        heartbeat_file_path = self._build_watchdog_heartbeat_file_path()
-        temp_file_path = f'{heartbeat_file_path}.tmp'
-
-        os.makedirs(os.path.dirname(heartbeat_file_path), exist_ok=True)
-        payload = {
-            'ts': time.time(),
-            'pid': os.getpid(),
-            'client_id': self.client_id,
-        }
-
-        with open(temp_file_path, 'w', encoding='utf-8') as file_obj:
-            json.dump(payload, file_obj)
-
-        os.replace(temp_file_path, heartbeat_file_path)
-
-    # add 本地watchdog心跳 2026-04-10 00:00
-    def _watchdog_heartbeat_loop(self):
-        while not self._watchdog_heartbeat_stop_event.is_set():
-            try:
-                self._write_watchdog_heartbeat()
-            except Exception as e:
-                logger.error(f'Failed to write watchdog heartbeat: {e}', exc_info=True)
-
-            self._watchdog_heartbeat_stop_event.wait(LOCAL_WATCHDOG_HEARTBEAT_INTERVAL_SECONDS)
-
-    # add 本地watchdog心跳 2026-04-10 00:00
-    def _start_watchdog_heartbeat_feeder(self):
-        if CONTROL_POLLER_BACKEND != 'process':
-            return
-
-        if not LOCAL_WATCHDOG_ENABLED:
-            return
-
-        if self._watchdog_heartbeat_thread is not None and self._watchdog_heartbeat_thread.is_alive():
-            return
-
-        self._watchdog_heartbeat_stop_event.clear()
-        self._write_watchdog_heartbeat()
-
-        self._watchdog_heartbeat_thread = threading.Thread(
-            target=self._watchdog_heartbeat_loop,
-            name='LocalWatchdogHeartbeat',
-            daemon=True,
-        )
-        self._watchdog_heartbeat_thread.start()
-
-    # add 本地watchdog心跳 2026-04-10 00:00
-    def _stop_watchdog_heartbeat_feeder(self):
-        self._watchdog_heartbeat_stop_event.set()
-
-    # add HTTP 控制轮询线程 2026-04-10 00:00
-    def _handle_http_control_command(self, command: str):
-        logger.warning(f'Executing HTTP control command: {command}')
+    # add remote control manager split 2026-04-10 00:00
+    def _handle_remote_control_command(self, command: str):
+        logger.warning(f'Executing remote control command: {command}')
         SessionControlService(self.server).execute_control_command(command)
-
-    # add HTTP 控制轮询线程 2026-04-10 00:00
-    def _start_control_poller(self):
-        if CONTROL_POLLER_BACKEND == 'process':
-            self._start_watchdog_heartbeat_feeder()
-
-            if self._control_watchdog_process is not None:
-                return
-
-            self._control_watchdog_process = HttpControlWatchdogProcess(
-                base_url=UPLOAD_BASE_URL,
-                client_id=self.client_id,
-                poll_interval=CONTROL_POLL_INTERVAL_SECONDS,
-                heartbeat_file_path=self._build_watchdog_heartbeat_file_path(),
-                watchdog_log_file_path=self._build_watchdog_log_file_path(),
-                local_watchdog_enabled=LOCAL_WATCHDOG_ENABLED,
-                local_watchdog_timeout_seconds=LOCAL_WATCHDOG_TIMEOUT_SECONDS,
-            )
-            self._control_watchdog_process.start()
-            return
-
-        if self._control_poller is not None:
-            return
-
-        self._control_poller = HttpControlPoller(
-            base_url=UPLOAD_BASE_URL,
-            client_id=self.client_id,
-            command_handler=self._handle_http_control_command,
-            poll_interval=CONTROL_POLL_INTERVAL_SECONDS,
-            stop_event=self._control_stop_event,
-        )
-        self._control_poller.start()
-
-    # add HTTP 控制轮询线程 2026-04-10 00:00
-    def _stop_control_poller(self):
-        self._control_stop_event.set()
-        self._stop_watchdog_heartbeat_feeder()
-
-        if self._control_poller is not None:
-            self._control_poller.stop()
-        if self._control_watchdog_process is not None:
-            self._control_watchdog_process.stop()
 
     def _reset_connection(self):
         """
@@ -302,7 +187,7 @@ class Client:
         """
         建立连接并完成握手
         """
-        self._start_control_poller()
+        self.guard_manager.start()
         self._connect_socket()
         self._handshake()
         self._start_receiver_thread()
@@ -361,8 +246,8 @@ class Client:
 
 
 if __name__ == '__main__':
-    if '--control-watchdog-worker' in sys.argv[1:]:
-        run_watchdog_worker_from_argv()
+    if '--remote-watchdog-worker' in sys.argv[1:]:
+        run_remote_watchdog_worker_from_argv()
         sys.exit(0)
 
     client = Client(SERVER_ADDR)
@@ -370,8 +255,8 @@ if __name__ == '__main__':
         client.connect()
         client.wait()
     except KeyboardInterrupt:
-        client._stop_control_poller()
+        client.guard_manager.stop()
         sys.exit(0)
     except Exception as e:
-        client._stop_control_poller()
+        client.guard_manager.stop()
         logger.error(e, exc_info=True)
