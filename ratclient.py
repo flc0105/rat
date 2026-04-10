@@ -11,18 +11,16 @@ from client.config.config import (
     RECONNECT_INTERVAL_SECONDS,
     SERVER_ADDR,
 )
-from client.connection.client_guard_manager import ClientGuardManager
-from client.connection.http_control_watchdog_process import run_remote_watchdog_worker_from_argv
+from client.watchdog.client_guard_manager import ClientGuardManager
 from client.connection.server_connection import ServerConnection
+from client.watchdog.watchdog_process import run_watchdog_worker_from_argv
 from core.utils.client_util import check_privilege, get_system_paths
 from core.utils.logger import logger
 
 # 强制导入所有平台模块，让 PyInstaller 检测到
-import client.commands.platform.mac
 
 if os.name == 'nt':
-    import client.commands.platform.win
-import client.commands.platform.linux
+    pass
 
 
 class Client:
@@ -51,6 +49,7 @@ class Client:
         """
         self.server = ServerConnection()
         self.server.client_id = self.client_id
+        self.server.guard_manager = self.guard_manager
 
     def _close_current_connection(self):
         """
@@ -239,8 +238,8 @@ class Client:
 
 
 if __name__ == '__main__':
-    if '--remote-watchdog-worker' in sys.argv[1:]:
-        run_remote_watchdog_worker_from_argv()
+    if '--watchdog-worker' in sys.argv[1:]:
+        run_watchdog_worker_from_argv()
         sys.exit(0)
 
     client = Client(SERVER_ADDR)

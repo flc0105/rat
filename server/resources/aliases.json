@@ -41,6 +41,7 @@
     "display_off": "pmset displaysleepnow",
     "clean_ds": "find . -name \"._*\" -type f -delete && find . -name \".DS_Store\" -type f -delete",
     "persist_on": "sudo launchctl bootstrap system /Library/LaunchDaemons/com.rat.helper.plist",
-    "persist_off": "sudo launchctl bootout system /Library/LaunchDaemons/com.rat.helper.plist"
+    "persist_off": "sudo launchctl bootout system /Library/LaunchDaemons/com.rat.helper.plist",
+    "suspend": "kill -STOP <pid>"
   }
 }
