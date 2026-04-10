@@ -18,18 +18,6 @@ class SessionControlService:
             pass
 
     # add 客户端强制会话控制 2026-04-10 00:00
-    # def _build_restart_command(self):
-    #     return get_executable_path()
-
-    # add 客户端强制会话控制 2026-04-10 00:00
-    # def _spawn_restart_process(self):
-    #     restart_command = self._build_restart_command()
-    #     if os.name == 'nt':
-    #         subprocess.Popen(restart_command)
-    #     elif os.name == 'posix':
-    #         subprocess.Popen(restart_command, shell=True)
-
-    # add 客户端强制会话控制 2026-04-10 00:00
     def kill_current_session(self):
         self._close_socket_quietly()
         time.sleep(0.2)
@@ -38,10 +26,6 @@ class SessionControlService:
     # add 客户端强制会话控制 2026-04-10 00:00
     def reset_current_session(self):
         reset(self.socket)
-        # self._spawn_restart_process()
-        # self._close_socket_quietly()
-        # time.sleep(0.2)
-        # os._exit(0)
 
     # add 客户端强制会话控制 2026-04-10 00:00
     def execute_control_command(self, command: str):

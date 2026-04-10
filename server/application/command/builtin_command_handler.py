@@ -6,6 +6,7 @@ from server.application.command.builtin_command_support import (
     ScriptBuiltinSupport,
     UploadBuiltinSupport,
 )
+from server.application.command.control_builtin_support import ControlBuiltinSupport
 
 
 class BuiltinCommandHandler:
@@ -73,6 +74,18 @@ class BuiltinCommandHandler:
             'help': 'Show current heartbeat RTT / last seen state',
             'source': 'server'
         },
+        {
+            'name': 'force_kill',
+            'template': 'force_kill',
+            'help': 'Send HTTP control kill command to the current client',
+            'source': 'server'
+        },
+        {
+            'name': 'force_reset',
+            'template': 'force_reset',
+            'help': 'Send HTTP control reset command to the current client',
+            'source': 'server'
+        },
     ]
 
     def __init__(
@@ -120,6 +133,9 @@ class BuiltinCommandHandler:
             command_processor_factory=self.command_processor_factory,
         )
         self.rtt_support = RttBuiltinSupport(
+            conn=self.conn,
+        )
+        self.control_support = ControlBuiltinSupport(
             conn=self.conn,
         )
 
@@ -196,4 +212,14 @@ class BuiltinCommandHandler:
 
     def rtt(self, arg=''):
         for item in self.rtt_support.rtt():
+            yield item
+
+    # add server端控制命令转发 2026-04-10 00:00
+    def force_kill(self, arg=''):
+        for item in self.control_support.force_kill():
+            yield item
+
+    # add server端控制命令转发 2026-04-10 00:00
+    def force_reset(self, arg=''):
+        for item in self.control_support.force_reset():
             yield item

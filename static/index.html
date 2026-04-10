@@ -143,9 +143,22 @@
                                         <el-button size="small" class="tool-btn tool-btn-accent"
                                                    @click="openProcessDialog">Processes
                                         </el-button>
-                                        <el-button size="small" class="tool-btn tool-btn-danger"
-                                                   @click="killConnection">Disconnect
-                                        </el-button>
+<!--                                        <el-button size="small" class="tool-btn tool-btn-danger"-->
+<!--                                                   @click="killConnection">Disconnect-->
+<!--                                        </el-button>-->
+
+                                        <el-dropdown trigger="click" @command="handleControlActionCommand">
+    <el-button size="small" class="tool-btn tool-btn-danger">
+        Control
+    </el-button>
+    <template #dropdown>
+        <el-dropdown-menu>
+            <el-dropdown-item command="kill">Force Kill</el-dropdown-item>
+            <el-dropdown-item command="reset">Force Reset</el-dropdown-item>
+            <el-dropdown-item divided command="disconnect">Disconnect</el-dropdown-item>
+        </el-dropdown-menu>
+    </template>
+</el-dropdown>
 
                                         <span class="tool-separator"></span>
                                         <el-button size="small" class="tool-btn" @click="clearOutput">Clear</el-button>
