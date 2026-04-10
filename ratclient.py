@@ -7,7 +7,6 @@ import threading
 import time
 import uuid
 
-from client.commands.services.session_control_service import SessionControlService
 from client.config.config import (
     RECONNECT_INTERVAL_SECONDS,
     SERVER_ADDR,
@@ -41,7 +40,6 @@ class Client:
 
         self.guard_manager = ClientGuardManager(
             client_id=self.client_id,
-            remote_control_command_handler=self._handle_remote_control_command,
         )
 
         self._create_connection()
@@ -91,11 +89,6 @@ class Client:
         self._receiver_stop_event = threading.Event()
         self._clear_receiver_error()
         self._receiver_thread = None
-
-    # add remote control manager split 2026-04-10 00:00
-    def _handle_remote_control_command(self, command: str):
-        logger.warning(f'Executing remote control command: {command}')
-        SessionControlService(self.server).execute_control_command(command)
 
     def _reset_connection(self):
         """

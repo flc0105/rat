@@ -6,14 +6,15 @@ import subprocess
 import sys
 import tempfile
 import time
+import urllib.error
+import urllib.request
 from typing import Optional
 
-from client.connection.http_control_poller import HttpRemoteControlPoller
 from core.utils.logger import logger
 
 
-def _build_watchdog_file_logger(log_file_path: str):
-    logger_name = f'watchdog_file_logger::{os.path.abspath(log_file_path)}'
+def _build_remote_watchdog_file_logger(log_file_path: str):
+    logger_name = f'remote_watchdog_file_logger::{os.path.abspath(log_file_path)}'
     file_logger = logging.getLogger(logger_name)
     file_logger.setLevel(logging.DEBUG)
     file_logger.propagate = False
@@ -36,7 +37,7 @@ class HttpRemoteControlWatchdogProcess:
         self,
         base_url: str,
         client_id: str,
-        poll_interval: float = 3,
+        poll_interval: float = 30,
         local_watchdog_heartbeat_file_path: str | None = None,
         remote_watchdog_log_file_path: str | None = None,
         local_watchdog_enabled: bool = True,
@@ -55,22 +56,22 @@ class HttpRemoteControlWatchdogProcess:
         self.local_watchdog_timeout_seconds = max(float(local_watchdog_timeout_seconds or 0), 1.0)
         self._process = None
 
-    # add remote watchdog rename 2026-04-10 00:00
+    # add remote watchdog cleanup 2026-04-10 00:00
     def _build_default_local_watchdog_heartbeat_file_path(self):
         return os.path.join(tempfile.gettempdir(), f'client_local_watchdog_heartbeat_{self.client_id}.json')
 
-    # add remote watchdog rename 2026-04-10 00:00
+    # add remote watchdog cleanup 2026-04-10 00:00
     def _build_default_remote_watchdog_log_file_path(self):
         return os.path.join(tempfile.gettempdir(), f'client_remote_watchdog_{self.client_id}.log')
 
-    # add remote watchdog rename 2026-04-10 00:00
+    # add remote watchdog cleanup 2026-04-10 00:00
     def _build_parent_launch_argv(self):
         if getattr(sys, 'frozen', False):
             return [os.path.realpath(sys.executable), *sys.argv[1:]]
 
         return [os.path.realpath(sys.executable), os.path.realpath(sys.argv[0]), *sys.argv[1:]]
 
-    # add remote watchdog rename 2026-04-10 00:00
+    # add remote watchdog cleanup 2026-04-10 00:00
     def _build_worker_argv(self):
         parent_launch_argv_json = json.dumps(self._build_parent_launch_argv())
 
@@ -106,7 +107,7 @@ class HttpRemoteControlWatchdogProcess:
             '--watch-local-watchdog-timeout-seconds', str(self.local_watchdog_timeout_seconds),
         ]
 
-    # add remote watchdog rename 2026-04-10 00:00
+    # add remote watchdog cleanup 2026-04-10 00:00
     def start(self):
         if self._process is not None and self._process.poll() is None:
             return
@@ -142,10 +143,10 @@ class HttpRemoteControlWatchdogProcess:
 
         logger.info(
             f'Remote watchdog process started: pid={self._process.pid}, '
-            f'client_id={self.client_id}, base_url={self.base_url}'
+            f'client_id={self.client_id}'
         )
 
-    # add remote watchdog rename 2026-04-10 00:00
+    # add remote watchdog cleanup 2026-04-10 00:00
     def stop(self):
         process = self._process
         if process is None:
@@ -192,31 +193,25 @@ class HttpRemoteControlWatchdogWorker:
         self.remote_watchdog_log_file_path = str(remote_watchdog_log_file_path or '').strip()
         self.local_watchdog_enabled = bool(local_watchdog_enabled)
         self.local_watchdog_timeout_seconds = max(float(local_watchdog_timeout_seconds or 0), 1.0)
-        self._remote_watchdog_logger = _build_watchdog_file_logger(self.remote_watchdog_log_file_path)
-        self._remote_control_poller = HttpRemoteControlPoller(
-            base_url=self.base_url,
-            client_id=self.client_id,
-            command_handler=self._handle_remote_control_command,
-            poll_interval=self.poll_interval,
-        )
+        self._remote_watchdog_logger = _build_remote_watchdog_file_logger(self.remote_watchdog_log_file_path)
 
-    # add remote watchdog rename 2026-04-10 00:00
-    def _log_debug(self, message: str):
+    # add remote watchdog cleanup 2026-04-10 00:00
+    def _log_http_debug(self, message: str):
         self._remote_watchdog_logger.debug(message)
 
-    # add remote watchdog rename 2026-04-10 00:00
-    def _log_info(self, message: str):
-        self._remote_watchdog_logger.info(message)
-
-    # add remote watchdog rename 2026-04-10 00:00
-    def _log_warning(self, message: str):
+    # add remote watchdog cleanup 2026-04-10 00:00
+    def _log_http_warning(self, message: str):
         self._remote_watchdog_logger.warning(message)
 
-    # add remote watchdog rename 2026-04-10 00:00
-    def _log_error(self, message: str):
+    # add remote watchdog cleanup 2026-04-10 00:00
+    def _log_http_error(self, message: str):
         self._remote_watchdog_logger.error(message)
 
-    # add remote watchdog rename 2026-04-10 00:00
+    # add remote watchdog cleanup 2026-04-10 00:00
+    def _build_poll_url(self) -> str:
+        return f'{self.base_url}/api/connections/{self.client_id}/control'
+
+    # add remote watchdog cleanup 2026-04-10 00:00
     def _is_parent_alive(self) -> bool:
         try:
             os.kill(self.parent_pid, 0)
@@ -224,7 +219,7 @@ class HttpRemoteControlWatchdogWorker:
         except Exception:
             return False
 
-    # add remote watchdog rename 2026-04-10 00:00
+    # add remote watchdog cleanup 2026-04-10 00:00
     def _kill_parent_process(self):
         if not self._is_parent_alive():
             return
@@ -240,9 +235,9 @@ class HttpRemoteControlWatchdogWorker:
             else:
                 os.kill(self.parent_pid, signal.SIGKILL)
         except Exception as e:
-            self._log_error(f'Failed to kill parent process: {e}')
+            self._log_http_error(f'kill parent process failed: {e}')
 
-    # add remote watchdog rename 2026-04-10 00:00
+    # add remote watchdog cleanup 2026-04-10 00:00
     def _spawn_restarted_parent(self):
         if not self.parent_launch_argv:
             raise RuntimeError('Missing parent launch argv')
@@ -276,7 +271,7 @@ class HttpRemoteControlWatchdogWorker:
         else:
             raise RuntimeError(f'Unsupported os.name: {os.name}')
 
-    # add remote watchdog rename 2026-04-10 00:00
+    # add remote watchdog cleanup 2026-04-10 00:00
     def _read_local_watchdog_heartbeat_age_seconds(self):
         if (
             not self.local_watchdog_heartbeat_file_path
@@ -291,14 +286,38 @@ class HttpRemoteControlWatchdogWorker:
             if ts_value <= 0:
                 return None
             return max(time.time() - ts_value, 0.0)
-        except Exception as e:
-            self._log_error(f'Failed to read local watchdog heartbeat: {e}')
+        except Exception:
             return None
 
-    # add remote watchdog rename 2026-04-10 00:00
-    def _handle_remote_control_command(self, command: str):
+    # add remote watchdog cleanup 2026-04-10 00:00
+    def _fetch_remote_control_command(self) -> str:
+        request = urllib.request.Request(
+            self._build_poll_url(),
+            method='GET',
+            headers={
+                'Accept': 'application/json',
+            },
+        )
+
+        with urllib.request.urlopen(request, timeout=5) as response:
+            payload = json.loads(response.read().decode('utf-8', errors='replace'))
+
+        if not isinstance(payload, dict):
+            return ''
+
+        data = payload.get('data') or {}
+        if not isinstance(data, dict):
+            return ''
+
+        command = str(data.get('command') or '').strip().lower()
+        if command in ('kill', 'reset'):
+            return command
+
+        return ''
+
+    # add remote watchdog cleanup 2026-04-10 00:00
+    def _execute_remote_control_command(self, command: str):
         command_text = str(command or '').strip().lower()
-        self._log_warning(f'Remote watchdog received control command: {command_text}')
 
         if command_text == 'kill':
             self._kill_parent_process()
@@ -312,57 +331,81 @@ class HttpRemoteControlWatchdogWorker:
 
         raise ValueError(f'Unsupported remote watchdog control command: {command_text}')
 
-    # add remote watchdog rename 2026-04-10 00:00
+    # add remote watchdog cleanup 2026-04-10 00:00
+    # add remote watchdog cleanup 2026-04-10 00:00
     def _handle_local_watchdog_timeout(self, heartbeat_age_seconds: float):
-        self._log_warning(
-            f'Local watchdog timeout detected by remote watchdog: pid={os.getpid()}, '
-            f'parent_pid={self.parent_pid}, client_id={self.client_id}, '
+        self._log_http_warning(
+            f'local watchdog timeout detected: client_id={self.client_id}, '
             f'heartbeat_age_seconds={heartbeat_age_seconds:.2f}, '
             f'timeout_seconds={self.local_watchdog_timeout_seconds}'
         )
+
         self._spawn_restarted_parent()
+
+        self._log_http_warning(
+            f'local watchdog restart spawned: client_id={self.client_id}, '
+            f'launch_cwd={self.launch_cwd}'
+        )
+
         time.sleep(0.2)
+
+        self._log_http_warning(
+            f'local watchdog killing old parent: client_id={self.client_id}, '
+            f'parent_pid={self.parent_pid}'
+        )
+
         self._kill_parent_process()
         os._exit(0)
 
-    # add remote watchdog rename 2026-04-10 00:00
+    # add remote watchdog cleanup 2026-04-10 00:00
     def run(self):
-        self._log_info(
-            f'Remote watchdog worker running: pid={os.getpid()}, parent_pid={self.parent_pid}, '
-            f'client_id={self.client_id}, base_url={self.base_url}, '
-            f'local_watchdog_heartbeat_file_path={self.local_watchdog_heartbeat_file_path}, '
-            f'remote_watchdog_log_file_path={self.remote_watchdog_log_file_path}, '
-            f'local_watchdog_enabled={self.local_watchdog_enabled}, '
-            f'local_watchdog_timeout_seconds={self.local_watchdog_timeout_seconds}'
-        )
-        self._remote_control_poller.start()
+        next_http_poll_at = 0.0
 
-        try:
-            while True:
-                parent_alive = self._is_parent_alive()
-                local_watchdog_heartbeat_age_seconds = self._read_local_watchdog_heartbeat_age_seconds()
+        while True:
+            if not self._is_parent_alive():
+                break
 
-                self._log_debug(
-                    f'Remote watchdog loop tick: pid={os.getpid()}, parent_pid={self.parent_pid}, '
-                    f'client_id={self.client_id}, parent_alive={parent_alive}, '
-                    f'local_watchdog_heartbeat_age_seconds={local_watchdog_heartbeat_age_seconds}, '
-                    f'control_url={self._remote_control_poller._build_poll_url()}'
+            if self.local_watchdog_enabled:
+                heartbeat_age_seconds = self._read_local_watchdog_heartbeat_age_seconds()
+                if (
+                    heartbeat_age_seconds is not None
+                    and heartbeat_age_seconds > self.local_watchdog_timeout_seconds
+                ):
+                    self._handle_local_watchdog_timeout(heartbeat_age_seconds)
+
+            now = time.time()
+            if now >= next_http_poll_at:
+                poll_url = self._build_poll_url()
+                self._log_http_debug(
+                    f'http control poll request: client_id={self.client_id}, url={poll_url}'
                 )
 
-                if not parent_alive:
-                    self._log_info('Remote watchdog parent process exited, worker stopping')
-                    break
+                try:
+                    command = self._fetch_remote_control_command()
+                    if command:
+                        self._log_http_warning(
+                            f'http control command received: client_id={self.client_id}, command={command}'
+                        )
+                        self._execute_remote_control_command(command)
+                except urllib.error.HTTPError as e:
+                    self._log_http_error(
+                        f'http control poll failed: client_id={self.client_id}, http_status={e.code}, url={poll_url}'
+                    )
+                except urllib.error.URLError as e:
+                    self._log_http_error(
+                        f'http control poll failed: client_id={self.client_id}, error={e}, url={poll_url}'
+                    )
+                except Exception as e:
+                    self._log_http_error(
+                        f'http control poll failed: client_id={self.client_id}, error={e}, url={poll_url}'
+                    )
 
-                if self.local_watchdog_enabled and local_watchdog_heartbeat_age_seconds is not None:
-                    if local_watchdog_heartbeat_age_seconds > self.local_watchdog_timeout_seconds:
-                        self._handle_local_watchdog_timeout(local_watchdog_heartbeat_age_seconds)
+                next_http_poll_at = now + self.poll_interval
 
-                time.sleep(min(self.poll_interval, 1.0))
-        finally:
-            self._remote_control_poller.stop()
+            time.sleep(0.5)
 
 
-# add remote watchdog rename 2026-04-10 00:00
+# add remote watchdog cleanup 2026-04-10 00:00
 def _read_flag_value(flag_name: str, default_value: Optional[str] = None) -> Optional[str]:
     argv = sys.argv[1:]
     for index, arg in enumerate(argv):
@@ -373,12 +416,12 @@ def _read_flag_value(flag_name: str, default_value: Optional[str] = None) -> Opt
     return default_value
 
 
-# add remote watchdog rename 2026-04-10 00:00
+# add remote watchdog cleanup 2026-04-10 00:00
 def run_remote_watchdog_worker_from_argv():
     parent_pid = int(_read_flag_value('--watch-parent-pid', '0') or '0')
     client_id = _read_flag_value('--watch-client-id', '') or ''
     base_url = _read_flag_value('--watch-base-url', '') or ''
-    poll_interval = float(_read_flag_value('--watch-poll-interval', '3') or '3')
+    poll_interval = float(_read_flag_value('--watch-poll-interval', '30') or '30')
     launch_cwd = _read_flag_value('--watch-launch-cwd', os.getcwd()) or os.getcwd()
     parent_launch_argv_json = _read_flag_value('--watch-parent-launch-argv-json', '[]') or '[]'
     local_watchdog_heartbeat_file_path = _read_flag_value('--watch-local-heartbeat-file-path', '') or ''

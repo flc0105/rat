@@ -6,22 +6,21 @@ import threading
 import time
 
 from client.config.config import (
-    CONTROL_POLLER_BACKEND,
-    CONTROL_POLL_INTERVAL_SECONDS,
     LOCAL_WATCHDOG_ENABLED,
     LOCAL_WATCHDOG_HEARTBEAT_INTERVAL_SECONDS,
     LOCAL_WATCHDOG_TIMEOUT_SECONDS,
+    REMOTE_HTTP_WATCHDOG_ENABLED,
+    REMOTE_HTTP_WATCHDOG_INTERVAL_SECONDS,
     UPLOAD_BASE_URL,
 )
-from client.connection.http_control_poller import HttpRemoteControlPoller
 from client.connection.http_control_watchdog_process import HttpRemoteControlWatchdogProcess
 from core.utils.logger import logger
 
 
-def _build_guard_file_logger(log_file_path: str):
-    logger_name = f'guard_file_logger::{os.path.abspath(log_file_path)}'
+def _build_local_watchdog_file_logger(log_file_path: str):
+    logger_name = f'local_watchdog_file_logger::{os.path.abspath(log_file_path)}'
     file_logger = logging.getLogger(logger_name)
-    file_logger.setLevel(logging.DEBUG)
+    file_logger.setLevel(logging.ERROR)
     file_logger.propagate = False
 
     if not file_logger.handlers:
@@ -38,25 +37,23 @@ def _build_guard_file_logger(log_file_path: str):
 
 
 class LocalWatchdogHeartbeatFeeder:
-    def __init__(self, client_id: str, heartbeat_interval_seconds: float, heartbeat_file_path: str, log_file_path: str):
+    def __init__(
+        self,
+        client_id: str,
+        heartbeat_interval_seconds: float,
+        heartbeat_file_path: str,
+        local_watchdog_log_file_path: str,
+    ):
         self.client_id = str(client_id or '').strip()
         self.heartbeat_interval_seconds = max(float(heartbeat_interval_seconds or 0), 0.5)
         self.heartbeat_file_path = str(heartbeat_file_path or '').strip()
-        self.log_file_path = str(log_file_path or '').strip()
+        self.local_watchdog_log_file_path = str(local_watchdog_log_file_path or '').strip()
 
         self._stop_event = threading.Event()
         self._thread = None
-        self._local_watchdog_logger = _build_guard_file_logger(self.log_file_path)
+        self._local_watchdog_logger = _build_local_watchdog_file_logger(self.local_watchdog_log_file_path)
 
-    # add local watchdog feeder split 2026-04-10 00:00
-    def _log_debug(self, message: str):
-        self._local_watchdog_logger.debug(message)
-
-    # add local watchdog feeder split 2026-04-10 00:00
-    def _log_info(self, message: str):
-        self._local_watchdog_logger.info(message)
-
-    # add local watchdog feeder split 2026-04-10 00:00
+    # add local watchdog cleanup 2026-04-10 00:00
     def _write_heartbeat(self):
         temp_file_path = f'{self.heartbeat_file_path}.tmp'
 
@@ -72,28 +69,17 @@ class LocalWatchdogHeartbeatFeeder:
 
         os.replace(temp_file_path, self.heartbeat_file_path)
 
-    # add local watchdog feeder split 2026-04-10 00:00
+    # add local watchdog cleanup 2026-04-10 00:00
     def _run_loop(self):
-        self._log_info(
-            f'Local watchdog heartbeat feeder running: pid={os.getpid()}, '
-            f'client_id={self.client_id}, heartbeat_file_path={self.heartbeat_file_path}, '
-            f'local_watchdog_log_file_path={self.log_file_path}, '
-            f'heartbeat_interval_seconds={self.heartbeat_interval_seconds}'
-        )
-
         while not self._stop_event.is_set():
             try:
                 self._write_heartbeat()
-                self._log_debug(
-                    f'Local watchdog heartbeat written: pid={os.getpid()}, '
-                    f'client_id={self.client_id}, heartbeat_file_path={self.heartbeat_file_path}'
-                )
             except Exception as e:
-                self._local_watchdog_logger.error(f'Failed to write local watchdog heartbeat: {e}')
+                self._local_watchdog_logger.error(f'write local watchdog heartbeat failed: {e}')
 
             self._stop_event.wait(self.heartbeat_interval_seconds)
 
-    # add local watchdog feeder split 2026-04-10 00:00
+    # add local watchdog cleanup 2026-04-10 00:00
     def start(self):
         if self._thread is not None and self._thread.is_alive():
             return
@@ -108,76 +94,60 @@ class LocalWatchdogHeartbeatFeeder:
         )
         self._thread.start()
 
-    # add local watchdog feeder split 2026-04-10 00:00
+    # add local watchdog cleanup 2026-04-10 00:00
     def stop(self):
         self._stop_event.set()
 
 
 class ClientGuardManager:
-    def __init__(self, client_id: str, remote_control_command_handler):
+    def __init__(self, client_id: str):
         self.client_id = str(client_id or '').strip()
-        self.remote_control_command_handler = remote_control_command_handler
-
-        self._remote_control_stop_event = threading.Event()
-        self._remote_control_poller = None
         self._remote_watchdog_process = None
         self._local_watchdog_feeder = None
+        self._started = False
 
-    # add guard manager split 2026-04-10 00:00
+    # add guard manager cleanup 2026-04-10 00:00
     def _build_local_watchdog_heartbeat_file_path(self):
         return os.path.join(tempfile.gettempdir(), f'client_local_watchdog_heartbeat_{self.client_id}.json')
 
-    # add guard manager split 2026-04-10 00:00
+    # add guard manager cleanup 2026-04-10 00:00
     def _build_local_watchdog_log_file_path(self):
         return os.path.join(tempfile.gettempdir(), f'client_local_watchdog_{self.client_id}.log')
 
-    # add guard manager split 2026-04-10 00:00
+    # add guard manager cleanup 2026-04-10 00:00
     def _build_remote_watchdog_log_file_path(self):
         return os.path.join(tempfile.gettempdir(), f'client_remote_watchdog_{self.client_id}.log')
 
-    # add guard manager split 2026-04-10 00:00
+    # add guard manager cleanup 2026-04-10 00:00
     def _ensure_local_watchdog_feeder(self):
         if self._local_watchdog_feeder is None:
             self._local_watchdog_feeder = LocalWatchdogHeartbeatFeeder(
                 client_id=self.client_id,
                 heartbeat_interval_seconds=LOCAL_WATCHDOG_HEARTBEAT_INTERVAL_SECONDS,
                 heartbeat_file_path=self._build_local_watchdog_heartbeat_file_path(),
-                log_file_path=self._build_local_watchdog_log_file_path(),
+                local_watchdog_log_file_path=self._build_local_watchdog_log_file_path(),
             )
 
-    # add guard manager split 2026-04-10 00:00
+    # add guard manager cleanup 2026-04-10 00:00
     def _start_local_watchdog_feeder(self):
         if not LOCAL_WATCHDOG_ENABLED:
-            logger.info(f'Local watchdog disabled: client_id={self.client_id}')
             return
 
         self._ensure_local_watchdog_feeder()
-        logger.info(
-            f'Starting local watchdog heartbeat feeder: client_id={self.client_id}, '
-            f'heartbeat_file_path={self._build_local_watchdog_heartbeat_file_path()}, '
-            f'local_watchdog_log_file_path={self._build_local_watchdog_log_file_path()}, '
-            f'heartbeat_interval_seconds={LOCAL_WATCHDOG_HEARTBEAT_INTERVAL_SECONDS}'
-        )
         self._local_watchdog_feeder.start()
 
-    # add guard manager split 2026-04-10 00:00
+    # add guard manager cleanup 2026-04-10 00:00
     def _start_remote_watchdog_process(self):
-        if self._remote_watchdog_process is not None:
+        if not REMOTE_HTTP_WATCHDOG_ENABLED:
             return
 
-        logger.info(
-            f'Starting remote watchdog process: client_id={self.client_id}, '
-            f'control_url={UPLOAD_BASE_URL}/api/connections/{self.client_id}/control, '
-            f'local_watchdog_heartbeat_file_path={self._build_local_watchdog_heartbeat_file_path()}, '
-            f'remote_watchdog_log_file_path={self._build_remote_watchdog_log_file_path()}, '
-            f'local_watchdog_enabled={LOCAL_WATCHDOG_ENABLED}, '
-            f'local_watchdog_timeout_seconds={LOCAL_WATCHDOG_TIMEOUT_SECONDS}'
-        )
+        if self._remote_watchdog_process is not None:
+            return
 
         self._remote_watchdog_process = HttpRemoteControlWatchdogProcess(
             base_url=UPLOAD_BASE_URL,
             client_id=self.client_id,
-            poll_interval=CONTROL_POLL_INTERVAL_SECONDS,
+            poll_interval=REMOTE_HTTP_WATCHDOG_INTERVAL_SECONDS,
             local_watchdog_heartbeat_file_path=self._build_local_watchdog_heartbeat_file_path(),
             remote_watchdog_log_file_path=self._build_remote_watchdog_log_file_path(),
             local_watchdog_enabled=LOCAL_WATCHDOG_ENABLED,
@@ -185,44 +155,36 @@ class ClientGuardManager:
         )
         self._remote_watchdog_process.start()
 
-    # add guard manager split 2026-04-10 00:00
-    def _start_remote_control_thread_poller(self):
-        if self._remote_control_poller is not None:
-            return
-
+    # add guard manager cleanup 2026-04-10 00:00
+    def _log_guard_startup_once(self):
         logger.info(
-            f'Starting remote control thread poller: client_id={self.client_id}, '
-            f'control_url={UPLOAD_BASE_URL}/api/connections/{self.client_id}/control, '
-            f'poll_interval_seconds={CONTROL_POLL_INTERVAL_SECONDS}'
+            f'Guard startup: client_id={self.client_id}, '
+            f'remote_http_watchdog_enabled={REMOTE_HTTP_WATCHDOG_ENABLED}, '
+            f'remote_http_watchdog_interval_seconds={REMOTE_HTTP_WATCHDOG_INTERVAL_SECONDS}, '
+            f'remote_watchdog_log_file_path={self._build_remote_watchdog_log_file_path()}, '
+            f'local_watchdog_enabled={LOCAL_WATCHDOG_ENABLED}, '
+            f'local_watchdog_heartbeat_interval_seconds={LOCAL_WATCHDOG_HEARTBEAT_INTERVAL_SECONDS}, '
+            f'local_watchdog_timeout_seconds={LOCAL_WATCHDOG_TIMEOUT_SECONDS}, '
+            f'local_watchdog_heartbeat_file_path={self._build_local_watchdog_heartbeat_file_path()}, '
+            f'local_watchdog_log_file_path={self._build_local_watchdog_log_file_path()}'
         )
 
-        self._remote_control_poller = HttpRemoteControlPoller(
-            base_url=UPLOAD_BASE_URL,
-            client_id=self.client_id,
-            command_handler=self.remote_control_command_handler,
-            poll_interval=CONTROL_POLL_INTERVAL_SECONDS,
-            stop_event=self._remote_control_stop_event,
-        )
-        self._remote_control_poller.start()
-
-    # add guard manager split 2026-04-10 00:00
+    # add guard manager cleanup 2026-04-10 00:00
     def start(self):
-        if CONTROL_POLLER_BACKEND == 'process':
-            self._start_local_watchdog_feeder()
-            self._start_remote_watchdog_process()
+        if self._started:
             return
 
-        self._start_remote_control_thread_poller()
+        self._log_guard_startup_once()
+        self._start_local_watchdog_feeder()
+        self._start_remote_watchdog_process()
+        self._started = True
 
-    # add guard manager split 2026-04-10 00:00
+    # add guard manager cleanup 2026-04-10 00:00
     def stop(self):
-        self._remote_control_stop_event.set()
-
-        if self._remote_control_poller is not None:
-            self._remote_control_poller.stop()
-
         if self._remote_watchdog_process is not None:
             self._remote_watchdog_process.stop()
 
         if self._local_watchdog_feeder is not None:
             self._local_watchdog_feeder.stop()
+
+        self._started = False
