@@ -7,6 +7,7 @@ import time
 import urllib.error
 import urllib.request
 
+from core.utils.client_util import spawn_new_instance
 
 def _build_remote_watchdog_file_logger(log_file_path: str):
     logger_name = f'remote_watchdog_file_logger::{os.path.abspath(log_file_path)}'
@@ -102,6 +103,9 @@ class WatchdogActionExecutor:
         self.kill_parent_process()
         os._exit(0)
 
+    def spawn_new_instance(self):
+        self.spawn_restarted_parent()
+
 
 class RemoteHttpWatchdogMonitor:
     def __init__(
@@ -158,7 +162,7 @@ class RemoteHttpWatchdogMonitor:
             return ''
 
         command = str(data.get('command') or '').strip().lower()
-        if command in ('kill', 'reset'):
+        if command in ('kill', 'reset', 'spawn'):
             return command
 
         return ''
@@ -172,6 +176,10 @@ class RemoteHttpWatchdogMonitor:
 
         if command_text == 'reset':
             self.action_executor.restart_parent_and_exit()
+
+        if command_text == 'spawn':
+            self.action_executor.spawn_new_instance()
+            return
 
         raise ValueError(f'Unsupported remote watchdog control command: {command_text}')
 

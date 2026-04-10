@@ -25,8 +25,8 @@ class ControlBuiltinSupport:
     # add server端控制命令转发 2026-04-10 00:00
     def _post_control_command(self, command: str) -> dict:
         normalized_command = str(command or '').strip().lower()
-        if normalized_command not in ('kill', 'reset'):
-            raise ValueError('command must be kill or reset')
+        if normalized_command not in ('kill', 'reset', 'spawn'):
+            raise ValueError('command must be kill, reset or spawn')
 
         payload = json.dumps({
             'command': normalized_command
@@ -75,3 +75,7 @@ class ControlBuiltinSupport:
     def force_reset(self):
         payload = self._post_control_command('reset')
         yield 1, f'force_reset sent -> client_id={payload.get("client_id", self._get_client_id())}, command=reset'
+
+    def force_spawn(self):
+        payload = self._post_control_command('spawn')
+        yield 1, f'force_spawn sent -> client_id={payload.get("client_id", self._get_client_id())}, command=spawn'

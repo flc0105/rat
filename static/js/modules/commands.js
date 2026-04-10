@@ -90,7 +90,13 @@ window.AppCommandsModule = {
                 return;
             }
 
-            const actionLabel = normalizedCommand === 'kill' ? 'Force Kill' : 'Force Reset';
+            const actionMap = {
+                kill: 'Force Kill',
+                spawn: 'Force Spawn',
+                reset: 'Force Reset'
+            };
+            const actionLabel = actionMap[normalizedCommand];
+            // const actionLabel = normalizedCommand === 'kill' ? 'Force Kill' : 'Force Reset';
 
             try {
                 await ElementPlus.ElMessageBox.confirm(
@@ -133,7 +139,7 @@ window.AppCommandsModule = {
                 return;
             }
 
-            if (normalizedCommand === 'kill' || normalizedCommand === 'reset') {
+            if (normalizedCommand === 'kill' || normalizedCommand === 'reset' || normalizedCommand === 'spawn') {
                 await this.sendHttpControlCommand(normalizedCommand);
                 return;
             }

@@ -88,8 +88,8 @@ def create_app(server_instance):
                 payload = request.get_json(silent=True) or {}
                 command = str(payload.get('command') or '').strip().lower()
 
-                if command not in ('kill', 'reset'):
-                    raise ValueError('command must be kill or reset')
+                if command not in ('kill', 'reset', 'spawn'):
+                    raise ValueError('command must be kill, reset or spawn')
 
                 server_instance.get_target_connection_by_client_id(client_id)
                 return control_command_store.set_pending_command(client_id, command)

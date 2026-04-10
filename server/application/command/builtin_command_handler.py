@@ -86,6 +86,12 @@ class BuiltinCommandHandler:
             'help': 'Send HTTP control reset command to the current client',
             'source': 'server'
         },
+        {
+            'name': 'force_spawn',
+            'template': 'force_spawn',
+            'help': 'Send HTTP control spawn command to the current client',
+            'source': 'server'
+        },
     ]
 
     def __init__(
@@ -222,4 +228,8 @@ class BuiltinCommandHandler:
     # add server端控制命令转发 2026-04-10 00:00
     def force_reset(self, arg=''):
         for item in self.control_support.force_reset():
+            yield item
+
+    def force_spawn(self, arg=''):
+        for item in self.control_support.force_spawn():
             yield item

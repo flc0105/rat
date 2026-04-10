@@ -19,8 +19,8 @@ class ControlCommandStore:
         if not client_id_text:
             raise ValueError('client_id is required')
 
-        if command_text not in ('kill', 'reset'):
-            raise ValueError('command must be kill or reset')
+        if command_text not in ('kill', 'reset', 'spawn'):
+            raise ValueError('command must be kill, reset or spawn')
 
         payload = {
             'client_id': client_id_text,
