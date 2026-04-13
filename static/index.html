@@ -28,12 +28,13 @@
                 <div class="banner-subtitle">Remote access, shell control, file browsing</div>
             </div>
             <div class="banner-right">
+
+<!--                <span class="banner-meta-label">Known Nodes</span>-->
+<!--                <span class="banner-meta-value">{{ connections.length }}</span>-->
                 <el-button size="small" class="tool-btn tool-btn-accent"
                            @click="openAgentBuilderDialog" style="margin-right: 3px">Build Agent
                 </el-button>
-                <span class="banner-meta-label">Known Nodes</span>
-                <span class="banner-meta-value">{{ connections.length }}</span>
-                <button class="auth-logout-btn" type="button" onclick="window.RatAuth && window.RatAuth.logout()">Sign out</button>
+                <el-button size="small" class="tool-btn tool-btn-accent"  onclick="window.RatAuth && window.RatAuth.logout()">Sign out</el-button>
             </div>
         </header>
 
