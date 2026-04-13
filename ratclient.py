@@ -7,16 +7,19 @@ import threading
 import time
 import uuid
 
-from client.config.config import (
-    RECONNECT_INTERVAL_SECONDS,
-    SERVER_ADDR, REMOTE_HTTP_WATCHDOG_ENABLED, LOCAL_WATCHDOG_ENABLED,
-)
+
 from client.config.runtime_config import HTTP_TRANSFER_MODE, PYTHON_EXECUTION_MODE
 from client.connection.server_connection import ServerConnection
 from client.watchdog.client_guard_manager import ClientGuardManager
 from client.watchdog.watchdog_process import run_watchdog_worker_from_argv
 from core.utils.client_util import check_privilege, get_system_paths
 from core.utils.logger import logger
+
+from client.config.config import (
+    CLIENT_BUILD_VERSION,
+    RECONNECT_INTERVAL_SECONDS,
+    SERVER_ADDR, REMOTE_HTTP_WATCHDOG_ENABLED, LOCAL_WATCHDOG_ENABLED,
+)
 
 # 强制导入所有平台模块，让 PyInstaller 检测到
 
@@ -145,7 +148,7 @@ class Client:
             'python_execution_mode': PYTHON_EXECUTION_MODE,
             'remote_watchdog_enabled': REMOTE_HTTP_WATCHDOG_ENABLED,
             'local_watchdog_enabled': LOCAL_WATCHDOG_ENABLED,
-
+            'build_version': CLIENT_BUILD_VERSION,
         }
 
     def _connect_socket(self):

@@ -22,25 +22,38 @@ def create_agent_blueprint(server_instance):
             target_os = (payload.get('target_os') or 'mac').strip()
             builder = (payload.get('builder') or 'pyinstaller').strip()
             target_arch = (payload.get('target_arch') or 'auto').strip()
+            server_web_scheme = (payload.get('server_web_scheme') or 'http').strip() or 'http'
+            server_web_host = (payload.get('server_web_host') or server_host).strip() or server_host
 
             if not server_host:
                 raise ValueError('server_host is required')
             if not server_port:
                 raise ValueError('server_port is required')
+            if not web_port:
+                raise ValueError('web_port is required')
 
             try:
                 server_port = int(server_port)
             except ValueError:
                 raise ValueError('server_port must be integer')
 
-            return agent_api.build_agent(
+            try:
+                web_port = int(web_port)
+            except ValueError:
+                raise ValueError('web_port must be integer')
+
+            result = agent_api.build_agent(
                 server_host,
                 server_port,
                 web_port,
                 target_os,
                 builder,
                 target_arch,
+                server_web_scheme,
+                server_web_host,
             )
+            result['download_url'] = f'/api/agent/download/{result["file_name"]}'
+            return result
 
         return responder.json_endpoint(_execute, default_error_status=500)
 

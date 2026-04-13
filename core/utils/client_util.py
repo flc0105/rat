@@ -1,9 +1,11 @@
 import os
 import platform
+import shlex
+import shutil
 import subprocess
 import sys
+import zipfile
 from pathlib import Path
-import shlex
 
 
 def check_privilege():
@@ -189,5 +191,93 @@ def spawn_new_instance():
             start_new_session=True,
             **popen_kwargs,
         )
+
+    raise RuntimeError(f'Unsupported os.name: {os.name}')
+
+
+def ensure_directory(path: str) -> str:
+    directory = os.path.abspath(path)
+    os.makedirs(directory, exist_ok=True)
+    return directory
+
+
+def get_client_bundle_release_dir() -> str:
+    # update 命令默认下载目录
+    return ensure_directory(os.path.join(str(Path.home()), 'client_bundle', 'releases'))
+
+
+def build_bundle_extract_dir(release_dir: str, file_name: str) -> str:
+    base_name = os.path.splitext(os.path.basename(file_name))[0] or 'client_bundle'
+    return os.path.join(os.path.abspath(release_dir), base_name)
+
+
+def safe_extract_zip_file(zip_path: str, destination_dir: str) -> str:
+    destination_dir = ensure_directory(destination_dir)
+    destination_dir_abs = os.path.abspath(destination_dir)
+
+    with zipfile.ZipFile(zip_path, 'r') as archive:
+        for member in archive.infolist():
+            member_path = os.path.abspath(os.path.join(destination_dir_abs, member.filename))
+            if os.path.commonpath([destination_dir_abs, member_path]) != destination_dir_abs:
+                raise ValueError(f'Unsafe zip entry detected: {member.filename}')
+        archive.extractall(destination_dir_abs)
+
+    return destination_dir_abs
+
+
+def _resolve_python_command_for_source_bundle() -> list[str]:
+    if not getattr(sys, 'frozen', False):
+        return [os.path.realpath(sys.executable)]
+
+    candidates = []
+
+    env_python = os.environ.get('PYTHON_EXECUTABLE', '').strip()
+    if env_python:
+        candidates.append([env_python])
+
+    python3_path = shutil.which('python3')
+    if python3_path:
+        candidates.append([python3_path])
+
+    python_path = shutil.which('python')
+    if python_path:
+        candidates.append([python_path])
+
+    py_launcher = shutil.which('py')
+    if py_launcher:
+        candidates.append([py_launcher, '-3'])
+
+    if not candidates:
+        raise RuntimeError('Python interpreter not found; cannot launch source bundle')
+
+    return candidates[0]
+
+
+def spawn_detached_python_script(script_path: str, cwd: str = '', args=None):
+    script_path = os.path.abspath(script_path)
+    launch_cwd = os.path.abspath(cwd) if cwd else os.path.dirname(script_path)
+    command = _resolve_python_command_for_source_bundle() + [script_path]
+
+    if args:
+        command.extend(str(item) for item in args)
+
+    popen_kwargs = {
+        'cwd': launch_cwd,
+        'env': dict(os.environ),
+        'stdin': subprocess.DEVNULL,
+        'stdout': subprocess.DEVNULL,
+        'stderr': subprocess.DEVNULL,
+        'close_fds': True,
+        'shell': False,
+    }
+
+    if os.name == 'nt':
+        creationflags = 0
+        creationflags |= getattr(subprocess, 'CREATE_NEW_PROCESS_GROUP', 0)
+        creationflags |= getattr(subprocess, 'DETACHED_PROCESS', 0)
+        return subprocess.Popen(command, creationflags=creationflags, **popen_kwargs)
+
+    if os.name == 'posix':
+        return subprocess.Popen(command, start_new_session=True, **popen_kwargs)
 
     raise RuntimeError(f'Unsupported os.name: {os.name}')

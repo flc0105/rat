@@ -67,6 +67,7 @@ class WebConnectionService:
             'last_rtt_ms': session.context.last_rtt_ms,
             'stale_after_seconds': self.STALE_AFTER_SECONDS,
             'connection_state': self._build_connection_state(session),
+            'build_version': info.build_version,
             'python_ver': info.get_extra('python_ver'),
             'process_id': info.get_extra('process_id'),
             'launch_command': info.get_extra('launch_command'),

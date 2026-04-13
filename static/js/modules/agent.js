@@ -17,7 +17,11 @@ window.AppAgentModule = {
     computed: {
         agentBuilderAlertText() {
             if (this.agentForm.builder === 'pyinstaller') {
-                return 'PyInstaller only builds for the current server platform. Architecture selection applies only to Go.';
+                return 'PyInstaller only builds for the current server platform. Build version will be injected automatically.';
+            }
+
+            if (this.agentForm.builder === 'bundle') {
+                return 'Bundle outputs a source zip that contains client/, core/ and ratclient.py. Target OS and architecture are not applicable, and build version will be injected automatically.';
             }
 
             return 'Windows defaults to amd64, Linux defaults to amd64, and macOS uses the best-matching server architecture by default.';
@@ -25,6 +29,10 @@ window.AppAgentModule = {
 
         isGoBuilder() {
             return this.agentForm.builder === 'go';
+        },
+
+        isBundleBuilder() {
+            return this.agentForm.builder === 'bundle';
         }
     },
 
@@ -38,6 +46,11 @@ window.AppAgentModule = {
         },
 
         applyRecommendedAgentArch() {
+            if (this.agentForm.builder === 'bundle') {
+                this.agentForm.target_arch = 'auto';
+                return;
+            }
+
             if (this.agentForm.builder !== 'go') {
                 this.agentForm.target_arch = 'auto';
                 return;
@@ -54,6 +67,14 @@ window.AppAgentModule = {
             }
 
             this.agentForm.target_arch = 'auto';
+        },
+
+        buildAgentPayload() {
+            return {
+                ...this.agentForm,
+                server_web_scheme: window.location.protocol.replace(':', '') || 'http',
+                server_web_host: window.location.hostname || this.agentForm.server_host,
+            };
         },
 
         async buildAgent() {
@@ -76,7 +97,7 @@ window.AppAgentModule = {
                 const res = await fetch('/api/agent/build', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify(this.agentForm)
+                    body: JSON.stringify(this.buildAgentPayload())
                 });
 
                 const json = await res.json();
@@ -85,7 +106,7 @@ window.AppAgentModule = {
                 }
 
                 const data = json.data;
-                const downloadUrl = `/api/agent/download/${encodeURIComponent(data.file_name)}`;
+                const downloadUrl = data.download_url || `/api/agent/download/${encodeURIComponent(data.file_name)}`;
 
                 const a = document.createElement('a');
                 a.href = downloadUrl;
@@ -102,7 +123,8 @@ window.AppAgentModule = {
                     });
                 }
 
-                ElementPlus.ElMessage.success(`Agent built: ${data.file_name} (${this.formatBytes(data.size)})`);
+                const buildVersionText = data.build_version ? `, ${data.build_version}` : '';
+                ElementPlus.ElMessage.success(`Agent built: ${data.file_name} (${this.formatBytes(data.size)})${buildVersionText}`);
                 this.agentBuilderDialogVisible = false;
 
             } catch (e) {

@@ -22,6 +22,8 @@ class WebAgentApi:
         target_os: str = 'mac',
         builder: str = 'pyinstaller',
         target_arch: str = 'auto',
+        server_web_scheme: str = 'http',
+        server_web_host: str = '',
     ):
         return self.agent_builder.build_agent(
             server_host=server_host,
@@ -30,6 +32,8 @@ class WebAgentApi:
             target_os=target_os,
             builder=builder,
             target_arch=target_arch,
+            server_web_scheme=server_web_scheme,
+            server_web_host=server_web_host,
         )
 
     def get_built_agent_file_path(self, filename: str):
@@ -40,5 +44,5 @@ class WebAgentApi:
 
     def cleanup_agent_build(self, work_dir: str):
         if work_dir:
-            self.agent_builder.cleanup_build_dir(work_dir)
+            self.agent_builder.cleanup(work_dir)
         return {'cleaned': True}

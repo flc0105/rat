@@ -1605,6 +1605,11 @@
                     <div class="background-job-stat-label">Python Version</div>
                     <div class="background-job-stat-value">{{ currentConnection?.python_ver || '-' }}</div>
                 </div>
+
+                <div class="background-job-stat">
+                    <div class="background-job-stat-label">Build Version</div>
+                    <div class="background-job-stat-value">{{ currentConnection?.build_version || '-' }}</div>
+                </div>
                 <div class="background-job-stat">
                     <div class="background-job-stat-label">PID</div>
                     <div class="background-job-stat-value">{{ currentConnection?.process_id || '-' }}</div>
@@ -1639,7 +1644,7 @@
                     <div class="background-job-stat-label">Local Watchdog Enabled</div>
                     <div class="background-job-stat-value">{{ currentConnection?.local_watchdog_enabled }}</div>
                 </div>
-                
+
                 <div class="background-job-stat">
                     <div class="background-job-stat-label">Reported Jobs</div>
                     <div class="background-job-stat-value">{{ connectionInfoJobCount }}</div>
@@ -1818,7 +1823,7 @@
             <el-form-item label="Web Port" required>
                 <el-input v-model.number="agentForm.web_port" type="number" placeholder="8000"/>
             </el-form-item>
-            <el-form-item label="Target OS">
+            <el-form-item v-if="!isBundleBuilder" label="Target OS">
                 <el-radio-group v-model="agentForm.target_os">
                     <el-radio label="mac">macOS</el-radio>
                     <el-radio label="win">Windows</el-radio>
@@ -1827,11 +1832,12 @@
             </el-form-item>
             <el-form-item label="Builder">
                 <el-radio-group v-model="agentForm.builder">
+                    <el-radio label="bundle">Bundle</el-radio>
                     <el-radio label="pyinstaller">PyInstaller</el-radio>
                     <el-radio label="go">Go</el-radio>
                 </el-radio-group>
             </el-form-item>
-            <el-form-item label="Target Arch">
+            <el-form-item v-if="!isBundleBuilder" label="Target Arch">
                 <el-radio-group v-model="agentForm.target_arch" :disabled="agentForm.builder !== 'go'">
                     <el-radio label="auto">Auto</el-radio>
                     <el-radio label="amd64">amd64</el-radio>
