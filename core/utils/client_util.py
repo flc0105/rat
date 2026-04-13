@@ -281,3 +281,41 @@ def spawn_detached_python_script(script_path: str, cwd: str = '', args=None):
         return subprocess.Popen(command, start_new_session=True, **popen_kwargs)
 
     raise RuntimeError(f'Unsupported os.name: {os.name}')
+
+def is_process_alive(pid: int) -> bool:
+    try:
+        pid = int(pid)
+    except Exception:
+        return False
+
+    if pid <= 0:
+        return False
+
+    if os.name == 'nt':
+        # Windows 下不能用 os.kill(pid, 0) 探活，否则可能直接终止目标进程
+        import ctypes
+
+        process_query_limited_information = 0x1000
+        still_active = 259
+
+        process_handle = ctypes.windll.kernel32.OpenProcess(
+            process_query_limited_information,
+            False,
+            pid,
+        )
+        if not process_handle:
+            return False
+
+        try:
+            exit_code = ctypes.c_ulong()
+            if not ctypes.windll.kernel32.GetExitCodeProcess(process_handle, ctypes.byref(exit_code)):
+                return False
+            return exit_code.value == still_active
+        finally:
+            ctypes.windll.kernel32.CloseHandle(process_handle)
+
+    try:
+        os.kill(pid, 0)
+        return True
+    except Exception:
+        return False

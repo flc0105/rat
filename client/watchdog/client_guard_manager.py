@@ -1,14 +1,16 @@
 import os
 import tempfile
 
-from client.config.config import (
+from client.config.runtime_config import (
     LOCAL_WATCHDOG_ENABLED,
     LOCAL_WATCHDOG_HEARTBEAT_INTERVAL_SECONDS,
     LOCAL_WATCHDOG_TIMEOUT_SECONDS,
     REMOTE_HTTP_WATCHDOG_ENABLED,
     REMOTE_HTTP_WATCHDOG_INTERVAL_SECONDS,
-    UPLOAD_BASE_URL,
+
 )
+
+from client.config.config import UPLOAD_BASE_URL
 from client.watchdog.local_watchdog import LocalWatchdogHeartbeatFeeder
 from client.watchdog.watchdog_process import ClientWatchdogProcess
 from core.utils.logger import logger

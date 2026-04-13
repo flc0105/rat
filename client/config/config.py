@@ -13,13 +13,6 @@ DEFAULT_CONFIG = {
     'server_web_scheme': 'http',
     'server_web_host': '127.0.0.1',
     'server_web_port': 8085,
-    'reconnect_interval_seconds': 5,
-    'remote_http_watchdog_enabled': True,
-    'remote_http_watchdog_interval_seconds': 15,
-    'local_watchdog_enabled': True,
-    'local_watchdog_heartbeat_interval_seconds': 5,
-    'local_watchdog_timeout_seconds': 15,
-    # client build version：开发环境默认 dev，构建产物会在打包时注入具体版本号
     'client_build_version': 'dev',
 }
 
@@ -67,10 +60,4 @@ SERVER_WEB_HOST = RUNTIME_CONFIG['server_web_host']
 SERVER_WEB_PORT = RUNTIME_CONFIG['server_web_port']
 UPLOAD_BASE_URL = f'{SERVER_WEB_SCHEME}://{SERVER_WEB_HOST}:{SERVER_WEB_PORT}'
 
-RECONNECT_INTERVAL_SECONDS = RUNTIME_CONFIG['reconnect_interval_seconds']
-REMOTE_HTTP_WATCHDOG_ENABLED = RUNTIME_CONFIG['remote_http_watchdog_enabled']
-REMOTE_HTTP_WATCHDOG_INTERVAL_SECONDS = RUNTIME_CONFIG['remote_http_watchdog_interval_seconds']
-LOCAL_WATCHDOG_ENABLED = RUNTIME_CONFIG['local_watchdog_enabled']
-LOCAL_WATCHDOG_HEARTBEAT_INTERVAL_SECONDS = RUNTIME_CONFIG['local_watchdog_heartbeat_interval_seconds']
-LOCAL_WATCHDOG_TIMEOUT_SECONDS = RUNTIME_CONFIG['local_watchdog_timeout_seconds']
 CLIENT_BUILD_VERSION = str(RUNTIME_CONFIG.get('client_build_version') or 'dev').strip() or 'dev'

@@ -17,9 +17,11 @@ from core.utils.logger import logger
 
 from client.config.config import (
     CLIENT_BUILD_VERSION,
-    RECONNECT_INTERVAL_SECONDS,
-    SERVER_ADDR, REMOTE_HTTP_WATCHDOG_ENABLED, LOCAL_WATCHDOG_ENABLED,
+
+    SERVER_ADDR,
 )
+
+from client.config.runtime_config import RECONNECT_INTERVAL_SECONDS,REMOTE_HTTP_WATCHDOG_ENABLED, LOCAL_WATCHDOG_ENABLED
 
 # 强制导入所有平台模块，让 PyInstaller 检测到
 
