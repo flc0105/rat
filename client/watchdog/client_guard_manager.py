@@ -62,21 +62,24 @@ class ClientGuardManager:
                 local_watchdog_log_file_path=self._build_local_watchdog_log_file_path(),
             )
 
-    # add guard manager separation 2026-04-10 00:00
     def _log_startup_once(self):
-        logger.info(
-            f'Watchdog startup: client_id={self.client_id}, '
-            f'main_process_pid={os.getpid()}, '
-            f'remote_http_watchdog_enabled={REMOTE_HTTP_WATCHDOG_ENABLED}, '
-            f'remote_http_watchdog_interval_seconds={REMOTE_HTTP_WATCHDOG_INTERVAL_SECONDS}, '
-            f'remote_http_control_url={self._build_remote_http_control_url()}, '
-            f'remote_watchdog_log_file_path={self._build_remote_watchdog_log_file_path()}, '
-            f'local_watchdog_enabled={LOCAL_WATCHDOG_ENABLED}, '
-            f'local_watchdog_heartbeat_interval_seconds={LOCAL_WATCHDOG_HEARTBEAT_INTERVAL_SECONDS}, '
-            f'local_watchdog_timeout_seconds={LOCAL_WATCHDOG_TIMEOUT_SECONDS}, '
-            f'local_watchdog_heartbeat_file_path={self._build_local_watchdog_heartbeat_file_path()}, '
-            f'local_watchdog_log_file_path={self._build_local_watchdog_log_file_path()}'
-        )
+        items = [
+            ('client_id', self.client_id),
+            ('main_process_pid', os.getpid()),
+            ('remote_http_watchdog_enabled', REMOTE_HTTP_WATCHDOG_ENABLED),
+            ('remote_http_watchdog_interval_seconds', REMOTE_HTTP_WATCHDOG_INTERVAL_SECONDS),
+            ('remote_http_control_url', self._build_remote_http_control_url()),
+            ('remote_watchdog_log_file_path', self._build_remote_watchdog_log_file_path()),
+            ('local_watchdog_enabled', LOCAL_WATCHDOG_ENABLED),
+            ('local_watchdog_heartbeat_interval_seconds', LOCAL_WATCHDOG_HEARTBEAT_INTERVAL_SECONDS),
+            ('local_watchdog_timeout_seconds', LOCAL_WATCHDOG_TIMEOUT_SECONDS),
+            ('local_watchdog_heartbeat_file_path', self._build_local_watchdog_heartbeat_file_path()),
+            ('local_watchdog_log_file_path', self._build_local_watchdog_log_file_path()),
+        ]
+
+        logger.info('Watchdog startup:')
+        for key, value in items:
+            logger.info(f'  {key}={value}')
 
     # add guard manager separation 2026-04-10 00:00
     def start(self):

@@ -1595,6 +1595,51 @@
                     <div class="background-job-stat-label">RTT</div>
                     <div class="background-job-stat-value">{{ formatConnectionRtt(currentConnection) }}</div>
                 </div>
+
+                <div class="background-job-stat">
+                    <div class="background-job-stat-label">Connected At</div>
+                    <div class="background-job-stat-value">{{ formatDateTimeStandard(currentConnection?.connected_at) || '-' }}</div>
+                </div>
+
+                <div class="background-job-stat">
+                    <div class="background-job-stat-label">Python Version</div>
+                    <div class="background-job-stat-value">{{ currentConnection?.python_ver || '-' }}</div>
+                </div>
+                <div class="background-job-stat">
+                    <div class="background-job-stat-label">PID</div>
+                    <div class="background-job-stat-value">{{ currentConnection?.process_id || '-' }}</div>
+                </div>
+                <div class="background-job-stat">
+                    <div class="background-job-stat-label">Process Name</div>
+                    <div class="background-job-stat-value">{{ currentConnection?.process_name || '-' }}</div>
+                </div>
+                <div class="background-job-stat">
+                    <div class="background-job-stat-label">Launch Command</div>
+                    <div class="background-job-stat-value">{{ currentConnection?.launch_command || '-' }}</div>
+                </div>
+                <div class="background-job-stat">
+                    <div class="background-job-stat-label">Username</div>
+                    <div class="background-job-stat-value">{{ currentConnection?.username || '-' }}</div>
+                </div>
+
+
+                <div class="background-job-stat">
+                    <div class="background-job-stat-label">HTTP Transfer Mode</div>
+                    <div class="background-job-stat-value">{{ currentConnection?.http_transfer_mode || '-' }}</div>
+                </div>
+                <div class="background-job-stat">
+                    <div class="background-job-stat-label">Python Execution Mode</div>
+                    <div class="background-job-stat-value">{{ currentConnection?.python_execution_mode || '-' }}</div>
+                </div>
+                <div class="background-job-stat">
+                    <div class="background-job-stat-label">Remote Watchdog Enabled</div>
+                    <div class="background-job-stat-value">{{ currentConnection?.remote_watchdog_enabled }}</div>
+                </div>
+                <div class="background-job-stat">
+                    <div class="background-job-stat-label">Local Watchdog Enabled</div>
+                    <div class="background-job-stat-value">{{ currentConnection?.local_watchdog_enabled }}</div>
+                </div>
+                
                 <div class="background-job-stat">
                     <div class="background-job-stat-label">Reported Jobs</div>
                     <div class="background-job-stat-value">{{ connectionInfoJobCount }}</div>
@@ -1603,6 +1648,8 @@
                     <div class="background-job-stat-label">Command Count</div>
                     <div class="background-job-stat-value">{{ connectionInfoClientCommands.length }}</div>
                 </div>
+
+
             </div>
 
             <div class="background-job-panel connection-command-panel">

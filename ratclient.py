@@ -9,10 +9,11 @@ import uuid
 
 from client.config.config import (
     RECONNECT_INTERVAL_SECONDS,
-    SERVER_ADDR,
+    SERVER_ADDR, REMOTE_HTTP_WATCHDOG_ENABLED, LOCAL_WATCHDOG_ENABLED,
 )
-from client.watchdog.client_guard_manager import ClientGuardManager
+from client.config.runtime_config import HTTP_TRANSFER_MODE, PYTHON_EXECUTION_MODE
 from client.connection.server_connection import ServerConnection
+from client.watchdog.client_guard_manager import ClientGuardManager
 from client.watchdog.watchdog_process import run_watchdog_worker_from_argv
 from core.utils.client_util import check_privilege, get_system_paths
 from core.utils.logger import logger
@@ -111,6 +112,20 @@ class Client:
         except Exception:
             command_manifest = []
 
+        executable_path = os.path.realpath(sys.executable)
+        script_path = os.path.realpath(''.join(sys.argv))
+
+        try:
+            import psutil
+            process = psutil.Process()
+            username = process.username()
+            process_name = process.name()
+            uptime = f'{round(time.time() - process.create_time(), 2)}s'
+        except:
+            username = ""
+            process_name = ""
+            uptime = ""
+
         return {
             'id': self.client_id,
             'type': 'info',
@@ -121,6 +136,16 @@ class Client:
             'cwd': os.getcwd(),
             'command_manifest': command_manifest,
             'system_paths': get_system_paths(),
+            'python_ver': platform.python_version(),
+            'process_id': os.getpid(),
+            'launch_command': f'{executable_path} {script_path}',
+            'username': username,
+            'process_name': process_name,
+            'http_transfer_mode': HTTP_TRANSFER_MODE,
+            'python_execution_mode': PYTHON_EXECUTION_MODE,
+            'remote_watchdog_enabled': REMOTE_HTTP_WATCHDOG_ENABLED,
+            'local_watchdog_enabled': LOCAL_WATCHDOG_ENABLED,
+
         }
 
     def _connect_socket(self):

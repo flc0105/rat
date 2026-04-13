@@ -67,6 +67,16 @@ class WebConnectionService:
             'last_rtt_ms': session.context.last_rtt_ms,
             'stale_after_seconds': self.STALE_AFTER_SECONDS,
             'connection_state': self._build_connection_state(session),
+            'python_ver': info.get_extra('python_ver'),
+            'process_id': info.get_extra('process_id'),
+            'launch_command': info.get_extra('launch_command'),
+            'username': info.get_extra('username'),
+            'process_name': info.get_extra('process_name'),
+            'http_transfer_mode': info.get_extra('http_transfer_mode'),
+            'python_execution_mode': info.get_extra('python_execution_mode'),
+            'remote_watchdog_enabled': info.get_extra('remote_watchdog_enabled'),
+            'local_watchdog_enabled': info.get_extra('local_watchdog_enabled'),
+
         }
 
     def get_connections_payload(self):

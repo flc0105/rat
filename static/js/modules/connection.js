@@ -105,6 +105,8 @@ window.AppConnectionModule = {
                 if (this.selectedId) {
                     await this.loadCommandCandidates(this.selectedId);
                 }
+
+                console.log(this.connections)
             } catch (e) {
                 ElementPlus.ElMessage.error('Failed to load devices');
             }
