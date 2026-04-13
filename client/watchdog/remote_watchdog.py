@@ -1,3 +1,4 @@
+import ctypes
 import json
 import logging
 import os
@@ -35,7 +36,38 @@ class WatchdogActionExecutor:
         self.parent_launch_argv = list(parent_launch_argv or [])
 
     # add watchdog action executor 2026-04-10 00:00
+    # def is_parent_alive(self) -> bool:
+    #     try:
+    #         os.kill(self.parent_pid, 0)
+    #         return True
+    #     except Exception:
+    #         return False
+
     def is_parent_alive(self) -> bool:
+        if self.parent_pid <= 0:
+            return False
+
+        if os.name == 'nt':
+            # Windows 下不能用 os.kill(pid, 0) 探活，否则可能直接终止目标进程
+            process_query_limited_information = 0x1000
+            still_active = 259
+
+            process_handle = ctypes.windll.kernel32.OpenProcess(
+                process_query_limited_information,
+                False,
+                self.parent_pid,
+            )
+            if not process_handle:
+                return False
+
+            try:
+                exit_code = ctypes.c_ulong()
+                if not ctypes.windll.kernel32.GetExitCodeProcess(process_handle, ctypes.byref(exit_code)):
+                    return False
+                return exit_code.value == still_active
+            finally:
+                ctypes.windll.kernel32.CloseHandle(process_handle)
+
         try:
             os.kill(self.parent_pid, 0)
             return True
