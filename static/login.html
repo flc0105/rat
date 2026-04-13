@@ -1,242 +1,316 @@
 <!DOCTYPE html>
-<html lang="zh">
+<html lang="zh-CN">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>验证登录</title>
+    <meta charset="UTF-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    <title>Admin Sign In</title>
+    <link rel="stylesheet" href="/app.css"/>
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
+        body {
+            overflow: auto;
         }
 
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            height: 100vh;
+        .auth-shell {
+            min-height: 100vh;
             display: flex;
             align-items: center;
             justify-content: center;
+            padding: 24px;
+            background:
+                    radial-gradient(circle at top left, rgba(37, 99, 235, 0.16), transparent 24%),
+                    radial-gradient(circle at bottom right, rgba(15, 23, 42, 0.10), transparent 26%),
+                    linear-gradient(180deg, #f7f9fc 0%, var(--bg-page) 100%);
         }
 
-        .login-container {
-            background: white;
-            padding: 40px;
-            border-radius: 20px;
-            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
-            width: 380px;
-            max-width: 90%;
+        .auth-card {
+            width: 100%;
+            max-width: 430px;
+            background: rgba(255, 255, 255, 0.92);
+            border: 1px solid rgba(255, 255, 255, 0.75);
+            border-radius: 24px;
+            box-shadow: 0 24px 60px rgba(15, 23, 42, 0.16);
+            backdrop-filter: blur(18px);
+            overflow: hidden;
         }
 
-        .login-title {
-            text-align: center;
-            margin-bottom: 30px;
+        .auth-card-top {
+            padding: 28px 30px 18px;
+            background:
+                    radial-gradient(circle at 18% 20%, rgba(96, 165, 250, 0.14), transparent 22%),
+                    linear-gradient(135deg, #0f172a 0%, #111827 56%, #1e293b 100%);
+            color: #eef4ff;
         }
 
-        .login-title h1 {
-            color: #333;
+        .auth-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 6px 10px;
+            border-radius: 999px;
+            background: rgba(255, 255, 255, 0.10);
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            font-size: 12px;
+            color: #dbeafe;
+        }
+
+        .auth-title {
+            margin: 16px 0 6px;
             font-size: 28px;
-            margin-bottom: 8px;
+            line-height: 1.1;
+            font-weight: 760;
+            letter-spacing: -0.03em;
         }
 
-        .login-title p {
-            color: #666;
-            font-size: 14px;
+        .auth-subtitle {
+            margin: 0;
+            font-size: 13px;
+            line-height: 1.6;
+            color: #cbd5e1;
         }
 
-        .form-group {
-            margin-bottom: 20px;
+        .auth-card-body {
+            padding: 26px 30px 30px;
         }
 
-        .form-group label {
-            display: block;
-            margin-bottom: 8px;
-            color: #555;
-            font-weight: 500;
+        .auth-form {
+            display: flex;
+            flex-direction: column;
+            gap: 18px;
         }
 
-        .form-group input {
+        .auth-field {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .auth-label {
+            font-size: 13px;
+            font-weight: 700;
+            color: var(--text);
+        }
+
+        .auth-input {
             width: 100%;
-            padding: 12px 16px;
-            font-size: 16px;
-            border: 2px solid #e0e0e0;
-            border-radius: 10px;
-            transition: border-color 0.2s;
+            height: 46px;
+            padding: 0 14px;
+            border: 1px solid rgba(15, 23, 42, 0.10);
+            border-radius: 14px;
+            background: rgba(248, 250, 252, 0.92);
+            color: var(--text);
+            font-size: 14px;
             outline: none;
+            transition: border-color .18s ease, box-shadow .18s ease, background .18s ease;
         }
 
-        .form-group input:focus {
-            border-color: #667eea;
+        .auth-input:focus {
+            border-color: rgba(37, 99, 235, 0.40);
+            box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.10);
+            background: #fff;
         }
 
-        .login-button {
-            width: 100%;
-            padding: 14px;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
+        .auth-submit {
+            height: 46px;
             border: none;
-            border-radius: 10px;
-            font-size: 16px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: transform 0.1s;
-        }
-
-        .login-button:hover {
-            transform: scale(1.02);
-        }
-
-        .login-button:active {
-            transform: scale(0.98);
-        }
-
-        .error-message {
-            color: #e53e3e;
+            border-radius: 14px;
+            background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+            color: white;
             font-size: 14px;
-            margin-top: 12px;
-            text-align: center;
+            font-weight: 700;
+            cursor: pointer;
+            transition: transform .12s ease, box-shadow .18s ease, opacity .18s ease;
+            box-shadow: 0 14px 28px rgba(37, 99, 235, 0.24);
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+        }
+
+        .auth-submit:hover:not(:disabled) {
+            transform: translateY(-1px);
+        }
+
+        .auth-submit:disabled {
+            opacity: .88;
+            cursor: wait;
+        }
+
+        .auth-spinner {
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            border: 2px solid rgba(255, 255, 255, 0.35);
+            border-top-color: #fff;
+            animation: auth-spin .72s linear infinite;
             display: none;
         }
 
-        .info-text {
-            text-align: center;
-            margin-top: 20px;
-            color: #888;
-            font-size: 12px;
+        .auth-submit.is-loading .auth-spinner {
+            display: inline-block;
         }
 
-        /* noscript 警告 */
-        .noscript-warning {
-            position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            background: #e53e3e;
-            color: white;
+        .auth-error,
+        .auth-success {
+            min-height: 20px;
+            font-size: 13px;
+            line-height: 1.5;
+            margin-top: -2px;
+        }
+
+        .auth-error {
+            color: #dc2626;
+        }
+
+        .auth-success {
+            color: #2563eb;
+        }
+
+        .auth-footnote {
+            margin-top: 6px;
+            font-size: 12px;
+            color: var(--muted);
             text-align: center;
-            padding: 15px;
-            font-weight: bold;
-            z-index: 1000;
+        }
+
+        @keyframes auth-spin {
+            to {
+                transform: rotate(360deg);
+            }
         }
     </style>
 </head>
 <body>
-    <!-- noscript 警告（JS禁用时显示） -->
-    <noscript>
-        <div class="noscript-warning">
-            ⚠️ 请启用JavaScript以继续访问
-        </div>
-    </noscript>
-
-    <div class="login-container">
-        <div class="login-title">
-            <h1>🔐 服务验证</h1>
-            <p>请输入访问密码</p>
+<div class="auth-shell">
+    <div class="auth-card">
+        <div class="auth-card-top">
+            <div class="auth-badge">Session Protected Access</div>
+            <h1 class="auth-title">Remote Control Hub</h1>
+            <p class="auth-subtitle">使用服务端配置的管理员账号登录。浏览器通过 Session 保持登录，脚本或 Postman 可改用静态 Bearer Token。</p>
         </div>
 
-        <div class="form-group">
-            <label>密码</label>
-            <input type="password" id="password" placeholder="输入密码" autofocus>
-        </div>
+        <div class="auth-card-body">
+            <form id="loginForm" class="auth-form">
+                <div class="auth-field">
+                    <label class="auth-label" for="username">Username</label>
+                    <input class="auth-input" id="username" name="username" type="text" autocomplete="username" placeholder="Enter admin username" required autofocus/>
+                </div>
 
-        <button class="login-button" id="loginBtn">验证</button>
+                <div class="auth-field">
+                    <label class="auth-label" for="password">Password</label>
+                    <input class="auth-input" id="password" name="password" type="password" autocomplete="current-password" placeholder="Enter password" required/>
+                </div>
 
-        <div class="error-message" id="errorMsg">
-            密码错误，请重试
-        </div>
+                <div id="errorText" class="auth-error"></div>
+                <div id="successText" class="auth-success"></div>
 
-        <div class="info-text">
-            验证通过后将自动跳转
+                <button id="submitButton" class="auth-submit" type="submit">
+                    <span class="auth-spinner"></span>
+                    <span id="submitText">Sign In</span>
+                </button>
+
+                <div class="auth-footnote">登录成功后会自动跳回原页面。</div>
+            </form>
         </div>
     </div>
+</div>
 
-    <script>
-        // 从URL获取重定向地址
-        const urlParams = new URLSearchParams(window.location.search);
-        const redirectUrl = urlParams.get('redirect') || '/';
+<script>
+    const SESSION_URL = '/api/auth/session';
+    const LOGIN_URL = '/api/auth/login';
+    const urlParams = new URLSearchParams(window.location.search);
+    const redirectTarget = urlParams.get('redirect') || '/';
 
-        // 解码重定向地址
-        const decodedRedirect = decodeURIComponent(redirectUrl);
+    const usernameInput = document.getElementById('username');
+    const passwordInput = document.getElementById('password');
+    const submitButton = document.getElementById('submitButton');
+    const submitText = document.getElementById('submitText');
+    const errorText = document.getElementById('errorText');
+    const successText = document.getElementById('successText');
+    const loginForm = document.getElementById('loginForm');
 
-        // 后端API地址（和auth.js保持一致）
-        const API_BASE = 'http://39.107.248.76:8000';
+    function setLoading(loading) {
+        submitButton.disabled = !!loading;
+        submitButton.classList.toggle('is-loading', !!loading);
+        submitText.textContent = loading ? 'Signing In...' : 'Sign In';
+    }
 
-        // 显示错误信息
-        const showError = (message) => {
-            const errorDiv = document.getElementById('errorMsg');
-            errorDiv.textContent = message || '密码错误，请重试';
-            errorDiv.style.display = 'block';
-            setTimeout(() => {
-                errorDiv.style.display = 'none';
-            }, 3000);
-        };
+    function showError(message) {
+        errorText.textContent = message || '';
+        successText.textContent = '';
+    }
 
-        // 登录功能
-        const login = async () => {
-            const password = document.getElementById('password').value;
-            const button = document.getElementById('loginBtn');
+    function showSuccess(message) {
+        successText.textContent = message || '';
+        errorText.textContent = '';
+    }
 
-            if (!password) {
-                showError('请输入密码');
+    async function ensureGuestNeedsLogin() {
+        try {
+            const response = await fetch(SESSION_URL, {
+                method: 'GET',
+                credentials: 'same-origin',
+                cache: 'no-store',
+            });
+            if (!response.ok) return;
+
+            const payload = await response.json();
+            if (payload?.data?.authenticated) {
+                window.location.replace(redirectTarget);
+            }
+        } catch (_error) {
+        }
+    }
+
+    async function handleLogin(event) {
+        event.preventDefault();
+        showError('');
+        showSuccess('');
+
+        const username = usernameInput.value.trim();
+        const password = passwordInput.value;
+
+        if (!username) {
+            showError('Please enter username');
+            usernameInput.focus();
+            return;
+        }
+
+        if (!password) {
+            showError('Please enter password');
+            passwordInput.focus();
+            return;
+        }
+
+        setLoading(true);
+        try {
+            const response = await fetch(LOGIN_URL, {
+                method: 'POST',
+                credentials: 'same-origin',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({username, password}),
+            });
+
+            const payload = await response.json().catch(() => ({}));
+            if (!response.ok || payload?.code !== 0) {
+                showError(payload?.message || 'Sign in failed');
+                passwordInput.value = '';
+                passwordInput.focus();
                 return;
             }
 
-            // 禁用按钮
-            button.disabled = true;
-            button.textContent = '验证中...';
-
-            try {
-                const response = await fetch(`${API_BASE}/api/login`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({ password })
-                });
-
-                const data = await response.json();
-
-                if (response.ok && data.success) {
-                    // 存储token和过期时间（7天）
-                    localStorage.setItem('access_token', data.access_token);
-
-                    // 计算过期时间（7天后）
-                    const expiryTime = Date.now() + (7 * 24 * 60 * 60 * 1000);
-                    localStorage.setItem('token_expiry', expiryTime.toString());
-
-                    // 跳转回原页面
-                    window.location.href = decodedRedirect;
-                } else {
-                    showError(data.message || '密码错误');
-                    button.disabled = false;
-                    button.textContent = '验证';
-                    document.getElementById('password').value = '';
-                    document.getElementById('password').focus();
-                }
-            } catch (error) {
-                showError('网络错误，请稍后重试');
-                button.disabled = false;
-                button.textContent = '验证';
-            }
-        };
-
-        // 绑定事件
-        document.getElementById('loginBtn').addEventListener('click', login);
-        document.getElementById('password').addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') {
-                login();
-            }
-        });
-
-        // 如果已经登录且有token，直接跳转
-        if (localStorage.getItem('access_token') && localStorage.getItem('token_expiry')) {
-            const expiry = parseInt(localStorage.getItem('token_expiry'));
-            if (Date.now() < expiry) {
-                // 有有效token，直接跳回
-                window.location.href = decodedRedirect;
-            }
+            showSuccess('Sign in successful, redirecting...');
+            window.setTimeout(() => {
+                window.location.replace(redirectTarget);
+            }, 320);
+        } catch (_error) {
+            showError('Network error, please try again');
+        } finally {
+            setLoading(false);
         }
-    </script>
+    }
+
+    loginForm.addEventListener('submit', handleLogin);
+    ensureGuestNeedsLogin();
+</script>
 </body>
 </html>

@@ -11,6 +11,14 @@ SOCKET_ADDR = (SOCKET_HOST, SOCKET_PORT)
 WEB_HOST = '0.0.0.0'
 WEB_PORT = 8085
 
+# ------------------ auth ------------------ #
+WEB_SESSION_SECRET = os.getenv('RAT_WEB_SESSION_SECRET', 'change-this-session-secret')
+ADMIN_USERNAME = os.getenv('RAT_ADMIN_USERNAME', 'admin')
+ADMIN_PASSWORD = os.getenv('RAT_ADMIN_PASSWORD', 'admin123456')
+ADMIN_API_TOKEN = os.getenv('RAT_ADMIN_API_TOKEN', 'change-this-static-token')
+WEB_AUTH_SESSION_DAYS = int(os.getenv('RAT_WEB_AUTH_SESSION_DAYS', '7'))
+SESSION_COOKIE_NAME = os.getenv('RAT_WEB_SESSION_COOKIE_NAME', 'rat_admin_session')
+
 # ------------------ command / alias ------------------ #
 ALIAS_PATH = os.path.join(SERVER_DIR, 'resources/aliases.json')
 SCRIPT_PATH = os.path.join(SERVER_DIR, 'resources/scripts')
