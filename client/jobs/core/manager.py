@@ -4,6 +4,7 @@ import threading
 from typing import Dict, List
 
 from client.jobs.core.runtime import JobRuntime
+from core.utils.job_metadata import read_job_metadata_from_file, resolve_job_params
 from core.utils.reflection import get_main_class
 
 
@@ -37,8 +38,9 @@ class JobManager:
             raise ValueError('The base job module cannot be started directly')
 
     # add remove client side job 2026-04-08 11:40
-    def _load_job_instance_from_file(self, full_path: str, job_name: str, command_id: int):
+    def _load_job_instance_from_file(self, full_path: str, job_name: str, command_id: int, job_params=None):
         module_name = self.get_job_key(job_name)
+        job_metadata = read_job_metadata_from_file(full_path, fallback_name=module_name)
 
         try:
             spec = importlib.util.spec_from_file_location(module_name, full_path)
@@ -50,11 +52,14 @@ class JobManager:
 
             job_class = get_main_class(module, module_name)
             job_instance = job_class()
+            resolved_params = resolve_job_params(job_metadata, job_params)
             job_instance.bind_context(
                 self.socket,
                 command_id,
                 client_id=getattr(self.socket, 'client_id', None),
-                job_key=self.get_job_key(job_name)
+                job_key=self.get_job_key(job_name),
+                job_metadata=job_metadata,
+                job_params=resolved_params,
             )
             return job_instance
         except Exception as e:
@@ -89,7 +94,7 @@ class JobManager:
             for job_key in finished_keys:
                 self._runtimes.pop(job_key, None)
 
-    def start_job(self, full_path: str, job_name: str, command_id: int) -> JobRuntime:
+    def start_job(self, full_path: str, job_name: str, command_id: int, job_params=None) -> JobRuntime:
         self.cleanup_finished_jobs()
         self.validate_job_name(job_name)
 
@@ -97,7 +102,7 @@ class JobManager:
         if self.is_running(job_name):
             raise RuntimeError(f'Job is already running: {job_key}')
 
-        job_instance = self._load_job_instance_from_file(full_path, job_name, command_id)
+        job_instance = self._load_job_instance_from_file(full_path, job_name, command_id, job_params=job_params)
         thread = threading.Thread(
             target=job_instance.run,
             name=f'JobThread-{job_key}',

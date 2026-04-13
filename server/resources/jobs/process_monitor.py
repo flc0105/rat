@@ -1,3 +1,19 @@
+JOB_METADATA = {
+    "name": "process_monitor",
+    "display_name": "Process Monitor",
+    "description": "Monitor Windows process creation events",
+    "platforms": ["windows"],
+    "params": [
+        {
+            "name": "target_processes_csv",
+            "type": "string",
+            "required": False,
+            "default": "all",
+            "description": "Comma-separated process names, or all"
+        }
+    ]
+}
+
 import inspect
 import threading
 import time
@@ -23,6 +39,11 @@ class ProcessMonitor(Job):
         super().__init__()
         self.target_processes = target_processes or ['all']
         self.status = False
+
+    def on_context_bound(self):
+        raw = str(self.get_job_param('target_processes_csv', 'all') or 'all').strip()
+        items = [item.strip() for item in raw.split(',') if item.strip()]
+        self.target_processes = items or ['all']
 
     def run(self):
         try:

@@ -13,6 +13,10 @@ window.AppJobsModule = {
             backgroundJobMessageDialogVisible: false,
             selectedBackgroundJobMessage: {},
             serverJobUploadLoading: false,
+            backgroundJobStartDialogVisible: false,
+            backgroundJobStartSubmitting: false,
+            pendingStartJobModule: null,
+            backgroundJobParamForm: {},
         }
     },
 
@@ -34,6 +38,7 @@ window.AppJobsModule = {
             const rawJobName = String(item.job_name || item.name || item.job_key || '').trim();
             const rawJobKey = String(item.job_key || '').trim();
             const rawDisplayName = String(item.display_name || '').trim();
+            const metadata = this.normalizeJobMetadata(item.metadata || {});
 
             const isHeadingLike = /^(available\s+client\s+job\s+modules:?|available\s+remote\s+scripts:?|no\s+remote\s+scripts\s+available)$/i.test(rawJobName);
             const stripPySuffix = (value = '') => String(value).replace(/\.py$/i, '').trim();
@@ -43,13 +48,14 @@ window.AppJobsModule = {
             let displayName = rawDisplayName;
 
             if (!displayName) {
-                displayName = jobName;
+                displayName = metadata.display_name || jobName;
             }
             if (!jobKey) {
                 jobKey = stripPySuffix(jobName) || jobName;
             }
 
             const subtitle = jobKey && displayName !== jobKey ? jobKey : '';
+            const description = String(item.description || metadata.description || '').trim();
 
             return {
                 ...item,
@@ -57,10 +63,282 @@ window.AppJobsModule = {
                 job_name: jobName,
                 job_key: jobKey,
                 display_name: displayName,
+                description,
+                metadata,
                 subtitle,
                 module_id: `job:${jobKey || jobName}`,
                 hidden_invalid: !jobName || isHeadingLike,
             };
+        },
+
+        normalizeJobMetadata(metadata = {}) {
+            if (!metadata || typeof metadata !== 'object' || Array.isArray(metadata)) {
+                return {
+                    name: '',
+                    display_name: '',
+                    description: '',
+                    platforms: [],
+                    params: [],
+                };
+            }
+
+            const normalizeParam = (item = {}) => {
+                const name = String(item.name || '').trim();
+                if (!name) return null;
+                return {
+                    ...item,
+                    name,
+                    type: String(item.type || 'string').trim().toLowerCase() || 'string',
+                    required: !!item.required,
+                    description: String(item.description || '').trim(),
+                };
+            };
+
+            return {
+                ...metadata,
+                name: String(metadata.name || '').trim(),
+                display_name: String(metadata.display_name || '').trim(),
+                description: String(metadata.description || '').trim(),
+                platforms: this.normalizeJobPlatforms(metadata.platforms),
+                params: Array.isArray(metadata.params)
+                    ? metadata.params.map(item => normalizeParam(item)).filter(Boolean)
+                    : [],
+            };
+        },
+
+        normalizeJobPlatforms(platforms) {
+            const source = Array.isArray(platforms)
+                ? platforms
+                : (typeof platforms === 'string' && platforms.trim() ? [platforms] : []);
+
+            const result = [];
+            const seen = new Set();
+            for (const item of source) {
+                const normalized = this.normalizeJobPlatform(item);
+                if (!normalized || seen.has(normalized)) continue;
+                seen.add(normalized);
+                result.push(normalized);
+            }
+            return result;
+        },
+
+        normalizeJobPlatform(platform) {
+            const value = String(platform || '').trim().toLowerCase();
+            if (!value) return '';
+            if (['*', 'all', 'any'].includes(value)) return '*';
+            if (['darwin', 'mac', 'macos', 'osx'].includes(value)) return 'darwin';
+            if (['windows', 'win', 'win32', 'nt'].includes(value)) return 'windows';
+            if (value === 'linux') return 'linux';
+            return value;
+        },
+
+        normalizeClientPlatform(osType = '') {
+            const value = String(osType || '').trim().toLowerCase();
+            if (!value) return '';
+            if (value.includes('darwin') || value.includes('mac')) return 'darwin';
+            if (value.includes('win')) return 'windows';
+            if (value.includes('linux')) return 'linux';
+            return this.normalizeJobPlatform(value);
+        },
+
+        formatJobPlatformLabel(platforms) {
+            const normalized = this.normalizeJobPlatforms(platforms);
+            if (!normalized.length || normalized.includes('*')) {
+                return 'All OS';
+            }
+
+            const labels = normalized.map(item => {
+                if (item === 'darwin') return 'macOS';
+                if (item === 'windows') return 'Windows';
+                if (item === 'linux') return 'Linux';
+                return item;
+            });
+
+            return labels.join(' / ');
+        },
+
+        isJobSupportedForCurrentConnection(item) {
+            const metadata = this.normalizeJobMetadata(item?.metadata || {});
+            const platforms = metadata.platforms || [];
+            if (!platforms.length || platforms.includes('*')) return true;
+
+            const current = this.normalizeClientPlatform(this.currentConnection?.os_type || '');
+            if (!current) return true;
+
+            return platforms.includes(current);
+        },
+
+        hasBackgroundJobParams(item) {
+            const metadata = this.normalizeJobMetadata(item?.metadata || {});
+            return Array.isArray(metadata.params) && metadata.params.length > 0;
+        },
+
+        buildBackgroundJobParamDefaults(item) {
+            const metadata = this.normalizeJobMetadata(item?.metadata || {});
+            const result = {};
+
+            for (const param of metadata.params || []) {
+                if (Object.prototype.hasOwnProperty.call(param, 'default')) {
+                    const defaultValue = param.default;
+                    result[param.name] = defaultValue === null || defaultValue === undefined ? '' : String(defaultValue);
+                } else {
+                    result[param.name] = '';
+                }
+            }
+
+            return result;
+        },
+
+        openBackgroundJobStartDialog(item) {
+            if (!this.selectedId) {
+                ElementPlus.ElMessage.warning('Please select a device');
+                return;
+            }
+
+            if (!item || !String(item.job_name || '').trim()) {
+                ElementPlus.ElMessage.warning('Invalid job name');
+                return;
+            }
+
+            if (!this.isJobSupportedForCurrentConnection(item)) {
+                const jobName = item.display_name || item.job_name;
+                const platformLabel = this.formatJobPlatformLabel(item.metadata?.platforms || []);
+                ElementPlus.ElMessage.warning(`${jobName} only supports: ${platformLabel}`);
+                return;
+            }
+
+            if (this.isBackgroundJobStartDisabled(item)) {
+                ElementPlus.ElMessage.warning('This background job is already running');
+                return;
+            }
+
+            if (!this.hasBackgroundJobParams(item)) {
+                this.startBackgroundJob(item.job_name);
+                return;
+            }
+
+            this.pendingStartJobModule = item;
+            this.backgroundJobParamForm = this.buildBackgroundJobParamDefaults(item);
+            this.backgroundJobStartDialogVisible = true;
+        },
+
+        closeBackgroundJobStartDialog() {
+            this.backgroundJobStartDialogVisible = false;
+            this.backgroundJobStartSubmitting = false;
+            this.pendingStartJobModule = null;
+            this.backgroundJobParamForm = {};
+        },
+
+        coerceBackgroundJobParamValue(param, rawValue) {
+            const type = String(param?.type || 'string').trim().toLowerCase();
+            const value = rawValue === null || rawValue === undefined ? '' : String(rawValue).trim();
+
+            if (type === 'integer' || type === 'int') {
+                if (!/^-?\d+$/.test(value)) {
+                    throw new Error(`Param "${param.name}" must be an integer`);
+                }
+                const parsed = parseInt(value, 10);
+                if (param.min !== undefined && parsed < Number(param.min)) {
+                    throw new Error(`Param "${param.name}" must be >= ${param.min}`);
+                }
+                if (param.max !== undefined && parsed > Number(param.max)) {
+                    throw new Error(`Param "${param.name}" must be <= ${param.max}`);
+                }
+                return parsed;
+            }
+
+            if (type === 'number' || type === 'float') {
+                const parsed = Number(value);
+                if (Number.isNaN(parsed)) {
+                    throw new Error(`Param "${param.name}" must be a number`);
+                }
+                if (param.min !== undefined && parsed < Number(param.min)) {
+                    throw new Error(`Param "${param.name}" must be >= ${param.min}`);
+                }
+                if (param.max !== undefined && parsed > Number(param.max)) {
+                    throw new Error(`Param "${param.name}" must be <= ${param.max}`);
+                }
+                return parsed;
+            }
+
+            if (type === 'boolean' || type === 'bool') {
+                const lowered = value.toLowerCase();
+                if (['1', 'true', 'yes', 'on'].includes(lowered)) return true;
+                if (['0', 'false', 'no', 'off'].includes(lowered)) return false;
+                throw new Error(`Param "${param.name}" must be true/false`);
+            }
+
+            return value;
+        },
+
+        buildBackgroundJobStartParams(item) {
+            const metadata = this.normalizeJobMetadata(item?.metadata || {});
+            const params = {};
+
+            for (const param of metadata.params || []) {
+                const hasValue = Object.prototype.hasOwnProperty.call(this.backgroundJobParamForm, param.name);
+                const rawValue = hasValue ? this.backgroundJobParamForm[param.name] : '';
+                const textValue = rawValue === null || rawValue === undefined ? '' : String(rawValue).trim();
+
+                if (!textValue) {
+                    if (param.required && (param.default === undefined || param.default === null || String(param.default).trim() === '')) {
+                        throw new Error(`Missing required param: ${param.name}`);
+                    }
+                    if (param.default !== undefined && param.default !== null && String(param.default).trim() !== '') {
+                        params[param.name] = this.coerceBackgroundJobParamValue(param, param.default);
+                    }
+                    continue;
+                }
+
+                params[param.name] = this.coerceBackgroundJobParamValue(param, rawValue);
+            }
+
+            return params;
+        },
+
+        async submitBackgroundJobStart(jobName, params = {}) {
+            const normalized = String(jobName || '').trim();
+            if (!normalized) {
+                ElementPlus.ElMessage.warning('Invalid job name');
+                return;
+            }
+
+            const res = await fetch(`/api/connections/${encodeURIComponent(this.selectedId)}/background-jobs/start`, {
+                method: 'POST',
+                headers: this.getTabScopedHeaders({'Content-Type': 'application/json'}),
+                body: JSON.stringify({job_name: normalized, params})
+            });
+
+            const json = await res.json();
+            if (!res.ok || json.code !== 0) {
+                throw new Error(json.message || 'Failed to start background job');
+            }
+
+            const taskId = json.data && json.data.task_id;
+            this.setActiveTask(this.selectedId, taskId || '');
+            return json.data || {};
+        },
+
+        async confirmStartBackgroundJobWithParams() {
+            const item = this.pendingStartJobModule;
+            if (!item) {
+                this.closeBackgroundJobStartDialog();
+                return;
+            }
+
+            try {
+                this.backgroundJobStartSubmitting = true;
+                const params = this.buildBackgroundJobStartParams(item);
+                await this.submitBackgroundJobStart(item.job_name, params);
+                ElementPlus.ElMessage.success(`Start request submitted: ${item.display_name || item.job_name}`);
+                this.backgroundJobsActiveTab = 'jobs';
+                this.closeBackgroundJobStartDialog();
+                setTimeout(() => this.loadBackgroundJobs(), 500);
+            } catch (e) {
+                ElementPlus.ElMessage.error(e.message || 'Failed to start background job');
+            } finally {
+                this.backgroundJobStartSubmitting = false;
+            }
         },
 
         async loadBackgroundJobModules() {
@@ -130,7 +408,7 @@ window.AppJobsModule = {
             }, 200);
         },
 
-        async startBackgroundJob(jobName) {
+        async startBackgroundJob(jobName, params = {}) {
             if (!this.selectedId) {
                 ElementPlus.ElMessage.warning('Please select a device');
                 return;
@@ -143,20 +421,7 @@ window.AppJobsModule = {
             }
 
             try {
-                const res = await fetch(`/api/connections/${encodeURIComponent(this.selectedId)}/background-jobs/start`, {
-                    method: 'POST',
-                    headers: this.getTabScopedHeaders({'Content-Type': 'application/json'}),
-                    body: JSON.stringify({job_name: normalized})
-                });
-
-                const json = await res.json();
-                if (!res.ok || json.code !== 0) {
-                    throw new Error(json.message || 'Failed to start background job');
-                }
-
-                const taskId = json.data && json.data.task_id;
-                this.setActiveTask(this.selectedId, taskId || '');
-
+                await this.submitBackgroundJobStart(normalized, params);
                 ElementPlus.ElMessage.success(`Start request submitted: ${normalized}`);
                 this.backgroundJobsActiveTab = 'jobs';
                 setTimeout(() => this.loadBackgroundJobs(), 500);
@@ -235,7 +500,7 @@ window.AppJobsModule = {
                 .map(part => part.charAt(0).toUpperCase() + part.slice(1))
                 .join('') || 'NewBackgroundJob';
 
-            return `import time\n\nfrom client.jobs.core.job import Job\n\n\nclass ${classBaseName}(Job):\n    def __init__(self):\n        super().__init__()\n        self.interval = 10\n\n    def run(self):\n        self.mark_running()\n        self.send_to_server(1, "${normalizedScriptName} started")\n\n        try:\n            while not self.stop_event.is_set():\n                self.send_to_server(1, f"heartbeat: {time.strftime('%Y-%m-%d %H:%M:%S')}")\n                time.sleep(self.interval)\n        finally:\n            self.send_to_server(1, "${normalizedScriptName} stopped")\n            self.mark_stopped()\n\n    def stop(self, notify=True):\n        self.request_stop(notify=notify)\n`;
+            return `JOB_METADATA = {\n    "name": "${normalizedScriptName.replace(/\.py$/i, '')}",\n    "display_name": "${classBaseName}",\n    "description": "Describe what this job does",\n    "platforms": ["darwin"],\n    "params": [\n        {\n            "name": "interval_seconds",\n            "type": "integer",\n            "required": false,\n            "default": 10,\n            "min": 1,\n            "description": "Loop interval in seconds"\n        }\n    ]\n}\n\nimport time\n\nfrom client.jobs.core.job import Job\n\n\nclass ${classBaseName}(Job):\n    def __init__(self):\n        super().__init__()\n        self.interval = 10\n\n    def on_context_bound(self):\n        self.interval = int(self.get_job_param("interval_seconds", 10) or 10)\n\n    def run(self):\n        self.mark_running()\n        self.send_to_server(1, "${normalizedScriptName} started")\n\n        try:\n            while not self.stop_event.is_set():\n                self.send_to_server(1, f"heartbeat: {time.strftime('%Y-%m-%d %H:%M:%S')}")\n                time.sleep(self.interval)\n        finally:\n            self.send_to_server(1, "${normalizedScriptName} stopped")\n            self.mark_stopped()\n\n    def stop(self, notify=True):\n        self.request_stop(notify=notify)\n`;
         },
 
         triggerServerJobUpload() {
@@ -473,6 +738,12 @@ window.AppJobsModule = {
         backgroundJobMessageDialogVisible(val) {
             if (!val) {
                 this.selectedBackgroundJobMessage = {};
+            }
+        },
+
+        backgroundJobStartDialogVisible(val) {
+            if (!val) {
+                this.closeBackgroundJobStartDialog();
             }
         },
     }

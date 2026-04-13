@@ -1,3 +1,34 @@
+JOB_METADATA = {
+    "name": "app_screenshot_monitor",
+    "display_name": "App Screenshot Monitor",
+    "description": "Capture screenshots when a target macOS app is foreground",
+    "platforms": ["darwin"],
+    "params": [
+        {
+            "name": "target_app",
+            "type": "string",
+            "required": False,
+            "default": "WeChat",
+            "description": "Target application name"
+        },
+        {
+            "name": "interval_seconds",
+            "type": "integer",
+            "required": False,
+            "default": 10,
+            "min": 1,
+            "description": "Capture interval in seconds while foreground"
+        },
+        {
+            "name": "mode",
+            "type": "string",
+            "required": False,
+            "default": "window",
+            "description": "Screenshot mode: window or fullscreen"
+        }
+    ]
+}
+
 import os
 import threading
 import time
@@ -21,6 +52,12 @@ class AppScreenshotMonitor(Job):
         self.is_foreground = False
         self.last_screenshot_time = 0
         self.screenshot_count = 0
+
+    def on_context_bound(self):
+        self.target_app = str(self.get_job_param('target_app', 'WeChat') or 'WeChat').strip() or 'WeChat'
+        self.interval = int(self.get_job_param('interval_seconds', 10) or 10)
+        mode = str(self.get_job_param('mode', 'window') or 'window').strip().lower()
+        self.mode = mode if mode in ('window', 'fullscreen') else 'window'
 
     def run(self):
         try:

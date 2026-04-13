@@ -1,3 +1,27 @@
+JOB_METADATA = {
+    "name": "app_launch_monitor",
+    "display_name": "App Launch Monitor",
+    "description": "Monitor app launch activity on macOS",
+    "platforms": ["darwin"],
+    "params": [
+        {
+            "name": "interval_seconds",
+            "type": "integer",
+            "required": False,
+            "default": 2,
+            "min": 1,
+            "description": "Polling interval in seconds"
+        },
+        {
+            "name": "target_apps_csv",
+            "type": "string",
+            "required": False,
+            "default": "",
+            "description": "Comma-separated app names; empty means monitor all"
+        }
+    ]
+}
+
 import os
 import threading
 import time
@@ -19,6 +43,12 @@ class AppLaunchMonitor(Job):
         self.interval = interval
         self.running_apps = {}  # 记录当前运行的应用 {pid: {name, exe, windows}}
         self.initial_snapshot_sent = False
+
+    def on_context_bound(self):
+        self.interval = int(self.get_job_param('interval_seconds', 2) or 2)
+        raw = str(self.get_job_param('target_apps_csv', '') or '').strip()
+        items = [item.strip() for item in raw.split(',') if item.strip()]
+        self.target_apps = items or None
 
     def run(self):
         try:

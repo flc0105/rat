@@ -97,10 +97,13 @@ def create_background_job_blueprint(server_instance):
         def _execute():
             payload = get_json_payload()
             job_name = (payload.get('job_name') or '').strip()
+            params = payload.get('params') or {}
             if not job_name:
                 raise ValueError('job_name is required')
+            if params is not None and not isinstance(params, dict):
+                raise ValueError('params must be an object')
 
-            return job_api.start_background_job(client_id, job_name)
+            return job_api.start_background_job(client_id, job_name, params=params)
 
         return responder.json_endpoint(_execute, default_error_status=500)
 

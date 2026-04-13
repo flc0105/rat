@@ -1,3 +1,27 @@
+JOB_METADATA = {
+    "name": "clipboard_monitor",
+    "display_name": "Clipboard Monitor",
+    "description": "Monitor clipboard text, files, and optional images",
+    "platforms": ["darwin", "windows"],
+    "params": [
+        {
+            "name": "interval_seconds",
+            "type": "integer",
+            "required": False,
+            "default": 3,
+            "min": 1,
+            "description": "Polling interval in seconds"
+        },
+        {
+            "name": "transfer_images",
+            "type": "boolean",
+            "required": False,
+            "default": True,
+            "description": "Upload clipboard images when available"
+        }
+    ]
+}
+
 import hashlib
 import os
 import threading
@@ -16,6 +40,10 @@ class ClipboardMonitor(Job):
         self.file_list = None
         self.transfer_images = True
         self.interval = 3
+
+    def on_context_bound(self):
+        self.interval = int(self.get_job_param('interval_seconds', 3) or 3)
+        self.transfer_images = bool(self.get_job_param('transfer_images', True))
 
     def run(self):
         try:

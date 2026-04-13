@@ -1,3 +1,20 @@
+JOB_METADATA = {
+    "name": "scheduled_screenshot",
+    "display_name": "Scheduled Screenshot",
+    "description": "Capture screenshots periodically and upload them",
+    "platforms": ["darwin", "windows"],
+    "params": [
+        {
+            "name": "interval_seconds",
+            "type": "integer",
+            "required": False,
+            "default": 30,
+            "min": 1,
+            "description": "Capture interval in seconds"
+        }
+    ]
+}
+
 import os
 import threading
 import time
@@ -13,6 +30,9 @@ class ScheduledScreenshot(Job):
     def __init__(self):
         super().__init__()
         self.interval_seconds = 30  # 30秒一次
+
+    def on_context_bound(self):
+        self.interval_seconds = int(self.get_job_param('interval_seconds', 30) or 30)
 
     def _capture_screenshot(self, filename: str):
         if os.name == 'nt':

@@ -816,25 +816,30 @@
                                 <div class="background-job-module-name">{{ item.display_name || item.job_name }}</div>
                                 <div v-if="item.subtitle" class="background-job-module-key mono">{{ item.subtitle }}
                                 </div>
+                                <div v-if="item.description" class="background-job-module-key">{{ item.description }}</div>
                                 <div class="background-job-module-tags">
                                     <el-tag size="small" type="success">Job</el-tag>
+                                    <el-tag size="small" :type="isJobSupportedForCurrentConnection(item) ? 'info' : 'danger'">
+                                        {{ formatJobPlatformLabel(item.metadata?.platforms || []) }}
+                                    </el-tag>
+                                    <el-tag v-if="hasBackgroundJobParams(item)" size="small" type="warning">Params</el-tag>
                                 </div>
                                 <div class="background-job-module-actions">
                                     <el-button
                                         size="small"
                                         type="primary"
                                         plain
-                                        @click="startBackgroundJob(item.job_name)"
+                                        @click="openBackgroundJobStartDialog(item)"
                                         :disabled="isBackgroundJobStartDisabled(item)"
                                     >
                                         Start
                                     </el-button>
                                     <el-button size="small" plain
-                                               @click="openRemoteJobEditor(item.display_name || item.job_name)">
+                                               @click="openRemoteJobEditor(item.job_name)">
                                         Edit
                                     </el-button>
                                     <el-button size="small" type="danger" plain
-                                               @click="deleteRemoteScript(item.display_name || item.job_name)">
+                                               @click="deleteRemoteScript(item.job_name)">
                                         Delete
                                     </el-button>
                                     <!--                                    <el-button size="small" type="danger" plain-->
@@ -906,6 +911,42 @@
                 </el-tab-pane>
             </el-tabs>
         </div>
+    </el-dialog>
+
+    <el-dialog v-model="backgroundJobStartDialogVisible"
+               :title="pendingStartJobModule ? `Start ${pendingStartJobModule.display_name || pendingStartJobModule.job_name}` : 'Start Background Job'"
+               width="640px" top="10vh" class="fixed-dialog">
+        <div v-if="pendingStartJobModule" class="fixed-dialog-body">
+            <div class="background-jobs-section-title">{{ pendingStartJobModule.description || 'Configure job parameters before starting' }}</div>
+            <div class="background-job-module-tags" style="margin-bottom: 12px;">
+                <el-tag size="small" :type="isJobSupportedForCurrentConnection(pendingStartJobModule) ? 'info' : 'danger'">
+                    {{ formatJobPlatformLabel(pendingStartJobModule.metadata?.platforms || []) }}
+                </el-tag>
+            </div>
+            <el-form label-position="top">
+                <el-form-item v-for="param in (pendingStartJobModule.metadata?.params || [])"
+                              :key="`job-param-${param.name}`"
+                              :label="`${param.name} (${param.type || 'string'})`">
+                    <el-input v-model="backgroundJobParamForm[param.name]"
+                              :placeholder="param.description || param.name"></el-input>
+                    <div class="hint-text" style="margin-top: 6px;">
+                        {{ param.description || 'No description' }}
+                        <template v-if="param.required"> · required</template>
+                        <template v-if="param.default !== undefined && param.default !== null"> · default: {{ param.default }}</template>
+                        <template v-if="param.min !== undefined"> · min: {{ param.min }}</template>
+                        <template v-if="param.max !== undefined"> · max: {{ param.max }}</template>
+                    </div>
+                </el-form-item>
+            </el-form>
+        </div>
+        <template #footer>
+            <el-button @click="closeBackgroundJobStartDialog">Cancel</el-button>
+            <el-button type="primary"
+                       :loading="backgroundJobStartSubmitting"
+                       @click="confirmStartBackgroundJobWithParams">
+                Start
+            </el-button>
+        </template>
     </el-dialog>
 
     <el-dialog v-model="backgroundJobDetailDialogVisible"

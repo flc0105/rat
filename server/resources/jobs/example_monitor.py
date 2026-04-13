@@ -1,6 +1,23 @@
 # server/scripts/jobs/example_monitor.py
 # Example monitor that reports system info every 10 seconds
 
+JOB_METADATA = {
+    "name": "example_monitor",
+    "display_name": "Example Monitor",
+    "description": "Report a heartbeat message periodically",
+    "platforms": ["darwin", "windows", "linux"],
+    "params": [
+        {
+            "name": "interval_seconds",
+            "type": "integer",
+            "required": False,
+            "default": 10,
+            "min": 1,
+            "description": "Heartbeat interval in seconds"
+        }
+    ]
+}
+
 import platform
 import time
 
@@ -11,6 +28,9 @@ class ExampleMonitor(Job):
     def __init__(self):
         super().__init__()
         self.interval = 10
+
+    def on_context_bound(self):
+        self.interval = int(self.get_job_param('interval_seconds', 10) or 10)
 
     def run(self):
         self.mark_running()

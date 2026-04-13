@@ -29,8 +29,10 @@ class Job(ABC):
         self.report_url = UPLOAD_BASE_URL.rstrip('/') + '/api/background-jobs/report'
         self.client_id = None
         self.hostname = ''
+        self.job_metadata = {}
+        self.job_params = {}
 
-    def bind_context(self, server, command_id, client_id=None, job_key=''):
+    def bind_context(self, server, command_id, client_id=None, job_key='', job_metadata=None, job_params=None):
         """
         绑定运行上下文
         """
@@ -39,10 +41,24 @@ class Job(ABC):
         self.client_id = client_id
         self.job_key = (job_key or '').strip()
         self.hostname = ''
+        self.job_metadata = dict(job_metadata or {})
+        self.job_params = dict(job_params or {})
         try:
             self.hostname = (getattr(server, 'info', {}) or {}).get('hostname', '') or ''
         except Exception:
             self.hostname = ''
+
+        self.on_context_bound()
+
+    def on_context_bound(self):
+        """
+        在 job metadata / params 绑定完成后触发。
+        新 job 可在这里消费参数，老 job 不受影响。
+        """
+        return None
+
+    def get_job_param(self, name: str, default=None):
+        return (self.job_params or {}).get(name, default)
 
     def _build_display_name(self) -> str:
         display_base = self.job_key or self.job_name or 'job'
@@ -210,5 +226,3 @@ class Job(ABC):
 
     def stop(self, notify: bool = True):
         self.request_stop(notify=notify)
-
-

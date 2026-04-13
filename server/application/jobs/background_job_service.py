@@ -1,3 +1,5 @@
+import base64
+import json
 import os
 from datetime import datetime
 
@@ -22,16 +24,38 @@ class BackgroundJobService:
         self.remote_execution_service = remote_execution_service
         self.job_catalog_service = job_catalog_service
 
+    def _encode_payload_arg(self, payload: dict) -> str:
+        raw = json.dumps(payload, ensure_ascii=False).encode('utf-8')
+        encoded = base64.urlsafe_b64encode(raw).decode('utf-8')
+        return f'__json__:{encoded}'
+
+    def _build_start_job_command(self, job_name: str, params=None) -> str:
+        normalized_job_name = str(job_name or '').strip()
+        normalized_params = dict(params or {}) if isinstance(params, dict) else {}
+
+        if not normalized_params:
+            return f'start_job {normalized_job_name}'
+
+        payload = {
+            'job_name': normalized_job_name,
+            'params': normalized_params,
+        }
+        return f'start_job {self._encode_payload_arg(payload)}'
+
     # add remove client side job 2026-04-08 11:40
     def _serialize_available_job(self, job_item: dict) -> dict:
         job_name = str(job_item.get('job_name') or job_item.get('name') or job_item.get('job_key') or '').strip()
         display_name = str(job_item.get('display_name') or job_name).strip() or job_name
         job_key = str(job_item.get('job_key') or job_name).strip() or job_name
+        description = str(job_item.get('description') or '').strip()
+        metadata = job_item.get('metadata') or {}
 
         return {
             'job_name': job_name,
             'job_key': job_key,
             'display_name': display_name,
+            'description': description,
+            'metadata': metadata,
             'source': 'job',
         }
 
@@ -43,20 +67,23 @@ class BackgroundJobService:
             if isinstance(item, dict)
         ]
 
-    def start_job(self, client_id: str, job_name: str) -> dict:
+    def start_job(self, client_id: str, job_name: str, params=None) -> dict:
         job_name = (job_name or '').strip()
         if not job_name:
             raise ValueError('job_name is required')
 
+        normalized_params = dict(params or {}) if isinstance(params, dict) else {}
+
         text = self.remote_execution_service.run_foreground_text_command(
             client_id,
-            f'start_job {job_name}',
+            self._build_start_job_command(job_name, normalized_params),
             task_type='job_control',
             source='web_background_job',
         )
         return {
             'client_id': client_id,
             'job_name': job_name,
+            'params': normalized_params,
             'message': text,
         }
 

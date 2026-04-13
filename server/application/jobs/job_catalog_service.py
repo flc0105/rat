@@ -4,6 +4,8 @@ from pathlib import Path
 
 from werkzeug.utils import secure_filename
 
+from core.utils.job_metadata import read_job_metadata_from_file
+
 
 class JobCatalogService:
 
@@ -15,6 +17,28 @@ class JobCatalogService:
         """确保任务目录存在"""
         os.makedirs(self.jobs_root_dir, exist_ok=True)
 
+    def _build_job_item(self, file_path: str) -> dict:
+        rel_path = os.path.relpath(file_path, self.jobs_root_dir)
+        name = rel_path.replace('\\', '/')
+        job_name = name[:-3] if name.endswith('.py') else name
+        metadata = read_job_metadata_from_file(file_path, fallback_name=job_name)
+
+        display_name = str(metadata.get('display_name') or name).strip() or name
+        description = str(metadata.get('description') or '').strip()
+
+        return {
+            'name': job_name,
+            'job_name': job_name,
+            'job_key': job_name,
+            'display_name': display_name,
+            'description': description,
+            'metadata': metadata,
+            'path': file_path,
+            'size': os.path.getsize(file_path),
+            'source': 'job',
+            'kind': 'background_job',
+        }
+
     def list_jobs(self) -> list[dict]:
         """列出所有可用的任务。"""
         jobs = []
@@ -22,19 +46,7 @@ class JobCatalogService:
         for file_path in glob.iglob(pattern, recursive=True):
             if not os.path.isfile(file_path):
                 continue
-            rel_path = os.path.relpath(file_path, self.jobs_root_dir)
-            name = rel_path.replace('\\', '/')
-            job_name = name[:-3] if name.endswith('.py') else name
-            jobs.append({
-                'name': job_name,
-                'job_name': job_name,
-                'job_key': job_name,
-                'display_name': name,
-                'path': file_path,
-                'size': os.path.getsize(file_path),
-                'source': 'job',
-                'kind': 'background_job',
-            })
+            jobs.append(self._build_job_item(file_path))
         return sorted(jobs, key=lambda x: x['job_name'])
 
     def get_job_content(self, job_name: str) -> str:

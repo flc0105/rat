@@ -1,3 +1,5 @@
+import base64
+import json
 import os
 import tempfile
 import uuid
@@ -13,6 +15,35 @@ class CommandJobMixin:
         if name.endswith('.py'):
             name = name[:-3]
         return name.strip('/').strip()
+
+    def _decode_job_payload_arg(self, raw):
+        text = str(raw or '').strip()
+        prefix = '__json__:'
+        if not text.startswith(prefix):
+            return text
+
+        encoded = text[len(prefix):]
+        decoded = base64.urlsafe_b64decode(encoded.encode()).decode('utf-8')
+        return json.loads(decoded)
+
+    def _parse_start_job_request(self, raw):
+        payload = self._decode_job_payload_arg(raw)
+        if isinstance(payload, dict):
+            job_name = self._normalize_job_name(payload.get('job_name') or payload.get('name') or '')
+            job_params = payload.get('params') or {}
+            if not isinstance(job_params, dict):
+                raise ValueError('job params must be an object')
+            return {
+                'job_name': job_name,
+                'job_params': job_params,
+                'raw_payload': payload,
+            }
+
+        return {
+            'job_name': self._normalize_job_name(payload),
+            'job_params': {},
+            'raw_payload': None,
+        }
 
     def _format_runtime_start_message(self, runtime, title: str) -> str:
         display_name = getattr(runtime, 'display_name', '') or title
@@ -48,14 +79,14 @@ class CommandJobMixin:
                 result.append(normalized_name)
         return result
 
-    def _start_remote_job_by_name(self, job_name: str, job_manager):
+    def _start_remote_job_by_name(self, job_name: str, job_manager, job_params=None):
         normalized = self._normalize_job_name(job_name)
         if not normalized:
             raise ValueError('job name is required')
 
         self._send_interim_result(1, f'Fetching job: {normalized}')
         script_content = self._fetch_remote_job(normalized)
-        return self._start_from_script_content(script_content, normalized, job_manager)
+        return self._start_from_script_content(script_content, normalized, job_manager, job_params=job_params)
 
     def _attach_remote_runtime_metadata(self, runtime, temp_path: str, job_name: str):
         normalized_job_name = self._normalize_job_name(job_name)
@@ -76,15 +107,22 @@ class CommandJobMixin:
         仅支持从服务端拉取 job 后运行。
         - 必须传任务名
         """
-        normalized = self._normalize_job_name(job_name)
         job_manager = self.socket.job_manager
+
+        try:
+            request_info = self._parse_start_job_request(job_name)
+        except Exception as e:
+            return 0, f'Invalid start_job payload: {e}'
+
+        normalized = request_info['job_name']
+        job_params = request_info['job_params']
 
         if not normalized:
             return 0, 'Usage: start_job <job_name>'
 
         self._send_interim_result(1, f'Preparing background job: {normalized}')
         try:
-            runtime = self._start_remote_job_by_name(normalized, job_manager)
+            runtime = self._start_remote_job_by_name(normalized, job_manager, job_params=job_params)
             self._send_final_result(1, self._format_runtime_start_message(runtime, 'Background job started'))
             return None
         except Exception as e:
@@ -168,7 +206,7 @@ class CommandJobMixin:
         except Exception as e:
             return 0, f'Failed to stop background jobs: {e}'
 
-    def _start_from_script_content(self, script_content: str, script_name: str, job_manager):
+    def _start_from_script_content(self, script_content: str, script_name: str, job_manager, job_params=None):
         """
         从脚本内容启动任务。
         """
@@ -186,7 +224,7 @@ class CommandJobMixin:
 
             self._send_interim_result(1, f'Preparing background job from remote job: {display_script_name}')
 
-            runtime = job_manager.start_job(temp_path, normalized_job_name, self.command_id)
+            runtime = job_manager.start_job(temp_path, normalized_job_name, self.command_id, job_params=job_params)
             self._attach_remote_runtime_metadata(runtime, temp_path, normalized_job_name)
             return runtime
         except Exception:
