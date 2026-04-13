@@ -6,6 +6,9 @@ window.AppConnectionModule = {
             connectionInfoDialogVisible: false,
             connectionInfoLoading: false,
             connectionInfoJobCount: 0,
+            connectionInfoValueDialogVisible: false,
+            connectionInfoValueDialogTitle: '',
+            connectionInfoValueDialogValue: '',
         }
     },
 
@@ -218,6 +221,9 @@ window.AppConnectionModule = {
             this.connectionInfoDialogVisible = true;
             this.connectionInfoLoading = true;
             this.connectionInfoJobCount = 0;
+            this.connectionInfoValueDialogVisible = false;
+            this.connectionInfoValueDialogTitle = '';
+            this.connectionInfoValueDialogValue = '';
 
             try {
                 if (this.commandCandidatesLoadedFor !== this.selectedId || !this.commandCandidates.length) {
@@ -235,6 +241,35 @@ window.AppConnectionModule = {
                 this.connectionInfoLoading = false;
             }
         },
+
+        normalizeConnectionInfoValue(value) {
+            if (value === null || value === undefined || value === '') return '-';
+            if (typeof value === 'boolean') return value ? 'true' : 'false';
+            if (Array.isArray(value)) {
+                return value.length ? value.join(', ') : '-';
+            }
+            if (typeof value === 'object') {
+                try {
+                    return JSON.stringify(value, null, 2);
+                } catch (_error) {
+                    return String(value);
+                }
+            }
+            return String(value);
+        },
+
+        isConnectionInfoValueExpandable(value) {
+            const text = this.normalizeConnectionInfoValue(value);
+            if (!text || text === '-') return false;
+            return text.length > 42 || text.includes('\n');
+        },
+
+openConnectionInfoValueDialog(item) {
+    if (!item) return;
+    this.connectionInfoValueDialogTitle = item.label || 'Details';
+    this.connectionInfoValueDialogValue = item.fullValue || '-';
+    this.connectionInfoValueDialogVisible = true;
+},
 
         getConnectionDisplayState(conn) {
             const state = String(conn && conn.connection_state || '').trim();
@@ -336,6 +371,43 @@ window.AppConnectionModule = {
     computed: {
         currentConnection() {
             return this.connections.find(item => item.client_id === this.selectedId) || null;
+        },
+
+        connectionInfoCards() {
+            const conn = this.currentConnection || {};
+            const items = [
+                {label: 'Status', value: this.getConnectionStatusText(conn)},
+                {label: 'Hostname', value: conn.hostname || '-'},
+                {label: 'Address', value: conn.addr || '-', mono: true},
+                {label: 'Client ID', value: conn.client_id || '-', mono: true},
+                {label: 'Platform', value: this.formatOsLabel(conn.os_type, conn.os_ver) || '-'},
+                {label: 'Integrity', value: conn.integrity || '-'},
+                {label: 'Build Version', value: conn.build_version || '-'},
+                {label: 'Last Seen', value: this.formatConnectionLastSeen(conn)},
+                {label: 'Connected At', value: this.formatDateTimeStandard(conn.connected_at) || '-'},
+                {label: 'RTT', value: this.formatConnectionRtt(conn)},
+                {label: 'Working Directory', value: conn.cwd || '-', mono: true},
+                {label: 'PID', value: conn.process_id || '-'},
+                {label: 'Process Name', value: conn.process_name || '-'},
+                {label: 'Launch Command', value: conn.launch_command || '-'},
+                {label: 'Username', value: conn.username || '-'},
+                {label: 'Python Version', value: conn.python_ver || '-'},
+                {label: 'HTTP Transfer Mode', value: conn.http_transfer_mode || '-'},
+                {label: 'Python Execution Mode', value: conn.python_execution_mode || '-'},
+                {label: 'Remote Watchdog Enabled', value: conn.remote_watchdog_enabled},
+                {label: 'Local Watchdog Enabled', value: conn.local_watchdog_enabled},
+                {label: 'Reported Jobs', value: this.connectionInfoJobCount},
+                {label: 'Command Count', value: this.connectionInfoClientCommands.length},
+            ];
+
+            return items.map(item => {
+                const fullValue = this.normalizeConnectionInfoValue(item.value);
+                return {
+                    ...item,
+                    fullValue,
+                    expandable: this.isConnectionInfoValueExpandable(fullValue),
+                };
+            });
         },
 
         connectionInfoClientCommands() {

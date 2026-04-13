@@ -1622,106 +1622,20 @@
     <el-dialog v-model="connectionInfoDialogVisible" title="Connection Info" width="980px" top="6vh"
                class="fixed-dialog connection-info-dialog">
         <div class="fixed-dialog-body" v-loading="connectionInfoLoading">
-            <div class="background-job-stats">
-                <div class="background-job-stat">
-                    <div class="background-job-stat-label">Status</div>
-                    <div class="background-job-stat-value">{{ getConnectionStatusText(currentConnection) }}</div>
-                </div>
-                <div class="background-job-stat">
-                    <div class="background-job-stat-label">Hostname</div>
-                    <div class="background-job-stat-value">{{ currentConnection?.hostname || '-' }}</div>
-                </div>
-                <div class="background-job-stat">
-                    <div class="background-job-stat-label">Client ID</div>
-                    <div class="background-job-stat-value mono">{{ currentConnection?.client_id || '-' }}</div>
-                </div>
-                <div class="background-job-stat">
-                    <div class="background-job-stat-label">Address</div>
-                    <div class="background-job-stat-value mono">{{ currentConnection?.addr || '-' }}</div>
-                </div>
-                <div class="background-job-stat">
-                    <div class="background-job-stat-label">Platform</div>
-                    <div class="background-job-stat-value">{{ formatOsLabel(currentConnection?.os_type,
-                        currentConnection?.os_ver) }}
-                    </div>
-                </div>
-                <div class="background-job-stat">
-                    <div class="background-job-stat-label">Integrity</div>
-                    <div class="background-job-stat-value">{{ currentConnection?.integrity || '-' }}</div>
-                </div>
-                <div class="background-job-stat">
-                    <div class="background-job-stat-label">Working Directory</div>
-                    <div class="background-job-stat-value mono">{{ currentConnection?.cwd || '-' }}</div>
-                </div>
-                <div class="background-job-stat">
-                    <div class="background-job-stat-label">Last Seen</div>
-                    <div class="background-job-stat-value">{{ formatConnectionLastSeen(currentConnection) }}</div>
-                </div>
-                <div class="background-job-stat">
-                    <div class="background-job-stat-label">RTT</div>
-                    <div class="background-job-stat-value">{{ formatConnectionRtt(currentConnection) }}</div>
-                </div>
-
-                <div class="background-job-stat">
-                    <div class="background-job-stat-label">Connected At</div>
-                    <div class="background-job-stat-value">{{ formatDateTimeStandard(currentConnection?.connected_at) || '-' }}</div>
-                </div>
-
-                <div class="background-job-stat">
-                    <div class="background-job-stat-label">Python Version</div>
-                    <div class="background-job-stat-value">{{ currentConnection?.python_ver || '-' }}</div>
-                </div>
-
-                <div class="background-job-stat">
-                    <div class="background-job-stat-label">Build Version</div>
-                    <div class="background-job-stat-value">{{ currentConnection?.build_version || '-' }}</div>
-                </div>
-                <div class="background-job-stat">
-                    <div class="background-job-stat-label">PID</div>
-                    <div class="background-job-stat-value">{{ currentConnection?.process_id || '-' }}</div>
-                </div>
-                <div class="background-job-stat">
-                    <div class="background-job-stat-label">Process Name</div>
-                    <div class="background-job-stat-value">{{ currentConnection?.process_name || '-' }}</div>
-                </div>
-                <div class="background-job-stat">
-                    <div class="background-job-stat-label">Launch Command</div>
-                    <div class="background-job-stat-value">{{ currentConnection?.launch_command || '-' }}</div>
-                </div>
-                <div class="background-job-stat">
-                    <div class="background-job-stat-label">Username</div>
-                    <div class="background-job-stat-value">{{ currentConnection?.username || '-' }}</div>
-                </div>
-
-
-                <div class="background-job-stat">
-                    <div class="background-job-stat-label">HTTP Transfer Mode</div>
-                    <div class="background-job-stat-value">{{ currentConnection?.http_transfer_mode || '-' }}</div>
-                </div>
-                <div class="background-job-stat">
-                    <div class="background-job-stat-label">Python Execution Mode</div>
-                    <div class="background-job-stat-value">{{ currentConnection?.python_execution_mode || '-' }}</div>
-                </div>
-                <div class="background-job-stat">
-                    <div class="background-job-stat-label">Remote Watchdog Enabled</div>
-                    <div class="background-job-stat-value">{{ currentConnection?.remote_watchdog_enabled }}</div>
-                </div>
-                <div class="background-job-stat">
-                    <div class="background-job-stat-label">Local Watchdog Enabled</div>
-                    <div class="background-job-stat-value">{{ currentConnection?.local_watchdog_enabled }}</div>
-                </div>
-
-                <div class="background-job-stat">
-                    <div class="background-job-stat-label">Reported Jobs</div>
-                    <div class="background-job-stat-value">{{ connectionInfoJobCount }}</div>
-                </div>
-                <div class="background-job-stat">
-                    <div class="background-job-stat-label">Command Count</div>
-                    <div class="background-job-stat-value">{{ connectionInfoClientCommands.length }}</div>
-                </div>
-
-
-            </div>
+            <div class="background-job-stats connection-info-stats-grid">
+    <div v-for="item in connectionInfoCards"
+         :key="item.label"
+         class="background-job-stat connection-info-stat connection-info-stat-expandable"
+         @click="openConnectionInfoValueDialog(item)">
+        <div class="background-job-stat-label connection-info-stat-label">
+            {{ item.label }}
+        </div>
+        <div class="background-job-stat-value connection-info-stat-value"
+             :class="{ mono: item.mono }">
+            {{ item.fullValue }}
+        </div>
+    </div>
+</div>
 
             <div class="background-job-panel connection-command-panel">
                 <div class="background-job-panel-title">Command List</div>
@@ -1739,6 +1653,18 @@
             </div>
         </div>
     </el-dialog>
+
+
+
+    <el-dialog v-model="connectionInfoValueDialogVisible"
+           :title="connectionInfoValueDialogTitle || 'Details'"
+           width="760px"
+           top="12vh"
+           class="fixed-dialog">
+    <div class="fixed-dialog-body">
+        <pre class="connection-info-full-value">{{ connectionInfoValueDialogValue || '-' }}</pre>
+    </div>
+</el-dialog>
 
 
     <el-dialog v-model="processDialogVisible" title="Process Manager" width="1100px" top="5vh"
