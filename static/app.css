@@ -2471,3 +2471,65 @@ body {
   margin: 0;
 }
 
+.banner-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: nowrap;
+  height: 32px;
+}
+
+.banner-meta-inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 32px;
+  margin: 0;
+  white-space: nowrap;
+}
+
+.banner-action-links {
+  display: inline-flex;
+  align-items: center;
+  gap: 0;
+  height: 32px;
+  white-space: nowrap;
+}
+
+.banner-inline-action {
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: rgba(238, 244, 255, 0.88);
+  font-size: 13px;
+  font-weight: 400;
+  line-height: 32px;
+  height: 32px;
+  cursor: pointer;
+  transition: color 0.18s ease, opacity 0.18s ease;
+}
+
+.banner-inline-action:hover {
+  color: #ffffff;
+}
+
+.banner-inline-action:active {
+  opacity: 0.72;
+}
+
+.banner-inline-action + .banner-inline-action {
+  position: relative;
+  margin-left: 12px;
+  padding-left: 12px;
+}
+
+.banner-inline-action + .banner-inline-action::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 50%;
+  width: 1px;
+  height: 12px;
+  background: rgba(255, 255, 255, 0.18);
+  transform: translateY(-50%);
+}

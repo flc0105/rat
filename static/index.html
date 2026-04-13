@@ -31,10 +31,26 @@
 
 <!--                <span class="banner-meta-label">Known Nodes</span>-->
 <!--                <span class="banner-meta-value">{{ connections.length }}</span>-->
-                <el-button size="small" class="tool-btn tool-btn-accent"
-                           @click="openAgentBuilderDialog" style="margin-right: 3px">Build Agent
-                </el-button>
-                <el-button size="small" class="tool-btn tool-btn-accent"  onclick="window.RatAuth && window.RatAuth.logout()">Sign out</el-button>
+<div class="banner-actions">
+<!--    <div class="banner-meta banner-meta-inline">-->
+<!--        <span class="banner-meta-label">Known Nodes</span>-->
+<!--        <span class="banner-meta-value">{{ connections.length }}</span>-->
+<!--    </div>-->
+
+    <div class="banner-action-links">
+        <button class="banner-inline-action"
+                type="button"
+                @click="openAgentBuilderDialog">
+            Build Agent
+        </button>
+
+        <button class="banner-inline-action"
+                type="button"
+                onclick="window.RatAuth && window.RatAuth.logout()">
+            Sign out
+        </button>
+    </div>
+</div>
             </div>
         </header>
 
