@@ -1,36 +1,34 @@
 import hmac
-import re
-from urllib.parse import quote
+from functools import wraps
 
-from flask import request, session
+from flask import current_app, request, session
 
 from server.config.config import ADMIN_API_TOKEN
 
 
-PUBLIC_STATIC_PATHS = {
-    '/login.html',
-    '/auth.js',
-    '/app.css',
-    '/favicon.ico',
-}
+PUBLIC_ENDPOINT_ATTR = '__rat_allow_anonymous__'
 
-PUBLIC_API_PATHS = {
-    '/api/auth/login',
-    '/api/auth/logout',
-    '/api/auth/session',
-}
 
-# 这些接口由 Agent 或后台任务主动调用，保持免鉴权以避免破坏现有链路。
-PUBLIC_API_PATTERNS = [
-    (None, re.compile(r'^/api/files/upload$')),
-    (None, re.compile(r'^/api/background-jobs/report$')),
-    ('GET', re.compile(r'^/api/jobs/download$')),
-    ('GET', re.compile(r'^/api/jobs/list$')),
-    ('GET', re.compile(r'^/api/connections/[^/]+/control$')),
-    ('GET', re.compile(r'^/api/upload-tmp/[^/]+/[^/]+$')),
-    ('POST', re.compile(r'^/api/agent/build$')),
-    ('GET', re.compile(r'^/api/agent/download/[^/]+$')),
-]
+def allow_anonymous(view_func):
+    """
+    路由级匿名访问注解。
+    被标记的接口可跳过 session / token 验证。
+    """
+    setattr(view_func, PUBLIC_ENDPOINT_ATTR, True)
+    return view_func
+
+
+def _unwrap_view_func(view_func):
+    current = view_func
+    visited = set()
+
+    while current is not None and current not in visited:
+        visited.add(current)
+        if getattr(current, PUBLIC_ENDPOINT_ATTR, False):
+            return current
+        current = getattr(current, '__wrapped__', None)
+
+    return view_func
 
 
 class WebAuthGuard:
@@ -78,30 +76,17 @@ class WebAuthGuard:
         session.pop(self.SESSION_USER_KEY, None)
         session.clear()
 
-    def is_public_static_path(self, path: str) -> bool:
-        normalized = str(path or '').strip()
-        if normalized in PUBLIC_STATIC_PATHS:
-            return True
-        return normalized.startswith('/monaco-editor/')
-
-    def is_public_api_path(self, path: str, method: str) -> bool:
-        normalized_path = str(path or '').strip()
-        normalized_method = str(method or '').upper()
-
-        if normalized_path in PUBLIC_API_PATHS:
+    def is_public_request(self) -> bool:
+        # Flask 静态资源路由，不需要单独配 URL 白名单
+        if request.endpoint == 'static':
             return True
 
-        for allowed_method, pattern in PUBLIC_API_PATTERNS:
-            if allowed_method is not None and normalized_method != allowed_method:
-                continue
-            if pattern.match(normalized_path):
-                return True
+        if not request.endpoint:
+            return False
 
-        return False
+        view_func = current_app.view_functions.get(request.endpoint)
+        if view_func is None:
+            return False
 
-    def build_login_redirect_target(self) -> str:
-        raw_query = request.query_string.decode('utf-8', errors='ignore')
-        full_path = request.path
-        if raw_query:
-            full_path = f'{full_path}?{raw_query}'
-        return f'/login.html?redirect={quote(full_path, safe="")}'
+        unwrapped = _unwrap_view_func(view_func)
+        return bool(getattr(unwrapped, PUBLIC_ENDPOINT_ATTR, False))

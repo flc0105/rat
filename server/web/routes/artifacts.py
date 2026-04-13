@@ -3,6 +3,7 @@ import os
 from flask import Blueprint, request, send_file
 
 from server.web.api_response import WebApiResponder
+from server.web.auth_guard import allow_anonymous
 from server.web.request_parsers import (
     get_json_payload,
     get_optional_form_text,
@@ -77,6 +78,7 @@ def create_artifacts_blueprint(server_instance):
         return responder.json_endpoint(_execute, default_error_status=500)
 
     @blueprint.post('/api/files/upload')
+    @allow_anonymous
     def upload_file():
         def _execute():
             upload = get_required_upload()

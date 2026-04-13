@@ -1,6 +1,7 @@
 from flask import Blueprint, send_file
 
 from server.web.api_response import WebApiResponder
+from server.web.auth_guard import allow_anonymous
 from server.web.request_parsers import get_json_payload
 
 
@@ -11,6 +12,7 @@ def create_agent_blueprint(server_instance):
     responder = WebApiResponder()
 
     @blueprint.post('/api/agent/build')
+    @allow_anonymous
     def build_agent():
         """构建 Agent"""
 
@@ -58,6 +60,7 @@ def create_agent_blueprint(server_instance):
         return responder.json_endpoint(_execute, default_error_status=500)
 
     @blueprint.get('/api/agent/download/<filename>')
+    @allow_anonymous
     def download_agent(filename):
         """下载构建好的 Agent"""
         try:

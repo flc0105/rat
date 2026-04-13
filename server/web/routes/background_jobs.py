@@ -1,6 +1,7 @@
 from flask import Blueprint, request, Response
 
 from server.web.api_response import WebApiResponder
+from server.web.auth_guard import allow_anonymous
 from server.web.request_parsers import get_json_payload
 
 
@@ -11,6 +12,7 @@ def create_background_job_blueprint(server_instance):
     responder = WebApiResponder()
 
     @blueprint.get('/api/jobs/list')
+    @allow_anonymous
     def list_jobs():
         """列出所有可用的任务"""
         return responder.json_endpoint(
@@ -19,6 +21,7 @@ def create_background_job_blueprint(server_instance):
         )
 
     @blueprint.get('/api/jobs/download')
+    @allow_anonymous
     def download_job():
         """下载任务内容（供 Client 使用）"""
         job_name = request.args.get('name', '').strip()
@@ -119,6 +122,7 @@ def create_background_job_blueprint(server_instance):
         return responder.json_endpoint(_execute, default_error_status=500)
 
     @blueprint.post('/api/background-jobs/report')
+    @allow_anonymous
     def report_background_job_event():
         def _execute():
             payload = get_json_payload()

@@ -16,7 +16,7 @@ from server.config.config import (
     WEB_SESSION_SECRET,
 )
 from server.web.api_response import WebApiResponder
-from server.web.auth_guard import WebAuthGuard
+from server.web.auth_guard import WebAuthGuard, allow_anonymous
 from server.web.request_parsers import (
     get_optional_tab_id,
     get_required_command,
@@ -58,45 +58,36 @@ def create_app(server_instance):
 
     @app.before_request
     def enforce_authentication():
-        path = request.path or '/'
-
         if request.method == 'OPTIONS':
             return None
 
-        if auth_guard.is_public_static_path(path):
-            return None
-
-        if path.startswith('/api/'):
-            if auth_guard.is_public_api_path(path, request.method):
-                return None
-            if auth_guard.is_authenticated():
-                return None
-            return responder.fail('Authentication required', 401)
-
-        if path in ('/', '/index.html'):
-            if auth_guard.is_authenticated():
-                return None
-            return redirect(auth_guard.build_login_redirect_target())
-
-        if path.startswith('/login'):
+        if auth_guard.is_public_request():
             return None
 
         if auth_guard.is_authenticated():
             return None
 
-        return redirect(auth_guard.build_login_redirect_target())
+        is_api_request = (request.path or '').startswith('/api/')
+        if is_api_request:
+            return responder.fail('Authentication required', 401)
+
+        return redirect('/login.html')
 
     @app.get('/')
     def index():
+        if not auth_guard.is_authenticated():
+            return redirect('/login.html')
         return send_from_directory(app.static_folder, 'index.html')
 
     @app.get('/login.html')
+    @allow_anonymous
     def login_page():
         if auth_guard.is_authenticated():
             return redirect('/')
         return send_from_directory(app.static_folder, 'login.html')
 
     @app.get('/api/auth/session')
+    @allow_anonymous
     def auth_session():
         return responder.ok({
             'authenticated': auth_guard.is_authenticated(),
@@ -104,6 +95,7 @@ def create_app(server_instance):
         })
 
     @app.post('/api/auth/login')
+    @allow_anonymous
     def auth_login():
         payload = request.get_json(silent=True) or {}
         username = str(payload.get('username') or '').strip()
@@ -166,24 +158,25 @@ def create_app(server_instance):
 
         return responder.json_endpoint(_execute, default_error_status=500)
 
-    @app.route('/api/connections/<client_id>/control', methods=['GET', 'POST'])
-    def connection_control(client_id):
+    @app.get('/api/connections/<client_id>/control')
+    @allow_anonymous
+    def get_connection_control(client_id):
+        return responder.json_endpoint(
+            lambda: control_command_store.pop_pending_command(client_id) or {'command': ''},
+            default_error_status=500,
+        )
+
+    @app.post('/api/connections/<client_id>/control')
+    def set_connection_control(client_id):
         def _execute():
-            if request.method == 'POST':
-                payload = request.get_json(silent=True) or {}
-                command = str(payload.get('command') or '').strip().lower()
+            payload = request.get_json(silent=True) or {}
+            command = str(payload.get('command') or '').strip().lower()
 
-                if command not in ('kill', 'reset', 'spawn'):
-                    raise ValueError('command must be kill, reset or spawn')
+            if command not in ('kill', 'reset', 'spawn'):
+                raise ValueError('command must be kill, reset or spawn')
 
-                server_instance.get_target_connection_by_client_id(client_id)
-                return control_command_store.set_pending_command(client_id, command)
-
-            data = control_command_store.pop_pending_command(client_id)
-            if data is None:
-                return {'command': ''}
-
-            return data
+            server_instance.get_target_connection_by_client_id(client_id)
+            return control_command_store.set_pending_command(client_id, command)
 
         return responder.json_endpoint(_execute, default_error_status=500)
 
@@ -205,6 +198,7 @@ def create_app(server_instance):
         return responder.json_endpoint(_execute, default_error_status=500)
 
     @app.get('/api/upload-tmp/<temp_id>/<filename>')
+    @allow_anonymous
     def download_upload_tmp_file(temp_id, filename):
         try:
             file_path = artifact_api.get_upload_temp_file_path(temp_id, filename)
