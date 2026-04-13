@@ -811,54 +811,61 @@
                         <!-- 统一展示远程 background job -->
                         <div class="background-job-module-list" v-else>
                             <div v-for="item in backgroundJobModules"
-                                 :key="item.module_id || `job:${item.job_name}`"
-                                 class="background-job-module-card">
-                                <div class="background-job-module-name">{{ item.display_name || item.job_name }}</div>
-                                <div v-if="item.subtitle" class="background-job-module-key mono">{{ item.subtitle }}
-                                </div>
-                                <div v-if="item.description" class="background-job-module-key">{{ item.description }}</div>
-                                <div class="background-job-module-tags">
-                                    <el-tag size="small" type="success">Job</el-tag>
-                                    <el-tag size="small" :type="isJobSupportedForCurrentConnection(item) ? 'info' : 'danger'">
-                                        {{ formatJobPlatformLabel(item.metadata?.platforms || []) }}
-                                    </el-tag>
-                                    <el-tag v-if="hasBackgroundJobParams(item)" size="small" type="warning">Params</el-tag>
-                                </div>
-                                <div class="background-job-module-actions">
-                                    <el-button
-                                        size="small"
-                                        type="primary"
-                                        plain
-                                        @click="openBackgroundJobStartDialog(item)"
-                                        :disabled="isBackgroundJobStartDisabled(item)"
-                                    >
-                                        Start
-                                    </el-button>
-                                    <el-button size="small" plain
-                                               @click="openRemoteJobEditor(item.job_name)">
-                                        Edit
-                                    </el-button>
-                                    <el-button size="small" type="danger" plain
-                                               @click="deleteRemoteScript(item.job_name)">
-                                        Delete
-                                    </el-button>
-                                    <!--                                    <el-button size="small" type="danger" plain-->
-                                    <!--                                               @click="deleteRemoteScript(item.job_name)">-->
-                                    <!--                                        Delete-->
-                                    <!--                                    </el-button>-->
-                                </div>
-                            </div>
+     :key="item.module_id || `job:${item.job_name}`"
+     class="background-job-module-card">
+    <div class="background-job-module-main">
+        <div class="background-job-module-name"
+             :title="item.display_name || item.job_name">
+            {{ item.display_name || item.job_name }}
+        </div>
+
+        <div v-if="item.subtitle"
+             class="background-job-module-key mono"
+             :title="item.subtitle">
+            {{ item.subtitle }}
+        </div>
+
+        <div v-if="item.description"
+             class="background-job-module-desc"
+             :title="item.description">
+            {{ item.description }}
+        </div>
+
+        <div class="background-job-module-tags">
+            <el-tag size="small"
+                    :type="isJobSupportedForCurrentConnection(item) ? 'info' : 'danger'">
+                {{ formatJobPlatformLabel(item.metadata?.platforms || []) }}
+            </el-tag>
+            <el-tag v-if="hasBackgroundJobParams(item)" size="small" type="warning">
+                Params
+            </el-tag>
+        </div>
+    </div>
+
+    <div class="background-job-module-actions">
+        <el-button
+            size="small"
+            type="primary"
+            plain
+            @click="openBackgroundJobStartDialog(item)"
+            :disabled="isBackgroundJobStartDisabled(item)"
+        >
+            Start
+        </el-button>
+        <el-button size="small"
+                   plain
+                   @click="openRemoteJobEditor(item.job_name)">
+            Edit
+        </el-button>
+        <el-button size="small"
+                   type="danger"
+                   plain
+                   @click="deleteRemoteScript(item.job_name)">
+            Delete
+        </el-button>
+    </div>
+</div>
                         </div>
-                        <!--                        <div class="background-job-module-list" v-else>-->
-                        <!--                            <div v-for="item in backgroundJobModules" :key="item.module_id || `job:${item.job_name}`"-->
-                        <!--                                 class="background-job-module-card">-->
-                        <!--                                <div class="background-job-module-name">{{ item.job_name }}</div>-->
-                        <!--                                <div class="background-job-module-key mono">{{ item.job_key || '-' }}</div>-->
-                        <!--                                <el-button size="small" type="primary" plain @click="startBackgroundJob(item.job_name)">-->
-                        <!--                                    Start-->
-                        <!--                                </el-button>-->
-                        <!--                            </div>-->
-                        <!--                        </div>-->
                     </div>
                 </el-tab-pane>
 

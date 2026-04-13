@@ -2379,3 +2379,94 @@ body {
     gap: 6px 10px;
   }
 }
+
+
+/* ========== Background job card layout stabilization ========== */
+.background-job-module-list {
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  align-items: stretch;
+}
+
+.background-job-module-card {
+  min-width: 0;
+  height: 200px;
+  min-height: 200px;
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.background-job-module-main {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.background-job-module-name,
+.background-job-module-key,
+.background-job-module-desc {
+  min-width: 0;
+  margin: 0;
+}
+
+.background-job-module-name {
+  font-size: 15px;
+  line-height: 22px;
+  font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.background-job-module-key {
+  font-size: 12px;
+  line-height: 18px;
+  color: #667085;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.background-job-module-desc {
+  font-size: 13px;
+  line-height: 20px;
+  color: #667085;
+  overflow: hidden;
+  word-break: break-word;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  /*min-height: 10px;*/
+}
+
+.background-job-module-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: flex-start;
+  align-content: flex-start;
+  min-height: 0px;
+  margin: auto 0 10px 0;
+}
+
+.background-job-module-tags .el-tag {
+  margin: 0;
+}
+
+.background-job-module-actions {
+  margin-top: auto;
+
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  align-items: end;
+}
+
+.background-job-module-actions .el-button {
+  width: 100%;
+  min-width: 0;
+  margin: 0;
+}
