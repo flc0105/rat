@@ -152,24 +152,24 @@
                                         <el-button size="small" class="tool-btn" @click="openConnectionInfoDialog">
                                             Info
                                         </el-button>
-<!--                                        <el-button size="small" class="tool-btn" @click="openBackgroundJobsDialog">-->
-<!--                                            Jobs-->
-<!--                                        </el-button>-->
-<!--                                        <el-button size="small" class="tool-btn" @click="openScriptLibraryDialog">-->
-<!--                                            Scripts-->
-<!--                                        </el-button>-->
+                                        <el-button size="small" class="tool-btn" @click="openBackgroundJobsDialog">
+                                            Jobs
+                                        </el-button>
+                                        <el-button size="small" class="tool-btn" @click="openScriptLibraryDialog">
+                                            Scripts
+                                        </el-button>
 
-                                        <el-dropdown trigger="click" @command="handleResourcesCommand">
-    <el-button size="small" class="tool-btn">
-        Resources
-    </el-button>
-    <template #dropdown>
-        <el-dropdown-menu>
-            <el-dropdown-item command="jobs">Jobs</el-dropdown-item>
-            <el-dropdown-item command="scripts">Scripts</el-dropdown-item>
-        </el-dropdown-menu>
-    </template>
-</el-dropdown>
+<!--                                        <el-dropdown trigger="click" @command="handleResourcesCommand">-->
+<!--    <el-button size="small" class="tool-btn">-->
+<!--        Resources-->
+<!--    </el-button>-->
+<!--    <template #dropdown>-->
+<!--        <el-dropdown-menu>-->
+<!--            <el-dropdown-item command="jobs">Jobs</el-dropdown-item>-->
+<!--            <el-dropdown-item command="scripts">Scripts</el-dropdown-item>-->
+<!--        </el-dropdown-menu>-->
+<!--    </template>-->
+<!--</el-dropdown>-->
                                         <el-button size="small" class="tool-btn" @click="openCommandHistoryDialog">
                                             History
                                         </el-button>
@@ -417,7 +417,7 @@
                                     </el-dropdown-menu>
                                 </template>
                             </el-dropdown>
-                            <el-button size="small" @click="toggleCurrentPinnedQuickJump">{{ remotePinButtonText }}</el-button>
+<!--                            <el-button size="small" @click="toggleCurrentPinnedQuickJump">{{ remotePinButtonText }}</el-button>-->
                         </div>
 
                         <span class="remote-toolbar-divider"></span>
@@ -435,31 +435,63 @@
                             </el-button>
                         </div>
 
+<!--                        <span class="remote-toolbar-divider"></span>-->
+
+<!--                        <div class="remote-toolbar-group">-->
+<!--                            <el-button size="small" :disabled="!hasRemoteSelection" @click="copySelectedRemoteEntries">-->
+<!--                                Copy<span v-if="remoteSelectedPaths.length"> ({{ remoteSelectedPaths.length }})</span>-->
+<!--                            </el-button>-->
+<!--                            <el-button size="small" :disabled="!hasRemoteSelection" @click="cutSelectedRemoteEntries">-->
+<!--                                Cut<span v-if="remoteSelectedPaths.length"> ({{ remoteSelectedPaths.length }})</span>-->
+<!--                            </el-button>-->
+<!--                            <el-button size="small" type="primary" plain :disabled="!hasRemoteClipboard" @click="pasteRemoteClipboard">-->
+<!--                                Paste<span v-if="hasRemoteClipboard"> ({{ remoteClipboardPaths.length }})</span>-->
+<!--                            </el-button>-->
+<!--                            <el-button size="small" plain :disabled="!hasRemoteClipboard" @click="clearRemoteClipboard">-->
+<!--                                Clear Clipboard-->
+<!--                            </el-button>-->
+<!--                        </div>-->
+
+<!--                        <span class="remote-toolbar-divider"></span>-->
+
+<!--                        <div class="remote-toolbar-group">-->
+<!--                            <el-button size="small" :disabled="!hasRemoteSelection" @click="clearRemoteSelection">Clear Selection</el-button>-->
+<!--                            <el-button size="small" @click="toggleRemoteHiddenFiles">-->
+<!--                                {{ showHiddenFiles ? 'Hide Hidden' : 'Show Hidden' }}-->
+<!--                            </el-button>-->
+<!--                        </div>-->
+
                         <span class="remote-toolbar-divider"></span>
 
-                        <div class="remote-toolbar-group">
-                            <el-button size="small" :disabled="!hasRemoteSelection" @click="copySelectedRemoteEntries">
-                                Copy<span v-if="remoteSelectedPaths.length"> ({{ remoteSelectedPaths.length }})</span>
-                            </el-button>
-                            <el-button size="small" :disabled="!hasRemoteSelection" @click="cutSelectedRemoteEntries">
-                                Cut<span v-if="remoteSelectedPaths.length"> ({{ remoteSelectedPaths.length }})</span>
-                            </el-button>
-                            <el-button size="small" type="primary" plain :disabled="!hasRemoteClipboard" @click="pasteRemoteClipboard">
-                                Paste<span v-if="hasRemoteClipboard"> ({{ remoteClipboardPaths.length }})</span>
-                            </el-button>
-                            <el-button size="small" plain :disabled="!hasRemoteClipboard" @click="clearRemoteClipboard">
-                                Clear Clipboard
-                            </el-button>
-                        </div>
+<div class="remote-toolbar-group">
+    <el-button size="small" type="primary" plain :disabled="!hasRemoteClipboard" @click="pasteRemoteClipboard">
+        Paste<span v-if="hasRemoteClipboard"> ({{ remoteClipboardPaths.length }})</span>
+    </el-button>
+    <el-dropdown trigger="click" @command="handleRemoteToolbarMoreCommand">
+        <el-button size="small">More</el-button>
+        <template #dropdown>
+            <el-dropdown-menu>
+                <el-dropdown-item command="toggle_pin">{{ remotePinButtonText }}</el-dropdown-item>
+                <el-dropdown-item command="copy" :disabled="!hasRemoteSelection">
+                    Copy<span v-if="remoteSelectedPaths.length"> ({{ remoteSelectedPaths.length }})</span>
+                </el-dropdown-item>
+                <el-dropdown-item command="cut" :disabled="!hasRemoteSelection">
+                    Cut<span v-if="remoteSelectedPaths.length"> ({{ remoteSelectedPaths.length }})</span>
+                </el-dropdown-item>
 
-                        <span class="remote-toolbar-divider"></span>
-
-                        <div class="remote-toolbar-group">
-                            <el-button size="small" :disabled="!hasRemoteSelection" @click="clearRemoteSelection">Clear Selection</el-button>
-                            <el-button size="small" @click="toggleRemoteHiddenFiles">
-                                {{ showHiddenFiles ? 'Hide Hidden' : 'Show Hidden' }}
-                            </el-button>
-                        </div>
+                <el-dropdown-item command="clear_clipboard" :disabled="!hasRemoteClipboard">
+                    Clear Clipboard
+                </el-dropdown-item>
+                <el-dropdown-item command="clear_selection" :disabled="!hasRemoteSelection">
+                    Clear Selection
+                </el-dropdown-item>
+                <el-dropdown-item command="toggle_hidden">
+                    {{ showHiddenFiles ? 'Hide Hidden' : 'Show Hidden' }}
+                </el-dropdown-item>
+            </el-dropdown-menu>
+        </template>
+    </el-dropdown>
+</div>
                     </div>
                 </div>
             </div>
@@ -815,107 +847,145 @@
         </div>
     </el-dialog>
 
-    <el-dialog v-model="scriptLibraryDialogVisible" title="Script Library" width="1240px" top="5vh"
+<el-dialog v-model="scriptLibraryDialogVisible" title="Script Library" width="1240px" top="5vh"
            class="fixed-dialog script-library-dialog">
     <div class="fixed-dialog-body script-library-body" v-loading="scriptLibraryLoading">
+        <div class="background-jobs-toolbar script-library-toolbar">
+            <div class="script-library-toolbar-left">
+                <el-button size="small" @click="loadScriptCatalog" :loading="scriptLibraryLoading">Refresh</el-button>
+                <el-button size="small" @click="triggerScriptUpload" :loading="serverScriptUploadLoading">Upload</el-button>
+                <el-button size="small" type="primary" plain @click="createRemoteScriptPrompt()">New Script</el-button>
+                <input id="server-script-upload-input"
+                       type="file"
+                       accept=".py,text/x-python"
+                       style="display: none"
+                       @change="handleServerScriptUpload">
+            </div>
+        </div>
+
         <div class="script-library-shell">
             <div class="script-library-tree panel-lite">
-                <div class="background-jobs-toolbar">
-                    <el-button size="small" @click="loadScriptCatalog" :loading="scriptLibraryLoading">Refresh</el-button>
-                </div>
                 <div class="background-jobs-section-title">Folders</div>
-
-                <el-tree
-                        v-if="scriptDirectoryTreeData.length"
-                        :data="scriptDirectoryTreeData"
-                        node-key="key"
-                        default-expand-all
-                        highlight-current
-                        :expand-on-click-node="true"
-                        class="script-library-tree-view"
-                        @node-click="handleScriptTreeNodeClick">
-                    <template #default="{ data }">
-                        <span class="script-tree-node">
-                            <span class="script-tree-node-label">{{ data.label }}</span>
-                        </span>
-                    </template>
-                </el-tree>
-
-                <div v-else class="empty-state">No script folders available</div>
+                <div class="script-library-pane-scroll">
+                    <el-tree
+                            v-if="scriptDirectoryTreeData.length"
+                            :data="scriptDirectoryTreeData"
+                            node-key="key"
+                            default-expand-all
+                            highlight-current
+                            :expand-on-click-node="true"
+                            class="script-library-tree-view"
+                            @node-click="handleScriptTreeNodeClick">
+                        <template #default="{ data }">
+                            <span class="script-tree-node">
+                                <span class="script-tree-node-label">{{ data.label }}</span>
+                            </span>
+                        </template>
+                    </el-tree>
+                    <div v-else class="empty-state">No script folders available</div>
+                </div>
             </div>
 
             <div class="script-library-directory panel-lite">
                 <div class="script-library-directory-top">
                     <div>
-                        <div class="background-jobs-section-title">
-                            {{ selectedScriptDirectory || 'Scripts' }}
-                        </div>
+                        <div class="background-jobs-section-title">{{ selectedScriptDirectory || 'Scripts' }}</div>
                         <div class="background-job-module-key mono">
                             {{ currentScriptDirectoryItems.length }} script<span v-if="currentScriptDirectoryItems.length !== 1">s</span>
                         </div>
                     </div>
                 </div>
 
-                <div v-if="currentScriptDirectoryItems.length" class="script-library-card-list">
-                    <div v-for="item in currentScriptDirectoryItems"
-                         :key="item.script_name"
-                         class="script-library-card">
-                        <div class="script-library-card-main">
-                            <div class="script-library-card-title"
-                                 :title="item.display_name || item.script_name">
-                                {{ item.display_name || item.script_name }}
+                <div class="script-library-pane-scroll">
+                    <div v-if="currentScriptDirectoryItems.length" class="script-library-card-list script-library-card-list-single">
+                        <div v-for="item in currentScriptDirectoryItems"
+                             :key="item.script_name"
+                             class="script-library-card background-job-module-card">
+                            <div class="script-library-card-main background-job-module-main">
+                                <div class="script-library-card-title background-job-module-name"
+                                     :title="item.display_name || item.script_name">
+                                    {{ item.display_name || item.script_name }}
+                                </div>
+
+                                <div class="script-library-card-path background-job-module-key mono"
+                                     :title="item.path || item.script_name">
+                                    {{ item.path || item.script_name }}
+                                </div>
+
+                                <div class="script-library-card-description background-job-module-desc"
+                                     :title="item.description || ''">
+                                    {{ item.description || 'No description' }}
+                                </div>
+
+                                <div class="background-job-module-tags script-library-card-tags">
+                                    <el-tag size="small"
+                                            :type="isScriptSupportedForCurrentConnection(item) ? 'info' : 'danger'">
+                                        {{ formatScriptPlatformLabel(item) }}
+                                    </el-tag>
+                                    <el-tag v-if="scriptHasParams(item)" size="small" type="warning">Params</el-tag>
+                                </div>
                             </div>
 
-                            <div class="script-library-card-path mono"
-                                 :title="item.path || item.script_name">
-                                {{ item.path || item.script_name }}
+                            <div class="script-library-card-actions background-job-module-actions">
+                                <el-button size="small" type="primary" plain @click="openScriptRunDialog(item)">Run</el-button>
+                                <el-button size="small" plain @click="openRemoteScriptEditor(item.script_name)">Edit</el-button>
+                                <el-button size="small" type="danger" plain @click="deleteServerScript(item.script_name)">Delete</el-button>
                             </div>
-
-                            <div class="script-library-card-description"
-                                 :title="item.description || ''">
-                                {{ item.description || 'No description' }}
-                            </div>
-
-                            <div class="background-job-module-tags script-library-card-tags">
-                                <el-tag size="small"
-                                        :type="isScriptSupportedForCurrentConnection(item) ? 'info' : 'danger'">
-                                    {{ formatScriptPlatformLabel(item) }}
-                                </el-tag>
-                                <el-tag v-if="scriptHasParams(item)" size="small" type="warning">
-                                    Params
-                                </el-tag>
-                            </div>
-                        </div>
-
-                        <div class="script-library-card-actions">
-                            <el-button size="small"
-                                       type="primary"
-                                       plain
-                                       @click="openScriptRunDialog(item)">
-                                Run
-                            </el-button>
-                            <el-button size="small"
-                                       plain
-                                       @click="openRemoteScriptEditor(item.script_name)">
-                                Edit
-                            </el-button>
-                            <el-button size="small"
-                                       type="danger"
-                                       plain
-                                       @click="deleteServerScript(item.script_name)">
-                                Delete
-                            </el-button>
                         </div>
                     </div>
-                </div>
 
-                <div v-else class="empty-state">
-                    No scripts in this folder
+                    <div v-else class="empty-state">No scripts in this folder</div>
                 </div>
             </div>
         </div>
     </div>
 </el-dialog>
+
+<el-dialog v-model="scriptRunDialogVisible"
+           :title="pendingRunScriptItem ? `Run ${pendingRunScriptItem.display_name || pendingRunScriptItem.script_name}` : 'Run Script'"
+           width="680px"
+           top="10vh"
+           class="fixed-dialog">
+    <div v-if="pendingRunScriptItem" class="fixed-dialog-body">
+        <div class="script-run-dialog-top">
+            <div class="background-job-module-key mono">{{ pendingRunScriptItem.path || pendingRunScriptItem.script_name }}</div>
+            <div v-if="pendingRunScriptItem.description" class="script-library-description">{{ pendingRunScriptItem.description }}</div>
+            <div class="background-job-module-tags" style="margin-top: 10px;">
+                <el-tag size="small" :type="isScriptSupportedForCurrentConnection(pendingRunScriptItem) ? 'info' : 'danger'">
+                    {{ formatScriptPlatformLabel(pendingRunScriptItem) }}
+                </el-tag>
+                <el-tag v-if="pendingRunScriptParamSpecs.length" size="small" type="warning">Params</el-tag>
+            </div>
+        </div>
+
+        <el-form v-if="pendingRunScriptParamSpecs.length" label-position="top" class="script-library-form">
+            <el-form-item v-for="param in pendingRunScriptParamSpecs"
+                          :key="`script-param-${param.name}`"
+                          :label="`${param.name} (${param.type || 'string'})`">
+                <el-switch v-if="param.type === 'boolean'" v-model="scriptParamForm[param.name]"></el-switch>
+                <el-select v-else-if="param.type === 'select' && param.options && param.options.length"
+                           v-model="scriptParamForm[param.name]" style="width: 100%">
+                    <el-option v-for="option in param.options" :key="`${param.name}-${option}`" :label="option" :value="option"></el-option>
+                </el-select>
+                <el-input v-else v-model="scriptParamForm[param.name]" :placeholder="param.description || param.name"></el-input>
+                <div class="hint-text" style="margin-top: 6px;">
+                    {{ param.description || 'No description' }}
+                    <template v-if="param.required"> · required</template>
+                    <template v-if="param.default !== undefined && param.default !== null && param.type !== 'boolean'"> · default: {{ param.default }}</template>
+                    <template v-if="param.min !== undefined"> · min: {{ param.min }}</template>
+                    <template v-if="param.max !== undefined"> · max: {{ param.max }}</template>
+                </div>
+            </el-form-item>
+        </el-form>
+
+        <div v-else class="empty-state" style="min-height: 96px;">This script has no declared parameters.</div>
+    </div>
+    <template #footer>
+        <el-button @click="closeScriptRunDialog">Cancel</el-button>
+        <el-button type="primary" :loading="scriptRunSubmitting" @click="confirmRunScript">Run</el-button>
+    </template>
+</el-dialog>
+
 
     <el-dialog v-model="scriptRunDialogVisible"
            :title="pendingRunScriptItem ? `Run ${pendingRunScriptItem.display_name || pendingRunScriptItem.script_name}` : 'Run Script'"

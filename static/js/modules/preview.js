@@ -579,6 +579,73 @@ window.AppPreviewModule = {
             window.open(this.previewUrl, '_blank');
         },
 
+        buildServerScriptTemplate(scriptName = 'new_script.py') {
+    const normalizedScriptName = String(scriptName || 'new_script.py').trim().replace(/\\/g, '/').replace(/^\/+/, '') || 'new_script.py';
+    const classBaseName = normalizedScriptName
+        .replace(/\.py$/i, '')
+        .split('/')
+        .pop()
+        .split(/[^a-zA-Z0-9]+/)
+        .filter(Boolean)
+        .map(part => part.charAt(0).toUpperCase() + part.slice(1))
+        .join('') || 'NewScript';
+
+    return `SCRIPT_METADATA = {
+    "name": "${normalizedScriptName.replace(/\.py$/i, '')}",
+    "display_name": "${classBaseName}",
+    "description": "Describe what this script does",
+    "platforms": ["common"],
+    "category": "General",
+    "params": [
+        {
+            "name": "example",
+            "type": "string",
+            "required": false,
+            "default": "",
+            "description": "Example parameter"
+        }
+    ]
+}
+
+# kwargs will be injected by the script runner.
+# Example:
+# value = kwargs.get('example', '')
+`;
+},
+
+openNewRemoteScriptEditor(scriptName = 'new_script.py') {
+    if (!this.selectedId) {
+        ElementPlus.ElMessage.warning('Please select a device');
+        return;
+    }
+
+    let normalizedScriptName = String(scriptName || '').trim().replace(/\\/g, '/').replace(/^\/+/, '');
+    if (!normalizedScriptName) {
+        normalizedScriptName = 'new_script.py';
+    }
+    if (!/\.py$/i.test(normalizedScriptName)) {
+        normalizedScriptName = `${normalizedScriptName}.py`;
+    }
+
+    const content = this.buildServerScriptTemplate(normalizedScriptName);
+
+    this.previewSource = 'server_script';
+    this.previewFilePath = normalizedScriptName;
+    this.previewTitle = normalizedScriptName;
+    this.previewText = content;
+    this.previewOriginalContent = content;
+    this.previewType = 'text';
+    this.previewTruncated = false;
+    this.previewFileSize = this.formatBytes(content.length);
+    this.previewFileEncoding = 'UTF-8';
+    this.previewEditMode = true;
+    this.previewDialogVisible = true;
+
+    this.$nextTick(() => {
+        this.initMonacoEditor(content, false);
+    });
+},
+
         openNewRemoteJobEditor(scriptName = 'new_job.py') {
             if (!this.selectedId) {
                 ElementPlus.ElMessage.warning('Please select a device');

@@ -9,6 +9,7 @@ window.AppScriptsModule = {
             scriptRunDialogVisible: false,
             pendingRunScriptName: '',
             scriptParamForm: {},
+            serverScriptUploadLoading: false,
         };
     },
 
@@ -95,6 +96,13 @@ window.AppScriptsModule = {
             await this.loadScriptCatalog();
         },
 
+        normalizeServerScriptFilename(scriptName, fallbackName = 'new_script.py') {
+            let normalized = String(scriptName || '').trim().replace(/\\/g, '/').replace(/^\/+/, '');
+            if (!normalized) normalized = fallbackName;
+            if (!/\.py$/i.test(normalized)) normalized = `${normalized}.py`;
+            return normalized;
+        },
+
         async loadScriptCatalog() {
             this.scriptLibraryLoading = true;
             try {
@@ -107,13 +115,10 @@ window.AppScriptsModule = {
                 this.scriptCatalogItems = Array.isArray(json.data) ? json.data : [];
 
                 if (!this.selectedScriptDirectory) {
-                    const firstDir = this.getFirstAvailableScriptDirectory();
-                    this.selectedScriptDirectory = firstDir;
+                    this.selectedScriptDirectory = this.getFirstAvailableScriptDirectory();
                 } else {
                     const hasCurrentDir = this.scriptCatalogItems.some(item => this.getScriptDirectoryPath(item) === this.selectedScriptDirectory);
-                    if (!hasCurrentDir) {
-                        this.selectedScriptDirectory = this.getFirstAvailableScriptDirectory();
-                    }
+                    if (!hasCurrentDir) this.selectedScriptDirectory = this.getFirstAvailableScriptDirectory();
                 }
             } catch (e) {
                 ElementPlus.ElMessage.error(e.message || 'Failed to load script catalog');
@@ -219,7 +224,6 @@ window.AppScriptsModule = {
             if (type === 'boolean') return !!rawValue;
 
             const value = rawValue === null || rawValue === undefined ? '' : String(rawValue).trim();
-
             if (type === 'integer') {
                 if (!/^-?\d+$/.test(value)) throw new Error(`Param "${param.name}" must be an integer`);
                 const parsed = parseInt(value, 10);
@@ -227,7 +231,6 @@ window.AppScriptsModule = {
                 if (param.max !== undefined && parsed > Number(param.max)) throw new Error(`Param "${param.name}" must be <= ${param.max}`);
                 return parsed;
             }
-
             if (type === 'number') {
                 const parsed = Number(value);
                 if (Number.isNaN(parsed)) throw new Error(`Param "${param.name}" must be a number`);
@@ -235,27 +238,22 @@ window.AppScriptsModule = {
                 if (param.max !== undefined && parsed > Number(param.max)) throw new Error(`Param "${param.name}" must be <= ${param.max}`);
                 return parsed;
             }
-
             if (type === 'select') {
                 if (Array.isArray(param.options) && param.options.length && !param.options.includes(value)) {
                     throw new Error(`Param "${param.name}" has invalid option`);
                 }
                 return value;
             }
-
             return value;
         },
 
         buildScriptRunParams(item) {
             const metadata = this.normalizeScriptMetadata(item?.metadata || {});
             const params = {};
-
             for (const param of metadata.params || []) {
                 const rawValue = this.scriptParamForm[param.name];
                 const type = String(param.type || 'string').toLowerCase();
-                const textValue = type === 'boolean'
-                    ? rawValue
-                    : String(rawValue === null || rawValue === undefined ? '' : rawValue).trim();
+                const textValue = type === 'boolean' ? rawValue : String(rawValue === null || rawValue === undefined ? '' : rawValue).trim();
 
                 if ((type !== 'boolean' && !textValue) || (type === 'boolean' && rawValue === undefined)) {
                     if (param.required && (param.default === undefined || param.default === null || String(param.default).trim() === '')) {
@@ -266,26 +264,21 @@ window.AppScriptsModule = {
                     }
                     continue;
                 }
-
                 params[param.name] = this.coerceScriptParamValue(param, rawValue);
             }
-
             return params;
         },
 
         openScriptRunDialog(item) {
             if (!item) return;
-
             if (!this.selectedId) {
                 ElementPlus.ElMessage.warning('Please select a device');
                 return;
             }
-
             if (!this.isScriptSupportedForCurrentConnection(item)) {
                 ElementPlus.ElMessage.warning(`${item.display_name || item.script_name} only supports: ${this.formatScriptPlatformLabel(item)}`);
                 return;
             }
-
             this.pendingRunScriptName = String(item.script_name || '').trim();
             this.scriptParamForm = this.buildScriptParamDefaults(item);
             this.scriptRunDialogVisible = true;
@@ -304,27 +297,20 @@ window.AppScriptsModule = {
                 this.closeScriptRunDialog();
                 return;
             }
-
             if (!this.selectedId) {
                 ElementPlus.ElMessage.warning('Please select a device');
                 return;
             }
-
             try {
                 this.scriptRunSubmitting = true;
                 const params = this.buildScriptRunParams(item);
-
                 const res = await fetch(`/api/connections/${encodeURIComponent(this.selectedId)}/scripts/run`, {
                     method: 'POST',
                     headers: this.getTabScopedHeaders({'Content-Type': 'application/json'}),
                     body: JSON.stringify({script_name: item.script_name, params})
                 });
-
                 const json = await res.json();
-                if (!res.ok || json.code !== 0) {
-                    throw new Error(json.message || 'Failed to run script');
-                }
-
+                if (!res.ok || json.code !== 0) throw new Error(json.message || 'Failed to run script');
                 const taskId = json.data && json.data.task_id;
                 this.setActiveTask(this.selectedId, taskId || '');
                 ElementPlus.ElMessage.success(`Run request submitted: ${item.display_name || item.script_name}`);
@@ -342,33 +328,93 @@ window.AppScriptsModule = {
             }
         },
 
+        async createRemoteScriptPrompt() {
+            if (!this.selectedId) {
+                ElementPlus.ElMessage.warning('Please select a device');
+                return;
+            }
+            try {
+                const baseDir = this.selectedScriptDirectory ? `${this.selectedScriptDirectory}/` : '';
+                const {value} = await ElementPlus.ElMessageBox.prompt(
+                    'Enter the new script filename',
+                    'New Script',
+                    {
+                        confirmButtonText: 'Create',
+                        cancelButtonText: 'Cancel',
+                        inputValue: `${baseDir}new_script.py`,
+                        inputPlaceholder: 'folder/new_script.py',
+                    }
+                );
+                if (typeof this.openNewRemoteScriptEditor === 'function') {
+                    this.openNewRemoteScriptEditor(value || `${baseDir}new_script.py`);
+                }
+            } catch (e) {
+                if (e === 'cancel' || e === 'close') return;
+            }
+        },
+
+        triggerScriptUpload() {
+            if (!this.selectedId) {
+                ElementPlus.ElMessage.warning('Please select a device');
+                return;
+            }
+            const input = document.getElementById('server-script-upload-input');
+            if (input) {
+                input.value = '';
+                input.click();
+            }
+        },
+
+        async handleServerScriptUpload(event) {
+            const input = event && event.target;
+            const file = input && input.files && input.files[0];
+            if (!file) return;
+
+            if (!/\.py$/i.test(file.name || '')) {
+                ElementPlus.ElMessage.warning('Only .py files are supported');
+                input.value = '';
+                return;
+            }
+
+            this.serverScriptUploadLoading = true;
+            try {
+                const formData = new FormData();
+                formData.append('file', file, file.name);
+                const res = await fetch('/api/scripts/upload', {method: 'POST', body: formData});
+                const json = await res.json();
+                if (!res.ok || json.code !== 0) throw new Error(json.message || 'Failed to upload script');
+
+                const uploadedName = this.normalizeServerScriptFilename(json.data?.name || file.name);
+                ElementPlus.ElMessage.success(`Script uploaded: ${uploadedName}`);
+                await this.loadScriptCatalog();
+                if (typeof this.openRemoteScriptEditorInternal === 'function') {
+                    await this.openRemoteScriptEditorInternal(uploadedName);
+                }
+            } catch (e) {
+                ElementPlus.ElMessage.error(e.message || 'Failed to upload script');
+            } finally {
+                this.serverScriptUploadLoading = false;
+                if (input) input.value = '';
+            }
+        },
+
         async deleteServerScript(scriptName) {
             const normalized = String(scriptName || '').trim().replace(/\\/g, '/').replace(/^\/+/, '').replace(/\.py$/i, '');
             if (!normalized) {
                 ElementPlus.ElMessage.warning('Invalid script name');
                 return;
             }
-
             try {
-                await ElementPlus.ElMessageBox.confirm(
-                    `Delete "${normalized}.py"? This action cannot be undone.`,
-                    'Delete Script',
-                    {
-                        type: 'warning',
-                        confirmButtonText: 'Delete',
-                        cancelButtonText: 'Cancel'
-                    }
-                );
-
+                await ElementPlus.ElMessageBox.confirm(`Delete "${normalized}.py"? This action cannot be undone.`, 'Delete Script', {
+                    type: 'warning', confirmButtonText: 'Delete', cancelButtonText: 'Cancel'
+                });
                 const res = await fetch('/api/scripts/delete', {
                     method: 'DELETE',
                     headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify({name: normalized})
                 });
-
                 const json = await res.json();
                 if (!res.ok || json.code !== 0) throw new Error(json.message || 'Failed to delete script');
-
                 ElementPlus.ElMessage.success(`Deleted: ${normalized}.py`);
                 await this.loadScriptCatalog();
             } catch (e) {
@@ -390,9 +436,7 @@ window.AppScriptsModule = {
 
     watch: {
         scriptRunDialogVisible(val) {
-            if (!val) {
-                this.closeScriptRunDialog();
-            }
+            if (!val) this.closeScriptRunDialog();
         },
     },
 };

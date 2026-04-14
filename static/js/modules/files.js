@@ -350,6 +350,32 @@ window.AppFilesModule = {
             }
         },
 
+        handleRemoteToolbarMoreCommand(command) {
+    if (command === 'toggle_pin') {
+        this.toggleCurrentPinnedQuickJump();
+        return;
+    }
+    if (command === 'copy') {
+        this.copySelectedRemoteEntries();
+        return;
+    }
+    if (command === 'cut') {
+        this.cutSelectedRemoteEntries();
+        return;
+    }
+    if (command === 'clear_clipboard') {
+        this.clearRemoteClipboard();
+        return;
+    }
+    if (command === 'clear_selection') {
+        this.clearRemoteSelection();
+        return;
+    }
+    if (command === 'toggle_hidden') {
+        this.toggleRemoteHiddenFiles();
+    }
+},
+
         handleRemoteMoreAction(command, row) {
             if (!row || row.is_parent_entry) return;
 
