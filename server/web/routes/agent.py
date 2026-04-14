@@ -82,6 +82,14 @@ def create_agent_blueprint(server_instance):
             default_error_status=500,
         )
 
+    @blueprint.post('/api/agent/loader/report')
+    @allow_anonymous
+    def ingest_loader_report():
+        return responder.json_endpoint(
+            lambda: agent_api.ingest_loader_report(get_json_payload()),
+            default_error_status=500,
+        )
+
     @blueprint.delete('/api/agent/cleanup')
     def cleanup_agent_build():
         """清理构建临时文件"""

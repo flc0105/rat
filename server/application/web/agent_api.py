@@ -1,4 +1,7 @@
+import json
 import os
+import platform
+from datetime import datetime
 
 
 class WebAgentApi:
@@ -9,10 +12,13 @@ class WebAgentApi:
     - 提供 Agent build 能力
     - 提供构建产物定位能力
     - 提供构建临时目录清理能力
+    - 提供 Go loader 上报落盘能力
     """
 
     def __init__(self, agent_builder):
         self.agent_builder = agent_builder
+        self.logs_dir = os.path.abspath(os.path.join('runtime', 'logs'))
+        os.makedirs(self.logs_dir, exist_ok=True)
 
     def build_agent(
         self,
@@ -41,6 +47,38 @@ class WebAgentApi:
         if not os.path.isfile(file_path):
             raise FileNotFoundError('File not found')
         return file_path
+
+    def get_server_platform(self):
+        system = platform.system()
+        target_os = self.agent_builder.PYINSTALLER_PLATFORM_MAP.get(system, 'mac')
+        machine = platform.machine().lower()
+        if machine in {'arm64', 'aarch64'}:
+            target_arch = 'arm64'
+        else:
+            target_arch = 'amd64'
+        return {
+            'system': system,
+            'target_os': target_os,
+            'target_arch': target_arch,
+        }
+
+    def _get_loader_log_path(self) -> str:
+        stamp = datetime.now().strftime('%Y%m%d-%H')
+        return os.path.join(self.logs_dir, f'go_loader_{stamp}.log')
+
+    def ingest_loader_report(self, payload: dict):
+        if not isinstance(payload, dict):
+            raise ValueError('Invalid loader payload')
+
+        record = {
+            'time': datetime.now().isoformat(),
+            **payload,
+        }
+        log_path = self._get_loader_log_path()
+        with open(log_path, 'a', encoding='utf-8') as fp:
+            fp.write(json.dumps(record, ensure_ascii=False) + '\n')
+
+        return {'logged': True, 'log_file': os.path.basename(log_path)}
 
     def cleanup_agent_build(self, work_dir: str):
         if work_dir:

@@ -25,11 +25,11 @@ window.AppAgentModule = {
                 return 'Bundle outputs a source zip that contains client/, core/ and ratclient.py. Target OS and architecture are not applicable.';
             }
 
-            return 'Go builder supports Windows, macOS and Linux targets. Architecture can be selected manually.';
-        },
+            if (this.agentForm.builder === 'go_loader') {
+                return 'Go Loader reports host environment details by HTTP, checks for python3 / python, downloads the latest bundle, extracts it under ~/client_bundle, launches ratclient.py, then exits.';
+            }
 
-        isGoBuilder() {
-            return this.agentForm.builder === 'go';
+            return 'Go (Simple) builds a standalone cross-platform Go client. Target OS and architecture can be selected manually.';
         },
 
         isBundleBuilder() {
@@ -74,6 +74,7 @@ window.AppAgentModule = {
         applyAgentBuilderRules() {
             if (this.agentForm.builder === 'bundle') {
                 this.agentForm.target_arch = 'auto';
+                this.agentForm.target_os = 'mac';
                 return;
             }
 
@@ -83,26 +84,21 @@ window.AppAgentModule = {
                 return;
             }
 
-            if (this.agentForm.target_os === 'win') {
-                if (this.agentForm.target_arch === 'auto') {
-                    this.agentForm.target_arch = 'amd64';
-                }
+            if (this.agentForm.target_os === 'win' && this.agentForm.target_arch === 'auto') {
+                this.agentForm.target_arch = 'amd64';
                 return;
             }
 
-            if (this.agentForm.target_os === 'linux') {
-                if (this.agentForm.target_arch === 'auto') {
-                    this.agentForm.target_arch = 'amd64';
-                }
-                return;
+            if (this.agentForm.target_os === 'linux' && this.agentForm.target_arch === 'auto') {
+                this.agentForm.target_arch = 'amd64';
             }
         },
 
         buildAgentPayload() {
             const payload = {
                 ...this.agentForm,
-                server_web_scheme: window.location.protocol.replace(':', '') || 'http',
-                server_web_host: window.location.hostname || this.agentForm.server_host,
+server_web_scheme: window.location.protocol.replace(':', '') || 'http',
+server_web_host: this.agentForm.server_host,
             };
 
             if (this.agentForm.builder === 'bundle') {
