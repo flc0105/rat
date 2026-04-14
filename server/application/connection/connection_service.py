@@ -12,14 +12,16 @@ class WebConnectionService:
     - 序列化连接信息
     - 创建带 Web 能力的客户端会话对象
     - 处理连接上线/下线/心跳状态事件
+    - 维护最近见过的设备缓存
     """
 
     STALE_AFTER_SECONDS = 45
 
-    def __init__(self, server, event_bus, artifact_service):
+    def __init__(self, server, event_bus, artifact_service, recent_device_store=None):
         self.server = server
         self.event_bus = event_bus
         self.artifact_service = artifact_service
+        self.recent_device_store = recent_device_store
 
     def _now(self):
         return datetime.now()
@@ -47,6 +49,9 @@ class WebConnectionService:
             return 'stale'
 
         return 'online'
+
+    def _hostname_key(self, hostname: str) -> str:
+        return str(hostname or '').strip().lower()
 
     # ------------------ payload ------------------ #
     def serialize_connection(self, session: ClientSession) -> dict:
@@ -77,11 +82,73 @@ class WebConnectionService:
             'python_execution_mode': info.get_extra('python_execution_mode'),
             'remote_watchdog_enabled': info.get_extra('remote_watchdog_enabled'),
             'local_watchdog_enabled': info.get_extra('local_watchdog_enabled'),
-
         }
 
+    def _sync_recent_online_connections(self, active_connections: list[dict]):
+        if not self.recent_device_store:
+            return
+
+        for item in active_connections:
+            hostname = str(item.get('hostname') or '').strip()
+            if not hostname:
+                continue
+            self.recent_device_store.upsert_from_connection(item)
+
+    def _build_recent_offline_entries(self, active_connections: list[dict]) -> list[dict]:
+        if not self.recent_device_store:
+            return []
+
+        active_hostnames = {
+            self._hostname_key(item.get('hostname'))
+            for item in active_connections
+            if str(item.get('hostname') or '').strip()
+        }
+
+        results = []
+        for item in self.recent_device_store.list_recent_devices():
+            hostname_key = self._hostname_key(item.get('hostname'))
+            if not hostname_key:
+                continue
+            if hostname_key in active_hostnames:
+                continue
+
+            offline_item = {
+                'client_id': item.get('client_id') or '',
+                'addr': item.get('addr') or '',
+                'os_type': item.get('os_type') or 'Unknown',
+                'os_ver': item.get('os_ver') or 'Unknown',
+                'hostname': item.get('hostname') or 'Unknown',
+                'integrity': item.get('integrity') or '?',
+                'cwd': item.get('cwd') or '',
+                'connected_at': item.get('connected_at') or '',
+                'disconnected_at': item.get('disconnected_at') or '',
+                'last_seen_at': item.get('last_seen_at') or '',
+                'last_heartbeat_sent_at': item.get('last_heartbeat_sent_at') or '',
+                'last_heartbeat_ack_at': item.get('last_heartbeat_ack_at') or '',
+                'last_rtt_ms': item.get('last_rtt_ms'),
+                'stale_after_seconds': item.get('stale_after_seconds') or self.STALE_AFTER_SECONDS,
+                'connection_state': 'offline',
+                'build_version': item.get('build_version') or '',
+                'python_ver': item.get('python_ver') or '',
+                'process_id': item.get('process_id') or '',
+                'launch_command': item.get('launch_command') or '',
+                'username': item.get('username') or '',
+                'process_name': item.get('process_name') or '',
+                'http_transfer_mode': item.get('http_transfer_mode') or '',
+                'python_execution_mode': item.get('python_execution_mode') or '',
+                'remote_watchdog_enabled': item.get('remote_watchdog_enabled'),
+                'local_watchdog_enabled': item.get('local_watchdog_enabled'),
+                'recent_cached': True,
+            }
+            results.append(offline_item)
+
+        return results
+
     def get_connections_payload(self):
-        return [self.serialize_connection(session) for session in self.server.connections.all()]
+        active_connections = [self.serialize_connection(session) for session in self.server.connections.all()]
+        self._sync_recent_online_connections(active_connections)
+        recent_offline = self._build_recent_offline_entries(active_connections)
+        return active_connections + recent_offline
 
     # ------------------ connection lifecycle ------------------ #
     def create_web_connection(self, transport: ClientTransport, addr, info: dict) -> ClientSession:
@@ -106,6 +173,9 @@ class WebConnectionService:
         连接注册成功后的 Web 通知
         """
         session.services.heartbeat_service.mark_connected()
+        payload = self.serialize_connection(session)
+        if self.recent_device_store:
+            self.recent_device_store.upsert_from_connection(payload)
         self.publish_connection_online(session)
 
     def handle_connection_closed(self, session: ClientSession):
@@ -113,6 +183,13 @@ class WebConnectionService:
         连接关闭后的 Web 通知
         """
         session.services.heartbeat_service.mark_disconnected()
+        payload = self.serialize_connection(session)
+        if self.recent_device_store:
+            self.recent_device_store.upsert_from_connection(payload)
+            self.recent_device_store.mark_offline(
+                hostname=payload.get('hostname') or '',
+                disconnected_at=payload.get('disconnected_at') or '',
+            )
         self.publish_connection_offline(session)
 
     # ------------------ event publish ------------------ #
@@ -130,8 +207,12 @@ class WebConnectionService:
         })
 
     def publish_connection_heartbeat(self, session: ClientSession):
+        payload = self.serialize_connection(session)
+        if self.recent_device_store:
+            self.recent_device_store.upsert_from_connection(payload)
+
         self.event_bus.publish('connection_heartbeat', {
-            'connection': self.serialize_connection(session),
+            'connection': payload,
             'time': datetime.now().isoformat()
         })
 
@@ -161,12 +242,3 @@ class WebConnectionService:
             'download_url': artifact_info.get('download_url', ''),
             'preview_url': artifact_info.get('preview_url', ''),
         })
-
-
-
-
-
-
-
-
-

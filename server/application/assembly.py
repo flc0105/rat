@@ -3,6 +3,7 @@ from server.application.artifact.artifact_service import WebArtifactService
 from server.application.artifact.remote_file_service import WebRemoteFileService
 from server.application.command.command_executor_factory import CommandExecutorFactory
 from server.application.connection.connection_service import WebConnectionService
+from server.application.connection.recent_device_store import RecentDeviceStore
 from server.application.execution.remote_execution_service import RemoteExecutionService
 from server.application.jobs.background_job_service import BackgroundJobService
 from server.application.jobs.background_job_store import BackgroundJobStore
@@ -21,7 +22,7 @@ from server.application.web.pinned_path_api import PinnedPathApi
 from server.application.web.remote_file_api import WebRemoteFileApi
 from server.application.web.system_api import WebSystemInspectionApi
 from server.application.scripts.script_catalog_service import ScriptCatalogService
-from server.config.config import SCRIPT_JOBS_PATH, SCRIPT_PATH
+from server.config.config import SCRIPT_JOBS_PATH, SCRIPT_PATH, RECENT_DEVICES_JSON_PATH
 from server.web.event_bus import WebEventBus
 
 
@@ -62,10 +63,13 @@ class ServerApplicationAssembly:
             artifact_service=self.artifact_service,
         )
 
+        self.recent_device_store = RecentDeviceStore(RECENT_DEVICES_JSON_PATH)
+
         self.connection_service = WebConnectionService(
             server=self.server,
             event_bus=self.event_bus,
             artifact_service=self.artifact_service,
+            recent_device_store=self.recent_device_store,
         )
 
         self.task_runner = WebTaskRunner(
