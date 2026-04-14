@@ -33,6 +33,12 @@ class BuiltinCommandHandler:
             'source': 'server'
         },
         {
+            'name': 'run_script',
+            'template': 'run_script ',
+            'help': 'run_script <payload> | Execute a structured server-side script on the client',
+            'source': 'server'
+        },
+        {
             'name': 'alias',
             'template': 'alias ',
             'help': 'alias [--platform win|mac|common] <name> = <command> | Save a command alias',
@@ -198,6 +204,14 @@ class BuiltinCommandHandler:
             return
 
         for item in self.script_support.execute_script_file(filename):
+            yield item
+
+    def run_script(self, payload_text):
+        if not payload_text:
+            yield 0, 'Usage: run_script <payload>'
+            return
+
+        for item in self.script_support.execute_script_payload(payload_text):
             yield item
 
     def alias(self, arg):

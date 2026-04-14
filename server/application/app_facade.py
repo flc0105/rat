@@ -40,6 +40,7 @@ class ServerWebService:
         self.connection_api = self.assembly.connection_api
         self.command_api = self.assembly.command_api
         self.job_api = self.assembly.job_api
+        self.script_api = self.assembly.script_api
         self.artifact_api = self.assembly.artifact_api
         self.remote_file_api = self.assembly.remote_file_api
         self.pinned_path_api = self.assembly.pinned_path_api

@@ -210,8 +210,50 @@ window.AppPreviewModule = {
                 await this.saveToArtifact(currentContent);
             } else if (this.previewSource === 'background_job') {
                 await this.saveToBackgroundJob(currentContent);
+            } else if (this.previewSource === 'server_script') {
+                await this.saveToServerScript(currentContent);
             } else {
                 ElementPlus.ElMessage.warning('Unknown preview source');
+            }
+        },
+
+        async saveToServerScript(content) {
+            if (!this.previewFilePath) {
+                ElementPlus.ElMessage.warning('Invalid script name');
+                return;
+            }
+
+            this.previewSaving = true;
+
+            try {
+                const res = await fetch('/api/scripts/save', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        name: this.previewFilePath,
+                        content: content
+                    })
+                });
+
+                const json = await res.json();
+                if (!res.ok || json.code !== 0) {
+                    throw new Error(json.message || 'Failed to save script');
+                }
+
+                ElementPlus.ElMessage.success('Script saved successfully');
+
+                this.previewOriginalContent = content;
+                this.previewText = content;
+                this.previewEditMode = false;
+                this.setMonacoEditorReadOnly(true);
+
+                if (this.scriptLibraryDialogVisible && typeof this.loadScriptCatalog === 'function') {
+                    await this.loadScriptCatalog();
+                }
+            } catch (e) {
+                ElementPlus.ElMessage.error(e.message || 'Failed to save script');
+            } finally {
+                this.previewSaving = false;
             }
         },
 
@@ -563,6 +605,49 @@ window.AppPreviewModule = {
             });
         },
 
+        async openRemoteScriptEditorInternal(scriptName) {
+            if (!this.selectedId) {
+                ElementPlus.ElMessage.warning('Please select a device');
+                return;
+            }
+
+            let normalizedScriptName = String(scriptName || '').trim().replace(/\\/g, '/').replace(/^\/+/, '');
+            if (!normalizedScriptName) {
+                ElementPlus.ElMessage.warning('Invalid script name');
+                return;
+            }
+            if (!/\.py$/i.test(normalizedScriptName)) {
+                normalizedScriptName = `${normalizedScriptName}.py`;
+            }
+
+            try {
+                const res = await fetch(`/api/scripts/download?name=${encodeURIComponent(normalizedScriptName)}`);
+                if (!res.ok) {
+                    throw new Error(`Failed to load script: ${res.statusText}`);
+                }
+                const content = await res.text();
+
+                this.previewSource = 'server_script';
+                this.previewFilePath = normalizedScriptName;
+                this.previewTitle = normalizedScriptName;
+                this.previewText = content;
+                this.previewOriginalContent = content;
+                this.previewType = 'text';
+                this.previewTruncated = false;
+                this.previewFileSize = this.formatBytes(content.length);
+                this.previewFileEncoding = 'UTF-8';
+                this.previewEditMode = true;
+
+                this.previewDialogVisible = true;
+
+                this.$nextTick(() => {
+                    this.initMonacoEditor(content, false);
+                });
+            } catch (e) {
+                ElementPlus.ElMessage.error(e.message || 'Failed to load script');
+            }
+        },
+
         async openRemoteJobEditor(scriptName) {
             if (!this.selectedId) {
                 ElementPlus.ElMessage.warning('Please select a device');
@@ -627,6 +712,9 @@ window.AppPreviewModule = {
             }
             if (this.previewSource === 'background_job') {
                 return 'Background Job';
+            }
+            if (this.previewSource === 'server_script') {
+                return 'Server Script';
             }
             return 'Unknown';
         },

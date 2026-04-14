@@ -1,3 +1,18 @@
+SCRIPT_METADATA = {
+    "name": "win/ui/task_dialog",
+    "display_name": "Task Dialog",
+    "description": "Show a native Windows task dialog",
+    "platforms": ["windows"],
+    "category": "UI",
+    "params": [
+        {"name": "title", "type": "string", "required": False, "default": "", "description": "Window title"},
+        {"name": "main", "type": "string", "required": False, "default": "", "description": "Main instruction"},
+        {"name": "text", "type": "string", "required": True, "default": "", "description": "Dialog content"},
+        {"name": "icon", "type": "select", "required": False, "default": "none", "options": ["none", "warning", "error", "info", "shield"], "description": "Dialog icon"},
+        {"name": "buttons", "type": "select", "required": False, "default": "ok", "options": ["ok", "okcancel", "yesno", "retrycancel"], "description": "Button layout"}
+    ]
+}
+
 import ctypes
 import threading
 

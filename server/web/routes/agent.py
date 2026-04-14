@@ -75,6 +75,13 @@ def create_agent_blueprint(server_instance):
         except Exception as e:
             return responder.map_common_error(e)
 
+    @blueprint.get('/api/agent/platform')
+    def get_agent_platform():
+        return responder.json_endpoint(
+            lambda: agent_api.get_server_platform(),
+            default_error_status=500,
+        )
+
     @blueprint.delete('/api/agent/cleanup')
     def cleanup_agent_build():
         """清理构建临时文件"""

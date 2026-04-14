@@ -1,3 +1,18 @@
+SCRIPT_METADATA = {
+    "name": "win/ui/msgbox",
+    "display_name": "Message Box",
+    "description": "Show a native Windows message box",
+    "platforms": ["windows"],
+    "category": "UI",
+    "params": [
+        {"name": "title", "type": "string", "required": False, "default": "", "description": "Window title"},
+        {"name": "text", "type": "string", "required": True, "default": "", "description": "Message content"},
+        {"name": "icon", "type": "select", "required": False, "default": "none", "options": ["none", "error", "question", "warning", "info"], "description": "Dialog icon"},
+        {"name": "buttons", "type": "select", "required": False, "default": "ok", "options": ["ok", "okcancel", "yesno", "retrycancel"], "description": "Button layout"},
+        {"name": "topmost", "type": "boolean", "required": False, "default": False, "description": "Show on top"}
+    ]
+}
+
 import ctypes
 import threading
 

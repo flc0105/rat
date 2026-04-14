@@ -12,6 +12,7 @@ from server.application.tasks.task_runner import WebTaskRunner
 from server.application.tasks.task_service import WebTaskService
 from server.application.tasks.task_store import WebTaskStore
 from server.application.web.agent_api import WebAgentApi
+from server.application.web.script_api import WebScriptApi
 from server.application.web.artifact_api import WebArtifactApi
 from server.application.web.command_api import WebCommandApi
 from server.application.web.connection_api import WebConnectionApi
@@ -19,7 +20,8 @@ from server.application.web.job_api import WebJobApi
 from server.application.web.pinned_path_api import PinnedPathApi
 from server.application.web.remote_file_api import WebRemoteFileApi
 from server.application.web.system_api import WebSystemInspectionApi
-from server.config.config import SCRIPT_JOBS_PATH
+from server.application.scripts.script_catalog_service import ScriptCatalogService
+from server.config.config import SCRIPT_JOBS_PATH, SCRIPT_PATH
 from server.web.event_bus import WebEventBus
 
 
@@ -83,6 +85,7 @@ class ServerApplicationAssembly:
 
         self.background_job_store = BackgroundJobStore()
         self.job_catalog_service = JobCatalogService(SCRIPT_JOBS_PATH)
+        self.script_catalog_service = ScriptCatalogService(SCRIPT_PATH)
 
         self.background_job_service = BackgroundJobService(
             event_bus=self.event_bus,
@@ -109,6 +112,11 @@ class ServerApplicationAssembly:
             command_api=self.command_api,
             background_job_service=self.background_job_service,
             job_catalog_service=self.job_catalog_service,
+        )
+
+        self.script_api = WebScriptApi(
+            command_api=self.command_api,
+            script_catalog_service=self.script_catalog_service,
         )
 
         self.artifact_api = WebArtifactApi(

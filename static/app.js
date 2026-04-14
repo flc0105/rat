@@ -10,6 +10,7 @@ createApp({
             ...window.AppFilesModule.data(),
             ...window.AppPreviewModule.data(),
             ...window.AppJobsModule.data(),
+            ...window.AppScriptsModule.data(),
             ...window.AppCandidatesModule.data(),
             ...window.AppHistoryModule.data(),
             ...window.AppTerminalModule.data(),
@@ -32,6 +33,7 @@ createApp({
         ...window.AppFilesModule.computed,
         ...window.AppArtifactsModule.computed,
         ...window.AppJobsModule.computed,
+        ...window.AppScriptsModule.computed,
     },
 
     watch: {
@@ -43,6 +45,7 @@ createApp({
         ...window.AppFilesModule.watch,
         ...window.AppArtifactsModule.watch,
         ...window.AppJobsModule.watch,
+        ...window.AppScriptsModule.watch,
         ...window.AppHistoryModule.watch,
     },
 
@@ -51,6 +54,7 @@ createApp({
         ...window.AppCommandsModule.methods,
         ...window.AppFilesModule.methods,
         ...window.AppJobsModule.methods,
+        ...window.AppScriptsModule.methods,
         ...window.AppSseModule.methods,
         ...window.AppAgentModule.methods,
         ...window.AppProcessModule.methods,

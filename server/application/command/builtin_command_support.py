@@ -1,3 +1,4 @@
+import base64
 import glob
 import json
 import os
@@ -6,6 +7,7 @@ import shlex
 
 from core.utils.formatting import format_dict
 from core.utils.parsing import scan_args
+from core.utils.script_metadata import read_script_metadata_from_file
 from server.config.config import SCRIPT_PATH
 from server.application.command.command_execution_event import CommandExecutionEvent
 
@@ -79,6 +81,21 @@ class ScriptBuiltinSupport:
             for file_path in self._iter_script_files()
         ]
 
+    def list_script_catalog(self):
+        items = []
+        for file_path in self._iter_script_files():
+            rel_path = os.path.relpath(file_path, SCRIPT_PATH).replace('\\', '/')
+            script_name = rel_path[:-3] if rel_path.endswith('.py') else rel_path
+            metadata = read_script_metadata_from_file(file_path, fallback_name=script_name)
+            items.append({
+                'script_name': script_name,
+                'path': rel_path,
+                'display_name': str(metadata.get('display_name') or script_name.split('/')[-1]).strip() or script_name,
+                'description': str(metadata.get('description') or '').strip(),
+                'metadata': metadata,
+            })
+        return sorted(items, key=lambda item: item.get('path', '').lower())
+
     def _resolve_script_path(self, script_name: str) -> str:
         script_path = os.path.abspath(os.path.join(SCRIPT_PATH, script_name))
         if os.path.isfile(script_path):
@@ -92,6 +109,18 @@ class ScriptBuiltinSupport:
     def _build_script_plan(self, script_text: str, script_args: list):
         return self.plan_builder.build_script_plan(script_text, scan_args(script_args))
 
+    def _decode_script_payload_arg(self, raw):
+        text = str(raw or '').strip()
+        prefix = '__json__:'
+        if not text.startswith(prefix):
+            raise ValueError('Invalid run_script payload')
+        encoded = text[len(prefix):]
+        try:
+            decoded = base64.urlsafe_b64decode(encoded.encode()).decode('utf-8')
+            return json.loads(decoded)
+        except Exception as e:
+            raise ValueError(f'Invalid run_script payload: {e}')
+
     def execute_script_file(self, filename: str):
         parts = shlex.split(filename)
         script_path = self._resolve_script_path(parts[0])
@@ -100,6 +129,30 @@ class ScriptBuiltinSupport:
         with open(script_path, 'rt', encoding='utf-8') as file_obj:
             try:
                 plan = self._build_script_plan(file_obj.read(), parts[1:])
+                for item in plan_executor(plan)():
+                    yield item
+            except UnicodeDecodeError:
+                raise RuntimeError(f"Unable to read file: {script_path}")
+
+    def execute_script_payload(self, payload_text: str):
+        payload = self._decode_script_payload_arg(payload_text)
+        if not isinstance(payload, dict):
+            raise ValueError('Invalid run_script payload')
+
+        script_name = str(payload.get('script_name') or payload.get('name') or '').strip()
+        if not script_name:
+            raise ValueError('script_name is required')
+
+        params = payload.get('params') or {}
+        if not isinstance(params, dict):
+            raise ValueError('params must be an object')
+
+        script_path = self._resolve_script_path(script_name)
+        plan_executor = self.plan_executor_factory()
+
+        with open(script_path, 'rt', encoding='utf-8') as file_obj:
+            try:
+                plan = self.plan_builder.build_script_plan(file_obj.read(), params)
                 for item in plan_executor(plan)():
                     yield item
             except UnicodeDecodeError:

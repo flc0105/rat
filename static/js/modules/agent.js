@@ -3,6 +3,7 @@ window.AppAgentModule = {
         return {
             agentBuilderDialogVisible: false,
             agentBuilding: false,
+            agentServerTargetOs: 'mac',
             agentForm: {
                 server_host: window.location.hostname || '127.0.0.1',
                 server_port: 9999,
@@ -17,14 +18,14 @@ window.AppAgentModule = {
     computed: {
         agentBuilderAlertText() {
             if (this.agentForm.builder === 'pyinstaller') {
-                return 'PyInstaller only builds for the current server platform. Build version will be injected automatically.';
+                return 'PyInstaller builds only for the current server platform. Target OS is locked to the server platform and architecture selection is disabled.';
             }
 
             if (this.agentForm.builder === 'bundle') {
-                return 'Bundle outputs a source zip that contains client/, core/ and ratclient.py. Target OS and architecture are not applicable, and build version will be injected automatically.';
+                return 'Bundle outputs a source zip that contains client/, core/ and ratclient.py. Target OS and architecture are not applicable.';
             }
 
-            return 'Windows defaults to amd64, Linux defaults to amd64, and macOS uses the best-matching server architecture by default.';
+            return 'Go builder supports Windows, macOS and Linux targets. Architecture can be selected manually.';
         },
 
         isGoBuilder() {
@@ -33,48 +34,86 @@ window.AppAgentModule = {
 
         isBundleBuilder() {
             return this.agentForm.builder === 'bundle';
+        },
+
+        isPyInstallerBuilder() {
+            return this.agentForm.builder === 'pyinstaller';
+        },
+
+        isAgentTargetOsDisabled() {
+            return this.isBundleBuilder || this.isPyInstallerBuilder;
+        },
+
+        isAgentTargetArchDisabled() {
+            return this.isBundleBuilder || this.isPyInstallerBuilder;
         }
     },
 
     methods: {
-        openAgentBuilderDialog() {
+        async loadAgentServerPlatform() {
+            try {
+                const res = await fetch('/api/agent/platform');
+                const json = await res.json();
+                if (!res.ok || json.code !== 0) throw new Error(json.message || 'Failed to load server platform');
+                const targetOs = String(json.data?.target_os || 'mac').trim() || 'mac';
+                this.agentServerTargetOs = targetOs;
+            } catch (_error) {
+                this.agentServerTargetOs = 'mac';
+            }
+        },
+
+        async openAgentBuilderDialog() {
             this.agentBuilderDialogVisible = true;
             this.agentForm.server_host = window.location.hostname || '127.0.0.1';
             this.agentForm.server_port = 9999;
             this.agentForm.web_port = 8085;
-            this.applyRecommendedAgentArch();
+            await this.loadAgentServerPlatform();
+            this.applyAgentBuilderRules();
         },
 
-        applyRecommendedAgentArch() {
+        applyAgentBuilderRules() {
             if (this.agentForm.builder === 'bundle') {
                 this.agentForm.target_arch = 'auto';
                 return;
             }
 
-            if (this.agentForm.builder !== 'go') {
+            if (this.agentForm.builder === 'pyinstaller') {
+                this.agentForm.target_os = this.agentServerTargetOs || 'mac';
                 this.agentForm.target_arch = 'auto';
                 return;
             }
 
             if (this.agentForm.target_os === 'win') {
-                this.agentForm.target_arch = 'amd64';
+                if (this.agentForm.target_arch === 'auto') {
+                    this.agentForm.target_arch = 'amd64';
+                }
                 return;
             }
 
             if (this.agentForm.target_os === 'linux') {
-                this.agentForm.target_arch = 'amd64';
+                if (this.agentForm.target_arch === 'auto') {
+                    this.agentForm.target_arch = 'amd64';
+                }
                 return;
             }
-
-            this.agentForm.target_arch = 'auto';
         },
 
         buildAgentPayload() {
-            return {
+            const payload = {
                 ...this.agentForm,
                 server_web_scheme: window.location.protocol.replace(':', '') || 'http',
                 server_web_host: window.location.hostname || this.agentForm.server_host,
             };
+
+            if (this.agentForm.builder === 'bundle') {
+                payload.target_os = 'bundle';
+                payload.target_arch = 'auto';
+            } else if (this.agentForm.builder === 'pyinstaller') {
+                payload.target_os = this.agentServerTargetOs || this.agentForm.target_os || 'mac';
+                payload.target_arch = 'auto';
+            }
+
+            return payload;
         },
 
         async buildAgent() {
@@ -117,9 +156,7 @@ window.AppAgentModule = {
 
                 if (Array.isArray(data.warnings) && data.warnings.length > 0) {
                     data.warnings.forEach(msg => {
-                        if (msg) {
-                            ElementPlus.ElMessage.warning(msg);
-                        }
+                        if (msg) ElementPlus.ElMessage.warning(msg);
                     });
                 }
 
@@ -137,11 +174,11 @@ window.AppAgentModule = {
 
     watch: {
         'agentForm.builder'() {
-            this.applyRecommendedAgentArch();
+            this.applyAgentBuilderRules();
         },
 
         'agentForm.target_os'() {
-            this.applyRecommendedAgentArch();
+            this.applyAgentBuilderRules();
         }
     }
 };

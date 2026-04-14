@@ -155,6 +155,9 @@
                                         <el-button size="small" class="tool-btn" @click="openBackgroundJobsDialog">
                                             Jobs
                                         </el-button>
+                                        <el-button size="small" class="tool-btn" @click="openScriptLibraryDialog">
+                                            Scripts
+                                        </el-button>
                                         <el-button size="small" class="tool-btn" @click="openCommandHistoryDialog">
                                             History
                                         </el-button>
@@ -797,6 +800,83 @@
                 </div>
             </div>
 
+        </div>
+    </el-dialog>
+
+    <el-dialog v-model="scriptLibraryDialogVisible" title="Script Library" width="1180px" top="5vh"
+               class="fixed-dialog script-library-dialog">
+        <div class="fixed-dialog-body script-library-body" v-loading="scriptLibraryLoading">
+            <div class="script-library-shell">
+                <div class="script-library-tree panel-lite">
+                    <div class="background-jobs-toolbar">
+                        <el-button size="small" @click="loadScriptCatalog" :loading="scriptLibraryLoading">Refresh</el-button>
+                    </div>
+                    <div class="background-jobs-section-title">Scripts</div>
+                    <el-tree
+                            v-if="scriptTreeData.length"
+                            :data="scriptTreeData"
+                            node-key="key"
+                            default-expand-all
+                            highlight-current
+                            class="script-library-tree-view"
+                            @node-click="handleScriptTreeNodeClick">
+                        <template #default="{ data }">
+                            <span class="script-tree-node" :class="{ 'script-tree-node-leaf': data.isScript }">
+                                <span class="script-tree-node-label">{{ data.label }}</span>
+                            </span>
+                        </template>
+                    </el-tree>
+                    <div v-else class="empty-state">No scripts available</div>
+                </div>
+
+                <div class="script-library-detail panel-lite" v-if="selectedScriptItem">
+                    <div class="script-library-detail-top">
+                        <div>
+                            <div class="background-jobs-section-title">{{ selectedScriptItem.display_name || selectedScriptItem.script_name }}</div>
+                            <div class="background-job-module-key mono">{{ selectedScriptItem.path }}</div>
+                            <div v-if="selectedScriptItem.description" class="script-library-description">{{ selectedScriptItem.description }}</div>
+                        </div>
+                        <div class="background-job-module-tags">
+                            <el-tag size="small" :type="isScriptSupportedForCurrentConnection(selectedScriptItem) ? 'info' : 'danger'">
+                                {{ formatScriptPlatformLabel(selectedScriptItem) }}
+                            </el-tag>
+                            <el-tag v-if="selectedScriptParamSpecs.length" size="small" type="warning">Params</el-tag>
+                        </div>
+                    </div>
+
+                    <el-form label-position="top" class="script-library-form">
+                        <el-form-item v-for="param in selectedScriptParamSpecs"
+                                      :key="`script-param-${param.name}`"
+                                      :label="`${param.name} (${param.type || 'string'})`">
+                            <el-switch v-if="param.type === 'boolean'" v-model="scriptParamForm[param.name]"></el-switch>
+                            <el-select v-else-if="param.type === 'select' && param.options && param.options.length"
+                                       v-model="scriptParamForm[param.name]"
+                                       style="width: 100%">
+                                <el-option v-for="option in param.options" :key="`${param.name}-${option}`" :label="option" :value="option"></el-option>
+                            </el-select>
+                            <el-input v-else
+                                      v-model="scriptParamForm[param.name]"
+                                      :placeholder="param.description || param.name"></el-input>
+                            <div class="hint-text" style="margin-top: 6px;">
+                                {{ param.description || 'No description' }}
+                                <template v-if="param.required"> · required</template>
+                                <template v-if="param.default !== undefined && param.default !== null && param.type !== 'boolean'"> · default: {{ param.default }}</template>
+                                <template v-if="param.min !== undefined"> · min: {{ param.min }}</template>
+                                <template v-if="param.max !== undefined"> · max: {{ param.max }}</template>
+                            </div>
+                        </el-form-item>
+                    </el-form>
+
+                    <div class="script-library-actions">
+                        <el-button type="primary" @click="runSelectedScript" :loading="scriptRunSubmitting">Run Script</el-button>
+                        <el-button plain @click="openRemoteScriptEditor(selectedScriptItem.script_name)">Edit</el-button>
+                        <el-button type="danger" plain @click="deleteServerScript(selectedScriptItem.script_name)">Delete</el-button>
+                    </div>
+                </div>
+                <div class="script-library-detail panel-lite" v-else>
+                    <div class="empty-state">Select a script from the left tree</div>
+                </div>
+            </div>
         </div>
     </el-dialog>
 
@@ -1815,8 +1895,8 @@
             <el-form-item label="Web Port" required>
                 <el-input v-model.number="agentForm.web_port" type="number" placeholder="8000"/>
             </el-form-item>
-            <el-form-item v-if="!isBundleBuilder" label="Target OS">
-                <el-radio-group v-model="agentForm.target_os">
+            <el-form-item label="Target OS">
+                <el-radio-group v-model="agentForm.target_os" :disabled="isAgentTargetOsDisabled">
                     <el-radio label="mac">macOS</el-radio>
                     <el-radio label="win">Windows</el-radio>
                     <el-radio label="linux">Linux</el-radio>
@@ -1829,8 +1909,8 @@
                     <el-radio label="go">Go</el-radio>
                 </el-radio-group>
             </el-form-item>
-            <el-form-item v-if="!isBundleBuilder" label="Target Arch">
-                <el-radio-group v-model="agentForm.target_arch" :disabled="agentForm.builder !== 'go'">
+            <el-form-item label="Target Arch">
+                <el-radio-group v-model="agentForm.target_arch" :disabled="isAgentTargetArchDisabled">
                     <el-radio label="auto">Auto</el-radio>
                     <el-radio label="amd64">amd64</el-radio>
                     <el-radio label="arm64">arm64</el-radio>
@@ -1980,6 +2060,7 @@
 <script src="/js/modules/commands.js"></script>
 <script src="/js/modules/files.js"></script>
 <script src="/js/modules/jobs.js"></script>
+<script src="/js/modules/scripts.js"></script>
 <script src="/js/modules/sse.js"></script>
 <script src="/js/modules/agent.js"></script>
 <script src="/js/modules/process.js"></script>
