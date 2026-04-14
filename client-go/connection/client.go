@@ -40,6 +40,7 @@ func (c *Client) Run() {
 			"hostname":         hostname(),
 			"cwd":              session.Cwd,
 			"integrity":        executor.DetectHandshakeIntegrity(),
+			"build_version":    config.CLIENT_BUILD_VERSION,
 			"command_manifest": executor.CommandManifest(),
 			"system_paths":     []interface{}{},
 		})
