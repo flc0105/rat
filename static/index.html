@@ -939,7 +939,14 @@
                             </div>
 
                             <div class="script-library-card-actions">
-                                <el-button size="small" type="primary" plain @click="openScriptRunDialog(item)">Run</el-button>
+<!--                                <el-button size="small" type="primary" plain @click="openScriptRunDialog(item)">Run</el-button>-->
+                                <el-button size="small"
+           type="primary"
+           plain
+           :disabled="!isScriptSupportedForCurrentConnection(item)"
+           @click="openScriptRunDialog(item)">
+    Run
+</el-button>
                                 <el-button size="small" plain @click="openRemoteScriptEditor(item.script_name)">Edit</el-button>
                                 <el-button size="small" type="danger" plain @click="deleteServerScript(item.script_name)">Delete</el-button>
                             </div>
