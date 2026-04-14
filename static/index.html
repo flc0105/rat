@@ -152,12 +152,24 @@
                                         <el-button size="small" class="tool-btn" @click="openConnectionInfoDialog">
                                             Info
                                         </el-button>
-                                        <el-button size="small" class="tool-btn" @click="openBackgroundJobsDialog">
-                                            Jobs
-                                        </el-button>
-                                        <el-button size="small" class="tool-btn" @click="openScriptLibraryDialog">
-                                            Scripts
-                                        </el-button>
+<!--                                        <el-button size="small" class="tool-btn" @click="openBackgroundJobsDialog">-->
+<!--                                            Jobs-->
+<!--                                        </el-button>-->
+<!--                                        <el-button size="small" class="tool-btn" @click="openScriptLibraryDialog">-->
+<!--                                            Scripts-->
+<!--                                        </el-button>-->
+
+                                        <el-dropdown trigger="click" @command="handleResourcesCommand">
+    <el-button size="small" class="tool-btn">
+        Resources
+    </el-button>
+    <template #dropdown>
+        <el-dropdown-menu>
+            <el-dropdown-item command="jobs">Jobs</el-dropdown-item>
+            <el-dropdown-item command="scripts">Scripts</el-dropdown-item>
+        </el-dropdown-menu>
+    </template>
+</el-dropdown>
                                         <el-button size="small" class="tool-btn" @click="openCommandHistoryDialog">
                                             History
                                         </el-button>
@@ -803,82 +815,171 @@
         </div>
     </el-dialog>
 
-    <el-dialog v-model="scriptLibraryDialogVisible" title="Script Library" width="1180px" top="5vh"
-               class="fixed-dialog script-library-dialog">
-        <div class="fixed-dialog-body script-library-body" v-loading="scriptLibraryLoading">
-            <div class="script-library-shell">
-                <div class="script-library-tree panel-lite">
-                    <div class="background-jobs-toolbar">
-                        <el-button size="small" @click="loadScriptCatalog" :loading="scriptLibraryLoading">Refresh</el-button>
+    <el-dialog v-model="scriptLibraryDialogVisible" title="Script Library" width="1240px" top="5vh"
+           class="fixed-dialog script-library-dialog">
+    <div class="fixed-dialog-body script-library-body" v-loading="scriptLibraryLoading">
+        <div class="script-library-shell">
+            <div class="script-library-tree panel-lite">
+                <div class="background-jobs-toolbar">
+                    <el-button size="small" @click="loadScriptCatalog" :loading="scriptLibraryLoading">Refresh</el-button>
+                </div>
+                <div class="background-jobs-section-title">Folders</div>
+
+                <el-tree
+                        v-if="scriptDirectoryTreeData.length"
+                        :data="scriptDirectoryTreeData"
+                        node-key="key"
+                        default-expand-all
+                        highlight-current
+                        :expand-on-click-node="true"
+                        class="script-library-tree-view"
+                        @node-click="handleScriptTreeNodeClick">
+                    <template #default="{ data }">
+                        <span class="script-tree-node">
+                            <span class="script-tree-node-label">{{ data.label }}</span>
+                        </span>
+                    </template>
+                </el-tree>
+
+                <div v-else class="empty-state">No script folders available</div>
+            </div>
+
+            <div class="script-library-directory panel-lite">
+                <div class="script-library-directory-top">
+                    <div>
+                        <div class="background-jobs-section-title">
+                            {{ selectedScriptDirectory || 'Scripts' }}
+                        </div>
+                        <div class="background-job-module-key mono">
+                            {{ currentScriptDirectoryItems.length }} script<span v-if="currentScriptDirectoryItems.length !== 1">s</span>
+                        </div>
                     </div>
-                    <div class="background-jobs-section-title">Scripts</div>
-                    <el-tree
-                            v-if="scriptTreeData.length"
-                            :data="scriptTreeData"
-                            node-key="key"
-                            default-expand-all
-                            highlight-current
-                            class="script-library-tree-view"
-                            @node-click="handleScriptTreeNodeClick">
-                        <template #default="{ data }">
-                            <span class="script-tree-node" :class="{ 'script-tree-node-leaf': data.isScript }">
-                                <span class="script-tree-node-label">{{ data.label }}</span>
-                            </span>
-                        </template>
-                    </el-tree>
-                    <div v-else class="empty-state">No scripts available</div>
                 </div>
 
-                <div class="script-library-detail panel-lite" v-if="selectedScriptItem">
-                    <div class="script-library-detail-top">
-                        <div>
-                            <div class="background-jobs-section-title">{{ selectedScriptItem.display_name || selectedScriptItem.script_name }}</div>
-                            <div class="background-job-module-key mono">{{ selectedScriptItem.path }}</div>
-                            <div v-if="selectedScriptItem.description" class="script-library-description">{{ selectedScriptItem.description }}</div>
-                        </div>
-                        <div class="background-job-module-tags">
-                            <el-tag size="small" :type="isScriptSupportedForCurrentConnection(selectedScriptItem) ? 'info' : 'danger'">
-                                {{ formatScriptPlatformLabel(selectedScriptItem) }}
-                            </el-tag>
-                            <el-tag v-if="selectedScriptParamSpecs.length" size="small" type="warning">Params</el-tag>
-                        </div>
-                    </div>
-
-                    <el-form label-position="top" class="script-library-form">
-                        <el-form-item v-for="param in selectedScriptParamSpecs"
-                                      :key="`script-param-${param.name}`"
-                                      :label="`${param.name} (${param.type || 'string'})`">
-                            <el-switch v-if="param.type === 'boolean'" v-model="scriptParamForm[param.name]"></el-switch>
-                            <el-select v-else-if="param.type === 'select' && param.options && param.options.length"
-                                       v-model="scriptParamForm[param.name]"
-                                       style="width: 100%">
-                                <el-option v-for="option in param.options" :key="`${param.name}-${option}`" :label="option" :value="option"></el-option>
-                            </el-select>
-                            <el-input v-else
-                                      v-model="scriptParamForm[param.name]"
-                                      :placeholder="param.description || param.name"></el-input>
-                            <div class="hint-text" style="margin-top: 6px;">
-                                {{ param.description || 'No description' }}
-                                <template v-if="param.required"> · required</template>
-                                <template v-if="param.default !== undefined && param.default !== null && param.type !== 'boolean'"> · default: {{ param.default }}</template>
-                                <template v-if="param.min !== undefined"> · min: {{ param.min }}</template>
-                                <template v-if="param.max !== undefined"> · max: {{ param.max }}</template>
+                <div v-if="currentScriptDirectoryItems.length" class="script-library-card-list">
+                    <div v-for="item in currentScriptDirectoryItems"
+                         :key="item.script_name"
+                         class="script-library-card">
+                        <div class="script-library-card-main">
+                            <div class="script-library-card-title"
+                                 :title="item.display_name || item.script_name">
+                                {{ item.display_name || item.script_name }}
                             </div>
-                        </el-form-item>
-                    </el-form>
 
-                    <div class="script-library-actions">
-                        <el-button type="primary" @click="runSelectedScript" :loading="scriptRunSubmitting">Run Script</el-button>
-                        <el-button plain @click="openRemoteScriptEditor(selectedScriptItem.script_name)">Edit</el-button>
-                        <el-button type="danger" plain @click="deleteServerScript(selectedScriptItem.script_name)">Delete</el-button>
+                            <div class="script-library-card-path mono"
+                                 :title="item.path || item.script_name">
+                                {{ item.path || item.script_name }}
+                            </div>
+
+                            <div class="script-library-card-description"
+                                 :title="item.description || ''">
+                                {{ item.description || 'No description' }}
+                            </div>
+
+                            <div class="background-job-module-tags script-library-card-tags">
+                                <el-tag size="small"
+                                        :type="isScriptSupportedForCurrentConnection(item) ? 'info' : 'danger'">
+                                    {{ formatScriptPlatformLabel(item) }}
+                                </el-tag>
+                                <el-tag v-if="scriptHasParams(item)" size="small" type="warning">
+                                    Params
+                                </el-tag>
+                            </div>
+                        </div>
+
+                        <div class="script-library-card-actions">
+                            <el-button size="small"
+                                       type="primary"
+                                       plain
+                                       @click="openScriptRunDialog(item)">
+                                Run
+                            </el-button>
+                            <el-button size="small"
+                                       plain
+                                       @click="openRemoteScriptEditor(item.script_name)">
+                                Edit
+                            </el-button>
+                            <el-button size="small"
+                                       type="danger"
+                                       plain
+                                       @click="deleteServerScript(item.script_name)">
+                                Delete
+                            </el-button>
+                        </div>
                     </div>
                 </div>
-                <div class="script-library-detail panel-lite" v-else>
-                    <div class="empty-state">Select a script from the left tree</div>
+
+                <div v-else class="empty-state">
+                    No scripts in this folder
                 </div>
             </div>
         </div>
-    </el-dialog>
+    </div>
+</el-dialog>
+
+    <el-dialog v-model="scriptRunDialogVisible"
+           :title="pendingRunScriptItem ? `Run ${pendingRunScriptItem.display_name || pendingRunScriptItem.script_name}` : 'Run Script'"
+           width="680px"
+           top="10vh"
+           class="fixed-dialog">
+    <div v-if="pendingRunScriptItem" class="fixed-dialog-body">
+        <div class="script-run-dialog-top">
+            <div class="background-job-module-key mono">{{ pendingRunScriptItem.path || pendingRunScriptItem.script_name }}</div>
+            <div v-if="pendingRunScriptItem.description" class="script-library-description">{{ pendingRunScriptItem.description }}</div>
+            <div class="background-job-module-tags" style="margin-top: 10px;">
+                <el-tag size="small"
+                        :type="isScriptSupportedForCurrentConnection(pendingRunScriptItem) ? 'info' : 'danger'">
+                    {{ formatScriptPlatformLabel(pendingRunScriptItem) }}
+                </el-tag>
+                <el-tag v-if="pendingRunScriptParamSpecs.length" size="small" type="warning">Params</el-tag>
+            </div>
+        </div>
+
+        <el-form v-if="pendingRunScriptParamSpecs.length"
+                 label-position="top"
+                 class="script-library-form">
+            <el-form-item v-for="param in pendingRunScriptParamSpecs"
+                          :key="`script-param-${param.name}`"
+                          :label="`${param.name} (${param.type || 'string'})`">
+                <el-switch v-if="param.type === 'boolean'" v-model="scriptParamForm[param.name]"></el-switch>
+
+                <el-select v-else-if="param.type === 'select' && param.options && param.options.length"
+                           v-model="scriptParamForm[param.name]"
+                           style="width: 100%">
+                    <el-option v-for="option in param.options"
+                               :key="`${param.name}-${option}`"
+                               :label="option"
+                               :value="option"></el-option>
+                </el-select>
+
+                <el-input v-else
+                          v-model="scriptParamForm[param.name]"
+                          :placeholder="param.description || param.name"></el-input>
+
+                <div class="hint-text" style="margin-top: 6px;">
+                    {{ param.description || 'No description' }}
+                    <template v-if="param.required"> · required</template>
+                    <template v-if="param.default !== undefined && param.default !== null && param.type !== 'boolean'"> · default: {{ param.default }}</template>
+                    <template v-if="param.min !== undefined"> · min: {{ param.min }}</template>
+                    <template v-if="param.max !== undefined"> · max: {{ param.max }}</template>
+                </div>
+            </el-form-item>
+        </el-form>
+
+        <div v-else class="empty-state" style="min-height: 96px;">
+            This script has no declared parameters.
+        </div>
+    </div>
+
+    <template #footer>
+        <el-button @click="closeScriptRunDialog">Cancel</el-button>
+        <el-button type="primary"
+                   :loading="scriptRunSubmitting"
+                   @click="confirmRunScript">
+            Run
+        </el-button>
+    </template>
+</el-dialog>
 
     <el-dialog v-model="backgroundJobsDialogVisible" title="Background Jobs" width="1180px" top="5vh"
                class="fixed-dialog background-jobs-dialog">

@@ -4,19 +4,21 @@ window.AppScriptsModule = {
             scriptLibraryDialogVisible: false,
             scriptLibraryLoading: false,
             scriptCatalogItems: [],
-            selectedScriptName: '',
+            selectedScriptDirectory: '',
             scriptRunSubmitting: false,
+            scriptRunDialogVisible: false,
+            pendingRunScriptName: '',
             scriptParamForm: {},
         };
     },
 
     computed: {
-        scriptTreeData() {
+        scriptDirectoryTreeData() {
             const root = [];
-            const ensureNode = (children, key, label, path, isScript = false, item = null) => {
+            const ensureNode = (children, key, label, path) => {
                 const existing = children.find(node => node.key === key);
                 if (existing) return existing;
-                const node = {key, label, path, children: [], isScript, item};
+                const node = {key, label, path, children: []};
                 children.push(node);
                 return node;
             };
@@ -24,23 +26,24 @@ window.AppScriptsModule = {
             for (const item of this.scriptCatalogItems || []) {
                 const path = String(item.path || `${item.script_name || ''}.py`).replace(/^\/+/, '');
                 const parts = path.split('/').filter(Boolean);
+                const dirParts = parts.slice(0, -1);
                 let currentChildren = root;
                 let currentPath = '';
-                parts.forEach((part, index) => {
+
+                if (!dirParts.length) {
+                    ensureNode(root, 'dir:.', 'root', '');
+                    continue;
+                }
+
+                dirParts.forEach((part) => {
                     currentPath = currentPath ? `${currentPath}/${part}` : part;
-                    const isLeaf = index === parts.length - 1;
-                    const key = isLeaf ? `script:${item.script_name}` : `dir:${currentPath}`;
-                    const label = isLeaf ? (item.display_name || part.replace(/\.py$/i, '')) : part;
-                    const node = ensureNode(currentChildren, key, label, currentPath, isLeaf, isLeaf ? item : null);
+                    const node = ensureNode(currentChildren, `dir:${currentPath}`, part, currentPath);
                     currentChildren = node.children;
                 });
             }
 
             const sortNodes = (nodes) => {
-                nodes.sort((a, b) => {
-                    if (!!a.isScript !== !!b.isScript) return a.isScript ? 1 : -1;
-                    return String(a.label || '').localeCompare(String(b.label || ''));
-                });
+                nodes.sort((a, b) => String(a.label || '').localeCompare(String(b.label || '')));
                 nodes.forEach(node => sortNodes(node.children || []));
                 return nodes;
             };
@@ -48,21 +51,37 @@ window.AppScriptsModule = {
             return sortNodes(root);
         },
 
-        selectedScriptItem() {
-            const target = String(this.selectedScriptName || '').trim();
+        currentScriptDirectoryItems() {
+            const currentDir = String(this.selectedScriptDirectory || '').trim();
+            const items = (this.scriptCatalogItems || []).filter(item => {
+                const path = String(item.path || `${item.script_name || ''}.py`).replace(/^\/+/, '');
+                const parts = path.split('/').filter(Boolean);
+                const dirPath = parts.slice(0, -1).join('/');
+                return dirPath === currentDir;
+            });
+
+            return items.sort((a, b) => {
+                const da = String(a.display_name || a.script_name || '').toLowerCase();
+                const db = String(b.display_name || b.script_name || '').toLowerCase();
+                return da.localeCompare(db);
+            });
+        },
+
+        pendingRunScriptItem() {
+            const target = String(this.pendingRunScriptName || '').trim();
             return (this.scriptCatalogItems || []).find(item => String(item.script_name || '').trim() === target) || null;
         },
 
-        selectedScriptMetadata() {
-            const item = this.selectedScriptItem;
+        pendingRunScriptMetadata() {
+            const item = this.pendingRunScriptItem;
             if (!item) {
                 return {name: '', display_name: '', description: '', platforms: [], params: [], category: '', tags: []};
             }
             return this.normalizeScriptMetadata(item.metadata || {});
         },
 
-        selectedScriptParamSpecs() {
-            return Array.isArray(this.selectedScriptMetadata.params) ? this.selectedScriptMetadata.params : [];
+        pendingRunScriptParamSpecs() {
+            return Array.isArray(this.pendingRunScriptMetadata.params) ? this.pendingRunScriptMetadata.params : [];
         },
     },
 
@@ -84,15 +103,16 @@ window.AppScriptsModule = {
                 if (!res.ok || json.code !== 0) {
                     throw new Error(json.message || 'Failed to load script catalog');
                 }
+
                 this.scriptCatalogItems = Array.isArray(json.data) ? json.data : [];
-                if (!this.selectedScriptName && this.scriptCatalogItems.length > 0) {
-                    this.selectScriptItem(this.scriptCatalogItems[0]);
-                } else if (this.selectedScriptName) {
-                    const found = this.scriptCatalogItems.find(item => item.script_name === this.selectedScriptName);
-                    if (found) {
-                        this.selectScriptItem(found);
-                    } else if (this.scriptCatalogItems.length > 0) {
-                        this.selectScriptItem(this.scriptCatalogItems[0]);
+
+                if (!this.selectedScriptDirectory) {
+                    const firstDir = this.getFirstAvailableScriptDirectory();
+                    this.selectedScriptDirectory = firstDir;
+                } else {
+                    const hasCurrentDir = this.scriptCatalogItems.some(item => this.getScriptDirectoryPath(item) === this.selectedScriptDirectory);
+                    if (!hasCurrentDir) {
+                        this.selectedScriptDirectory = this.getFirstAvailableScriptDirectory();
                     }
                 }
             } catch (e) {
@@ -102,22 +122,27 @@ window.AppScriptsModule = {
             }
         },
 
-        handleScriptTreeNodeClick(node) {
-            if (node && node.isScript && node.item) {
-                this.selectScriptItem(node.item);
-            }
+        getScriptDirectoryPath(item) {
+            const path = String(item?.path || `${item?.script_name || ''}.py`).replace(/^\/+/, '');
+            const parts = path.split('/').filter(Boolean);
+            return parts.slice(0, -1).join('/');
         },
 
-        selectScriptItem(item) {
-            if (!item) return;
-            this.selectedScriptName = String(item.script_name || '').trim();
-            this.scriptParamForm = this.buildScriptParamDefaults(item);
+        getFirstAvailableScriptDirectory() {
+            const dirs = (this.scriptCatalogItems || []).map(item => this.getScriptDirectoryPath(item));
+            return dirs.length ? dirs.sort()[0] : '';
+        },
+
+        handleScriptTreeNodeClick(node) {
+            if (!node) return;
+            this.selectedScriptDirectory = String(node.path || '').trim();
         },
 
         normalizeScriptMetadata(metadata = {}) {
             if (!metadata || typeof metadata !== 'object' || Array.isArray(metadata)) {
                 return {name: '', display_name: '', description: '', platforms: [], params: [], category: '', tags: []};
             }
+
             const normalizeParam = (item = {}) => {
                 const name = String(item.name || '').trim();
                 if (!name) return null;
@@ -130,6 +155,7 @@ window.AppScriptsModule = {
                     options: Array.isArray(item.options) ? item.options : [],
                 };
             };
+
             return {
                 ...metadata,
                 name: String(metadata.name || '').trim(),
@@ -160,9 +186,17 @@ window.AppScriptsModule = {
             const metadata = this.normalizeScriptMetadata(item?.metadata || {});
             const platforms = metadata.platforms || [];
             if (!platforms.length || platforms.includes('*') || platforms.includes('common')) return true;
+
             const current = typeof this.normalizeClientPlatform === 'function'
-                ? this.normalizeClientPlatform(this.currentConnection?.os_type || this.currentConnection?.platform || this.currentConnection?.system || this.currentConnection?.os || '')
+                ? this.normalizeClientPlatform(
+                    this.currentConnection?.os_type ||
+                    this.currentConnection?.platform ||
+                    this.currentConnection?.system ||
+                    this.currentConnection?.os ||
+                    ''
+                )
                 : '';
+
             if (!current) return true;
             return platforms.includes(current);
         },
@@ -175,10 +209,17 @@ window.AppScriptsModule = {
             return platforms.join(' / ');
         },
 
+        scriptHasParams(item) {
+            const metadata = this.normalizeScriptMetadata(item?.metadata || {});
+            return Array.isArray(metadata.params) && metadata.params.length > 0;
+        },
+
         coerceScriptParamValue(param, rawValue) {
             const type = String(param?.type || 'string').trim().toLowerCase();
             if (type === 'boolean') return !!rawValue;
+
             const value = rawValue === null || rawValue === undefined ? '' : String(rawValue).trim();
+
             if (type === 'integer') {
                 if (!/^-?\d+$/.test(value)) throw new Error(`Param "${param.name}" must be an integer`);
                 const parsed = parseInt(value, 10);
@@ -186,6 +227,7 @@ window.AppScriptsModule = {
                 if (param.max !== undefined && parsed > Number(param.max)) throw new Error(`Param "${param.name}" must be <= ${param.max}`);
                 return parsed;
             }
+
             if (type === 'number') {
                 const parsed = Number(value);
                 if (Number.isNaN(parsed)) throw new Error(`Param "${param.name}" must be a number`);
@@ -193,22 +235,28 @@ window.AppScriptsModule = {
                 if (param.max !== undefined && parsed > Number(param.max)) throw new Error(`Param "${param.name}" must be <= ${param.max}`);
                 return parsed;
             }
+
             if (type === 'select') {
                 if (Array.isArray(param.options) && param.options.length && !param.options.includes(value)) {
                     throw new Error(`Param "${param.name}" has invalid option`);
                 }
                 return value;
             }
+
             return value;
         },
 
         buildScriptRunParams(item) {
             const metadata = this.normalizeScriptMetadata(item?.metadata || {});
             const params = {};
+
             for (const param of metadata.params || []) {
                 const rawValue = this.scriptParamForm[param.name];
                 const type = String(param.type || 'string').toLowerCase();
-                const textValue = type === 'boolean' ? rawValue : String(rawValue === null || rawValue === undefined ? '' : rawValue).trim();
+                const textValue = type === 'boolean'
+                    ? rawValue
+                    : String(rawValue === null || rawValue === undefined ? '' : rawValue).trim();
+
                 if ((type !== 'boolean' && !textValue) || (type === 'boolean' && rawValue === undefined)) {
                     if (param.required && (param.default === undefined || param.default === null || String(param.default).trim() === '')) {
                         throw new Error(`Missing required param: ${param.name}`);
@@ -218,40 +266,69 @@ window.AppScriptsModule = {
                     }
                     continue;
                 }
+
                 params[param.name] = this.coerceScriptParamValue(param, rawValue);
             }
+
             return params;
         },
 
-        async runSelectedScript() {
-            const item = this.selectedScriptItem;
-            if (!item) {
-                ElementPlus.ElMessage.warning('Please select a script');
-                return;
-            }
+        openScriptRunDialog(item) {
+            if (!item) return;
+
             if (!this.selectedId) {
                 ElementPlus.ElMessage.warning('Please select a device');
                 return;
             }
+
             if (!this.isScriptSupportedForCurrentConnection(item)) {
                 ElementPlus.ElMessage.warning(`${item.display_name || item.script_name} only supports: ${this.formatScriptPlatformLabel(item)}`);
                 return;
             }
+
+            this.pendingRunScriptName = String(item.script_name || '').trim();
+            this.scriptParamForm = this.buildScriptParamDefaults(item);
+            this.scriptRunDialogVisible = true;
+        },
+
+        closeScriptRunDialog() {
+            this.scriptRunDialogVisible = false;
+            this.scriptRunSubmitting = false;
+            this.pendingRunScriptName = '';
+            this.scriptParamForm = {};
+        },
+
+        async confirmRunScript() {
+            const item = this.pendingRunScriptItem;
+            if (!item) {
+                this.closeScriptRunDialog();
+                return;
+            }
+
+            if (!this.selectedId) {
+                ElementPlus.ElMessage.warning('Please select a device');
+                return;
+            }
+
             try {
                 this.scriptRunSubmitting = true;
                 const params = this.buildScriptRunParams(item);
+
                 const res = await fetch(`/api/connections/${encodeURIComponent(this.selectedId)}/scripts/run`, {
                     method: 'POST',
                     headers: this.getTabScopedHeaders({'Content-Type': 'application/json'}),
                     body: JSON.stringify({script_name: item.script_name, params})
                 });
+
                 const json = await res.json();
                 if (!res.ok || json.code !== 0) {
                     throw new Error(json.message || 'Failed to run script');
                 }
+
                 const taskId = json.data && json.data.task_id;
                 this.setActiveTask(this.selectedId, taskId || '');
                 ElementPlus.ElMessage.success(`Run request submitted: ${item.display_name || item.script_name}`);
+                this.closeScriptRunDialog();
             } catch (e) {
                 ElementPlus.ElMessage.error(e.message || 'Failed to run script');
             } finally {
@@ -271,17 +348,27 @@ window.AppScriptsModule = {
                 ElementPlus.ElMessage.warning('Invalid script name');
                 return;
             }
+
             try {
-                await ElementPlus.ElMessageBox.confirm(`Delete "${normalized}.py"? This action cannot be undone.`, 'Delete Script', {
-                    type: 'warning', confirmButtonText: 'Delete', cancelButtonText: 'Cancel'
-                });
+                await ElementPlus.ElMessageBox.confirm(
+                    `Delete "${normalized}.py"? This action cannot be undone.`,
+                    'Delete Script',
+                    {
+                        type: 'warning',
+                        confirmButtonText: 'Delete',
+                        cancelButtonText: 'Cancel'
+                    }
+                );
+
                 const res = await fetch('/api/scripts/delete', {
                     method: 'DELETE',
                     headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify({name: normalized})
                 });
+
                 const json = await res.json();
                 if (!res.ok || json.code !== 0) throw new Error(json.message || 'Failed to delete script');
+
                 ElementPlus.ElMessage.success(`Deleted: ${normalized}.py`);
                 await this.loadScriptCatalog();
             } catch (e) {
@@ -289,7 +376,23 @@ window.AppScriptsModule = {
                 ElementPlus.ElMessage.error(e.message || 'Failed to delete script');
             }
         },
+
+        async handleResourcesCommand(command) {
+            if (command === 'jobs') {
+                await this.openBackgroundJobsDialog();
+                return;
+            }
+            if (command === 'scripts') {
+                await this.openScriptLibraryDialog();
+            }
+        },
     },
 
-    watch: {},
+    watch: {
+        scriptRunDialogVisible(val) {
+            if (!val) {
+                this.closeScriptRunDialog();
+            }
+        },
+    },
 };
