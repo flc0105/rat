@@ -600,12 +600,15 @@ window.AppPreviewModule = {
         {
             "name": "example",
             "type": "string",
-            "required": false,
+            "required": False,
             "default": "",
             "description": "Example parameter"
         }
     ]
 }
+
+value = kwargs.get('example', '')
+print(value)
 
 # kwargs will be injected by the script runner.
 # Example:

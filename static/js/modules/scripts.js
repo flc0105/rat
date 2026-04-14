@@ -365,39 +365,49 @@ window.AppScriptsModule = {
             }
         },
 
-        async handleServerScriptUpload(event) {
-            const input = event && event.target;
-            const file = input && input.files && input.files[0];
-            if (!file) return;
+async handleServerScriptUpload(event) {
+    const input = event && event.target;
+    const file = input && input.files && input.files[0];
+    if (!file) return;
 
-            if (!/\.py$/i.test(file.name || '')) {
-                ElementPlus.ElMessage.warning('Only .py files are supported');
-                input.value = '';
-                return;
-            }
+    if (!/\.py$/i.test(file.name || '')) {
+        ElementPlus.ElMessage.warning('Only .py files are supported');
+        input.value = '';
+        return;
+    }
 
-            this.serverScriptUploadLoading = true;
-            try {
-                const formData = new FormData();
-                formData.append('file', file, file.name);
-                const res = await fetch('/api/scripts/upload', {method: 'POST', body: formData});
-                const json = await res.json();
-                if (!res.ok || json.code !== 0) throw new Error(json.message || 'Failed to upload script');
+    this.serverScriptUploadLoading = true;
 
-                const uploadedName = this.normalizeServerScriptFilename(json.data?.name || file.name);
-                ElementPlus.ElMessage.success(`Script uploaded: ${uploadedName}`);
-                await this.loadScriptCatalog();
-                if (typeof this.openRemoteScriptEditorInternal === 'function') {
-                    await this.openRemoteScriptEditorInternal(uploadedName);
-                }
-            } catch (e) {
-                ElementPlus.ElMessage.error(e.message || 'Failed to upload script');
-            } finally {
-                this.serverScriptUploadLoading = false;
-                if (input) input.value = '';
-            }
-        },
+    try {
+        const formData = new FormData();
+        formData.append('file', file, file.name);
+        formData.append('directory', this.selectedScriptDirectory || '');
 
+        const res = await fetch('/api/scripts/upload', {
+            method: 'POST',
+            body: formData
+        });
+
+        const json = await res.json();
+        if (!res.ok || json.code !== 0) {
+            throw new Error(json.message || 'Failed to upload script');
+        }
+
+        const uploadedName = this.normalizeServerScriptFilename(json.data?.name || file.name);
+        ElementPlus.ElMessage.success(`Script uploaded: ${uploadedName}`);
+
+        await this.loadScriptCatalog();
+
+        if (typeof this.openRemoteScriptEditorInternal === 'function') {
+            await this.openRemoteScriptEditorInternal(uploadedName);
+        }
+    } catch (e) {
+        ElementPlus.ElMessage.error(e.message || 'Failed to upload script');
+    } finally {
+        this.serverScriptUploadLoading = false;
+        if (input) input.value = '';
+    }
+},
         async deleteServerScript(scriptName) {
             const normalized = String(scriptName || '').trim().replace(/\\/g, '/').replace(/^\/+/, '').replace(/\.py$/i, '');
             if (!normalized) {

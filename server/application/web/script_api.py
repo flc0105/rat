@@ -33,8 +33,8 @@ class WebScriptApi:
     def save_script_content(self, script_name: str, content: str):
         return self.script_catalog_service.save_script(script_name, content)
 
-    def upload_script(self, file_storage):
-        return self.script_catalog_service.upload_script(file_storage)
+    def upload_script(self, file_storage, directory: str = ''):
+        return self.script_catalog_service.upload_script(file_storage, directory=directory)
 
     def delete_script(self, script_name: str):
         return self.script_catalog_service.delete_script(script_name)

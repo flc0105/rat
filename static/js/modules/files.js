@@ -350,9 +350,13 @@ window.AppFilesModule = {
             }
         },
 
-        handleRemoteToolbarMoreCommand(command) {
+     handleRemoteToolbarMoreCommand(command) {
     if (command === 'toggle_pin') {
         this.toggleCurrentPinnedQuickJump();
+        return;
+    }
+    if (command === 'paste') {
+        this.pasteRemoteClipboard();
         return;
     }
     if (command === 'copy') {
@@ -375,7 +379,6 @@ window.AppFilesModule = {
         this.toggleRemoteHiddenFiles();
     }
 },
-
         handleRemoteMoreAction(command, row) {
             if (!row || row.is_parent_entry) return;
 

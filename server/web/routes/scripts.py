@@ -47,9 +47,10 @@ def create_script_blueprint(server_instance):
     def upload_script():
         def _execute():
             file_obj = request.files.get('file')
+            directory = (request.form.get('directory') or '').strip()
             if file_obj is None:
                 raise ValueError('file is required')
-            return script_api.upload_script(file_obj)
+            return script_api.upload_script(file_obj, directory=directory)
 
         return responder.json_endpoint(_execute, default_error_status=500)
 

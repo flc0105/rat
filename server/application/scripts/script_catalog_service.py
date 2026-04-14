@@ -92,7 +92,7 @@ class ScriptCatalogService:
         os.remove(script_path)
         return {'name': safe_name[:-3], 'path': safe_name, 'deleted': True}
 
-    def upload_script(self, file_storage) -> dict:
+    def upload_script(self, file_storage, directory: str = '') -> dict:
         if file_storage is None:
             raise ValueError('file is required')
 
@@ -106,7 +106,12 @@ class ScriptCatalogService:
         if not safe_filename.lower().endswith('.py'):
             raise ValueError('Only .py files are supported')
 
-        safe_name = self._normalize_script_name(safe_filename)
+        directory = str(directory or '').replace('\\', '/').strip().strip('/')
+        if directory:
+            safe_name = self._normalize_script_name(f'{directory}/{safe_filename}')
+        else:
+            safe_name = self._normalize_script_name(safe_filename)
+
         if not safe_name:
             raise ValueError('Invalid script name')
 
@@ -117,4 +122,8 @@ class ScriptCatalogService:
         os.makedirs(os.path.dirname(script_path), exist_ok=True)
         file_storage.save(script_path)
 
-        return {'name': safe_name[:-3], 'path': safe_name, 'size': os.path.getsize(script_path)}
+        return {
+            'name': safe_name[:-3],
+            'path': safe_name,
+            'size': os.path.getsize(script_path),
+        }

