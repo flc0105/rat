@@ -956,7 +956,7 @@ window.AppFilesModule = {
             try {
                 const {value} = await ElementPlus.ElMessageBox.prompt(
                     'Enter the target path',
-                    'Input Navigate',
+                    'Go to Folder',
                     {
                         confirmButtonText: 'Go',
                         cancelButtonText: 'Cancel',

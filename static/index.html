@@ -398,18 +398,20 @@
                                         <el-dropdown-item command="documents">Documents</el-dropdown-item>
                                         <el-dropdown-item command="downloads">Downloads</el-dropdown-item>
                                         <el-dropdown-item command="executable">Program Directory</el-dropdown-item>
-                                        <el-dropdown-item divided command="input_navigate">Input Navigate</el-dropdown-item>
-                                        <el-dropdown-item v-if="hasPinnedQuickJumps" divided disabled>Pinned</el-dropdown-item>
+                                        <el-dropdown-item divided command="input_navigate">Go to Folder</el-dropdown-item>
+
                                         <el-dropdown-item
-                                                v-for="item in remotePinnedJumpItems"
+                                                v-for="(item, index) in remotePinnedJumpItems"
                                                 :key="`pinned-jump-${item.display_name}-${item.path}`"
+                                                :divided="index === 0"
                                                 :command="{ type: 'pinned_jump', display_name: item.display_name, path: item.path }"
                                         >
                                             {{ item.display_name }}
                                         </el-dropdown-item>
+
                                         <el-dropdown-item
                                                 v-if="hasPinnedQuickJumps"
-                                                divided
+
                                                 :command="{ type: 'manage_pins' }"
                                         >
                                             Manage Pins

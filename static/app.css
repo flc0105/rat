@@ -779,7 +779,7 @@ body {
   padding: 3px 6px;
   border-radius: 8px;
   cursor: pointer;
-  font-size: 13px;
+  font-size: 14px;
 }
 
 .remote-breadcrumb-item:hover {
@@ -789,7 +789,7 @@ body {
 
 .remote-breadcrumb-item.active {
   color: var(--text);
-  font-weight: 600;
+  font-weight: 400;
   cursor: default;
 }
 
@@ -2879,4 +2879,51 @@ body {
   min-height: 0;
   overflow-y: auto;
   overflow-x: hidden;
+}
+
+
+.artifact-filter-box {
+  min-width: 260px;
+}
+
+.artifact-filter-box .el-select,
+.artifact-filter-box .el-input,
+.artifact-filter-box .el-input__wrapper {
+  border-radius: 10px;
+}
+
+.artifact-filter-box .el-select {
+  width: 260px;
+
+}
+
+.dialog-head-right .artifact-filter-box {
+  margin-left: auto;
+}
+
+.dialog-head-right .artifact-filter-box .el-select {
+  display: block;
+   font-size: 12px;
+}
+
+.dialog-head-right .artifact-filter-box .el-select .el-select__wrapper,
+.dialog-head-right .artifact-filter-box .el-input__wrapper {
+  min-height: 34px;
+  height: 34px;
+  border-radius: 10px;
+   font-size: 12px;
+}
+
+.dialog-head-right {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex: 1 1 auto;
+  margin-left: auto;
+}
+
+.dialog-head-right .artifact-filter-box {
+  margin-left: auto;
+  display: flex;
+  justify-content: flex-end;
 }
