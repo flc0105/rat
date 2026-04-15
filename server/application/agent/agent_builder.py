@@ -16,7 +16,8 @@ class AgentBuilder:
     BUNDLE_INCLUDE_PATHS = ('client', 'core', 'ratclient.py')
     SUPPORTED_TARGETS = {'win', 'mac', 'linux'}
     SUPPORTED_BUILDERS = {'pyinstaller', 'go', 'go_loader', 'bundle'}
-    SUPPORTED_GO_ARCHES = {'auto', 'amd64', 'arm64'}
+    SUPPORTED_GO_ARCHES = {'amd64', 'arm64'}
+    BUILD_STATUS_MESSAGE = 'Build completed.'
     PYINSTALLER_PLATFORM_MAP = {
         'Windows': 'win',
         'Darwin': 'mac',
@@ -71,18 +72,18 @@ class AgentBuilder:
 
     def build_agent(self, server_host: str, server_port: int,
                     web_port: int, target_os: str = 'mac',
-                    builder: str = 'pyinstaller', target_arch: str = 'auto',
+                    builder: str = 'pyinstaller', target_arch: str = '',
                     server_web_scheme: str = 'http', server_web_host: str = '') -> dict:
         builder = (builder or 'pyinstaller').strip().lower()
-        target_arch = (target_arch or 'auto').strip().lower()
+        target_arch = self._normalize_goarch(target_arch)
         target_os = (target_os or 'mac').strip().lower()
         server_web_scheme = (server_web_scheme or 'http').strip().lower() or 'http'
         server_web_host = (server_web_host or server_host).strip() or server_host
 
         if builder not in self.SUPPORTED_BUILDERS:
             raise ValueError(f'Unsupported builder: {builder}')
-        if target_arch not in self.SUPPORTED_GO_ARCHES:
-            raise ValueError(f'Unsupported target arch: {target_arch}')
+        if builder in {'go', 'go_loader'} and target_arch not in self.SUPPORTED_GO_ARCHES:
+            raise ValueError(f'Unsupported target arch: {target_arch or "empty"}')
         if builder != 'bundle' and target_os not in self.SUPPORTED_TARGETS:
             raise ValueError(f'Unsupported target OS: {target_os}')
 
@@ -97,7 +98,6 @@ class AgentBuilder:
                     server_port=server_port,
                     web_port=web_port,
                     target_os=target_os,
-                    target_arch=target_arch,
                     build_version=build_version,
                     server_web_scheme=server_web_scheme,
                     server_web_host=server_web_host,
@@ -152,7 +152,7 @@ class AgentBuilder:
                 'builder': builder,
                 'target_os': result.get('target_os', target_os),
                 'warnings': warnings,
-                'target_arch': result.get('target_arch', target_arch),
+                'target_arch': result.get('target_arch', target_arch or 'n/a'),
                 'build_version': build_version,
             }
         except Exception:
@@ -225,16 +225,15 @@ const BundleReportAPIPath = "/api/agent/loader/report"
             f.write(template)
 
     def _build_with_pyinstaller(self, work_dir: str, server_host: str, server_port: int,
-                                web_port: int, target_os: str, target_arch: str = 'auto',
+                                web_port: int, target_os: str,
                                 build_version: str = 'dev', server_web_scheme: str = 'http',
                                 server_web_host: str = '') -> dict:
         current_target = self._get_current_pyinstaller_target()
         if current_target != target_os:
             current_label = self._describe_target(current_target)
-            target_label = self._describe_target(target_os)
             raise ValueError(
-                'PyInstaller only supports building for the same platform as the current server.'
-                f' Current server platform：{current_label}.'
+                'PyInstaller only supports building for the same platform as the current server. '
+                f'Current server platform: {current_label}.'
             )
 
         client_copy = os.path.join(work_dir, 'rat')
@@ -249,13 +248,13 @@ const BundleReportAPIPath = "/api/agent/loader/report"
         else:
             result = self._build_macos(client_copy, build_version=build_version)
 
-        result['warnings'] = ['The PyInstaller artifact must match the current server platform.']
-        result['target_arch'] = target_arch
+        result['warnings'] = [self.BUILD_STATUS_MESSAGE]
+        result['target_arch'] = 'n/a'
         result['target_os'] = target_os
         return result
 
     def _build_with_go(self, work_dir: str, server_host: str, server_port: int,
-                       web_port: int, target_os: str, target_arch: str = 'auto',
+                       web_port: int, target_os: str, target_arch: str,
                        build_version: str = 'dev', server_web_scheme: str = 'http',
                        server_web_host: str = '') -> dict:
         go_project_dir = os.path.join(self.source_dir, 'client-go')
@@ -264,26 +263,24 @@ const BundleReportAPIPath = "/api/agent/loader/report"
 
         client_copy = os.path.join(work_dir, 'rat')
         self._copy_source_with_excludes(self.source_dir, client_copy)
-        logger.info(f'Temporary workspace：{os.path.abspath(client_copy)}')
+        logger.info(f'Temporary workspace: {os.path.abspath(client_copy)}')
         self._inject_go_config(client_copy, server_host, server_port, web_port, build_version, server_web_scheme, server_web_host)
 
         go_target = self.GO_TARGET_MAP[target_os]
-        normalized_arch = self._resolve_goarch_for_target(target_os, target_arch)
-        output_name = self._build_go_output_name(target_os, normalized_arch, build_version)
+        output_name = self._build_go_output_name(target_os, target_arch, build_version)
         output_path = os.path.join(client_copy, 'client-go', output_name)
-        self._run_go_build(os.path.join(client_copy, 'client-go'), output_path, go_target['GOOS'], normalized_arch)
+        self._run_go_build(os.path.join(client_copy, 'client-go'), output_path, go_target['GOOS'], target_arch)
 
-        warnings = [f'The Go client was built for target platform {self._describe_target(target_os)} with target architecture {normalized_arch}.']
         return {
             'file_path': output_path,
             'file_name': output_name,
-            'warnings': warnings,
-            'target_arch': normalized_arch,
+            'warnings': [self.BUILD_STATUS_MESSAGE],
+            'target_arch': target_arch,
             'target_os': target_os,
         }
 
     def _build_with_go_loader(self, work_dir: str, server_host: str, server_port: int,
-                              web_port: int, target_os: str, target_arch: str = 'auto',
+                              web_port: int, target_os: str, target_arch: str,
                               build_version: str = 'dev', server_web_scheme: str = 'http',
                               server_web_host: str = '') -> dict:
         go_project_dir = os.path.join(self.source_dir, 'go-loader')
@@ -292,25 +289,19 @@ const BundleReportAPIPath = "/api/agent/loader/report"
 
         client_copy = os.path.join(work_dir, 'rat')
         self._copy_source_with_excludes(self.source_dir, client_copy)
-        logger.info(f'临时文件：{os.path.abspath(client_copy)}')
+        logger.info(f'Temporary workspace: {os.path.abspath(client_copy)}')
         self._inject_go_loader_config(client_copy, server_host, server_port, web_port, build_version, server_web_scheme, server_web_host)
 
         go_target = self.GO_TARGET_MAP[target_os]
-        normalized_arch = self._resolve_goarch_for_target(target_os, target_arch)
-        output_name = self._build_go_loader_output_name(target_os, normalized_arch, build_version)
+        output_name = self._build_go_loader_output_name(target_os, target_arch, build_version)
         output_path = os.path.join(client_copy, 'go-loader', output_name)
-        self._run_go_build(os.path.join(client_copy, 'go-loader'), output_path, go_target['GOOS'], normalized_arch)
+        self._run_go_build(os.path.join(client_copy, 'go-loader'), output_path, go_target['GOOS'], target_arch)
 
-        warnings = [
-            'The Go loader first reports environment information over HTTP, '
-            'then downloads the bundle and tries to launch ratclient.py with python.',
-            'If no usable Python runtime is available on the target machine, the loader will log the issue and exit.'
-        ]
         return {
             'file_path': output_path,
             'file_name': output_name,
-            'warnings': warnings,
-            'target_arch': normalized_arch,
+            'warnings': [self.BUILD_STATUS_MESSAGE],
+            'target_arch': target_arch,
             'target_os': target_os,
         }
 
@@ -366,7 +357,7 @@ const BundleReportAPIPath = "/api/agent/loader/report"
         return {
             'file_path': bundle_path,
             'file_name': bundle_name,
-            'warnings': ['Bundle mode outputs a source ZIP and does not use target OS or architecture selection.'],
+            'warnings': [self.BUILD_STATUS_MESSAGE],
             'target_arch': 'n/a',
             'target_os': 'bundle',
         }
@@ -422,23 +413,7 @@ const BundleReportAPIPath = "/api/agent/loader/report"
     def _normalize_goarch(self, arch: str) -> str:
         value = (arch or '').strip().lower()
         aliases = {'x86_64': 'amd64', 'amd64': 'amd64', 'arm64': 'arm64', 'aarch64': 'arm64', 'x64': 'amd64'}
-        return aliases.get(value, value or 'amd64')
-
-    def _resolve_goarch_for_target(self, target_os: str, target_arch: str = 'auto') -> str:
-        normalized_target_arch = self._normalize_goarch(target_arch)
-        if normalized_target_arch in {'amd64', 'arm64'} and target_arch != 'auto':
-            return normalized_target_arch
-
-        current_goarch = os.environ.get('GOARCH', '').strip() or platform.machine().lower()
-        normalized_current_arch = self._normalize_goarch(current_goarch)
-
-        if target_os in {'win', 'linux'}:
-            return 'amd64'
-        if target_os == 'mac':
-            if normalized_current_arch in {'amd64', 'arm64'}:
-                return normalized_current_arch
-            return 'arm64'
-        return 'amd64'
+        return aliases.get(value, value)
 
     def _describe_target(self, target_os: str) -> str:
         mapping = {'win': 'Windows', 'mac': 'macOS', 'linux': 'Linux', 'bundle': 'Bundle'}

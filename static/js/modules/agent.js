@@ -10,7 +10,7 @@ window.AppAgentModule = {
                 web_port: 8085,
                 target_os: 'mac',
                 builder: 'bundle',
-                target_arch: 'auto',
+                target_arch: 'arm64',
             }
         };
     },
@@ -18,7 +18,7 @@ window.AppAgentModule = {
     computed: {
         agentBuilderAlertText() {
             if (this.agentForm.builder === 'pyinstaller') {
-                return 'Standalone executable. Can only build for the same OS as the current server.';
+                return `Standalone executable. Can only build for the same OS as the current server (${this.describeAgentTargetOs(this.agentServerTargetOs)}).`;
             }
 
             if (this.agentForm.builder === 'bundle') {
@@ -29,7 +29,7 @@ window.AppAgentModule = {
                 return 'Small Go loader. Downloads the bundle ZIP and runs it with Python.';
             }
 
-            return 'Lightweight Go client. Supports basic shell commands.';
+            return 'Lightweight Go client for basic commands.';
         },
 
         isBundleBuilder() {
@@ -50,6 +50,24 @@ window.AppAgentModule = {
     },
 
     methods: {
+        describeAgentTargetOs(targetOs) {
+            const mapping = {
+                win: 'Windows',
+                mac: 'macOS',
+                linux: 'Linux',
+                bundle: 'Bundle',
+            };
+            return mapping[targetOs] || targetOs || 'macOS';
+        },
+
+        getDefaultAgentTargetArch(targetOs) {
+            const normalizedTargetOs = String(targetOs || '').trim().toLowerCase();
+
+            if (normalizedTargetOs === 'win') return 'amd64';
+            if (normalizedTargetOs === 'mac') return 'arm64';
+            return 'amd64';
+        },
+
         async loadAgentServerPlatform() {
             try {
                 const res = await fetch('/api/agent/platform');
@@ -73,40 +91,33 @@ window.AppAgentModule = {
 
         applyAgentBuilderRules() {
             if (this.agentForm.builder === 'bundle') {
-                this.agentForm.target_arch = 'auto';
                 this.agentForm.target_os = 'mac';
+                this.agentForm.target_arch = 'arm64';
                 return;
             }
 
             if (this.agentForm.builder === 'pyinstaller') {
                 this.agentForm.target_os = this.agentServerTargetOs || 'mac';
-                this.agentForm.target_arch = 'auto';
+                this.agentForm.target_arch = this.getDefaultAgentTargetArch(this.agentForm.target_os);
                 return;
             }
 
-            if (this.agentForm.target_os === 'win' && this.agentForm.target_arch === 'auto') {
-                this.agentForm.target_arch = 'amd64';
-                return;
-            }
-
-            if (this.agentForm.target_os === 'linux' && this.agentForm.target_arch === 'auto') {
-                this.agentForm.target_arch = 'amd64';
-            }
+            this.agentForm.target_arch = this.getDefaultAgentTargetArch(this.agentForm.target_os);
         },
 
         buildAgentPayload() {
             const payload = {
                 ...this.agentForm,
-server_web_scheme: window.location.protocol.replace(':', '') || 'http',
-server_web_host: this.agentForm.server_host,
+                server_web_scheme: window.location.protocol.replace(':', '') || 'http',
+                server_web_host: this.agentForm.server_host,
             };
 
             if (this.agentForm.builder === 'bundle') {
                 payload.target_os = 'bundle';
-                payload.target_arch = 'auto';
+                payload.target_arch = '';
             } else if (this.agentForm.builder === 'pyinstaller') {
                 payload.target_os = this.agentServerTargetOs || this.agentForm.target_os || 'mac';
-                payload.target_arch = 'auto';
+                payload.target_arch = '';
             }
 
             return payload;
@@ -143,6 +154,8 @@ server_web_host: this.agentForm.server_host,
                 const data = json.data;
                 const downloadUrl = data.download_url || `/api/agent/download/${encodeURIComponent(data.file_name)}`;
 
+                ElementPlus.ElMessage.success('Build completed. Downloading...');
+
                 const a = document.createElement('a');
                 a.href = downloadUrl;
                 a.download = data.file_name;
@@ -150,16 +163,7 @@ server_web_host: this.agentForm.server_host,
                 a.click();
                 document.body.removeChild(a);
 
-                if (Array.isArray(data.warnings) && data.warnings.length > 0) {
-                    data.warnings.forEach(msg => {
-                        if (msg) ElementPlus.ElMessage.warning(msg);
-                    });
-                }
-
-                const buildVersionText = data.build_version ? `, ${data.build_version}` : '';
-                ElementPlus.ElMessage.success(`Agent built: ${data.file_name} (${this.formatBytes(data.size)})${buildVersionText}`);
                 this.agentBuilderDialogVisible = false;
-
             } catch (e) {
                 ElementPlus.ElMessage.error(e.message || 'Build failed');
             } finally {
