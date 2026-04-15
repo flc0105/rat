@@ -114,12 +114,18 @@ window.AppProcessModule = {
             });
             if (this.refreshTimer) clearInterval(this.refreshTimer);
             this.refreshTimer = setInterval(() => {
-                if (this.processDialogVisible) {
-                    this.loadProcessesSilent().then(() => {
-                        this.loadAppsSilent();
-                    });
+                if (!this.processDialogVisible || this.processDetailDialogVisible || this.processDetailLoading) {
+                    return;
                 }
-            }, 10000); //10秒刷新一次
+
+                // 只刷新当前 tab，避免无意义地同时抢占前台查询槽。
+                if (this.processActiveTab === 'apps') {
+                    this.loadAppsSilent();
+                    return;
+                }
+
+                this.loadProcessesSilent();
+            }, 5000); // 5秒刷新一次
         },
 
         async loadProcesses() {
@@ -132,6 +138,7 @@ window.AppProcessModule = {
                     this.processes = json.data || [];
                 }
             } catch (e) {
+                ElementPlus.ElMessage.error('Error while fetching processes: ' + e.message);
                 console.error(e);
             } finally {
                 this.processesLoading = false;
@@ -147,6 +154,7 @@ window.AppProcessModule = {
                     this.processes = json.data || [];
                 }
             } catch (e) {
+                ElementPlus.ElMessage.error('Error while fetching processes: ' + e.message);
                 console.error(e);
             }
         },
@@ -162,6 +170,7 @@ window.AppProcessModule = {
                 }
             } catch (e) {
                 console.error(e);
+                ElementPlus.ElMessage.error('Error while fetching processes: ' + e.message);
             } finally {
                 this.appsLoading = false;
             }
@@ -177,11 +186,13 @@ window.AppProcessModule = {
                 }
             } catch (e) {
                 console.error(e);
+                ElementPlus.ElMessage.error('Error while fetching processes: ' + e.message);
             }
         },
 
         async openProcessDetail(pid) {
-            if (!this.selectedId || !pid) return;
+            // if (!this.selectedId || !pid) return;
+            if (!this.selectedId) return;
             this.processDetailDialogVisible = true;
             this.processDetailLoading = true;
             this.processDetail = null;
@@ -220,6 +231,7 @@ window.AppProcessModule = {
                 if (res.ok && json.code === 0) {
                     ElementPlus.ElMessage.success(`Process ${pid} killed`);
                     this.loadProcesses();
+                    this.loadAppsSilent();
                 } else {
                     throw new Error(json.message);
                 }
@@ -240,6 +252,7 @@ window.AppProcessModule = {
                 if (res.ok && json.code === 0) {
                     ElementPlus.ElMessage.success(`${name} force quit`);
                     this.loadApps();
+                    this.loadProcessesSilent();
                 } else {
                     throw new Error(json.message);
                 }

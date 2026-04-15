@@ -13,6 +13,7 @@ from server.application.tasks.task_runner import WebTaskRunner
 from server.application.tasks.task_service import WebTaskService
 from server.application.tasks.task_store import WebTaskStore
 from server.application.web.agent_api import WebAgentApi
+from server.application.web.process_snapshot_cache import ProcessSnapshotCache
 from server.application.web.script_api import WebScriptApi
 from server.application.web.artifact_api import WebArtifactApi
 from server.application.web.command_api import WebCommandApi
@@ -142,9 +143,17 @@ class ServerApplicationAssembly:
             agent_builder=self.agent_builder,
         )
 
+        # self.system_api = WebSystemInspectionApi(
+        #     server=self.server,
+        #     remote_execution_service=self.remote_execution_service,
+        # )
+
+        self.process_snapshot_cache = ProcessSnapshotCache()
+
         self.system_api = WebSystemInspectionApi(
             server=self.server,
             remote_execution_service=self.remote_execution_service,
+            process_snapshot_cache=self.process_snapshot_cache,
         )
 
         self._wire_cross_dependencies()
