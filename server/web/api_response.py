@@ -46,7 +46,15 @@ class WebApiResponder:
         except Exception as e:
             logger.error(f'Web API error: {e}', exc_info=True)
             traceback.print_exc()
-            return self.fail(e, default_error_status)
+
+            # Web 端不要直接暴露 CLI/底层选择错误文案
+            message = str(e)
+            http_status = default_error_status
+            if message == 'Not a valid selection':
+                message = 'Client is offline or not found'
+                http_status = 404
+
+            return self.fail(message, http_status)
 
     def file_endpoint(self, func):
         try:

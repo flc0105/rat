@@ -98,7 +98,7 @@ window.AppFilesModule = {
 
                 ElementPlus.ElMessage.success(`Upload started: ${file.name}`);
             } catch (e) {
-                this.appendOutput(this.selectedId, `[上传失败] ${e.message || 'unknown error'}`, 'error');
+                this.appendOutput(this.selectedId, `[Upload failed] ${e.message || 'unknown error'}`, 'error');
                 ElementPlus.ElMessage.error(e.message || 'Upload failed');
             } finally {
                 this.remoteUploadLoading = false;

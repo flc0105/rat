@@ -127,7 +127,7 @@ window.AppTerminalModule = {
         inferLineKind(text) {
             const value = String(text ?? '');
             if (value.startsWith('> ')) return 'command';
-            if (value.startsWith('[发送失败]') || value.startsWith('[上传失败]')) return 'error';
+            // if (value.startsWith('[发送失败]') || value.startsWith('[上传失败]')) return 'error';
             if (value.startsWith('[异步消息]') || value.startsWith('[Background]')) return 'info';
             if (value.startsWith('[命令结束]') || value.startsWith('[Command finished]')) {
                 return /成功|Success/i.test(value) ? 'success' : 'error';

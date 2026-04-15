@@ -48,8 +48,9 @@ window.AppCommandsModule = {
                 this.commandCandidatesLoadedFor = '';
                 await this.loadCommandCandidates(this.selectedId);
             } catch (e) {
-                this.appendOutput(this.selectedId, '[发送失败] ' + (e.message || 'unknown error'), 'error');
+                this.appendOutput(this.selectedId, '[Command failed] ' + (e.message || 'unknown error'), 'error');
                 ElementPlus.ElMessage.error(e.message || 'Command failed');
+                this.commandText = '';
             } finally {
                 this.sending = false;
             }
