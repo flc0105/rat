@@ -36,11 +36,18 @@
         <div class="banner-action-links">
             <span class="tool-separator" style="margin-right: 12px; margin-left: 6px"></span>
 
+            <div class="banner-action-links">
+                    <button class="banner-inline-action"
+                type="button"
+                @click="openAgentBuilderDialog">
+            Build Agent
+        </button>
             <button class="banner-inline-action"
                     type="button"
                     onclick="window.RatAuth && window.RatAuth.logout()">
                 Sign out
             </button>
+            </div>
         </div>
     </div>
 </div>
@@ -56,11 +63,11 @@
 <!--&lt;!&ndash;    </div>&ndash;&gt;-->
 
 <!--    <div class="banner-action-links">-->
-<!--&lt;!&ndash;        <button class="banner-inline-action"&ndash;&gt;-->
-<!--&lt;!&ndash;                type="button"&ndash;&gt;-->
-<!--&lt;!&ndash;                @click="openAgentBuilderDialog">&ndash;&gt;-->
-<!--&lt;!&ndash;            Build Agent&ndash;&gt;-->
-<!--&lt;!&ndash;        </button>&ndash;&gt;-->
+<!--        <button class="banner-inline-action"-->
+<!--                type="button"-->
+<!--                @click="openAgentBuilderDialog">-->
+<!--            Build Agent-->
+<!--        </button>-->
 
 <!--        <button class="banner-inline-action"-->
 <!--                type="button"-->
