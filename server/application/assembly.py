@@ -1,4 +1,5 @@
 from server.application.agent.agent_builder import AgentBuilder
+from server.application.agent.agent_output_registry import AgentOutputRegistry
 from server.application.artifact.artifact_service import WebArtifactService
 from server.application.artifact.remote_file_service import WebRemoteFileService
 from server.application.command.command_executor_factory import CommandExecutorFactory
@@ -101,6 +102,7 @@ class ServerApplicationAssembly:
 
         self.pinned_path_store = PinnedPathStore()
         self.agent_builder = AgentBuilder()
+        self.agent_output_registry = AgentOutputRegistry(self.agent_builder.output_dir)
 
         # ------------------ web sub facades / apis ------------------ #
         self.connection_api = WebConnectionApi(
@@ -141,6 +143,7 @@ class ServerApplicationAssembly:
 
         self.agent_api = WebAgentApi(
             agent_builder=self.agent_builder,
+            agent_output_registry=self.agent_output_registry,
         )
 
         # self.system_api = WebSystemInspectionApi(

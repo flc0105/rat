@@ -29,8 +29,8 @@
             </div>
             <div class="banner-right">
 
-<!--                <span class="banner-meta-label">Known Nodes</span>-->
-<!--                <span class="banner-meta-value">{{ connections.length }}</span>-->
+                <span class="banner-meta-label">Known Nodes</span>
+                <span class="banner-meta-value">{{ connections.length }}</span>
 <div class="banner-actions">
 <!--    <div class="banner-meta banner-meta-inline">-->
 <!--        <span class="banner-meta-label">Known Nodes</span>-->
@@ -38,11 +38,11 @@
 <!--    </div>-->
 
     <div class="banner-action-links">
-        <button class="banner-inline-action"
-                type="button"
-                @click="openAgentBuilderDialog">
-            Build Agent
-        </button>
+<!--        <button class="banner-inline-action"-->
+<!--                type="button"-->
+<!--                @click="openAgentBuilderDialog">-->
+<!--            Build Agent-->
+<!--        </button>-->
 
         <button class="banner-inline-action"
                 type="button"
@@ -157,6 +157,10 @@
                                         </el-button>
                                         <el-button size="small" class="tool-btn" @click="openScriptLibraryDialog">
                                             Scripts
+                                        </el-button>
+
+                                                        <el-button size="small" class="tool-btn" @click="openAgentOutputsDialog">
+                                            Agents
                                         </el-button>
 
 <!--                                        <el-dropdown trigger="click" @command="handleResourcesCommand">-->
@@ -2188,6 +2192,80 @@
 
         <el-empty v-else description="No image info available"></el-empty>
     </div>
+</el-dialog>
+
+    <el-dialog
+        v-model="agentOutputsDialogVisible"
+        title="Agent Outputs"
+        width="1180px"
+        top="5vh"
+        class="fixed-dialog"
+>
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+        <div style="font-size:13px; color:#606266;">
+            Generated files under <code>runtime/agent_output</code>
+        </div>
+        <div style="display:flex; gap:8px;">
+            <el-button size="small" @click="openAgentBuilderDialog">Build Agent</el-button>
+            <el-button size="small" @click="loadAgentOutputs" :loading="agentOutputsLoading">Refresh</el-button>
+        </div>
+    </div>
+
+    <el-table :data="agentOutputs" v-loading="agentOutputsLoading" stripe border style="width: 100%;" height="65vh">
+
+
+
+            <el-table-column prop="build_version" label="Version" min-width="260" show-overflow-tooltip></el-table-column>
+
+    <el-table-column prop="builder" label="Builder" min-width="120" show-overflow-tooltip></el-table-column>
+    <el-table-column label="Build Time" min-width="170">
+        <template #default="{ row }">{{ formatDateTimeStandard(row.build_time) }}</template>
+    </el-table-column>
+
+    <el-table-column prop="file_name" label="File Name" min-width="260" show-overflow-tooltip></el-table-column>
+
+
+
+    <el-table-column label="OS" min-width="90">
+        <template #default="{ row }">{{ describeAgentTargetOs(row.target_os) }}</template>
+    </el-table-column>
+
+    <el-table-column prop="target_arch" label="Arch" min-width="90"></el-table-column>
+
+    <el-table-column label="Socket" min-width="160">
+        <template #default="{ row }">{{ formatAgentListenerText(row) }}</template>
+    </el-table-column>
+
+    <el-table-column label="Web" min-width="200">
+        <template #default="{ row }">{{ formatAgentWebListenerText(row) }}</template>
+    </el-table-column>
+
+            <el-table-column label="Source" min-width="150">
+        <template #default="{ row }">{{ formatAgentSourceText(row.source) }}</template>
+    </el-table-column>
+
+    <el-table-column label="Size" min-width="110">
+        <template #default="{ row }">{{ formatBytes(row.size) }}</template>
+    </el-table-column>
+
+    <el-table-column label="Actions" width="170" fixed="right">
+        <template #default="{ row }">
+            <a class="table-action-link" :href="row.download_url" target="_blank">Download</a>
+            <a class="table-action-link danger" style="margin-left: 10px;"
+               @click.prevent="deleteAgentOutput(row)">
+                {{ isAgentOutputDeleting(row.file_name) ? 'Deleting...' : 'Delete' }}
+            </a>
+        </template>
+    </el-table-column>
+</el-table>
+
+    <div v-if="!agentOutputs.length && !agentOutputsLoading" class="empty-state">
+        No agent outputs
+    </div>
+
+    <template #footer>
+        <el-button @click="agentOutputsDialogVisible = false">Close</el-button>
+    </template>
 </el-dialog>
 </div>
 

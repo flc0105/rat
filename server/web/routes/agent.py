@@ -23,9 +23,10 @@ def create_agent_blueprint(server_instance):
             web_port = payload.get('web_port')
             target_os = (payload.get('target_os') or 'mac').strip()
             builder = (payload.get('builder') or 'pyinstaller').strip()
-            target_arch = (payload.get('target_arch') or 'auto').strip()
+            target_arch = (payload.get('target_arch') or '').strip()
             server_web_scheme = (payload.get('server_web_scheme') or 'http').strip() or 'http'
             server_web_host = (payload.get('server_web_host') or server_host).strip() or server_host
+            source = (payload.get('source') or 'web_manual_build').strip() or 'web_manual_build'
 
             if not server_host:
                 raise ValueError('server_host is required')
@@ -53,11 +54,26 @@ def create_agent_blueprint(server_instance):
                 target_arch,
                 server_web_scheme,
                 server_web_host,
+                source,
             )
             result['download_url'] = f'/api/agent/download/{result["file_name"]}'
             return result
 
         return responder.json_endpoint(_execute, default_error_status=500)
+
+    @blueprint.get('/api/agent/outputs')
+    def list_agent_outputs():
+        return responder.json_endpoint(
+            lambda: agent_api.list_agent_outputs(),
+            default_error_status=500,
+        )
+
+    @blueprint.delete('/api/agent/outputs/<filename>')
+    def delete_agent_output(filename):
+        return responder.json_endpoint(
+            lambda: agent_api.delete_agent_output(filename),
+            default_error_status=500,
+        )
 
     @blueprint.get('/api/agent/download/<filename>')
     @allow_anonymous

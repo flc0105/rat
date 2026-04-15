@@ -11,12 +11,14 @@ class WebAgentApi:
     职责：
     - 提供 Agent build 能力
     - 提供构建产物定位能力
+    - 提供构建产物列表/删除能力
     - 提供构建临时目录清理能力
     - 提供 Go loader 上报落盘能力
     """
 
-    def __init__(self, agent_builder):
+    def __init__(self, agent_builder, agent_output_registry):
         self.agent_builder = agent_builder
+        self.agent_output_registry = agent_output_registry
         self.logs_dir = os.path.abspath(os.path.join('runtime', 'logs'))
         os.makedirs(self.logs_dir, exist_ok=True)
 
@@ -27,11 +29,12 @@ class WebAgentApi:
         web_port: int = None,
         target_os: str = 'mac',
         builder: str = 'pyinstaller',
-        target_arch: str = 'auto',
+        target_arch: str = '',
         server_web_scheme: str = 'http',
         server_web_host: str = '',
+        source: str = 'web_manual_build',
     ):
-        return self.agent_builder.build_agent(
+        build_result = self.agent_builder.build_agent(
             server_host=server_host,
             server_port=server_port,
             web_port=web_port,
@@ -41,12 +44,43 @@ class WebAgentApi:
             server_web_scheme=server_web_scheme,
             server_web_host=server_web_host,
         )
+        record = self.agent_output_registry.register_output(
+            build_result,
+            source=source,
+            request_payload={
+                'server_host': server_host,
+                'server_port': server_port,
+                'web_port': web_port,
+                'target_os': target_os,
+                'builder': builder,
+                'target_arch': target_arch,
+                'server_web_scheme': server_web_scheme,
+                'server_web_host': server_web_host,
+                'source': source,
+            },
+        )
+        record['work_dir'] = str(build_result.get('work_dir') or '').strip()
+        record['warnings'] = build_result.get('warnings') or []
+        return record
 
     def get_built_agent_file_path(self, filename: str):
-        file_path = os.path.join(self.agent_builder.output_dir, filename)
+        file_path = os.path.join(self.agent_builder.output_dir, os.path.basename(filename))
         if not os.path.isfile(file_path):
             raise FileNotFoundError('File not found')
         return file_path
+
+    def list_agent_outputs(self):
+        results = []
+        for item in self.agent_output_registry.list_outputs():
+            copied = dict(item)
+            file_name = str(copied.get('file_name') or '').strip()
+            copied['download_url'] = f'/api/agent/download/{file_name}' if file_name else ''
+            copied['delete_url'] = f'/api/agent/outputs/{file_name}' if file_name else ''
+            results.append(copied)
+        return results
+
+    def delete_agent_output(self, filename: str):
+        return self.agent_output_registry.delete_output(filename)
 
     def get_server_platform(self):
         system = platform.system()
