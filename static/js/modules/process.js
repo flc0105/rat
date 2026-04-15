@@ -108,6 +108,10 @@ window.AppProcessModule = {
                 return;
             }
             this.processDialogVisible = true;
+            this.processes = [];
+            this.apps = [];
+            this.processDetail = null;
+            this.processFilterText = '';
             // 串行加载
             this.loadProcesses().then(() => {
                 this.loadApps();
@@ -134,10 +138,17 @@ window.AppProcessModule = {
             try {
                 const res = await fetch(`/api/connections/${this.selectedId}/processes`);
                 const json = await res.json();
+
                 if (res.ok && json.code === 0) {
                     this.processes = json.data || [];
+                    return;
                 }
+                this.processes = [];
+                ElementPlus.ElMessage.error(
+                    json?.message || `Error while fetching processes (HTTP ${res.status})`
+                );
             } catch (e) {
+                this.processes = [];
                 ElementPlus.ElMessage.error('Error while fetching processes: ' + e.message);
                 console.error(e);
             } finally {
@@ -167,9 +178,15 @@ window.AppProcessModule = {
                 const json = await res.json();
                 if (res.ok && json.code === 0) {
                     this.apps = json.data || [];
+                    return;
                 }
+                this.apps = [];
+                ElementPlus.ElMessage.error(
+                    json?.message || `Error while fetching processes (HTTP ${res.status})`
+                );
             } catch (e) {
                 console.error(e);
+                this.apps = [];
                 ElementPlus.ElMessage.error('Error while fetching processes: ' + e.message);
             } finally {
                 this.appsLoading = false;
