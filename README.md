@@ -1046,6 +1046,56 @@ The next major milestones are mostly about **consolidation**:
 
 ---
 
+## Limitations / Known Gaps
+
+The following limitations come from the current execution model, transport split, and agent/runtime boundaries. Several of them are structural trade-offs rather than short-term bugs, so they may remain unresolved for a long time.
+
+1. **A single client effectively exposes only one active foreground slot at a time**
+   - Foreground command execution, web-submitted tasks, uploads, remote file operations, process inspection, and similar interactive actions all contend for the same active execution slot on one client.
+   - As a result, the project is currently optimized for one operator / one active interaction flow per client, not true concurrent multi-operator control on the same session.
+   - When another foreground action is already running, later requests will typically fail with a busy-state response rather than being queued and multiplexed.
+   - If parallel work against the same target is required, the practical workaround is to launch another connection / agent instance instead of sharing the same one.
+
+2. **Script-style streaming execution does not have fully reliable cancellation semantics**
+   - Cancellation is best-effort, not a hard guarantee, for script-oriented streaming paths.
+   - The runtime can propagate cancel requests and can terminate some subprocess-backed execution paths, but it cannot reliably unwind work that is already executing inside the current interpreter or already inside user script logic.
+   - In other words, the UI/server can request cancellation, but “stop immediately and cleanly at any point” is not something the current script execution model can guarantee.
+
+3. **There is still no single lightweight, cross-platform, feature-complete agent form factor**
+   - The build pipeline is currently split across different delivery styles (for example, Python bundle / PyInstaller / Go-related build paths), which reflects a trade-off rather than a solved packaging story.
+   - Heavier builds provide broader feature coverage, while lighter paths are better for footprint but do not yet represent a clean “small binary with full feature parity everywhere” solution.
+   - A truly lightweight executable agent that is also cross-platform and feature-complete is still missing.
+
+4. **Direct server-local operations are still not a first-class surface**
+   - Most operational APIs and UI flows are connection-scoped and target remote clients.
+   - The project still lacks an equally complete server-local operation plane for things like direct server shell access, general server-side file management, and similar local administration workflows.
+   - In practice, the server mainly acts as coordinator, storage layer, command router, and web/API host rather than a full local administration console.
+
+5. **Command output and message shapes are not yet normalized across the entire system**
+   - Different command families currently return different result styles: human-readable text blocks, table-like text, raw JSON text, structured API payloads, SSE chunks, artifact/file messages, and command-specific ad hoc formats.
+   - Some commands expose a JSON mode, while others are still primarily text-oriented.
+   - This makes downstream parsing, generic UI rendering, and third-party automation more brittle than they should be.
+
+6. **Some features rely on third-party Python packages that are only imported at execution time**
+   - A number of commands lazily import optional dependencies only when the relevant command is executed.
+   - This keeps startup and baseline deployment simpler, but missing dependencies only fail at runtime, not at boot time.
+   - In practice, operators may still hit runtime import failures for dependency-backed features such as process inspection, screenshot/UI automation, networking helpers, platform-specific integrations, image handling, or package inspection.
+   - A more explicit dependency bundling / on-demand dependency delivery model may be added later, but it is not solved yet.
+
+7. **There is no strong, stable machine identity layer yet**
+   - Several parts of the system still correlate devices using weak identifiers such as hostname, and the recent-device cache is merged primarily on hostname.
+   - History, artifacts, and job-related records also carry session/client identifiers that are useful operationally but are not durable enough to behave like a real machine identity.
+   - This can cause collisions or weak deduplication when multiple machines share similar names, or when reconnects create fresh session/client identifiers.
+   - A persistent machine-level identifier has not been fully introduced yet.
+
+8. **Shell execution is not PTY-backed and does not support real interactive stdin**
+   - Shell-like commands are launched as one-shot subprocess executions rather than as a true interactive terminal session with a PTY.
+   - Commands that require live stdin interaction, password prompts, full-screen TUI behavior, or step-by-step confirmation flows are therefore not handled well.
+   - This affects cases such as interactive privilege elevation, confirmation-driven shell programs, and terminal UI applications.
+   - The same limitation also applies to built-in command flows: the current command architecture is fundamentally request/stream/result oriented, not a multi-stage prompt/response conversation model.
+
+---
+
 ## License / Usage Note
 
 Before publishing this repository, add the license and usage policy that match your intended deployment model.
