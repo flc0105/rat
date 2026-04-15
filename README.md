@@ -14,6 +14,7 @@ It combines an interactive shell, remote file operations, script execution, back
 - [Overview](#overview)
 - [Core Capabilities](#core-capabilities)
 - [Architecture](#architecture)
+- [Protocol and Execution Model](#protocol-and-execution-model)
 - [Repository Layout](#repository-layout)
 - [Web UI Modules](#web-ui-modules)
 - [Remote Operations](#remote-operations)
@@ -34,6 +35,7 @@ Remote Control Hub is a server/client project for operating remote endpoints fro
 At a high level, it provides:
 
 - A **web console** for shell-like command execution and live output streaming
+- A **server CLI** path that can use the same core session/command infrastructure without the browser
 - A **device list** with online/offline status
 - A **remote file browser** with common file operations
 - **Artifacts** for previews and downloads
@@ -46,6 +48,19 @@ At a high level, it provides:
 
 The current implementation is intentionally lightweight and file-based. It does not require a database and stores runtime state under `runtime/`.
 
+The project supports both **server CLI** and **server web UI** entrypoints:
+
+- `ratserver.py` starts the socket server and interactive CLI loop
+- `run_web.py` starts the same server core plus the Flask web app
+
+A few implementation-level characteristics are important when reading the rest of this README:
+
+- **Command/control messages** use a custom socket protocol
+- **File payload transfer** uses HTTP rather than the command socket
+- **Heartbeat/RTT** are first-class connection metrics and are exposed to the UI and server built-ins
+- **Watchdog support** is split into a remote control watchdog and a local self-healing watchdog
+- The project supports both lightweight **shell-like commands** and structured **`acmd` commands**
+
 ---
 
 ## Core Capabilities
@@ -56,6 +71,7 @@ The current implementation is intentionally lightweight and file-based. It does 
 - Displays connection metadata such as hostname, IP, platform, integrity, RTT, working directory, and client ID
 - Supports recent-device caching so previously seen hosts remain visible as offline entries after refresh
 - Uses hostname-based merging for the recent-device cache
+- Tracks handshake-reported client metadata such as Python version, process ID, launch command, execution mode, transfer mode, build version, and watchdog flags
 
 ### 2. Interactive command execution
 
@@ -63,6 +79,9 @@ The current implementation is intentionally lightweight and file-based. It does 
 - Streams command output back to the UI
 - Supports command candidates / autocomplete sourced from both server-side built-ins and client manifests
 - Includes task cancellation for active web-submitted commands
+- Supports both **one-shot return** commands and **streaming** commands
+- Supports ordinary **shell-like commands** and structured **`acmd`** execution
+- Supports per-command execution context with timeout and cancel state
 
 ### 3. Remote file browser
 
@@ -75,7 +94,9 @@ The current implementation is intentionally lightweight and file-based. It does 
 - Copy / cut / paste remote paths
 - Preview and save remote file content
 - Support hidden-file visibility toggle
+- Support directory pagination
 - Manage pinned quick-jump paths
+- Provide breadcrumb navigation in the UI
 
 ### 4. Artifact center
 
@@ -85,6 +106,7 @@ The current implementation is intentionally lightweight and file-based. It does 
 - Preview supported artifact content
 - Edit artifact content server-side
 - Clear artifacts by category
+- Preserve file/artifact references so command history and job views can trace related files later
 
 ### 5. Process and app inspection
 
@@ -101,6 +123,7 @@ The current implementation is intentionally lightweight and file-based. It does 
 - Supports script metadata via `SCRIPT_METADATA`
 - Supports structured script execution via `run_script` while keeping legacy command-style execution paths intact
 - Supports script editing, upload, creation, and deletion from the UI
+- Includes platform-specific helper scripts, including some basic persistence / privilege-related administrative helpers in the built-in library
 
 ### 7. Background jobs
 
@@ -109,8 +132,9 @@ The current implementation is intentionally lightweight and file-based. It does 
 - Supports parameterized job start requests
 - Supports job start/stop lifecycle from the web UI
 - Supports job result reporting back to the server
+- Preserves job-related uploaded files/artifacts for later inspection and download
 
-### 8. Agent generation
+### 8. Agent generation and update workflow
 
 - Build downloadable client artifacts from the web panel
 - Includes multiple build modes such as:
@@ -120,6 +144,7 @@ The current implementation is intentionally lightweight and file-based. It does 
   - **Go (Loader)**
 - Injects build/version metadata into generated outputs
 - Exposes build and download APIs
+- Supports an `update` workflow on the Python client that can request a fresh **bundle**, download it automatically, extract it, and launch the new client bundle
 
 ### 9. Authentication and access control
 
@@ -146,23 +171,28 @@ Responsibilities include:
 - agent build pipeline
 - recent-device cache
 - web auth
+- heartbeat dispatch and RTT tracking
+- server built-ins such as `history`, `rtt`, `alias`, `exec`, `run_script`, and watchdog control forwarding
 
 ### `client/`
 The Python client runtime that connects back to the server and executes commands/jobs/scripts.
 
 Responsibilities include:
 - transport and session initialization
+- client handshake and manifest reporting
 - command execution
 - background job execution
 - upload and HTTP transfer helpers
 - platform-specific command support
 - watchdog behavior
+- heartbeat acknowledgement and connection metadata refresh
 
 ### `core/`
 Shared protocol and utility code used by both server and client.
 
 Responsibilities include:
 - protocol helpers
+- socket framing / message type definitions
 - logging utilities
 - shared helpers
 
@@ -178,6 +208,235 @@ Responsibilities include:
 - process dialogs
 - script/job management dialogs
 - login page and auth bootstrap
+- terminal JSON table/flat rendering and autocomplete UX
+
+---
+
+## Protocol and Execution Model
+
+### Socket protocol vs HTTP transfer
+
+The project intentionally separates **command/control transport** from **file payload transfer**:
+
+- **Socket protocol** is used for command/control/result messages
+- **HTTP protocol** is used for file upload/download and artifact transfer
+
+The socket layer uses JSON messages over a length-prefixed framing protocol (`RATSocket`). Current message families include:
+
+- `command`
+- `acmd`
+- `script`
+- `result`
+- `cancel` / `cancel_ack`
+- `heartbeat` / `heartbeat_ack`
+
+This split keeps the command channel lightweight while letting file flows use regular HTTP semantics.
+
+Typical mixed flows include:
+
+- a socket command triggering a **screenshot** that is then uploaded as an HTTP artifact
+- remote file browser actions using socket commands to orchestrate work, while the actual file bytes move over HTTP
+- background jobs uploading generated files while still reporting job state over the normal control channel
+
+### Client handshake
+
+After the TCP connection is established, the client sends an initial `info` handshake payload.
+
+That handshake currently reports runtime details such as:
+
+- client ID
+- platform / OS version / hostname
+- integrity level
+- current working directory
+- command manifest
+- system paths
+- Python version
+- process ID / process name / username
+- launch command
+- current HTTP transfer mode
+- current Python execution mode
+- remote/local watchdog enabled flags
+- client build version
+
+This allows the server UI/CLI to immediately display execution characteristics instead of treating every client as a generic endpoint.
+
+### Heartbeat and RTT
+
+The server periodically sends a `heartbeat` message to each session. The client responds with `heartbeat_ack`, echoing the heartbeat ID and server timestamp while also attaching client-side timing/context fields.
+
+The server uses that round-trip acknowledgement to maintain:
+
+- `last_seen_at`
+- `last_heartbeat_sent_at`
+- `last_heartbeat_ack_at`
+- `last_rtt_ms`
+
+RTT is therefore not a guessed UI field; it is computed from the heartbeat exchange and exposed both in the UI and through the server-side `rtt` built-in command.
+
+### Watchdog model
+
+Watchdog behavior is split into two different responsibilities.
+
+#### Remote HTTP watchdog
+
+The **remote watchdog** is for **out-of-band remote control**.
+
+It runs in the shared watchdog worker and polls a dedicated HTTP endpoint:
+
+- server side queues control actions per client
+- client watchdog polls independently of the main socket command stream
+- currently supported remote control actions are `kill`, `spawn`, and `reset`
+
+This means the server can still deliver watchdog control commands even when the normal interactive command channel is blocked, busy, or no longer trusted to be the only control path.
+
+The web UI exposes these actions, and the server also provides built-ins such as:
+
+- `force_kill`
+- `force_reset`
+- `force_spawn`
+
+#### Local watchdog
+
+The **local watchdog** is for **local self-healing / parent liveness monitoring**.
+
+The main client process periodically feeds heartbeat state to a local heartbeat file, and the watchdog worker monitors that file. If the local heartbeat is stale beyond the configured timeout, the watchdog can restart the parent client process.
+
+In short:
+
+- **remote watchdog** = independent remote control channel (`kill` / `spawn` / `reset`)
+- **local watchdog** = local crash/hang recovery for the client process itself
+
+A `watchdog` client command also returns a JSON status payload describing the runtime watchdog state.
+
+### Shell-like commands vs `acmd`
+
+The project supports **two command styles**.
+
+#### 1. Shell-like commands
+
+Shell-like commands are lightweight and intentionally simple:
+
+- command name is the first token
+- the remaining text is treated as a single raw argument string
+- if the command name maps to an exported client method, that method is invoked
+- otherwise execution falls back to the generic `shell(...)` handler
+
+This is the familiar path for commands such as:
+
+- `cd ...`
+- `spawn ...`
+- `read ...`
+- `pyexec_collect ...`
+- `pyexec_stream ...`
+- many file/process/platform helpers
+
+This path is reflection-driven: exported client command methods are discovered from the command object and surfaced through the client manifest.
+
+#### 2. Structured `acmd`
+
+`acmd` is the structured command path:
+
+```text
+acmd <command> [--key value] [--key=value] [--flag] [-- positional...]
+```
+
+This path is backed by an explicit **command registry** and option specification layer rather than pure reflection.
+
+It is useful when a command needs:
+
+- clearer argument schemas
+- typed options
+- validation
+- positional + named option mixing
+- better manifest/help generation
+
+So the project currently supports both:
+
+- a **reflection-style command system** for ordinary exported methods
+- a **command registry** system for structured `acmd` commands
+
+### Structured payloads inside shell-like commands
+
+A few web-driven operations still use shell-like commands as the transport surface, but pass structured data encoded as a JSON/base64 payload (for example `__json__:<base64url-json>` style arguments).
+
+This is used in places where the outer command is still convenient as a normal command string, but the payload is naturally structured, such as:
+
+- remote file browser operations
+- web-triggered file uploads/downloads
+- script/job run requests that need parameter objects
+
+That lets the project reuse the shell-like submission UX without losing structured payload expressiveness.
+
+### Command context, timeout, and cancellation
+
+Each command execution gets a command context that can carry:
+
+- timeout
+- cancel event
+- cleanup hooks
+- cancel policy metadata
+
+This means timeout/cancel is tracked per execution rather than globally.
+
+Important nuance: **cancellation is capability-dependent, not universal**.
+
+Examples:
+
+- normal streaming subprocess commands can be cancelled
+- Python execution in `inproc` mode cannot be force-killed like a subprocess
+- HTTP transfer in `legacy` mode does not support cancellation
+- HTTP transfer in `cancelable` mode does support timeout/cancel-aware streaming
+
+So the accurate mental model is **best-effort cancellation with explicit per-command/per-strategy policy**, not “everything is always interruptible”.
+
+### Python execution strategy
+
+Python code execution supports two runtime strategies:
+
+- **`inproc`** — executes inside the current interpreter with `exec()`
+- **`subprocess_pipe`** — starts a child Python process and communicates through stdin/stdout pipes
+
+Trade-offs:
+
+- `inproc` is lightweight and direct, but cancellation/isolation are limited
+- `subprocess_pipe` is heavier, but gives better cancellation/timeout/process control behavior
+
+The current runtime configuration selects the active default mode (`PYTHON_EXECUTION_MODE`), and the client handshake reports that mode back to the server.
+
+### Python collect vs stream, and script execution semantics
+
+The project distinguishes **one-shot collected Python execution** from **streaming Python execution**.
+
+Current command-level behavior:
+
+- `pyexec_collect` = execute Python code and return collected output
+- `pyexec_stream` = execute Python code with true streaming output
+- `script` / `exec <script>` / `run_script` currently execute through the script path and **do not provide true streaming output**
+
+So the important limitation is:
+
+- **streaming Python exec is currently supported through command execution (`pyexec_stream`)**
+- **server-side script execution currently behaves as collected output rather than true streaming**
+
+This is especially important when choosing between quick command execution and reusable script-library execution.
+
+### HTTP transfer modes
+
+HTTP transfer currently supports two strategies:
+
+#### `legacy`
+
+- keeps the simpler `requests files=...` upload / `iter_content()` download behavior
+- is compatible with the older implementation path
+- does **not** support cancellation during upload/download
+
+#### `cancelable`
+
+- uses an interruptible streaming implementation
+- supports timeout-aware and cancellation-aware upload/download
+- integrates with command context and cleanup handlers
+
+The active transfer mode is reported by the client handshake and affects what the server/UI can truthfully claim about cancel support.
 
 ---
 
@@ -271,6 +530,40 @@ The front end is organized into modular JS files under `static/js/modules/`.
 - **Agent Builder dialog** — generate agent outputs with different build modes
 - **Login page** — session login UI with loading state and server-side auth
 
+### Terminal JSON rendering
+
+The terminal is not limited to raw text output.
+
+When a command output group contains a complete JSON payload, the UI can automatically parse it and render it as:
+
+- a **table** when the payload is an array of objects with a shared shape
+- a **flat key/value view** when the payload is a plain object
+- a **raw JSON viewer** when table/flat rendering is not a good fit
+
+This is especially useful for commands like `watchdog`, process/file metadata views, and other structured results.
+
+### Autocomplete / candidates
+
+Autocomplete currently merges multiple candidate sources, including:
+
+- server built-in commands
+- common ops command suggestions from the front end
+- client command manifest entries
+- structured `acmd` manifest entries
+- script library execution entries such as `exec <script>`
+- alias names
+- quick-jump entries
+- recent command history
+- quick-history replay shortcuts such as `!<index>`
+
+In practice this means the command box can surface:
+
+- **server commands**
+- **common ops commands**
+- **client commands**
+- **exec script list entries**
+- **recent commands**
+
 ### Front-end module list
 
 Current JS modules include:
@@ -300,19 +593,52 @@ Current JS modules include:
 
 Commands are submitted from the web UI to the selected client. The server tracks active web tasks and streams responses via SSE.
 
+The same backend command pipeline is also usable from the server CLI, so the project is not web-only.
+
+The current command surface includes:
+
+- shell-like commands
+- `acmd` structured commands
+- server built-ins
+- alias expansion
+- history replay shortcuts
+- script execution and job control flows
+
 ### File transfer
 
 The project supports both direct command execution and HTTP-assisted file transfer flows.
 
 Capabilities include:
+
 - web-to-client upload
 - client-to-server upload
 - zip packaging for batch download
 - preview/edit workflows for server-side stored artifacts
+- remote browser download/upload helpers that preserve command/job/history association metadata
+
+A useful way to think about the design is:
+
+- **command routing** happens over the socket protocol
+- **file bytes** move over HTTP
+
+That split is reused in many places. For example, commands such as screenshot capture, remote-file downloads, and job-generated outputs can all end up as uploaded/downloadable artifact files.
+
+### File browser UX details
+
+The remote file browser supports more than simple listing:
+
+- pin / quick-jump path management
+- breadcrumb navigation
+- copy / cut / paste of remote paths
+- hidden-file toggle
+- pagination of directory listings
+- preview/edit/save workflows
+- single-file download and multi-path zip download
 
 ### Process control
 
 From the web UI you can:
+
 - list processes
 - inspect process details
 - kill individual processes
@@ -321,10 +647,13 @@ From the web UI you can:
 ### Connection control
 
 The UI includes high-level control actions such as:
+
 - force kill
 - force reset
 - force spawn
 - disconnect
+
+The `force_*` controls are forwarded through the remote watchdog HTTP control path rather than being simple shell aliases.
 
 ---
 
@@ -335,13 +664,16 @@ The UI includes high-level control actions such as:
 Background jobs are long-running tasks managed by the server/client job framework.
 
 Current job system highlights:
+
 - job catalog APIs
 - metadata-driven parameter forms
 - start / stop controls
 - report ingestion
 - support for platform tags and parameter schemas
+- file/artifact association so job outputs remain queryable later
 
 Typical use cases:
+
 - monitoring application launches
 - clipboard monitoring
 - screenshot or scheduled capture flows
@@ -351,17 +683,84 @@ Typical use cases:
 Scripts are one-shot utilities stored under `server/resources/scripts/`.
 
 Current script system highlights:
+
 - directory-based organization
 - metadata via `SCRIPT_METADATA`
 - script library UI with folder navigation
 - edit/upload/delete support
 - structured execution via `/api/connections/<client_id>/scripts/run`
+- legacy command-style execution through `exec <script>`
+- parameter normalization before execution when metadata declares params
 
 This makes scripts well-suited for:
+
 - small data collection tasks
 - platform-specific admin actions
 - quick UI prompts or persistence helpers
 - repeatable one-off actions that do not need a full job lifecycle
+
+### History, quick history, and execution history
+
+The project distinguishes between **quick history** and **execution history**.
+
+#### Quick history
+
+Quick history is designed for fast reuse:
+
+- de-duplicated by command text
+- keeps the latest entry per command
+- supports pin/unpin
+- supports moving pinned items up/down
+- is optimized for reuse from the terminal
+
+Replay helpers include:
+
+- `history run <index>`
+- `!<index>` as shorthand syntax
+
+#### Execution history
+
+Execution history preserves the full run record:
+
+- no de-duplication
+- full command status
+- start/end working directory details
+- output records
+- duration and completion state
+- associated file/artifact references
+
+This makes execution history the audit/trace view, while quick history is the reuse/favorites view.
+
+### History/job file association
+
+History and background job records can retain related file references, so later inspection can answer questions such as:
+
+- what files were produced by this command?
+- what screenshot/archive/log belongs to this background job?
+- is the original artifact still downloadable/previewable?
+
+That linkage is one of the reasons the server records upload metadata like source type, command ID, and related path.
+
+### Alias support
+
+The server supports persistent aliases with simple placeholder substitution.
+
+Current characteristics:
+
+- aliases are stored persistently in JSON
+- supports platform groups: `common`, `win`, and `mac`
+- effective alias lookup applies the relevant platform overlay
+- supports simple positional placeholder parameters such as `<path>` / `<name>`
+
+Examples:
+
+```text
+alias ll = read ls -la
+alias --platform win desk = cd <path>
+unalias ll
+```
+
+Important nuance: alias placeholders are intentionally simple and positional. This is not a full shell macro engine.
 
 ---
 
@@ -380,17 +779,38 @@ The project exposes agent-building features from the web UI.
 - Packages `client/`, `core/`, and `ratclient.py` into a zip archive
 - Injects build version into the bundle configuration
 - Designed for source-based delivery/update flows
+- Used by the Python-client `update` workflow to fetch and launch a newer bundle automatically
 
 ### Go (Simple)
 
-- Intended as the simplified Go client builder path
-- Keeps cross-platform build-style options exposed in the UI
+`Go (Simple)` is positioned as a **small and lightweight baseline client** for cases where a compact executable is preferred and the full Python/PyInstaller delivery path is too heavy.
+
+Current intent and positioning:
+
+- minimal cross-platform standalone Go client path
+- better fit for lightweight execution scenarios
+- useful when PyInstaller output is too bulky
+- useful when a full source bundle is not convenient to land on the target
+
+Compared with the Python client, the current Go (Simple) path is intentionally basic and should be understood as a minimal feature subset.
+
+It is intended for simple capabilities such as:
+
+- unified heartbeat/message protocol participation
+- basic shell execution
+- `cd` / `pwd`-style command support
+- `getinfo`-style environment reporting
+- screenshot/basic artifact upload flows
+- basic file transfer/download-oriented operations
+
+It is **not** the feature-complete path today. Advanced Python-client features such as the richer remote file browser workflow, background jobs, script library execution, and watchdog-related functionality should be considered Python-client-first for now.
 
 ### Go (Loader)
 
 The Go loader has a different responsibility from the simple Go build.
 
 Current loader responsibilities include:
+
 - collecting local environment basics such as OS/arch/host/IPs
 - reporting to the server via HTTP
 - detecting Python availability and reporting the result
@@ -441,7 +861,8 @@ Examples include:
 
 - artifacts
 - command history
-- pinned paths
+- execution history details
+- pinned paths / quick jumps
 - web files / previews
 - agent build outputs
 - loader logs
@@ -456,6 +877,7 @@ runtime/recent_devices.json
 ```
 
 Current behavior:
+
 - one record per hostname
 - online device updates overwrite prior cached state
 - offline devices remain visible as recent entries after refresh
@@ -477,8 +899,8 @@ Typical development/runtime requirements include:
 
 Typical entrypoints in the repo:
 
-- `ratserver.py`
-- `run_web.py`
+- `ratserver.py` — socket server + CLI
+- `run_web.py` — socket server + heartbeat runner + web app
 
 ## Run the client
 
@@ -523,6 +945,16 @@ The current architecture intentionally favors:
 - no database setup
 
 That keeps iteration fast, but some subsystems still need convergence and cleanup.
+
+### Execution model notes
+
+A few subtle implementation notes are worth calling out explicitly:
+
+- command cancellation support depends on the command/strategy being used
+- HTTP transfer cancel support depends on whether transfer mode is `legacy` or `cancelable`
+- Python execution semantics differ between `inproc` and `subprocess_pipe`
+- true streaming Python execution currently exists at the command level (`pyexec_stream`) rather than the reusable script-library path
+- server built-ins, aliases, client manifests, and history shortcuts all participate in the final terminal UX together
 
 ---
 
@@ -603,6 +1035,8 @@ Today, the project already provides a fairly broad remote operations surface:
 - agent generation
 - basic web auth
 - recent-device caching
+- heartbeat/RTT visibility
+- watchdog-assisted control and recovery
 
 The next major milestones are mostly about **consolidation**:
 - cleaner data models
