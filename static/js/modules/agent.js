@@ -9,7 +9,7 @@ window.AppAgentModule = {
                 server_port: 9999,
                 web_port: 8085,
                 target_os: 'mac',
-                builder: 'pyinstaller',
+                builder: 'bundle',
                 target_arch: 'auto',
             }
         };
@@ -18,18 +18,18 @@ window.AppAgentModule = {
     computed: {
         agentBuilderAlertText() {
             if (this.agentForm.builder === 'pyinstaller') {
-                return 'PyInstaller builds only for the current server platform. Target OS is locked to the server platform and architecture selection is disabled.';
+                return 'Standalone executable. Can only build for the same OS as the current server.';
             }
 
             if (this.agentForm.builder === 'bundle') {
-                return 'Bundle outputs a source zip that contains client/, core/ and ratclient.py. Target OS and architecture are not applicable.';
+                return 'Source ZIP bundle. Includes the Python client source files.';
             }
 
             if (this.agentForm.builder === 'go_loader') {
-                return 'Go Loader reports host environment details by HTTP, checks for python3 / python, downloads the latest bundle, extracts it under ~/client_bundle, launches ratclient.py, then exits.';
+                return 'Small Go loader. Downloads the bundle ZIP and runs it with Python.';
             }
 
-            return 'Go (Simple) builds a standalone cross-platform Go client. Target OS and architecture can be selected manually.';
+            return 'Lightweight Go client. Supports basic shell commands.';
         },
 
         isBundleBuilder() {

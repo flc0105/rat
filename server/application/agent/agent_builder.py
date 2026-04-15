@@ -10,7 +10,6 @@ from core.utils.logger import logger
 
 
 class AgentBuilder:
-    """Agent 生成器"""
 
     EXCLUDE_DIRS = {'venv', '__pycache__', '.git', 'node_modules', 'dist', 'build', '.idea', '.vscode', 'runtime'}
     EXCLUDE_EXTENSIONS = {'.pyc', '.pyo', '.pyd'}
@@ -234,13 +233,13 @@ const BundleReportAPIPath = "/api/agent/loader/report"
             current_label = self._describe_target(current_target)
             target_label = self._describe_target(target_os)
             raise ValueError(
-                'PyInstaller 仅支持与当前服务端相同平台的打包。'
-                f' 当前服务端平台：{current_label}，你选择的是：{target_label}。'
+                'PyInstaller only supports building for the same platform as the current server.'
+                f' Current server platform：{current_label}.'
             )
 
         client_copy = os.path.join(work_dir, 'rat')
         self._copy_source_with_excludes(self.source_dir, client_copy)
-        logger.info(f'临时文件：{os.path.abspath(client_copy)}')
+        logger.info(f'Temporary workspace: {os.path.abspath(client_copy)}')
         self._inject_config(client_copy, server_host, server_port, web_port, build_version, server_web_scheme, server_web_host)
 
         if target_os == 'win':
@@ -250,7 +249,7 @@ const BundleReportAPIPath = "/api/agent/loader/report"
         else:
             result = self._build_macos(client_copy, build_version=build_version)
 
-        result['warnings'] = ['PyInstaller 产物与当前服务端平台一致。']
+        result['warnings'] = ['The PyInstaller artifact must match the current server platform.']
         result['target_arch'] = target_arch
         result['target_os'] = target_os
         return result
@@ -265,7 +264,7 @@ const BundleReportAPIPath = "/api/agent/loader/report"
 
         client_copy = os.path.join(work_dir, 'rat')
         self._copy_source_with_excludes(self.source_dir, client_copy)
-        logger.info(f'临时文件：{os.path.abspath(client_copy)}')
+        logger.info(f'Temporary workspace：{os.path.abspath(client_copy)}')
         self._inject_go_config(client_copy, server_host, server_port, web_port, build_version, server_web_scheme, server_web_host)
 
         go_target = self.GO_TARGET_MAP[target_os]
@@ -274,7 +273,7 @@ const BundleReportAPIPath = "/api/agent/loader/report"
         output_path = os.path.join(client_copy, 'client-go', output_name)
         self._run_go_build(os.path.join(client_copy, 'client-go'), output_path, go_target['GOOS'], normalized_arch)
 
-        warnings = [f'Go 简化版已按目标平台 {self._describe_target(target_os)} 构建，目标架构为 {normalized_arch}。']
+        warnings = [f'The Go client was built for target platform {self._describe_target(target_os)} with target architecture {normalized_arch}.']
         return {
             'file_path': output_path,
             'file_name': output_name,
@@ -303,8 +302,9 @@ const BundleReportAPIPath = "/api/agent/loader/report"
         self._run_go_build(os.path.join(client_copy, 'go-loader'), output_path, go_target['GOOS'], normalized_arch)
 
         warnings = [
-            'Go Loader 会先通过 HTTP 上报环境信息，再拉取 Bundle 并尝试用 python3 / python 启动 ratclient.py。',
-            '如果目标机器没有可用 Python 环境，Loader 会记录日志并退出。',
+            'The Go loader first reports environment information over HTTP, '
+            'then downloads the bundle and tries to launch ratclient.py with python.',
+            'If no usable Python runtime is available on the target machine, the loader will log the issue and exit.'
         ]
         return {
             'file_path': output_path,
@@ -366,7 +366,7 @@ const BundleReportAPIPath = "/api/agent/loader/report"
         return {
             'file_path': bundle_path,
             'file_name': bundle_name,
-            'warnings': ['Bundle 模式会输出源码 zip，不适用目标系统和架构选择。'],
+            'warnings': ['Bundle mode outputs a source ZIP and does not use target OS or architecture selection.'],
             'target_arch': 'n/a',
             'target_os': 'bundle',
         }
@@ -416,7 +416,7 @@ const BundleReportAPIPath = "/api/agent/loader/report"
         current_system = platform.system()
         current_target = self.PYINSTALLER_PLATFORM_MAP.get(current_system)
         if not current_target:
-            raise ValueError(f'当前服务端平台暂不支持 PyInstaller: {current_system}')
+            raise ValueError(f'The current server platform does not support PyInstaller: {current_system}')
         return current_target
 
     def _normalize_goarch(self, arch: str) -> str:
