@@ -385,7 +385,8 @@ func requestBundleBuild() (*BundleBuildResponse, error) {
 		"server_web_host":   config.ServerWebHost,
 		"builder":           "bundle",
 		"target_os":         "bundle",
-		"target_arch":       "auto",
+		"target_arch":       "",
+		"source":            "loader",
 	}
 
 	body, _ := json.Marshal(payload)

@@ -32,7 +32,7 @@ class WebAgentApi:
         target_arch: str = '',
         server_web_scheme: str = 'http',
         server_web_host: str = '',
-        source: str = 'web_manual_build',
+        source: str = 'manual',
     ):
         build_result = self.agent_builder.build_agent(
             server_host=server_host,

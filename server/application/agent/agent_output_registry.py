@@ -62,7 +62,7 @@ class AgentOutputRegistry:
         with open(metadata_path, 'w', encoding='utf-8') as fp:
             json.dump(payload, fp, ensure_ascii=False, indent=2)
 
-    def register_output(self, build_result: dict, *, source: str = 'web_manual_build', request_payload: Optional[dict] = None) -> dict:
+    def register_output(self, build_result: dict, *, source: str = 'manual', request_payload: Optional[dict] = None) -> dict:
         payload = dict(request_payload or {})
         file_name = self._normalize_filename(build_result.get('file_name'))
         file_path = self._safe_join_output(file_name)
@@ -76,7 +76,7 @@ class AgentOutputRegistry:
             'updated_at': created_at,
             'build_version': str(build_result.get('build_version') or '').strip(),
             'builder': str(build_result.get('builder') or payload.get('builder') or '').strip(),
-            'source': str(source or payload.get('source') or 'web_manual_build').strip() or 'web_manual_build',
+            'source': str(source or payload.get('source') or 'web_manual_build').strip() or 'manual',
             'target_os': str(build_result.get('target_os') or payload.get('target_os') or '').strip(),
             'target_arch': str(build_result.get('target_arch') or payload.get('target_arch') or '').strip(),
             'size': int(build_result.get('size') or stat.st_size or 0),

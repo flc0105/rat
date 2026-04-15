@@ -26,7 +26,7 @@ window.AppAgentModule = {
             }
 
             if (this.agentForm.builder === 'bundle') {
-                return 'Source ZIP package.';
+                return 'Source ZIP package. Includes the Python client source files.';
             }
 
             if (this.agentForm.builder === 'go_loader') {
@@ -92,9 +92,9 @@ window.AppAgentModule = {
             if (!source) return '-';
 
             const mapping = {
-                web_manual_build: 'Web manual build',
-                update_build: 'Update build',
-                loader_build: 'Loader build',
+                manual: 'Manual',
+                update: 'Update',
+                loader: 'Loader',
             };
             return mapping[source] || source;
         },
@@ -148,7 +148,7 @@ window.AppAgentModule = {
         buildAgentPayload() {
             const payload = {
                 ...this.agentForm,
-                source: 'web_manual_build',
+                source: 'manual',
                 server_web_scheme: window.location.protocol.replace(':', '') || 'http',
                 server_web_host: this.agentForm.server_host,
             };

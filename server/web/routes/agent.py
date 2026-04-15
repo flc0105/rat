@@ -26,7 +26,7 @@ def create_agent_blueprint(server_instance):
             target_arch = (payload.get('target_arch') or '').strip()
             server_web_scheme = (payload.get('server_web_scheme') or 'http').strip() or 'http'
             server_web_host = (payload.get('server_web_host') or server_host).strip() or server_host
-            source = (payload.get('source') or 'web_manual_build').strip() or 'web_manual_build'
+            source = (payload.get('source') or 'manual').strip() or 'manual'
 
             if not server_host:
                 raise ValueError('server_host is required')

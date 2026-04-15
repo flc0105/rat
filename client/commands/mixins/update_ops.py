@@ -37,7 +37,8 @@ class CommandUpdateMixin:
             'web_port': SERVER_WEB_PORT,
             'target_os': 'bundle',
             'builder': 'bundle',
-            'target_arch': 'auto',
+            'target_arch': '',
+            'source': 'update',
         }
 
     def _request_update_bundle(self) -> dict:

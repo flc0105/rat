@@ -373,6 +373,10 @@ openConnectionInfoValueDialog(item) {
             return this.connections.find(item => item.client_id === this.selectedId) || null;
         },
 
+onlineConnectionsCount() {
+            return (this.connections || []).filter(item => this.getConnectionDisplayState(item) === 'online').length;
+        },
+
         connectionInfoCards() {
             const conn = this.currentConnection || {};
             const items = [
