@@ -1849,7 +1849,7 @@ body {
 }
 
 .action-btn-danger {
-  background: #dc2626;
+  background: var(--el-color-danger);
   color: #ffffff;
   /*border: 1px solid #e0e7ff;*/
 }

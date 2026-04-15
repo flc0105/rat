@@ -15,7 +15,7 @@ class CommandHistoryRecordPolicy:
     - history replay 记录，但最终 command 保留为被回放的真实命令：history run <index> / !<index>
     - 所有 __json__: payload 结构命令不记录
     - web 高频操作命令不记录：remote file / process / job control / web upload / run_script
-    - job 相关命令默认不记录；
+    - job 相关命令默认不记录
     - alias / gopin 这类用户输入快捷命令保留原始输入，不在这里改写
     """
 
