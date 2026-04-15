@@ -10,6 +10,7 @@ from core.utils.parsing import scan_args
 from core.utils.script_metadata import read_script_metadata_from_file
 from server.config.config import SCRIPT_PATH
 from server.application.command.command_execution_event import CommandExecutionEvent
+from server.application.history.history_record_policy import CommandHistoryRecordPolicy
 
 
 class UploadBuiltinSupport:
@@ -273,21 +274,6 @@ class PinnedPathBuiltinSupport:
         return getattr(session_info, 'hostname', '') or 'unknown_host'
 
     # add gopin 快速跳转 2026-04-09 15:30
-    def _update_history_entry_command(self, resolved_command: str):
-        entry_id = (self.history_entry_id_provider() or '').strip()
-        if not entry_id:
-            return
-
-        if self.command_history is None:
-            return
-
-        self.command_history.update_entry_command_for_connection(
-            self.conn,
-            entry_id,
-            resolved_command,
-        )
-
-    # add gopin 快速跳转 2026-04-09 15:30
     def list_pinned_paths(self) -> list[dict]:
         return self.pinned_path_store.list_items(self._get_hostname())
 
@@ -317,8 +303,8 @@ class PinnedPathBuiltinSupport:
 
         target_path = str(matched_item.get('path') or '').strip()
         resolved_command = self._build_cd_command(target_path)
-        self._update_history_entry_command(resolved_command)
 
+        # gopin 作为快捷命令，history 保留原始 gopin 输入，不再改写成 cd 结果。
         yield 1, f'gopin {name} -> {resolved_command}'
 
         command_processor = self.command_processor_factory()
@@ -345,11 +331,7 @@ class HistoryBuiltinSupport:
         text = str(command_text or '').strip()
         if not text:
             return False
-        if self.HISTORY_SHORTCUT_PATTERN.fullmatch(text):
-            return True
-        if self.HISTORY_RUN_PATTERN.fullmatch(text):
-            return True
-        return False
+        return CommandHistoryRecordPolicy.is_history_replay_command(text)
 
     def _get_resolvable_quick_history(self) -> list:
         """

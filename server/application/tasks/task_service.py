@@ -30,12 +30,14 @@ class WebTaskService:
         tab_id: str = '',
         source: str = 'web',
         should_record=None,
+        task_type: str = '',
     ):
         entry_id = self.history_orchestrator.begin_execution(
             conn,
             command,
             source=source,
             should_record=should_record,
+            task_type=task_type,
         )
 
         task = self.task_store.create_task(client_id, command, tab_id=tab_id)
@@ -117,6 +119,7 @@ class WebTaskService:
             command,
             tab_id=tab_id,
             source='web',
+            task_type=TASK_TYPE_COMMAND,
         )
 
         context = self._build_task_context(
@@ -160,7 +163,7 @@ class WebTaskService:
             command,
             tab_id=tab_id,
             source='web',
-            should_record=True,
+            task_type=TASK_TYPE_UPLOAD,
         )
 
         context = self._build_task_context(

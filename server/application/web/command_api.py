@@ -66,49 +66,46 @@ class WebCommandApi:
         return merged
 
     # ------------------ command history ------------------ #
-    def get_command_history(self, client_id: str):
-        session = self.server.get_target_connection_by_client_id(client_id)
-        return self.server.command_history.get_history_for_connection(session)
+    def get_command_history(self, hostname: str):
+        return self.server.command_history.view_service.get_history_by_hostname(hostname)
 
-    def get_command_execution_history(self, client_id: str):
-        session = self.server.get_target_connection_by_client_id(client_id)
-        return self.server.command_history.get_execution_history_for_connection(session)
+    def get_command_execution_history(self, hostname: str):
+        return self.server.command_history.view_service.get_execution_history_by_hostname(hostname)
 
-    def clear_command_history(self, client_id: str):
-        session = self.server.get_target_connection_by_client_id(client_id)
-        self.server.command_history.clear_history_for_connection(session)
+    def clear_command_history(self, hostname: str):
+        self.server.command_history.write_service.clear_history_by_hostname(hostname)
         return None
 
-    def set_command_history_pinned(self, client_id: str, command: str, is_pinned: bool):
-        session = self.server.get_target_connection_by_client_id(client_id)
-        changed = self.server.command_history.set_command_pinned_for_connection(
-            session,
+    def set_command_history_pinned(self, hostname: str, command: str, is_pinned: bool):
+        changed = self.server.command_history.write_service.set_command_pinned_by_hostname(
+            hostname,
             command,
             is_pinned,
         )
         return {
+            'hostname': (hostname or '').strip(),
             'command': (command or '').strip(),
             'is_pinned': bool(is_pinned),
             'changed': bool(changed),
         }
 
-    def move_command_history_pinned(self, client_id: str, command: str, direction: str):
-        session = self.server.get_target_connection_by_client_id(client_id)
-        changed = self.server.command_history.move_pinned_command_for_connection(
-            session,
+    def move_command_history_pinned(self, hostname: str, command: str, direction: str):
+        changed = self.server.command_history.write_service.move_pinned_command_by_hostname(
+            hostname,
             command,
             direction,
         )
         return {
+            'hostname': (hostname or '').strip(),
             'command': (command or '').strip(),
             'direction': (direction or '').strip().lower(),
             'changed': bool(changed),
         }
 
-    def delete_command_execution_history_entry(self, client_id: str, entry_id: str):
-        session = self.server.get_target_connection_by_client_id(client_id)
-        deleted = self.server.command_history.delete_execution_entry_for_connection(session, entry_id)
+    def delete_command_execution_history_entry(self, hostname: str, entry_id: str):
+        deleted = self.server.command_history.write_service.delete_execution_entry_by_hostname(hostname, entry_id)
         return {
+            'hostname': (hostname or '').strip(),
             'entry_id': (entry_id or '').strip(),
             'deleted': bool(deleted),
         }

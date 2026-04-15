@@ -17,9 +17,19 @@ window.AppHistoryModule = {
     },
 
     methods: {
+        getSelectedHistoryHostname() {
+            return String(this.currentConnection?.hostname || '').trim();
+        },
+
         async openCommandHistoryDialog() {
             if (!this.selectedId) {
                 ElementPlus.ElMessage.warning('Please select a device');
+                return;
+            }
+
+            const hostname = this.getSelectedHistoryHostname();
+            if (!hostname) {
+                ElementPlus.ElMessage.warning('Current device hostname is unavailable');
                 return;
             }
 
@@ -41,13 +51,23 @@ window.AppHistoryModule = {
                 return;
             }
 
+            const hostname = this.getSelectedHistoryHostname();
+            if (!hostname) {
+                this.commandHistoryItems = [];
+                this.commandExecutionItems = [];
+                if (!silent) {
+                    ElementPlus.ElMessage.warning('Current device hostname is unavailable');
+                }
+                return;
+            }
+
             this.commandHistoryLoading = true;
             this.commandExecutionHistoryLoading = true;
 
             try {
                 const [quickRes, fullRes] = await Promise.all([
-                    fetch(`/api/connections/${encodeURIComponent(this.selectedId)}/command-history`),
-                    fetch(`/api/connections/${encodeURIComponent(this.selectedId)}/command-history/full`)
+                    fetch(`/api/hosts/${encodeURIComponent(hostname)}/command-history`),
+                    fetch(`/api/hosts/${encodeURIComponent(hostname)}/command-history/full`)
                 ]);
 
                 const quickJson = await quickRes.json();
@@ -72,7 +92,10 @@ window.AppHistoryModule = {
                     this.selectedCommandExecutionEntryId = '';
                 }
 
-                await this.loadCommandCandidates(this.selectedId);
+                try {
+                    await this.loadCommandCandidates(this.selectedId);
+                } catch (_error) {
+                }
             } catch (e) {
                 this.commandHistoryItems = [];
                 this.commandExecutionItems = [];
@@ -109,6 +132,11 @@ window.AppHistoryModule = {
                 ElementPlus.ElMessage.warning('Please select a device');
                 return;
             }
+            const hostname = this.getSelectedHistoryHostname();
+            if (!hostname) {
+                ElementPlus.ElMessage.warning('Current device hostname is unavailable');
+                return;
+            }
             if (!row || !row.command) {
                 return;
             }
@@ -117,7 +145,7 @@ window.AppHistoryModule = {
             this.commandHistoryPinningCommand = commandText;
 
             try {
-                const res = await fetch(`/api/connections/${encodeURIComponent(this.selectedId)}/command-history/pin`, {
+                const res = await fetch(`/api/hosts/${encodeURIComponent(hostname)}/command-history/pin`, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json'
@@ -147,6 +175,11 @@ window.AppHistoryModule = {
                 ElementPlus.ElMessage.warning('Please select a device');
                 return;
             }
+            const hostname = this.getSelectedHistoryHostname();
+            if (!hostname) {
+                ElementPlus.ElMessage.warning('Current device hostname is unavailable');
+                return;
+            }
             if (!row || !row.command || !row.is_pinned) {
                 return;
             }
@@ -163,7 +196,7 @@ window.AppHistoryModule = {
             }
 
             try {
-                const res = await fetch(`/api/connections/${encodeURIComponent(this.selectedId)}/command-history/pin/move`, {
+                const res = await fetch(`/api/hosts/${encodeURIComponent(hostname)}/command-history/pin/move`, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json'
@@ -190,6 +223,11 @@ window.AppHistoryModule = {
                 ElementPlus.ElMessage.warning('Please select a device');
                 return;
             }
+            const hostname = this.getSelectedHistoryHostname();
+            if (!hostname) {
+                ElementPlus.ElMessage.warning('Current device hostname is unavailable');
+                return;
+            }
             if (!row || !row.entry_id) {
                 return;
             }
@@ -206,7 +244,7 @@ window.AppHistoryModule = {
                 );
 
                 this.commandExecutionDeletingEntryId = row.entry_id;
-                const res = await fetch(`/api/connections/${encodeURIComponent(this.selectedId)}/command-history/full/${encodeURIComponent(row.entry_id)}`, {
+                const res = await fetch(`/api/hosts/${encodeURIComponent(hostname)}/command-history/full/${encodeURIComponent(row.entry_id)}`, {
                     method: 'DELETE'
                 });
 
@@ -231,6 +269,12 @@ window.AppHistoryModule = {
                 return;
             }
 
+            const hostname = this.getSelectedHistoryHostname();
+            if (!hostname) {
+                ElementPlus.ElMessage.warning('Current device hostname is unavailable');
+                return;
+            }
+
             try {
                 await ElementPlus.ElMessageBox.confirm(
                     'Clear command history for the current host?',
@@ -242,7 +286,7 @@ window.AppHistoryModule = {
                     }
                 );
 
-                const res = await fetch(`/api/connections/${encodeURIComponent(this.selectedId)}/command-history`, {
+                const res = await fetch(`/api/hosts/${encodeURIComponent(hostname)}/command-history`, {
                     method: 'DELETE'
                 });
 
@@ -257,7 +301,10 @@ window.AppHistoryModule = {
                 this.commandCandidatesLoadedFor = '';
                 this.commandExecutionDetailDialogVisible = false;
                 this.selectedCommandExecutionEntryId = '';
-                await this.loadCommandCandidates(this.selectedId);
+                try {
+                    await this.loadCommandCandidates(this.selectedId);
+                } catch (_error) {
+                }
                 ElementPlus.ElMessage.success('Command history cleared');
             } catch (e) {
                 if (e === 'cancel' || e === 'close' || e?.toString?.().includes('cancel')) return;

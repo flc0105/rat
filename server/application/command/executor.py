@@ -46,20 +46,13 @@ class CommandExecutor:
     def _get_current_history_entry_id(self) -> str:
         return self.current_history_entry_id
 
-    # add alias展开历史改写与提示 2026-04-08
+    # add alias展开提示保留原始history命令 2026-04-15
     def _on_alias_resolved(self, alias_plan: dict):
         resolved_command = str(alias_plan.get('command') or '').strip()
         alias_name = str(alias_plan.get('alias_name') or '').strip()
         alias_platform = str(alias_plan.get('alias_platform') or '').strip()
-        entry_id = self._get_current_history_entry_id()
 
-        if entry_id and resolved_command:
-            self.server.command_history.update_entry_command_for_connection(
-                self.conn,
-                entry_id,
-                resolved_command,
-            )
-
+        # alias 现在保留用户原始输入，不再把 history entry 改写为展开后的真实命令。
         if resolved_command:
             platform_suffix = f' [{alias_platform}]' if alias_platform else ''
             yield 1, f'alias {alias_name}{platform_suffix} -> {resolved_command}'

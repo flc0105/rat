@@ -10,29 +10,29 @@ def create_command_history_blueprint(server_instance):
     command_api = web_service.command_api
     responder = WebApiResponder()
 
-    @blueprint.get('/api/connections/<client_id>/command-history')
-    def get_command_history(client_id):
+    @blueprint.get('/api/hosts/<hostname>/command-history')
+    def get_command_history(hostname):
         return responder.json_endpoint(
-            lambda: command_api.get_command_history(client_id),
+            lambda: command_api.get_command_history(hostname),
             default_error_status=500,
         )
 
-    @blueprint.get('/api/connections/<client_id>/command-history/full')
-    def get_full_command_history(client_id):
+    @blueprint.get('/api/hosts/<hostname>/command-history/full')
+    def get_full_command_history(hostname):
         return responder.json_endpoint(
-            lambda: command_api.get_command_execution_history(client_id),
+            lambda: command_api.get_command_execution_history(hostname),
             default_error_status=500,
         )
 
-    @blueprint.delete('/api/connections/<client_id>/command-history')
-    def clear_command_history(client_id):
+    @blueprint.delete('/api/hosts/<hostname>/command-history')
+    def clear_command_history(hostname):
         return responder.json_endpoint(
-            lambda: command_api.clear_command_history(client_id),
+            lambda: command_api.clear_command_history(hostname),
             default_error_status=500,
         )
 
-    @blueprint.post('/api/connections/<client_id>/command-history/pin')
-    def set_command_history_pinned(client_id):
+    @blueprint.post('/api/hosts/<hostname>/command-history/pin')
+    def set_command_history_pinned(hostname):
         def _execute():
             payload = get_json_payload()
             command = (payload.get('command') or '').strip()
@@ -40,15 +40,15 @@ def create_command_history_blueprint(server_instance):
                 raise ValueError('command is required')
 
             return command_api.set_command_history_pinned(
-                client_id,
+                hostname,
                 command,
                 payload.get('is_pinned', False),
             )
 
         return responder.json_endpoint(_execute, default_error_status=500)
 
-    @blueprint.post('/api/connections/<client_id>/command-history/pin/move')
-    def move_command_history_pinned(client_id):
+    @blueprint.post('/api/hosts/<hostname>/command-history/pin/move')
+    def move_command_history_pinned(hostname):
         def _execute():
             payload = get_json_payload()
             command = (payload.get('command') or '').strip()
@@ -60,17 +60,17 @@ def create_command_history_blueprint(server_instance):
                 raise ValueError('direction must be up or down')
 
             return command_api.move_command_history_pinned(
-                client_id,
+                hostname,
                 command,
                 direction,
             )
 
         return responder.json_endpoint(_execute, default_error_status=500)
 
-    @blueprint.delete('/api/connections/<client_id>/command-history/full/<entry_id>')
-    def delete_command_execution_history_entry(client_id, entry_id):
+    @blueprint.delete('/api/hosts/<hostname>/command-history/full/<entry_id>')
+    def delete_command_execution_history_entry(hostname, entry_id):
         return responder.json_endpoint(
-            lambda: command_api.delete_command_execution_history_entry(client_id, entry_id),
+            lambda: command_api.delete_command_execution_history_entry(hostname, entry_id),
             default_error_status=500,
         )
 

@@ -15,6 +15,9 @@ class HistoryWriteService:
     def __init__(self, store):
         self.store = store
 
+    def _normalize_lookup_hostname(self, hostname: str) -> str:
+        return str(hostname or '').strip() or 'unknown_host'
+
     def create_entry_for_connection(self, conn, command: str, source: str = 'cli'):
         """
         为指定连接创建一条命令历史，并返回 entry_id
@@ -208,9 +211,16 @@ class HistoryWriteService:
             return
 
         hostname = self.store._get_hostname_from_conn(conn)
+        self.clear_history_by_hostname(hostname)
+
+    def clear_history_by_hostname(self, hostname: str):
+        """
+        按 hostname 清空命令历史。
+        """
+        hostname_text = self._normalize_lookup_hostname(hostname)
 
         with self.store._lock:
-            self.store._write_entries(hostname, [])
+            self.store._write_entries(hostname_text, [])
 
     def set_command_pinned_for_connection(self, conn, command: str, is_pinned: bool):
         """
@@ -225,16 +235,23 @@ class HistoryWriteService:
         if conn is None:
             return False
 
+        hostname = self.store._get_hostname_from_conn(conn)
+        return self.set_command_pinned_by_hostname(hostname, command, is_pinned)
+
+    def set_command_pinned_by_hostname(self, hostname: str, command: str, is_pinned: bool):
+        """
+        按 hostname 设置指定命令的置顶状态。
+        """
         command_text = str(command or '').strip()
         if not command_text:
             return False
 
-        hostname = self.store._get_hostname_from_conn(conn)
+        hostname_text = self._normalize_lookup_hostname(hostname)
         pinned = bool(is_pinned)
         changed = False
 
         with self.store._lock:
-            entries = self.store._read_entries(hostname)
+            entries = self.store._read_entries(hostname_text)
 
             current_pin_order = 0
             for item in entries:
@@ -269,7 +286,7 @@ class HistoryWriteService:
                 changed = True
 
             if changed:
-                self.store._write_entries(hostname, entries)
+                self.store._write_entries(hostname_text, entries)
 
         return changed
 
@@ -349,6 +366,13 @@ class HistoryWriteService:
         if conn is None:
             return False
 
+        hostname = self.store._get_hostname_from_conn(conn)
+        return self.move_pinned_command_by_hostname(hostname, command, direction)
+
+    def move_pinned_command_by_hostname(self, hostname: str, command: str, direction: str):
+        """
+        按 hostname 调整 pinned quick history 顺序。
+        """
         command_text = str(command or '').strip()
         direction_text = str(direction or '').strip().lower()
 
@@ -357,10 +381,10 @@ class HistoryWriteService:
         if direction_text not in ('up', 'down'):
             raise ValueError('direction must be up or down')
 
-        hostname = self.store._get_hostname_from_conn(conn)
+        hostname_text = self._normalize_lookup_hostname(hostname)
 
         with self.store._lock:
-            entries = self.store._read_entries(hostname)
+            entries = self.store._read_entries(hostname_text)
             pinned_items = self._build_pinned_snapshot_items(entries)
 
             if not pinned_items:
@@ -376,13 +400,13 @@ class HistoryWriteService:
             if direction_text == 'up':
                 if current_index <= 0:
                     if changed:
-                        self.store._write_entries(hostname, entries)
+                        self.store._write_entries(hostname_text, entries)
                     return False
                 target_index = current_index - 1
             else:
                 if current_index >= len(command_list) - 1:
                     if changed:
-                        self.store._write_entries(hostname, entries)
+                        self.store._write_entries(hostname_text, entries)
                     return False
                 target_index = current_index + 1
 
@@ -398,7 +422,7 @@ class HistoryWriteService:
                 changed = True
 
             if changed:
-                self.store._write_entries(hostname, entries)
+                self.store._write_entries(hostname_text, entries)
 
             return True
 
@@ -409,14 +433,21 @@ class HistoryWriteService:
         if conn is None:
             return False
 
+        hostname = self.store._get_hostname_from_conn(conn)
+        return self.delete_execution_entry_by_hostname(hostname, entry_id)
+
+    def delete_execution_entry_by_hostname(self, hostname: str, entry_id: str):
+        """
+        按 hostname 删除指定 execution history 单条记录。
+        """
         target_entry_id = str(entry_id or '').strip()
         if not target_entry_id:
             return False
 
-        hostname = self.store._get_hostname_from_conn(conn)
+        hostname_text = self._normalize_lookup_hostname(hostname)
 
         with self.store._lock:
-            entries = self.store._read_entries(hostname)
+            entries = self.store._read_entries(hostname_text)
             new_entries = [
                 item for item in entries
                 if str(item.get('entry_id') or '').strip() != target_entry_id
@@ -425,5 +456,5 @@ class HistoryWriteService:
             if len(new_entries) == len(entries):
                 return False
 
-            self.store._write_entries(hostname, new_entries)
+            self.store._write_entries(hostname_text, new_entries)
             return True

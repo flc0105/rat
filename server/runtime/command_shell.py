@@ -118,6 +118,7 @@ class ServerCommandShell:
             session,
             cmd,
             source='cli',
+            task_type='command',
         )
 
         context = ExecutionContext.from_session(

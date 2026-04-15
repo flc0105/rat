@@ -1,3 +1,6 @@
+from server.application.history.history_record_policy import CommandHistoryRecordPolicy
+
+
 class CommandHistoryOrchestrator:
     """
     命令历史编排器。
@@ -20,20 +23,19 @@ class CommandHistoryOrchestrator:
         self.history_store = history_store
 
     # ------------------ record policy ------------------ #
-    def should_record_command(self, command: str) -> bool:
+    def should_record_command(self, command: str, *, source: str = '', task_type: str = '') -> bool:
         """
         判断命令是否应该进入历史。
-        先沿用当前既有规则：
-        - 空命令不记
-        - history* 命令不记
+        统一委托给集中策略，避免规则散落在 CLI / Web / job / file / process 各入口。
         """
-        command_text = (command or '').strip()
-        if not command_text:
-            return False
-        return not command_text.startswith('history')
+        return CommandHistoryRecordPolicy.should_record_command(
+            command,
+            source=source,
+            task_type=task_type,
+        )
 
     # ------------------ history entry lifecycle ------------------ #
-    def begin_execution(self, conn, command: str, source: str = 'cli', should_record=None) -> str:
+    def begin_execution(self, conn, command: str, source: str = 'cli', should_record=None, task_type: str = '') -> str:
         """
         为一次执行创建 history entry。
         """
@@ -45,7 +47,11 @@ class CommandHistoryOrchestrator:
             return ''
 
         if should_record is None:
-            should_record = self.should_record_command(command_text)
+            should_record = self.should_record_command(
+                command_text,
+                source=source,
+                task_type=task_type,
+            )
 
         if not should_record:
             return ''

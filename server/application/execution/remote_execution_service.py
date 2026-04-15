@@ -52,7 +52,7 @@ class RemoteExecutionService:
     def _build_http_receive_command(self, payload: dict) -> str:
         return f'{self.HTTP_RECEIVE_COMMAND_NAME} {self._encode_payload_arg(payload)}'
 
-    def create_history_entry(self, target, command: str, source: str = 'cli', should_record: bool = True) -> str:
+    def create_history_entry(self, target, command: str, source: str = 'cli', should_record: bool = True, task_type: str = '') -> str:
         session = self.get_connection(target)
 
         if self.history_orchestrator is not None:
@@ -60,7 +60,8 @@ class RemoteExecutionService:
                 session,
                 command,
                 source=source,
-                should_record=should_record
+                should_record=should_record,
+                task_type=task_type,
             )
 
         if not should_record:

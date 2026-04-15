@@ -182,3 +182,16 @@ class HistoryViewService:
                 self.store._normalize_entry_flags(item)
 
         return self._build_deduplicated_latest_view(entries)
+
+    def get_execution_history_by_hostname(self, hostname: str) -> list:
+        """
+        按 hostname 读取完整执行历史视图
+        """
+        hostname_text = (hostname or '').strip() or 'unknown_host'
+
+        with self.store._lock:
+            entries = self.store._read_entries(hostname_text)
+            for item in entries:
+                self.store._normalize_entry_flags(item)
+
+        return self._build_execution_history_view(entries)

@@ -964,8 +964,8 @@ Below is a reorganized roadmap based on current priorities and project direction
 
 ### High-priority architecture and refactor work
 
-- [ ] Unify history queries around **hostname** as the primary lookup model
-- [ ] Add a centralized whitelist/annotation-based policy to decide which commands should be recorded in history
+- [x] Unify history queries around **hostname** as the primary lookup model
+- [x] Add a centralized whitelist/annotation-based policy to decide which commands should be recorded in history
 - [ ] Introduce a consistent exception/error model across server and client layers
 - [ ] Refactor duplicated fields and behaviors across **history / task / job** models
 - [ ] Rebuild the front end with **Vite + Vue 3**

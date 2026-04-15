@@ -7,6 +7,11 @@ window.AppCandidatesModule = {
     },
 
     methods: {
+        resolveCommandHistoryHostname(clientId) {
+            const target = (this.connections || []).find(item => item && item.client_id === clientId);
+            return String(target?.hostname || '').trim();
+        },
+
         buildCommonOpsCandidates() {
             return [
                 {
@@ -108,11 +113,17 @@ window.AppCandidatesModule = {
         async loadCommandCandidates(clientId) {
             if (!clientId) return;
 
+            const historyHostname = this.resolveCommandHistoryHostname(clientId);
+
             try {
-                const [candidateRes, historyRes] = await Promise.all([
+                const requests = [
                     fetch(`/api/connections/${encodeURIComponent(clientId)}/command-candidates`),
-                    fetch(`/api/connections/${encodeURIComponent(clientId)}/command-history`)
-                ]);
+                    historyHostname
+                        ? fetch(`/api/hosts/${encodeURIComponent(historyHostname)}/command-history`)
+                        : Promise.resolve({ok: true, json: async () => ({code: 0, data: []})})
+                ];
+
+                const [candidateRes, historyRes] = await Promise.all(requests);
 
                 const candidateJson = await candidateRes.json();
                 const historyJson = await historyRes.json();
