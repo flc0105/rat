@@ -1,9 +1,10 @@
 import threading
 
+import uvicorn
+
 from server.config.config import SOCKET_ADDR, WEB_HOST, WEB_PORT
 from ratserver import Server
-from server.web.app import create_app
-from server.web.pty_ws_server import PtyWebSocketServer
+from server.web.asgi import create_asgi_app
 
 
 def main():
@@ -12,10 +13,8 @@ def main():
     threading.Thread(target=server.serve, daemon=True).start()
     threading.Thread(target=server.heartbeat_loop, daemon=True).start()
 
-    PtyWebSocketServer(server).start()
-
-    app = create_app(server)
-    app.run(host=WEB_HOST, port=WEB_PORT, threaded=True, debug=False)
+    app = create_asgi_app(server)
+    uvicorn.run(app, host=WEB_HOST, port=WEB_PORT, log_level='info')
 
 
 if __name__ == '__main__':

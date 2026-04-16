@@ -4,16 +4,18 @@ window.AppPtyModule = {
             ptyDialogVisible: false,
             ptyLoading: false,
             ptySessionId: '',
+            ptySeq: 0,
             ptyStatus: '',
             ptyError: '',
             ptyShellPath: '',
             ptyTerm: null,
             ptyFitAddon: null,
-            ptyWs: null,
             ptyInputQueue: '',
             ptyFlushTimer: null,
             ptyLastCols: 0,
             ptyLastRows: 0,
+            ptyWs: null,
+            ptyWsPath: '',
             _ptyResizeTimer: null,
             _ptyWindowResizeHandler: null,
         };
@@ -34,8 +36,10 @@ window.AppPtyModule = {
             this.ptyLoading = true;
             this.ptyDialogVisible = true;
             this.ptySessionId = '';
+            this.ptySeq = 0;
             this.ptyStatus = 'opening';
             this.ptyError = '';
+            this.closePtySocket();
             this.resetPtyInputQueue();
 
             try {
@@ -66,8 +70,9 @@ window.AppPtyModule = {
                 this.ptyStatus = json.data?.status || 'opening';
                 this.ptyLastCols = dims.cols;
                 this.ptyLastRows = dims.rows;
+                this.ptyWsPath = json.data?.ws_path || '';
 
-                await this.connectPtyWebSocket(json.data?.ws_url || '');
+                this.openPtySocket();
                 this.focusPtyInput();
                 this.schedulePtyResize();
             } catch (e) {
@@ -80,97 +85,34 @@ window.AppPtyModule = {
             }
         },
 
-        async connectPtyWebSocket(url) {
-            if (!url) throw new Error('PTY websocket url missing');
-            this.closePtyWebSocket();
-            await new Promise((resolve, reject) => {
-                const ws = new WebSocket(url);
-                let settled = false;
-                ws.onopen = () => {
-                    this.ptyWs = ws;
-                    settled = true;
-                    resolve();
-                };
-                ws.onmessage = (event) => this.handlePtyWsMessage(event.data);
-                ws.onerror = () => {
-                    if (!settled) {
-                        settled = true;
-                        reject(new Error('PTY websocket connection failed'));
-                    }
-                };
-                ws.onclose = () => {
-                    if (this.ptyWs === ws) {
-                        this.ptyWs = null;
-                    }
-                    if (!settled) {
-                        settled = true;
-                        reject(new Error('PTY websocket closed before ready'));
-                        return;
-                    }
-                    if (this.ptyDialogVisible && this.ptyStatus !== 'closed') {
-                        this.ptyStatus = 'closed';
-                        this.writePtySystemLine('\r\n[PTY disconnected]\r\n');
-                    }
-                };
-            });
-        },
-
-        handlePtyWsMessage(raw) {
-            let payload = {};
-            try {
-                payload = JSON.parse(raw || '{}');
-            } catch (_) {
-                return;
-            }
-            const type = String(payload.type || '');
-            if (type === 'snapshot' || type === 'pty_update') {
-                this.ptyStatus = payload.status || this.ptyStatus || '';
-                this.ptyError = payload.error || this.ptyError || '';
-                const chunks = Array.isArray(payload.chunks) ? payload.chunks : [];
-                chunks.forEach((chunk) => {
-                    const text = String(chunk?.text || '');
-                    if (text) this.writePtyOutput(text);
-                });
-                if (this.ptyStatus === 'closed' || this.ptyStatus === 'error') {
-                    this.closePtyWebSocket();
-                }
-                return;
-            }
-            if (type === 'error') {
-                this.ptyError = String(payload.message || 'PTY error');
-                this.ptyStatus = 'error';
-                this.writePtySystemLine(`\r\n[PTY error] ${this.ptyError}\r\n`);
-                return;
-            }
-        },
-
-        sendPtyWsMessage(payload) {
-            if (!this.ptyWs || this.ptyWs.readyState !== WebSocket.OPEN) return;
-            try {
-                this.ptyWs.send(JSON.stringify(payload || {}));
-            } catch (_) {}
-        },
-
         async closePtyDialog() {
             this.resetPtyInputQueue();
             this.clearPtyResizeTimer();
+            this.sendPtyWs({ type: 'close' });
+            this.closePtySocket();
 
-            if (this.ptySessionId && this.ptyWs && this.ptyWs.readyState === WebSocket.OPEN) {
-                this.sendPtyWsMessage({ type: 'close' });
-            }
-
+            const ptyId = this.ptySessionId;
             this.ptyDialogVisible = false;
             this.ptySessionId = '';
             this.ptyStatus = 'closed';
-            this.closePtyWebSocket();
-            this.disposePtyTerminal();
-        },
 
-        closePtyWebSocket() {
-            const ws = this.ptyWs;
-            this.ptyWs = null;
-            if (ws) {
-                try { ws.close(); } catch (_) {}
+            if (!ptyId) {
+                this.disposePtyTerminal();
+                return;
+            }
+
+            try {
+                await fetch(`/api/pty/${encodeURIComponent(ptyId)}/close`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        ...this.getTabScopedHeaders(),
+                    },
+                    body: '{}',
+                });
+            } catch (_) {
+            } finally {
+                this.disposePtyTerminal();
             }
         },
 
@@ -185,12 +127,15 @@ window.AppPtyModule = {
                 scrollback: 2000,
                 fontSize: 15,
                 lineHeight: 1.25,
-                theme: { background: '#03142d' },
+                theme: {
+                    background: '#03142d',
+                },
             });
 
             const fitAddon = new window.FitAddon.FitAddon();
             term.loadAddon(fitAddon);
             term.open(host);
+
             try { fitAddon.fit(); } catch (_) {}
 
             term.onData((data) => {
@@ -203,7 +148,10 @@ window.AppPtyModule = {
 
             this.ptyTerm = term;
             this.ptyFitAddon = fitAddon;
-            this._ptyWindowResizeHandler = () => this.schedulePtyResize();
+
+            this._ptyWindowResizeHandler = () => {
+                this.schedulePtyResize();
+            };
             window.addEventListener('resize', this._ptyWindowResizeHandler, { passive: true });
         },
 
@@ -212,11 +160,14 @@ window.AppPtyModule = {
                 window.removeEventListener('resize', this._ptyWindowResizeHandler);
                 this._ptyWindowResizeHandler = null;
             }
+
             this.clearPtyResizeTimer();
+
             if (this.ptyTerm) {
                 try { this.ptyTerm.dispose(); } catch (_) {}
                 this.ptyTerm = null;
             }
+
             this.ptyFitAddon = null;
             this.ptyLastCols = 0;
             this.ptyLastRows = 0;
@@ -237,12 +188,16 @@ window.AppPtyModule = {
         },
 
         writePtyOutput(text) {
-            if (!text || !this.ptyTerm) return;
-            this.ptyTerm.write(text);
+            if (!text) return;
+            if (this.ptyTerm) {
+                this.ptyTerm.write(text);
+            }
         },
 
         writePtySystemLine(text) {
-            if (this.ptyTerm) this.ptyTerm.write(text);
+            if (this.ptyTerm) {
+                this.ptyTerm.write(text);
+            }
         },
 
         focusPtyInput() {
@@ -266,24 +221,87 @@ window.AppPtyModule = {
         },
 
         schedulePtyResize() {
-            if (!this.ptyDialogVisible || !this.ptySessionId || !this.ptyWs) return;
+            if (!this.ptyDialogVisible || !this.ptySessionId || !this.ptyWs || this.ptyWs.readyState !== WebSocket.OPEN) return;
+
             this.clearPtyResizeTimer();
             this._ptyResizeTimer = setTimeout(() => {
                 this._ptyResizeTimer = null;
-                if (!this.ptyDialogVisible || !this.ptySessionId || !this.ptyWs) return;
+                if (!this.ptyDialogVisible || !this.ptySessionId) return;
                 const size = this.fitPtyTerminalAndGetSize();
                 this.sendPtyResize(size.cols, size.rows);
             }, 80);
         },
 
         sendPtyResize(cols, rows) {
+            if (!this.ptySessionId) return;
             cols = Math.max(20, Number(cols || 0));
             rows = Math.max(5, Number(rows || 0));
             if (!cols || !rows) return;
             if (this.ptyLastCols === cols && this.ptyLastRows === rows) return;
             this.ptyLastCols = cols;
             this.ptyLastRows = rows;
-            this.sendPtyWsMessage({ type: 'resize', cols, rows });
+            this.sendPtyWs({ type: 'resize', cols, rows });
+        },
+
+        openPtySocket() {
+            this.closePtySocket();
+            if (!this.ptyWsPath) return;
+            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const url = `${protocol}//${window.location.host}${this.ptyWsPath}`;
+            const ws = new WebSocket(url);
+            this.ptyWs = ws;
+
+            ws.onopen = () => {
+                this.ptyStatus = this.ptyStatus === 'error' ? this.ptyStatus : 'open';
+                this.focusPtyInput();
+                this.schedulePtyResize();
+            };
+
+            ws.onmessage = (event) => {
+                try {
+                    const payload = JSON.parse(String(event.data || '{}'));
+                    if (payload.type === 'output' && Array.isArray(payload.chunks)) {
+                        payload.chunks.forEach((chunk) => {
+                            const seq = Number(chunk?.seq || 0);
+                            if (seq > this.ptySeq) this.ptySeq = seq;
+                            const text = String(chunk?.text || '');
+                            if (text) this.writePtyOutput(text);
+                        });
+                    }
+                    if (payload.status) this.ptyStatus = payload.status;
+                    if (payload.error) this.ptyError = payload.error;
+                    if (payload.type === 'status' && (payload.status === 'closed' || payload.status === 'error')) {
+                        this.closePtySocket();
+                    }
+                } catch (e) {
+                    console.error('PTY ws message parse failed', e);
+                }
+            };
+
+            ws.onerror = () => {
+                this.ptyError = this.ptyError || 'PTY websocket error';
+            };
+
+            ws.onclose = () => {
+                if (this.ptyDialogVisible && this.ptyStatus !== 'closed' && this.ptyStatus !== 'error') {
+                    this.ptyStatus = 'closed';
+                }
+                this.ptyWs = null;
+            };
+        },
+
+        closePtySocket() {
+            if (this.ptyWs) {
+                try { this.ptyWs.close(); } catch (_) {}
+                this.ptyWs = null;
+            }
+        },
+
+        sendPtyWs(payload) {
+            if (!this.ptyWs || this.ptyWs.readyState !== WebSocket.OPEN) return;
+            try {
+                this.ptyWs.send(JSON.stringify(payload || {}));
+            } catch (_) {}
         },
 
         queuePtyInput(raw) {
@@ -306,7 +324,8 @@ window.AppPtyModule = {
             this.ptyInputQueue = '';
             this.ptyFlushTimer = null;
             if (!this.ptySessionId || !payload) return;
-            this.sendPtyWsMessage({ type: 'input', data: this.encodePtyInput(payload) });
+            const encoded = this.encodePtyInput(payload);
+            this.sendPtyWs({ type: 'input', data: encoded });
         },
 
         encodePtyInput(raw) {
@@ -323,8 +342,8 @@ window.AppPtyModule = {
         handlePtyDialogClosed() {
             this.resetPtyInputQueue();
             this.clearPtyResizeTimer();
+            this.closePtySocket();
             this.ptySessionId = '';
-            this.closePtyWebSocket();
             this.disposePtyTerminal();
         },
     },

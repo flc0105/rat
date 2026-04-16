@@ -58,14 +58,6 @@ class PtySessionService:
             'ws_token': item['ws_token'],
         }
 
-
-    def authorize_ws(self, pty_session_id: str, token: str) -> bool:
-        with self._lock:
-            item = self._sessions.get(str(pty_session_id))
-            if not item:
-                return False
-            return str(item.get('ws_token') or '') == str(token or '')
-
     def write_input(self, pty_session_id: str, data: str):
         item = self._get_required(pty_session_id)
         session = self.server.get_target_connection_by_client_id(item['client_id'])
@@ -166,6 +158,15 @@ class PtySessionService:
             item['chunks'].append({'seq': item['seq'], 'text': f"\n[PTY error] {item['error']}\n"})
             if len(item['chunks']) > self.max_chunks:
                 item['chunks'] = item['chunks'][-self.max_chunks:]
+
+
+    def authorize_ws(self, pty_session_id: str, token: str) -> bool:
+        with self._lock:
+            item = self._sessions.get(str(pty_session_id))
+            if not item:
+                return False
+            expected = str(item.get('ws_token') or '')
+        return bool(expected) and bool(token) and secrets.compare_digest(expected, str(token))
 
     def _get_required(self, pty_session_id: str) -> dict:
         with self._lock:
