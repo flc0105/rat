@@ -3403,3 +3403,137 @@ body {
     min-height: 400px;
   }
 }
+
+
+/* PTY terminal refinements */
+.pty-dialog .el-dialog__body {
+  padding-top: 10px;
+}
+
+.pty-toolbar {
+  gap: 10px;
+}
+
+/*.pty-badge {*/
+/*  background: rgba(255, 255, 255, 0.08);*/
+/*  color: #e5e7eb;*/
+/*  border: 1px solid rgba(255, 255, 255, 0.06);*/
+/*}*/
+
+/*.pty-badge-status {*/
+/*  background: rgba(59, 130, 246, 0.14);*/
+/*}*/
+
+/*.pty-error-text {*/
+/*  color: #fca5a5;*/
+/*}*/
+
+.xterm-shell,
+.pty-screen-shell {
+  background: #000000;
+}
+
+.pty-screen-shell {
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
+}
+
+.pty-terminal-host {
+  min-height: 480px;
+  padding: 16px 18px 16px 16px;
+  box-sizing: border-box;
+}
+
+.pty-terminal-host .xterm {
+  height: 100%;
+  padding-right: 8px;
+}
+
+.pty-terminal-host .xterm-viewport {
+  overflow-y: auto !important;
+  background: #000000 !important;
+  scrollbar-gutter: stable;
+}
+
+.pty-terminal-host .xterm-viewport::-webkit-scrollbar {
+  width: 10px;
+}
+
+.pty-terminal-host .xterm-viewport::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.04);
+  border-radius: 999px;
+}
+
+.pty-terminal-host .xterm-viewport::-webkit-scrollbar-thumb {
+  background: rgba(148, 163, 184, 0.42);
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+
+.pty-terminal-host .xterm-viewport::-webkit-scrollbar-thumb:hover {
+  background: rgba(148, 163, 184, 0.62);
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+
+.pty-terminal-host .xterm-screen,
+.pty-terminal-host .xterm-helpers {
+  width: calc(100% - 8px) !important;
+}
+
+.pty-hint {
+  color: #94a3b8;
+}
+
+@media (max-width: 768px) {
+  .pty-terminal-host {
+    min-height: 360px;
+    padding: 12px 14px 12px 12px;
+  }
+}
+
+
+/*.pty-status-badge {*/
+/*  display: inline-flex;*/
+/*  align-items: center;*/
+/*  gap: 6px;*/
+/*  height: 28px;*/
+/*  padding: 0 10px;*/
+/*  border-radius: 999px;*/
+/*  font-size: 13px;*/
+/*  font-weight: 600;*/
+/*  line-height: 1;*/
+/*  border: 1px solid rgba(255, 255, 255, 0.08);*/
+/*  background: rgba(255, 255, 255, 0.08);*/
+/*  color: #e5e7eb;*/
+/*}*/
+
+/*.pty-status-badge.open,*/
+/*.pty-status-badge.connected,*/
+/*.pty-status-badge.success {*/
+/*  background: rgba(34, 197, 94, 0.16);*/
+/*  color: #bbf7d0;*/
+/*  border-color: rgba(34, 197, 94, 0.28);*/
+/*}*/
+
+/*.pty-status-badge.opening,*/
+/*.pty-status-badge.connecting {*/
+/*  background: rgba(59, 130, 246, 0.16);*/
+/*  color: #bfdbfe;*/
+/*  border-color: rgba(59, 130, 246, 0.28);*/
+/*}*/
+
+/*.pty-status-badge.error,*/
+/*.pty-status-badge.disconnected,*/
+/*.pty-status-badge.closed {*/
+/*  background: rgba(239, 68, 68, 0.16);*/
+/*  color: #fecaca;*/
+/*  border-color: rgba(239, 68, 68, 0.28);*/
+/*}*/
+
+/*.pty-client-chip {*/
+/*  background: rgba(255, 255, 255, 0.08);*/
+/*  color: #e5e7eb;*/
+/*  border: 1px solid rgba(255, 255, 255, 0.08);*/
+/*}*/

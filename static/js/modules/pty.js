@@ -16,6 +16,8 @@ window.AppPtyModule = {
             ptyLastRows: 0,
             ptyWs: null,
             ptyWsPath: '',
+            ptyUserClosing: false,
+            ptyWsConnectedOnce: false,
             _ptyResizeTimer: null,
             _ptyWindowResizeHandler: null,
         };
@@ -39,6 +41,8 @@ window.AppPtyModule = {
             this.ptySeq = 0;
             this.ptyStatus = 'opening';
             this.ptyError = '';
+            this.ptyUserClosing = false;
+            this.ptyWsConnectedOnce = false;
             this.closePtySocket();
             this.resetPtyInputQueue();
 
@@ -47,6 +51,7 @@ window.AppPtyModule = {
                 this.initPtyTerminal();
                 this.clearPtyTerminal();
                 this.writePtySystemLine('[opening PTY...]\r\n');
+                ElementPlus.ElMessage({ type: 'info', message: 'Opening PTY session...', duration: 1200 });
 
                 const dims = this.fitPtyTerminalAndGetSize();
                 const res = await fetch(`/api/connections/${encodeURIComponent(this.selectedId)}/pty/open`, {
@@ -88,6 +93,7 @@ window.AppPtyModule = {
         async closePtyDialog() {
             this.resetPtyInputQueue();
             this.clearPtyResizeTimer();
+            this.ptyUserClosing = true;
             this.sendPtyWs({ type: 'close' });
             this.closePtySocket();
 
@@ -124,12 +130,18 @@ window.AppPtyModule = {
             const term = new window.Terminal({
                 cursorBlink: true,
                 convertEol: false,
-                scrollback: 2000,
-                fontSize: 15,
-                lineHeight: 1.25,
+                scrollback: 5000,
+                fontSize: 14,
+                lineHeight: 1.32,
+                fontFamily: "'JetBrains Mono', 'SFMono-Regular', 'Cascadia Mono', 'Menlo', 'Consolas', monospace",
                 theme: {
-                    background: '#03142d',
+                    background: '#000000',
+                    foreground: '#e5e7eb',
+                    cursor: '#93c5fd',
+                    cursorAccent: '#000000',
+                    selectionBackground: 'rgba(148, 163, 184, 0.28)',
                 },
+                allowTransparency: false,
             });
 
             const fitAddon = new window.FitAddon.FitAddon();
@@ -253,8 +265,10 @@ window.AppPtyModule = {
 
             ws.onopen = () => {
                 this.ptyStatus = this.ptyStatus === 'error' ? this.ptyStatus : 'open';
+                this.ptyWsConnectedOnce = true;
                 this.focusPtyInput();
                 this.schedulePtyResize();
+                ElementPlus.ElMessage({ type: 'success', message: 'PTY connected', duration: 1200 });
             };
 
             ws.onmessage = (event) => {
@@ -283,10 +297,18 @@ window.AppPtyModule = {
             };
 
             ws.onclose = () => {
+                const unexpected = !this.ptyUserClosing && this.ptyDialogVisible && this.ptyStatus !== 'error';
                 if (this.ptyDialogVisible && this.ptyStatus !== 'closed' && this.ptyStatus !== 'error') {
                     this.ptyStatus = 'closed';
                 }
                 this.ptyWs = null;
+                if (unexpected) {
+                    ElementPlus.ElMessage({
+                        type: 'warning',
+                        message: this.ptyWsConnectedOnce ? 'PTY disconnected' : 'PTY connection closed',
+                        duration: 1800,
+                    });
+                }
             };
         },
 
