@@ -1,12 +1,25 @@
-# -*- coding: utf-8 -*-
+SCRIPT_METADATA = {
+    "name": "win/files/locking_processes",
+    "display_name": "Locking Processes",
+    "description": "List Windows processes that are currently locking a file",
+    "platforms": ["windows"],
+    "category": "Misc",
+    "params": [
+        {
+            "name": "file",
+            "type": "string",
+            "required": True,
+            "default": "",
+            "description": "Target file path to inspect"
+        }
+    ]
+}
 
 import ctypes
 import json
 import os
 import sys
 from ctypes import wintypes
-
-# from core.utils.client_util import require_kwarg
 
 CCH_RM_MAX_APP_NAME = 255
 CCH_RM_MAX_SVC_NAME = 63
@@ -77,7 +90,6 @@ RmEndSession.argtypes = [wintypes.DWORD]
 RmEndSession.restype = wintypes.DWORD
 
 
-# add 检查文件占用进程 2026-04-07 00:00
 def get_locking_processes(file_path):
     abs_path = os.path.abspath(file_path)
 
@@ -144,7 +156,6 @@ def get_locking_processes(file_path):
         RmEndSession(session_handle.value)
 
 
-# add 构建json输出结果 2026-04-07 00:00
 def build_result(success, file_path="", processes=None, error=""):
     return {
         "success": success,
@@ -157,9 +168,7 @@ def build_result(success, file_path="", processes=None, error=""):
 
 if os.name != "nt":
     print(json.dumps(build_result(False, error="This script only supports Windows."), ensure_ascii=False))
-    sys.exit(1)
 
-# file_path = require_kwarg(kwargs, 'file')
 file_path = kwargs.get('file', '')
 
 try:
@@ -167,4 +176,3 @@ try:
     print(json.dumps(build_result(True, file_path=file_path, processes=processes), ensure_ascii=False))
 except Exception as e:
     print(json.dumps(build_result(False, file_path=file_path, error=str(e)), ensure_ascii=False))
-    sys.exit(2)

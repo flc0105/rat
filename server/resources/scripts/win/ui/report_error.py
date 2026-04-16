@@ -1,3 +1,20 @@
+SCRIPT_METADATA = {
+    "name": "win/system/wer_report",
+    "display_name": "WER Report",
+    "description": "Trigger a Windows Error Reporting submission for a target executable path",
+    "platforms": ["windows"],
+    "category": "UI",
+    "params": [
+        {
+            "name": "exec_path",
+            "type": "string",
+            "required": False,
+            "default": r"C:\windows\explorer.exe",
+            "description": "Target executable path used in the report"
+        }
+    ]
+}
+
 import ctypes
 import threading
 from ctypes import wintypes
