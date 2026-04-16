@@ -3,6 +3,7 @@ import threading
 from server.config.config import SOCKET_ADDR, WEB_HOST, WEB_PORT
 from ratserver import Server
 from server.web.app import create_app
+from server.web.pty_ws_server import PtyWebSocketServer
 
 
 def main():
@@ -10,6 +11,8 @@ def main():
 
     threading.Thread(target=server.serve, daemon=True).start()
     threading.Thread(target=server.heartbeat_loop, daemon=True).start()
+
+    PtyWebSocketServer(server).start()
 
     app = create_app(server)
     app.run(host=WEB_HOST, port=WEB_PORT, threaded=True, debug=False)

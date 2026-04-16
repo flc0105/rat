@@ -10,6 +10,7 @@ SOCKET_ADDR = (SOCKET_HOST, SOCKET_PORT)
 
 WEB_HOST = '0.0.0.0'
 WEB_PORT = 8085
+WEB_WS_PORT = int(os.getenv('RAT_WEB_WS_PORT', str(WEB_PORT + 1)))
 
 # ------------------ auth ------------------ #
 WEB_SESSION_SECRET = os.getenv('RAT_WEB_SESSION_SECRET', 'change-this-session-secret')

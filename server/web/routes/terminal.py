@@ -1,5 +1,7 @@
 from flask import Blueprint, request
 
+from server.config.config import WEB_WS_PORT
+
 from server.web.api_response import WebApiResponder
 from server.web.request_parsers import get_json_payload
 
@@ -13,13 +15,17 @@ def create_terminal_blueprint(server_instance):
     def open_pty(client_id):
         def _execute():
             payload = get_json_payload()
-            return terminal_api.open_pty_session(
+            result = terminal_api.open_pty_session(
                 client_id,
                 cols=payload.get('cols') or 120,
                 rows=payload.get('rows') or 32,
                 shell=(payload.get('shell') or '').strip(),
                 cwd=(payload.get('cwd') or '').strip(),
             )
+            host = (request.host.split(':', 1)[0] or '127.0.0.1').strip()
+            scheme = 'wss' if (request.headers.get('X-Forwarded-Proto') or request.scheme) == 'https' else 'ws'
+            result['ws_url'] = f"{scheme}://{host}:{WEB_WS_PORT}/ws/pty?pty_session_id={result['pty_session_id']}&token={result['ws_token']}"
+            return result
 
         return responder.json_endpoint(_execute, default_error_status=500)
 

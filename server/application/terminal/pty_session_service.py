@@ -1,4 +1,5 @@
 import base64
+import secrets
 import threading
 import time
 import uuid
@@ -36,6 +37,7 @@ class PtySessionService:
             'seq': 0,
             'chunks': [],
             'error': '',
+            'ws_token': secrets.token_urlsafe(24),
         }
         with self._lock:
             self._sessions[pty_id] = item
@@ -53,7 +55,16 @@ class PtySessionService:
             'status': item['status'],
             'cols': item['cols'],
             'rows': item['rows'],
+            'ws_token': item['ws_token'],
         }
+
+
+    def authorize_ws(self, pty_session_id: str, token: str) -> bool:
+        with self._lock:
+            item = self._sessions.get(str(pty_session_id))
+            if not item:
+                return False
+            return str(item.get('ws_token') or '') == str(token or '')
 
     def write_input(self, pty_session_id: str, data: str):
         item = self._get_required(pty_session_id)
