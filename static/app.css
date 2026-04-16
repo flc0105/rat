@@ -1721,7 +1721,7 @@ body {
   padding: 2px 8px;
   font-size: 11px;
   font-weight: 500;
-  border-radius: 20px;
+  /*border-radius: 20px;*/
   line-height: 18px;
 }
 
@@ -1830,7 +1830,7 @@ body {
 
 .execution-actions {
   display: flex;
-  gap: 12px;
+  /*gap: 12px;*/
   justify-content: flex-end;
 }
 
@@ -1857,9 +1857,9 @@ body {
 }
 
 .action-btn-primary {
-  background: #eef2ff;
-  color: #4f46e5;
-  border: 1px solid #e0e7ff;
+
+  color: var(--el-color-primary);
+  border: 1px solid var(--el-color-primary);;
 }
 
 .action-btn-danger {
@@ -1869,8 +1869,9 @@ body {
 }
 
 .action-btn-primary:hover {
-  background: #e0e7ff;
-  border-color: #c7d2fe;
+  background: #eef2ff;
+  /*background: #e0e7ff;*/
+  /*border-color: #c7d2fe;*/
 }
 
 /* ========== 后台任务模块 ========== */

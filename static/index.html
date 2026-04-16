@@ -1662,15 +1662,20 @@
                                 <div class="execution-card-header">
                                     <div class="execution-command mono">{{ item.command || '-' }}</div>
                                     <div class="execution-badges">
-                        <span class="execution-status" :class="`status-${item.status || 'unknown'}`">
-                            {{ item.status || 'unknown' }}
-                        </span>
-                                        <span v-if="item.has_files" class="execution-badge badge-files">
-                            📎 {{ item.file_count || 0 }}
-                        </span>
-                                        <span v-if="item.output_truncated" class="execution-badge badge-truncated">
+<!--                        <span class="execution-status" :class="`status-${item.status || 'unknown'}`">-->
+<!--                            {{ item.status || 'unknown' }}-->
+<!--                        </span>-->
+                                        <el-tag :type="buildCommandExecutionStatusTagType(item.status)" size="small">
+                                            {{ item.status || '-' }}
+                                    </el-tag>
+<!--                                        <span v-if="item.has_files" class="execution-badge badge-files">-->
+                                        <el-tag type="primary" size="small" v-if="item.has_files"> 📎 {{ item.file_count || 0 }}</el-tag>
+<!--                        </span>-->
+<!--                                        <span v-if="item.output_truncated" class="execution-badge badge-truncated">-->
+                                        <el-tag type="warning" size="small" v-if="item.output_truncated">
                             ✂️ truncated
-                        </span>
+                                        </el-tag>
+<!--                        </span>-->
                                     </div>
                                 </div>
 
@@ -1704,17 +1709,17 @@
 
                                 <!-- 操作按钮 -->
                                 <div class="execution-actions">
-                                    <button class="action-btn action-btn-secondary" @click="applyHistoryCommand(item)">
+                                    <el-button type="" plain size="small" @click="applyHistoryCommand(item)">
                                         Use
-                                    </button>
-                                    <button class="action-btn action-btn-primary"
+                                    </el-button>
+                                    <el-button type="" plain size="small"
                                             @click="openCommandExecutionDetail(item)">
                                         Details
-                                    </button>
-                                    <button class="action-btn action-btn-danger"
+                                    </el-button>
+                                    <el-button type="danger" plain size="small"
                                             @click="deleteCommandExecutionItem(item)">
                                         Delete
-                                    </button>
+                                    </el-button>
                                 </div>
                             </div>
                         </div>

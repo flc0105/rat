@@ -150,7 +150,27 @@ class CommandHistoryStore:
             return 0
         return max(len(text.splitlines()), 1)
 
+    # def _build_output_summary(self, entry: dict) -> str:
+    #     if entry.get('has_files'):
+    #         file_count = entry.get('file_count', 0)
+    #         if file_count > 0:
+    #             return f'Produced {file_count} file(s)'
+    #
+    #     records = entry.get('output_records') or []
+    #     for item in reversed(records):
+    #         text = self._safe_text(item.get('text')).strip()
+    #         if text:
+    #             return text[:self.MAX_OUTPUT_SUMMARY_CHARS]
+    #
+    #     status = entry.get('status') or ''
+    #     if status == 'success':
+    #         return 'Command completed'
+    #     if status == 'error':
+    #         return 'Command failed'
+    #     return 'No output'
+
     def _build_output_summary(self, entry: dict) -> str:
+        # 如果只有一行 就返回这一行内容（字符数截断），如果超过1行 显示completed或者failed
         if entry.get('has_files'):
             file_count = entry.get('file_count', 0)
             if file_count > 0:
@@ -158,9 +178,18 @@ class CommandHistoryStore:
 
         records = entry.get('output_records') or []
         for item in reversed(records):
-            text = self._safe_text(item.get('text')).strip()
-            if text:
+            text = self._safe_text(item.get('text'))
+            if not text:
+                continue
+
+            text = text.strip()
+            if not text:
+                continue
+
+            if '\n' not in text and '\r' not in text:
                 return text[:self.MAX_OUTPUT_SUMMARY_CHARS]
+
+            break
 
         status = entry.get('status') or ''
         if status == 'success':
