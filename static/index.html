@@ -161,6 +161,11 @@
                                         <el-button size="small" class="tool-btn" @click="openCommandHistoryDialog">
                                             History
                                         </el-button>
+
+                                        <el-button size="small" class="tool-btn" @click="openPtyDialog" :disabled="!selectedId">
+                                            PTY
+                                        </el-button>
+
                                         <el-button size="small" class="tool-btn tool-btn-accent"
                                                    @click="openProcessDialog">Processes
                                         </el-button>
@@ -371,7 +376,7 @@
                         <div class="remote-toolbar-group">
                             <el-button size="small" @click="refreshRemoteDirectory">Refresh</el-button>
                             <el-button size="small" @click="goToRemoteParent" :disabled="!remoteFilesParentPath">Up</el-button>
-                            <el-button size="small" type="primary" plain @click="openPtyDialog" :disabled="!selectedId">PTY</el-button>
+
                             <el-dropdown @command="jumpToPath" :loading="quickJumpLoading || remotePinnedJumpLoading">
                                 <el-button size="small">
                                     Quick Jump
