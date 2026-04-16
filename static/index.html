@@ -2180,110 +2180,24 @@
     </div>
 </el-dialog>
 
-<!--    <el-dialog-->
-<!--        v-model="agentOutputsDialogVisible"-->
-<!--        title="Agent Outputs"-->
-<!--        width="1180px"-->
-<!--        top="5vh"-->
-<!--        class="fixed-dialog"-->
-<!--&gt;-->
-<!--    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">-->
-<!--        <div style="font-size:13px; color:#606266;">-->
-<!--            Generated files under <code>runtime/agent_output</code>-->
-<!--        </div>-->
-<!--        <div style="display:flex; gap:8px;">-->
-<!--            <el-button size="small" @click="openAgentBuilderDialog">Build Agent</el-button>-->
-<!--            <el-button size="small" @click="loadAgentOutputs" :loading="agentOutputsLoading">Refresh</el-button>-->
-<!--        </div>-->
-<!--    </div>-->
-
-<!--    <el-table :data="agentOutputs" v-loading="agentOutputsLoading" stripe border style="width: 100%;" height="65vh">-->
-
-
-
-<!--            <el-table-column prop="build_version" label="Version" min-width="260" show-overflow-tooltip></el-table-column>-->
-
-<!--    <el-table-column prop="builder" label="Builder" min-width="120" show-overflow-tooltip></el-table-column>-->
-<!--    <el-table-column label="Build Time" min-width="170">-->
-<!--        <template #default="{ row }">{{ formatDateTimeStandard(row.build_time) }}</template>-->
-<!--    </el-table-column>-->
-
-<!--    <el-table-column prop="file_name" label="File Name" min-width="260" show-overflow-tooltip></el-table-column>-->
-
-
-
-<!--    <el-table-column label="OS" min-width="90">-->
-<!--        <template #default="{ row }">{{ describeAgentTargetOs(row.target_os) }}</template>-->
-<!--    </el-table-column>-->
-
-<!--    <el-table-column prop="target_arch" label="Arch" min-width="90"></el-table-column>-->
-
-<!--    <el-table-column label="Socket" min-width="160">-->
-<!--        <template #default="{ row }">{{ formatAgentListenerText(row) }}</template>-->
-<!--    </el-table-column>-->
-
-<!--    <el-table-column label="Web" min-width="200">-->
-<!--        <template #default="{ row }">{{ formatAgentWebListenerText(row) }}</template>-->
-<!--    </el-table-column>-->
-
-<!--            <el-table-column label="Source" min-width="150">-->
-<!--        <template #default="{ row }">{{ formatAgentSourceText(row.source) }}</template>-->
-<!--    </el-table-column>-->
-
-<!--    <el-table-column label="Size" min-width="110">-->
-<!--        <template #default="{ row }">{{ formatBytes(row.size) }}</template>-->
-<!--    </el-table-column>-->
-
-<!--    <el-table-column label="Actions" width="170" fixed="right">-->
-<!--        <template #default="{ row }">-->
-<!--            <a class="table-action-link" :href="row.download_url" target="_blank">Download</a>-->
-<!--            <a class="table-action-link danger" style="margin-left: 10px;"-->
-<!--               @click.prevent="deleteAgentOutput(row)">-->
-<!--                {{ isAgentOutputDeleting(row.file_name) ? 'Deleting...' : 'Delete' }}-->
-<!--            </a>-->
-<!--        </template>-->
-<!--    </el-table-column>-->
-<!--</el-table>-->
-
-<!--    <div v-if="!agentOutputs.length && !agentOutputsLoading" class="empty-state">-->
-<!--        No agent outputs-->
-<!--    </div>-->
-
-<!--    <template #footer>-->
-<!--        <el-button @click="agentOutputsDialogVisible = false">Close</el-button>-->
-<!--    </template>-->
-<!--</el-dialog>-->
-
 
     <el-dialog
         v-model="agentOutputsDialogVisible"
         title="Agent Outputs"
         width="1280px"
         top="4vh"
-        class="fixed-dialog agent-outputs-dialog"
+        class="fixed-dialog agent-outputs-dialog "
 >
-    <div class="agent-outputs-toolbar">
-        <div class="agent-outputs-toolbar-left">
-            <div class="agent-outputs-title-row">
-                <span class="agent-outputs-title">Generated Outputs</span>
-                <span class="agent-outputs-count">{{ agentOutputs.length }}</span>
-            </div>
-            <div class="agent-outputs-subtitle">
-                Generated files under <code>runtime/agent_output</code>
-            </div>
-        </div>
-
-        <div class="agent-outputs-toolbar-actions">
-            <el-button type="primary" plain @click="openAgentBuilderDialog">
+        <div class="agent-outputs-toolbar-actions" style="margin-bottom: 12px">
+            <el-button type="primary" plain class="toolbar-btn" size="small" @click="openAgentBuilderDialog">
                 Build Agent
             </el-button>
-            <el-button @click="loadAgentOutputs" :loading="agentOutputsLoading">
+            <el-button @click="loadAgentOutputs" class="toolbar-btn" size="small" :loading="agentOutputsLoading">
                 Refresh
             </el-button>
         </div>
-    </div>
 
-    <div class="agent-outputs-table-wrap">
+    <div class="agent-outputs-table-wrap ">
         <el-table
                 :data="agentOutputs"
                 v-loading="agentOutputsLoading"
@@ -2291,44 +2205,59 @@
                 border
                 style="width: 100%;"
                 height="66vh"
-                class="agent-outputs-table"
+                class="dialog-table-shell"
         >
-            <el-table-column label="File" min-width="320" fixed="left">
+            <el-table-column label="File" min-width="320">
                 <template #default="{ row }">
                     <div class="agent-output-file-cell">
                         <div class="agent-output-file-name" :title="row.file_name">{{ row.file_name || '-' }}</div>
-                        <div class="agent-output-file-sub">
-                            <span>{{ row.build_version || '-' }}</span>
-
-                        </div>
                     </div>
                 </template>
             </el-table-column>
 
-            <el-table-column label="Builder" min-width="120">
+
+
+            <el-table-column label="Builder" min-width="100">
                 <template #default="{ row }">
        {{ row.builder || '-' }}
                 </template>
             </el-table-column>
 
-
-
-
-
-            <el-table-column label="Target" min-width="170">
+                        <el-table-column label="Version" min-width="200">
                 <template #default="{ row }">
-                    <div class="agent-output-tag-group">
-                        <el-tag size="small" effect="plain">{{ describeAgentTargetOs(row.target_os) }}</el-tag>
-                        <el-tag size="small" type="info" effect="plain">{{ row.target_arch || '-' }}</el-tag>
-                    </div>
+                <span>{{ row.build_version || '-' }}</span>
                 </template>
             </el-table-column>
 
-            <el-table-column label="Source" min-width="120">
+
+
+
+
+            <el-table-column label="OS" min-width="100">
                 <template #default="{ row }">
-                    <el-tag size="small" type="success" effect="light">
+
+                        <el-tag size="small" effect="plain">{{ describeAgentTargetOs(row.target_os) }}</el-tag>
+
+
+                </template>
+            </el-table-column>
+
+                        <el-table-column label="Arch" min-width="100">
+                <template #default="{ row }">
+
+                         <el-tag size="small" type="info" effect="plain">{{ row.target_arch || '-' }}</el-tag>
+
+
+                </template>
+            </el-table-column>
+
+
+
+            <el-table-column label="Source" min-width="100">
+                <template #default="{ row }">
+
                         {{ formatAgentSourceText(row.source) }}
-                    </el-tag>
+
                 </template>
             </el-table-column>
 
@@ -2351,7 +2280,7 @@
                 </template>
             </el-table-column>
 
-                                    <el-table-column label="Size" min-width="140">
+                                    <el-table-column label="Size" min-width="120">
                 <template #default="{ row }">
 <span>{{ formatBytes(row.size) }}</span>
                 </template>
