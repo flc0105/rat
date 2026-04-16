@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
     <title>Remote Control Hub</title>
     <link rel="stylesheet" href="https://unpkg.com/element-plus/dist/index.css"/>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.min.css"/>
     <link rel="stylesheet" href="/app.css"/>
     <script src="/auth.js"></script>
 
@@ -2197,20 +2198,10 @@
                     <el-button size="small" @click="closePtyDialog">Close</el-button>
                 </div>
             </div>
-            <div class="pty-screen-shell" @click="focusPtyInput">
-                <pre ref="ptyOutputRef" class="pty-screen">{{ ptyOutput }}</pre>
-                <textarea
-                    ref="ptyInputCaptureRef"
-                    class="pty-input-capture"
-                    autocomplete="off"
-                    autocapitalize="off"
-                    spellcheck="false"
-                    @keydown="handlePtyKeydown"
-                    @paste="handlePtyPaste"
-                    @blur="refocusPtyInput"
-                ></textarea>
+            <div class="pty-screen-shell xterm-shell" @click="focusPtyInput">
+                <div ref="ptyTerminalRef" class="pty-terminal-host"></div>
             </div>
-            <div class="pty-hint">Type directly in the terminal area. Supports basic shell interaction, sudo prompts, arrows, tab, Ctrl+C and Ctrl+D.</div>
+            <div class="pty-hint">Powered by xterm.js. Supports ANSI control sequences, vim/less/top style full-screen apps, sudo prompts, paste and resize.</div>
         </div>
     </el-dialog>
 
@@ -2218,6 +2209,8 @@
 
 <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
 <script src="https://unpkg.com/element-plus/dist/index.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.8.0/lib/xterm-addon-fit.min.js"></script>
 <script src="/js/core/state.js"></script>
 <script src="/js/modules/utils.js"></script>
 <script src="/js/modules/commands.js"></script>

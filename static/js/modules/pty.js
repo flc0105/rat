@@ -4,12 +4,18 @@ window.AppPtyModule = {
             ptyDialogVisible: false,
             ptyLoading: false,
             ptySessionId: '',
-            ptyOutput: '',
             ptySeq: 0,
             ptyStatus: '',
             ptyError: '',
             ptyPollTimer: null,
             ptyShellPath: '',
+            ptyTerm: null,
+            ptyFitAddon: null,
+            ptyResizeObserver: null,
+            ptyInputQueue: '',
+            ptyFlushTimer: null,
+            ptyLastCols: 0,
+            ptyLastRows: 0,
         };
     },
 
@@ -20,16 +26,27 @@ window.AppPtyModule = {
                 return;
             }
             if (this.ptyLoading) return;
+            if (!window.Terminal || !window.FitAddon || !window.FitAddon.FitAddon) {
+                ElementPlus.ElMessage.error('xterm.js failed to load');
+                return;
+            }
 
             this.ptyLoading = true;
             this.ptyDialogVisible = true;
             this.ptySessionId = '';
-            this.ptyOutput = '';
             this.ptySeq = 0;
             this.ptyStatus = 'opening';
             this.ptyError = '';
+            this.stopPtyPolling();
+            this.resetPtyInputQueue();
 
             try {
+                await this.$nextTick();
+                this.initPtyTerminal();
+                this.clearPtyTerminal();
+                this.writePtySystemLine('[opening PTY...]\r\n');
+
+                const dims = this.getPtyTerminalSize();
                 const res = await fetch(`/api/connections/${encodeURIComponent(this.selectedId)}/pty/open`, {
                     method: 'POST',
                     headers: {
@@ -37,8 +54,8 @@ window.AppPtyModule = {
                         ...this.getTabScopedHeaders(),
                     },
                     body: JSON.stringify({
-                        cols: 120,
-                        rows: 32,
+                        cols: dims.cols,
+                        rows: dims.rows,
                         shell: this.ptyShellPath || '',
                     }),
                 });
@@ -49,10 +66,12 @@ window.AppPtyModule = {
                 this.ptySessionId = json.data?.pty_session_id || '';
                 this.ptyStatus = json.data?.status || 'opening';
                 this.startPtyPolling();
-                this.$nextTick(() => this.focusPtyInput());
+                this.focusPtyInput();
+                this.schedulePtyResize();
             } catch (e) {
                 this.ptyStatus = 'error';
                 this.ptyError = e?.message || String(e);
+                this.writePtySystemLine(`\r\n[PTY error] ${this.ptyError}\r\n`);
                 ElementPlus.ElMessage.error(this.ptyError || 'Failed to open PTY');
             } finally {
                 this.ptyLoading = false;
@@ -61,11 +80,15 @@ window.AppPtyModule = {
 
         async closePtyDialog() {
             this.stopPtyPolling();
+            this.resetPtyInputQueue();
             const ptyId = this.ptySessionId;
             this.ptyDialogVisible = false;
             this.ptySessionId = '';
             this.ptyStatus = 'closed';
-            if (!ptyId) return;
+            if (!ptyId) {
+                this.disposePtyTerminal();
+                return;
+            }
             try {
                 await fetch(`/api/pty/${encodeURIComponent(ptyId)}/close`, {
                     method: 'POST',
@@ -74,6 +97,135 @@ window.AppPtyModule = {
                         ...this.getTabScopedHeaders(),
                     },
                     body: '{}',
+                });
+            } catch (_) {
+            } finally {
+                this.disposePtyTerminal();
+            }
+        },
+
+        initPtyTerminal() {
+            if (this.ptyTerm) return;
+            const host = this.$refs.ptyTerminalRef;
+            if (!host) return;
+
+            const term = new window.Terminal({
+                cursorBlink: true,
+                convertEol: false,
+                scrollback: 2000,
+                fontSize: 15,
+                lineHeight: 1.25,
+                theme: {
+                    background: '#03142d',
+                },
+            });
+            const fitAddon = new window.FitAddon.FitAddon();
+            term.loadAddon(fitAddon);
+            term.open(host);
+            try {
+                fitAddon.fit();
+            } catch (_) {}
+
+            term.onData((data) => {
+                this.queuePtyInput(data);
+            });
+            term.onResize((size) => {
+                this.sendPtyResize(size.cols, size.rows);
+            });
+            term.onTitleChange((title) => {
+                if (title) this.ptyStatus = this.ptyStatus || 'open';
+            });
+
+            this.ptyTerm = term;
+            this.ptyFitAddon = fitAddon;
+
+            if (window.ResizeObserver) {
+                this.ptyResizeObserver = new ResizeObserver(() => {
+                    this.schedulePtyResize();
+                });
+                this.ptyResizeObserver.observe(host);
+            }
+        },
+
+        disposePtyTerminal() {
+            if (this.ptyResizeObserver) {
+                try { this.ptyResizeObserver.disconnect(); } catch (_) {}
+                this.ptyResizeObserver = null;
+            }
+            if (this.ptyTerm) {
+                try { this.ptyTerm.dispose(); } catch (_) {}
+                this.ptyTerm = null;
+            }
+            this.ptyFitAddon = null;
+            this.ptyLastCols = 0;
+            this.ptyLastRows = 0;
+        },
+
+        clearPtyTerminal() {
+            if (this.ptyTerm) {
+                try { this.ptyTerm.clear(); } catch (_) {}
+                try { this.ptyTerm.reset(); } catch (_) {}
+            }
+        },
+
+        writePtyOutput(text) {
+            if (!text) return;
+            if (this.ptyTerm) {
+                this.ptyTerm.write(text);
+            }
+        },
+
+        writePtySystemLine(text) {
+            if (this.ptyTerm) {
+                this.ptyTerm.write(text);
+            }
+        },
+
+        focusPtyInput() {
+            if (this.ptyTerm) {
+                try { this.ptyTerm.focus(); } catch (_) {}
+            }
+        },
+
+        refocusPtyInput() {
+            if (!this.ptyDialogVisible) return;
+            setTimeout(() => this.focusPtyInput(), 0);
+        },
+
+        getPtyTerminalSize() {
+            if (this.ptyFitAddon) {
+                try { this.ptyFitAddon.fit(); } catch (_) {}
+            }
+            const cols = Math.max(20, Number(this.ptyTerm?.cols || 120));
+            const rows = Math.max(5, Number(this.ptyTerm?.rows || 32));
+            return { cols, rows };
+        },
+
+        schedulePtyResize() {
+            if (!this.ptyDialogVisible) return;
+            setTimeout(() => {
+                if (!this.ptyDialogVisible) return;
+                const size = this.getPtyTerminalSize();
+                this.sendPtyResize(size.cols, size.rows);
+            }, 30);
+        },
+
+        async sendPtyResize(cols, rows) {
+            if (!this.ptySessionId) return;
+            cols = Math.max(20, Number(cols || 0));
+            rows = Math.max(5, Number(rows || 0));
+            if (!cols || !rows) return;
+            if (this.ptyLastCols === cols && this.ptyLastRows === rows) return;
+            this.ptyLastCols = cols;
+            this.ptyLastRows = rows;
+            try {
+                await fetch(`/api/pty/${encodeURIComponent(this.ptySessionId)}/resize`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        ...this.getTabScopedHeaders(),
+                    },
+                    body: JSON.stringify({ cols, rows }),
                 });
             } catch (_) {}
         },
@@ -85,7 +237,7 @@ window.AppPtyModule = {
                 try {
                     const url = new URL(`/api/pty/${encodeURIComponent(this.ptySessionId)}/poll`, window.location.origin);
                     url.searchParams.set('after_seq', String(this.ptySeq || 0));
-                    const res = await fetch(url.toString(), {headers: this.getTabScopedHeaders()});
+                    const res = await fetch(url.toString(), { headers: this.getTabScopedHeaders() });
                     const json = await res.json();
                     if (!res.ok || json.code !== 0) {
                         throw new Error(json.message || 'PTY poll failed');
@@ -98,8 +250,11 @@ window.AppPtyModule = {
                             const seq = Number(chunk?.seq || 0);
                             if (seq > this.ptySeq) this.ptySeq = seq;
                             const text = String(chunk?.text || '');
-                            if (text) this.appendPtyOutput(text);
+                            if (text) this.writePtyOutput(text);
                         });
+                    }
+                    if ((payload.cols && payload.rows) && this.ptyTerm && (this.ptyStatus === 'open' || this.ptyStatus === 'opening')) {
+                        this.schedulePtyResize();
                     }
                     if (this.ptyStatus === 'closed' || this.ptyStatus === 'error') {
                         this.stopPtyPolling();
@@ -107,10 +262,11 @@ window.AppPtyModule = {
                 } catch (e) {
                     this.ptyError = e?.message || String(e);
                     this.ptyStatus = 'error';
+                    this.writePtySystemLine(`\r\n[PTY error] ${this.ptyError}\r\n`);
                     this.stopPtyPolling();
                 }
                 if (this.ptyDialogVisible && this.ptySessionId && this.ptyStatus !== 'closed' && this.ptyStatus !== 'error') {
-                    this.ptyPollTimer = setTimeout(tick, 250);
+                    this.ptyPollTimer = setTimeout(tick, 120);
                 }
             };
             tick();
@@ -123,83 +279,55 @@ window.AppPtyModule = {
             }
         },
 
-        appendPtyOutput(text) {
-            this.ptyOutput = `${this.ptyOutput || ''}${text}`;
-            if (this.ptyOutput.length > 200000) {
-                this.ptyOutput = this.ptyOutput.slice(-200000);
-            }
-            this.$nextTick(() => this.scrollPtyToBottom());
-        },
-
-        scrollPtyToBottom() {
-            const el = this.$refs.ptyOutputRef;
-            if (el) {
-                el.scrollTop = el.scrollHeight;
-            }
-        },
-
-        focusPtyInput() {
-            const el = this.$refs.ptyInputCaptureRef;
-            if (el) {
-                el.focus();
-                try { el.setSelectionRange(0, 0); } catch (_) {}
-            }
-        },
-
-        refocusPtyInput() {
-            if (!this.ptyDialogVisible) return;
-            setTimeout(() => this.focusPtyInput(), 0);
-        },
-
-        async sendPtyData(raw) {
+        queuePtyInput(raw) {
             if (!this.ptySessionId || !raw) return;
+            this.ptyInputQueue = `${this.ptyInputQueue || ''}${raw}`;
+            if (this.ptyFlushTimer) return;
+            this.ptyFlushTimer = setTimeout(() => this.flushPtyInputQueue(), 10);
+        },
+
+        resetPtyInputQueue() {
+            this.ptyInputQueue = '';
+            if (this.ptyFlushTimer) {
+                clearTimeout(this.ptyFlushTimer);
+                this.ptyFlushTimer = null;
+            }
+        },
+
+        async flushPtyInputQueue() {
+            const payload = this.ptyInputQueue || '';
+            this.ptyInputQueue = '';
+            this.ptyFlushTimer = null;
+            if (!this.ptySessionId || !payload) return;
             try {
-                const encoded = btoa(unescape(encodeURIComponent(raw)));
+                const encoded = this.encodePtyInput(payload);
                 await fetch(`/api/pty/${encodeURIComponent(this.ptySessionId)}/input`, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
                         ...this.getTabScopedHeaders(),
                     },
-                    body: JSON.stringify({data: encoded}),
+                    body: JSON.stringify({ data: encoded }),
                 });
             } catch (_) {}
         },
 
-        async handlePtyKeydown(event) {
-            if (!this.ptySessionId) return;
-            let payload = '';
-            if (event.ctrlKey && !event.altKey && !event.metaKey) {
-                const key = (event.key || '').toLowerCase();
-                if (key === 'c') payload = '\u0003';
-                else if (key === 'd') payload = '\u0004';
-                else if (key === 'l') payload = '\u000c';
-            } else if (event.key === 'Enter') payload = '\r';
-            else if (event.key === 'Backspace') payload = '\u007f';
-            else if (event.key === 'Tab') payload = '\t';
-            else if (event.key === 'ArrowUp') payload = '\u001b[A';
-            else if (event.key === 'ArrowDown') payload = '\u001b[B';
-            else if (event.key === 'ArrowRight') payload = '\u001b[C';
-            else if (event.key === 'ArrowLeft') payload = '\u001b[D';
-            else if (event.key === 'Escape') payload = '\u001b';
-            else if ((event.key || '').length === 1 && !event.metaKey && !event.altKey) payload = event.key;
-
-            if (!payload) return;
-            event.preventDefault();
-            await this.sendPtyData(payload);
-        },
-
-        async handlePtyPaste(event) {
-            if (!this.ptySessionId) return;
-            const text = event?.clipboardData?.getData('text') || '';
-            if (!text) return;
-            event.preventDefault();
-            await this.sendPtyData(text);
+        encodePtyInput(raw) {
+            const bytes = new TextEncoder().encode(String(raw || ''));
+            let binary = '';
+            const chunkSize = 0x8000;
+            for (let i = 0; i < bytes.length; i += chunkSize) {
+                const chunk = bytes.subarray(i, i + chunkSize);
+                binary += String.fromCharCode(...chunk);
+            }
+            return btoa(binary);
         },
 
         handlePtyDialogClosed() {
             this.stopPtyPolling();
+            this.resetPtyInputQueue();
             this.ptySessionId = '';
+            this.disposePtyTerminal();
         },
     },
 };

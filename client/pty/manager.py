@@ -3,7 +3,8 @@ import os
 import select
 import signal
 import struct
-import termios
+if os.name != 'nt':
+    import termios
 import threading
 import time
 
