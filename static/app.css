@@ -846,8 +846,14 @@ body {
 }
 
 .command-history-search-input .el-input__wrapper {
-  min-height: 34px;
-  height: 34px;
+  min-height: 32px;
+  height: 32px;
+  border-radius: 10px;
+}
+
+.toolbar-input .el-input__wrapper {
+  min-height: 32px;
+  height: 32px;
   border-radius: 10px;
 }
 
@@ -877,8 +883,16 @@ body {
 }
 
 .dialog-head-left .el-button {
-  height: 34px;
-  min-height: 34px;
+  height: 32px;
+  min-height: 32px;
+  padding-inline: 12px;
+  border-radius: 10px;
+  margin: 0;
+}
+
+.toolbar-btn {
+  height: 32px;
+  min-height: 32px;
   padding-inline: 12px;
   border-radius: 10px;
   margin: 0;
@@ -1227,7 +1241,7 @@ body {
 .background-jobs-toolbar {
   margin-bottom: 10px;
   display: flex;
-  gap: 8px;
+  /*gap: 8px;*/
   flex-wrap: wrap;
 }
 
@@ -1939,8 +1953,8 @@ body {
 }
 
 .process-dialog-filter-input .el-input__wrapper {
-  min-height: 34px;
-  height: 34px;
+  min-height: 32px;
+  height: 32px;
   border-radius: 10px;
 }
 
@@ -2908,8 +2922,8 @@ body {
 
 .dialog-head-right .artifact-filter-box .el-select .el-select__wrapper,
 .dialog-head-right .artifact-filter-box .el-input__wrapper {
-  min-height: 34px;
-  height: 34px;
+  min-height: 32px;
+  height: 32px;
   border-radius: 10px;
    font-size: 12px;
 }
@@ -3089,4 +3103,247 @@ body {
 .agent-outputs-empty-text {
     font-size: 13px;
     color: #6b7280;
+}
+
+
+
+
+@media (max-width: 768px) {
+  /* ===== Remote file breadcrumb: mobile only ===== */
+
+  .remote-files-head,
+  .remote-files-head-main,
+  .dialog-head-left {
+    min-width: 0;
+  }
+
+  .remote-breadcrumb-bar {
+    display: block;
+    width: 100%;
+    min-width: 0;
+    min-height: 32px;
+    padding: 2px 0 6px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    white-space: nowrap;
+    text-align: left;
+    -webkit-overflow-scrolling: touch;
+    touch-action: pan-x;
+    overscroll-behavior-x: contain;
+    scrollbar-width: thin;
+  }
+
+  .remote-breadcrumb-bar::-webkit-scrollbar {
+    height: 4px;
+  }
+
+  .remote-breadcrumb-item {
+    display: inline-flex;
+    vertical-align: middle;
+    align-items: center;
+    justify-content: flex-start;
+    max-width: 72vw;
+    min-width: 0;
+    margin: 0 2px 0 0;
+    padding: 4px 6px;
+    text-align: left;
+    white-space: nowrap;
+  }
+
+  .remote-breadcrumb-item > span:last-child {
+    display: inline-block;
+    min-width: 0;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    text-align: left;
+  }
+
+  .remote-breadcrumb-sep {
+    flex: 0 0 auto;
+    margin-right: 4px;
+  }
+
+  .remote-breadcrumb-empty {
+    display: inline-block;
+    white-space: nowrap;
+    text-align: left;
+  }
+
+  /* ===== Remote file pagination: mobile only ===== */
+
+  .dialog-pagination-wrap {
+    justify-content: stretch;
+    margin: 12px 0 10px;
+  }
+
+  .dialog-pagination-bar {
+    width: 100%;
+    max-width: none;
+    align-items: flex-start;
+    justify-content: flex-start;
+    gap: 10px;
+    padding: 12px;
+  }
+
+  .dialog-pagination-meta {
+    width: 100%;
+    justify-content: flex-start;
+    text-align: left;
+    line-height: 1.5;
+  }
+
+  .dialog-pagination-bar .el-pagination {
+    width: 100%;
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-start;
+    row-gap: 8px;
+    column-gap: 6px;
+  }
+
+  .dialog-pagination-bar .el-pagination > * {
+    /*margin: 0 !important;*/
+  }
+
+  .dialog-pagination-bar .el-pagination .el-select,
+  .dialog-pagination-bar .el-pagination .btn-prev,
+  .dialog-pagination-bar .el-pagination .btn-next,
+  .dialog-pagination-bar .el-pagination .el-pager li,
+  .dialog-pagination-bar .el-pagination .el-pagination__total,
+  .dialog-pagination-bar .el-pagination .el-pagination__jump {
+    /*margin: 0 !important;*/
+  }
+}
+
+@media (max-width: 768px) {
+  .dialog-pagination-meta {
+    display: none !important;
+  }
+
+  .dialog-pagination-bar {
+    display: block !important;
+  }
+
+  .dialog-pagination-bar .el-pagination {
+    display: flex !important;
+    flex-wrap: wrap !important;
+    align-items: center !important;
+    justify-content: center !important;
+    width: 100% !important;
+    gap: 10px 8px !important;
+  }
+
+  /* sizes 后强制换到下一行 */
+  .dialog-pagination-bar .el-pagination::after {
+    content: "";
+    order: 3;
+    flex-basis: 100%;
+    width: 0;
+    height: 0;
+  }
+
+  /* 第一行：total */
+  .dialog-pagination-bar .el-pagination .el-pagination__total {
+    order: 1;
+    flex: 0 0 auto !important;
+    margin: 0 !important;
+    white-space: nowrap !important;
+  }
+
+  /* 第一行：sizes */
+  .dialog-pagination-bar .el-pagination .el-pagination__sizes {
+    order: 2;
+    flex: 1 1 140px !important;
+    min-width: 120px !important;
+    margin: 0 !important;
+  }
+
+  .dialog-pagination-bar .el-pagination .el-pagination__sizes .el-select {
+    width: 100% !important;
+  }
+
+  /* 默认：小分页时，第二行同一行显示 */
+  .dialog-pagination-bar .el-pagination .btn-prev {
+    order: 4;
+    margin: 0 !important;
+  }
+
+  .dialog-pagination-bar .el-pagination .el-pager {
+    order: 5;
+    flex: 1 1 auto !important;
+    min-width: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    display: flex !important;
+    flex-wrap: nowrap !important;
+    align-items: center !important;
+    justify-content: center !important;
+    overflow-x: auto !important;
+    overflow-y: hidden !important;
+    -webkit-overflow-scrolling: touch;
+    touch-action: pan-x;
+    scrollbar-width: none;
+  }
+
+  .dialog-pagination-bar .el-pagination .el-pager::-webkit-scrollbar {
+    display: none;
+  }
+
+  .dialog-pagination-bar .el-pagination .el-pager li {
+    flex: 0 0 auto !important;
+    margin: 0 6px 0 0 !important;
+  }
+
+  .dialog-pagination-bar .el-pagination .el-pager li:last-child {
+    margin-right: 0 !important;
+  }
+
+  .dialog-pagination-bar .el-pagination .btn-next {
+    order: 6;
+    margin: 0 !important;
+  }
+
+  /* ===== 大分页：出现 ... / quickprev / quicknext 时切三行 ===== */
+
+  /* 注意：这里只改第二行之后的元素，不再改整个 el-pagination 的总对齐 */
+  .dialog-pagination-bar .el-pagination:has(.el-pager li.more) .btn-prev,
+  .dialog-pagination-bar .el-pagination:has(.el-pager li.btn-quickprev) .btn-prev,
+  .dialog-pagination-bar .el-pagination:has(.el-pager li.btn-quicknext) .btn-prev {
+    order: 4 !important;
+    flex: 0 0 100% !important;
+    width: 100% !important;
+    margin: 0 !important;
+    display: inline-flex !important;
+    justify-content: center !important;
+    align-items: center !important;
+    text-align: center !important;
+  }
+
+  .dialog-pagination-bar .el-pagination:has(.el-pager li.more) .el-pager,
+  .dialog-pagination-bar .el-pagination:has(.el-pager li.btn-quickprev) .el-pager,
+  .dialog-pagination-bar .el-pagination:has(.el-pager li.btn-quicknext) .el-pager {
+    order: 5 !important;
+    flex: 0 0 100% !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    justify-content: center !important;
+    text-align: center !important;
+  }
+
+  .dialog-pagination-bar .el-pagination:has(.el-pager li.more) .btn-next,
+  .dialog-pagination-bar .el-pagination:has(.el-pager li.btn-quickprev) .btn-next,
+  .dialog-pagination-bar .el-pagination:has(.el-pager li.btn-quicknext) .btn-next {
+    order: 6 !important;
+    flex: 0 0 100% !important;
+    width: 100% !important;
+    margin: 0 !important;
+    display: inline-flex !important;
+    justify-content: center !important;
+    align-items: center !important;
+    text-align: center !important;
+  }
 }

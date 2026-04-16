@@ -27,7 +27,7 @@ SCRIPT_JOBS_PATH = os.path.join(SERVER_DIR, 'resources/jobs')
 
 # ------------------ logging ------------------ #
 BACKGROUND_MESSAGE_OUTPUT_TO_FILE = True
-BACKGROUND_MESSAGE_LOG_FILE = 'session_messages.log'
+BACKGROUND_MESSAGE_LOG_FILE = os.path.abspath(os.path.join('runtime', 'session_messages.log'))
 
 # ------------------ history ------------------ #
 COMMAND_HISTORY_ROOT_DIR = os.path.abspath(os.path.join('runtime', 'command_history'))

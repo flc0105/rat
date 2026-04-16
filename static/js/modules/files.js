@@ -355,6 +355,10 @@ window.AppFilesModule = {
         this.toggleCurrentPinnedQuickJump();
         return;
     }
+    if (command === 'manage_pins') {
+        this.openPinnedQuickJumpManager();
+                    return;
+    }
     if (command === 'paste') {
         this.pasteRemoteClipboard();
         return;
@@ -937,10 +941,10 @@ window.AppFilesModule = {
                     return;
                 }
 
-                if (command.type === 'manage_pins') {
-                    this.openPinnedQuickJumpManager();
-                    return;
-                }
+                // if (command.type === 'manage_pins') {
+                //     this.openPinnedQuickJumpManager();
+                //     return;
+                // }
             }
 
             const path = this.quickJumpPaths[command];

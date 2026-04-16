@@ -401,7 +401,7 @@
                                         <el-dropdown-item command="documents">Documents</el-dropdown-item>
                                         <el-dropdown-item command="downloads">Downloads</el-dropdown-item>
                                         <el-dropdown-item command="executable">Program Directory</el-dropdown-item>
-                                        <el-dropdown-item divided command="input_navigate">Go to Folder</el-dropdown-item>
+
 
                                         <el-dropdown-item
                                                 v-for="(item, index) in remotePinnedJumpItems"
@@ -412,13 +412,9 @@
                                             {{ item.display_name }}
                                         </el-dropdown-item>
 
-                                        <el-dropdown-item
-                                                v-if="hasPinnedQuickJumps"
+                                        <el-dropdown-item divided command="input_navigate">Go to Folder</el-dropdown-item>
 
-                                                :command="{ type: 'manage_pins' }"
-                                        >
-                                            Manage Pins
-                                        </el-dropdown-item>
+
                                     </el-dropdown-menu>
                                 </template>
                             </el-dropdown>
@@ -440,32 +436,6 @@
                             </el-button>
                         </div>
 
-<!--                        <span class="remote-toolbar-divider"></span>-->
-
-<!--                        <div class="remote-toolbar-group">-->
-<!--                            <el-button size="small" :disabled="!hasRemoteSelection" @click="copySelectedRemoteEntries">-->
-<!--                                Copy<span v-if="remoteSelectedPaths.length"> ({{ remoteSelectedPaths.length }})</span>-->
-<!--                            </el-button>-->
-<!--                            <el-button size="small" :disabled="!hasRemoteSelection" @click="cutSelectedRemoteEntries">-->
-<!--                                Cut<span v-if="remoteSelectedPaths.length"> ({{ remoteSelectedPaths.length }})</span>-->
-<!--                            </el-button>-->
-<!--                            <el-button size="small" type="primary" plain :disabled="!hasRemoteClipboard" @click="pasteRemoteClipboard">-->
-<!--                                Paste<span v-if="hasRemoteClipboard"> ({{ remoteClipboardPaths.length }})</span>-->
-<!--                            </el-button>-->
-<!--                            <el-button size="small" plain :disabled="!hasRemoteClipboard" @click="clearRemoteClipboard">-->
-<!--                                Clear Clipboard-->
-<!--                            </el-button>-->
-<!--                        </div>-->
-
-<!--                        <span class="remote-toolbar-divider"></span>-->
-
-<!--                        <div class="remote-toolbar-group">-->
-<!--                            <el-button size="small" :disabled="!hasRemoteSelection" @click="clearRemoteSelection">Clear Selection</el-button>-->
-<!--                            <el-button size="small" @click="toggleRemoteHiddenFiles">-->
-<!--                                {{ showHiddenFiles ? 'Hide Hidden' : 'Show Hidden' }}-->
-<!--                            </el-button>-->
-<!--                        </div>-->
-
                         <span class="remote-toolbar-divider"></span>
 
 <div class="remote-toolbar-group">
@@ -477,7 +447,16 @@
         <template #dropdown>
             <el-dropdown-menu>
                 <el-dropdown-item command="toggle_pin">{{ remotePinButtonText }}</el-dropdown-item>
-                <el-dropdown-item command="copy" :disabled="!hasRemoteSelection">
+
+                                                        <el-dropdown-item
+                                                v-if="hasPinnedQuickJumps"
+
+                                                command="manage_pins"
+                                        >
+                                            Manage Pins
+                                        </el-dropdown-item>
+
+                <el-dropdown-item command="copy" :disabled="!hasRemoteSelection" divided>
                     Copy<span v-if="remoteSelectedPaths.length"> ({{ remoteSelectedPaths.length }})</span>
                 </el-dropdown-item>
                 <el-dropdown-item command="cut" :disabled="!hasRemoteSelection">
@@ -491,9 +470,13 @@
                 <el-dropdown-item command="clear_clipboard" :disabled="!hasRemoteClipboard">
                     Clear Clipboard
                 </el-dropdown-item>
-                <el-dropdown-item command="clear_selection" :disabled="!hasRemoteSelection">
+
+
+                <el-dropdown-item command="clear_selection" :disabled="!hasRemoteSelection" divided>
                     Clear Selection
                 </el-dropdown-item>
+
+
                 <el-dropdown-item command="toggle_hidden">
                     {{ showHiddenFiles ? 'Hide Hidden' : 'Show Hidden' }}
                 </el-dropdown-item>
@@ -604,6 +587,7 @@
                             :page-size="remoteFilesPageSize"
                             :page-sizes="remoteFilesPageSizeOptions"
                             :total="remoteFilesTotal"
+                            :pager-count="5"
                             @current-change="handleRemotePageChange"
                             @size-change="handleRemotePageSizeChange"
                     />
@@ -1027,15 +1011,18 @@
             <el-tabs v-model="backgroundJobsActiveTab" class="background-jobs-tabs">
                 <el-tab-pane label="Modules" name="modules">
                     <div class="background-jobs-toolbar">
-                        <el-button size="small" @click="loadBackgroundJobModules"
-                                   :loading="backgroundJobModulesLoading">Refresh Modules
+                                <el-button size="small" type="primary" class="toolbar-btn" plain @click="createRemoteJobPrompt()">
+                            New
                         </el-button>
-                        <el-button size="small" @click="triggerServerJobUpload"
-                                   :loading="serverJobUploadLoading">Upload Script
+                                                <el-button size="small" class="toolbar-btn" @click="triggerServerJobUpload"
+                                   :loading="serverJobUploadLoading">Upload
                         </el-button>
-                        <el-button size="small" type="primary" plain @click="createRemoteJobPrompt()">
-                            New Job
+
+                        <el-button size="small" class="toolbar-btn" @click="loadBackgroundJobModules"
+                                   :loading="backgroundJobModulesLoading">Refresh
                         </el-button>
+
+
                         <input id="server-job-upload-input"
                                type="file"
                                accept=".py,text/x-python"
@@ -1110,8 +1097,7 @@
 
                 <el-tab-pane label="Jobs" name="jobs">
                     <div class="background-jobs-toolbar">
-                        <el-button size="small" @click="loadBackgroundJobs" :loading="backgroundJobsLoading">Refresh
-                            Jobs
+                        <el-button size="small" class="toolbar-btn" @click="loadBackgroundJobs" :loading="backgroundJobsLoading">Refresh
                         </el-button>
                     </div>
                     <div class="background-jobs-list-shell panel-lite" v-loading="backgroundJobsLoading">
