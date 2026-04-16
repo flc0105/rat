@@ -27,6 +27,7 @@ SCRIPT_JOBS_PATH = os.path.join(SERVER_DIR, 'resources/jobs')
 
 # ------------------ logging ------------------ #
 BACKGROUND_MESSAGE_OUTPUT_TO_FILE = True
+os.makedirs('runtime', exist_ok=True)
 BACKGROUND_MESSAGE_LOG_FILE = os.path.abspath(os.path.join('runtime', 'session_messages.log'))
 
 # ------------------ history ------------------ #
