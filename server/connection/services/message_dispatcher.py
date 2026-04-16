@@ -1,4 +1,11 @@
-from core.protocol.message_types import MSG_TYPE_HEARTBEAT_ACK, MSG_TYPE_RESULT
+from core.protocol.message_types import (
+    MSG_TYPE_HEARTBEAT_ACK,
+    MSG_TYPE_RESULT,
+    MSG_TYPE_PTY_OPENED,
+    MSG_TYPE_PTY_OUTPUT,
+    MSG_TYPE_PTY_CLOSED,
+    MSG_TYPE_PTY_ERROR,
+)
 
 
 class ServerInboundMessageDispatcher:
@@ -10,7 +17,7 @@ class ServerInboundMessageDispatcher:
     - heartbeat_ack
     """
 
-    IMMEDIATE_MESSAGE_TYPES = {MSG_TYPE_RESULT, MSG_TYPE_HEARTBEAT_ACK}
+    IMMEDIATE_MESSAGE_TYPES = {MSG_TYPE_RESULT, MSG_TYPE_HEARTBEAT_ACK, MSG_TYPE_PTY_OPENED, MSG_TYPE_PTY_OUTPUT, MSG_TYPE_PTY_CLOSED, MSG_TYPE_PTY_ERROR}
 
     def __init__(self, session):
         self.session = session

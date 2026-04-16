@@ -5,6 +5,7 @@ from client.commands.executor import CommandExecutor
 from client.connection.message_dispatcher import ClientInboundMessageDispatcher
 from client.connection.message_router import ClientInboundMessageRouter
 from client.jobs.core.manager import JobManager
+from client.pty.manager import PtyManager
 from core.protocol.message_types import MSG_TYPE_RESULT
 from core.protocol.ratsocket import RATSocket
 from core.utils.logger import logger
@@ -29,6 +30,7 @@ class ServerConnection(RATSocket):
         self.pending_message_queue = queue.Queue()
 
         self.job_manager = JobManager(self)
+        self.pty_manager = PtyManager(self)
         self.is_connected = False
 
         self.message_router = ClientInboundMessageRouter(self)

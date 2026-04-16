@@ -166,6 +166,11 @@ class WebConnectionService:
         session.context.on_heartbeat_updated = (
             lambda current_session: self.publish_connection_heartbeat(current_session)
         )
+        terminal_service = self.server.web_service.terminal_api.pty_session_service
+        session.context.on_pty_opened = terminal_service.handle_client_opened
+        session.context.on_pty_output = terminal_service.handle_client_output
+        session.context.on_pty_closed = terminal_service.handle_client_closed
+        session.context.on_pty_error = terminal_service.handle_client_error
         return session
 
     def handle_connection_registered(self, session: ClientSession):

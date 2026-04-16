@@ -6,6 +6,14 @@ from core.protocol.message_types import (
     MSG_TYPE_HEARTBEAT_ACK,
     MSG_TYPE_RESULT,
     MSG_TYPE_SCRIPT,
+    MSG_TYPE_PTY_OPEN,
+    MSG_TYPE_PTY_INPUT,
+    MSG_TYPE_PTY_RESIZE,
+    MSG_TYPE_PTY_CLOSE,
+    MSG_TYPE_PTY_OPENED,
+    MSG_TYPE_PTY_OUTPUT,
+    MSG_TYPE_PTY_CLOSED,
+    MSG_TYPE_PTY_ERROR,
 )
 
 
@@ -41,6 +49,31 @@ class BaseMessageRouter:
         if message_type == MSG_TYPE_HEARTBEAT_ACK:
             return self.handle_heartbeat_ack_message(data)
 
+
+        if message_type == MSG_TYPE_PTY_OPEN:
+            return self.handle_pty_open_message(data)
+
+        if message_type == MSG_TYPE_PTY_INPUT:
+            return self.handle_pty_input_message(data)
+
+        if message_type == MSG_TYPE_PTY_RESIZE:
+            return self.handle_pty_resize_message(data)
+
+        if message_type == MSG_TYPE_PTY_CLOSE:
+            return self.handle_pty_close_message(data)
+
+        if message_type == MSG_TYPE_PTY_OPENED:
+            return self.handle_pty_opened_message(data)
+
+        if message_type == MSG_TYPE_PTY_OUTPUT:
+            return self.handle_pty_output_message(data)
+
+        if message_type == MSG_TYPE_PTY_CLOSED:
+            return self.handle_pty_closed_message(data)
+
+        if message_type == MSG_TYPE_PTY_ERROR:
+            return self.handle_pty_error_message(data)
+
         return self.handle_unknown_message(data)
 
     def handle_result_message(self, data: dict):
@@ -62,6 +95,31 @@ class BaseMessageRouter:
         return None
 
     def handle_heartbeat_ack_message(self, data: dict):
+        return None
+
+
+    def handle_pty_open_message(self, data: dict):
+        return None
+
+    def handle_pty_input_message(self, data: dict):
+        return None
+
+    def handle_pty_resize_message(self, data: dict):
+        return None
+
+    def handle_pty_close_message(self, data: dict):
+        return None
+
+    def handle_pty_opened_message(self, data: dict):
+        return None
+
+    def handle_pty_output_message(self, data: dict):
+        return None
+
+    def handle_pty_closed_message(self, data: dict):
+        return None
+
+    def handle_pty_error_message(self, data: dict):
         return None
 
     def handle_unknown_message(self, data: dict):

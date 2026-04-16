@@ -74,6 +74,36 @@ class ClientInboundMessageRouter(BaseMessageRouter):
         })
         return None
 
+
+    def handle_pty_open_message(self, data: dict):
+        self.connection.pty_manager.open_session(
+            data.get('pty_session_id') or '',
+            shell=data.get('shell') or '',
+            cwd=data.get('cwd') or '',
+            cols=data.get('cols') or 120,
+            rows=data.get('rows') or 32,
+        )
+        return None
+
+    def handle_pty_input_message(self, data: dict):
+        self.connection.pty_manager.write_input(
+            data.get('pty_session_id') or '',
+            data.get('data') or '',
+        )
+        return None
+
+    def handle_pty_resize_message(self, data: dict):
+        self.connection.pty_manager.resize_session(
+            data.get('pty_session_id') or '',
+            data.get('cols') or 120,
+            data.get('rows') or 32,
+        )
+        return None
+
+    def handle_pty_close_message(self, data: dict):
+        self.connection.pty_manager.close_session(data.get('pty_session_id') or '')
+        return None
+
     def handle_heartbeat_ack_message(self, data: dict):
         return None
 

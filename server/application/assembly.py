@@ -13,6 +13,7 @@ from server.application.pinned_paths.pinned_path_store import PinnedPathStore
 from server.application.tasks.task_runner import WebTaskRunner
 from server.application.tasks.task_service import WebTaskService
 from server.application.tasks.task_store import WebTaskStore
+from server.application.terminal.pty_session_service import PtySessionService
 from server.application.web.agent_api import WebAgentApi
 from server.application.web.process_snapshot_cache import ProcessSnapshotCache
 from server.application.web.script_api import WebScriptApi
@@ -23,6 +24,7 @@ from server.application.web.job_api import WebJobApi
 from server.application.web.pinned_path_api import PinnedPathApi
 from server.application.web.remote_file_api import WebRemoteFileApi
 from server.application.web.system_api import WebSystemInspectionApi
+from server.application.web.terminal_api import WebTerminalApi
 from server.application.scripts.script_catalog_service import ScriptCatalogService
 from server.config.config import SCRIPT_JOBS_PATH, SCRIPT_PATH, RECENT_DEVICES_JSON_PATH
 from server.web.event_bus import WebEventBus
@@ -103,6 +105,7 @@ class ServerApplicationAssembly:
         self.pinned_path_store = PinnedPathStore()
         self.agent_builder = AgentBuilder()
         self.agent_output_registry = AgentOutputRegistry(self.agent_builder.output_dir)
+        self.pty_session_service = PtySessionService(self.server)
 
         # ------------------ web sub facades / apis ------------------ #
         self.connection_api = WebConnectionApi(
@@ -157,6 +160,10 @@ class ServerApplicationAssembly:
             server=self.server,
             remote_execution_service=self.remote_execution_service,
             process_snapshot_cache=self.process_snapshot_cache,
+        )
+
+        self.terminal_api = WebTerminalApi(
+            pty_session_service=self.pty_session_service,
         )
 
         self._wire_cross_dependencies()

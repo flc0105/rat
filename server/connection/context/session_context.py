@@ -29,6 +29,10 @@ class ClientSessionContext:
         self.artifact_service = None
         self.on_unexpected_message = None
         self.on_heartbeat_updated = None
+        self.on_pty_opened = None
+        self.on_pty_output = None
+        self.on_pty_closed = None
+        self.on_pty_error = None
 
         self.connected_at = ''
         self.disconnected_at = ''

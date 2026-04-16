@@ -370,6 +370,7 @@
                         <div class="remote-toolbar-group">
                             <el-button size="small" @click="refreshRemoteDirectory">Refresh</el-button>
                             <el-button size="small" @click="goToRemoteParent" :disabled="!remoteFilesParentPath">Up</el-button>
+                            <el-button size="small" type="primary" plain @click="openPtyDialog" :disabled="!selectedId">PTY</el-button>
                             <el-dropdown @command="jumpToPath" :loading="quickJumpLoading || remotePinnedJumpLoading">
                                 <el-button size="small">
                                     Quick Jump
@@ -2174,6 +2175,45 @@
 
 
 </el-dialog>
+
+    <el-dialog
+        v-model="ptyDialogVisible"
+        title="Remote PTY"
+        width="900px"
+        top="6vh"
+        class="fixed-dialog pty-dialog"
+        @closed="handlePtyDialogClosed"
+    >
+        <div class="pty-shell">
+            <div class="pty-toolbar">
+                <div class="pty-toolbar-left">
+                    <span class="pty-badge">{{ currentConnection ? (currentConnection.hostname || currentConnection.client_id) : 'No device' }}</span>
+                    <span class="pty-badge pty-badge-status">{{ ptyStatus || 'idle' }}</span>
+                    <span v-if="ptyError" class="pty-error-text">{{ ptyError }}</span>
+                </div>
+                <div class="pty-toolbar-right">
+                    <el-input v-model="ptyShellPath" size="small" placeholder="Optional shell path" class="pty-shell-input"/>
+                    <el-button size="small" @click="focusPtyInput">Focus</el-button>
+                    <el-button size="small" @click="closePtyDialog">Close</el-button>
+                </div>
+            </div>
+            <div class="pty-screen-shell" @click="focusPtyInput">
+                <pre ref="ptyOutputRef" class="pty-screen">{{ ptyOutput }}</pre>
+                <textarea
+                    ref="ptyInputCaptureRef"
+                    class="pty-input-capture"
+                    autocomplete="off"
+                    autocapitalize="off"
+                    spellcheck="false"
+                    @keydown="handlePtyKeydown"
+                    @paste="handlePtyPaste"
+                    @blur="refocusPtyInput"
+                ></textarea>
+            </div>
+            <div class="pty-hint">Type directly in the terminal area. Supports basic shell interaction, sudo prompts, arrows, tab, Ctrl+C and Ctrl+D.</div>
+        </div>
+    </el-dialog>
+
 </div>
 
 <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
@@ -2190,6 +2230,7 @@
 <script src="/js/modules/connection.js"></script>
 <script src="/js/modules/task.js"></script>
 <script src="/js/modules/terminal.js"></script>
+<script src="/js/modules/pty.js"></script>
 <script src="/js/modules/candidates.js"></script>
 <script src="/js/modules/history.js"></script>
 <script src="/js/modules/artifacts.js"></script>

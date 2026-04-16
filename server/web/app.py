@@ -30,6 +30,7 @@ from server.web.routes.pinned_paths import create_pinned_path_blueprint
 from server.web.routes.remote_files import create_remote_files_blueprint
 from server.web.routes.scripts import create_script_blueprint
 from server.web.routes.system_inspection import create_system_inspection_blueprint
+from server.web.routes.terminal import create_terminal_blueprint
 
 
 def create_app(server_instance):
@@ -57,6 +58,7 @@ def create_app(server_instance):
     app.register_blueprint(create_artifacts_blueprint(server_instance))
     app.register_blueprint(create_agent_blueprint(server_instance))
     app.register_blueprint(create_script_blueprint(server_instance))
+    app.register_blueprint(create_terminal_blueprint(server_instance))
 
     @app.before_request
     def enforce_authentication():
