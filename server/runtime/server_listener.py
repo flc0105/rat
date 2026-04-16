@@ -95,18 +95,63 @@ class ServerListener:
     def _handle_connection_closed(self, session):
         """
         处理连接关闭后的清理逻辑
+
+        关键点：
+        - 不管 recent-device / event-bus / 其它副作用是否抛异常
+        - 都必须保证连接最终从 ConnectionManager 中移除
         """
-        # add 拆分服务端监听器连接关闭清理 2026-04-08
-        logger.error(f'Connection closed: {session.address}')
-        self.server.web_service.connection_api.handle_connection_closed(session)
-        self._notify_connection_closed(session)
-        self._remove_connection(session)
+        client_id = getattr(getattr(session, 'session_info', None), 'client_id', '')
+        logger.error(f'Connection closed: {session.address} client_id={client_id}')
+
+        try:
+            try:
+                self.server.web_service.connection_api.handle_connection_closed(session)
+            except Exception:
+                logger.error(
+                    'handle_connection_closed failed: addr=%s client_id=%s',
+                    session.address,
+                    client_id,
+                    exc_info=True,
+                )
+
+            try:
+                self._notify_connection_closed(session)
+            except Exception:
+                logger.error(
+                    'notify_connection_closed failed: addr=%s client_id=%s',
+                    session.address,
+                    client_id,
+                    exc_info=True,
+                )
+        finally:
+            try:
+                before_len = len(self.server.connections)
+                logger.warning(
+                    'Removing connection from manager: addr=%s client_id=%s size_before=%s',
+                    session.address,
+                    client_id,
+                    before_len,
+                )
+                self._remove_connection(session)
+                after_len = len(self.server.connections)
+                logger.warning(
+                    'Removed connection from manager: addr=%s client_id=%s size_after=%s',
+                    session.address,
+                    client_id,
+                    after_len,
+                )
+            except Exception:
+                logger.error(
+                    'remove_connection failed: addr=%s client_id=%s',
+                    session.address,
+                    client_id,
+                    exc_info=True,
+                )
 
     def _handle_connection_receive_error(self, session):
         """
         处理接收线程中的非致命异常
         """
-        # add 拆分服务端监听器接收异常处理 2026-04-08
         logger.error(f'Error receiving from {session.address}', exc_info=True)
         time.sleep(1)
 
@@ -114,7 +159,6 @@ class ServerListener:
         """
         处理接收的子线程
         """
-        # add 拆分服务端监听器会话接收循环 2026-04-08
         while 1:
             try:
                 session.recv_message()
@@ -128,7 +172,6 @@ class ServerListener:
         """
         接受新连接的线程
         """
-        # add 拆分服务端监听器主循环 2026-04-08
         try:
             self._bind_server_socket()
         except Exception as e:

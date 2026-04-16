@@ -264,12 +264,12 @@ window.AppConnectionModule = {
             return text.length > 42 || text.includes('\n');
         },
 
-openConnectionInfoValueDialog(item) {
-    if (!item) return;
-    this.connectionInfoValueDialogTitle = item.label || 'Details';
-    this.connectionInfoValueDialogValue = item.fullValue || '-';
-    this.connectionInfoValueDialogVisible = true;
-},
+        openConnectionInfoValueDialog(item) {
+            if (!item) return;
+            this.connectionInfoValueDialogTitle = item.label || 'Details';
+            this.connectionInfoValueDialogValue = item.fullValue || '-';
+            this.connectionInfoValueDialogVisible = true;
+        },
 
         getConnectionDisplayState(conn) {
             const state = String(conn && conn.connection_state || '').trim();
@@ -373,7 +373,7 @@ openConnectionInfoValueDialog(item) {
             return this.connections.find(item => item.client_id === this.selectedId) || null;
         },
 
-onlineConnectionsCount() {
+        onlineConnectionsCount() {
             return (this.connections || []).filter(item => this.getConnectionDisplayState(item) === 'online').length;
         },
 
