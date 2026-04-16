@@ -139,9 +139,12 @@ window.AppPtyModule = {
                 fitAddon.fit();
             } catch (_) {}
 
+
             term.onData((data) => {
                 this.queuePtyInput(data);
             });
+
+
 
             // 不再用 term.onResize -> sendPtyResize，避免形成 resize 回路
             term.onTitleChange((title) => {

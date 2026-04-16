@@ -38,8 +38,19 @@ class PtyManager:
                     os.chdir(cwd)
             except Exception:
                 pass
+
             shell_path = shell or os.environ.get('SHELL') or ('/bin/zsh' if os.path.exists('/bin/zsh') else '/bin/bash')
-            os.execv(shell_path, [shell_path])
+
+            env = os.environ.copy()
+            env.setdefault('TERM', 'xterm-256color')
+            env.setdefault('COLORTERM', 'truecolor')
+
+            # 显式启交互模式，避免 shell 退化成奇怪的半交互行为
+            try:
+                os.execve(shell_path, [shell_path, '-i'], env)
+            except Exception:
+                os.execve(shell_path, [shell_path], env)
+
             os._exit(1)
 
         self._resize_fd(master_fd, cols, rows)
