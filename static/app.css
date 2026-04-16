@@ -1597,7 +1597,7 @@ body {
 
 .preview-toolbar-left {
   display: flex;
-  gap: 4px;
+  /*gap: 4px;*/
   align-items: center;
   flex-wrap: wrap;
 }
@@ -1621,8 +1621,8 @@ body {
   align-items: center;
   gap: 4px;
   padding: 0 8px;
-  height: 28px;
-  line-height: 28px;
+  height: 26px;
+  line-height: 26px;
 }
 
 .preview-info-tags .el-tag .el-icon {
@@ -1634,7 +1634,7 @@ body {
   align-items: center;
   gap: 4px;
   padding: 6px 16px;
-  height: 28px;
+  height: 26px;
 }
 
 .preview-toolbar-left .el-button .el-icon {
@@ -2821,7 +2821,7 @@ body {
 .script-library-card-actions {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: 12px;
   flex-wrap: nowrap;
   white-space: nowrap;
 }
