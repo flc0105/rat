@@ -11,11 +11,12 @@ window.AppPtyModule = {
             ptyShellPath: '',
             ptyTerm: null,
             ptyFitAddon: null,
-            ptyResizeObserver: null,
             ptyInputQueue: '',
             ptyFlushTimer: null,
             ptyLastCols: 0,
             ptyLastRows: 0,
+            _ptyResizeTimer: null,
+            _ptyWindowResizeHandler: null,
         };
     },
 
@@ -46,7 +47,7 @@ window.AppPtyModule = {
                 this.clearPtyTerminal();
                 this.writePtySystemLine('[opening PTY...]\r\n');
 
-                const dims = this.getPtyTerminalSize();
+                const dims = this.fitPtyTerminalAndGetSize();
                 const res = await fetch(`/api/connections/${encodeURIComponent(this.selectedId)}/pty/open`, {
                     method: 'POST',
                     headers: {
@@ -63,10 +64,16 @@ window.AppPtyModule = {
                 if (!res.ok || json.code !== 0) {
                     throw new Error(json.message || 'Failed to open PTY');
                 }
+
                 this.ptySessionId = json.data?.pty_session_id || '';
                 this.ptyStatus = json.data?.status || 'opening';
+                this.ptyLastCols = dims.cols;
+                this.ptyLastRows = dims.rows;
+
                 this.startPtyPolling();
                 this.focusPtyInput();
+
+                // 只在打开后补一次，避免初始化布局抖动
                 this.schedulePtyResize();
             } catch (e) {
                 this.ptyStatus = 'error';
@@ -81,14 +88,18 @@ window.AppPtyModule = {
         async closePtyDialog() {
             this.stopPtyPolling();
             this.resetPtyInputQueue();
+            this.clearPtyResizeTimer();
+
             const ptyId = this.ptySessionId;
             this.ptyDialogVisible = false;
             this.ptySessionId = '';
             this.ptyStatus = 'closed';
+
             if (!ptyId) {
                 this.disposePtyTerminal();
                 return;
             }
+
             try {
                 await fetch(`/api/pty/${encodeURIComponent(ptyId)}/close`, {
                     method: 'POST',
@@ -119,9 +130,11 @@ window.AppPtyModule = {
                     background: '#03142d',
                 },
             });
+
             const fitAddon = new window.FitAddon.FitAddon();
             term.loadAddon(fitAddon);
             term.open(host);
+
             try {
                 fitAddon.fit();
             } catch (_) {}
@@ -129,9 +142,8 @@ window.AppPtyModule = {
             term.onData((data) => {
                 this.queuePtyInput(data);
             });
-            term.onResize((size) => {
-                this.sendPtyResize(size.cols, size.rows);
-            });
+
+            // 不再用 term.onResize -> sendPtyResize，避免形成 resize 回路
             term.onTitleChange((title) => {
                 if (title) this.ptyStatus = this.ptyStatus || 'open';
             });
@@ -139,26 +151,36 @@ window.AppPtyModule = {
             this.ptyTerm = term;
             this.ptyFitAddon = fitAddon;
 
-            if (window.ResizeObserver) {
-                this.ptyResizeObserver = new ResizeObserver(() => {
-                    this.schedulePtyResize();
-                });
-                this.ptyResizeObserver.observe(host);
-            }
+            // 只监听 window resize，不用 ResizeObserver
+            this._ptyWindowResizeHandler = () => {
+                this.schedulePtyResize();
+            };
+            window.addEventListener('resize', this._ptyWindowResizeHandler, { passive: true });
         },
 
         disposePtyTerminal() {
-            if (this.ptyResizeObserver) {
-                try { this.ptyResizeObserver.disconnect(); } catch (_) {}
-                this.ptyResizeObserver = null;
+            if (this._ptyWindowResizeHandler) {
+                window.removeEventListener('resize', this._ptyWindowResizeHandler);
+                this._ptyWindowResizeHandler = null;
             }
+
+            this.clearPtyResizeTimer();
+
             if (this.ptyTerm) {
                 try { this.ptyTerm.dispose(); } catch (_) {}
                 this.ptyTerm = null;
             }
+
             this.ptyFitAddon = null;
             this.ptyLastCols = 0;
             this.ptyLastRows = 0;
+        },
+
+        clearPtyResizeTimer() {
+            if (this._ptyResizeTimer) {
+                clearTimeout(this._ptyResizeTimer);
+                this._ptyResizeTimer = null;
+            }
         },
 
         clearPtyTerminal() {
@@ -192,7 +214,7 @@ window.AppPtyModule = {
             setTimeout(() => this.focusPtyInput(), 0);
         },
 
-        getPtyTerminalSize() {
+        fitPtyTerminalAndGetSize() {
             if (this.ptyFitAddon) {
                 try { this.ptyFitAddon.fit(); } catch (_) {}
             }
@@ -202,22 +224,31 @@ window.AppPtyModule = {
         },
 
         schedulePtyResize() {
-            if (!this.ptyDialogVisible) return;
-            setTimeout(() => {
-                if (!this.ptyDialogVisible) return;
-                const size = this.getPtyTerminalSize();
+            if (!this.ptyDialogVisible || !this.ptySessionId) return;
+
+            this.clearPtyResizeTimer();
+            this._ptyResizeTimer = setTimeout(() => {
+                this._ptyResizeTimer = null;
+                if (!this.ptyDialogVisible || !this.ptySessionId) return;
+                const size = this.fitPtyTerminalAndGetSize();
                 this.sendPtyResize(size.cols, size.rows);
-            }, 30);
+            }, 80);
         },
 
         async sendPtyResize(cols, rows) {
             if (!this.ptySessionId) return;
+
             cols = Math.max(20, Number(cols || 0));
             rows = Math.max(5, Number(rows || 0));
             if (!cols || !rows) return;
-            if (this.ptyLastCols === cols && this.ptyLastRows === rows) return;
+
+            if (this.ptyLastCols === cols && this.ptyLastRows === rows) {
+                return;
+            }
+
             this.ptyLastCols = cols;
             this.ptyLastRows = rows;
+
             try {
                 await fetch(`/api/pty/${encodeURIComponent(this.ptySessionId)}/resize`, {
                     method: 'POST',
@@ -232,19 +263,27 @@ window.AppPtyModule = {
 
         startPtyPolling() {
             this.stopPtyPolling();
+
             const tick = async () => {
                 if (!this.ptyDialogVisible || !this.ptySessionId) return;
+
                 try {
                     const url = new URL(`/api/pty/${encodeURIComponent(this.ptySessionId)}/poll`, window.location.origin);
                     url.searchParams.set('after_seq', String(this.ptySeq || 0));
-                    const res = await fetch(url.toString(), { headers: this.getTabScopedHeaders() });
+
+                    const res = await fetch(url.toString(), {
+                        headers: this.getTabScopedHeaders(),
+                    });
                     const json = await res.json();
+
                     if (!res.ok || json.code !== 0) {
                         throw new Error(json.message || 'PTY poll failed');
                     }
+
                     const payload = json.data || {};
                     this.ptyStatus = payload.status || this.ptyStatus || '';
                     this.ptyError = payload.error || this.ptyError || '';
+
                     if (Array.isArray(payload.chunks)) {
                         payload.chunks.forEach((chunk) => {
                             const seq = Number(chunk?.seq || 0);
@@ -253,9 +292,8 @@ window.AppPtyModule = {
                             if (text) this.writePtyOutput(text);
                         });
                     }
-                    if ((payload.cols && payload.rows) && this.ptyTerm && (this.ptyStatus === 'open' || this.ptyStatus === 'opening')) {
-                        this.schedulePtyResize();
-                    }
+
+                    // 注意：poll 里不再触发 resize
                     if (this.ptyStatus === 'closed' || this.ptyStatus === 'error') {
                         this.stopPtyPolling();
                     }
@@ -265,10 +303,17 @@ window.AppPtyModule = {
                     this.writePtySystemLine(`\r\n[PTY error] ${this.ptyError}\r\n`);
                     this.stopPtyPolling();
                 }
-                if (this.ptyDialogVisible && this.ptySessionId && this.ptyStatus !== 'closed' && this.ptyStatus !== 'error') {
+
+                if (
+                    this.ptyDialogVisible &&
+                    this.ptySessionId &&
+                    this.ptyStatus !== 'closed' &&
+                    this.ptyStatus !== 'error'
+                ) {
                     this.ptyPollTimer = setTimeout(tick, 120);
                 }
             };
+
             tick();
         },
 
@@ -299,6 +344,7 @@ window.AppPtyModule = {
             this.ptyInputQueue = '';
             this.ptyFlushTimer = null;
             if (!this.ptySessionId || !payload) return;
+
             try {
                 const encoded = this.encodePtyInput(payload);
                 await fetch(`/api/pty/${encodeURIComponent(this.ptySessionId)}/input`, {
@@ -326,6 +372,7 @@ window.AppPtyModule = {
         handlePtyDialogClosed() {
             this.stopPtyPolling();
             this.resetPtyInputQueue();
+            this.clearPtyResizeTimer();
             this.ptySessionId = '';
             this.disposePtyTerminal();
         },
