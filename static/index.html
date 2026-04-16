@@ -845,9 +845,10 @@
     <div class="fixed-dialog-body script-library-body" v-loading="scriptLibraryLoading">
         <div class="background-jobs-toolbar script-library-toolbar">
             <div class="script-library-toolbar-left">
-                <el-button size="small" @click="loadScriptCatalog" :loading="scriptLibraryLoading">Refresh</el-button>
-                <el-button size="small" @click="triggerScriptUpload" :loading="serverScriptUploadLoading">Upload</el-button>
-                <el-button size="small" type="primary" plain @click="createRemoteScriptPrompt()">New Script</el-button>
+                                <el-button size="small" class="toolbar-btn" type="primary" plain @click="createRemoteScriptPrompt()">New</el-button>
+                <el-button size="small" class="toolbar-btn" @click="triggerScriptUpload" :loading="serverScriptUploadLoading">Upload</el-button>
+
+                <el-button size="small" class="toolbar-btn" @click="loadScriptCatalog" :loading="scriptLibraryLoading">Refresh</el-button>
                 <input id="server-script-upload-input"
                        type="file"
                        accept=".py,text/x-python"

@@ -2695,7 +2695,7 @@ body {
 .script-library-toolbar-right {
   display: flex;
   align-items: center;
-  gap: 8px;
+  /*gap: 8px;*/
   flex-wrap: wrap;
 }
 
@@ -2864,7 +2864,7 @@ body {
 .script-library-dialog .el-dialog__body {
   display: flex;
   flex-direction: column;
-  height: calc(72vh - 54px - 24px);
+  height: 640px;
   min-height: 0;
   overflow: hidden;
 }
