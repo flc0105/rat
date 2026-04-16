@@ -18,28 +18,167 @@ class ServerCommandShell:
             command_history_orchestrator=server.command_history_orchestrator,
         )
 
+    # def list_connections(self):
+    #     """
+    #     显示连接列表
+    #     """
+    #     connection_list = self.server.connections.all()
+    #     if not connection_list:
+    #         print("No active sessions")
+    #         return
+    #
+    #     headers = ['ID', 'Address', 'OS', 'OS Version', 'Hostname', 'Integrity']
+    #     data = [
+    #         [
+    #             str(i),
+    #             session.session_info.addr or 'N/A',
+    #             session.session_info.os_type,
+    #             session.session_info.os_ver,
+    #             session.session_info.hostname,
+    #             session.session_info.integrity
+    #         ]
+    #         for i, session in enumerate(connection_list)
+    #     ]
+    #     print_table(headers, data)
+
     def list_connections(self):
         """
         显示连接列表
         """
-        connection_list = self.server.connections.all()
-        if not connection_list:
-            print("No active sessions")
+        rows = self._get_console_rows()
+        if not rows:
+            print('No active sessions')
             return
 
-        headers = ['ID', 'Address', 'OS', 'OS Version', 'Hostname', 'Integrity']
+        headers = ['ID', 'Address', 'OS', 'OS Version', 'Hostname', 'Integrity', 'Last Seen', 'Status']
         data = [
             [
-                str(i),
-                session.session_info.addr or 'N/A',
-                session.session_info.os_type,
-                session.session_info.os_ver,
-                session.session_info.hostname,
-                session.session_info.integrity
+                str(item['index']),
+                item['addr'],
+                item['os_type'],
+                item['os_ver'],
+                item['hostname'],
+                item['integrity'],
+                item['last_seen_at'],
+                item['status'],
             ]
-            for i, session in enumerate(connection_list)
+            for item in rows
         ]
         print_table(headers, data)
+
+    def print_console_help(self):
+        """
+        显示外层 CLI shell 帮助
+        """
+        rows = [
+            ['help, h, ?', 'Show this help message'],
+            ['status, st', 'Show session summary'],
+            ['list, ls, l', 'List active sessions'],
+            ['last, q', 'Open the latest active session'],
+            ['select <index>', 'Open a session by index'],
+            ['s <index>', 'Alias of select'],
+            ['use <index>', 'Alias of select'],
+            ['<index>', 'Directly open a session by index'],
+            ['clear, cls', 'Clear the console screen'],
+            ['cd <path>', 'Change local working directory'],
+            ['pwd', 'Show local working directory'],
+            ['exit, quit', 'Exit the server console'],
+            ['kill <index>', 'Send kill command to a target session'],
+        ]
+
+        print()
+        print('Server console commands:')
+        print_table(['Command', 'Description'], rows)
+
+    def _serialize_session_for_console(self, session) -> dict:
+        """
+        统一拿外层 shell 需要展示的会话信息
+        """
+        try:
+            return self.server.web_service.connection_service.serialize_connection(session)
+        except Exception:
+            info = getattr(session, 'session_info', None)
+            return {
+                'client_id': getattr(info, 'client_id', ''),
+                'addr': getattr(info, 'addr', ''),
+                'os_type': getattr(info, 'os_type', ''),
+                'os_ver': getattr(info, 'os_ver', ''),
+                'hostname': getattr(info, 'hostname', ''),
+                'integrity': getattr(info, 'integrity', ''),
+                'last_seen_at': '',
+                'connection_state': '',
+            }
+
+    def _format_last_seen(self, value) -> str:
+        if not value:
+            return '-'
+        return str(value)
+
+    def _get_console_rows(self):
+        rows = []
+        connection_list = self.server.connections.all()
+
+        for i, session in enumerate(connection_list):
+            item = self._serialize_session_for_console(session)
+            rows.append({
+                'index': i,
+                'session': session,
+                'client_id': item.get('client_id') or '',
+                'addr': item.get('addr') or 'N/A',
+                'os_type': item.get('os_type') or '',
+                'os_ver': item.get('os_ver') or '',
+                'hostname': item.get('hostname') or '',
+                'integrity': item.get('integrity') or '',
+                'last_seen_at': self._format_last_seen(item.get('last_seen_at')),
+                'status': item.get('connection_state') or 'unknown',
+            })
+
+        return rows
+
+    def _print_status_summary(self):
+        rows = self._get_console_rows()
+        if not rows:
+            print('No active sessions')
+            return
+
+        total = len(rows)
+        online = sum(1 for item in rows if item['status'] == 'online')
+        stale = sum(1 for item in rows if item['status'] == 'stale')
+        offline = sum(1 for item in rows if item['status'] == 'offline')
+
+        windows = sum(1 for item in rows if str(item['os_type']).lower().startswith('win'))
+        linux = sum(1 for item in rows if str(item['os_type']).lower().startswith('linux'))
+        mac = sum(1 for item in rows if str(item['os_type']).lower() in ['darwin', 'mac', 'macos'])
+
+        print()
+        print(f'Total:   {total}')
+        print(f'Online:  {online}')
+        print(f'Stale:   {stale}')
+        print(f'Offline: {offline}')
+        print()
+        print(f'Windows: {windows}')
+        print(f'Linux:   {linux}')
+        print(f'Mac:     {mac}')
+        print()
+
+        latest = None
+        for item in rows:
+            if not latest:
+                latest = item
+                continue
+            if str(item['last_seen_at']) > str(latest['last_seen_at']):
+                latest = item
+
+        if latest:
+            print(
+                'Latest: #{index} {hostname} [{status}] {last_seen}'.format(
+                    index=latest['index'],
+                    hostname=latest['hostname'] or latest['client_id'],
+                    status=latest['status'],
+                    last_seen=latest['last_seen_at'],
+                )
+            )
+            print()
 
     def get_last_connection(self) -> ClientSession:
         """
@@ -149,6 +288,18 @@ class ServerCommandShell:
 
         return final_ok
 
+    def _execute_session_command(self, session: ClientSession, cmd: str):
+        """
+        在外层总控台对指定 session 执行一条命令。
+        复用交互态的执行链，但不进入交互循环。
+        """
+        command_executor = self.server.web_service.command_executor_factory.create(
+            session,
+            use_foreground_guard=True,
+            foreground_source='cli'
+        )
+        return self._execute_interactive_command(session, command_executor, cmd)
+
     def _open_latest_from_interactive(self, current_session: ClientSession):
         """
         交互态快速切到最新连接
@@ -223,20 +374,36 @@ class ServerCommandShell:
         """
         name, arg = parse(cmd)
 
+        if cmd in ['h', 'help', '?']:
+            self.print_console_help()
+            return
+
+        if cmd in ['st', 'status']:
+            self._print_status_summary()
+            return
+
         if cmd in ['l', 'ls', 'list']:
             self.list_connections()
             return
 
-        if cmd == 'q':
+        if cmd in ['q', 'last']:
             self.open_connection(self.get_last_connection())
             return
 
-        if name in ['i', 's', 'select']:
+        if name in ['s', 'select', 'use']:
             target = arg.strip() if arg else ''
             if target:
                 self.open_connection(self.get_target_connection(target))
             else:
                 self.open_connection(self.get_last_connection())
+            return
+
+        if name == 'kill':
+            target = arg.strip() if arg else ''
+            if not target:
+                raise Exception('Usage: kill <index|client_id>')
+            session = self.get_target_connection(target)
+            self._execute_session_command(session, 'kill')
             return
 
         if cmd in ['quit', 'exit']:
@@ -249,6 +416,10 @@ class ServerCommandShell:
 
         if name == 'cd':
             print(cd(arg))
+            return
+
+        if cmd == 'pwd':
+            print(os.getcwd())
             return
 
         try:
