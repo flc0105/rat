@@ -31,7 +31,10 @@
     "kill_pid": "taskkill /pid <pid> /f",
     "kill_name": "taskkill /im <name> /f",
     "md5": "certUtil -hashfile <file> MD5",
-    "pkill": "wmic process where name='<process_name>' call terminate"
+    "pkill": "wmic process where name='<process_name>' call terminate",
+    "usb_history": "powershell Get-ItemProperty -Path HKLM:/SYSTEM/CurrentControlSet/Enum/USBSTOR/*/* ^| select @{ Name='device name'; Expression={ $_.FriendlyName } }",
+    "who_lock_usb": "powershell Get-EventLog -LogName System -After (Get-Date).AddHours(-1) ^| Where-Object { $_.EventID -eq 225 } ^| Sort-Object TimeGenerated ^| Format-Table -Wrap",
+    "killport": "powershell Stop-Process -Id (Get-NetTCPConnection -LocalPort <port>).OwningProcess"
   },
   "mac": {
     "ll": "ls -la",
