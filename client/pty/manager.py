@@ -24,7 +24,7 @@ class PtyManager:
 
     def open_session(self, pty_session_id: str, shell: str = '', cwd: str = '', cols: int = 120, rows: int = 32):
         if os.name == 'nt':
-            self._send_error(pty_session_id, 'PTY is not supported on Windows in this build')
+            self._send_error(pty_session_id, 'PTY is not supported on Windows in this build\r\n')
             return None
 
         with self._lock:

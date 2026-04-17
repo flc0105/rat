@@ -83,10 +83,11 @@ window.AppPtyModule = {
             } catch (e) {
                 this.ptyStatus = 'error';
                 this.ptyError = e?.message || String(e);
-                this.writePtySystemLine(`\r\naaaa[PTY error] ${this.ptyError}\r\n`);
+                // this.writePtySystemLine(`\r\n[PTY error] ${this.ptyError}\r\n`);
 
                 ElementPlus.ElMessage.error(this.ptyError || 'Failed to open PTY');
             } finally {
+                this.ptyStatus = 'error';
                 this.ptyLoading = false;
             }
         },
