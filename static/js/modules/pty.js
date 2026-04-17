@@ -257,13 +257,23 @@ window.AppPtyModule = {
             this.sendPtyWs({ type: 'resize', cols, rows });
         },
 
-        openPtySocket() {
+               openPtySocket() {
             this.closePtySocket();
             if (!this.ptyWsPath) return;
             const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
             const url = `${protocol}//${window.location.host}${this.ptyWsPath}`;
             const ws = new WebSocket(url);
             this.ptyWs = ws;
+
+            const applyChunks = (chunks) => {
+                if (!Array.isArray(chunks)) return;
+                chunks.forEach((chunk) => {
+                    const seq = Number(chunk?.seq || 0);
+                    if (seq > this.ptySeq) this.ptySeq = seq;
+                    const text = String(chunk?.text || '');
+                    if (text) this.writePtyOutput(text);
+                });
+            };
 
             ws.onopen = () => {
                 this.ptyStatus = this.ptyStatus === 'error' ? this.ptyStatus : 'open';
@@ -276,18 +286,30 @@ window.AppPtyModule = {
             ws.onmessage = (event) => {
                 try {
                     const payload = JSON.parse(String(event.data || '{}'));
-                    if (payload.type === 'output' && Array.isArray(payload.chunks)) {
-                        payload.chunks.forEach((chunk) => {
-                            const seq = Number(chunk?.seq || 0);
-                            if (seq > this.ptySeq) this.ptySeq = seq;
-                            const text = String(chunk?.text || '');
-                            if (text) this.writePtyOutput(text);
-                        });
+                    console.log('PTY WS payload:', payload);
+
+                    // asgi websocket: output/status
+                    if (payload.type === 'output') {
+                        applyChunks(payload.chunks);
                     }
+
+                    // legacy websocket server: snapshot/pty_update
+                    if (payload.type === 'snapshot' || payload.type === 'pty_update') {
+                        applyChunks(payload.chunks);
+                    }
+
                     if (payload.status) this.ptyStatus = payload.status;
                     if (payload.error) this.ptyError = payload.error;
-                    if (payload.type === 'status' && (payload.status === 'closed' || payload.status === 'error')) {
-                        this.closePtySocket();
+                    if (payload.seq) this.ptySeq = Math.max(this.ptySeq, Number(payload.seq || 0));
+
+                    if (
+                        payload.type === 'status' ||
+                        payload.type === 'snapshot' ||
+                        payload.type === 'pty_update'
+                    ) {
+                        if (payload.status === 'closed' || payload.status === 'error') {
+                            this.closePtySocket();
+                        }
                     }
                 } catch (e) {
                     console.error('PTY ws message parse failed', e);
