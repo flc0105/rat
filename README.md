@@ -979,7 +979,7 @@ Below is a reorganized roadmap based on current priorities and project direction
 
 ### Shell, execution, and terminal improvements
 
-- [ ] Add **xterm.js + PTY** support
+- [x] Add **xterm.js + PTY** support
 - [ ] Support client-side variables in commands, for example `spawn ${exec_path}`
 - [ ] Support inline helper expressions such as `kill ${getpid}`
 - [ ] Add reverse shell support
