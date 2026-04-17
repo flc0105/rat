@@ -18,46 +18,49 @@ window.AppPreviewModule = {
             previewArtifactInfo: null,
             previewImageInfo: null,
             previewImageInfoDialogVisible: false,
+            previewDetectedLanguage: 'Plain Text', // Monaco 识别语言
+
         }
     },
     methods: {
         monacoEditor: null,
 
         initMonacoEditor(content, readOnly = true) {
-            if (this.monacoEditor) {
-                this.monacoEditor.dispose();
-                this.monacoEditor = null;
-            }
+    if (this.monacoEditor) {
+        this.monacoEditor.dispose();
+        this.monacoEditor = null;
+    }
 
-            const container = document.getElementById('monaco-editor-container');
-            if (!container) return;
+    const container = document.getElementById('monaco-editor-container');
+    if (!container) return;
 
-            // 等待容器渲染完成
-            this.$nextTick(() => {
-                require.config({paths: {vs: 'https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs'}});
-                require(['vs/editor/editor.main'], () => {
-                    // 根据文件扩展名推断语言
-                    const lang = this.getLanguageFromFilename(this.previewTitle);
+    // 等待容器渲染完成
+    this.$nextTick(() => {
+        require.config({paths: {vs: 'https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs'}});
+        require(['vs/editor/editor.main'], () => {
+            // 根据文件扩展名推断语言
+            const lang = this.getLanguageFromFilename(this.previewTitle);
+            this.previewDetectedLanguage = this.getLanguageDisplayName(lang);
 
-                    this.monacoEditor = monaco.editor.create(container, {
-                        value: content,
-                        language: lang,
-                        theme: 'vs',
-                        readOnly: readOnly,
-                        automaticLayout: true,
-                        fontSize: 13,
-                        fontFamily: 'Monaco, Menlo, "Ubuntu Mono", Consolas, monospace',
-                        lineNumbers: 'on',
-                        minimap: {enabled: false},
-                        scrollBeyondLastLine: false,
-                        wordWrap: 'on',
-                        renderWhitespace: 'boundary',
-                        tabSize: 4,
-                        insertSpaces: true,
-                    });
-                });
+            this.monacoEditor = monaco.editor.create(container, {
+                value: content,
+                language: lang,
+                theme: 'vs',
+                readOnly: readOnly,
+                automaticLayout: true,
+                fontSize: 13,
+                fontFamily: 'Monaco, Menlo, "Ubuntu Mono", Consolas, monospace',
+                lineNumbers: 'on',
+                minimap: {enabled: false},
+                scrollBeyondLastLine: false,
+                wordWrap: 'on',
+                renderWhitespace: 'boundary',
+                tabSize: 4,
+                insertSpaces: true,
             });
-        },
+        });
+    });
+},
 
         // 根据文件名获取语言
         getLanguageFromFilename(filename) {
@@ -97,6 +100,38 @@ window.AppPreviewModule = {
 
             return langMap[ext] || 'plaintext';
         },
+
+        getLanguageDisplayName(language) {
+    const langNameMap = {
+        plaintext: 'Plain Text',
+        python: 'Python',
+        javascript: 'JavaScript',
+        typescript: 'TypeScript',
+        html: 'HTML',
+        css: 'CSS',
+        json: 'JSON',
+        xml: 'XML',
+        yaml: 'YAML',
+        markdown: 'Markdown',
+        shell: 'Shell',
+        sql: 'SQL',
+        java: 'Java',
+        c: 'C',
+        cpp: 'C++',
+        go: 'Go',
+        rust: 'Rust',
+        php: 'PHP',
+        ruby: 'Ruby',
+        perl: 'Perl',
+        lua: 'Lua',
+        ini: 'INI',
+        log: 'Log',
+        powershell: 'Powershell'
+    };
+
+    const key = String(language || '').trim().toLowerCase();
+    return langNameMap[key] || key || 'Plain Text';
+},
 
         // 获取编辑器内容
         getMonacoEditorContent() {
@@ -427,6 +462,8 @@ window.AppPreviewModule = {
                     this.previewOriginalContent = this.previewText;
                     this.previewFileSize = this.formatBytes(data.size || this.previewText.length);
                     this.previewFileEncoding = this.detectEncoding(this.previewText);
+this.previewDetectedLanguage = this.getLanguageDisplayName(this.getLanguageFromFilename(this.previewTitle));
+
 
                     // 等待 DOM 渲染完成后初始化编辑器
                     this.$nextTick(() => {
@@ -668,6 +705,8 @@ openNewRemoteScriptEditor(scriptName = 'new_script.py') {
             this.previewTruncated = false;
             this.previewFileSize = this.formatBytes(content.length);
             this.previewFileEncoding = 'UTF-8';
+           this.previewDetectedLanguage = this.getLanguageDisplayName(this.getLanguageFromFilename(this.previewTitle));
+
             this.previewEditMode = true;
             this.previewDialogVisible = true;
 
@@ -707,6 +746,8 @@ openNewRemoteScriptEditor(scriptName = 'new_script.py') {
                 this.previewTruncated = false;
                 this.previewFileSize = this.formatBytes(content.length);
                 this.previewFileEncoding = 'UTF-8';
+                 this.previewDetectedLanguage = this.getLanguageDisplayName(this.getLanguageFromFilename(this.previewTitle));
+
                 this.previewEditMode = true;
 
                 this.previewDialogVisible = true;
@@ -747,6 +788,8 @@ openNewRemoteScriptEditor(scriptName = 'new_script.py') {
                 this.previewTruncated = false;
                 this.previewFileSize = this.formatBytes(content.length);
                 this.previewFileEncoding = 'UTF-8';
+this.previewDetectedLanguage = this.getLanguageDisplayName(this.getLanguageFromFilename(this.previewTitle));
+
                 this.previewEditMode = true;
 
                 this.previewDialogVisible = true;
@@ -770,6 +813,7 @@ openNewRemoteScriptEditor(scriptName = 'new_script.py') {
             this.previewArtifactInfo = null;
             this.previewImageInfo = null;
             this.previewImageInfoDialogVisible = false;
+            this.previewDetectedLanguage = 'Plain Text';
         },
     },
 
