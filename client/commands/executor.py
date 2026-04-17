@@ -2,6 +2,7 @@ import inspect
 
 from client.commands.services.command_catalog import CommandCatalog
 from client.commands.services.command_context_store import CommandExecutionContextStore
+from core.utils.command_output import render_structured_result
 from core.utils.parsing import parse
 
 
@@ -62,6 +63,9 @@ class CommandExecutor:
             commands.command_id = command_id
         return commands
 
+    def _render_command_result(self, result, output_format='text'):
+        return render_structured_result(result, output_format=output_format)
+
     # ------------------ 命令路由 ------------------ #
     def _resolve_builtin_command(self, commands, name):
         """
@@ -113,7 +117,9 @@ class CommandExecutor:
 
             builtin_command = self._resolve_builtin_command(commands, name)
             if builtin_command:
-                return self._invoke_command_method(builtin_command, arg)
+                result = self._invoke_command_method(builtin_command, arg)
+                output_format = 'json' if str(arg or '').strip().lower() in ('json', '--json') else 'text'
+                return self._render_command_result(result, output_format=output_format)
 
             default_command = self._resolve_default_command(commands, command)
             return default_command()
@@ -157,11 +163,3 @@ class CommandExecutor:
             return commands.execute_script_stream(script_text, kwargs=kwargs)
 
         return self._execute_with_cleanup(command_id, _invoke)
-
-
-
-
-
-
-
-

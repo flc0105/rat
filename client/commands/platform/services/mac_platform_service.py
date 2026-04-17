@@ -11,6 +11,7 @@ import psutil
 
 from client.commands.command_context import CommandCancelledError, CommandTimeoutError
 from core.utils.client_util import get_executable_path
+from core.utils.command_output import StructuredCommandResult
 from core.utils.formatting import format_dict, format_table, get_size, get_time
 
 
@@ -108,28 +109,15 @@ class MacPlatformService:
                 except Exception:
                     pass
 
-    # def collect_system_info(self):
-    #     try:
-    #         payload = self.owner._run_interruptible(self.build_process_info)
-    #         return 1, format_dict(payload)
-    #     except CommandCancelledError:
-    #         return 0, 'Command cancelled'
-    #     except CommandTimeoutError:
-    #         return 0, 'Command timed out and was terminated'
-    #     except Exception as e:
-    #         return 0, f'Failed to collect system information: {e}'
-
     def collect_system_info(self, arg=''):
         try:
             payload = self.owner._run_interruptible(self.build_process_info)
-
-            arg_text = str(arg or '').strip().lower()
-            output_json = arg_text in ('json', '--json')
-
-            if output_json:
-                return 1, json.dumps(payload, ensure_ascii=False, indent=2)
-
-            return 1, format_dict(payload)
+            return StructuredCommandResult(
+                status=1,
+                data=payload,
+                shape='dict',
+                width=20,
+            )
         except CommandCancelledError:
             return 0, 'Command cancelled'
         except CommandTimeoutError:

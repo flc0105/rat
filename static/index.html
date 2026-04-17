@@ -170,8 +170,12 @@
                                                    @click="openProcessDialog">Processes
                                         </el-button>
 
+
+
+<!--                                        <el-dropdown-item divided command="disconnect"></el-dropdown-item>-->
+
                                         <el-dropdown trigger="click" @command="handleControlActionCommand">
-    <el-button size="small" class="tool-btn tool-btn-danger">
+    <el-button size="small" class="tool-btn tool-btn-accent">
         Control
     </el-button>
     <template #dropdown>
@@ -179,10 +183,14 @@
             <el-dropdown-item command="kill">Force Kill</el-dropdown-item>
             <el-dropdown-item command="reset">Force Reset</el-dropdown-item>
             <el-dropdown-item command="spawn">Force Spawn</el-dropdown-item>
-            <el-dropdown-item divided command="disconnect">Disconnect</el-dropdown-item>
+
         </el-dropdown-menu>
     </template>
 </el-dropdown>
+
+                                                                       <el-button size="small" class="tool-btn tool-btn-danger"
+                                                   @click="killConnection">Disconnect
+                                        </el-button>
 
                                         <span class="tool-separator"></span>
                                         <el-button size="small" class="tool-btn" @click="clearOutput">Clear</el-button>

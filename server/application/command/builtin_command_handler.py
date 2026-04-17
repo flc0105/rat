@@ -231,7 +231,7 @@ class BuiltinCommandHandler:
             yield item
 
     def rtt(self, arg=''):
-        for item in self.rtt_support.rtt():
+        for item in self.rtt_support.rtt(arg):
             yield item
 
     # add server端控制命令转发 2026-04-10 00:00

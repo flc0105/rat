@@ -135,10 +135,10 @@ window.AppCommandsModule = {
         async handleControlActionCommand(command) {
             const normalizedCommand = String(command || '').trim().toLowerCase();
 
-            if (normalizedCommand === 'disconnect') {
-                await this.killConnection();
-                return;
-            }
+            // if (normalizedCommand === 'disconnect') {
+            //     await this.killConnection();
+            //     return;
+            // }
 
             if (normalizedCommand === 'kill' || normalizedCommand === 'reset' || normalizedCommand === 'spawn') {
                 await this.sendHttpControlCommand(normalizedCommand);
