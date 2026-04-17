@@ -31,7 +31,7 @@ class ArtifactPreviewService:
         image_exts = {'.png', '.jpg', '.jpeg', '.gif', '.webp', '.bmp'}
         text_exts = {
             '.txt', '.log', '.py', '.js', '.ts', '.json', '.xml', '.yaml', '.yml',
-            '.ini', '.cfg', '.conf', '.md', '.csv', '.sql', '.bat', '.sh', '.html', '.css'
+            '.ini', '.cfg', '.conf', '.md', '.csv', '.sql', '.bat', '.sh', '.html', '.css', '.ps1'
         }
 
         if ext in image_exts:

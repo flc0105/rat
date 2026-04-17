@@ -92,6 +92,7 @@ window.AppPreviewModule = {
                 'conf': 'ini',
                 'log': 'log',
                 'txt': 'plaintext',
+                'ps1': 'powershell',
             };
 
             return langMap[ext] || 'plaintext';
