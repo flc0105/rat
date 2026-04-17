@@ -1,3 +1,12 @@
+SCRIPT_METADATA = {
+    "name": "mac/gather/get_launch_items",
+    "display_name": "List Launch Items",
+    "description": "Get launch agents, daemons, and login items on macOS",
+    "platforms": ["darwin"],
+    "category": "Gather",
+    "params": []
+}
+
 #!/usr/bin/env python3
 import plistlib
 import subprocess

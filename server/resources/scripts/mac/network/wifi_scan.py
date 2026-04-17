@@ -1,17 +1,22 @@
-#!/usr/bin/env python3
+SCRIPT_METADATA = {
+    "name": "mac/network/wifi_scan",
+    "display_name": "Scan Wi-Fi",
+    "description": "Scan nearby Wi-Fi networks",
+    "platforms": ["darwin"],
+    "category": "Network",
+    "params": []
+}
+
 import subprocess
 import json
 import platform
 import re
 
 
-# ======================
-# scan
-# ======================
 def scan_macos():
     try:
         result = subprocess.run(
-            ['/System/Library/PrivateFrameworks/Apple80211.framework/Versions/Current/Resources/airport', '-s'],
+            ["/System/Library/PrivateFrameworks/Apple80211.framework/Versions/Current/Resources/airport", "-s"],
             capture_output=True,
             text=True
         )
@@ -22,9 +27,9 @@ def scan_macos():
 
 def scan_linux():
     try:
-        subprocess.run(['nmcli', 'device', 'wifi', 'rescan'], capture_output=True)
+        subprocess.run(["nmcli", "device", "wifi", "rescan"], capture_output=True)
         result = subprocess.run(
-            ['nmcli', '-t', '-f', 'SSID,SECURITY,SIGNAL', 'device', 'wifi', 'list'],
+            ["nmcli", "-t", "-f", "SSID,SECURITY,SIGNAL", "device", "wifi", "list"],
             capture_output=True,
             text=True
         )
@@ -33,9 +38,6 @@ def scan_linux():
         return ""
 
 
-# ======================
-# parse（最终稳定版）
-# ======================
 def parse_macos(output):
     networks = []
 
@@ -49,11 +51,9 @@ def parse_macos(output):
             continue
 
         parts = line.split()
-
         if len(parts) < 2:
             continue
 
-        # ===== 找 RSSI（关键）=====
         rssi_index = None
         rssi_val = None
 
@@ -66,13 +66,8 @@ def parse_macos(output):
         if rssi_index is None:
             continue
 
-        # ===== SSID =====
-        ssid = " ".join(parts[:rssi_index])
-
-        # ===== SECURITY（最后一个字段）=====
-        security = parts[-1]
-
-        # ===== signal 转换 =====
+        ssid = " ".join(parts[:rssi_index]).strip()
+        security = parts[-1].strip()
         signal = max(0, min(100, 2 * (rssi_val + 100)))
 
         networks.append({
@@ -91,12 +86,12 @@ def parse_linux(output):
         if not line:
             continue
 
-        parts = line.split(':')
+        parts = line.split(":")
         if len(parts) < 3:
             continue
 
-        ssid = parts[0] or "(hidden)"
-        security = parts[1]
+        ssid = parts[0].strip() or "(hidden)"
+        security = parts[1].strip()
         signal = int(parts[2]) if parts[2].isdigit() else None
 
         networks.append({
@@ -108,9 +103,6 @@ def parse_linux(output):
     return networks
 
 
-# ======================
-# post-process
-# ======================
 def deduplicate(networks):
     best = {}
 
@@ -129,28 +121,22 @@ def deduplicate(networks):
 def sort_networks(networks):
     return sorted(
         networks,
-        key=lambda x: (x["signal"] is not None, x["signal"]),
+        key=lambda x: (x["signal"] is not None, x["signal"] if x["signal"] is not None else -1),
         reverse=True
     )
 
 
-# ======================
-# run
-# ======================
 system = platform.system()
 
 if system == "Darwin":
     raw = scan_macos()
     networks = parse_macos(raw)
-
 elif system == "Linux":
     raw = scan_linux()
     networks = parse_linux(raw)
-
 else:
-    print(json.dumps({"error": f"{system} not supported"}))
-    exit()
-
+    print(json.dumps({"error": f"{system} not supported"}, ensure_ascii=False))
+    raise SystemExit
 
 networks = deduplicate(networks)
 networks = sort_networks(networks)

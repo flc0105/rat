@@ -1,4 +1,13 @@
-#!/usr/bin/env python3
+SCRIPT_METADATA = {
+    "name": "mac/gather/get_installed_apps",
+    "display_name": "List Installed Apps",
+    "description": "Get installed applications on macOS",
+    "platforms": ["darwin"],
+    "category": "Gather",
+    "params": []
+}
+
+
 import subprocess
 import json
 from pathlib import Path
