@@ -26,41 +26,41 @@ window.AppPreviewModule = {
         monacoEditor: null,
 
         initMonacoEditor(content, readOnly = true) {
-    if (this.monacoEditor) {
-        this.monacoEditor.dispose();
-        this.monacoEditor = null;
-    }
+            if (this.monacoEditor) {
+                this.monacoEditor.dispose();
+                this.monacoEditor = null;
+            }
 
-    const container = document.getElementById('monaco-editor-container');
-    if (!container) return;
+            const container = document.getElementById('monaco-editor-container');
+            if (!container) return;
 
-    // 等待容器渲染完成
-    this.$nextTick(() => {
-        require.config({paths: {vs: 'https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs'}});
-        require(['vs/editor/editor.main'], () => {
-            // 根据文件扩展名推断语言
-            const lang = this.getLanguageFromFilename(this.previewTitle);
-            this.previewDetectedLanguage = this.getLanguageDisplayName(lang);
+            // 等待容器渲染完成
+            this.$nextTick(() => {
+                require.config({paths: {vs: 'https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs'}});
+                require(['vs/editor/editor.main'], () => {
+                    // 根据文件扩展名推断语言
+                    const lang = this.getLanguageFromFilename(this.previewTitle);
+                    this.previewDetectedLanguage = this.getLanguageDisplayName(lang);
 
-            this.monacoEditor = monaco.editor.create(container, {
-                value: content,
-                language: lang,
-                theme: 'vs',
-                readOnly: readOnly,
-                automaticLayout: true,
-                fontSize: 13,
-                fontFamily: 'Monaco, Menlo, "Ubuntu Mono", Consolas, monospace',
-                lineNumbers: 'on',
-                minimap: {enabled: false},
-                scrollBeyondLastLine: false,
-                wordWrap: 'on',
-                renderWhitespace: 'boundary',
-                tabSize: 4,
-                insertSpaces: true,
+                    this.monacoEditor = monaco.editor.create(container, {
+                        value: content,
+                        language: lang,
+                        theme: 'vs',
+                        readOnly: readOnly,
+                        automaticLayout: true,
+                        fontSize: 13,
+                        fontFamily: 'Monaco, Menlo, "Ubuntu Mono", Consolas, monospace',
+                        lineNumbers: 'on',
+                        minimap: {enabled: false},
+                        scrollBeyondLastLine: false,
+                        wordWrap: 'on',
+                        renderWhitespace: 'boundary',
+                        tabSize: 4,
+                        insertSpaces: true,
+                    });
+                });
             });
-        });
-    });
-},
+        },
 
         // 根据文件名获取语言
         getLanguageFromFilename(filename) {
@@ -102,36 +102,36 @@ window.AppPreviewModule = {
         },
 
         getLanguageDisplayName(language) {
-    const langNameMap = {
-        plaintext: 'Plain Text',
-        python: 'Python',
-        javascript: 'JavaScript',
-        typescript: 'TypeScript',
-        html: 'HTML',
-        css: 'CSS',
-        json: 'JSON',
-        xml: 'XML',
-        yaml: 'YAML',
-        markdown: 'Markdown',
-        shell: 'Shell',
-        sql: 'SQL',
-        java: 'Java',
-        c: 'C',
-        cpp: 'C++',
-        go: 'Go',
-        rust: 'Rust',
-        php: 'PHP',
-        ruby: 'Ruby',
-        perl: 'Perl',
-        lua: 'Lua',
-        ini: 'INI',
-        log: 'Log',
-        powershell: 'Powershell'
-    };
+            const langNameMap = {
+                plaintext: 'Plain Text',
+                python: 'Python',
+                javascript: 'JavaScript',
+                typescript: 'TypeScript',
+                html: 'HTML',
+                css: 'CSS',
+                json: 'JSON',
+                xml: 'XML',
+                yaml: 'YAML',
+                markdown: 'Markdown',
+                shell: 'Shell',
+                sql: 'SQL',
+                java: 'Java',
+                c: 'C',
+                cpp: 'C++',
+                go: 'Go',
+                rust: 'Rust',
+                php: 'PHP',
+                ruby: 'Ruby',
+                perl: 'Perl',
+                lua: 'Lua',
+                ini: 'INI',
+                log: 'Log',
+                powershell: 'Powershell'
+            };
 
-    const key = String(language || '').trim().toLowerCase();
-    return langNameMap[key] || key || 'Plain Text';
-},
+            const key = String(language || '').trim().toLowerCase();
+            return langNameMap[key] || key || 'Plain Text';
+        },
 
         // 获取编辑器内容
         getMonacoEditorContent() {
@@ -462,7 +462,7 @@ window.AppPreviewModule = {
                     this.previewOriginalContent = this.previewText;
                     this.previewFileSize = this.formatBytes(data.size || this.previewText.length);
                     this.previewFileEncoding = this.detectEncoding(this.previewText);
-this.previewDetectedLanguage = this.getLanguageDisplayName(this.getLanguageFromFilename(this.previewTitle));
+                    this.previewDetectedLanguage = this.getLanguageDisplayName(this.getLanguageFromFilename(this.previewTitle));
 
 
                     // 等待 DOM 渲染完成后初始化编辑器
@@ -618,17 +618,17 @@ this.previewDetectedLanguage = this.getLanguageDisplayName(this.getLanguageFromF
         },
 
         buildServerScriptTemplate(scriptName = 'new_script.py') {
-    const normalizedScriptName = String(scriptName || 'new_script.py').trim().replace(/\\/g, '/').replace(/^\/+/, '') || 'new_script.py';
-    const classBaseName = normalizedScriptName
-        .replace(/\.py$/i, '')
-        .split('/')
-        .pop()
-        .split(/[^a-zA-Z0-9]+/)
-        .filter(Boolean)
-        .map(part => part.charAt(0).toUpperCase() + part.slice(1))
-        .join('') || 'NewScript';
+            const normalizedScriptName = String(scriptName || 'new_script.py').trim().replace(/\\/g, '/').replace(/^\/+/, '') || 'new_script.py';
+            const classBaseName = normalizedScriptName
+                .replace(/\.py$/i, '')
+                .split('/')
+                .pop()
+                .split(/[^a-zA-Z0-9]+/)
+                .filter(Boolean)
+                .map(part => part.charAt(0).toUpperCase() + part.slice(1))
+                .join('') || 'NewScript';
 
-    return `SCRIPT_METADATA = {
+            return `SCRIPT_METADATA = {
     "name": "${normalizedScriptName.replace(/\.py$/i, '')}",
     "display_name": "${classBaseName}",
     "description": "Describe what this script does",
@@ -652,40 +652,40 @@ print(value)
 # Example:
 # value = kwargs.get('example', '')
 `;
-},
+        },
 
-openNewRemoteScriptEditor(scriptName = 'new_script.py') {
-    if (!this.selectedId) {
-        ElementPlus.ElMessage.warning('Please select a device');
-        return;
-    }
+        openNewRemoteScriptEditor(scriptName = 'new_script.py') {
+            if (!this.selectedId) {
+                ElementPlus.ElMessage.warning('Please select a device');
+                return;
+            }
 
-    let normalizedScriptName = String(scriptName || '').trim().replace(/\\/g, '/').replace(/^\/+/, '');
-    if (!normalizedScriptName) {
-        normalizedScriptName = 'new_script.py';
-    }
-    if (!/\.py$/i.test(normalizedScriptName)) {
-        normalizedScriptName = `${normalizedScriptName}.py`;
-    }
+            let normalizedScriptName = String(scriptName || '').trim().replace(/\\/g, '/').replace(/^\/+/, '');
+            if (!normalizedScriptName) {
+                normalizedScriptName = 'new_script.py';
+            }
+            if (!/\.py$/i.test(normalizedScriptName)) {
+                normalizedScriptName = `${normalizedScriptName}.py`;
+            }
 
-    const content = this.buildServerScriptTemplate(normalizedScriptName);
+            const content = this.buildServerScriptTemplate(normalizedScriptName);
 
-    this.previewSource = 'server_script';
-    this.previewFilePath = normalizedScriptName;
-    this.previewTitle = normalizedScriptName;
-    this.previewText = content;
-    this.previewOriginalContent = content;
-    this.previewType = 'text';
-    this.previewTruncated = false;
-    this.previewFileSize = this.formatBytes(content.length);
-    this.previewFileEncoding = 'UTF-8';
-    this.previewEditMode = true;
-    this.previewDialogVisible = true;
+            this.previewSource = 'server_script';
+            this.previewFilePath = normalizedScriptName;
+            this.previewTitle = normalizedScriptName;
+            this.previewText = content;
+            this.previewOriginalContent = content;
+            this.previewType = 'text';
+            this.previewTruncated = false;
+            this.previewFileSize = this.formatBytes(content.length);
+            this.previewFileEncoding = 'UTF-8';
+            this.previewEditMode = true;
+            this.previewDialogVisible = true;
 
-    this.$nextTick(() => {
-        this.initMonacoEditor(content, false);
-    });
-},
+            this.$nextTick(() => {
+                this.initMonacoEditor(content, false);
+            });
+        },
 
         openNewRemoteJobEditor(scriptName = 'new_job.py') {
             if (!this.selectedId) {
@@ -705,7 +705,7 @@ openNewRemoteScriptEditor(scriptName = 'new_script.py') {
             this.previewTruncated = false;
             this.previewFileSize = this.formatBytes(content.length);
             this.previewFileEncoding = 'UTF-8';
-           this.previewDetectedLanguage = this.getLanguageDisplayName(this.getLanguageFromFilename(this.previewTitle));
+            this.previewDetectedLanguage = this.getLanguageDisplayName(this.getLanguageFromFilename(this.previewTitle));
 
             this.previewEditMode = true;
             this.previewDialogVisible = true;
@@ -746,7 +746,7 @@ openNewRemoteScriptEditor(scriptName = 'new_script.py') {
                 this.previewTruncated = false;
                 this.previewFileSize = this.formatBytes(content.length);
                 this.previewFileEncoding = 'UTF-8';
-                 this.previewDetectedLanguage = this.getLanguageDisplayName(this.getLanguageFromFilename(this.previewTitle));
+                this.previewDetectedLanguage = this.getLanguageDisplayName(this.getLanguageFromFilename(this.previewTitle));
 
                 this.previewEditMode = true;
 
@@ -788,7 +788,7 @@ openNewRemoteScriptEditor(scriptName = 'new_script.py') {
                 this.previewTruncated = false;
                 this.previewFileSize = this.formatBytes(content.length);
                 this.previewFileEncoding = 'UTF-8';
-this.previewDetectedLanguage = this.getLanguageDisplayName(this.getLanguageFromFilename(this.previewTitle));
+                this.previewDetectedLanguage = this.getLanguageDisplayName(this.getLanguageFromFilename(this.previewTitle));
 
                 this.previewEditMode = true;
 
@@ -836,7 +836,7 @@ this.previewDetectedLanguage = this.getLanguageDisplayName(this.getLanguageFromF
     },
 
     watch: {
-         previewDialogVisible(val) {
+        previewDialogVisible(val) {
             if (!val) this.resetPreviewState();
         },
 

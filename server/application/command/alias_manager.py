@@ -7,13 +7,14 @@ from server.config.config import ALIAS_PATH
 
 class AliasManager:
     PLACEHOLDER_PATTERN = r'<.*?>'
-    SUPPORTED_PLATFORMS = ('common', 'win', 'mac')
+    SUPPORTED_PLATFORMS = ('common', 'win', 'mac', 'linux')
     OS_PLATFORM_MAP = {
         'windows': 'win',
         'win': 'win',
         'darwin': 'mac',
         'mac': 'mac',
         'macos': 'mac',
+        'linux': 'linux'
     }
     QUERY_PLATFORMS = SUPPORTED_PLATFORMS + ('all',)
 
