@@ -1,4 +1,11 @@
-# -*- coding: utf-8 -*-
+SCRIPT_METADATA = {
+    "name": "common/gather/list_disks",
+    "display_name": "List Disks",
+    "description": "List mounted disks and storage usage",
+    "platforms": ["common"],
+    "category": "Gather",
+    "params": []
+}
 
 import json
 import psutil
@@ -33,16 +40,16 @@ try:
             continue
 
         result.append({
-            "mount_point": partition.mountpoint,
-            "device": partition.device,
+            "mount_point": partition.mountpoint or "",
+            "device": partition.device or "",
             "file_system": partition.fstype or "N/A",
             "total_size": get_readable_size(usage.total),
             "used": get_readable_size(usage.used),
             "free": get_readable_size(usage.free),
-            "percentage": usage.percent
+            "percentage": float(usage.percent)
         })
 
-    result.sort(key=lambda x: x["mount_point"].lower())
+    result.sort(key=lambda x: (x["mount_point"] or "").lower())
     print(json.dumps(result, ensure_ascii=False, indent=2))
 
 except Exception as e:

@@ -1,9 +1,9 @@
 SCRIPT_METADATA = {
-    "name": "common/misc/openurl",
+    "name": "common/browser/open_url",
     "display_name": "Open URL",
     "description": "Open a URL in the default browser",
     "platforms": ["common"],
-    "category": "Misc",
+    "category": "Browser",
     "params": [
         {
             "name": "url",
