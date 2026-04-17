@@ -50,14 +50,8 @@ window.AppPtyModule = {
                 await this.$nextTick();
                 this.initPtyTerminal();
                 this.clearPtyTerminal();
-                this.setPtyCursorEnabled(true);
                 this.writePtySystemLine('[opening PTY...]\r\n');
-
-                ElementPlus.ElMessage({
-                    type: 'info',
-                    message: 'Opening PTY session...',
-                    duration: 1200
-                });
+                ElementPlus.ElMessage({ type: 'info', message: 'Opening PTY session...', duration: 1200 });
 
                 const dims = this.fitPtyTerminalAndGetSize();
                 const res = await fetch(`/api/connections/${encodeURIComponent(this.selectedId)}/pty/open`, {
@@ -72,7 +66,6 @@ window.AppPtyModule = {
                         shell: this.ptyShellPath || '',
                     }),
                 });
-
                 const json = await res.json();
                 if (!res.ok || json.code !== 0) {
                     throw new Error(json.message || 'Failed to open PTY');
@@ -90,7 +83,8 @@ window.AppPtyModule = {
             } catch (e) {
                 this.ptyStatus = 'error';
                 this.ptyError = e?.message || String(e);
-                this.renderPtyDisconnect(this.ptyError || 'Failed to open PTY');
+                this.writePtySystemLine(`\r\naaaa[PTY error] ${this.ptyError}\r\n`);
+
                 ElementPlus.ElMessage.error(this.ptyError || 'Failed to open PTY');
             } finally {
                 this.ptyLoading = false;
@@ -101,15 +95,13 @@ window.AppPtyModule = {
             this.resetPtyInputQueue();
             this.clearPtyResizeTimer();
             this.ptyUserClosing = true;
-            this.sendPtyWs({type: 'close'});
+            this.sendPtyWs({ type: 'close' });
             this.closePtySocket();
 
             const ptyId = this.ptySessionId;
             this.ptyDialogVisible = false;
             this.ptySessionId = '';
             this.ptyStatus = 'closed';
-            this.ptyError = '';
-            this.setPtyCursorEnabled(false);
 
             if (!ptyId) {
                 this.disposePtyTerminal();
@@ -157,10 +149,7 @@ window.AppPtyModule = {
             term.loadAddon(fitAddon);
             term.open(host);
 
-            try {
-                fitAddon.fit();
-            } catch (_) {
-            }
+            try { fitAddon.fit(); } catch (_) {}
 
             term.onData((data) => {
                 this.queuePtyInput(data);
@@ -176,7 +165,7 @@ window.AppPtyModule = {
             this._ptyWindowResizeHandler = () => {
                 this.schedulePtyResize();
             };
-            window.addEventListener('resize', this._ptyWindowResizeHandler, {passive: true});
+            window.addEventListener('resize', this._ptyWindowResizeHandler, { passive: true });
         },
 
         disposePtyTerminal() {
@@ -188,10 +177,7 @@ window.AppPtyModule = {
             this.clearPtyResizeTimer();
 
             if (this.ptyTerm) {
-                try {
-                    this.ptyTerm.dispose();
-                } catch (_) {
-                }
+                try { this.ptyTerm.dispose(); } catch (_) {}
                 this.ptyTerm = null;
             }
 
@@ -209,14 +195,8 @@ window.AppPtyModule = {
 
         clearPtyTerminal() {
             if (this.ptyTerm) {
-                try {
-                    this.ptyTerm.clear();
-                } catch (_) {
-                }
-                try {
-                    this.ptyTerm.reset();
-                } catch (_) {
-                }
+                try { this.ptyTerm.clear(); } catch (_) {}
+                try { this.ptyTerm.reset(); } catch (_) {}
             }
         },
 
@@ -235,10 +215,7 @@ window.AppPtyModule = {
 
         focusPtyInput() {
             if (this.ptyTerm) {
-                try {
-                    this.ptyTerm.focus();
-                } catch (_) {
-                }
+                try { this.ptyTerm.focus(); } catch (_) {}
             }
         },
 
@@ -247,37 +224,13 @@ window.AppPtyModule = {
             setTimeout(() => this.focusPtyInput(), 0);
         },
 
-        setPtyCursorEnabled(enabled) {
-            if (!this.ptyTerm) return;
-            try {
-                this.ptyTerm.options.cursorBlink = !!enabled;
-            } catch (_) {
-            }
-            try {
-                if (!enabled) this.ptyTerm.blur();
-            } catch (_) {
-            }
-        },
-
-
-        renderPtyDisconnect(message = '') {
-            if (!this.ptyTerm) return;
-            this.setPtyCursorEnabled(false);
-            // this.writePtySystemLine('\r\n[disconnected]\r\n');
-            this.writePtySystemLine('\r\n');
-        },
-
-
         fitPtyTerminalAndGetSize() {
             if (this.ptyFitAddon) {
-                try {
-                    this.ptyFitAddon.fit();
-                } catch (_) {
-                }
+                try { this.ptyFitAddon.fit(); } catch (_) {}
             }
             const cols = Math.max(20, Number(this.ptyTerm?.cols || 120));
             const rows = Math.max(5, Number(this.ptyTerm?.rows || 32));
-            return {cols, rows};
+            return { cols, rows };
         },
 
         schedulePtyResize() {
@@ -300,13 +253,12 @@ window.AppPtyModule = {
             if (this.ptyLastCols === cols && this.ptyLastRows === rows) return;
             this.ptyLastCols = cols;
             this.ptyLastRows = rows;
-            this.sendPtyWs({type: 'resize', cols, rows});
+            this.sendPtyWs({ type: 'resize', cols, rows });
         },
 
         openPtySocket() {
             this.closePtySocket();
             if (!this.ptyWsPath) return;
-
             const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
             const url = `${protocol}//${window.location.host}${this.ptyWsPath}`;
             const ws = new WebSocket(url);
@@ -315,20 +267,14 @@ window.AppPtyModule = {
             ws.onopen = () => {
                 this.ptyStatus = this.ptyStatus === 'error' ? this.ptyStatus : 'open';
                 this.ptyWsConnectedOnce = true;
-                this.setPtyCursorEnabled(true);
                 this.focusPtyInput();
                 this.schedulePtyResize();
-                ElementPlus.ElMessage({
-                    type: 'success',
-                    message: 'PTY connected',
-                    duration: 1200
-                });
+                ElementPlus.ElMessage({ type: 'success', message: 'PTY connected', duration: 1200 });
             };
 
             ws.onmessage = (event) => {
                 try {
                     const payload = JSON.parse(String(event.data || '{}'));
-
                     if (payload.type === 'output' && Array.isArray(payload.chunks)) {
                         payload.chunks.forEach((chunk) => {
                             const seq = Number(chunk?.seq || 0);
@@ -337,20 +283,10 @@ window.AppPtyModule = {
                             if (text) this.writePtyOutput(text);
                         });
                     }
-
                     if (payload.status) this.ptyStatus = payload.status;
                     if (payload.error) this.ptyError = payload.error;
-
-                    if (payload.type === 'status' && payload.status === 'error') {
-                        this.renderPtyDisconnect(payload.error || this.ptyError || 'PTY error');
+                    if (payload.type === 'status' && (payload.status === 'closed' || payload.status === 'error')) {
                         this.closePtySocket();
-                        return;
-                    }
-
-                    if (payload.type === 'status' && payload.status === 'closed') {
-                        this.renderPtyDisconnect('PTY closed');
-                        this.closePtySocket();
-                        return;
                     }
                 } catch (e) {
                     console.error('PTY ws message parse failed', e);
@@ -363,17 +299,11 @@ window.AppPtyModule = {
 
             ws.onclose = () => {
                 const unexpected = !this.ptyUserClosing && this.ptyDialogVisible && this.ptyStatus !== 'error';
-
                 if (this.ptyDialogVisible && this.ptyStatus !== 'closed' && this.ptyStatus !== 'error') {
                     this.ptyStatus = 'closed';
                 }
-
                 this.ptyWs = null;
-                this.setPtyCursorEnabled(false);
-
                 if (unexpected) {
-                    const msg = this.ptyError || (this.ptyWsConnectedOnce ? 'PTY disconnected' : 'PTY connection closed');
-                    this.renderPtyDisconnect(msg);
                     ElementPlus.ElMessage({
                         type: 'warning',
                         message: this.ptyWsConnectedOnce ? 'PTY disconnected' : 'PTY connection closed',
@@ -385,10 +315,7 @@ window.AppPtyModule = {
 
         closePtySocket() {
             if (this.ptyWs) {
-                try {
-                    this.ptyWs.close();
-                } catch (_) {
-                }
+                try { this.ptyWs.close(); } catch (_) {}
                 this.ptyWs = null;
             }
         },
@@ -397,8 +324,7 @@ window.AppPtyModule = {
             if (!this.ptyWs || this.ptyWs.readyState !== WebSocket.OPEN) return;
             try {
                 this.ptyWs.send(JSON.stringify(payload || {}));
-            } catch (_) {
-            }
+            } catch (_) {}
         },
 
         queuePtyInput(raw) {
@@ -422,7 +348,7 @@ window.AppPtyModule = {
             this.ptyFlushTimer = null;
             if (!this.ptySessionId || !payload) return;
             const encoded = this.encodePtyInput(payload);
-            this.sendPtyWs({type: 'input', data: encoded});
+            this.sendPtyWs({ type: 'input', data: encoded });
         },
 
         encodePtyInput(raw) {
@@ -441,9 +367,6 @@ window.AppPtyModule = {
             this.clearPtyResizeTimer();
             this.closePtySocket();
             this.ptySessionId = '';
-            this.ptyStatus = '';
-            this.ptyError = '';
-            this.setPtyCursorEnabled(false);
             this.disposePtyTerminal();
         },
     },
