@@ -5,12 +5,17 @@ import os
 import re
 import shlex
 
+from core.utils.command_output import (
+    StructuredCommandResult,
+    parse_output_format,
+    render_structured_result,
+)
 from core.utils.formatting import format_dict
 from core.utils.parsing import scan_args
 from core.utils.script_metadata import read_script_metadata_from_file
-from server.config.config import SCRIPT_PATH
 from server.application.command.command_execution_event import CommandExecutionEvent
 from server.application.history.history_record_policy import CommandHistoryRecordPolicy
+from server.config.config import SCRIPT_PATH
 
 
 class UploadBuiltinSupport:
@@ -63,6 +68,7 @@ class UploadBuiltinSupport:
                 if event.payload.get('terminal'):
                     continue
                 yield 0, event.text or 'cancelled'
+
 
 class ScriptBuiltinSupport:
     """
@@ -432,31 +438,6 @@ class HistoryBuiltinSupport:
         raise ValueError('Unsupported history command. Use: history | history run <index> | history clear')
 
 
-# class RttBuiltinSupport:
-#     """
-#     RTT / last seen 状态相关内建命令支持。
-#     """
-#
-#     def __init__(self, conn):
-#         self.conn = conn
-#
-#     def rtt(self):
-#         session_info = getattr(self.conn, 'session_info', None)
-#         if not session_info:
-#             yield 1, 'No session info available'
-#             return
-#
-#         heartbeat_rtt = getattr(session_info, 'heartbeat_rtt_ms', None)
-#         last_seen = getattr(session_info, 'last_seen_at', '') or ''
-#         online = bool(getattr(session_info, 'online', False))
-#
-#         lines = [
-#             f'online: {online}',
-#             f'heartbeat_rtt_ms: {heartbeat_rtt if heartbeat_rtt is not None else "unknown"}',
-#             f'last_seen_at: {last_seen or "unknown"}'
-#         ]
-#         yield 1, '\n'.join(lines)
-
 class RttBuiltinSupport:
     """
     rtt 相关内建命令支持。
@@ -477,11 +458,15 @@ class RttBuiltinSupport:
             'last_rtt_ms': self.conn.context.last_rtt_ms if self.conn.context.last_rtt_ms is not None else '',
             'last_heartbeat_id': self.conn.context.last_heartbeat_id if self.conn.context.last_heartbeat_id is not None else '',
         }
-        arg_text = str(arg or '').strip().lower()
-        output_json = arg_text in ('json', '--json')
 
-        if output_json:
-            yield 1, json.dumps(payload, ensure_ascii=False, indent=2)
-            return
+        output_format = parse_output_format(arg)
 
-        yield 1, format_dict(payload, width=25)
+        yield render_structured_result(
+            StructuredCommandResult(
+                status=1,
+                data=payload,
+                shape='dict',
+                width=24,
+            ),
+            output_format=output_format,
+        )

@@ -252,11 +252,6 @@ class CommandExecutionMixin:
         except Exception as e:
             self._send_final_result(0, f'Failed to execute command: {e}')
 
-    @desc('Run a command with live output (No cancel test)', group='shell')
-    @interruptible()
-    @cancel_policy(False)
-    def read_nocancel(self, command):
-       self.read(command)
 
     @desc('Execute Python code and collect output', group='shell')
     @interruptible()
@@ -298,43 +293,6 @@ class CommandExecutionMixin:
         except Exception as e:
             return 0, f'Failed to execute code: {e}'
 
-    # @desc('Alias of collect', group='shell', suggest=False)
-    # @interruptible()
-    # def pyexec(self, code, kwargs=None):
-    #     """
-    #     兼容旧命令：一次性返回版本
-    #     """
-    #     return self.collect(code, kwargs=kwargs)
-    #
-    # @desc('Alias of stream', group='shell', suggest=False)
-    # @interruptible()
-    # def pyexec_gen(self, code, kwargs=None):
-    #     """
-    #     兼容旧命令：流式返回版本
-    #     """
-    #     return self.stream(code, kwargs=kwargs)
-    #
-    # @desc('Legacy alias of subprocess streaming Python execution', group='shell', suggest=False)
-    # @interruptible()
-    # def pyexec_subprocess_gen(self, code, kwargs=None):
-    #     """
-    #     兼容旧命令：
-    #     强制以 subprocess_pipe 策略执行流式 Python 代码
-    #     """
-    #     try:
-    #         return self._execute_python_stream(
-    #             code,
-    #             kwargs=kwargs,
-    #             mode='subprocess_pipe',
-    #             default_mode='subprocess_pipe',
-    #         )
-    #     except CommandCancelledError:
-    #         return 0, 'Command cancelled'
-    #     except (CommandTimeoutError, subprocess.TimeoutExpired):
-    #         return 0, 'Command timed out'
-    #     except Exception as e:
-    #         return 0, f'Failed to execute code: {e}'
-
     # ------------------ 连接控制 ------------------ #
     @desc('Terminate current session', group='session')
     @interruptible()
@@ -342,16 +300,6 @@ class CommandExecutionMixin:
         self.socket.close()
         sys.exit(0)
 
-    # @desc('Restart client process and reconnect', group='session')
-    # @interruptible()
-    # def reset(self):
-    #     restart_command = self._build_restart_command()
-    #     if os.name == 'nt':
-    #         subprocess.Popen(restart_command)
-    #     elif os.name == 'posix':
-    #         subprocess.Popen(restart_command, shell=True)
-    #     self.socket.close()
-    #     sys.exit(0)
 
     @desc('Restart client process and reconnect', group='session')
     @interruptible()
@@ -363,7 +311,6 @@ class CommandExecutionMixin:
     def reexec_restart(self):
         from core.utils.client_util import get_executable_path
 
-        # add exec replacement restart 2026-04-10 00:00
         restart_command = get_executable_path()
 
         try:
