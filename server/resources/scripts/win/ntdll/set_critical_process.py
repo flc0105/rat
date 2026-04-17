@@ -3,7 +3,7 @@ SCRIPT_METADATA = {
     "display_name": "Set Critical Process",
     "description": "Mark the current process as critical - terminating it will cause a system blue screen (BSOD)",
     "platforms": ["windows"],
-    "category": "System",
+    "category": "ntdll",
     "params": [
         {
             "name": "enable",

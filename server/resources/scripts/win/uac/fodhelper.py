@@ -1,3 +1,12 @@
+SCRIPT_METADATA = {
+    "name": "win/uac/fodhelper",
+    "display_name": "UAC Bypass (Fodhelper)",
+    "description": "Bypass UAC and launch a new client session with administrator privileges via fodhelper.exe",
+    "platforms": ["windows"],
+    "category": "uac",
+    "params": []
+}
+
 import subprocess
 import winreg
 

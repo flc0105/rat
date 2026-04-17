@@ -1,3 +1,12 @@
+SCRIPT_METADATA = {
+    "name": "win/steal_token/system",
+    "display_name": "Run as SYSTEM",
+    "description": "Launch a new client session with SYSTEM privileges by impersonating winlogon.exe token",
+    "platforms": ["windows"],
+    "category": "steal_token",
+    "params": []
+}
+
 from client.commands.platform.utils.win_util import enable_privilege, get_pid, duplicate_token, \
     create_process_with_token, get_process_token
 from core.utils.client_util import get_executable_path
