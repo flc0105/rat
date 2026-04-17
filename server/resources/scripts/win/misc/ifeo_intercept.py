@@ -4,11 +4,11 @@ import winreg
 
 
 SCRIPT_METADATA = {
-    "name": "windows/system/ifeo_intercept",
+    "name": "win/misc/ifeo_intercept",
     "display_name": "Manage IFEO Intercept",
     "description": "Register, remove, or inspect IFEO execution intercepts",
     "platforms": ["windows"],
-    "category": "System",
+    "category": "Misc",
     "params": [
         {
             "name": "action",
