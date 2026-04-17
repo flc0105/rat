@@ -1,4 +1,11 @@
-# -*- coding: utf-8 -*-
+SCRIPT_METADATA = {
+    "name": "win/gather/list_software",
+    "display_name": "List Installed Apps",
+    "description": "Get installed applications from Windows registry",
+    "platforms": ["windows"],
+    "category": "Gather",
+    "params": []
+}
 
 import json
 import winreg

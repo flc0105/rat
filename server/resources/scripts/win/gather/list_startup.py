@@ -1,4 +1,11 @@
-# -*- coding: utf-8 -*-
+SCRIPT_METADATA = {
+    "name": "win/gather/list_startup",
+    "display_name": "List Startup Items",
+    "description": "Get Windows startup items",
+    "platforms": ["windows"],
+    "category": "Gather",
+    "params": []
+}
 
 import json
 import wmi
@@ -25,7 +32,7 @@ try:
             "location": location or "N/A"
         })
 
-    result.sort(key=lambda x: x["caption"].lower())
+    result.sort(key=lambda x: (x.get("caption") or "").lower())
     print(json.dumps(result, ensure_ascii=False, indent=2))
 
 except Exception as e:
