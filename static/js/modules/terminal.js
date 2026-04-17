@@ -352,15 +352,32 @@ window.AppTerminalModule = {
             this.previewArtifact(line.artifactInfo);
         },
 
+        // getTerminalCommandGroupStartIndex(lines, endIndex) {
+        //     const safeLines = Array.isArray(lines) ? lines : [];
+        //     for (let i = endIndex; i >= 0; i--) {
+        //         if (safeLines[i] && safeLines[i].kind === 'command') {
+        //             return i;
+        //         }
+        //     }
+        //     return 0;
+        // },
+
         getTerminalCommandGroupStartIndex(lines, endIndex) {
-            const safeLines = Array.isArray(lines) ? lines : [];
-            for (let i = endIndex; i >= 0; i--) {
-                if (safeLines[i] && safeLines[i].kind === 'command') {
-                    return i;
-                }
-            }
-            return 0;
-        },
+    const safeLines = Array.isArray(lines) ? lines : [];
+    for (let i = endIndex; i >= 0; i--) {
+        const line = safeLines[i];
+        if (!line) continue;
+
+        if (line.kind === 'command') {
+            return i;
+        }
+
+        if (i < endIndex && this.isCommandFinishedLine(line)) {
+            return i + 1;
+        }
+    }
+    return 0;
+},
 
         getTerminalCommandGroupLines(lines, endIndex) {
             const safeLines = Array.isArray(lines) ? lines : [];

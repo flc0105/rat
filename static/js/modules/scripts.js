@@ -304,6 +304,10 @@ window.AppScriptsModule = {
             try {
                 this.scriptRunSubmitting = true;
                 const params = this.buildScriptRunParams(item);
+
+                const commandText = `> [Run Script] ${item.display_name || item.script_name}`;
+this.appendOutput(this.selectedId, commandText, 'command');
+
                 const res = await fetch(`/api/connections/${encodeURIComponent(this.selectedId)}/scripts/run`, {
                     method: 'POST',
                     headers: this.getTabScopedHeaders({'Content-Type': 'application/json'}),
