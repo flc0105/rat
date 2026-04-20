@@ -7,7 +7,7 @@ import tempfile
 import time
 from pathlib import Path
 
-import psutil
+
 
 from client.commands.command_context import CommandCancelledError, CommandTimeoutError
 from core.utils.client_util import get_executable_path
@@ -45,6 +45,7 @@ class MacPlatformService:
             return ''
 
     def build_process_info(self):
+        import psutil
         process = psutil.Process()
         executable_path = os.path.realpath(sys.executable)
         script_path = os.path.realpath(''.join(sys.argv))
