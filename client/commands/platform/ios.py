@@ -1108,8 +1108,6 @@ class iOSCommands(CommonCommands):
                                help_text='Text file path'),
             ArgumentOptionSpec(name='lines', option_type='int', required=False, default=10,
                                help_text='Number of lines to show'),
-            ArgumentOptionSpec(name='n', option_type='int', required=False, default=None,
-                               help_text='Alias of --lines'),
             ArgumentOptionSpec(name='help', option_type='flag', required=False, default=False,
                                help_text='Show this help message'),
         ]
@@ -1123,35 +1121,20 @@ class iOSCommands(CommonCommands):
                                help_text='Text file path'),
             ArgumentOptionSpec(name='lines', option_type='int', required=False, default=10,
                                help_text='Number of lines to show'),
-            ArgumentOptionSpec(name='n', option_type='int', required=False, default=None,
-                               help_text='Alias of --lines'),
             ArgumentOptionSpec(name='help', option_type='flag', required=False, default=False,
                                help_text='Show this help message'),
         ]
     )
 
-    WC_ARGUMENT_SPEC = ArgumentCommandSpec(
-        name='wc',
-        description='Count file lines',
-        options=[
-            ArgumentOptionSpec(name='path', option_type='str', required=True, default=None, allow_empty=False,
-                               help_text='Text file path'),
-            ArgumentOptionSpec(name='lines', option_type='flag', required=False, default=False,
-                               help_text='Count lines only'),
-            ArgumentOptionSpec(name='l', option_type='flag', required=False, default=False,
-                               help_text='Alias of --lines'),
-            ArgumentOptionSpec(name='help', option_type='flag', required=False, default=False,
-                               help_text='Show this help message'),
-        ]
-    )
+
 
     WGET_ARGUMENT_SPEC = ArgumentCommandSpec(
         name='wget',
         description='Download file from URL',
         options=[
             ArgumentOptionSpec(name='url', option_type='str', required=True, default=None, allow_empty=False,
-                               help_text='Source URL'),
-            ArgumentOptionSpec(name='o', option_type='str', required=False, default='',
+                               help_text='Source URL', positional_index=0),
+            ArgumentOptionSpec(name='output', option_type='str', required=False, default='',
                                help_text='Output file path'),
             ArgumentOptionSpec(name='help', option_type='flag', required=False, default=False,
                                help_text='Show this help message'),
@@ -1163,9 +1146,7 @@ class iOSCommands(CommonCommands):
     def head(self, args_dict, payload=None):
         try:
             path = os.path.expanduser((args_dict.get('path') or '').strip())
-            lines_count = args_dict.get('n')
-            if lines_count is None:
-                lines_count = args_dict.get('lines', 10)
+            lines_count = args_dict.get('lines', 10)
             lines_count = int(lines_count)
 
             if not os.path.exists(path):
@@ -1187,9 +1168,7 @@ class iOSCommands(CommonCommands):
     def tail(self, args_dict, payload=None):
         try:
             path = os.path.expanduser((args_dict.get('path') or '').strip())
-            lines_count = args_dict.get('n')
-            if lines_count is None:
-                lines_count = args_dict.get('lines', 10)
+            lines_count = args_dict.get('lines', 10)
             lines_count = int(lines_count)
 
             if not os.path.exists(path):
@@ -1206,31 +1185,6 @@ class iOSCommands(CommonCommands):
         except Exception as e:
             return 0, f'tail failed: {e}'
 
-    @argument_command('wc', spec=WC_ARGUMENT_SPEC)
-    @interruptible()
-    def wc(self, args_dict, payload=None):
-        try:
-            path = os.path.expanduser((args_dict.get('path') or '').strip())
-            lines_only = bool(args_dict.get('lines', False) or args_dict.get('l', False))
-
-            if not os.path.exists(path):
-                return 0, f'Path not found: {path}'
-            if not os.path.isfile(path):
-                return 0, f'Not a file: {path}'
-
-            with open(path, 'r', encoding='utf-8', errors='ignore') as f:
-                content = f.read()
-
-            line_count = len(content.splitlines())
-
-            if lines_only:
-                return 1, str(line_count)
-
-            word_count = len(content.split())
-            char_count = len(content)
-            return 1, f'lines={line_count} words={word_count} chars={char_count} path={path}'
-        except Exception as e:
-            return 0, f'wc failed: {e}'
 
     @argument_command('wget', spec=WGET_ARGUMENT_SPEC)
     @interruptible()
@@ -1238,7 +1192,7 @@ class iOSCommands(CommonCommands):
         try:
             import urllib.request
             url = str(args_dict.get('url') or '').strip()
-            out = str(args_dict.get('o') or '').strip()
+            out = str(args_dict.get('output') or '').strip()
 
             if not url:
                 return 0, 'Missing required option: --url'
@@ -1247,7 +1201,7 @@ class iOSCommands(CommonCommands):
                 out_path = os.path.expanduser(out)
             else:
                 name = url.rstrip('/').split('/')[-1] or 'download.bin'
-                out_path = os.path.expanduser(os.path.join('~/Documents', name))
+                out_path = os.path.join(os.getcwd(), name) #默认下载到当前目录
 
             out_dir = os.path.dirname(out_path)
             if out_dir:
