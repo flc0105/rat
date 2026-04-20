@@ -18,6 +18,7 @@ class CommandCatalog:
         'windows': ('client.commands.platform.win', 'WindowsCommands'),
         'darwin': ('client.commands.platform.mac', 'MacCommands'),
         'linux': ('client.commands.platform.linux', 'LinuxCommands'),
+        'ios': ('client.commands.platform.ios', 'iOSCommands')
     }
 
     def __init__(self, socket):
