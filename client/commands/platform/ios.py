@@ -880,64 +880,6 @@ class iOSCommands(CommonCommands):
 
 
 
-    @desc('Find files by keyword', group='shell')
-    @interruptible()
-    def find(self, path='.', keyword=''):
-        try:
-            target = os.path.expanduser((path or '.').strip())
-            word = (keyword or '').strip()
-
-            if not os.path.exists(target):
-                return 0, f'Path not found: {target}'
-            if not os.path.isdir(target):
-                return 0, f'Not a directory: {target}'
-            if not word:
-                return 0, 'Usage: find <path> <keyword>'
-
-            results = []
-            for root, dirs, files in os.walk(target):
-                for name in dirs + files:
-                    if word.lower() in name.lower():
-                        results.append(os.path.join(root, name))
-
-            return 1, '\n'.join(results)
-        except Exception as e:
-            return 0, f'find failed: {e}'
-
-    @desc('Show directory tree', group='shell')
-    @interruptible()
-    def tree(self, path='.', max_depth='3'):
-        try:
-            target = os.path.expanduser((path or '.').strip())
-            depth_limit = int(max_depth)
-
-            if not os.path.exists(target):
-                return 0, f'Path not found: {target}'
-            if not os.path.isdir(target):
-                return 0, f'Not a directory: {target}'
-
-            lines = [os.path.basename(target.rstrip('/')) or target]
-
-            def walk(current, prefix='', depth=0):
-                if depth >= depth_limit:
-                    return
-                items = sorted(os.listdir(current),
-                               key=lambda name: (0 if os.path.isdir(os.path.join(current, name)) else 1, name.lower()))
-                for i, name in enumerate(items):
-                    full = os.path.join(current, name)
-                    is_last = i == len(items) - 1
-                    branch = '└── ' if is_last else '├── '
-                    suffix = '/' if os.path.isdir(full) else ''
-                    lines.append(prefix + branch + name + suffix)
-                    if os.path.isdir(full):
-                        walk(full, prefix + ('    ' if is_last else '│   '), depth + 1)
-
-            walk(target)
-            return 1, '\n'.join(lines)
-        except Exception as e:
-            return 0, f'tree failed: {e}'
-
-
 
 
 
@@ -1102,3 +1044,223 @@ class iOSCommands(CommonCommands):
             return 1, '\n'.join(lines)
         except Exception as e:
             return 0, f'tree failed: {e}'
+
+    @desc('Compute file MD5', group='shell')
+    @interruptible()
+    def md5sum(self, path=''):
+        try:
+            import hashlib
+            target = os.path.expanduser((path or '').strip())
+            if not target:
+                return 0, 'Usage: md5sum <file>'
+            if not os.path.exists(target):
+                return 0, f'Path not found: {target}'
+            if not os.path.isfile(target):
+                return 0, f'Not a file: {target}'
+
+            md5 = hashlib.md5()
+            with open(target, 'rb') as f:
+                for chunk in iter(lambda: f.read(1024 * 1024), b''):
+                    md5.update(chunk)
+
+            return 1, f'{md5.hexdigest()}  {target}'
+        except Exception as e:
+            return 0, f'md5sum failed: {e}'
+
+
+    @desc('Print environment variables', group='shell')
+    @interruptible()
+    def printenv(self, name=''):
+        try:
+            key = (name or '').strip()
+            if key:
+                return 1, str(os.environ.get(key, ''))
+
+            lines = []
+            for env_name in sorted(os.environ.keys()):
+                lines.append(f'{env_name}={os.environ.get(env_name, "")}')
+            return 1, '\n'.join(lines)
+        except Exception as e:
+            return 0, f'printenv failed: {e}'
+
+
+    @desc('Echo text or expand environment variables', group='shell')
+    @interruptible()
+    def echo(self, text=''):
+        try:
+            import re
+            raw = str(text or '')
+
+            def repl(match):
+                name = match.group(1) or match.group(2) or ''
+                return str(os.environ.get(name, ''))
+
+            rendered = re.sub(r'\$([A-Za-z_][A-Za-z0-9_]*)|\$\{([^}]+)\}', repl, raw)
+            return 1, rendered
+        except Exception as e:
+            return 0, f'echo failed: {e}'
+
+    HEAD_ARGUMENT_SPEC = ArgumentCommandSpec(
+        name='head',
+        description='Show first N lines of a text file',
+        options=[
+            ArgumentOptionSpec(name='path', option_type='str', required=True, default=None, allow_empty=False,
+                               help_text='Text file path'),
+            ArgumentOptionSpec(name='lines', option_type='int', required=False, default=10,
+                               help_text='Number of lines to show'),
+            ArgumentOptionSpec(name='n', option_type='int', required=False, default=None,
+                               help_text='Alias of --lines'),
+            ArgumentOptionSpec(name='help', option_type='flag', required=False, default=False,
+                               help_text='Show this help message'),
+        ]
+    )
+
+    TAIL_ARGUMENT_SPEC = ArgumentCommandSpec(
+        name='tail',
+        description='Show last N lines of a text file',
+        options=[
+            ArgumentOptionSpec(name='path', option_type='str', required=True, default=None, allow_empty=False,
+                               help_text='Text file path'),
+            ArgumentOptionSpec(name='lines', option_type='int', required=False, default=10,
+                               help_text='Number of lines to show'),
+            ArgumentOptionSpec(name='n', option_type='int', required=False, default=None,
+                               help_text='Alias of --lines'),
+            ArgumentOptionSpec(name='help', option_type='flag', required=False, default=False,
+                               help_text='Show this help message'),
+        ]
+    )
+
+    WC_ARGUMENT_SPEC = ArgumentCommandSpec(
+        name='wc',
+        description='Count file lines',
+        options=[
+            ArgumentOptionSpec(name='path', option_type='str', required=True, default=None, allow_empty=False,
+                               help_text='Text file path'),
+            ArgumentOptionSpec(name='lines', option_type='flag', required=False, default=False,
+                               help_text='Count lines only'),
+            ArgumentOptionSpec(name='l', option_type='flag', required=False, default=False,
+                               help_text='Alias of --lines'),
+            ArgumentOptionSpec(name='help', option_type='flag', required=False, default=False,
+                               help_text='Show this help message'),
+        ]
+    )
+
+    WGET_ARGUMENT_SPEC = ArgumentCommandSpec(
+        name='wget',
+        description='Download file from URL',
+        options=[
+            ArgumentOptionSpec(name='url', option_type='str', required=True, default=None, allow_empty=False,
+                               help_text='Source URL'),
+            ArgumentOptionSpec(name='o', option_type='str', required=False, default='',
+                               help_text='Output file path'),
+            ArgumentOptionSpec(name='help', option_type='flag', required=False, default=False,
+                               help_text='Show this help message'),
+        ]
+    )
+
+    @argument_command('head', spec=HEAD_ARGUMENT_SPEC)
+    @interruptible()
+    def head(self, args_dict, payload=None):
+        try:
+            path = os.path.expanduser((args_dict.get('path') or '').strip())
+            lines_count = args_dict.get('n')
+            if lines_count is None:
+                lines_count = args_dict.get('lines', 10)
+            lines_count = int(lines_count)
+
+            if not os.path.exists(path):
+                return 0, f'Path not found: {path}'
+            if not os.path.isfile(path):
+                return 0, f'Not a file: {path}'
+            if lines_count < 0:
+                return 0, 'Option "--lines" must be >= 0'
+
+            with open(path, 'r', encoding='utf-8', errors='ignore') as f:
+                lines = f.readlines()
+
+            return 1, ''.join(lines[:lines_count]).rstrip('\n')
+        except Exception as e:
+            return 0, f'head failed: {e}'
+
+    @argument_command('tail', spec=TAIL_ARGUMENT_SPEC)
+    @interruptible()
+    def tail(self, args_dict, payload=None):
+        try:
+            path = os.path.expanduser((args_dict.get('path') or '').strip())
+            lines_count = args_dict.get('n')
+            if lines_count is None:
+                lines_count = args_dict.get('lines', 10)
+            lines_count = int(lines_count)
+
+            if not os.path.exists(path):
+                return 0, f'Path not found: {path}'
+            if not os.path.isfile(path):
+                return 0, f'Not a file: {path}'
+            if lines_count < 0:
+                return 0, 'Option "--lines" must be >= 0'
+
+            with open(path, 'r', encoding='utf-8', errors='ignore') as f:
+                lines = f.readlines()
+
+            return 1, ''.join(lines[-lines_count:] if lines_count else []).rstrip('\n')
+        except Exception as e:
+            return 0, f'tail failed: {e}'
+
+    @argument_command('wc', spec=WC_ARGUMENT_SPEC)
+    @interruptible()
+    def wc(self, args_dict, payload=None):
+        try:
+            path = os.path.expanduser((args_dict.get('path') or '').strip())
+            lines_only = bool(args_dict.get('lines', False) or args_dict.get('l', False))
+
+            if not os.path.exists(path):
+                return 0, f'Path not found: {path}'
+            if not os.path.isfile(path):
+                return 0, f'Not a file: {path}'
+
+            with open(path, 'r', encoding='utf-8', errors='ignore') as f:
+                content = f.read()
+
+            line_count = len(content.splitlines())
+
+            if lines_only:
+                return 1, str(line_count)
+
+            word_count = len(content.split())
+            char_count = len(content)
+            return 1, f'lines={line_count} words={word_count} chars={char_count} path={path}'
+        except Exception as e:
+            return 0, f'wc failed: {e}'
+
+    @argument_command('wget', spec=WGET_ARGUMENT_SPEC)
+    @interruptible()
+    def wget(self, args_dict, payload=None):
+        try:
+            import urllib.request
+            url = str(args_dict.get('url') or '').strip()
+            out = str(args_dict.get('o') or '').strip()
+
+            if not url:
+                return 0, 'Missing required option: --url'
+
+            if out:
+                out_path = os.path.expanduser(out)
+            else:
+                name = url.rstrip('/').split('/')[-1] or 'download.bin'
+                out_path = os.path.expanduser(os.path.join('~/Documents', name))
+
+            out_dir = os.path.dirname(out_path)
+            if out_dir:
+                os.makedirs(out_dir, exist_ok=True)
+
+            with urllib.request.urlopen(url) as resp:
+                with open(out_path, 'wb') as f:
+                    while True:
+                        chunk = resp.read(1024 * 256)
+                        if not chunk:
+                            break
+                        f.write(chunk)
+
+            return 1, out_path
+        except Exception as e:
+            return 0, f'wget failed: {e}'

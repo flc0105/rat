@@ -203,8 +203,10 @@ def ensure_directory(path: str) -> str:
 
 def get_client_bundle_release_dir() -> str:
     # update 命令默认下载目录
-    return ensure_directory(os.path.join(str(Path.home()), 'client_bundle', 'releases'))
-
+    if detect_platform_name().lower() != 'ios':
+        return ensure_directory(os.path.join(str(Path.home()), 'client_bundle', 'releases'))
+    else:
+        return ensure_directory(os.path.join(str(Path.home()), 'Documents', 'client_bundle', 'releases'))
 
 def build_bundle_extract_dir(release_dir: str, file_name: str) -> str:
     base_name = os.path.splitext(os.path.basename(file_name))[0] or 'client_bundle'

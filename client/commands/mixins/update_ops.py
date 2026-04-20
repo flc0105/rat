@@ -18,7 +18,7 @@ from core.utils.client_util import (
     build_bundle_extract_dir,
     get_client_bundle_release_dir,
     safe_extract_zip_file,
-    spawn_detached_python_script, ensure_directory,
+    spawn_detached_python_script, ensure_directory, detect_platform_name,
 )
 from core.utils.decorator import desc
 
@@ -117,7 +117,10 @@ class CommandUpdateMixin:
             if not os.path.isfile(ratclient_path):
                 raise FileNotFoundError(f'ratclient.py not found after extract: {ratclient_path}')
 
-            process = spawn_detached_python_script(ratclient_path, cwd=extract_dir)
+            pid_str = ''
+            if detect_platform_name().lower() != 'ios':
+                process = spawn_detached_python_script(ratclient_path, cwd=extract_dir)
+                pid_str = f'PID: {process.pid}'
 
             return 1, (
                 f'Update bundle downloaded and started\n'
@@ -125,46 +128,8 @@ class CommandUpdateMixin:
                 f'Downloaded Archive: {archive_path}\n'
                 f'Extracted Path: {extract_dir}\n'
                 f'Launch Script: {ratclient_path}\n'
-                f'PID: {process.pid}'
-            )
-        except Exception as e:
-            return 0, f'Failed to update client bundle: {e}'
+                + pid_str
 
-    @desc('Build, download, extract and launch the latest client bundle for iOS', group='session')
-    @interruptible()
-    def updateios(self, arg=''):
-        try:
-            bundle_meta = self._request_update_bundle()
-
-            release_dir = os.path.join(str(Path.home()), 'Documents', 'client_bundle', 'releases')
-            if os.path.isdir(release_dir):
-                shutil.rmtree(release_dir)
-
-            release_dir = ensure_directory(os.path.join(str(Path.home()), 'Documents', 'client_bundle', 'releases'))
-
-            archive_path = os.path.join(release_dir, bundle_meta['file_name'])
-            extract_dir = build_bundle_extract_dir(release_dir, bundle_meta['file_name'])
-
-            self._download_bundle_archive(bundle_meta['download_url'], archive_path)
-
-            if os.path.isdir(extract_dir):
-                shutil.rmtree(extract_dir)
-
-            safe_extract_zip_file(archive_path, extract_dir)
-
-            ratclient_path = os.path.join(extract_dir, 'ratclient.py')
-            if not os.path.isfile(ratclient_path):
-                raise FileNotFoundError(f'ratclient.py not found after extract: {ratclient_path}')
-
-            # process = spawn_detached_python_script(ratclient_path, cwd=extract_dir)
-
-            return 1, (
-                f'Update bundle downloaded and started\n'
-                f'Build Version: {bundle_meta.get("build_version") or "-"}\n'
-                f'Downloaded Archive: {archive_path}\n'
-                f'Extracted Path: {extract_dir}\n'
-                f'Launch Script: {ratclient_path}\n'
-                # f'PID: {process.pid}'
             )
         except Exception as e:
             return 0, f'Failed to update client bundle: {e}'
