@@ -655,14 +655,26 @@ def build_web_services(items):
 
 listeners = merge_listeners()
 
-result = {
-    "service_ports": build_service_ports(listeners),
-    "web_services": build_web_services(listeners),
-    "meta": {
-        "generated_at": int(time.time()),
-        "hostname": socket.gethostname(),
-        "python": sys.executable,
-    }
+mode = kwargs.get("mode", "service")
+if mode not in {"service", "web"}:
+    raise ValueError(f"invalid mode: {mode}, expected 'service' or 'web'")
+
+meta = {
+    "generated_at": int(time.time()),
+    "hostname": socket.gethostname(),
+    "python": sys.executable,
+    "mode": mode,
 }
+
+if mode == "service":
+    result = {
+        "service_ports": build_service_ports(listeners),
+        "meta": meta,
+    }
+else:  # mode == "web"
+    result = {
+        "web_services": build_web_services(listeners),
+        "meta": meta,
+    }
 
 print(json.dumps(result, ensure_ascii=False, indent=2))

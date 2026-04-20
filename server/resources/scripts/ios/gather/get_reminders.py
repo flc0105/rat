@@ -1,3 +1,12 @@
+SCRIPT_METADATA = {
+    "name": "ios/recon/reminders",
+    "display_name": "Dump Reminders",
+    "description": "Retrieve all pending and completed reminders from the iOS Reminders app",
+    "platforms": ["ios"],
+    "category": "Recon",
+    "params": []
+}
+
 import reminders
 
 def main():

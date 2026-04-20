@@ -1,3 +1,12 @@
+SCRIPT_METADATA = {
+    "name": "ios/recon/battery_info",
+    "display_name": "Battery Information",
+    "description": "Retrieve current battery level and charging state from iOS device",
+    "platforms": ["ios"],
+    "category": "Recon",
+    "params": []
+}
+
 from objc_util import *
 
 UIDevice = ObjCClass('UIDevice')

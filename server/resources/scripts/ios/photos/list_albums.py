@@ -1,4 +1,12 @@
-# coding: utf-8
+SCRIPT_METADATA = {
+    "name": "ios/recon/photos_albums",
+    "display_name": "Dump Photos Albums",
+    "description": "Retrieve all photo albums with photo counts from the iOS Photos library",
+    "platforms": ["ios"],
+    "category": "Recon",
+    "params": []
+}
+
 import json
 import photos
 

@@ -1,4 +1,12 @@
-# coding: utf-8
+SCRIPT_METADATA = {
+    "name": "ios/recon/media_library",
+    "display_name": "Dump Media Library",
+    "description": "Retrieve song list (artist, title, album, play count) from the iOS Media Library",
+    "platforms": ["ios"],
+    "category": "Recon",
+    "params": []
+}
+
 import ctypes
 import json
 import time

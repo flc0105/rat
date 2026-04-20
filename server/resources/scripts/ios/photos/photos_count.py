@@ -1,4 +1,12 @@
-# coding: utf-8
+SCRIPT_METADATA = {
+    "name": "ios/recon/photos_stats",
+    "display_name": "Photos Library Stats",
+    "description": "Retrieve photo and video counts (visible, hidden, total) from the iOS Photos library",
+    "platforms": ["ios"],
+    "category": "Recon",
+    "params": []
+}
+
 import json
 import photos
 
