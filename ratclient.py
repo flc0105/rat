@@ -12,7 +12,7 @@ from client.config.runtime_config import HTTP_TRANSFER_MODE, PYTHON_EXECUTION_MO
 from client.connection.server_connection import ServerConnection
 from client.watchdog.client_guard_manager import ClientGuardManager
 from client.watchdog.watchdog_process import run_watchdog_worker_from_argv
-from core.utils.client_util import check_privilege, get_system_paths
+from core.utils.client_util import check_privilege, get_system_paths, detect_platform_name
 from core.utils.logger import logger
 
 from client.config.config import (
@@ -134,7 +134,8 @@ class Client:
         return {
             'id': self.client_id,
             'type': 'info',
-            'os_type': platform.system(),
+            # 'os_type': platform.system(),
+            'os_type': detect_platform_name(),
             'os_ver': platform.platform(),
             'hostname': socket.gethostname(),
             'integrity': check_privilege(),

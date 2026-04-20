@@ -319,3 +319,21 @@ def is_process_alive(pid: int) -> bool:
         return True
     except Exception:
         return False
+
+
+import platform
+import sys
+
+
+def detect_platform_name() -> str:
+    system_name = platform.system()
+
+    if system_name in ('Windows', 'Linux'):
+        return system_name
+
+    if system_name == 'Darwin':
+        if sys.platform == 'ios':
+            return 'iOS'
+        return 'Darwin'
+
+    return system_name or 'Unknown'

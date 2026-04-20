@@ -1,6 +1,7 @@
 import platform
 
 from client.commands.argument_command_registry import ArgumentCommandRegistry
+from core.utils.client_util import detect_platform_name
 
 
 class CommandCatalog:
@@ -28,7 +29,8 @@ class CommandCatalog:
         """
         获取当前系统平台名称
         """
-        return platform.system().lower()
+        # return platform.system().lower()
+        return detect_platform_name().lower()
 
     def _load_platform_command_class(self):
         """
