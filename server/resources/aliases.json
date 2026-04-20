@@ -31,7 +31,7 @@
     "kill_pid": "taskkill /pid <pid> /f",
     "kill_name": "taskkill /im <name> /f",
     "md5": "certUtil -hashfile <file> MD5",
-    "get_computer": "wmic computersystem get manufacturer,model"
+    "computer_info": "wmic computersystem get manufacturer,model"
   },
   "mac": {
     "ll": "ls -la",

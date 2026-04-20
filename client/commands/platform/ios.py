@@ -12,6 +12,7 @@ from client.commands.command_context import CommandCancelledError, CommandTimeou
 from client.commands.common import CommonCommands
 from client.commands.interrupts import timeout, cancel_policy, interruptible
 from client.config.config import UPLOAD_BASE_URL
+from client.config.runtime_config import HTTP_TRANSFER_MODE
 from core.utils.decorator import desc
 from core.utils.logger import logger
 
@@ -969,6 +970,32 @@ class iOSCommands(CommonCommands):
         ]
     )
 
+    FIND_ARGUMENT_SPEC = ArgumentCommandSpec(
+        name='find',
+        description='Find files by keyword',
+        options=[
+            ArgumentOptionSpec(name='path', option_type='str', required=False, default='.', allow_empty=True,
+                               help_text='Target directory'),
+            ArgumentOptionSpec(name='keyword', option_type='str', required=True, default=None, allow_empty=False,
+                               help_text='Keyword to search in file or directory names'),
+            ArgumentOptionSpec(name='help', option_type='flag', required=False, default=False,
+                               help_text='Show this help message'),
+        ]
+    )
+
+    TREE_ARGUMENT_SPEC = ArgumentCommandSpec(
+        name='tree',
+        description='Show directory tree',
+        options=[
+            ArgumentOptionSpec(name='path', option_type='str', required=False, default='.', allow_empty=True,
+                               help_text='Target directory'),
+            ArgumentOptionSpec(name='max_depth', option_type='int', required=False, default=3,
+                               help_text='Maximum recursion depth'),
+            ArgumentOptionSpec(name='help', option_type='flag', required=False, default=False,
+                               help_text='Show this help message'),
+        ]
+    )
+
     @argument_command('alert', spec=ALERT_ARGUMENT_SPEC)
     @interruptible()
     def alert(self, args_dict, payload=None):
@@ -1000,5 +1027,78 @@ class iOSCommands(CommonCommands):
         except Exception as e:
             return 0, f'Failed to send notification: {e}'
 
+    @argument_command('find', spec=FIND_ARGUMENT_SPEC)
+    @interruptible()
+    def find(self, args_dict, payload=None):
+        try:
+            path = args_dict.get('path', '.')
+            keyword = args_dict['keyword']
 
+            target = os.path.expanduser((path or '.').strip())
+            word = (keyword or '').strip()
 
+            if not os.path.exists(target):
+                return 0, f'Path not found: {target}'
+            if not os.path.isdir(target):
+                return 0, f'Not a directory: {target}'
+            if not word:
+                return 0, 'Option "--keyword" cannot be empty'
+
+            results = []
+            for root, dirs, files in os.walk(target):
+                for name in dirs + files:
+                    if word.lower() in name.lower():
+                        results.append(os.path.join(root, name))
+
+            if not results:
+                return 1, ''
+
+            return 1, '\n'.join(results)
+        except Exception as e:
+            return 0, f'find failed: {e}'
+
+    @argument_command('tree', spec=TREE_ARGUMENT_SPEC)
+    @interruptible()
+    def tree(self, args_dict, payload=None):
+        try:
+            path = args_dict.get('path', '.')
+            max_depth = args_dict.get('max_depth', 3)
+
+            target = os.path.expanduser((path or '.').strip())
+            depth_limit = int(max_depth)
+
+            if not os.path.exists(target):
+                return 0, f'Path not found: {target}'
+            if not os.path.isdir(target):
+                return 0, f'Not a directory: {target}'
+            if depth_limit < 0:
+                return 0, 'Option "--max_depth" must be >= 0'
+
+            lines = [os.path.basename(target.rstrip('/')) or target]
+
+            def walk(current, prefix='', depth=0):
+                if depth >= depth_limit:
+                    return
+
+                items = sorted(
+                    os.listdir(current),
+                    key=lambda name: (
+                        0 if os.path.isdir(os.path.join(current, name)) else 1,
+                        name.lower()
+                    )
+                )
+
+                for i, name in enumerate(items):
+                    full = os.path.join(current, name)
+                    is_last = i == len(items) - 1
+                    branch = '└── ' if is_last else '├── '
+                    suffix = '/' if os.path.isdir(full) else ''
+                    lines.append(prefix + branch + name + suffix)
+
+                    if os.path.isdir(full):
+                        walk(full, prefix + ('    ' if is_last else '│   '), depth + 1)
+
+            walk(target)
+            return 1, '\n'.join(lines)
+        except Exception as e:
+            return 0, f'tree failed: {e}'

@@ -41,13 +41,7 @@ class BuiltinCommandHandler:
         {
             'name': 'alias',
             'template': 'alias ',
-            'help': 'alias [--platform win|mac|common] <name> = <command> | Save a command alias',
-            'source': 'server'
-        },
-        {
-            'name': 'unalias',
-            'template': 'unalias ',
-            'help': 'unalias [--platform win|mac|common] <name> | Remove a command alias',
+            'help': 'alias set|unset|list|resolve|reload [--platform win|mac|linux|common]',
             'source': 'server'
         },
         {

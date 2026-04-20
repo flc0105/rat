@@ -1,5 +1,5 @@
 SCRIPT_METADATA = {
-    "name": "ios/photos/export",
+    "name": "ios/photos/export_photos",
     "display_name": "Export Photos",
     "description": "Export photos from iOS Photos",
     "platforms": ["ios"],
