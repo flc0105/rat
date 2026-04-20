@@ -15,46 +15,86 @@ window.AppScriptsModule = {
     },
 
     computed: {
+        // scriptDirectoryTreeData() {
+        //     const root = [];
+        //     const ensureNode = (children, key, label, path) => {
+        //         const existing = children.find(node => node.key === key);
+        //         if (existing) return existing;
+        //         const node = {key, label, path, children: []};
+        //         children.push(node);
+        //         return node;
+        //     };
+        //
+        //     const directories = Array.isArray(this.scriptCatalogDirectories) && this.scriptCatalogDirectories.length
+        //         ? this.scriptCatalogDirectories
+        //         : [{key: 'dir:.', label: 'root', path: ''}];
+        //
+        //     directories.forEach((directory) => {
+        //         const path = String(directory?.path || '').trim().replace(/^\/+/, '');
+        //         const parts = path.split('/').filter(Boolean);
+        //         let currentChildren = root;
+        //         let currentPath = '';
+        //
+        //         if (!parts.length) {
+        //             ensureNode(root, 'dir:.', 'root', '');
+        //             return;
+        //         }
+        //
+        //         parts.forEach((part) => {
+        //             currentPath = currentPath ? `${currentPath}/${part}` : part;
+        //             const node = ensureNode(currentChildren, `dir:${currentPath}`, part, currentPath);
+        //             currentChildren = node.children;
+        //         });
+        //     });
+        //
+        //     const sortNodes = (nodes) => {
+        //         nodes.sort((a, b) => String(a.label || '').localeCompare(String(b.label || '')));
+        //         nodes.forEach(node => sortNodes(node.children || []));
+        //         return nodes;
+        //     };
+        //
+        //     return sortNodes(root);
+        // },
+
         scriptDirectoryTreeData() {
-            const root = [];
-            const ensureNode = (children, key, label, path) => {
-                const existing = children.find(node => node.key === key);
-                if (existing) return existing;
-                const node = {key, label, path, children: []};
-                children.push(node);
-                return node;
-            };
+    const ensureNode = (children, key, label, path) => {
+        const existing = children.find(node => node.key === key);
+        if (existing) return existing;
+        const node = {key, label, path, children: []};
+        children.push(node);
+        return node;
+    };
 
-            const directories = Array.isArray(this.scriptCatalogDirectories) && this.scriptCatalogDirectories.length
-                ? this.scriptCatalogDirectories
-                : [{key: 'dir:.', label: 'root', path: ''}];
+    const rootNode = {key: 'dir:.', label: 'root', path: '', children: []};
 
-            directories.forEach((directory) => {
-                const path = String(directory?.path || '').trim().replace(/^\/+/, '');
-                const parts = path.split('/').filter(Boolean);
-                let currentChildren = root;
-                let currentPath = '';
+    const directories = Array.isArray(this.scriptCatalogDirectories) && this.scriptCatalogDirectories.length
+        ? this.scriptCatalogDirectories
+        : [{key: 'dir:.', label: 'root', path: ''}];
 
-                if (!parts.length) {
-                    ensureNode(root, 'dir:.', 'root', '');
-                    return;
-                }
+    directories.forEach((directory) => {
+        const path = String(directory?.path || '').trim().replace(/^\/+/, '');
+        const parts = path.split('/').filter(Boolean);
+        let currentChildren = rootNode.children;
+        let currentPath = '';
 
-                parts.forEach((part) => {
-                    currentPath = currentPath ? `${currentPath}/${part}` : part;
-                    const node = ensureNode(currentChildren, `dir:${currentPath}`, part, currentPath);
-                    currentChildren = node.children;
-                });
-            });
+        if (!parts.length) return;
 
-            const sortNodes = (nodes) => {
-                nodes.sort((a, b) => String(a.label || '').localeCompare(String(b.label || '')));
-                nodes.forEach(node => sortNodes(node.children || []));
-                return nodes;
-            };
+        parts.forEach((part) => {
+            currentPath = currentPath ? `${currentPath}/${part}` : part;
+            const node = ensureNode(currentChildren, `dir:${currentPath}`, part, currentPath);
+            currentChildren = node.children;
+        });
+    });
 
-            return sortNodes(root);
-        },
+    const sortNodes = (nodes) => {
+        nodes.sort((a, b) => String(a.label || '').localeCompare(String(b.label || '')));
+        nodes.forEach(node => sortNodes(node.children || []));
+        return nodes;
+    };
+
+    sortNodes(rootNode.children);
+    return [rootNode];
+},
 
         currentScriptDirectoryItems() {
             const currentDir = String(this.selectedScriptDirectory || '').trim();
