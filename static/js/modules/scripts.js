@@ -184,6 +184,95 @@ window.AppScriptsModule = {
             return dirs.length ? dirs.sort()[0] : '';
         },
 
+        getParentScriptDirectory(directory) {
+    const normalized = String(directory || '').trim().replace(/^\/+/, '').replace(/\/+$/, '');
+    if (!normalized) return '';
+    const parts = normalized.split('/').filter(Boolean);
+    return parts.slice(0, -1).join('/');
+},
+
+        async renameRemoteScriptFolder() {
+    const currentDirectory = String(this.selectedScriptDirectory || '').trim();
+    if (!currentDirectory) {
+        ElementPlus.ElMessage.warning('Root folder cannot be renamed');
+        return;
+    }
+
+    try {
+        const {value} = await ElementPlus.ElMessageBox.prompt(
+            'Enter the new folder path',
+            'Rename Folder',
+            {
+                confirmButtonText: 'Rename',
+                cancelButtonText: 'Cancel',
+                inputValue: currentDirectory,
+                inputPlaceholder: 'folder/subfolder',
+            }
+        );
+
+        const newDirectory = String(value || '').trim().replace(/\\/g, '/').replace(/^\/+/, '').replace(/\/+$/, '');
+        if (!newDirectory) {
+            ElementPlus.ElMessage.warning('New folder path is required');
+            return;
+        }
+
+        const res = await fetch('/api/scripts/folders/rename', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                directory: currentDirectory,
+                new_directory: newDirectory
+            })
+        });
+        const json = await res.json();
+        if (!res.ok || json.code !== 0) throw new Error(json.message || 'Failed to rename folder');
+
+        this.selectedScriptDirectory = newDirectory;
+        ElementPlus.ElMessage.success(`Folder renamed: ${newDirectory}`);
+        await this.loadScriptCatalog();
+    } catch (e) {
+        if (e === 'cancel' || e === 'close') return;
+        ElementPlus.ElMessage.error(e.message || 'Failed to rename folder');
+    }
+},
+
+        async deleteRemoteScriptFolder() {
+    const currentDirectory = String(this.selectedScriptDirectory || '').trim();
+    if (!currentDirectory) {
+        ElementPlus.ElMessage.warning('Root folder cannot be deleted');
+        return;
+    }
+
+    try {
+        await ElementPlus.ElMessageBox.confirm(
+            `Delete folder "${currentDirectory}" and all files/subfolders in it? This action cannot be undone.`,
+            'Delete Folder',
+            {
+                type: 'warning',
+                confirmButtonText: 'Delete',
+                cancelButtonText: 'Cancel'
+            }
+        );
+
+        const parentDirectory = this.getParentScriptDirectory(currentDirectory);
+
+        const res = await fetch('/api/scripts/folders', {
+            method: 'DELETE',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({directory: currentDirectory})
+        });
+        const json = await res.json();
+        if (!res.ok || json.code !== 0) throw new Error(json.message || 'Failed to delete folder');
+
+        this.selectedScriptDirectory = parentDirectory;
+        ElementPlus.ElMessage.success(`Folder deleted: ${currentDirectory}`);
+        await this.loadScriptCatalog();
+    } catch (e) {
+        if (e === 'cancel' || e === 'close') return;
+        ElementPlus.ElMessage.error(e.message || 'Failed to delete folder');
+    }
+},
+
         handleScriptTreeNodeClick(node) {
             if (!node) return;
             this.selectedScriptDirectory = String(node.path || '').trim();

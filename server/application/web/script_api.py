@@ -57,6 +57,12 @@ class WebScriptApi:
     def create_directory(self, directory: str):
         return self.script_catalog_service.create_directory(directory)
 
+    def rename_directory(self, directory: str, new_directory: str):
+        return self.script_catalog_service.rename_directory(directory, new_directory)
+
+    def delete_directory(self, directory: str):
+        return self.script_catalog_service.delete_directory(directory)
+
     def rename_script(self, script_name: str, new_name: str):
         return self.script_catalog_service.rename_script(script_name, new_name)
 

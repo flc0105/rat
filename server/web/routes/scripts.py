@@ -64,6 +64,31 @@ def create_script_blueprint(server_instance):
             return script_api.create_directory(directory)
         return responder.json_endpoint(_execute, default_error_status=500)
 
+    @blueprint.post('/api/scripts/folders/rename')
+    def rename_script_folder():
+        def _execute():
+            payload = get_json_payload()
+            directory = (payload.get('directory') or '').strip()
+            new_directory = (payload.get('new_directory') or '').strip()
+            if not directory:
+                raise ValueError('directory is required')
+            if not new_directory:
+                raise ValueError('new directory is required')
+            return script_api.rename_directory(directory, new_directory)
+
+        return responder.json_endpoint(_execute, default_error_status=500)
+
+    @blueprint.delete('/api/scripts/folders')
+    def delete_script_folder():
+        def _execute():
+            payload = get_json_payload()
+            directory = (payload.get('directory') or '').strip()
+            if not directory:
+                raise ValueError('directory is required')
+            return script_api.delete_directory(directory)
+
+        return responder.json_endpoint(_execute, default_error_status=500)
+
     @blueprint.post('/api/scripts/rename')
     def rename_script():
         def _execute():

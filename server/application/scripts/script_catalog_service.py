@@ -1,5 +1,6 @@
 import glob
 import os
+import shutil
 from pathlib import Path
 
 from werkzeug.utils import secure_filename
@@ -178,6 +179,48 @@ class ScriptCatalogService:
         dir_path = self._resolve_abs_path(safe_directory)
         os.makedirs(dir_path, exist_ok=True)
         return {'path': safe_directory, 'created': True}
+
+    def rename_directory(self, directory: str, new_directory: str) -> dict:
+        source_directory = self._normalize_directory_path(directory)
+        target_directory = self._normalize_directory_path(new_directory)
+
+        if not source_directory:
+            raise ValueError('directory is required')
+        if not target_directory:
+            raise ValueError('new directory is required')
+
+        source_path = self._resolve_abs_path(source_directory)
+        target_path = self._resolve_abs_path(target_directory)
+
+        if not os.path.isdir(source_path):
+            raise FileNotFoundError(f'Directory not found: {directory}')
+        if os.path.exists(target_path):
+            raise FileExistsError(f'Target directory already exists: {new_directory}')
+
+        os.makedirs(os.path.dirname(target_path), exist_ok=True)
+        os.rename(source_path, target_path)
+
+        return {
+            'path': target_directory,
+            'old_path': source_directory,
+            'renamed': True,
+        }
+
+    def delete_directory(self, directory: str) -> dict:
+        safe_directory = self._normalize_directory_path(directory)
+        if not safe_directory:
+            raise ValueError('directory is required')
+
+        dir_path = self._resolve_abs_path(safe_directory)
+        if not os.path.isdir(dir_path):
+            raise FileNotFoundError(f'Directory not found: {directory}')
+
+        shutil.rmtree(dir_path)
+
+        return {
+            'path': safe_directory,
+            'deleted': True,
+        }
 
     def rename_script(self, script_name: str, new_name: str) -> dict:
         safe_source_name = self._normalize_script_name(script_name)
