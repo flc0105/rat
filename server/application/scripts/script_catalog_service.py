@@ -15,18 +15,31 @@ class ScriptCatalogService:
     def _ensure_dir(self):
         os.makedirs(self.scripts_root_dir, exist_ok=True)
 
-    def _normalize_script_name(self, name: str) -> str:
-        name = str(name or '').replace('\\', '/').lstrip('/')
+    def _normalize_relative_path(self, value: str) -> str:
+        value = str(value or '').replace('\\', '/').lstrip('/')
         parts = []
-        for part in name.split('/'):
+        for part in value.split('/'):
             part = part.strip()
             if not part or part in ('.', '..'):
                 continue
             parts.append(part)
-        normalized = '/'.join(parts)
+        return '/'.join(parts)
+
+    def _normalize_script_name(self, name: str) -> str:
+        normalized = self._normalize_relative_path(name)
         if normalized.endswith('.py'):
             return normalized
         return normalized + '.py' if normalized else ''
+
+    def _normalize_directory_path(self, directory: str) -> str:
+        return self._normalize_relative_path(directory)
+
+    def _resolve_abs_path(self, relative_path: str) -> str:
+        safe_relative_path = self._normalize_relative_path(relative_path)
+        abs_path = os.path.abspath(os.path.join(self.scripts_root_dir, safe_relative_path))
+        if abs_path != self.scripts_root_dir and not abs_path.startswith(self.scripts_root_dir + os.sep):
+            raise ValueError('Invalid script path')
+        return abs_path
 
     def _build_script_item(self, file_path: str) -> dict:
         rel_path = os.path.relpath(file_path, self.scripts_root_dir)
@@ -47,6 +60,17 @@ class ScriptCatalogService:
             'kind': 'script',
         }
 
+    def _build_directory_item(self, dir_path: str) -> dict:
+        rel_path = os.path.relpath(dir_path, self.scripts_root_dir)
+        normalized_path = '' if rel_path in ('.', '') else rel_path.replace('\\', '/')
+        label = normalized_path.split('/')[-1] if normalized_path else 'root'
+        return {
+            'key': f'dir:{normalized_path or "."}',
+            'path': normalized_path,
+            'label': label,
+            'kind': 'directory',
+        }
+
     def list_scripts(self) -> list[dict]:
         items = []
         pattern = os.path.join(self.scripts_root_dir, '**/*.py')
@@ -56,13 +80,39 @@ class ScriptCatalogService:
             items.append(self._build_script_item(file_path))
         return sorted(items, key=lambda x: x['path'])
 
+    # def list_directories(self) -> list[dict]:
+    #     directories = {self.scripts_root_dir}
+    #     for current_root, dir_names, _ in os.walk(self.scripts_root_dir):
+    #         directories.add(os.path.abspath(current_root))
+    #         for dir_name in dir_names:
+    #             directories.add(os.path.abspath(os.path.join(current_root, dir_name)))
+    #     return [self._build_directory_item(path) for path in sorted(directories)]
+
+    def list_directories(self) -> list[dict]:
+        directories = {self.scripts_root_dir}
+        ignored_dir_names = {'__pycache__', '__MACOSX'}  # 过滤缓存目录和 macOS 压缩包目录
+
+        for current_root, dir_names, _ in os.walk(self.scripts_root_dir):
+            # 原地过滤，阻止 os.walk 继续进入这些目录
+            dir_names[:] = [name for name in dir_names if name not in ignored_dir_names]
+
+            directories.add(os.path.abspath(current_root))
+            for dir_name in dir_names:
+                directories.add(os.path.abspath(os.path.join(current_root, dir_name)))
+
+        return [self._build_directory_item(path) for path in sorted(directories)]
+
+    def get_catalog(self) -> dict:
+        return {
+            'items': self.list_scripts(),
+            'directories': self.list_directories(),
+        }
+
     def get_script_content(self, script_name: str) -> str:
         safe_name = self._normalize_script_name(script_name)
         if not safe_name:
             raise ValueError('Invalid script name')
-        script_path = os.path.abspath(os.path.join(self.scripts_root_dir, safe_name))
-        if not script_path.startswith(self.scripts_root_dir + os.sep):
-            raise ValueError('Invalid script path')
+        script_path = self._resolve_abs_path(safe_name)
         if not os.path.isfile(script_path):
             raise FileNotFoundError(f'Script not found: {script_name}')
         with open(script_path, 'r', encoding='utf-8') as f:
@@ -72,9 +122,7 @@ class ScriptCatalogService:
         safe_name = self._normalize_script_name(script_name)
         if not safe_name:
             raise ValueError('Invalid script name')
-        script_path = os.path.abspath(os.path.join(self.scripts_root_dir, safe_name))
-        if not script_path.startswith(self.scripts_root_dir + os.sep):
-            raise ValueError('Invalid script path')
+        script_path = self._resolve_abs_path(safe_name)
         os.makedirs(os.path.dirname(script_path), exist_ok=True)
         with open(script_path, 'w', encoding='utf-8') as f:
             f.write(content)
@@ -84,9 +132,7 @@ class ScriptCatalogService:
         safe_name = self._normalize_script_name(script_name)
         if not safe_name:
             raise ValueError('Invalid script name')
-        script_path = os.path.abspath(os.path.join(self.scripts_root_dir, safe_name))
-        if not script_path.startswith(self.scripts_root_dir + os.sep):
-            raise ValueError('Invalid script path')
+        script_path = self._resolve_abs_path(safe_name)
         if not os.path.isfile(script_path):
             raise FileNotFoundError(f'Script not found: {script_name}')
         os.remove(script_path)
@@ -106,7 +152,7 @@ class ScriptCatalogService:
         if not safe_filename.lower().endswith('.py'):
             raise ValueError('Only .py files are supported')
 
-        directory = str(directory or '').replace('\\', '/').strip().strip('/')
+        directory = self._normalize_directory_path(directory)
         if directory:
             safe_name = self._normalize_script_name(f'{directory}/{safe_filename}')
         else:
@@ -115,10 +161,7 @@ class ScriptCatalogService:
         if not safe_name:
             raise ValueError('Invalid script name')
 
-        script_path = os.path.abspath(os.path.join(self.scripts_root_dir, safe_name))
-        if not script_path.startswith(self.scripts_root_dir + os.sep):
-            raise ValueError('Invalid script path')
-
+        script_path = self._resolve_abs_path(safe_name)
         os.makedirs(os.path.dirname(script_path), exist_ok=True)
         file_storage.save(script_path)
 
@@ -126,4 +169,38 @@ class ScriptCatalogService:
             'name': safe_name[:-3],
             'path': safe_name,
             'size': os.path.getsize(script_path),
+        }
+
+    def create_directory(self, directory: str) -> dict:
+        safe_directory = self._normalize_directory_path(directory)
+        if not safe_directory:
+            raise ValueError('directory is required')
+        dir_path = self._resolve_abs_path(safe_directory)
+        os.makedirs(dir_path, exist_ok=True)
+        return {'path': safe_directory, 'created': True}
+
+    def rename_script(self, script_name: str, new_name: str) -> dict:
+        safe_source_name = self._normalize_script_name(script_name)
+        safe_target_name = self._normalize_script_name(new_name)
+        if not safe_source_name:
+            raise ValueError('script name is required')
+        if not safe_target_name:
+            raise ValueError('new script name is required')
+
+        source_path = self._resolve_abs_path(safe_source_name)
+        target_path = self._resolve_abs_path(safe_target_name)
+
+        if not os.path.isfile(source_path):
+            raise FileNotFoundError(f'Script not found: {script_name}')
+        if os.path.exists(target_path):
+            raise FileExistsError(f'Target script already exists: {new_name}')
+
+        os.makedirs(os.path.dirname(target_path), exist_ok=True)
+        os.rename(source_path, target_path)
+        return {
+            'name': safe_target_name[:-3],
+            'path': safe_target_name,
+            'old_name': safe_source_name[:-3],
+            'old_path': safe_source_name,
+            'renamed': True,
         }

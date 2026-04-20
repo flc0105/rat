@@ -10,8 +10,9 @@ class WebScriptApi:
         self.script_catalog_service = script_catalog_service
 
     def list_script_catalog(self):
+        catalog = self.script_catalog_service.get_catalog() or {}
         items = []
-        for item in self.script_catalog_service.list_scripts() or []:
+        for item in catalog.get('items') or []:
             if not isinstance(item, dict):
                 continue
             script_name = str(item.get('script_name') or item.get('name') or '').strip()
@@ -25,7 +26,24 @@ class WebScriptApi:
                 'metadata': item.get('metadata') or {},
                 'source': 'script',
             })
-        return items
+
+        directories = []
+        for item in catalog.get('directories') or []:
+            if not isinstance(item, dict):
+                continue
+            path = str(item.get('path') or '').strip()
+            directories.append({
+                **item,
+                'path': path,
+                'label': str(item.get('label') or (path.split('/')[-1] if path else 'root')).strip() or 'root',
+                'key': str(item.get('key') or f'dir:{path or "."}').strip() or f'dir:{path or "."}',
+                'kind': 'directory',
+            })
+
+        return {
+            'items': items,
+            'directories': directories,
+        }
 
     def get_script_content(self, script_name: str) -> str:
         return self.script_catalog_service.get_script_content(script_name)
@@ -35,6 +53,12 @@ class WebScriptApi:
 
     def upload_script(self, file_storage, directory: str = ''):
         return self.script_catalog_service.upload_script(file_storage, directory=directory)
+
+    def create_directory(self, directory: str):
+        return self.script_catalog_service.create_directory(directory)
+
+    def rename_script(self, script_name: str, new_name: str):
+        return self.script_catalog_service.rename_script(script_name, new_name)
 
     def delete_script(self, script_name: str):
         return self.script_catalog_service.delete_script(script_name)

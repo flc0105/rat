@@ -839,6 +839,7 @@
             <div class="script-library-toolbar-left">
                                 <el-button size="small" class="toolbar-btn" type="primary" plain @click="createRemoteScriptPrompt()">New</el-button>
                 <el-button size="small" class="toolbar-btn" @click="triggerScriptUpload" :loading="serverScriptUploadLoading">Upload</el-button>
+                <el-button size="small" class="toolbar-btn" @click="createRemoteScriptFolderPrompt">New Folder</el-button>
 
                 <el-button size="small" class="toolbar-btn" @click="loadScriptCatalog" :loading="scriptLibraryLoading">Refresh</el-button>
                 <input id="server-script-upload-input"
@@ -861,7 +862,6 @@
 
                 <div class="script-library-pane-scroll">
                     <el-tree
-                            v-if="scriptDirectoryTreeData.length"
                             :data="scriptDirectoryTreeData"
                             node-key="key"
                             default-expand-all
@@ -876,7 +876,6 @@
                         </template>
                     </el-tree>
 
-                    <div v-else class="empty-state">No script folders available</div>
                 </div>
             </div>
 
@@ -930,6 +929,7 @@
                                     Run
                                 </el-button>
                                 <el-button size="small" plain @click="openRemoteScriptEditor(item.script_name)">Edit</el-button>
+                                <el-button size="small" plain @click="renameServerScript(item.script_name)">Rename</el-button>
                                 <el-button size="small" type="danger" plain @click="deleteServerScript(item.script_name)">Delete</el-button>
                             </div>
                         </div>
@@ -1315,6 +1315,14 @@
                             Edit
                         </el-button>
                         <template v-else-if="previewEditMode">
+                            <el-button
+                                    size="small"
+                                    type="danger"
+                                    plain
+                                    @click="clearPreviewContent"
+                            >
+                                Clear Content
+                            </el-button>
                             <el-button
                                     size="small"
                                     type="primary"

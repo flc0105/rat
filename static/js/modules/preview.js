@@ -167,6 +167,21 @@ window.AppPreviewModule = {
             this.setMonacoEditorReadOnly(true);
         },
 
+        clearPreviewContent() {
+            if (this.previewType !== 'text') {
+                ElementPlus.ElMessage.warning('Only text content can be cleared');
+                return;
+            }
+            if (!this.previewEditMode) {
+                ElementPlus.ElMessage.warning('Please enter edit mode first');
+                return;
+            }
+            if (this.monacoEditor) {
+                this.monacoEditor.setValue('');
+            }
+            this.previewText = '';
+        },
+
         async previewRemoteEntry(row) {
             if (!row || !row.path || row.is_dir || row.is_parent_entry) {
                 ElementPlus.ElMessage.warning('Please select a file');

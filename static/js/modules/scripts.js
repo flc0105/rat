@@ -4,6 +4,7 @@ window.AppScriptsModule = {
             scriptLibraryDialogVisible: false,
             scriptLibraryLoading: false,
             scriptCatalogItems: [],
+            scriptCatalogDirectories: [],
             selectedScriptDirectory: '',
             scriptRunSubmitting: false,
             scriptRunDialogVisible: false,
@@ -24,24 +25,27 @@ window.AppScriptsModule = {
                 return node;
             };
 
-            for (const item of this.scriptCatalogItems || []) {
-                const path = String(item.path || `${item.script_name || ''}.py`).replace(/^\/+/, '');
+            const directories = Array.isArray(this.scriptCatalogDirectories) && this.scriptCatalogDirectories.length
+                ? this.scriptCatalogDirectories
+                : [{key: 'dir:.', label: 'root', path: ''}];
+
+            directories.forEach((directory) => {
+                const path = String(directory?.path || '').trim().replace(/^\/+/, '');
                 const parts = path.split('/').filter(Boolean);
-                const dirParts = parts.slice(0, -1);
                 let currentChildren = root;
                 let currentPath = '';
 
-                if (!dirParts.length) {
+                if (!parts.length) {
                     ensureNode(root, 'dir:.', 'root', '');
-                    continue;
+                    return;
                 }
 
-                dirParts.forEach((part) => {
+                parts.forEach((part) => {
                     currentPath = currentPath ? `${currentPath}/${part}` : part;
                     const node = ensureNode(currentChildren, `dir:${currentPath}`, part, currentPath);
                     currentChildren = node.children;
                 });
-            }
+            });
 
             const sortNodes = (nodes) => {
                 nodes.sort((a, b) => String(a.label || '').localeCompare(String(b.label || '')));
@@ -112,12 +116,14 @@ window.AppScriptsModule = {
                     throw new Error(json.message || 'Failed to load script catalog');
                 }
 
-                this.scriptCatalogItems = Array.isArray(json.data) ? json.data : [];
+                const catalog = json.data || {};
+                this.scriptCatalogItems = Array.isArray(catalog.items) ? catalog.items : [];
+                this.scriptCatalogDirectories = Array.isArray(catalog.directories) ? catalog.directories : [{key: 'dir:.', label: 'root', path: ''}];
 
                 if (!this.selectedScriptDirectory) {
                     this.selectedScriptDirectory = this.getFirstAvailableScriptDirectory();
                 } else {
-                    const hasCurrentDir = this.scriptCatalogItems.some(item => this.getScriptDirectoryPath(item) === this.selectedScriptDirectory);
+                    const hasCurrentDir = this.scriptCatalogDirectories.some(item => String(item?.path || '').trim() === this.selectedScriptDirectory);
                     if (!hasCurrentDir) this.selectedScriptDirectory = this.getFirstAvailableScriptDirectory();
                 }
             } catch (e) {
@@ -134,7 +140,7 @@ window.AppScriptsModule = {
         },
 
         getFirstAvailableScriptDirectory() {
-            const dirs = (this.scriptCatalogItems || []).map(item => this.getScriptDirectoryPath(item));
+            const dirs = (this.scriptCatalogDirectories || []).map(item => String(item?.path || '').trim());
             return dirs.length ? dirs.sort()[0] : '';
         },
 
@@ -354,6 +360,88 @@ this.appendOutput(this.selectedId, commandText, 'command');
                 }
             } catch (e) {
                 if (e === 'cancel' || e === 'close') return;
+            }
+        },
+
+        async createRemoteScriptFolderPrompt() {
+            if (!this.selectedId) {
+                ElementPlus.ElMessage.warning('Please select a device');
+                return;
+            }
+            try {
+                const baseDir = this.selectedScriptDirectory ? `${this.selectedScriptDirectory}/` : '';
+                const {value} = await ElementPlus.ElMessageBox.prompt(
+                    'Enter the new folder path',
+                    'New Folder',
+                    {
+                        confirmButtonText: 'Create',
+                        cancelButtonText: 'Cancel',
+                        inputValue: `${baseDir}new_folder`,
+                        inputPlaceholder: 'folder/subfolder',
+                    }
+                );
+                const directory = String(value || '').trim().replace(/\\/g, '/').replace(/^\/+/, '').replace(/\/+$/, '');
+                if (!directory) {
+                    ElementPlus.ElMessage.warning('Folder path is required');
+                    return;
+                }
+
+                const res = await fetch('/api/scripts/folders', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({directory})
+                });
+                const json = await res.json();
+                if (!res.ok || json.code !== 0) throw new Error(json.message || 'Failed to create folder');
+
+                this.selectedScriptDirectory = directory;
+                ElementPlus.ElMessage.success(`Folder created: ${directory}`);
+                await this.loadScriptCatalog();
+            } catch (e) {
+                if (e === 'cancel' || e === 'close') return;
+                ElementPlus.ElMessage.error(e.message || 'Failed to create folder');
+            }
+        },
+
+        async renameServerScript(scriptName) {
+            const normalized = String(scriptName || '').trim().replace(/\\/g, '/').replace(/^\/+/, '');
+            if (!normalized) {
+                ElementPlus.ElMessage.warning('Invalid script name');
+                return;
+            }
+
+            try {
+                const {value} = await ElementPlus.ElMessageBox.prompt(
+                    'Enter the new file name (.py path)',
+                    'Rename Script',
+                    {
+                        confirmButtonText: 'Rename',
+                        cancelButtonText: 'Cancel',
+                        inputValue: `${normalized}.py`,
+                        inputPlaceholder: 'folder/new_name.py',
+                    }
+                );
+
+                const newName = String(value || '').trim().replace(/\\/g, '/').replace(/^\/+/, '');
+                if (!newName) {
+                    ElementPlus.ElMessage.warning('New file name is required');
+                    return;
+                }
+
+                const res = await fetch('/api/scripts/rename', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({name: normalized, new_name: newName})
+                });
+                const json = await res.json();
+                if (!res.ok || json.code !== 0) throw new Error(json.message || 'Failed to rename script');
+
+                const renamedName = this.normalizeServerScriptFilename(json.data?.name || newName);
+                ElementPlus.ElMessage.success(`Script renamed: ${renamedName}`);
+                await this.loadScriptCatalog();
+            } catch (e) {
+                if (e === 'cancel' || e === 'close') return;
+                ElementPlus.ElMessage.error(e.message || 'Failed to rename script');
             }
         },
 
