@@ -8,7 +8,7 @@ import shlex
 from core.utils.command_output import (
     StructuredCommandResult,
     parse_output_format,
-    render_structured_result,
+    render_structured_result, strip_output_format_arg,
 )
 from core.utils.formatting import format_dict
 from core.utils.parsing import scan_args
@@ -166,100 +166,289 @@ class ScriptBuiltinSupport:
                 raise RuntimeError(f"Unable to read file: {script_path}")
 
 
+
+import re
+
+from core.utils.command_output import (
+    StructuredCommandResult,
+    parse_output_format,
+    render_structured_result,
+    strip_output_format_arg,
+)
+
+
+import re
+
+from core.utils.command_output import (
+    StructuredCommandResult,
+    parse_output_format,
+    render_structured_result,
+    strip_output_format_arg,
+)
+
+
 class AliasBuiltinSupport:
     """
-    alias / unalias 相关内建命令支持。
+    alias 子命令支持：
+
+    - alias / alias resolve
+    - alias set [--platform common|win|mac|linux] name = command
+    - alias unset [--platform common|win|mac|linux] name
+    - alias list [--platform common|win|mac|linux] [--json]
+    - alias reload
     """
 
-    PLATFORM_OPTION_PATTERN = re.compile(r'^(?:--platform|-p)\s+(all|common|win|mac)\b', re.IGNORECASE)
+    VALID_PLATFORMS = ('common', 'win', 'mac', 'linux')
+
+    PLATFORM_OPTION_PATTERN = re.compile(
+        r'^(?:--platform|-p)\s+(common|win|mac|linux)\b',
+        re.IGNORECASE,
+    )
+
+    ANY_PLATFORM_OPTION_PATTERN = re.compile(
+        r'^(?:--platform|-p)\s+(\S+)\b',
+        re.IGNORECASE,
+    )
+
+    SUBCOMMAND_PATTERN = re.compile(
+        r'^(resolve|set|unset|list|reload)\b',
+        re.IGNORECASE,
+    )
 
     def __init__(self, alias_manager, conn):
         self.alias_manager = alias_manager
         self.conn = conn
 
-    # add alias平台选项解析 2026-04-08
     def _parse_platform_option(self, arg_text: str) -> tuple[str, str]:
         text = str(arg_text or '').strip()
         matched = self.PLATFORM_OPTION_PATTERN.match(text)
-        if matched is None:
-            return '', text
+        if matched is not None:
+            platform_name = matched.group(1).lower()
+            remaining = text[matched.end():].strip()
+            return platform_name, remaining
 
-        platform_name = matched.group(1).lower()
+        any_matched = self.ANY_PLATFORM_OPTION_PATTERN.match(text)
+        if any_matched is not None:
+            invalid_platform = any_matched.group(1)
+            raise ValueError(
+                f"Unsupported platform: {invalid_platform}. "
+                f"Supported platforms: {', '.join(self.VALID_PLATFORMS)}"
+            )
+
+        return '', text
+
+    def _resolve_target_platform(self, platform_name: str) -> str:
+        return platform_name or 'common'
+
+    def _parse_subcommand(self, arg_text: str) -> tuple[str, str]:
+        text = str(arg_text or '').strip()
+        if not text:
+            return 'resolve', ''
+
+        matched = self.SUBCOMMAND_PATTERN.match(text)
+        if matched is None:
+            return 'resolve', text
+
+        subcommand = matched.group(1).lower()
         remaining = text[matched.end():].strip()
-        return platform_name, remaining
+        return subcommand, remaining
+
+    def _get_runtime_platform(self) -> str:
+        """
+        直接复用 AliasManager 的连接平台识别逻辑。
+        如果是 ios/android/unknown，返回空串，resolve 时只显示 common。
+        """
+        platform_name = self.alias_manager.get_platform_for_connection(self.conn)
+        if platform_name in self.VALID_PLATFORMS:
+            return platform_name
+        return ''
+
+    def _normalize_alias_rows(self, alias_map: dict, platform_name: str) -> list[dict]:
+        rows = []
+        for alias_name in sorted((alias_map or {}).keys()):
+            rows.append({
+                'platform': platform_name,
+                'alias': alias_name or '',
+                'command': alias_map.get(alias_name) or '',
+            })
+        return rows
+
+    def _build_resolved_alias_payload(self) -> list[dict]:
+        """
+        alias resolve:
+        - 显示 common + 当前平台
+        - 当前平台无法识别时，只显示 common
+        - platform 字段表示“该 alias 最终来自哪一层”
+        """
+        runtime_platform = self._get_runtime_platform()
+
+        common_aliases = self.alias_manager.list_aliases_for_platform('common', conn=self.conn) or {}
+        platform_aliases = {}
+
+        if runtime_platform and runtime_platform != 'common':
+            platform_aliases = self.alias_manager.list_aliases_for_platform(runtime_platform, conn=self.conn) or {}
+
+        merged = dict(common_aliases)
+        merged.update(platform_aliases)
+
+        rows = []
+        for alias_name, command_text in merged.items():
+            source_platform = runtime_platform if runtime_platform and alias_name in platform_aliases else 'common'
+            rows.append({
+                'platform': source_platform,
+                'alias': alias_name or '',
+                'command': command_text or '',
+            })
+
+        rows.sort(key=lambda item: (
+            str(item.get('platform') or ''),
+            str(item.get('alias') or ''),
+        ))
+        return rows
+
+    def _build_list_alias_payload(self, platform_name: str = '') -> list[dict]:
+        """
+        alias list:
+        - 默认显示所有平台原始配置
+        - 支持 --platform common|win|mac|linux
+        - 不支持 --platform all
+        """
+        if platform_name:
+            alias_map = self.alias_manager.list_aliases_for_platform(platform_name, conn=self.conn) or {}
+            return self._normalize_alias_rows(alias_map, platform_name)
+
+        grouped = self.alias_manager.list_aliases_grouped() or {}
+        rows = []
+
+        for current_platform in self.VALID_PLATFORMS:
+            alias_map = grouped.get(current_platform) or {}
+            rows.extend(self._normalize_alias_rows(alias_map, current_platform))
+
+        return rows
 
     def list_aliases(self):
+        """
+        给自动补全/旧逻辑使用：返回当前连接可用 alias（dict）
+        """
         return self.alias_manager.list_aliases(conn=self.conn)
 
-    def alias(self, arg):
-        arg_text = str(arg or '').strip()
-        platform_name, remaining_text = self._parse_platform_option(arg_text)
-        target_platform = platform_name or 'common'
+    def list_resolved_aliases(self) -> list[dict]:
+        """
+        给自动补全/展示使用：返回 common + 当前平台 合并后的结构化结果
+        """
+        return self._build_resolved_alias_payload()
 
-        if not remaining_text:
-            payload = self.alias_manager.list_aliases_for_platform(platform_name, conn=self.conn)
-            # yield 1, format_dict(payload)
-            if platform_name == 'all':
-                yield 1, self._format_grouped_aliases(payload)
-            else:
-                yield 1, format_dict(payload)
-            return
+    def _render_table_result(self, payload: list[dict], output_format: str):
+        return render_structured_result(
+            StructuredCommandResult(
+                status=1,
+                data=payload,
+                shape='table',
+            ),
+            output_format=output_format,
+        )
 
-        if remaining_text.lower() == 'reload':
-            self.alias_manager.load_aliases()
-            yield 1, 'Aliases reloaded'
-            return
+    def _alias_resolve(self, arg=''):
+        output_format = parse_output_format(arg)
+        arg = strip_output_format_arg(arg)
 
-        if remaining_text in ('--json', 'json'):
-            payload = self.alias_manager.list_aliases_for_platform(platform_name, conn=self.conn)
-            yield 1, json.dumps(
-                payload,
-                ensure_ascii=False,
-                indent=2
+        if str(arg or '').strip():
+            raise ValueError("alias resolve does not accept any arguments")
+
+        payload = self._build_resolved_alias_payload()
+        yield self._render_table_result(payload, output_format)
+
+    def _alias_set(self, arg=''):
+        text = str(arg or '').strip()
+        platform_name, remaining_text = self._parse_platform_option(text)
+        target_platform = self._resolve_target_platform(platform_name)
+
+        if not remaining_text or '=' not in remaining_text:
+            raise ValueError(
+                "Expected format: alias set [--platform common|win|mac|linux] name = command"
             )
-            return
 
         try:
-            if '=' in remaining_text:
-                if target_platform == 'all':
-                    raise ValueError("Platform all is query-only and cannot be used to save alias")
+            alias_name, command_text = [part.strip() for part in remaining_text.split('=', 1)]
 
-                alias_name, command_text = [part.strip() for part in remaining_text.split('=', 1)]
-                self.alias_manager.add_alias(alias_name, command_text, platform=target_platform)
-                yield 1, f'Alias saved [{target_platform}]: {alias_name} -> {command_text}'
-            else:
-                raise ValueError("Expected format: alias [--platform win|mac|common] name = command")
+            if not alias_name:
+                raise ValueError("Missing alias name")
+            if not command_text:
+                raise ValueError("Missing alias command")
+
+            self.alias_manager.add_alias(alias_name, command_text, platform=target_platform)
+            yield 1, f'Alias saved [{target_platform}]: {alias_name} -> {command_text}'
         except Exception as e:
             raise ValueError(f'Failed to save alias: {e}')
 
-    def _format_grouped_aliases(self, payload: dict) -> str:
-        lines = []
-        for platform_name in ('common', 'win', 'mac'):
-            alias_map = payload.get(platform_name) or {}
-            lines.append(f'[{platform_name}]')
-            if not alias_map:
-                lines.append('(empty)')
-            else:
-                for alias_name, command_text in alias_map.items():
-                    lines.append(f'{alias_name} = {command_text}')
-            lines.append('')
-        return '\n'.join(lines).rstrip()
+    def _alias_unset(self, arg=''):
+        text = str(arg or '').strip()
+        platform_name, remaining_text = self._parse_platform_option(text)
+        target_platform = self._resolve_target_platform(platform_name)
 
-    def unalias(self, arg):
-        if not arg:
-            raise ValueError("Missing alias name")
-
-        platform_name, remaining_text = self._parse_platform_option(arg)
         alias_name = remaining_text.strip()
         if not alias_name:
             raise ValueError("Missing alias name")
 
         try:
-            target_platform = platform_name or 'common'
             self.alias_manager.remove_alias(alias_name, platform=target_platform)
             yield 1, f"Alias removed [{target_platform}]: {alias_name}"
         except KeyError:
             raise ValueError(f"Alias not found: {alias_name}")
+
+    def _alias_list(self, arg=''):
+        output_format = parse_output_format(arg)
+        arg = strip_output_format_arg(arg)
+
+        platform_name, remaining_text = self._parse_platform_option(arg)
+        if remaining_text:
+            raise ValueError(
+                "Expected format: alias list [--platform common|win|mac|linux] [--json]"
+            )
+
+        payload = self._build_list_alias_payload(platform_name=platform_name)
+        yield self._render_table_result(payload, output_format)
+
+    def _alias_reload(self, arg=''):
+        text = str(arg or '').strip()
+        if text:
+            raise ValueError("alias reload does not accept any arguments")
+
+        self.alias_manager.load_aliases()
+        yield 1, 'Aliases reloaded'
+
+    def alias(self, arg=''):
+        subcommand, remaining = self._parse_subcommand(arg)
+
+        if subcommand == 'resolve':
+            for item in self._alias_resolve(remaining):
+                yield item
+            return
+
+        if subcommand == 'set':
+            for item in self._alias_set(remaining):
+                yield item
+            return
+
+        if subcommand == 'unset':
+            for item in self._alias_unset(remaining):
+                yield item
+            return
+
+        if subcommand == 'list':
+            for item in self._alias_list(remaining):
+                yield item
+            return
+
+        if subcommand == 'reload':
+            for item in self._alias_reload(remaining):
+                yield item
+            return
+
+        raise ValueError(
+            "Unsupported alias subcommand. "
+            "Use: alias [resolve] | alias set | alias unset | alias list | alias reload"
+        )
 
 
 class PinnedPathBuiltinSupport:
@@ -460,6 +649,7 @@ class RttBuiltinSupport:
         }
 
         output_format = parse_output_format(arg)
+        arg = strip_output_format_arg(arg)
 
         yield render_structured_result(
             StructuredCommandResult(

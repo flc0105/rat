@@ -29,6 +29,7 @@ class AliasManager:
             'common': {},
             'win': {},
             'mac': {},
+            'linux': {}
         }
 
     def _read_alias_file(self):
@@ -45,8 +46,13 @@ class AliasManager:
         with open(self.alias_path, 'w', encoding='utf-8') as file_obj:
             json.dump(aliases, file_obj, indent=2, ensure_ascii=False)
 
-    # add alias平台归一化 2026-04-08
-    def _normalize_platform(self, platform_name: str, allow_empty: bool = False, allow_all: bool = False) -> str:
+    def _normalize_platform(
+            self,
+            platform_name: str,
+            allow_empty: bool = False,
+            allow_all: bool = False,
+            allow_unknown: bool = False,
+    ) -> str:
         text = str(platform_name or '').strip().lower()
         if not text:
             if allow_empty:
@@ -59,8 +65,13 @@ class AliasManager:
             return 'all'
 
         if normalized not in self.SUPPORTED_PLATFORMS:
+            if allow_unknown:
+                return ''
             raise ValueError(f'Unsupported platform: {platform_name}')
+
         return normalized
+
+
 
     # add alias配置结构归一化 2026-04-08
     def _normalize_alias_payload(self, payload) -> dict:
@@ -102,12 +113,14 @@ class AliasManager:
         self._write_alias_file(self.aliases)
 
     # ------------------ 平台解析 ------------------ #
-    # add alias连接平台识别 2026-04-08
     def get_platform_for_connection(self, conn=None) -> str:
         session_info = getattr(conn, 'session_info', None)
         os_type = str(getattr(session_info, 'os_type', '') or '').strip().lower()
-        return self._normalize_platform(os_type, allow_empty=True)
-
+        return self._normalize_platform(
+            os_type,
+            allow_empty=True,
+            allow_unknown=True,
+        )
     # add alias当前连接可见列表 2026-04-08
     def get_effective_aliases(self, conn=None) -> dict:
         platform_name = self.get_platform_for_connection(conn)

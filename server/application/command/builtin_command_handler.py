@@ -162,11 +162,18 @@ class BuiltinCommandHandler:
                 'source': 'script'
             })
 
-        for alias_name, alias_command in self.alias_support.list_aliases().items():
+        for item in self.alias_support.list_resolved_aliases():
+            alias_name = item.get('alias') or ''
+            alias_command = item.get('command') or ''
+            alias_platform = item.get('platform') or 'common'
+
+            if not alias_name:
+                continue
+
             candidates.append({
                 'name': alias_name,
                 'template': alias_name,
-                'help': f'Alias -> {alias_command}',
+                'help': f'Alias [{alias_platform}] -> {alias_command}',
                 'source': 'alias'
             })
 
@@ -214,13 +221,10 @@ class BuiltinCommandHandler:
         for item in self.script_support.execute_script_payload(payload_text):
             yield item
 
-    def alias(self, arg):
+    def alias(self, arg=''):
         for item in self.alias_support.alias(arg):
             yield item
 
-    def unalias(self, arg):
-        for item in self.alias_support.unalias(arg):
-            yield item
 
     def history(self, arg):
         for item in self.history_support.history(arg):

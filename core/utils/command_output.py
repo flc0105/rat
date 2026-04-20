@@ -13,22 +13,36 @@ class StructuredCommandResult:
     status: int
     data: dict | list[dict]
     shape: OutputShape | None = None
-    columns: list[str] | None = None
     width: int | None = None
 
 
 def parse_output_format(arg: str = '', default: str = 'text') -> str:
-    text = str(arg or '').strip().lower()
-    if text in ('json', '--json'):
+    text = str(arg or '').strip()
+    if not text:
+        return default
+
+    parts = text.split()
+    last = parts[-1].lower()
+    if last in ('json', '--json'):
         return 'json'
+
     return default
 
 
+def strip_output_format_arg(arg: str = '') -> str:
+    text = str(arg or '').strip()
+    if not text:
+        return ''
+
+    parts = text.split()
+    last = parts[-1].lower()
+    if last in ('json', '--json'):
+        return ' '.join(parts[:-1]).strip()
+
+    return text
+
+
 def render_structured_result(result, output_format: str = 'text'):
-    """
-    统一渲染命令输出。
-    兼容旧命令：如果不是 StructuredCommandResult，原样返回。
-    """
     if not isinstance(result, StructuredCommandResult):
         return result
 
@@ -38,16 +52,26 @@ def render_structured_result(result, output_format: str = 'text'):
     data = result.data
 
     if isinstance(data, dict):
-        if result.width is not None:
-            return result.status, format_dict(data, width=result.width)
-        return result.status, format_dict(data)
+        if result.width is None:
+            raise ValueError('width is required for dict output')
+        return result.status, format_dict(data, width=result.width)
 
     if isinstance(data, list):
         if not data:
             return result.status, 'No data to display'
 
-        headers = result.columns or list(data[0].keys())
-        rows = [[item.get(header, '') for header in headers] for item in data]
+        headers = [str(header) for header in data[0].keys()]
+        rows = []
+
+        for item in data:
+            row = []
+            for header in headers:
+                value = item.get(header, '')
+                if value is None:
+                    value = ''
+                row.append(str(value))
+            rows.append(row)
+
         return result.status, format_table(headers, rows)
 
     return result.status, str(data)

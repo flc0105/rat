@@ -11,13 +11,13 @@
     "list_ports": "powershell Get-NetTCPConnection -State Listen ^| Sort-Object LocalPort ^| Select-Object LocalAddress, LocalPort, OwningProcess",
     "list_ip": "powershell Get-NetIPAddress -AddressFamily IPv4 ^| Select-Object InterfaceAlias, IPAddress",
     "list_services": "powershell Get-Service ^| Sort-Object Status,DisplayName ^| Select-Object Status,Name,DisplayName",
-    "list_drives": "powershell Get-Volume ^| Select DriveLetter,FileSystemLabel,@{n='FreeGB';e={[int]($_.SizeRemaining/1GB)}},@{n='SizeGB';e={[int]($_.Size/1GB)}}",
     "list_env": "powershell Get-ChildItem Env: ^| Sort-Object Name",
     "list_users": "powershell Get-LocalUser ^| Select-Object Name, Enabled, LastLogon",
     "os_info": "powershell Get-ComputerInfo ^| Select-Object WindowsProductName, WindowsVersion, OsHardwareAbstractionLayer",
     "download_file": "powershell Invoke-WebRequest -Uri <url> -OutFile <file>",
     "run_as_admin": "powershell Start-Process -Verb runas <command>",
     "show_desktop": "powershell (New-Object -ComObject shell.application).toggleDesktop()",
+    "kill_port": "powershell Stop-Process -Id (Get-NetTCPConnection -LocalPort <port>).OwningProcess",
     "ls": "powershell Get-ChildItem",
     "ll": "powershell Get-ChildItem -Force",
     "pwd": "powershell Get-Location",
@@ -30,23 +30,17 @@
     "ps": "tasklist",
     "kill_pid": "taskkill /pid <pid> /f",
     "kill_name": "taskkill /im <name> /f",
-    "md5": "certUtil -hashfile <file> MD5",
-    "pkill": "wmic process where name='<process_name>' call terminate",
-    "usb_history": "powershell Get-ItemProperty -Path HKLM:/SYSTEM/CurrentControlSet/Enum/USBSTOR/*/* ^| select @{ Name='device name'; Expression={ $_.FriendlyName } }",
-    "who_lock_usb": "powershell Get-EventLog -LogName System -After (Get-Date).AddHours(-1) ^| Where-Object { $_.EventID -eq 225 } ^| Sort-Object TimeGenerated ^| Format-Table -Wrap",
-    "killport": "powershell Stop-Process -Id (Get-NetTCPConnection -LocalPort <port>).OwningProcess"
+    "md5": "certUtil -hashfile <file> MD5"
   },
   "mac": {
     "ll": "ls -la",
     "sleep": "read ping -c <sec> 127.0.0.1",
     "kill_port": "kill -9 $(lsof -t -i:<port>)",
     "ip": "ipconfig getifaddr en0",
-    "display_off": "pmset displaysleepnow",
     "clean_ds": "find . -name \"._*\" -type f -delete && find . -name \".DS_Store\" -type f -delete",
-    "persist_on": "sudo launchctl bootstrap system /Library/LaunchDaemons/com.rat.helper.plist",
-    "persist_off": "sudo launchctl bootout system /Library/LaunchDaemons/com.rat.helper.plist",
-    "suspend": "kill -STOP <pid>",
-    "restore": "kill -CONT <pid>",
+    "pause": "kill -STOP <pid>",
+    "resume": "kill -CONT <pid>",
     "wifipass": "security find-generic-password -wa <ssid>"
-  }
+  },
+  "linux": {}
 }
