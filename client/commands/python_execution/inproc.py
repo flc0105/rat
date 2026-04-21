@@ -16,7 +16,8 @@ class InProcessPythonExecutionStrategy(PythonExecutionStrategy):
         if kwargs is None:
             kwargs = {}
 
-        exec_globals = {}
+        # exec_globals = {}
+        exec_globals = {'__name__': '__main__'} # 支持if __name__ == '__main__'
         exec_globals.update(kwargs)  # 用户传入的参数
 
         # 同时注入 kwargs 本身，方便脚本使用
