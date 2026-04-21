@@ -16,10 +16,10 @@ class CommonCommands(
     CommandPathMixin,
     CommandIntrospectionMixin,
     CommandJobMixin,
-    CommandBase,
     CommandProcessMixin,
     CommandWatchdogMixin,
     CommandUpdateMixin,
+    CommandBase,
 ):
     """跨平台通用命令集合"""
     pass

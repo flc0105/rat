@@ -1885,8 +1885,8 @@
                 <div>
                     <div style="font-weight: 600; font-size: 14px; margin-bottom: 10px;">Open Files ({{ (processDetail.open_files || []).length }})</div>
                     <el-table :data="processDetail.open_files || []" stripe border max-height="240" empty-text="No open files">
-                        <el-table-column prop="path" label="Path" min-width="400" show-overflow-tooltip></el-table-column>
-                        <el-table-column prop="fd" label="FD" width="100" align="center"></el-table-column>
+                        <el-table-column prop="path" label="Path" show-overflow-tooltip></el-table-column>
+<!--                        <el-table-column prop="fd" label="FD" width="100" align="center"></el-table-column>-->
                     </el-table>
                 </div>
             </template>
