@@ -1,6 +1,8 @@
 import json
 from datetime import datetime
 
+from core.platform.platform_identity import detect_platform_alias
+
 
 class ProcessService:
 
@@ -226,3 +228,25 @@ class ProcessService:
                 return apps
         except Exception:
             raise
+
+    def kill_process(self, pid):
+        import psutil
+        """
+        终止进程
+        """
+        try:
+            pid = int(pid.strip())
+            proc = psutil.Process(pid)
+
+            if detect_platform_alias() == 'win':
+                proc.kill()
+            else:
+                proc.terminate()
+                proc.wait(timeout=3)
+
+        except psutil.NoSuchProcess:
+            raise Exception(f'Process {pid} not found')
+        except psutil.AccessDenied:
+            raise Exception(f'Access denied to kill process {pid}')
+        except Exception as e:
+            raise Exception(f'Failed to kill process {pid}: {e}')

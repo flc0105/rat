@@ -71,24 +71,8 @@ class CommandProcessMixin:
 
     @desc('Kill a process by PID', group='process', suggest=False)
     def kill_process(self, pid: str):
-        import psutil
-        """
-        终止进程
-        """
         try:
-            pid = int(pid.strip())
-            proc = psutil.Process(pid)
-
-            if detect_platform_alias() == 'win':
-                proc.kill()
-            else:
-                proc.terminate()
-                proc.wait(timeout=3)
-
+            self._get_process_service().kill_process(pid)
             return 1, f'Process {pid} terminated'
-        except psutil.NoSuchProcess:
-            return 0, f'Process {pid} not found'
-        except psutil.AccessDenied:
-            return 0, f'Access denied to kill process {pid}'
         except Exception as e:
-            return 0, f'Failed to kill process {pid}: {e}'
+            return 0, str(e)
