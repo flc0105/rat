@@ -59,7 +59,7 @@ class ClientWatchdogWorker:
                 action_executor=LocalWatchdogActionExecutor(self._action_executor.restart_parent_and_exit),
             )
 
-    # add shared watchdog worker 2026-04-10 00:00
+
     def run(self):
         while True:
             if not self._action_executor.is_parent_alive():
@@ -100,14 +100,14 @@ class ClientWatchdogProcess:
         self.local_watchdog_log_file_path = str(local_watchdog_log_file_path or '').strip()
         self._process = None
 
-    # add shared watchdog worker 2026-04-10 00:00
+
     def _build_parent_launch_argv(self):
         if getattr(sys, 'frozen', False):
             return [os.path.realpath(sys.executable), *sys.argv[1:]]
 
         return [os.path.realpath(sys.executable), os.path.realpath(sys.argv[0]), *sys.argv[1:]]
 
-    # add shared watchdog worker 2026-04-10 00:00
+
     def _build_worker_argv(self):
         parent_launch_argv_json = json.dumps(self._build_parent_launch_argv())
 
@@ -147,7 +147,7 @@ class ClientWatchdogProcess:
             '--watch-local-watchdog-log-file-path', self.local_watchdog_log_file_path,
         ]
 
-    # add shared watchdog worker 2026-04-10 00:00
+
     def start(self):
         if self._process is not None and self._process.poll() is None:
             return
@@ -181,7 +181,7 @@ class ClientWatchdogProcess:
         else:
             raise RuntimeError(f'Unsupported os.name: {os.name}')
 
-    # add shared watchdog worker 2026-04-10 00:00
+
     def stop(self):
         process = self._process
         if process is None:
@@ -203,18 +203,18 @@ class ClientWatchdogProcess:
         except Exception:
             pass
 
-    # add shared watchdog worker 2026-04-10 00:00
+
     def get_pid(self):
         if self._process is None:
             return None
         return self._process.pid
 
-    # add shared watchdog worker 2026-04-10 00:00
+
     def is_alive(self) -> bool:
         return self._process is not None and self._process.poll() is None
 
 
-# add shared watchdog worker 2026-04-10 00:00
+
 def _read_flag_value(flag_name: str, default_value=None):
     argv = sys.argv[1:]
     for index, arg in enumerate(argv):
@@ -225,7 +225,7 @@ def _read_flag_value(flag_name: str, default_value=None):
     return default_value
 
 
-# add shared watchdog worker 2026-04-10 00:00
+
 def run_watchdog_worker_from_argv():
     parent_pid = int(_read_flag_value('--watch-parent-pid', '0') or '0')
     client_id = _read_flag_value('--watch-client-id', '') or ''

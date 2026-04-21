@@ -37,7 +37,7 @@ class JobManager:
         if job_key == 'module':
             raise ValueError('The base job module cannot be started directly')
 
-    # add remove client side job 2026-04-08 11:40
+
     def _load_job_instance_from_file(self, full_path: str, job_name: str, command_id: int, job_params=None):
         module_name = self.get_job_key(job_name)
         job_metadata = read_job_metadata_from_file(full_path, fallback_name=module_name)

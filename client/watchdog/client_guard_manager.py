@@ -23,25 +23,23 @@ class ClientGuardManager:
         self._local_watchdog_feeder = None
         self._started = False
 
-    # add guard manager separation 2026-04-10 00:00
+
     def _build_local_watchdog_heartbeat_file_path(self):
         return os.path.join(tempfile.gettempdir(), f'client_local_watchdog_heartbeat_{self.client_id}.json')
 
-    # add guard manager separation 2026-04-10 00:00
+
     def _build_local_watchdog_log_file_path(self):
-        # return os.path.join(tempfile.gettempdir(), f'client_local_watchdog_{self.client_id}.log')
         return os.path.join(tempfile.gettempdir(), f'client_local_watchdog.log')
 
-    # add guard manager separation 2026-04-10 00:00
+
     def _build_remote_watchdog_log_file_path(self):
         return os.path.join(tempfile.gettempdir(), f'client_remote_watchdog.log')
-        # return os.path.join(tempfile.gettempdir(), f'client_remote_watchdog_{self.client_id}.log')
 
-    # add guard manager separation 2026-04-10 00:00
+
     def _build_remote_http_control_url(self):
         return f'{UPLOAD_BASE_URL}/api/connections/{self.client_id}/control'
 
-    # add guard manager separation 2026-04-10 00:00
+
     def _ensure_local_watchdog_feeder(self):
         if self._local_watchdog_feeder is None:
             self._local_watchdog_feeder = LocalWatchdogHeartbeatFeeder(
@@ -51,7 +49,7 @@ class ClientGuardManager:
                 local_watchdog_log_file_path=self._build_local_watchdog_log_file_path(),
             )
 
-    # add guard manager separation 2026-04-10 00:00
+
     def _ensure_watchdog_process(self):
         if self._watchdog_process is None:
             self._watchdog_process = ClientWatchdogProcess(

@@ -36,18 +36,10 @@ class WatchdogActionExecutor:
         self.launch_cwd = str(launch_cwd or '').strip() or os.getcwd()
         self.parent_launch_argv = list(parent_launch_argv or [])
 
-    # add watchdog action executor 2026-04-10 00:00
-    # def is_parent_alive(self) -> bool:
-    #     try:
-    #         os.kill(self.parent_pid, 0)
-    #         return True
-    #     except Exception:
-    #         return False
-
     def is_parent_alive(self) -> bool:
         return is_process_alive(self.parent_pid)
 
-    # add watchdog action executor 2026-04-10 00:00
+
     def kill_parent_process(self):
         if not self.is_parent_alive():
             return
@@ -62,7 +54,7 @@ class WatchdogActionExecutor:
         else:
             os.kill(self.parent_pid, signal.SIGKILL)
 
-    # add watchdog action executor 2026-04-10 00:00
+
     def spawn_restarted_parent(self):
         if not self.parent_launch_argv:
             raise RuntimeError('Missing parent launch argv')
@@ -96,14 +88,14 @@ class WatchdogActionExecutor:
         else:
             raise RuntimeError(f'Unsupported os.name: {os.name}')
 
-    # add watchdog action executor 2026-04-10 00:00
+
     def restart_parent_and_exit(self):
         self.spawn_restarted_parent()
         time.sleep(0.2)
         self.kill_parent_process()
         os._exit(0)
 
-    # add watchdog action executor 2026-04-10 00:00
+
     def kill_parent_and_exit(self):
         self.kill_parent_process()
         os._exit(0)
@@ -130,23 +122,23 @@ class RemoteHttpWatchdogMonitor:
         self._logger = _build_remote_watchdog_file_logger(self.remote_watchdog_log_file_path)
         self._next_poll_at = 0.0
 
-    # add remote watchdog monitor 2026-04-10 00:00
+
     def _build_poll_url(self) -> str:
         return f'{self.base_url}/api/connections/{self.client_id}/control'
 
-    # add remote watchdog monitor 2026-04-10 00:00
+
     def _log_http_debug(self, message: str):
         self._logger.debug(message)
 
-    # add remote watchdog monitor 2026-04-10 00:00
+
     def _log_http_warning(self, message: str):
         self._logger.warning(message)
 
-    # add remote watchdog monitor 2026-04-10 00:00
+
     def _log_http_error(self, message: str):
         self._logger.error(message)
 
-    # add remote watchdog monitor 2026-04-10 00:00
+
     def _fetch_command(self) -> str:
         request = urllib.request.Request(
             self._build_poll_url(),
@@ -172,7 +164,7 @@ class RemoteHttpWatchdogMonitor:
 
         return ''
 
-    # add remote watchdog monitor 2026-04-10 00:00
+
     def _execute_command(self, command: str):
         command_text = str(command or '').strip().lower()
 
@@ -188,7 +180,7 @@ class RemoteHttpWatchdogMonitor:
 
         raise ValueError(f'Unsupported remote watchdog control command: {command_text}')
 
-    # add remote watchdog monitor 2026-04-10 00:00
+   
     def run_iteration(self, now: float):
         if now < self._next_poll_at:
             return

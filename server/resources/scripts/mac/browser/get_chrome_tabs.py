@@ -4,7 +4,7 @@ SCRIPT_METADATA = {
     "name": "macos/browser/get_chrome_tabs",
     "display_name": "Get Chrome Tabs",
     "description": "Get open tabs from Google Chrome on macOS",
-    "platforms": ["darwin"],
+    "platforms": ["mac"],
     "category": "Browser",
     "params": []
 }

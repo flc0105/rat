@@ -5,16 +5,18 @@ from copy import deepcopy
 _METADATA_KEYS = ('JOB_METADATA', 'job_metadata', 'metadata', 'META', 'meta')
 _ANY_PLATFORM_ALIASES = {'*', 'all', 'any'}
 _PLATFORM_ALIASES = {
-    'darwin': 'darwin',
-    'mac': 'darwin',
-    'macos': 'darwin',
-    'osx': 'darwin',
-    'windows': 'windows',
-    'win': 'windows',
-    'win32': 'windows',
-    'nt': 'windows',
+    'darwin': 'mac',
+    'mac': 'mac',
+    'macos': 'mac',
+    'osx': 'mac',
+    'windows': 'win',
+    'win': 'win',
+    'win32': 'win',
+    'nt': 'win',
     'linux': 'linux',
+    'ios': 'ios',
 }
+
 _PARAM_TYPE_ALIASES = {
     'int': 'integer',
     'integer': 'integer',

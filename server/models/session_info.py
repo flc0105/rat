@@ -7,6 +7,7 @@ class SessionInfo:
     addr: str = ''
     hostname: str = 'Unknown'
     os_type: str = 'Unknown'
+    os_alias: str = 'unknown'
     os_ver: str = 'Unknown'
     integrity: str = '?'
     cwd: str = ''
@@ -25,6 +26,7 @@ class SessionInfo:
             'addr',
             'hostname',
             'os_type',
+            'os_alias',
             'os_ver',
             'integrity',
             'cwd',
@@ -44,6 +46,7 @@ class SessionInfo:
             addr=str(payload.get('addr') or ''),
             hostname=str(payload.get('hostname') or 'Unknown'),
             os_type=str(payload.get('os_type') or 'Unknown'),
+            os_alias=str(payload.get('os_alias') or 'unknown'),
             os_ver=str(payload.get('os_ver') or 'Unknown'),
             integrity=str(payload.get('integrity') or '?'),
             cwd=str(payload.get('cwd') or ''),
@@ -59,6 +62,7 @@ class SessionInfo:
             'addr': self.addr,
             'hostname': self.hostname,
             'os_type': self.os_type,
+            'os_alias': self.os_alias,
             'os_ver': self.os_ver,
             'integrity': self.integrity,
             'cwd': self.cwd,

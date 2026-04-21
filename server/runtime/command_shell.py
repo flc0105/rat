@@ -102,6 +102,7 @@ class ServerCommandShell:
                 'client_id': getattr(info, 'client_id', ''),
                 'addr': getattr(info, 'addr', ''),
                 'os_type': getattr(info, 'os_type', ''),
+                'os_alias': getattr(info, 'os_alias', 'unknown'),
                 'os_ver': getattr(info, 'os_ver', ''),
                 'hostname': getattr(info, 'hostname', ''),
                 'integrity': getattr(info, 'integrity', ''),
@@ -146,10 +147,9 @@ class ServerCommandShell:
         stale = sum(1 for item in rows if item['status'] == 'stale')
         offline = sum(1 for item in rows if item['status'] == 'offline')
 
-        windows = sum(1 for item in rows if str(item['os_type']).lower().startswith('win'))
-        linux = sum(1 for item in rows if str(item['os_type']).lower().startswith('linux'))
-        mac = sum(1 for item in rows if str(item['os_type']).lower() in ['darwin', 'mac', 'macos'])
-
+        windows = sum(1 for item in rows if str(item.get('os_alias') or '').lower() == 'win')
+        linux = sum(1 for item in rows if str(item.get('os_alias') or '').lower() == 'linux')
+        mac = sum(1 for item in rows if str(item.get('os_alias') or '').lower() == 'mac')
         print()
         print(f'Total:   {total}')
         print(f'Online:  {online}')

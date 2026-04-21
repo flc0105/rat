@@ -92,6 +92,7 @@ class RecentDeviceStore:
                 'client_id': str(connection_payload.get('client_id') or previous.get('client_id') or ''),
                 'addr': str(connection_payload.get('addr') or previous.get('addr') or ''),
                 'os_type': str(connection_payload.get('os_type') or previous.get('os_type') or ''),
+                'os_alias': str(connection_payload.get('os_alias') or previous.get('os_alias') or 'unknown'),
                 'os_ver': str(connection_payload.get('os_ver') or previous.get('os_ver') or ''),
                 'integrity': str(connection_payload.get('integrity') or previous.get('integrity') or ''),
                 'cwd': str(connection_payload.get('cwd') or previous.get('cwd') or ''),

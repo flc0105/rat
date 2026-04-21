@@ -378,7 +378,7 @@ class CommandExecutionMixin:
     @desc('Start a new client instance without exiting current process', group='session')
     @interruptible()
     def spawn_instance(self):
-        # add 启动新实例不退出当前进程 2026-04-10 00:00
+
         process = spawn_new_instance()
         return 1, f'New client instance started, pid={process.pid}'
 

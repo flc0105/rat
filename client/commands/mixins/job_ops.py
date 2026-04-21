@@ -55,7 +55,6 @@ class CommandJobMixin:
             f'Use "stop_job {job_key}" to request stop'
         )
 
-    # add remove client side job 2026-04-08 11:40
     def _list_remote_job_names(self) -> list[str]:
         import requests
 

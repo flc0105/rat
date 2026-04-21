@@ -1,7 +1,7 @@
 import platform
 
 from client.commands.argument_command_registry import ArgumentCommandRegistry
-from core.utils.client_util import detect_platform_name
+from core.utils.client_util import detect_platform_name, detect_platform_alias
 
 
 class CommandCatalog:
@@ -14,9 +14,15 @@ class CommandCatalog:
     - 提供唯一的 acmd registry 归属点
     """
 
+    # PLATFORM_COMMAND_MODULES = {
+    #     'windows': ('client.commands.platform.win', 'WindowsCommands'),
+    #     'darwin': ('client.commands.platform.mac', 'MacCommands'),
+    #     'linux': ('client.commands.platform.linux', 'LinuxCommands'),
+    #     'ios': ('client.commands.platform.ios', 'iOSCommands')
+    # }
     PLATFORM_COMMAND_MODULES = {
-        'windows': ('client.commands.platform.win', 'WindowsCommands'),
-        'darwin': ('client.commands.platform.mac', 'MacCommands'),
+        'win': ('client.commands.platform.win', 'WindowsCommands'),
+        'mac': ('client.commands.platform.mac', 'MacCommands'),
         'linux': ('client.commands.platform.linux', 'LinuxCommands'),
         'ios': ('client.commands.platform.ios', 'iOSCommands')
     }
@@ -31,7 +37,8 @@ class CommandCatalog:
         获取当前系统平台名称
         """
         # return platform.system().lower()
-        return detect_platform_name().lower()
+        # return detect_platform_name().lower()
+        return detect_platform_alias()
 
     def _load_platform_command_class(self):
         """

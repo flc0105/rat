@@ -7,17 +7,19 @@ from server.config.config import ALIAS_PATH
 
 class AliasManager:
     PLACEHOLDER_PATTERN = r'<.*?>'
-    SUPPORTED_PLATFORMS = ('common', 'win', 'mac', 'linux')
+    SUPPORTED_PLATFORMS = ('common', 'win', 'mac', 'linux', 'ios')
     OS_PLATFORM_MAP = {
         'windows': 'win',
         'win': 'win',
+        # 兼容旧值 Darwin，但内部统一落到 mac
         'darwin': 'mac',
         'mac': 'mac',
         'macos': 'mac',
-        'linux': 'linux'
+        'linux': 'linux',
+        'ios': 'ios'
     }
-    QUERY_PLATFORMS = SUPPORTED_PLATFORMS + ('all',)
-
+    # QUERY_PLATFORMS = SUPPORTED_PLATFORMS + ('all',)
+    QUERY_PLATFORMS = SUPPORTED_PLATFORMS
     def __init__(self):
         self.alias_path = ALIAS_PATH
         self.aliases = self._create_empty_aliases()
@@ -29,7 +31,8 @@ class AliasManager:
             'common': {},
             'win': {},
             'mac': {},
-            'linux': {}
+            'linux': {},
+            'ios': {}
         }
 
     def _read_alias_file(self):

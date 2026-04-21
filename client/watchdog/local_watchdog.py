@@ -41,7 +41,7 @@ class LocalWatchdogHeartbeatFeeder:
         self._thread = None
         self._local_logger = _build_local_watchdog_file_logger(self.local_watchdog_log_file_path)
 
-    # add local watchdog separation 2026-04-10 00:00
+
     def _write_heartbeat(self):
         temp_file_path = f'{self.heartbeat_file_path}.tmp'
 
@@ -57,7 +57,7 @@ class LocalWatchdogHeartbeatFeeder:
 
         os.replace(temp_file_path, self.heartbeat_file_path)
 
-    # add local watchdog separation 2026-04-10 00:00
+
     def _run_loop(self):
         while not self._stop_event.is_set():
             try:
@@ -67,7 +67,7 @@ class LocalWatchdogHeartbeatFeeder:
 
             self._stop_event.wait(self.heartbeat_interval_seconds)
 
-    # add local watchdog separation 2026-04-10 00:00
+
     def start(self):
         if self._thread is not None and self._thread.is_alive():
             return
@@ -82,11 +82,11 @@ class LocalWatchdogHeartbeatFeeder:
         )
         self._thread.start()
 
-    # add local watchdog separation 2026-04-10 00:00
+
     def stop(self):
         self._stop_event.set()
 
-    # add local watchdog separation 2026-04-10 00:00
+
     def is_alive(self) -> bool:
         return self._thread is not None and self._thread.is_alive()
 

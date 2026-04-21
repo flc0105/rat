@@ -126,8 +126,8 @@ window.AppJobsModule = {
             const value = String(platform || '').trim().toLowerCase();
             if (!value) return '';
             if (['*', 'all', 'any'].includes(value)) return '*';
-            if (['darwin', 'mac', 'macos', 'osx'].includes(value)) return 'darwin';
-            if (['windows', 'win', 'win32', 'nt'].includes(value)) return 'windows';
+            if (['darwin', 'mac', 'macos', 'osx'].includes(value)) return 'mac';
+            if (['windows', 'win', 'win32', 'nt'].includes(value)) return 'win';
             if (value === 'linux') return 'linux';
             return value;
         },
@@ -135,8 +135,8 @@ window.AppJobsModule = {
         normalizeClientPlatform(osType = '') {
             const value = String(osType || '').trim().toLowerCase();
             if (!value) return '';
-            if (value.includes('darwin') || value.includes('mac')) return 'darwin';
-            if (value.includes('win')) return 'windows';
+            if (value.includes('darwin') || value.includes('mac')) return 'mac';
+            if (value.includes('win')) return 'win';
             if (value.includes('linux')) return 'linux';
             return this.normalizeJobPlatform(value);
         },
@@ -148,8 +148,8 @@ window.AppJobsModule = {
             }
 
             const labels = normalized.map(item => {
-                if (item === 'darwin') return 'macOS';
-                if (item === 'windows') return 'Windows';
+                if (item === 'mac') return 'macOS';
+                if (item === 'win') return 'Windows';
                 if (item === 'linux') return 'Linux';
                 if (item === 'ios') return 'iOS';
                 return item;
@@ -501,7 +501,7 @@ window.AppJobsModule = {
                 .map(part => part.charAt(0).toUpperCase() + part.slice(1))
                 .join('') || 'NewBackgroundJob';
 
-            return `JOB_METADATA = {\n    "name": "${normalizedScriptName.replace(/\.py$/i, '')}",\n    "display_name": "${classBaseName}",\n    "description": "Describe what this job does",\n    "platforms": ["darwin"],\n    "params": [\n        {\n            "name": "interval_seconds",\n            "type": "integer",\n            "required": false,\n            "default": 10,\n            "min": 1,\n            "description": "Loop interval in seconds"\n        }\n    ]\n}\n\nimport time\n\nfrom client.jobs.core.job import Job\n\n\nclass ${classBaseName}(Job):\n    def __init__(self):\n        super().__init__()\n        self.interval = 10\n\n    def on_context_bound(self):\n        self.interval = int(self.get_job_param("interval_seconds", 10) or 10)\n\n    def run(self):\n        self.mark_running()\n        self.send_to_server(1, "${normalizedScriptName} started")\n\n        try:\n            while not self.stop_event.is_set():\n                self.send_to_server(1, f"heartbeat: {time.strftime('%Y-%m-%d %H:%M:%S')}")\n                time.sleep(self.interval)\n        finally:\n            self.send_to_server(1, "${normalizedScriptName} stopped")\n            self.mark_stopped()\n\n    def stop(self, notify=True):\n        self.request_stop(notify=notify)\n`;
+            return `JOB_METADATA = {\n    "name": "${normalizedScriptName.replace(/\.py$/i, '')}",\n    "display_name": "${classBaseName}",\n    "description": "Describe what this job does",\n    "platforms": ["mac"],\n    "params": [\n        {\n            "name": "interval_seconds",\n            "type": "integer",\n            "required": false,\n            "default": 10,\n            "min": 1,\n            "description": "Loop interval in seconds"\n        }\n    ]\n}\n\nimport time\n\nfrom client.jobs.core.job import Job\n\n\nclass ${classBaseName}(Job):\n    def __init__(self):\n        super().__init__()\n        self.interval = 10\n\n    def on_context_bound(self):\n        self.interval = int(self.get_job_param("interval_seconds", 10) or 10)\n\n    def run(self):\n        self.mark_running()\n        self.send_to_server(1, "${normalizedScriptName} started")\n\n        try:\n            while not self.stop_event.is_set():\n                self.send_to_server(1, f"heartbeat: {time.strftime('%Y-%m-%d %H:%M:%S')}")\n                time.sleep(self.interval)\n        finally:\n            self.send_to_server(1, "${normalizedScriptName} stopped")\n            self.mark_stopped()\n\n    def stop(self, notify=True):\n        self.request_stop(notify=notify)\n`;
         },
 
         triggerServerJobUpload() {

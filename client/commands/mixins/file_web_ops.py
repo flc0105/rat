@@ -449,7 +449,7 @@ class CommandFileWebMixin:
         except Exception as e:
             return 0, f'Failed to rename path: {e}'
 
-    # add 复制移动文件 2026-04-09 12:00
+
     def _is_sub_path(self, parent_path: str, target_path: str) -> bool:
         try:
             common = os.path.commonpath([os.path.abspath(parent_path), os.path.abspath(target_path)])
@@ -457,7 +457,7 @@ class CommandFileWebMixin:
         except Exception:
             return False
 
-    # add 复制移动文件 2026-04-09 12:00
+
     def _copy_or_move_single_path(self, source_path: str, destination_dir: str, operation: str):
         source_abs = os.path.abspath(source_path)
         destination_dir_abs = os.path.abspath(destination_dir)

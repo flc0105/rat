@@ -5,6 +5,8 @@ import shutil
 import subprocess
 import sys
 import zipfile
+from dataclasses import dataclass
+from enum import Enum
 from pathlib import Path
 
 
@@ -120,12 +122,13 @@ def get_system_paths():
 
     return system_paths
 
-# add exec脚本参数异常 2026-04-07 00:00
+
+
 class ScriptArgError(Exception):
     pass
 
 
-# add exec脚本必填参数读取 2026-04-07 00:00
+
 def require_kwarg(kwargs, name, default='', allow_empty=False, error_prefix='[参数异常]'):
     value = kwargs.get(name, default)
 
@@ -154,7 +157,6 @@ def reset(socket):
     os._exit(0)
 
 
-# add 启动新实例不退出当前进程 2026-04-10 00:00
 def spawn_new_instance():
     restart_command = get_executable_path()
 
@@ -207,6 +209,7 @@ def get_client_bundle_release_dir() -> str:
         return ensure_directory(os.path.join(str(Path.home()), 'client_bundle', 'releases'))
     else:
         return ensure_directory(os.path.join(str(Path.home()), 'Documents', 'client_bundle', 'releases'))
+
 
 def build_bundle_extract_dir(release_dir: str, file_name: str) -> str:
     base_name = os.path.splitext(os.path.basename(file_name))[0] or 'client_bundle'
@@ -284,6 +287,7 @@ def spawn_detached_python_script(script_path: str, cwd: str = '', args=None):
 
     raise RuntimeError(f'Unsupported os.name: {os.name}')
 
+
 def is_process_alive(pid: int) -> bool:
     try:
         pid = int(pid)
@@ -323,24 +327,22 @@ def is_process_alive(pid: int) -> bool:
         return False
 
 
-import platform
-import sys
+# def detect_platform_name() -> str:
+#     system_name = platform.system()
+#
+#     if system_name in ('Windows', 'Linux'):
+#         return system_name
+#
+#     if system_name == 'Darwin':
+#         if sys.platform == 'ios':
+#             return 'iOS'
+#         return 'Darwin'
+#
+#     return system_name or 'Unknown'
 
-
-def detect_platform_name() -> str:
-    system_name = platform.system()
-
-    if system_name in ('Windows', 'Linux'):
-        return system_name
-
-    if system_name == 'Darwin':
-        if sys.platform == 'ios':
-            return 'iOS'
-        return 'Darwin'
-
-    return system_name or 'Unknown'
 
 def upload_file_via_http(file_obj, filename, upload_url, category='', client_id=None):
+    """给脚本使用的工具方法"""
     form_data = {
         'artifact_type': 'files',
         'category': category,
@@ -362,3 +364,52 @@ def upload_file_via_http(file_obj, filename, upload_url, category='', client_id=
         data=form_data,
         timeout=30,
     )
+
+class PlatformAlias(str, Enum):
+    WIN = 'win'
+    IOS = 'ios'
+    MAC = 'mac'
+    LINUX = 'linux'
+    UNKNOWN = 'unknown'
+
+
+@dataclass(frozen=True)
+class PlatformInfo:
+    alias: str
+    display_name: str
+    system_name: str
+
+
+_PLATFORM_INFO_MAP = {
+    'Windows': PlatformInfo(alias=PlatformAlias.WIN.value, display_name='Windows', system_name='Windows'),
+    'Linux': PlatformInfo(alias=PlatformAlias.LINUX.value, display_name='Linux', system_name='Linux'),
+}
+
+
+# add 平台信息统一入口 2026-04-21
+def detect_platform_info() -> PlatformInfo:
+    system_name = platform.system()
+
+    if system_name == 'Darwin':
+        if sys.platform == 'ios':
+            return PlatformInfo(alias=PlatformAlias.IOS.value, display_name='iOS', system_name=system_name)
+        return PlatformInfo(alias=PlatformAlias.MAC.value, display_name='macOS', system_name=system_name)
+
+    if system_name in _PLATFORM_INFO_MAP:
+        return _PLATFORM_INFO_MAP[system_name]
+
+    normalized_system_name = system_name or 'Unknown'
+    return PlatformInfo(
+        alias=PlatformAlias.UNKNOWN.value,
+        display_name=normalized_system_name,
+        system_name=normalized_system_name,
+    )
+
+
+# add 平台比较统一使用 alias 2026-04-21
+def detect_platform_alias() -> str:
+    return detect_platform_info().alias
+
+
+def detect_platform_name() -> str:
+    return detect_platform_info().display_name

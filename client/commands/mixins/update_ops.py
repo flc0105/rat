@@ -18,7 +18,7 @@ from core.utils.client_util import (
     build_bundle_extract_dir,
     get_client_bundle_release_dir,
     safe_extract_zip_file,
-    spawn_detached_python_script, ensure_directory, detect_platform_name,
+    spawn_detached_python_script, ensure_directory, detect_platform_name, detect_platform_alias,
 )
 from core.utils.decorator import desc
 
@@ -118,7 +118,7 @@ class CommandUpdateMixin:
                 raise FileNotFoundError(f'ratclient.py not found after extract: {ratclient_path}')
 
             pid_str = ''
-            if detect_platform_name().lower() != 'ios':
+            if detect_platform_alias() != 'ios':
                 process = spawn_detached_python_script(ratclient_path, cwd=extract_dir)
                 pid_str = f'PID: {process.pid}'
 
