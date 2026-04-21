@@ -1,3 +1,12 @@
+SCRIPT_METADATA = {
+    "name": "common/recon/machine_fingerprint",
+    "display_name": "Machine Fingerprint",
+    "description": "Generate a unique machine fingerprint based on hardware and OS characteristics across Windows, macOS, Linux, and iOS",
+    "platforms": ["common"],
+    "category": "Recon",
+    "params": []
+}
+
 import hashlib
 import json
 import os

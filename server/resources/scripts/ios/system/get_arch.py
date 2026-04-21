@@ -1,4 +1,13 @@
-def _detect_ios_arch() -> str:
+SCRIPT_METADATA = {
+    "name": "ios/recon/cpu_arch",
+    "display_name": "CPU Architecture",
+    "description": "Detect CPU architecture (arm64 or legacy) on iOS and macOS devices",
+    "platforms": ["ios", "macos"],
+    "category": "Recon",
+    "params": []
+}
+
+def detect_ios_arch() -> str:
     try:
         import ctypes
 
@@ -20,4 +29,4 @@ def _detect_ios_arch() -> str:
 
     return 'na'
 
-print(_detect_ios_arch())
+print(detect_ios_arch())
