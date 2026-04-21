@@ -5,8 +5,8 @@ from core.utils.script_metadata import resolve_script_params
 
 
 class WebScriptApi:
-    def __init__(self, command_api, script_catalog_service):
-        self.command_api = command_api
+    def __init__(self, command_execution_api, script_catalog_service):
+        self.command_execution_api = command_execution_api
         self.script_catalog_service = script_catalog_service
 
     def list_script_catalog(self):
@@ -88,7 +88,7 @@ class WebScriptApi:
             'script_name': normalized_script_name,
             'params': normalized_params,
         }
-        return self.command_api.submit_web_command(
+        return self.command_execution_api.submit_web_command(
             client_id,
             f'run_script {self._encode_payload_arg(payload)}',
             tab_id=tab_id,

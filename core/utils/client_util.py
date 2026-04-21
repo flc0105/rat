@@ -326,19 +326,6 @@ def is_process_alive(pid: int) -> bool:
         return False
 
 
-# def detect_platform_name() -> str:
-#     system_name = platform.system()
-#
-#     if system_name in ('Windows', 'Linux'):
-#         return system_name
-#
-#     if system_name == 'Darwin':
-#         if sys.platform == 'ios':
-#             return 'iOS'
-#         return 'Darwin'
-#
-#     return system_name or 'Unknown'
-
 
 def upload_file_via_http(file_obj, filename, upload_url, category='', client_id=None):
     """给脚本使用的工具方法"""

@@ -10,23 +10,25 @@ from server.application.jobs.background_job_service import BackgroundJobService
 from server.application.jobs.background_job_store import BackgroundJobStore
 from server.application.jobs.job_catalog_service import JobCatalogService
 from server.application.pinned_paths.pinned_path_store import PinnedPathStore
+from server.application.scripts.script_catalog_service import ScriptCatalogService
 from server.application.tasks.task_runner import WebTaskRunner
 from server.application.tasks.task_service import WebTaskService
 from server.application.tasks.task_store import WebTaskStore
 from server.application.terminal.pty_session_service import PtySessionService
 from server.application.web.agent_api import WebAgentApi
-from server.application.web.process_snapshot_cache import ProcessSnapshotCache
-from server.application.web.script_api import WebScriptApi
 from server.application.web.artifact_api import WebArtifactApi
-from server.application.web.command_api import WebCommandApi
+from server.application.web.command_catalog_api import WebCommandCatalogApi
+from server.application.web.command_execution_api import WebCommandExecutionApi
+from server.application.web.command_history_api import WebCommandHistoryApi
 from server.application.web.connection_api import WebConnectionApi
 from server.application.web.job_api import WebJobApi
 from server.application.web.pinned_path_api import PinnedPathApi
+from server.application.web.process_snapshot_cache import ProcessSnapshotCache
 from server.application.web.remote_file_api import WebRemoteFileApi
+from server.application.web.script_api import WebScriptApi
 from server.application.web.system_api import WebSystemInspectionApi
 from server.application.web.terminal_api import WebTerminalApi
-from server.application.scripts.script_catalog_service import ScriptCatalogService
-from server.config.config import SCRIPT_JOBS_PATH, SCRIPT_PATH, RECENT_DEVICES_JSON_PATH
+from server.config.config import RECENT_DEVICES_JSON_PATH, SCRIPT_JOBS_PATH, SCRIPT_PATH
 from server.web.event_bus import WebEventBus
 
 
@@ -112,20 +114,26 @@ class ServerApplicationAssembly:
             connection_service=self.connection_service,
         )
 
-        self.command_api = WebCommandApi(
+        self.command_catalog_api = WebCommandCatalogApi(
             server=self.server,
             command_executor_factory=self.command_executor_factory,
+        )
+
+        self.command_execution_api = WebCommandExecutionApi(
             task_service=self.task_service,
         )
 
+        self.command_history_api = WebCommandHistoryApi(
+            server=self.server,
+        )
+
         self.job_api = WebJobApi(
-            command_api=self.command_api,
             background_job_service=self.background_job_service,
             job_catalog_service=self.job_catalog_service,
         )
 
         self.script_api = WebScriptApi(
-            command_api=self.command_api,
+            command_execution_api=self.command_execution_api,
             script_catalog_service=self.script_catalog_service,
         )
 
@@ -148,11 +156,6 @@ class ServerApplicationAssembly:
             agent_builder=self.agent_builder,
             agent_output_registry=self.agent_output_registry,
         )
-
-        # self.system_api = WebSystemInspectionApi(
-        #     server=self.server,
-        #     remote_execution_service=self.remote_execution_service,
-        # )
 
         self.process_snapshot_cache = ProcessSnapshotCache()
 

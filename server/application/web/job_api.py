@@ -8,16 +8,14 @@ class WebJobApi:
     职责：
     - 管理 job catalog
     - 管理 background jobs
-    - 封装 background job 启动时所需的 command submit 语义
-    - 对外提供 background job catalog
+    - 提供 background job catalog
 
     说明：
-    - 路由层不再直接协调 job_catalog_service / background_job_service / command_api
+    - 路由层不再直接协调 job_catalog_service / background_job_service
     - 相关应用语义统一收口到这里
     """
 
-    def __init__(self, command_api, background_job_service, job_catalog_service):
-        self.command_api = command_api
+    def __init__(self, background_job_service, job_catalog_service):
         self.background_job_service = background_job_service
         self.job_catalog_service = job_catalog_service
 
