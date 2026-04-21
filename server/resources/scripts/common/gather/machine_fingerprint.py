@@ -320,7 +320,7 @@ def build_machine_identity_payload() -> dict:
     }
 
     fingerprint_basis = (
-        'mid:v1'
+        'v1'
         f'|hostname={normalized["hostname"]}'
         f'|os_name={normalized["os_name"]}'
         f'|os_version={normalized["os_version"]}'
