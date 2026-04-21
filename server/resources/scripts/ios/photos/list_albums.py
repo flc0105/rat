@@ -1,6 +1,6 @@
 SCRIPT_METADATA = {
-    "name": "ios/recon/photos_albums",
-    "display_name": "Dump Photos Albums",
+    "name": "ios/recon/list_albums",
+    "display_name": "List Albums",
     "description": "Retrieve all photo albums with photo counts from the iOS Photos library",
     "platforms": ["ios"],
     "category": "Recon",

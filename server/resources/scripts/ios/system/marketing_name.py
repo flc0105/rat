@@ -1,7 +1,7 @@
 SCRIPT_METADATA = {
     "name": "apple/recon/device_model",
     "display_name": "Apple Device Model",
-    "description": "Detect Apple device hardware identifier and marketing name on iOS and macOS",
+    "description": "Detect marketing name on iOS and macOS",
     "platforms": ["ios", "macos"],
     "category": "Recon",
     "params": []

@@ -21,20 +21,21 @@ class ServerWebService:
 
         # ------------------ shared infrastructure ------------------ #
         self.event_bus = self.assembly.event_bus
-        self.task_store = self.assembly.task_store
+        # self.task_store = self.assembly.task_store
 
         # ------------------ shared services (保留给仍未拆完的模块使用) ------------------ #
+        # TODO remove these
         self.artifact_service = self.assembly.artifact_service
-        self.file_service = self.assembly.file_service
-        self.remote_execution_service = self.assembly.remote_execution_service
-        self.remote_file_service = self.assembly.remote_file_service
+        # self.file_service = self.assembly.file_service
+        # self.remote_execution_service = self.assembly.remote_execution_service
+        # self.remote_file_service = self.assembly.remote_file_service
         self.connection_service = self.assembly.connection_service
         self.command_executor_factory = self.assembly.command_executor_factory
-        self.task_runner = self.assembly.task_runner
-        self.task_service = self.assembly.task_service
-        self.background_job_store = self.assembly.background_job_store
-        self.background_job_service = self.assembly.background_job_service
-        self.agent_builder = self.assembly.agent_builder
+        # self.task_runner = self.assembly.task_runner
+        # self.task_service = self.assembly.task_service
+        # self.background_job_store = self.assembly.background_job_store
+        # self.background_job_service = self.assembly.background_job_service
+        # self.agent_builder = self.assembly.agent_builder
 
         # ------------------ sub facades / apis ------------------ #
         self.connection_api = self.assembly.connection_api

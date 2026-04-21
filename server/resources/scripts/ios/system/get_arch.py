@@ -1,7 +1,7 @@
 SCRIPT_METADATA = {
     "name": "ios/recon/cpu_arch",
     "display_name": "CPU Architecture",
-    "description": "Detect CPU architecture (arm64 or legacy) on iOS and macOS devices",
+    "description": "Detect CPU architecture on iOS and macOS devices",
     "platforms": ["ios", "macos"],
     "category": "Recon",
     "params": []
