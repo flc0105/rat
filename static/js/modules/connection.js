@@ -389,7 +389,7 @@ window.AppConnectionModule = {
                 {label: 'Integrity', value: conn.integrity || '-'},
                 {label: 'Build Version', value: conn.build_version || '-'},
                 {label: 'Machine ID', value: conn.machine_id || '-', mono: true},
-                {label: 'Machine ID Version', value: conn.machine_id_version || '-'},
+                // {label: 'Machine ID Version', value: conn.machine_id_version || '-'},
                 {label: 'Fingerprint Basis', value: conn.machine_fingerprint_basis || '-', mono: true},
                 {label: 'Last Seen', value: this.formatConnectionLastSeen(conn)},
                 {label: 'Connected At', value: this.formatDateTimeStandard(conn.connected_at) || '-'},

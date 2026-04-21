@@ -1803,25 +1803,10 @@
                             <el-table-column prop="pid" label="PID" width="100" align="center"></el-table-column><!--align="center"-->
                             <el-table-column prop="name" label="Name" min-width="200"
                                              show-overflow-tooltip></el-table-column>
-<!--                            <el-table-column prop="username" label="User" min-width="150"-->
-<!--                                             show-overflow-tooltip></el-table-column>-->
-<!--                            <el-table-column prop="cpu_percent" label="CPU" width="100" align="center">-->
-<!--                                <template #default="{ row }">{{ row.cpu_percent }}%</template>-->
-<!--                            </el-table-column>-->
-<!--                            <el-table-column prop="memory_percent" label="Memory" width="100" align="center">-->
-<!--                                <template #default="{ row }">{{ row.memory_percent }}%</template>-->
-<!--                            </el-table-column>-->
                             <el-table-column prop="status" label="Status" width="160" align="center"></el-table-column>
                             <el-table-column label="Actions" width="240" align="center" fixed="right">
                                 <template #default="{ row }">
                                     <el-space>
-<!--                                        <el-button size="small" @click="openProcessDetail(row.pid)">-->
-<!--                                            Details-->
-<!--                                        </el-button>-->
-<!--                                        <el-button size="small" type="danger" plain @click="killProcess(row.pid, row.name)">-->
-<!--                                            Kill-->
-<!--                                        </el-button>-->
-
                                         <el-button size="small" link type="primary" @click="openProcessDetail(row.pid)">Details</el-button>
                             <el-button size="small" link type="danger" @click="killProcess(row.pid, row.name)">Kill</el-button>
                                     </el-space>
@@ -1837,8 +1822,6 @@
                             <el-table-column prop="pid" label="PID" width="100" align="center"></el-table-column>
                             <el-table-column prop="name" label="Name" min-width="200"
                                              show-overflow-tooltip></el-table-column>
-<!--                            <el-table-column prop="username" label="User" min-width="120"-->
-<!--                                             show-overflow-tooltip></el-table-column>-->
                             <el-table-column prop="status" label="Status" min-width="120"
                                              show-overflow-tooltip></el-table-column>
 
