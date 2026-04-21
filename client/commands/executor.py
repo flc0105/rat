@@ -1,9 +1,25 @@
 import inspect
+from dataclasses import dataclass
+from typing import Any, Callable
 
 from client.commands.services.command_catalog import CommandCatalog
 from client.commands.services.command_context_store import CommandExecutionContextStore
 from core.utils.command_output import render_structured_result
 from core.utils.parsing import parse
+
+
+@dataclass
+class CommandExecutionRequest:
+    """
+    统一命令执行请求。
+
+    说明：
+    - 这里只承载 CommandExecutor 主链分发所需的最小字段
+    - 不引入额外兼容入口，统一 command / acmd / script 三类请求的绑定流程
+    """
+
+    command_id: int
+    timeout: float | None = None
 
 
 class CommandExecutor:
@@ -39,6 +55,12 @@ class CommandExecutor:
     def _extract_timeout(self, options=None):
         return self.context_store.extract_timeout(options)
 
+    def _build_request(self, command_id, options=None, payload_options=None) -> CommandExecutionRequest:
+        timeout = self._extract_timeout(payload_options)
+        if timeout is None:
+            timeout = self._extract_timeout(options)
+        return CommandExecutionRequest(command_id=command_id, timeout=timeout)
+
     def _get_or_create_execution_context(self, command_id, timeout=None):
         return self.context_store.get_or_create(command_id, timeout=timeout)
 
@@ -51,20 +73,32 @@ class CommandExecutor:
         """
         return self.context_store.cancel(command_id)
 
-    def _prepare_commands(self, command_id, timeout=None):
+    def _bind_execution(self, commands, request: CommandExecutionRequest):
+        """
+        绑定命令实例与当前执行上下文。
+        """
+        execution_context = self._get_or_create_execution_context(
+            request.command_id,
+            timeout=request.timeout,
+        )
+        if hasattr(commands, 'bind_execution'):
+            commands.bind_execution(request.command_id, execution_context)
+        else:
+            commands.command_id = request.command_id
+        return commands
+
+    def _prepare_commands(self, request: CommandExecutionRequest):
         """
         获取命令实例并绑定当前 command_id
         """
         commands = self.get_commands()
-        execution_context = self._get_or_create_execution_context(command_id, timeout=timeout)
-        if hasattr(commands, 'bind_execution'):
-            commands.bind_execution(command_id, execution_context)
-        else:
-            commands.command_id = command_id
-        return commands
+        return self._bind_execution(commands, request)
 
     def _render_command_result(self, result, output_format='text'):
         return render_structured_result(result, output_format=output_format)
+
+    def _resolve_builtin_output_format(self, arg: Any) -> str:
+        return 'json' if str(arg or '').strip().lower() in ('json', '--json') else 'text'
 
     # ------------------ 命令路由 ------------------ #
     def _resolve_builtin_command(self, commands, name):
@@ -94,11 +128,18 @@ class CommandExecutor:
             return func(arg)
         return func()
 
-    def _execute_with_cleanup(self, command_id, invoke):
+    def _execute_with_cleanup(self, command_id, invoke: Callable[[], Any]):
         try:
             return invoke()
         finally:
             self._clear_execution_context(command_id)
+
+    def _execute_bound_request(self, request: CommandExecutionRequest, invoke: Callable[[Any], Any]):
+        def _runner():
+            commands = self._prepare_commands(request)
+            return invoke(commands)
+
+        return self._execute_with_cleanup(request.command_id, _runner)
 
     def execute_command(self, command_id, command, options=None):
         """
@@ -108,23 +149,23 @@ class CommandExecutor:
         :param options: 执行选项（如 timeout）
         :return: 执行结果元组（状态和消息）
         """
-        def _invoke():
+        request = self._build_request(command_id, options=options)
+
+        def _invoke(commands):
             name, arg = parse(command)
-            commands = self._prepare_commands(
-                command_id,
-                timeout=self._extract_timeout(options)
-            )
 
             builtin_command = self._resolve_builtin_command(commands, name)
             if builtin_command:
                 result = self._invoke_command_method(builtin_command, arg)
-                output_format = 'json' if str(arg or '').strip().lower() in ('json', '--json') else 'text'
-                return self._render_command_result(result, output_format=output_format)
+                return self._render_command_result(
+                    result,
+                    output_format=self._resolve_builtin_output_format(arg),
+                )
 
             default_command = self._resolve_default_command(commands, command)
             return default_command()
 
-        return self._execute_with_cleanup(command_id, _invoke)
+        return self._execute_bound_request(request, _invoke)
 
     def execute_argument_command(self, command_id, payload: dict, options=None):
         """
@@ -134,16 +175,13 @@ class CommandExecutor:
         :param options: 执行选项（如 timeout）
         :return: 执行结果元组（状态和消息）
         """
-        def _invoke():
-            payload_timeout = self._extract_timeout(payload)
-            commands = self._prepare_commands(
-                command_id,
-                timeout=payload_timeout if payload_timeout is not None else self._extract_timeout(options)
-            )
+        request = self._build_request(command_id, options=options, payload_options=payload)
+
+        def _invoke(_commands):
             registry = self.get_argument_command_registry()
             return registry.execute(payload)
 
-        return self._execute_with_cleanup(command_id, _invoke)
+        return self._execute_bound_request(request, _invoke)
 
     def execute_script_command(self, command_id, script_text: str, kwargs=None, options=None):
         """
@@ -154,12 +192,9 @@ class CommandExecutor:
         - script 默认只走 stream 语义
         - 当前进程 / 子进程由 Python execution strategy 决定
         """
-        def _invoke():
-            timeout = self._extract_timeout(options)
-            if timeout is None and isinstance(kwargs, dict):
-                timeout = self._extract_timeout(kwargs)
+        request = self._build_request(command_id, options=options, payload_options=kwargs)
 
-            commands = self._prepare_commands(command_id, timeout=timeout)
+        def _invoke(commands):
             return commands.execute_script_stream(script_text, kwargs=kwargs)
 
-        return self._execute_with_cleanup(command_id, _invoke)
+        return self._execute_bound_request(request, _invoke)
