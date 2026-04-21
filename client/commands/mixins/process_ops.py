@@ -1,9 +1,6 @@
 # client/commands/mixins/process_ops.py
 
-import os
-import sys
 import json
-import platform
 from datetime import datetime
 
 from core.platform.platform_identity import detect_platform_alias
@@ -12,29 +9,151 @@ from core.utils.decorator import desc
 
 class CommandProcessMixin:
 
+    def _list_processes(self):
+        import psutil
+        processes = []
+        for proc in psutil.process_iter(['pid', 'name', 'status']):
+            try:
+                pinfo = proc.info
+                processes.append({
+                    'pid': pinfo['pid'],
+                    'name': pinfo['name'] or '',
+                    'status': pinfo['status'] or '',
+                })
+            except (psutil.NoSuchProcess, psutil.AccessDenied):
+                continue
+        return processes
+
+    def _safe_proc_value(self, getter, default=None):
+        import psutil
+        try:
+            return getter()
+        except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
+            return default
+        except Exception:
+            return default
+
+    def _list_windows_apps(self):
+        import psutil
+        import win32gui
+        import win32process
+
+        apps = []
+
+        def enum_window_callback(hwnd, windows):
+            if win32gui.IsWindowVisible(hwnd):
+                _, pid = win32process.GetWindowThreadProcessId(hwnd)
+                if pid not in windows:
+                    windows.append(pid)
+
+        windows = []
+        win32gui.EnumWindows(enum_window_callback, windows)
+
+        for pid in windows:
+            try:
+                proc = psutil.Process(pid)
+                apps.append({
+                    'pid': pid,
+                    'name': self._safe_proc_value(proc.name, '') or '',
+                    'status': self._safe_proc_value(proc.status, '') or '',
+                })
+            except Exception:
+                continue
+        return apps
+
+    def _list_macos_app(self):
+        import subprocess
+        import psutil
+
+        exclude_names = {
+            'Finder',
+            'Dock',
+            'SystemUIServer',
+            'NotificationCenter',
+            'Spotlight',
+            'Siri',
+        }
+
+        apple_script = r'''
+                       tell application "System Events"
+                           set outputLines to {}
+                           set appProcs to every application process whose background only is false
+                           repeat with proc in appProcs
+                               try
+                                   set procPid to unix id of proc
+                                   set procName to name of proc
+                                   set procFrontmost to frontmost of proc
+                                   set end of outputLines to ((procFrontmost as text) & tab & (procPid as text) & tab & procName)
+                               end try
+                           end repeat
+                           return outputLines
+                       end tell
+                       '''
+
+        parsed_apps = []
+        try:
+            result = subprocess.run(
+                ['osascript', '-e', apple_script],
+                capture_output=True,
+                text=True,
+                timeout=5
+            )
+
+            stdout = (result.stdout or '').strip()
+            if stdout:
+                raw_lines = [item.strip() for item in stdout.split(',') if item.strip()]
+                seen_pid = set()
+
+                for line in raw_lines:
+                    parts = [part.strip().strip('"') for part in line.split('\t')]
+                    if len(parts) < 3:
+                        continue
+
+                    frontmost_text, pid_text, proc_name = parts[0], parts[1], parts[2]
+
+                    try:
+                        pid = int(pid_text)
+                    except Exception:
+                        continue
+
+                    if pid in seen_pid:
+                        continue
+                    seen_pid.add(pid)
+
+                    if not proc_name or proc_name in exclude_names or proc_name.startswith('com.'):
+                        continue
+
+                    try:
+                        proc = psutil.Process(pid)
+                    except Exception:
+                        continue
+
+                    parsed_apps.append({
+                        'pid': pid,
+                        'name': proc_name,
+                        'status': self._safe_proc_value(proc.status, '') or '',
+                    })
+
+            if parsed_apps:
+                parsed_apps.sort(
+                    key=lambda item: (
+                        (item.get('name') or '').lower(),
+                        item.get('pid') or 0,
+                    )
+                )
+                apps = parsed_apps
+        except Exception:
+            raise
+        return parsed_apps
+
     @desc('List running processes', group='process', suggest=False)
     def list_processes(self, arg=''):
-        import psutil
+
         """
         列出所有运行中的进程
         """
         try:
-            processes = []
-            # for proc in psutil.process_iter(['pid', 'name', 'username', 'cpu_percent', 'memory_percent', 'status']):
-            for proc in psutil.process_iter(['pid', 'name', 'status']):
-                try:
-                    pinfo = proc.info
-                    processes.append({
-                        'pid': pinfo['pid'],
-                        'name': pinfo['name'] or '',
-                        # 'username': pinfo['username'] or '',
-                        # 'cpu_percent': round(pinfo['cpu_percent'] or 0, 1),
-                        # 'memory_percent': round(pinfo['memory_percent'] or 0, 1),
-                        'status': pinfo['status'] or '',
-                    })
-                except (psutil.NoSuchProcess, psutil.AccessDenied):
-                    continue
-
+            processes = self._list_processes()
             return 1, json.dumps(processes)
         except Exception as e:
             return 0, f'Failed to list processes: {e}'
@@ -144,150 +263,22 @@ class CommandProcessMixin:
 
     @desc('List running applications (GUI apps only)', group='process', suggest=False)
     def list_apps(self, arg=''):
-        import psutil
         """
         列出运行中的应用程序（仅 GUI 应用）
         """
         try:
             apps = []
-
-            def _safe_proc_value(getter, default=None):
-                try:
-                    return getter()
-                except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
-                    return default
-                except Exception:
-                    return default
-
             current_platform = detect_platform_alias()
             if current_platform == 'win':
-                # if platform.system() == 'Windows':
-                # Windows: 获取有窗口的进程
-                import win32gui
-                import win32process
-
-                def enum_window_callback(hwnd, windows):
-                    if win32gui.IsWindowVisible(hwnd):
-                        _, pid = win32process.GetWindowThreadProcessId(hwnd)
-                        if pid not in windows:
-                            windows.append(pid)
-
-                windows = []
-                win32gui.EnumWindows(enum_window_callback, windows)
-
-                for pid in windows:
-                    try:
-                        proc = psutil.Process(pid)
-                        apps.append({
-                            'pid': pid,
-                            'name': _safe_proc_value(proc.name, '') or '',
-                            # 'username': _safe_proc_value(proc.username, '') or '',
-                            # 'exe': _safe_proc_value(proc.exe, '') or '',
-                            # 'cwd': _safe_proc_value(proc.cwd, '') or '',
-                            # 'cmdline': _safe_proc_value(proc.cmdline, []) or [],
-                            'status': _safe_proc_value(proc.status, '') or '',
-                        })
-                    except Exception:
-                        continue
-
-            # elif platform.system() == 'Darwin':
+                apps = self._list_windows_apps()
             elif current_platform == 'mac':
-                # macOS: 优先使用 System Events 获取真正的 GUI 应用进程（非 background only）
-                import subprocess
-
-                exclude_names = {
-                    'Finder',
-                    'Dock',
-                    'SystemUIServer',
-                    'NotificationCenter',
-                    'Spotlight',
-                    'Siri',
-                }
-
-                apple_script = r'''
-                tell application "System Events"
-                    set outputLines to {}
-                    set appProcs to every application process whose background only is false
-                    repeat with proc in appProcs
-                        try
-                            set procPid to unix id of proc
-                            set procName to name of proc
-                            set procFrontmost to frontmost of proc
-                            set end of outputLines to ((procFrontmost as text) & tab & (procPid as text) & tab & procName)
-                        end try
-                    end repeat
-                    return outputLines
-                end tell
-                '''
-
-                parsed_apps = []
-                try:
-                    result = subprocess.run(
-                        ['osascript', '-e', apple_script],
-                        capture_output=True,
-                        text=True,
-                        timeout=5
-                    )
-
-                    stdout = (result.stdout or '').strip()
-                    if stdout:
-                        raw_lines = [item.strip() for item in stdout.split(',') if item.strip()]
-                        seen_pid = set()
-
-                        for line in raw_lines:
-                            parts = [part.strip().strip('"') for part in line.split('\t')]
-                            if len(parts) < 3:
-                                continue
-
-                            frontmost_text, pid_text, proc_name = parts[0], parts[1], parts[2]
-
-                            try:
-                                pid = int(pid_text)
-                            except Exception:
-                                continue
-
-                            if pid in seen_pid:
-                                continue
-                            seen_pid.add(pid)
-
-                            if not proc_name or proc_name in exclude_names or proc_name.startswith('com.'):
-                                continue
-
-                            try:
-                                proc = psutil.Process(pid)
-                            except Exception:
-                                continue
-
-                            parsed_apps.append({
-                                'pid': pid,
-                                'name': proc_name,
-                                # 'username': _safe_proc_value(proc.username, '') or '',
-                                # 'exe': _safe_proc_value(proc.exe, '') or '',
-                                # 'cwd': _safe_proc_value(proc.cwd, '') or '',
-                                # 'cmdline': _safe_proc_value(proc.cmdline, []) or [],
-                                'status': _safe_proc_value(proc.status, '') or '',
-                                # 'frontmost': str(frontmost_text).lower() == 'true',
-                            })
-
-                    if parsed_apps:
-                        parsed_apps.sort(
-                            key=lambda item: (
-                                # 0 if item.get('frontmost') else 1,
-                                (item.get('name') or '').lower(),
-                                item.get('pid') or 0,
-                            )
-                        )
-                        apps = parsed_apps
-                except Exception:
-                    raise
-
+                apps = self._list_macos_app()
             else:
                 raise Exception('Unsupported os:' + str(current_platform))
 
             return 1, json.dumps(apps)
         except Exception as e:
             return 0, f'Failed to list apps: {e}'
-
 
     @desc('Kill a process by PID', group='process', suggest=False)
     def kill_process(self, pid: str):

@@ -59,27 +59,6 @@ class CommandExecutionMixin:
             )
         return self._python_execution_strategy_cache[cache_key]
 
-    # def _execute_python_collect(self, code, kwargs=None, mode: str = '', default_mode: str = 'inproc'):
-    #     strategy = self._get_python_execution_strategy(mode=mode, default_mode=default_mode)
-    #     return strategy.execute_collect(
-    #         code,
-    #         kwargs=kwargs,
-    #         timeout=self.DEFAULT_STREAM_TIMEOUT,
-    #     )
-
-    # def execute_script_stream(self, code, kwargs=None):
-    #     """
-    #     script 内部执行入口：
-    #     - 对外不单独作为推荐命令暴露
-    #     - 默认只走 stream
-    #     - 当前进程 / 子进程由 script strategy 决定
-    #     """
-    #     return self._execute_python_collect(
-    #         code,
-    #         kwargs=kwargs,
-    #         mode=get_python_execution_mode(),
-    #         default_mode='inproc',
-    #     )
 
     def _build_script_context(self):
         # 给脚本注入统一上下文，避免和平铺业务参数重名
