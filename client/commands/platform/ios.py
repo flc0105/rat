@@ -19,9 +19,6 @@ from core.utils.logger import logger
 upload_url = UPLOAD_BASE_URL.rstrip('/') + '/api/files/upload'
 
 
-
-
-
 def uptime_to_text(seconds):
     try:
         seconds = int(seconds)
@@ -252,14 +249,6 @@ class iOSCommands(CommonCommands):
                 data=form_data,
                 timeout=30,
             )
-
-            try:
-                payload = response.json()
-            except Exception:
-                payload = None
-
-            if response.ok and isinstance(payload, dict):
-                file_info = payload.get('data') or {}
 
             return response
 
@@ -579,60 +568,6 @@ class iOSCommands(CommonCommands):
             return 0, f'stat failed: {e}'
 
 
-
-
-    # @desc('Pick photo from library', group='mobile')
-    # @interruptible()
-    # def pickphoto(self):
-    #     try:
-    #         import photos
-    #
-    #         image = photos.pick_image()
-    #         if image is None:
-    #             return 0, 'No photo selected'
-    #
-    #         info = {
-    #             'width': getattr(image, 'size', (None, None))[0],
-    #             'height': getattr(image, 'size', (None, None))[1],
-    #         }
-    #
-    #         import io
-    #         buf = io.BytesIO()
-    #         if image.mode not in ('RGB', 'L'):
-    #             image = image.convert('RGB')
-    #         image.save(buf, format='JPEG', quality=90)
-    #         buf.seek(0)
-    #
-    #         response = upload_file_via_http(
-    #             buf,
-    #             category='pythonista',
-    #             filename='photo.jpg',
-    #         )
-    #
-    #         return 1, json.dumps(info, ensure_ascii=False)
-    #     except Exception as e:
-    #         return 0, f'Failed to pick photo: {e}'
-    #
-    # @desc('Save image file to Photos', group='mobile')
-    # @interruptible()
-    # def savephoto(self, path):
-    #     try:
-    #         import photos
-    #         from PIL import Image
-    #
-    #         target = os.path.expanduser((path or '').strip())
-    #         if not target:
-    #             return 0, 'Usage: savephoto <image_path>'
-    #         if not os.path.exists(target):
-    #             return 0, f'Path not found: {target}'
-    #         if not os.path.isfile(target):
-    #             return 0, f'Not a file: {target}'
-    #
-    #         image = Image.open(target)
-    #         photos.save_image(image)
-    #         return 1, f'Saved to Photos: {target}'
-    #     except Exception as e:
-    #         return 0, f'Failed to save photo: {e}'
 
     @desc('Get current location', group='mobile')
     @interruptible()
