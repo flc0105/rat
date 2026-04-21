@@ -464,13 +464,13 @@ class PinnedPathBuiltinSupport:
         self.command_processor_factory = command_processor_factory
 
     # add gopin 快速跳转 2026-04-09 15:30
-    def _get_hostname(self) -> str:
+    def _get_machine_id(self) -> str:
         session_info = getattr(self.conn, 'session_info', None)
-        return getattr(session_info, 'hostname', '') or 'unknown_host'
+        return getattr(session_info, 'machine_id', '') or 'unknown_machine'
 
     # add gopin 快速跳转 2026-04-09 15:30
     def list_pinned_paths(self) -> list[dict]:
-        return self.pinned_path_store.list_items(self._get_hostname())
+        return self.pinned_path_store.list_items(self._get_machine_id())
 
     # add gopin 快速跳转 2026-04-09 15:30
     def _build_cd_command(self, path: str) -> str:
@@ -486,13 +486,13 @@ class PinnedPathBuiltinSupport:
                 yield 1, 'No saved pinned paths for current host'
                 return
 
-            lines = [f'[{self._get_hostname()}]']
+            lines = [f'[{self._get_machine_id()}]']
             for item in items:
                 lines.append(f'{item.get("display_name", "")} -> {item.get("path", "")}')
             yield 1, '\n'.join(lines)
             return
 
-        matched_item = self.pinned_path_store.get_item_by_name(self._get_hostname(), name)
+        matched_item = self.pinned_path_store.get_item_by_name(self._get_machine_id(), name)
         if matched_item is None:
             raise ValueError(f'Pinned path not found: {name}')
 

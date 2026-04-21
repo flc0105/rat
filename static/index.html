@@ -727,9 +727,9 @@
                 </div>
                 <div class="dialog-head-right">
                     <div class="dialog-path-box artifact-filter-box">
-                        <el-select v-model="artifactHostnameFilter" clearable filterable
-                                   placeholder="Filter by hostname" @change="loadArtifacts">
-                            <el-option v-for="host in artifactHostnames" :key="host" :label="host" :value="host"/>
+                        <el-select v-model="artifactMachineIdFilter" clearable filterable
+                                   placeholder="Filter by device" @change="loadArtifacts">
+                            <el-option v-for="item in artifactMachines" :key="item.machine_id" :label="item.hostname || item.machine_id" :value="item.machine_id"/>
                         </el-select>
                     </div>
                 </div>

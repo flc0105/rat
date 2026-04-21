@@ -18,8 +18,9 @@ from core.utils.client_util import (
     build_bundle_extract_dir,
     get_client_bundle_release_dir,
     safe_extract_zip_file,
-    spawn_detached_python_script, ensure_directory, detect_platform_name, detect_platform_alias,
+    spawn_detached_python_script, ensure_directory,
 )
+from core.platform.platform_identity import detect_platform_alias
 from core.utils.decorator import desc
 
 

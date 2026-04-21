@@ -12,7 +12,9 @@ from client.config.runtime_config import HTTP_TRANSFER_MODE, PYTHON_EXECUTION_MO
 from client.connection.server_connection import ServerConnection
 from client.watchdog.client_guard_manager import ClientGuardManager
 from client.watchdog.watchdog_process import run_watchdog_worker_from_argv
-from core.utils.client_util import check_privilege, get_system_paths, detect_platform_name, detect_platform_info
+from core.device.machine_identity import build_machine_identity_payload
+from core.platform.platform_identity import detect_platform_info
+from core.utils.client_util import check_privilege, get_system_paths
 from core.utils.logger import logger
 
 from client.config.config import (
@@ -132,6 +134,7 @@ class Client:
             uptime = ""
 
         platform_info = detect_platform_info()
+        machine_identity = build_machine_identity_payload()
 
         return {
             'id': self.client_id,
@@ -144,6 +147,9 @@ class Client:
 
             'os_ver': platform.platform(),
             'hostname': socket.gethostname(),
+            'machine_id': machine_identity['machine_id_hash'],
+            'machine_id_version': machine_identity['machine_id_version'],
+            'machine_fingerprint_basis': machine_identity['fingerprint_basis'],
             'integrity': check_privilege(),
             'cwd': os.getcwd(),
             'command_manifest': command_manifest,

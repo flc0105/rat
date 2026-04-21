@@ -50,8 +50,8 @@ class WebConnectionService:
 
         return 'online'
 
-    def _hostname_key(self, hostname: str) -> str:
-        return str(hostname or '').strip().lower()
+    def _machine_key(self, machine_id: str) -> str:
+        return str(machine_id or '').strip().lower()
 
     # ------------------ payload ------------------ #
     def serialize_connection(self, session: ClientSession) -> dict:
@@ -59,10 +59,13 @@ class WebConnectionService:
         return {
             'client_id': info.client_id,
             'addr': info.addr,
+            'hostname': info.hostname,
+            'machine_id': info.machine_id,
+            'machine_id_version': info.machine_id_version,
+            'machine_fingerprint_basis': info.machine_fingerprint_basis,
             'os_type': info.os_type,
             'os_alias': info.os_alias,
             'os_ver': info.os_ver,
-            'hostname': info.hostname,
             'integrity': info.integrity,
             'cwd': info.cwd,
             'connected_at': session.context.connected_at,
@@ -90,8 +93,8 @@ class WebConnectionService:
             return
 
         for item in active_connections:
-            hostname = str(item.get('hostname') or '').strip()
-            if not hostname:
+            machine_id = str(item.get('machine_id') or '').strip()
+            if not machine_id:
                 continue
             self.recent_device_store.upsert_from_connection(item)
 
@@ -99,27 +102,30 @@ class WebConnectionService:
         if not self.recent_device_store:
             return []
 
-        active_hostnames = {
-            self._hostname_key(item.get('hostname'))
+        active_machine_ids = {
+            self._machine_key(item.get('machine_id'))
             for item in active_connections
-            if str(item.get('hostname') or '').strip()
+            if str(item.get('machine_id') or '').strip()
         }
 
         results = []
         for item in self.recent_device_store.list_recent_devices():
-            hostname_key = self._hostname_key(item.get('hostname'))
-            if not hostname_key:
+            machine_key = self._machine_key(item.get('machine_id'))
+            if not machine_key:
                 continue
-            if hostname_key in active_hostnames:
+            if machine_key in active_machine_ids:
                 continue
 
             offline_item = {
                 'client_id': item.get('client_id') or '',
                 'addr': item.get('addr') or '',
+                'hostname': item.get('hostname') or 'Unknown',
+                'machine_id': item.get('machine_id') or '',
+                'machine_id_version': item.get('machine_id_version') or '',
+                'machine_fingerprint_basis': item.get('machine_fingerprint_basis') or '',
                 'os_type': item.get('os_type') or 'Unknown',
                 'os_alias': item.get('os_alias') or 'unknown',
                 'os_ver': item.get('os_ver') or 'Unknown',
-                'hostname': item.get('hostname') or 'Unknown',
                 'integrity': item.get('integrity') or '?',
                 'cwd': item.get('cwd') or '',
                 'connected_at': item.get('connected_at') or '',
@@ -154,9 +160,6 @@ class WebConnectionService:
 
     # ------------------ connection lifecycle ------------------ #
     def create_web_connection(self, transport: ClientTransport, addr, info: dict) -> ClientSession:
-        """
-        创建并配置带 Web 能力的客户端会话对象
-        """
         session = ClientSession(transport, info)
         session.context.command_history = self.server.command_history
         session.context.command_history_orchestrator = self.server.command_history_orchestrator
@@ -176,9 +179,6 @@ class WebConnectionService:
         return session
 
     def handle_connection_registered(self, session: ClientSession):
-        """
-        连接注册成功后的 Web 通知
-        """
         session.services.heartbeat_service.mark_connected()
         payload = self.serialize_connection(session)
         if self.recent_device_store:
@@ -186,15 +186,12 @@ class WebConnectionService:
         self.publish_connection_online(session)
 
     def handle_connection_closed(self, session: ClientSession):
-        """
-        连接关闭后的 Web 通知
-        """
         session.services.heartbeat_service.mark_disconnected()
         payload = self.serialize_connection(session)
         if self.recent_device_store:
             self.recent_device_store.upsert_from_connection(payload)
             self.recent_device_store.mark_offline(
-                hostname=payload.get('hostname') or '',
+                machine_id=payload.get('machine_id') or '',
                 disconnected_at=payload.get('disconnected_at') or '',
             )
         self.publish_connection_offline(session)
@@ -242,6 +239,7 @@ class WebConnectionService:
             'artifact_type': artifact_info.get('artifact_type', ''),
             'category': artifact_info.get('category', ''),
             'hostname': artifact_info.get('hostname', ''),
+            'machine_id': artifact_info.get('machine_id', ''),
             'original_name': artifact_info.get('original_name', ''),
             'stored_name': artifact_info.get('stored_name', ''),
             'size': artifact_info.get('size', 0),

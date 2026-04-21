@@ -17,8 +17,8 @@ window.AppHistoryModule = {
     },
 
     methods: {
-        getSelectedHistoryHostname() {
-            return String(this.currentConnection?.hostname || '').trim();
+        getSelectedHistoryMachineId() {
+            return String(this.currentConnection?.machine_id || '').trim();
         },
 
         async openCommandHistoryDialog() {
@@ -27,9 +27,9 @@ window.AppHistoryModule = {
                 return;
             }
 
-            const hostname = this.getSelectedHistoryHostname();
-            if (!hostname) {
-                ElementPlus.ElMessage.warning('Current device hostname is unavailable');
+            const machine_id = this.getSelectedHistoryMachineId();
+            if (!machine_id) {
+                ElementPlus.ElMessage.warning('Current device identity is unavailable');
                 return;
             }
 
@@ -51,12 +51,12 @@ window.AppHistoryModule = {
                 return;
             }
 
-            const hostname = this.getSelectedHistoryHostname();
-            if (!hostname) {
+            const machine_id = this.getSelectedHistoryMachineId();
+            if (!machine_id) {
                 this.commandHistoryItems = [];
                 this.commandExecutionItems = [];
                 if (!silent) {
-                    ElementPlus.ElMessage.warning('Current device hostname is unavailable');
+                    ElementPlus.ElMessage.warning('Current device identity is unavailable');
                 }
                 return;
             }
@@ -66,8 +66,8 @@ window.AppHistoryModule = {
 
             try {
                 const [quickRes, fullRes] = await Promise.all([
-                    fetch(`/api/hosts/${encodeURIComponent(hostname)}/command-history`),
-                    fetch(`/api/hosts/${encodeURIComponent(hostname)}/command-history/full`)
+                    fetch(`/api/machines/${encodeURIComponent(machine_id)}/command-history`),
+                    fetch(`/api/machines/${encodeURIComponent(machine_id)}/command-history/full`)
                 ]);
 
                 const quickJson = await quickRes.json();
@@ -132,9 +132,9 @@ window.AppHistoryModule = {
                 ElementPlus.ElMessage.warning('Please select a device');
                 return;
             }
-            const hostname = this.getSelectedHistoryHostname();
-            if (!hostname) {
-                ElementPlus.ElMessage.warning('Current device hostname is unavailable');
+            const machine_id = this.getSelectedHistoryMachineId();
+            if (!machine_id) {
+                ElementPlus.ElMessage.warning('Current device identity is unavailable');
                 return;
             }
             if (!row || !row.command) {
@@ -145,7 +145,7 @@ window.AppHistoryModule = {
             this.commandHistoryPinningCommand = commandText;
 
             try {
-                const res = await fetch(`/api/hosts/${encodeURIComponent(hostname)}/command-history/pin`, {
+                const res = await fetch(`/api/machines/${encodeURIComponent(machine_id)}/command-history/pin`, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json'
@@ -175,9 +175,9 @@ window.AppHistoryModule = {
                 ElementPlus.ElMessage.warning('Please select a device');
                 return;
             }
-            const hostname = this.getSelectedHistoryHostname();
-            if (!hostname) {
-                ElementPlus.ElMessage.warning('Current device hostname is unavailable');
+            const machine_id = this.getSelectedHistoryMachineId();
+            if (!machine_id) {
+                ElementPlus.ElMessage.warning('Current device identity is unavailable');
                 return;
             }
             if (!row || !row.command || !row.is_pinned) {
@@ -196,7 +196,7 @@ window.AppHistoryModule = {
             }
 
             try {
-                const res = await fetch(`/api/hosts/${encodeURIComponent(hostname)}/command-history/pin/move`, {
+                const res = await fetch(`/api/machines/${encodeURIComponent(machine_id)}/command-history/pin/move`, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json'
@@ -223,9 +223,9 @@ window.AppHistoryModule = {
                 ElementPlus.ElMessage.warning('Please select a device');
                 return;
             }
-            const hostname = this.getSelectedHistoryHostname();
-            if (!hostname) {
-                ElementPlus.ElMessage.warning('Current device hostname is unavailable');
+            const machine_id = this.getSelectedHistoryMachineId();
+            if (!machine_id) {
+                ElementPlus.ElMessage.warning('Current device identity is unavailable');
                 return;
             }
             if (!row || !row.entry_id) {
@@ -244,7 +244,7 @@ window.AppHistoryModule = {
                 );
 
                 this.commandExecutionDeletingEntryId = row.entry_id;
-                const res = await fetch(`/api/hosts/${encodeURIComponent(hostname)}/command-history/full/${encodeURIComponent(row.entry_id)}`, {
+                const res = await fetch(`/api/machines/${encodeURIComponent(machine_id)}/command-history/full/${encodeURIComponent(row.entry_id)}`, {
                     method: 'DELETE'
                 });
 
@@ -269,15 +269,15 @@ window.AppHistoryModule = {
                 return;
             }
 
-            const hostname = this.getSelectedHistoryHostname();
-            if (!hostname) {
-                ElementPlus.ElMessage.warning('Current device hostname is unavailable');
+            const machine_id = this.getSelectedHistoryMachineId();
+            if (!machine_id) {
+                ElementPlus.ElMessage.warning('Current device identity is unavailable');
                 return;
             }
 
             try {
                 await ElementPlus.ElMessageBox.confirm(
-                    'Clear command history for the current host?',
+                    'Clear command history for the current device?',
                     'Clear History',
                     {
                         type: 'warning',
@@ -286,7 +286,7 @@ window.AppHistoryModule = {
                     }
                 );
 
-                const res = await fetch(`/api/hosts/${encodeURIComponent(hostname)}/command-history`, {
+                const res = await fetch(`/api/machines/${encodeURIComponent(machine_id)}/command-history`, {
                     method: 'DELETE'
                 });
 

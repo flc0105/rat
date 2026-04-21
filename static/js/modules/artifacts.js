@@ -4,9 +4,9 @@ window.AppArtifactsModule = {
             artifactDialogVisible: false,
             artifactLoading: false,
             artifactItems: [],
-            artifactHostnames: [],
+            artifactMachines: [],
             artifactActiveTab: 'files',
-            artifactHostnameFilter: '',
+            artifactMachineIdFilter: '',
             artifactClearing: false,
         };
     },
@@ -18,26 +18,23 @@ window.AppArtifactsModule = {
 
         async loadArtifacts() {
             this.artifactLoading = true;
-
             try {
                 const url = new URL('/api/artifacts', window.location.origin);
-                const hostname = String(this.artifactHostnameFilter || '').trim();
-
-                if (hostname) url.searchParams.set('hostname', hostname);
+                const machineId = String(this.artifactMachineIdFilter || '').trim();
+                if (machineId) url.searchParams.set('machine_id', machineId);
 
                 const res = await fetch(url.pathname + url.search);
                 const json = await res.json();
-
                 if (!res.ok || json.code !== 0) {
                     throw new Error(json.message || 'Failed to load artifacts');
                 }
 
                 const data = json.data || {};
                 this.artifactItems = Array.isArray(data.items) ? data.items : [];
-                this.artifactHostnames = Array.isArray(data.hostnames) ? data.hostnames : [];
+                this.artifactMachines = Array.isArray(data.machines) ? data.machines : [];
             } catch (e) {
                 this.artifactItems = [];
-                this.artifactHostnames = [];
+                this.artifactMachines = [];
                 ElementPlus.ElMessage.error(e.message || 'Failed to load artifacts');
             } finally {
                 this.artifactLoading = false;
@@ -49,27 +46,17 @@ window.AppArtifactsModule = {
                 ElementPlus.ElMessage.warning('Invalid artifact');
                 return;
             }
-
             try {
                 await ElementPlus.ElMessageBox.confirm(
                     `Delete "${row.original_name || row.stored_name}"?`,
                     'Delete Confirmation',
-                    {
-                        type: 'warning',
-                        confirmButtonText: 'Delete',
-                        cancelButtonText: 'Cancel'
-                    }
+                    {type: 'warning', confirmButtonText: 'Delete', cancelButtonText: 'Cancel'}
                 );
-
-                const res = await fetch(`/api/artifacts/${encodeURIComponent(row.artifact_id)}`, {
-                    method: 'DELETE'
-                });
-
+                const res = await fetch(`/api/artifacts/${encodeURIComponent(row.artifact_id)}`, {method: 'DELETE'});
                 const json = await res.json();
                 if (!res.ok || json.code !== 0) {
                     throw new Error(json.message || 'Delete failed');
                 }
-
                 ElementPlus.ElMessage.success('Deleted');
                 await this.loadArtifacts();
             } catch (e) {
@@ -84,17 +71,12 @@ window.AppArtifactsModule = {
                 ElementPlus.ElMessage.warning('Please select a category');
                 return;
             }
-
             try {
-                const hostnameText = this.artifactHostnameFilter ? ` for ${this.artifactHostnameFilter}` : '';
+                const suffix = this.artifactMachineIdFilter ? ' for selected device' : '';
                 await ElementPlus.ElMessageBox.confirm(
-                    `Clear all ${activeType}${hostnameText}?`,
+                    `Clear all ${activeType}${suffix}?`,
                     'Clear Artifacts',
-                    {
-                        type: 'warning',
-                        confirmButtonText: 'Clear',
-                        cancelButtonText: 'Cancel'
-                    }
+                    {type: 'warning', confirmButtonText: 'Clear', cancelButtonText: 'Cancel'}
                 );
 
                 this.artifactClearing = true;
@@ -103,7 +85,7 @@ window.AppArtifactsModule = {
                     headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify({
                         type: activeType,
-                        hostname: this.artifactHostnameFilter || ''
+                        machine_id: this.artifactMachineIdFilter || ''
                     })
                 });
 
@@ -126,32 +108,25 @@ window.AppArtifactsModule = {
     computed: {
         filteredArtifactItems() {
             const activeType = String(this.artifactActiveTab || '').trim();
-            const hostname = String(this.artifactHostnameFilter || '').trim();
-
+            const machineId = String(this.artifactMachineIdFilter || '').trim();
             return (this.artifactItems || []).filter(item => {
                 if (activeType && item.artifact_type !== activeType) return false;
-                if (hostname && item.hostname !== hostname) return false;
+                if (machineId && item.machine_id !== machineId) return false;
                 return true;
             });
         },
 
         artifactCountMap() {
-            const hostname = String(this.artifactHostnameFilter || '').trim();
-            const counts = {
-                files: 0,
-                previews: 0,
-            };
-
+            const machineId = String(this.artifactMachineIdFilter || '').trim();
+            const counts = {files: 0, previews: 0};
             (this.artifactItems || []).forEach(item => {
                 if (!item) return;
-                if (hostname && item.hostname !== hostname) return false;
-
+                if (machineId && item.machine_id !== machineId) return;
                 const type = String(item.artifact_type || '').trim();
                 if (Object.prototype.hasOwnProperty.call(counts, type)) {
                     counts[type] += 1;
                 }
             });
-
             return counts;
         },
     },
@@ -159,7 +134,7 @@ window.AppArtifactsModule = {
     watch: {
         artifactDialogVisible(val) {
             if (!val) {
-                this.artifactHostnameFilter = '';
+                this.artifactMachineIdFilter = '';
             }
         },
     }

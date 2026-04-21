@@ -1,5 +1,4 @@
 from dataclasses import dataclass, field
-from typing import Any
 
 
 @dataclass
@@ -23,13 +22,7 @@ class HistoryOutputRecord:
         )
 
     def to_dict(self) -> dict:
-        return {
-            'seq': self.seq,
-            'status': self.status,
-            'text': self.text,
-            'time': self.time,
-            'eof': self.eof,
-        }
+        return {'seq': self.seq, 'status': self.status, 'text': self.text, 'time': self.time, 'eof': self.eof}
 
 
 @dataclass
@@ -38,6 +31,7 @@ class HistoryFileRef:
     artifact_type: str = ''
     category: str = ''
     hostname: str = ''
+    machine_id: str = ''
     client_id: str = ''
     original_name: str = ''
     stored_name: str = ''
@@ -56,12 +50,12 @@ class HistoryFileRef:
     def from_dict(cls, payload: dict | None):
         if not isinstance(payload, dict):
             return cls()
-
         return cls(
             artifact_id=payload.get('artifact_id', ''),
             artifact_type=payload.get('artifact_type', ''),
             category=payload.get('category', ''),
             hostname=payload.get('hostname', ''),
+            machine_id=payload.get('machine_id', ''),
             client_id=payload.get('client_id', ''),
             original_name=payload.get('original_name', ''),
             stored_name=payload.get('stored_name', ''),
@@ -83,6 +77,7 @@ class HistoryFileRef:
             'artifact_type': self.artifact_type,
             'category': self.category,
             'hostname': self.hostname,
+            'machine_id': self.machine_id,
             'client_id': self.client_id,
             'original_name': self.original_name,
             'stored_name': self.stored_name,
@@ -106,18 +101,16 @@ class HistoryEntry:
     started_at: str = ''
     finished_at: str = ''
     duration_ms: int = 0
-
     command: str = ''
     source: str = ''
     status: str = 'running'
     final_status: str = ''
-
     hostname: str = 'unknown_host'
+    machine_id: str = 'unknown_machine'
     client_id: str = ''
     addr: str = ''
     cwd_start: str = ''
     cwd_end: str = ''
-
     has_output: bool = False
     output_summary: str = ''
     output_line_count: int = 0
@@ -127,7 +120,6 @@ class HistoryEntry:
     output_truncated: bool = False
     output_record_seq: int = 0
     output_records: list[dict] = field(default_factory=list)
-
     has_files: bool = False
     file_count: int = 0
     files: list[dict] = field(default_factory=list)
@@ -136,7 +128,6 @@ class HistoryEntry:
     def from_dict(cls, payload: dict | None):
         if not isinstance(payload, dict):
             return cls()
-
         return cls(
             entry_id=payload.get('entry_id', ''),
             time=payload.get('time', ''),
@@ -148,6 +139,7 @@ class HistoryEntry:
             status=payload.get('status', 'running'),
             final_status=payload.get('final_status', ''),
             hostname=payload.get('hostname', 'unknown_host'),
+            machine_id=payload.get('machine_id', 'unknown_machine'),
             client_id=payload.get('client_id', ''),
             addr=payload.get('addr', ''),
             cwd_start=payload.get('cwd_start', ''),
@@ -178,6 +170,7 @@ class HistoryEntry:
             'status': self.status,
             'final_status': self.final_status,
             'hostname': self.hostname,
+            'machine_id': self.machine_id,
             'client_id': self.client_id,
             'addr': self.addr,
             'cwd_start': self.cwd_start,
@@ -195,11 +188,3 @@ class HistoryEntry:
             'file_count': self.file_count,
             'files': list(self.files),
         }
-
-
-
-
-
-
-
-

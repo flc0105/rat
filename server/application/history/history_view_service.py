@@ -24,6 +24,7 @@ class HistoryViewService:
                     'artifact_type': artifact.get('artifact_type', copied.get('artifact_type', '')),
                     'category': artifact.get('category', copied.get('category', '')),
                     'hostname': artifact.get('hostname', copied.get('hostname', '')),
+                    'machine_id': artifact.get('machine_id', copied.get('machine_id', '')),
                     'client_id': artifact.get('client_id', copied.get('client_id', '')),
                     'original_name': artifact.get('original_name', copied.get('original_name', '')),
                     'stored_name': artifact.get('stored_name', copied.get('stored_name', '')),
@@ -63,15 +64,6 @@ class HistoryViewService:
         return copied
 
     def _apply_quick_history_move_flags(self, pinned_items: list, normal_items: list):
-        """
-        为 quick history 视图补充 pinned 移动能力标记。
-
-        规则：
-        - 只有 pinned 项才允许显示上移/下移菜单
-        - pinned 第一项不能再上移
-        - pinned 最后一项不能再下移
-        - 非 pinned 项统一为不可移动
-        """
         for index, item in enumerate(pinned_items):
             item['can_move_up'] = index > 0
             item['can_move_down'] = index < len(pinned_items) - 1
@@ -81,14 +73,6 @@ class HistoryViewService:
             item['can_move_down'] = False
 
     def _build_deduplicated_latest_view(self, entries: list) -> list:
-        """
-        构造默认展示视图：
-        - 保留所有原始记录
-        - 展示时按时间倒序去重
-        - 相同 command 只保留最新一条
-        - 置顶命令固定排在最上方
-        - pinned 区内部按 pin_order 固定，不再随执行时间漂移
-        """
         seen = set()
         pinned_items = []
         normal_items = []
@@ -118,12 +102,6 @@ class HistoryViewService:
         return result
 
     def _build_execution_history_view(self, entries: list) -> list:
-        """
-        构造完整执行历史视图：
-        - 不去重
-        - 按最新优先
-        - 保留完整执行元数据
-        """
         result = []
 
         for item in reversed(entries):
@@ -138,59 +116,46 @@ class HistoryViewService:
         return result
 
     def get_history_for_connection(self, conn) -> list:
-        """
-        获取指定连接的默认历史视图：
-        去重，只保留每条命令的最新记录
-        """
         if conn is None:
             return []
 
-        hostname = self.store._get_hostname_from_conn(conn)
+        machine_id = self.store._get_machine_id_from_conn(conn)
 
         with self.store._lock:
-            entries = self.store._read_entries(hostname)
+            entries = self.store._read_entries(machine_id)
             for item in entries:
                 self.store._normalize_entry_flags(item)
 
         return self._build_deduplicated_latest_view(entries)
 
     def get_execution_history_for_connection(self, conn) -> list:
-        """
-        获取指定连接的完整执行历史视图
-        """
         if conn is None:
             return []
 
-        hostname = self.store._get_hostname_from_conn(conn)
+        machine_id = self.store._get_machine_id_from_conn(conn)
 
         with self.store._lock:
-            entries = self.store._read_entries(hostname)
+            entries = self.store._read_entries(machine_id)
             for item in entries:
                 self.store._normalize_entry_flags(item)
 
         return self._build_execution_history_view(entries)
 
-    def get_history_by_hostname(self, hostname: str) -> list:
-        """
-        按 hostname 读取默认历史视图
-        """
-        hostname_text = (hostname or '').strip() or 'unknown_host'
+    def get_history_by_machine_id(self, machine_id: str) -> list:
+        machine_id_text = (machine_id or '').strip() or 'unknown_machine'
 
         with self.store._lock:
-            entries = self.store._read_entries(hostname_text)
+            entries = self.store._read_entries(machine_id_text)
             for item in entries:
                 self.store._normalize_entry_flags(item)
 
         return self._build_deduplicated_latest_view(entries)
 
-    def get_execution_history_by_hostname(self, hostname: str) -> list:
-        """
-        按 hostname 读取完整执行历史视图
-        """
-        hostname_text = (hostname or '').strip() or 'unknown_host'
+    def get_execution_history_by_machine_id(self, machine_id: str) -> list:
+        machine_id_text = (machine_id or '').strip() or 'unknown_machine'
 
         with self.store._lock:
-            entries = self.store._read_entries(hostname_text)
+            entries = self.store._read_entries(machine_id_text)
             for item in entries:
                 self.store._normalize_entry_flags(item)
 

@@ -1,7 +1,5 @@
-import platform
-
 from client.commands.argument_command_registry import ArgumentCommandRegistry
-from core.utils.client_util import detect_platform_name, detect_platform_alias
+from core.platform.platform_identity import detect_platform_alias
 
 
 class CommandCatalog:

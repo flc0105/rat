@@ -6,6 +6,9 @@ class SessionInfo:
     client_id: str = ''
     addr: str = ''
     hostname: str = 'Unknown'
+    machine_id: str = ''
+    machine_id_version: str = ''
+    machine_fingerprint_basis: str = ''
     os_type: str = 'Unknown'
     os_alias: str = 'unknown'
     os_ver: str = 'Unknown'
@@ -25,6 +28,9 @@ class SessionInfo:
             'id',
             'addr',
             'hostname',
+            'machine_id',
+            'machine_id_version',
+            'machine_fingerprint_basis',
             'os_type',
             'os_alias',
             'os_ver',
@@ -45,6 +51,9 @@ class SessionInfo:
             client_id=str(payload.get('id') or ''),
             addr=str(payload.get('addr') or ''),
             hostname=str(payload.get('hostname') or 'Unknown'),
+            machine_id=str(payload.get('machine_id') or ''),
+            machine_id_version=str(payload.get('machine_id_version') or ''),
+            machine_fingerprint_basis=str(payload.get('machine_fingerprint_basis') or ''),
             os_type=str(payload.get('os_type') or 'Unknown'),
             os_alias=str(payload.get('os_alias') or 'unknown'),
             os_ver=str(payload.get('os_ver') or 'Unknown'),
@@ -61,6 +70,9 @@ class SessionInfo:
             'id': self.client_id,
             'addr': self.addr,
             'hostname': self.hostname,
+            'machine_id': self.machine_id,
+            'machine_id_version': self.machine_id_version,
+            'machine_fingerprint_basis': self.machine_fingerprint_basis,
             'os_type': self.os_type,
             'os_alias': self.os_alias,
             'os_ver': self.os_ver,

@@ -32,9 +32,9 @@ class WebSystemInspectionApi:
         return self.server.get_target_connection_by_client_id(client_id)
 
     def _build_snapshot_target_key(self, session, client_id: str) -> str:
-        hostname = str(getattr(session.session_info, 'hostname', '') or '').strip()
-        if hostname:
-            return f'host::{hostname}'
+        machine_id = str(getattr(session.session_info, 'machine_id', '') or '').strip()
+        if machine_id:
+            return f'machine::{machine_id}'
         return f'client::{client_id}'
 
     def _run_process_command(self, client_id: str, command: str):

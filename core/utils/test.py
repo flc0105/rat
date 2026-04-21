@@ -5,7 +5,7 @@ import platform
 import re
 import subprocess
 
-from core.utils.client_util import PlatformAlias, detect_platform_info
+from core.platform.platform_identity import PlatformAlias, detect_platform_info
 
 
 def _safe_text(value, default='') -> str:

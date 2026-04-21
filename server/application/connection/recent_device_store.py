@@ -12,8 +12,8 @@ class RecentDeviceStore:
     最近见过的设备缓存。
 
     规则：
-    - 以 hostname 为维度
-    - 同 hostname 仅保留一条
+    - 以 machine_id 为维度
+    - 同 machine_id 仅保留一条
     - 在线设备写入时覆盖旧记录
     - 下线时更新 offline 状态和时间
     """
@@ -23,8 +23,8 @@ class RecentDeviceStore:
         os.makedirs(os.path.dirname(self.file_path), exist_ok=True)
         self._lock = threading.RLock()
 
-    def _normalize_hostname_key(self, hostname: str) -> str:
-        value = str(hostname or '').strip()
+    def _normalize_machine_id_key(self, machine_id: str) -> str:
+        value = str(machine_id or '').strip()
         return value.lower()
 
     def _now_iso(self) -> str:
@@ -62,23 +62,15 @@ class RecentDeviceStore:
             except Exception:
                 logger.warning('RecentDeviceStore temp cleanup failed: %s', temp_path, exc_info=True)
 
-    def _read_all(self) -> dict:
-        with self._lock:
-            return self._read_all_unlocked()
-
-    def _write_all(self, data: dict):
-        with self._lock:
-            self._write_all_unlocked(data)
-
     def upsert_from_connection(self, connection_payload: dict):
         if not isinstance(connection_payload, dict):
             return
 
-        hostname = str(connection_payload.get('hostname') or '').strip()
-        if not hostname:
+        machine_id = str(connection_payload.get('machine_id') or '').strip()
+        if not machine_id:
             return
 
-        key = self._normalize_hostname_key(hostname)
+        key = self._normalize_machine_id_key(machine_id)
         if not key:
             return
 
@@ -88,7 +80,10 @@ class RecentDeviceStore:
 
             record = {
                 'recent_device_key': key,
-                'hostname': hostname,
+                'machine_id': machine_id,
+                'machine_id_version': str(connection_payload.get('machine_id_version') or previous.get('machine_id_version') or ''),
+                'machine_fingerprint_basis': str(connection_payload.get('machine_fingerprint_basis') or previous.get('machine_fingerprint_basis') or ''),
+                'hostname': str(connection_payload.get('hostname') or previous.get('hostname') or ''),
                 'client_id': str(connection_payload.get('client_id') or previous.get('client_id') or ''),
                 'addr': str(connection_payload.get('addr') or previous.get('addr') or ''),
                 'os_type': str(connection_payload.get('os_type') or previous.get('os_type') or ''),
@@ -121,8 +116,8 @@ class RecentDeviceStore:
             current[key] = record
             self._write_all_unlocked(current)
 
-    def mark_offline(self, hostname: str, disconnected_at: str = ''):
-        key = self._normalize_hostname_key(hostname)
+    def mark_offline(self, machine_id: str, disconnected_at: str = ''):
+        key = self._normalize_machine_id_key(machine_id)
         if not key:
             return
 
@@ -146,10 +141,9 @@ class RecentDeviceStore:
 
         items = [value for value in current.values() if isinstance(value, dict)]
 
-        # 兜底去重：即便历史文件里混进了重复 hostname，也只取同 key 最新的一条
         deduped = {}
         for item in items:
-            key = str(item.get('recent_device_key') or self._normalize_hostname_key(item.get('hostname'))).strip()
+            key = str(item.get('recent_device_key') or self._normalize_machine_id_key(item.get('machine_id'))).strip()
             if not key:
                 continue
 

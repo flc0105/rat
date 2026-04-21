@@ -6,7 +6,7 @@ import json
 import platform
 from datetime import datetime
 
-from core.utils.client_util import detect_platform_alias
+from core.platform.platform_identity import detect_platform_alias
 from core.utils.decorator import desc
 
 

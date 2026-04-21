@@ -35,6 +35,7 @@ class BackgroundJobFileRef:
     artifact_type: str = ''
     category: str = ''
     hostname: str = ''
+    machine_id: str = ''
     client_id: str = ''
     original_name: str = ''
     stored_name: str = ''
@@ -57,6 +58,7 @@ class BackgroundJobFileRef:
             artifact_type=payload.get('artifact_type', ''),
             category=payload.get('category', ''),
             hostname=payload.get('hostname', ''),
+            machine_id=payload.get('machine_id', ''),
             client_id=payload.get('client_id', ''),
             original_name=payload.get('original_name', ''),
             stored_name=payload.get('stored_name', ''),
@@ -76,6 +78,7 @@ class BackgroundJobFileRef:
             'artifact_type': self.artifact_type,
             'category': self.category,
             'hostname': self.hostname,
+            'machine_id': self.machine_id,
             'client_id': self.client_id,
             'original_name': self.original_name,
             'stored_name': self.stored_name,

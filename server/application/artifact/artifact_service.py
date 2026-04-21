@@ -8,14 +8,6 @@ from server.config.config import WEB_CLEAR_PREVIEW_CACHE_ON_STARTUP, WEB_FILES_R
 
 
 class WebArtifactService:
-    """
-    Web Artifact 门面服务。
-
-    职责：
-    - 管理正式 artifact（files / previews）
-    - 管理 upload_tmp 临时文件（供 server -> client 的 HTTP 拉取链路使用）
-    """
-
     MAX_PREVIEW_TEXT_BYTES = WEB_PREVIEW_TEXT_MAX_BYTES
 
     CATEGORY_FILES = 'files'
@@ -30,7 +22,6 @@ class WebArtifactService:
         self.upload_tmp_dir = os.path.join(self.artifacts_root_dir, self.CATEGORY_UPLOAD_TMP)
 
         self._prepare_dirs()
-
         self.registry_service = ArtifactRegistryService(self)
         self.preview_service = ArtifactPreviewService(self)
         self.temp_file_service = ArtifactTempFileService(self)
@@ -38,7 +29,6 @@ class WebArtifactService:
         if WEB_CLEAR_PREVIEW_CACHE_ON_STARTUP:
             self._clear_preview_cache_on_startup()
 
-    # ------------------ dirs ------------------ #
     def _prepare_dirs(self):
         os.makedirs(self.artifacts_root_dir, exist_ok=True)
         os.makedirs(self.files_dir, exist_ok=True)
@@ -46,9 +36,6 @@ class WebArtifactService:
         os.makedirs(self.upload_tmp_dir, exist_ok=True)
 
     def _clear_preview_cache_on_startup(self):
-        """
-        服务端启动时清空 previews 缓存目录，避免预览文件无限堆积
-        """
         try:
             if os.path.isdir(self.previews_dir):
                 shutil.rmtree(self.previews_dir, ignore_errors=True)
@@ -56,39 +43,19 @@ class WebArtifactService:
         except Exception:
             pass
 
-    # ------------------ registry facade ------------------ #
-    def allocate_artifact_path(self, artifact_type: str, hostname: str, original_name: str, category: str = '') -> dict:
-        return self.registry_service.allocate_artifact_path(
-            artifact_type,
-            hostname,
-            original_name,
-            category=category
-        )
+    def allocate_artifact_path(self, artifact_type: str, machine_id: str, original_name: str, category: str = '') -> dict:
+        return self.registry_service.allocate_artifact_path(artifact_type, machine_id, original_name, category=category)
 
-    def register_existing_artifact(
-        self,
-        *,
-        artifact_type: str,
-        category: str,
-        hostname: str,
-        original_name: str,
-        file_path: str,
-        meta_path: str,
-        stored_name: str,
-        source_type: str = '',
-        source_command_id=None,
-        client_id: str = '',
-        addr: str = '',
-        job_id: str = '',
-        job_name: str = '',
-        job_key: str = '',
-        related_path: str = '',
-        extra: dict | None = None,
-    ) -> dict:
+    def register_existing_artifact(self, *, artifact_type: str, category: str, hostname: str, machine_id: str,
+                                   original_name: str, file_path: str, meta_path: str, stored_name: str,
+                                   source_type: str = '', source_command_id=None, client_id: str = '', addr: str = '',
+                                   job_id: str = '', job_name: str = '', job_key: str = '', related_path: str = '',
+                                   extra: dict | None = None) -> dict:
         return self.registry_service.register_existing_artifact(
             artifact_type=artifact_type,
             category=category,
             hostname=hostname,
+            machine_id=machine_id,
             original_name=original_name,
             file_path=file_path,
             meta_path=meta_path,
@@ -104,28 +71,17 @@ class WebArtifactService:
             extra=extra,
         )
 
-    def save_http_uploaded_file(
-        self,
-        file,
-        artifact_type: str = '',
-        category: str = '',
-        client_id: str = '',
-        hostname: str = '',
-        job_id: str = '',
-        job_name: str = '',
-        job_key: str = '',
-        source_type: str = '',
-        source_command_id=None,
-        addr: str = '',
-        related_path: str = '',
-        extra: dict | None = None,
-    ) -> dict:
+    def save_http_uploaded_file(self, file, artifact_type: str = '', category: str = '', client_id: str = '',
+                                hostname: str = '', machine_id: str = '', job_id: str = '', job_name: str = '',
+                                job_key: str = '', source_type: str = '', source_command_id=None, addr: str = '',
+                                related_path: str = '', extra: dict | None = None) -> dict:
         return self.registry_service.save_http_uploaded_file(
             file,
             artifact_type=artifact_type,
             category=category,
             client_id=client_id,
             hostname=hostname,
+            machine_id=machine_id,
             job_id=job_id,
             job_name=job_name,
             job_key=job_key,
@@ -136,14 +92,11 @@ class WebArtifactService:
             extra=extra,
         )
 
-    def list_artifacts(self, artifact_type: str = '', hostname: str = '') -> list[dict]:
-        return self.registry_service.list_artifacts(
-            artifact_type=artifact_type,
-            hostname=hostname
-        )
+    def list_artifacts(self, artifact_type: str = '', machine_id: str = '') -> list[dict]:
+        return self.registry_service.list_artifacts(artifact_type=artifact_type, machine_id=machine_id)
 
-    def list_artifact_hostnames(self) -> list[str]:
-        return self.registry_service.list_artifact_hostnames()
+    def list_artifact_machines(self) -> list[dict]:
+        return self.registry_service.list_artifact_machines()
 
     def get_artifact_by_id(self, artifact_id: str) -> dict:
         return self.registry_service.get_artifact_by_id(artifact_id)
@@ -154,17 +107,15 @@ class WebArtifactService:
     def delete_artifact(self, artifact_id: str) -> dict:
         return self.registry_service.delete_artifact(artifact_id)
 
-    def clear_artifacts(self, artifact_type: str, hostname: str = '') -> dict:
-        return self.registry_service.clear_artifacts(artifact_type, hostname=hostname)
+    def clear_artifacts(self, artifact_type: str, machine_id: str = '') -> dict:
+        return self.registry_service.clear_artifacts(artifact_type, machine_id=machine_id)
 
-    # ------------------ preview facade ------------------ #
     def guess_preview_type(self, filename: str) -> str:
         return self.preview_service.guess_preview_type(filename)
 
     def build_preview_payload(self, artifact_id: str) -> dict:
         return self.preview_service.build_preview_payload(artifact_id)
 
-    # ------------------ temp file facade ------------------ #
     def create_upload_temp_file(self, upload) -> tuple[str, str]:
         return self.temp_file_service.create_upload_temp_file(upload)
 
@@ -179,11 +130,3 @@ class WebArtifactService:
 
     def cleanup_upload_temp_file(self, temp_path: str):
         self.temp_file_service.cleanup_temp_file(temp_path)
-
-
-
-
-
-
-
-

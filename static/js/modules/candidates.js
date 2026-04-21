@@ -7,9 +7,9 @@ window.AppCandidatesModule = {
     },
 
     methods: {
-        resolveCommandHistoryHostname(clientId) {
+        resolveCommandHistoryMachineId(clientId) {
             const target = (this.connections || []).find(item => item && item.client_id === clientId);
-            return String(target?.hostname || '').trim();
+            return String(target?.machine_id || '').trim();
         },
 
         buildCommonOpsCandidates() {
@@ -113,13 +113,13 @@ window.AppCandidatesModule = {
         async loadCommandCandidates(clientId) {
             if (!clientId) return;
 
-            const historyHostname = this.resolveCommandHistoryHostname(clientId);
+            const historyMachineId = this.resolveCommandHistoryMachineId(clientId);
 
             try {
                 const requests = [
                     fetch(`/api/connections/${encodeURIComponent(clientId)}/command-candidates`),
-                    historyHostname
-                        ? fetch(`/api/hosts/${encodeURIComponent(historyHostname)}/command-history`)
+                    historyMachineId
+                        ? fetch(`/api/machines/${encodeURIComponent(historyMachineId)}/command-history`)
                         : Promise.resolve({ok: true, json: async () => ({code: 0, data: []})})
                 ];
 

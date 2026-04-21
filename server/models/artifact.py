@@ -8,6 +8,7 @@ class ArtifactRecord:
     artifact_type: str = ''
     category: str = ''
     hostname: str = ''
+    machine_id: str = ''
     client_id: str = ''
     addr: str = ''
     original_name: str = ''
@@ -38,6 +39,7 @@ class ArtifactRecord:
             artifact_type=payload.get('artifact_type', ''),
             category=payload.get('category', ''),
             hostname=payload.get('hostname', ''),
+            machine_id=payload.get('machine_id', ''),
             client_id=payload.get('client_id', ''),
             addr=payload.get('addr', ''),
             original_name=payload.get('original_name', ''),
@@ -63,6 +65,7 @@ class ArtifactRecord:
             'artifact_type': self.artifact_type,
             'category': self.category,
             'hostname': self.hostname,
+            'machine_id': self.machine_id,
             'client_id': self.client_id,
             'addr': self.addr,
             'original_name': self.original_name,
