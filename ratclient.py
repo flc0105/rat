@@ -170,6 +170,7 @@ class Client:
         连接建立后发送客户端握手信息
         """
         info = self._build_client_info()
+        self.info = info
         self.server.send(info)
         self.server.mark_connected()
         logger.info('Connected')

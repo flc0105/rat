@@ -151,6 +151,7 @@ window.AppJobsModule = {
                 if (item === 'darwin') return 'macOS';
                 if (item === 'windows') return 'Windows';
                 if (item === 'linux') return 'Linux';
+                if (item === 'ios') return 'iOS';
                 return item;
             });
 

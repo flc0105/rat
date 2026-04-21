@@ -385,6 +385,7 @@ window.AppConnectionModule = {
                 {label: 'Address', value: conn.addr || '-', mono: true},
                 {label: 'Client ID', value: conn.client_id || '-', mono: true},
                 {label: 'Platform', value: this.formatOsLabel(conn.os_type, conn.os_ver) || '-'},
+                {label: 'OS Version', value: conn.os_ver},
                 {label: 'Integrity', value: conn.integrity || '-'},
                 {label: 'Build Version', value: conn.build_version || '-'},
                 {label: 'Last Seen', value: this.formatConnectionLastSeen(conn)},

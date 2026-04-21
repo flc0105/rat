@@ -59,11 +59,45 @@ class CommandExecutionMixin:
             )
         return self._python_execution_strategy_cache[cache_key]
 
+    # def _execute_python_collect(self, code, kwargs=None, mode: str = '', default_mode: str = 'inproc'):
+    #     strategy = self._get_python_execution_strategy(mode=mode, default_mode=default_mode)
+    #     return strategy.execute_collect(
+    #         code,
+    #         kwargs=kwargs,
+    #         timeout=self.DEFAULT_STREAM_TIMEOUT,
+    #     )
+
+    # def execute_script_stream(self, code, kwargs=None):
+    #     """
+    #     script 内部执行入口：
+    #     - 对外不单独作为推荐命令暴露
+    #     - 默认只走 stream
+    #     - 当前进程 / 子进程由 script strategy 决定
+    #     """
+    #     return self._execute_python_collect(
+    #         code,
+    #         kwargs=kwargs,
+    #         mode=get_python_execution_mode(),
+    #         default_mode='inproc',
+    #     )
+
+    def _build_script_context(self):
+        # 给脚本注入统一上下文，避免和平铺业务参数重名
+        context = {}
+        socket_obj = getattr(self, 'socket', None)
+        context['client_id'] = getattr(socket_obj, 'client_id', '') or '',
+        return context
+
+    def _merge_script_kwargs_with_context(self, kwargs=None):
+        merged = dict(kwargs or {})
+        merged['__context__'] = self._build_script_context()
+        return merged
+
     def _execute_python_collect(self, code, kwargs=None, mode: str = '', default_mode: str = 'inproc'):
         strategy = self._get_python_execution_strategy(mode=mode, default_mode=default_mode)
         return strategy.execute_collect(
             code,
-            kwargs=kwargs,
+            kwargs=self._merge_script_kwargs_with_context(kwargs),
             timeout=self.DEFAULT_STREAM_TIMEOUT,
         )
 

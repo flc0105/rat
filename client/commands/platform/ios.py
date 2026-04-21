@@ -19,63 +19,7 @@ from core.utils.logger import logger
 upload_url = UPLOAD_BASE_URL.rstrip('/') + '/api/files/upload'
 
 
-def upload_file_via_http(
-        file_source,
-        category=None,
-        filename=None
-):
-    import os
-    import requests
 
-    form_data = {
-        'artifact_type': 'files',
-        'category': (category or '').strip() or 'default',
-    }
-
-    close_after = False
-
-    if isinstance(file_source, str):
-        file_obj = open(file_source, 'rb')
-        close_after = True
-        upload_name = filename or os.path.basename(file_source)
-    else:
-        file_obj = file_source
-        upload_name = filename or getattr(file_obj, 'name', None) or 'upload.bin'
-
-    try:
-        # 尽量从头开始读
-        try:
-            file_obj.seek(0)
-        except Exception:
-            pass
-
-        files = {
-            'file': (upload_name, file_obj)
-        }
-
-        response = requests.post(
-            upload_url,
-            files=files,
-            data=form_data,
-            timeout=30,
-        )
-
-        try:
-            payload = response.json()
-        except Exception:
-            payload = None
-
-        if response.ok and isinstance(payload, dict):
-            file_info = payload.get('data') or {}
-
-        return response
-
-    finally:
-        if close_after:
-            try:
-                file_obj.close()
-            except Exception:
-                pass
 
 
 def uptime_to_text(seconds):
@@ -265,6 +209,66 @@ class iOSCommands(CommonCommands):
 
     def __init__(self, socket):
         super().__init__(socket)
+
+    def upload_file_via_http(
+            self,
+            file_source,
+            category=None,
+            filename=None
+    ):
+        import os
+        import requests
+
+        form_data = {
+            'artifact_type': 'files',
+            'category': (category or '').strip() or 'default',
+            'client_id': getattr(self.socket, 'client_id', '') or '',
+        }
+
+        close_after = False
+
+        if isinstance(file_source, str):
+            file_obj = open(file_source, 'rb')
+            close_after = True
+            upload_name = filename or os.path.basename(file_source)
+        else:
+            file_obj = file_source
+            upload_name = filename or getattr(file_obj, 'name', None) or 'upload.bin'
+
+        try:
+            # 尽量从头开始读
+            try:
+                file_obj.seek(0)
+            except Exception:
+                pass
+
+            files = {
+                'file': (upload_name, file_obj)
+            }
+
+            response = requests.post(
+                upload_url,
+                files=files,
+                data=form_data,
+                timeout=30,
+            )
+
+            try:
+                payload = response.json()
+            except Exception:
+                payload = None
+
+            if response.ok and isinstance(payload, dict):
+                file_info = payload.get('data') or {}
+
+            return response
+
+        finally:
+            if close_after:
+                try:
+                    file_obj.close()
+                except Exception:
+                    pass
 
     # ------------------ 基础 shell ------------------ #
 
@@ -835,9 +839,9 @@ class iOSCommands(CommonCommands):
                 image.save(buf, format='JPEG', quality=90)
                 buf.seek(0)
 
-                response = upload_file_via_http(
+                response = self.upload_file_via_http(
                     buf,
-                    category='pythonista',
+                    category='Pythonista',
                     filename='photo.jpg',
                     # content_type='image/jpeg',
                 )
@@ -853,9 +857,9 @@ class iOSCommands(CommonCommands):
                     'filename': os.path.basename(file_path),
                 }
 
-                response = upload_file_via_http(
+                response = self.upload_file_via_http(
                     file_path,
-                    category='pythonista',
+                    category='Pythonista',
                     filename=os.path.basename(file_path)
                 )
 

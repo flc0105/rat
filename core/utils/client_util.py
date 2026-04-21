@@ -339,3 +339,26 @@ def detect_platform_name() -> str:
         return 'Darwin'
 
     return system_name or 'Unknown'
+
+def upload_file_via_http(file_obj, filename, upload_url, category='', client_id=None):
+    form_data = {
+        'artifact_type': 'files',
+        'category': category,
+        'client_id': client_id,
+    }
+    try:
+        file_obj.seek(0)
+    except Exception:
+        pass
+
+    files = {
+        'file': (filename, file_obj)
+    }
+
+    import requests
+    return requests.post(
+        upload_url,
+        files=files,
+        data=form_data,
+        timeout=30,
+    )
