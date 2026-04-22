@@ -3,6 +3,9 @@ import os
 import select
 import signal
 import struct
+
+from core.platform.platform_identity import detect_platform_alias
+
 if os.name != 'nt':
     import termios
 import threading
@@ -37,6 +40,11 @@ class PtyManager:
 
         if os.name == 'nt':
             return self._open_session_windows(pty_session_id, shell=shell, cwd=cwd, cols=cols, rows=rows)
+
+        if detect_platform_alias() == 'ios':
+            self._send_error(pty_session_id, 'iOS is not supported')
+            return False
+
         return self._open_session_unix(pty_session_id, shell=shell, cwd=cwd, cols=cols, rows=rows)
 
     def write_input(self, pty_session_id: str, data: str):
@@ -110,7 +118,7 @@ class PtyManager:
             except Exception:
                 os.execve(shell_path, [shell_path], env)
 
-            os._exit(1)
+            # os._exit(1)
 
         self._resize_fd(master_fd, cols, rows)
         item = {
