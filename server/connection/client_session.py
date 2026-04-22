@@ -21,22 +21,22 @@ class ClientSession:
     def address(self):
         return self.transport.address
 
-    # add SessionInfo 同步 dict 镜像 2026-04-08
+
     def refresh_info_dict(self):
         self.info = self.session_info.to_dict()
 
-    # add SessionInfo 更新 cwd 2026-04-08
+
     def update_current_workdir(self, cwd: str):
         if cwd:
             self.session_info.cwd = str(cwd)
             self.refresh_info_dict()
 
-    # add SessionInfo 额外字段写入 2026-04-08
+
     def set_info_extra(self, key: str, value):
         self.session_info.set_extra(key, value)
         self.refresh_info_dict()
 
-    # add SessionInfo 额外字段读取 2026-04-08
+
     def get_info_extra(self, key: str, default=None):
         return self.session_info.get_extra(key, default)
 

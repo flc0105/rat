@@ -240,7 +240,7 @@ class WebRemoteFileService:
             'message': result_text
         }
 
-    # add 复制移动文件 2026-04-09 12:00
+
     def paste_paths(self, client_id: str, paths: list[str], destination_dir: str, operation: str = 'copy') -> dict:
         if not isinstance(paths, list) or not paths:
             raise ValueError('paths is required and must be a non-empty list')

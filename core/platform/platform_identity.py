@@ -25,7 +25,7 @@ _PLATFORM_INFO_MAP = {
 }
 
 
-# add 平台信息统一入口 2026-04-21
+
 def detect_platform_info() -> PlatformInfo:
     system_name = platform.system()
 
@@ -45,7 +45,7 @@ def detect_platform_info() -> PlatformInfo:
     )
 
 
-# add 平台比较统一使用 alias 2026-04-21
+
 def detect_platform_alias() -> str:
     return detect_platform_info().alias
 

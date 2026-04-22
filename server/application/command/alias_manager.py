@@ -76,7 +76,7 @@ class AliasManager:
 
 
 
-    # add alias配置结构归一化 2026-04-08
+
     def _normalize_alias_payload(self, payload) -> dict:
         normalized = self._create_empty_aliases()
         if not isinstance(payload, dict):
@@ -124,7 +124,7 @@ class AliasManager:
             allow_empty=True,
             allow_unknown=True,
         )
-    # add alias当前连接可见列表 2026-04-08
+
     def get_effective_aliases(self, conn=None) -> dict:
         platform_name = self.get_platform_for_connection(conn)
         result = dict(self.aliases.get('common') or {})
@@ -174,7 +174,7 @@ class AliasManager:
         """返回格式化的别名列表"""
         return self.get_effective_aliases(conn)
 
-    # add alias全平台查询视图 2026-04-08
+
     def list_aliases_for_platform(self, platform: str, conn=None) -> dict:
         platform_name = self._normalize_platform(platform, allow_empty=True, allow_all=True)
         if platform_name == 'all':
@@ -183,7 +183,7 @@ class AliasManager:
             return self.list_aliases(conn=conn)
         return dict(self.aliases.get(platform_name) or {})
 
-    # add alias全量配置读取 2026-04-08
+
     def list_aliases_grouped(self):
         return {
             platform_name: dict(self.aliases.get(platform_name) or {})
@@ -233,7 +233,7 @@ class AliasManager:
         if provided_args:
             raise ValueError('This alias does not accept arguments')
 
-    # add alias解析详情返回 2026-04-08
+
     def resolve_alias(self, alias, args="", conn=None) -> dict:
         alias_name = str(alias or '').strip()
         command = self._get_alias_template(alias_name, conn=conn)

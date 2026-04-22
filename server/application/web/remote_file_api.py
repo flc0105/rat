@@ -44,7 +44,7 @@ class WebRemoteFileApi:
     def delete_remote_paths(self, client_id: str, paths: list[str]):
         return self.remote_file_service.delete_paths(client_id, paths)
 
-    # add 复制移动文件 2026-04-09 12:00
+
     def paste_remote_paths(self, client_id: str, paths: list[str], destination_dir: str, operation: str = 'copy'):
         return self.remote_file_service.paste_paths(client_id, paths, destination_dir, operation)
 

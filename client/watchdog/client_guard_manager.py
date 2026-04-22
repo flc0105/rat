@@ -83,7 +83,7 @@ class ClientGuardManager:
         for key, value in items:
             logger.info(f'  {key}={value}')
 
-    # add guard manager separation 2026-04-10 00:00
+
     def start(self):
         if self._started:
             return
@@ -100,7 +100,7 @@ class ClientGuardManager:
 
         self._started = True
 
-    # add guard manager separation 2026-04-10 00:00
+
     def stop(self):
         if self._watchdog_process is not None:
             self._watchdog_process.stop()
@@ -110,7 +110,7 @@ class ClientGuardManager:
 
         self._started = False
 
-    # add guard manager separation 2026-04-10 00:00
+
     def get_watchdog_status_payload(self):
         watchdog_worker_pid = None
         watchdog_worker_alive = False

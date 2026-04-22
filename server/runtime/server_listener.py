@@ -15,7 +15,6 @@ class ServerListener:
         """
         绑定并启动监听
         """
-        # add 拆分服务端监听器绑定 2026-04-08
         self.server.socket.bind(self.server.address)
         logger.info('Listening on port {}'.format(self.server.address[1]))
 
@@ -23,7 +22,6 @@ class ServerListener:
         """
         接收客户端初始信息
         """
-        # add 拆分服务端监听器握手接收 2026-04-08
         raw_sock.settimeout(5)
         try:
             transport = ClientTransport(raw_sock, addr)
@@ -35,11 +33,9 @@ class ServerListener:
         """
         构造客户端连接信息
         """
-        # add 拆分服务端监听器连接信息构造 2026-04-08
         return {**{'addr': f'{addr[0]}:{addr[1]}'}, **info}
 
     def _register_connection(self, transport: ClientTransport, addr, info: dict):
-        # add 拆分服务端监听器连接注册 2026-04-08
         session = self.server.web_service.connection_api.create_web_connection(transport, addr, info)
         self.server.connections.add(session)
         logger.info('Connection has been established: {}'.format(addr))
@@ -50,7 +46,6 @@ class ServerListener:
         """
         接受一个新连接并完成初始化
         """
-        # add 拆分服务端监听器接受连接 2026-04-08
         raw_sock, addr = self.server.socket.accept()
 
         try:
@@ -71,7 +66,6 @@ class ServerListener:
         """
         启动客户端会话接收线程
         """
-        # add 拆分服务端监听器接收线程启动 2026-04-08
         threading.Thread(
             target=self.connection_handler,
             args=(session,),
@@ -82,14 +76,12 @@ class ServerListener:
         """
         通知等待中的主线程：该连接已关闭
         """
-        # add 拆分服务端监听器连接关闭通知 2026-04-08
         session.runtime.message_queue.put(0, None, 1)
 
     def _remove_connection(self, session):
         """
         从连接管理器中移除连接
         """
-        # add 拆分服务端监听器连接移除 2026-04-08
         self.server.connections.remove(session)
 
     def _handle_connection_closed(self, session):

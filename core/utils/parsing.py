@@ -63,7 +63,6 @@ def parse_kwargs(kwargs: Sequence[Tuple[Sequence[str], dict]], arg_split: Sequen
     return arg_dict
 
 
-# add exec kwargs flag参数识别 2026-04-07 00:00
 def _is_flag_option(option_name):
     return option_name in {'topmost'}
 
@@ -102,7 +101,6 @@ def scan_args(arg_split: Sequence[str]) -> dict:
     return arg_dict
 
 
-# add exec kwargs flag和boolean解析 2026-04-07 00:00
 def _coerce_scan_arg_value(value):
     if value is True:
         return True

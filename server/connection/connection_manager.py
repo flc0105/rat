@@ -8,7 +8,7 @@ class ConnectionManager:
         self._lock = threading.RLock()
 
     def add(self, conn):
-        # add 主键索引连接注册 2026-04-08
+
         with self._lock:
             client_id = getattr(getattr(conn, 'session_info', None), 'client_id', '')
             if client_id:
@@ -17,7 +17,6 @@ class ConnectionManager:
                 self._anonymous_connections.append(conn)
 
     def remove(self, conn):
-        # add 主键索引连接移除 2026-04-08
         with self._lock:
             client_id = getattr(getattr(conn, 'session_info', None), 'client_id', '')
             if client_id:
@@ -54,7 +53,6 @@ class ConnectionManager:
         raise KeyError(f'Connection not found: {client_id}')
 
     def find(self, target):
-        # add 主键索引连接查找 2026-04-08
         text = str(target or '').strip()
         if not text:
             raise KeyError('Connection target is empty')

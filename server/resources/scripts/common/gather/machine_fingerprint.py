@@ -101,7 +101,6 @@ def _detect_ios_arch() -> str:
 
     return 'na'
 
-# add 读取 os-release 键值 2026-04-21
 def _read_linux_os_release() -> dict:
     content = _read_first_existing_text_file([
         '/etc/os-release',
@@ -126,7 +125,7 @@ def _read_linux_os_release() -> dict:
     return data
 
 
-# add Linux 发行版名和版本优先从 os-release 获取 2026-04-21
+# Linux 发行版名和版本优先从 os-release 获取
 def _detect_linux_distribution_name_and_version() -> tuple[str, str]:
     os_release = _read_linux_os_release()
 

@@ -9,12 +9,12 @@ class ControlBuiltinSupport:
     def __init__(self, conn):
         self.conn = conn
 
-    # add server端控制命令转发 2026-04-10 00:00
+
     def _get_client_id(self) -> str:
         session_info = getattr(self.conn, 'session_info', None)
         return str(getattr(session_info, 'client_id', '') or '').strip()
 
-    # add server端控制命令转发 2026-04-10 00:00
+
     def _build_control_url(self) -> str:
         client_id = self._get_client_id()
         if not client_id:
@@ -22,7 +22,7 @@ class ControlBuiltinSupport:
 
         return f'{WEB_PUBLIC_BASE_URL}/api/connections/{client_id}/control'
 
-    # add server端控制命令转发 2026-04-10 00:00
+
     def _post_control_command(self, command: str) -> dict:
         normalized_command = str(command or '').strip().lower()
         if normalized_command not in ('kill', 'reset', 'spawn'):
@@ -66,12 +66,12 @@ class ControlBuiltinSupport:
 
         return result.get('data') or {}
 
-    # add server端控制命令转发 2026-04-10 00:00
+
     def force_kill(self):
         payload = self._post_control_command('kill')
         yield 1, f'force_kill sent -> client_id={payload.get("client_id", self._get_client_id())}, command=kill'
 
-    # add server端控制命令转发 2026-04-10 00:00
+
     def force_reset(self):
         payload = self._post_control_command('reset')
         yield 1, f'force_reset sent -> client_id={payload.get("client_id", self._get_client_id())}, command=reset'

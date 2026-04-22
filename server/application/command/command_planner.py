@@ -151,7 +151,7 @@ class CommandPlanner:
             'extra': script_args_extra,
         }
 
-    # add alias发送前提示包装 2026-04-08
+
     def _wrap_alias_executor(self, alias_plan: dict):
         remote_executor = self.plan_executor(alias_plan)
         callback = self.alias_resolved_callback

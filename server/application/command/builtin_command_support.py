@@ -463,20 +463,20 @@ class PinnedPathBuiltinSupport:
         self.history_entry_id_provider = history_entry_id_provider
         self.command_processor_factory = command_processor_factory
 
-    # add gopin 快速跳转 2026-04-09 15:30
+
     def _get_machine_id(self) -> str:
         session_info = getattr(self.conn, 'session_info', None)
         return getattr(session_info, 'machine_id', '') or 'unknown_machine'
 
-    # add gopin 快速跳转 2026-04-09 15:30
+
     def list_pinned_paths(self) -> list[dict]:
         return self.pinned_path_store.list_items(self._get_machine_id())
 
-    # add gopin 快速跳转 2026-04-09 15:30
+
     def _build_cd_command(self, path: str) -> str:
         return f'cd {path}'
 
-    # add gopin 快速跳转 2026-04-09 15:30
+
     def gopin(self, arg=''):
         name = str(arg or '').strip()
         items = self.list_pinned_paths()

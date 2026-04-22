@@ -90,7 +90,7 @@ class LocalWatchdogHeartbeatFeeder:
     def is_alive(self) -> bool:
         return self._thread is not None and self._thread.is_alive()
 
-    # add local watchdog separation 2026-04-10 00:00
+
     def get_thread_name(self):
         if self._thread is None:
             return None
@@ -101,7 +101,7 @@ class LocalWatchdogActionExecutor:
     def __init__(self, restart_parent_callback):
         self.restart_parent_callback = restart_parent_callback
 
-    # add local watchdog separation 2026-04-10 00:00
+
     def restart_parent(self):
         self.restart_parent_callback()
 
@@ -124,7 +124,7 @@ class LocalWatchdogMonitor:
         self._local_logger = _build_local_watchdog_file_logger(self.local_watchdog_log_file_path)
         self._timeout_triggered = False
 
-    # add local watchdog separation 2026-04-10 00:00
+
     def _read_heartbeat_age_seconds(self):
         if not self.heartbeat_file_path or not os.path.isfile(self.heartbeat_file_path):
             return None
@@ -138,7 +138,7 @@ class LocalWatchdogMonitor:
 
         return max(time.time() - ts_value, 0.0)
 
-    # add local watchdog separation 2026-04-10 00:00
+
     def run_iteration(self):
         try:
             heartbeat_age_seconds = self._read_heartbeat_age_seconds()

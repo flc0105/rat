@@ -46,7 +46,7 @@ class CommandExecutor:
     def _get_current_history_entry_id(self) -> str:
         return self.current_history_entry_id
 
-    # add alias展开提示保留原始history命令 2026-04-15
+
     def _on_alias_resolved(self, alias_plan: dict):
         resolved_command = str(alias_plan.get('command') or '').strip()
         alias_name = str(alias_plan.get('alias_name') or '').strip()
@@ -117,7 +117,7 @@ class CommandExecutor:
         history_index = matched.group(1)
         return f'history run {history_index}'
 
-    # add command执行主链入口标记 2026-04-09
+
     def process_command(self, cmd, history_entry_id: str = ''):
         self.current_history_entry_id = (history_entry_id or '').strip()
 

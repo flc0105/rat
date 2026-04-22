@@ -42,7 +42,7 @@ class BackgroundJobService:
         }
         return f'start_job {self._encode_payload_arg(payload)}'
 
-    # add remove client side job 2026-04-08 11:40
+
     def _serialize_available_job(self, job_item: dict) -> dict:
         job_name = str(job_item.get('job_name') or job_item.get('name') or job_item.get('job_key') or '').strip()
         display_name = str(job_item.get('display_name') or job_name).strip() or job_name

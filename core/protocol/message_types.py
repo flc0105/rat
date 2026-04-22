@@ -1,5 +1,3 @@
-# add 消息类型常量收口 2026-04-08
-
 MSG_TYPE_RESULT = 'result'
 
 MSG_TYPE_COMMAND = 'command'

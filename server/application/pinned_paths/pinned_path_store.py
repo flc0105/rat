@@ -23,25 +23,25 @@ class PinnedPathStore:
         self._lock = threading.RLock()
         self._prepare_dirs()
 
-    # add machine_id quick jump 存储 2026-04-09 15:30
+
     def _prepare_dirs(self):
         os.makedirs(self.root_dir, exist_ok=True)
 
-    # add machine_id quick jump 存储 2026-04-09 15:30
+
     def _normalize_machine_id(self, machine_id: str) -> str:
         safe_name = secure_filename((machine_id or '').strip())
         return safe_name or 'unknown_machine'
 
-    # add machine_id quick jump 存储 2026-04-09 15:30
+
     def _get_file_path(self, machine_id: str) -> str:
         normalized = self._normalize_machine_id(machine_id)
         return os.path.join(self.root_dir, f'{normalized}.json')
 
-    # add machine_id quick jump 存储 2026-04-09 15:30
+
     def _now_text(self) -> str:
         return datetime.now().strftime(self.TIME_FORMAT)
 
-    # add machine_id quick jump 存储 2026-04-09 15:30
+
     def _normalize_entry(self, item) -> dict | None:
         if not isinstance(item, dict):
             return None
@@ -62,7 +62,7 @@ class PinnedPathStore:
             'updated_at': updated_at or created_at or now_text,
         }
 
-    # add machine_id quick jump 存储 2026-04-09 15:30
+
     def _read_payload(self, machine_id: str) -> list[dict]:
         file_path = self._get_file_path(machine_id)
         if not os.path.isfile(file_path):
@@ -87,7 +87,7 @@ class PinnedPathStore:
                 items.append(normalized)
         return items
 
-    # add machine_id quick jump 存储 2026-04-09 15:30
+
     def _write_payload(self, machine_id: str, items: list[dict]):
         file_path = self._get_file_path(machine_id)
         payload = {
@@ -97,13 +97,13 @@ class PinnedPathStore:
         with open(file_path, 'w', encoding='utf-8') as file_obj:
             json.dump(payload, file_obj, ensure_ascii=False, indent=2)
 
-    # add machine_id quick jump 存储 2026-04-09 15:30
+
     def list_items(self, machine_id: str) -> list[dict]:
         with self._lock:
             items = self._read_payload(machine_id)
         return sorted(items, key=lambda item: item.get('display_name', '').lower())
 
-    # add machine_id quick jump 存储 2026-04-09 15:30
+
     def save_item(self, machine_id: str, display_name: str, path: str) -> dict:
         display_name_text = str(display_name or '').strip()
         path_text = str(path or '').strip()
@@ -139,7 +139,7 @@ class PinnedPathStore:
             self._write_payload(machine_id, normalized_items)
             return dict(matched_item)
 
-    # add quick jump 管理编辑 2026-04-09 16:20
+
     def update_item(self, machine_id: str, original_display_name: str, display_name: str, path: str) -> dict:
         original_name_text = str(original_display_name or '').strip()
         display_name_text = str(display_name or '').strip()
@@ -177,7 +177,7 @@ class PinnedPathStore:
             self._write_payload(machine_id, normalized_items)
             return dict(matched_item)
 
-    # add machine_id quick jump 存储 2026-04-09 15:30
+
     def delete_item(self, machine_id: str, display_name: str) -> dict:
         display_name_text = str(display_name or '').strip()
         if not display_name_text:
@@ -202,7 +202,7 @@ class PinnedPathStore:
             self._write_payload(machine_id, normalized_items)
             return dict(removed_item)
 
-    # add machine_id quick jump 存储 2026-04-09 15:30
+
     def get_item_by_name(self, machine_id: str, display_name: str) -> dict | None:
         display_name_text = str(display_name or '').strip()
         if not display_name_text:

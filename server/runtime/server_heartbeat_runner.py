@@ -9,7 +9,7 @@ class ServerHeartbeatRunner:
         self.server = server
 
     def run(self):
-        # add 拆分 heartbeat 运行器 2026-04-08
+
         while 1:
             try:
                 sessions = self.server.connections.all()

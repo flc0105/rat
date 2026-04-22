@@ -232,12 +232,12 @@ class BuiltinCommandHandler:
         for item in self.rtt_support.rtt(arg):
             yield item
 
-    # add server端控制命令转发 2026-04-10 00:00
+
     def force_kill(self, arg=''):
         for item in self.control_support.force_kill():
             yield item
 
-    # add server端控制命令转发 2026-04-10 00:00
+
     def force_reset(self, arg=''):
         for item in self.control_support.force_reset():
             yield item
