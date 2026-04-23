@@ -12,8 +12,6 @@
     <!-- Monaco Editor CSS -->
     <link rel="stylesheet" data-name="vs/editor/editor.main"
           href="https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs/editor/editor.main.min.css">
-
-
 </head>
 <body>
 <div id="app">
@@ -358,7 +356,7 @@
     <input ref="remoteUploadInputRef" type="file" class="hidden-file-input" @change="handleRemoteUploadChange"/>
 
     <el-dialog v-model="remoteFilesDialogVisible" title="Remote File Browser" width="1180px" top="4vh"
-               class="fixed-dialog remote-files-dialog" :lock-scroll="true">
+               class="fixed-dialog remote-files-dialog">
         <div class="fixed-dialog-body">
             <div class="dialog-head remote-files-head">
                 <div class="dialog-head-left remote-files-head-main">

@@ -3,6 +3,7 @@
   box-sizing: border-box;
 }
 
+
 :root {
   --bg-page: #eef2f7;
   --bg-panel: rgba(255, 255, 255, 0.9);
@@ -2016,7 +2017,7 @@ body {
   body,
   #app,
   .app {
-    height: auto;
+    /*height: auto;*/ /*去掉这个可以让外层滚动条消失*/
     overflow: auto;
   }
 
@@ -3481,24 +3482,8 @@ body {
 }
 
 
-/*!*lock*!*/
-/*!* 锁 body 滚动 *!*/
-/*!* 锁定背景滚动 *!*/
-/*body.dialog-open {*/
-/*  overflow: hidden !important;*/
-/*  position: fixed !important;*/
-/*  width: 100% !important;*/
-/*  height: 100% !important;*/
-/*  top: 0;*/
-/*  left: 0;*/
-/*  right: 0;*/
-/*}*/
-
-/*!* dialog 内部滚动 *!*/
-/*.fixed-dialog .el-dialog__body,*/
-/*.fixed-dialog-body {*/
-/*  overflow-y: auto !important;*/
-/*  -webkit-overflow-scrolling: touch; !* 移动端平滑滚动 *!*/
-/*  max-height: 80vh; !* 避免超屏 *!*/
-/*  box-sizing: border-box;*/
-/*}*/
+@media (max-width: 768px), (max-height: 720px) {
+  body {
+    overflow: hidden !important;
+  }
+}

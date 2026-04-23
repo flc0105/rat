@@ -13,10 +13,10 @@ WEB_PORT = 8085
 WEB_WS_PORT = int(os.getenv('RAT_WEB_WS_PORT', str(WEB_PORT + 1)))
 
 # ------------------ auth ------------------ #
-WEB_SESSION_SECRET = os.getenv('RAT_WEB_SESSION_SECRET', 'change-this-session-secret')
+WEB_SESSION_SECRET = os.getenv('RAT_WEB_SESSION_SECRET', 'BE18F48E-F363-458A-8F29-5E6C791C8F03')
 ADMIN_USERNAME = os.getenv('RAT_ADMIN_USERNAME', 'admin')
 ADMIN_PASSWORD = os.getenv('RAT_ADMIN_PASSWORD', 'admin123456')
-ADMIN_API_TOKEN = os.getenv('RAT_ADMIN_API_TOKEN', 'change-this-static-token')
+ADMIN_API_TOKEN = os.getenv('RAT_ADMIN_API_TOKEN', '627D3547-E8F4-4705-AABC-D42EB872F4D6')
 WEB_AUTH_SESSION_DAYS = int(os.getenv('RAT_WEB_AUTH_SESSION_DAYS', '7'))
 SESSION_COOKIE_NAME = os.getenv('RAT_WEB_SESSION_COOKIE_NAME', 'rat_admin_session')
 
