@@ -1,5 +1,6 @@
 import sys
 import time
+from datetime import datetime, timezone
 from typing import Any, Iterable, Mapping
 
 
@@ -125,3 +126,30 @@ def format_table(headers: Iterable[Any], data: Iterable[Iterable[Any]]) -> str:
         lines.append(row_format.format(*row))
 
     return "\n".join(lines)
+
+
+def seconds_to_readable_text(seconds):
+    try:
+        seconds = int(seconds)
+    except Exception:
+        return None
+
+    days, rem = divmod(seconds, 86400)
+    hours, rem = divmod(rem, 3600)
+    minutes, seconds = divmod(rem, 60)
+    return f"{days}d {hours}h {minutes}m {seconds}s"
+
+
+def timestamp_to_readable_time(timestamp):
+    """
+    将 Unix 时间戳（秒）转换为本地可读时间。
+
+    参数:
+        timestamp: int 或 float，Unix 时间戳（秒）
+
+    返回:
+        str，格式如 '2026-04-23 14:32:15'
+    """
+    dt_utc = datetime.fromtimestamp(timestamp, tz=timezone.utc)
+    dt_local = dt_utc.astimezone()
+    return dt_local.strftime('%Y-%m-%d %H:%M:%S')

@@ -13,197 +13,28 @@ from client.commands.common import CommonCommands
 from client.commands.interrupts import timeout, cancel_policy, interruptible
 from client.config.config import UPLOAD_BASE_URL
 from client.config.runtime_config import HTTP_TRANSFER_MODE
+from client.utils.ios_util import _safe_call, get_ios_process_info, get_ios_device_info, get_ios_bundle_info, \
+    get_ios_username
 from core.platform.platform_identity import detect_platform_alias
+from core.utils.client_util import get_executable_path
+from core.utils.command_output import StructuredCommandResult
 from core.utils.decorator import desc
+from core.utils.formatting import get_size
 from core.utils.logger import logger
 
 
-if detect_platform_alias == 'ios':
+if detect_platform_alias() == 'ios':
     from objc_util import ObjCClass, ns, ObjCInstance
 
 upload_url = UPLOAD_BASE_URL.rstrip('/') + '/api/files/upload'
 
 
-def uptime_to_text(seconds):
-    try:
-        seconds = int(seconds)
-    except Exception:
-        return None
-
-    days, rem = divmod(seconds, 86400)
-    hours, rem = divmod(rem, 3600)
-    minutes, seconds = divmod(rem, 60)
-    return f"{days}d {hours}h {minutes}m {seconds}s"
 
 
-def _safe_call(fn, default=None):
-    try:
-        return fn()
-    except Exception:
-        return default
 
 
-def _format_bytes(value):
-    try:
-        size = float(value)
-    except Exception:
-        return None
-
-    units = ['B', 'KB', 'MB', 'GB', 'TB']
-    for unit in units:
-        if size < 1024 or unit == units[-1]:
-            return f'{size:.2f} {unit}'
-        size /= 1024.0
-    return str(value)
 
 
-def _get_username():
-    for key in ('USER', 'LOGNAME', 'USERNAME'):
-        value = os.environ.get(key)
-        if value:
-            return value
-    return _safe_call(os.getlogin, 'unknown')
-
-
-def _get_process_name():
-    argv0 = sys.argv[0] if sys.argv else ''
-    if argv0:
-        return os.path.basename(argv0)
-    return os.path.basename(sys.executable or '') or 'python'
-
-
-def _get_bundle_info():
-    info = {
-        'bundle_identifier': None,
-        'bundle_path': None,
-        'executable_path': None,
-        'resource_path': None,
-        'bundle_name': None,
-        'app_name': None,
-        'bundle_version': None,
-        'bundle_short_version': None,
-    }
-
-    try:
-        NSBundle = ObjCClass('NSBundle')
-        bundle = NSBundle.mainBundle()
-
-        info['bundle_identifier'] = _safe_call(lambda: str(bundle.bundleIdentifier()))
-        info['bundle_path'] = _safe_call(lambda: str(bundle.bundlePath()))
-        info['executable_path'] = _safe_call(lambda: str(bundle.executablePath()))
-        info['resource_path'] = _safe_call(lambda: str(bundle.resourcePath()))
-
-        info_dict = _safe_call(lambda: bundle.infoDictionary())
-        if info_dict is not None:
-            def get_value(key):
-                value = info_dict.objectForKey_(key)
-                return str(value) if value is not None else None
-
-            info['bundle_name'] = _safe_call(lambda: get_value('CFBundleName'))
-            info['app_name'] = _safe_call(lambda: get_value('CFBundleDisplayName')) or _safe_call(
-                lambda: get_value('CFBundleName'))
-            info['bundle_version'] = _safe_call(lambda: get_value('CFBundleVersion'))
-            info['bundle_short_version'] = _safe_call(lambda: get_value('CFBundleShortVersionString'))
-    except Exception:
-        pass
-
-    return info
-
-
-def _get_device_info():
-    info = {
-        'device_name': None,
-        'device_model': None,
-        'device_localized_model': None,
-        'device_type': None,
-        'system': None,
-        'system_version': None,
-        'machine_name': None,
-        'hostname': None,
-        'identifier_for_vendor': None,
-    }
-
-    try:
-        UIDevice = ObjCClass('UIDevice')
-        device = UIDevice.currentDevice()
-
-        idiom_map = {
-            0: "Phone",
-            1: "Pad",
-            2: "TV",
-            3: "CarPlay",
-            4: "Mac",
-            5: "Vision",
-        }
-
-        info['device_name'] = _safe_call(lambda: str(device.name()))
-        info['device_model'] = _safe_call(lambda: str(device.model()))
-        info['device_localized_model'] = _safe_call(lambda: str(device.localizedModel()))
-        info['system'] = _safe_call(lambda: str(device.systemName()))
-        info['system_version'] = _safe_call(lambda: str(device.systemVersion()))
-        info['device_type'] = _safe_call(
-            lambda: idiom_map.get(int(device.userInterfaceIdiom()), str(int(device.userInterfaceIdiom()))))
-
-        identifier_for_vendor = _safe_call(lambda: device.identifierForVendor())
-        if identifier_for_vendor is not None:
-            info['identifier_for_vendor'] = _safe_call(lambda: str(identifier_for_vendor.UUIDString()))
-    except Exception:
-        pass
-
-    try:
-        uname_info = os.uname()
-        info['machine_name'] = uname_info.machine
-        info['hostname'] = uname_info.nodename
-    except Exception:
-        pass
-
-    return info
-
-
-def _get_process_info():
-    info = {
-        'process_name': None,
-        'process_id': None,
-        'username': None,
-        'arguments': None,
-        'processor_count': None,
-        'active_processor_count': None,
-        'physical_memory_bytes': None,
-        'physical_memory_human': None,
-        'system_boot_time': None,
-        'system_uptime_seconds': None,
-        'system_uptime_human': None,
-        'operating_system_version_string': None,
-        'low_power_mode_enabled': None,
-    }
-
-    try:
-        NSProcessInfo = ObjCClass('NSProcessInfo')
-        proc = NSProcessInfo.processInfo()
-
-        info['process_name'] = _safe_call(lambda: str(proc.processName()))
-        info['process_id'] = _safe_call(lambda: int(proc.processIdentifier()))
-        info['username'] = _safe_call(lambda: str(proc.userName()))
-        info['arguments'] = _safe_call(lambda: [str(x) for x in list(proc.arguments())])
-
-        info['processor_count'] = _safe_call(lambda: int(proc.processorCount()))
-        info['active_processor_count'] = _safe_call(lambda: int(proc.activeProcessorCount()))
-
-        physical_memory = _safe_call(lambda: int(proc.physicalMemory()))
-        info['physical_memory_bytes'] = physical_memory
-        info['physical_memory_human'] = _format_bytes(physical_memory) if physical_memory is not None else None
-
-        system_uptime = _safe_call(lambda: int(proc.systemUptime()))
-        info['system_uptime_seconds'] = system_uptime
-        info['system_uptime_human'] = uptime_to_text(system_uptime) if system_uptime is not None else None
-        info['system_boot_time'] = int(time.time() - system_uptime) if system_uptime is not None else None
-
-        info['operating_system_version_string'] = _safe_call(lambda: str(proc.operatingSystemVersionString()))
-        info['low_power_mode_enabled'] = _safe_call(lambda: bool(proc.isLowPowerModeEnabled()))
-    except Exception:
-        pass
-
-    return info
 
 
 class iOSCommands(CommonCommands):
@@ -295,7 +126,7 @@ class iOSCommands(CommonCommands):
     @interruptible()
     def whoami(self):
         try:
-            return 1, str(_get_username())
+            return 1, str(get_ios_username())
         except Exception as e:
             return 0, f'whoami failed: {e}'
 
@@ -404,61 +235,55 @@ class iOSCommands(CommonCommands):
         try:
             from pathlib import Path
             import os
-            device = _get_device_info()
-            proc = _get_process_info()
-            bundle = _get_bundle_info()
+            device = get_ios_device_info()
+            proc = get_ios_process_info()
+            bundle = get_ios_bundle_info()
 
             info = {
                 'device_name': device.get('device_name'),
                 'device_model': device.get('device_model'),
-                'device_localized_model': device.get('device_localized_model'),
                 'device_type': device.get('device_type'),
-                'machine_name': device.get('machine_name'),
+                'machine_name': device.get('machine_name') or platform.machine(),
                 'hostname': device.get('hostname'),
                 'system': device.get('system'),
                 'system_version': device.get('system_version'),
                 'identifier_for_vendor': device.get('identifier_for_vendor'),
-
                 'platform': _safe_call(platform.platform),
-                'release': _safe_call(platform.release),
-                'version': _safe_call(platform.version),
-                'machine': _safe_call(platform.machine),
+                'kernel_release': _safe_call(platform.release),
+                'kernel_version': _safe_call(platform.version),
                 'python_compiler': _safe_call(platform.python_compiler),
                 'python_version': sys.version,
                 'python_version_short': _safe_call(platform.python_version),
-
                 'process_name': proc.get('process_name'),
                 'process_id': proc.get('process_id'),
                 'username': proc.get('username'),
-                'startup_args': proc.get('arguments'),
+                'executable_path': get_executable_path(),
                 'processor_count': proc.get('processor_count'),
-                'active_processor_count': proc.get('active_processor_count'),
-                'physical_memory_bytes': proc.get('physical_memory_bytes'),
-                'physical_memory_human': proc.get('physical_memory_human'),
+                'physical_memory': proc.get('physical_memory'),
                 'system_boot_time': proc.get('system_boot_time'),
-                'system_uptime_seconds': proc.get('system_uptime_seconds'),
-                'system_uptime_human': proc.get('system_uptime_human'),
-                'operating_system_version_string': proc.get('operating_system_version_string'),
+                'system_uptime': proc.get('system_uptime'),
+                'os_version_string': proc.get('operating_system_version_string'),
                 'low_power_mode_enabled': proc.get('low_power_mode_enabled'),
-
                 'bundle_identifier': bundle.get('bundle_identifier'),
                 'bundle_path': bundle.get('bundle_path'),
-                'executable_path': bundle.get('executable_path'),
-                'resource_path': bundle.get('resource_path'),
+                'bundle_executable_path': bundle.get('executable_path') or sys.executable,
                 'bundle_name': bundle.get('bundle_name'),
                 'app_name': bundle.get('app_name'),
                 'bundle_version': bundle.get('bundle_version'),
                 'bundle_short_version': bundle.get('bundle_short_version'),
-
-                'executable': sys.executable,
-                'home': os.path.expanduser('~'),
                 'cwd': os.getcwd(),
-                'pythonista_home':  str(Path.home()),
+                'home': os.path.expanduser('~') or str(Path.home()),
                 'documents': os.path.expanduser('~/Documents'),
                 'temp':  os.path.abspath(os.getenv('TMPDIR', '/tmp'))
             }
 
-            return 1, json.dumps(info, ensure_ascii=False)
+            return StructuredCommandResult(
+                status=1,
+                data=info,
+                shape='dict',
+                width=25,
+            )
+
         except Exception as e:
             logger.error(e, exc_info=True)
             return 0, f'Failed to get system info: {e}'
@@ -562,7 +387,7 @@ class iOSCommands(CommonCommands):
                 'is_dir': os.path.isdir(target),
                 'is_file': os.path.isfile(target),
                 'size': st.st_size,
-                'size_human': _format_bytes(st.st_size),
+                'size_human': get_size(st.st_size),
                 'mtime': int(st.st_mtime),
                 'ctime': int(st.st_ctime),
                 'atime': int(st.st_atime),

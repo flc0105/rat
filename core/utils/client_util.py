@@ -3,10 +3,14 @@ import shlex
 import shutil
 import subprocess
 import sys
+import time
 import zipfile
 from pathlib import Path
 
-from core.platform.platform_identity import detect_platform_alias, detect_platform_name
+from client.config.config import CLIENT_BUILD_VERSION
+from core.device.machine_identity import build_machine_identity_payload, _detect_machine_identity_components
+from core.platform.platform_identity import detect_platform_alias, detect_platform_name, detect_platform_info
+from core.utils.formatting import get_size, seconds_to_readable_text, timestamp_to_readable_time
 
 
 def check_privilege():
@@ -350,3 +354,6 @@ def upload_file_via_http(file_obj, filename, upload_url, category='', client_id=
         data=form_data,
         timeout=30,
     )
+
+
+
