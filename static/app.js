@@ -19,6 +19,8 @@ createApp({
             ...window.AppCommandsModule.data(),
             ...window.AppTaskModule.data(),
             ...window.AppSseModule.data(),
+            scrollTop: 0
+
         }
     },
 
@@ -48,6 +50,14 @@ createApp({
         ...window.AppJobsModule.watch,
         ...window.AppScriptsModule.watch,
         ...window.AppHistoryModule.watch,
+        remoteFilesDialogVisible: 'updateBodyDialogLock',
+        artifactDialogVisible: 'updateBodyDialogLock',
+        scriptLibraryDialogVisible: 'updateBodyDialogLock',
+        backgroundJobsDialogVisible: 'updateBodyDialogLock',
+        previewDialogVisible: 'updateBodyDialogLock',
+        commandHistoryDialogVisible: 'updateBodyDialogLock',
+        processDialogVisible: 'updateBodyDialogLock',
+        ptyDialogVisible: 'updateBodyDialogLock',
     },
 
     methods: {
@@ -67,6 +77,30 @@ createApp({
         ...window.AppHistoryModule.methods,
         ...window.AppArtifactsModule.methods,
         ...window.AppPreviewModule.methods,
+        lockBody() {
+            this.scrollTop = window.scrollY || document.documentElement.scrollTop;
+            document.body.classList.add('dialog-open');
+            document.body.style.top = `-${this.scrollTop}px`;
+        },
+        unlockBody() {
+            document.body.classList.remove('dialog-open');
+            document.body.style.top = '';
+            window.scrollTo(0, this.scrollTop);
+        },
+        updateBodyDialogLock() {
+            // 所有 dialog 的 visible
+            const anyDialogOpen =
+                this.remoteFilesDialogVisible ||
+                this.artifactDialogVisible ||
+                this.scriptLibraryDialogVisible ||
+                this.backgroundJobsDialogVisible ||
+                this.previewDialogVisible ||
+                this.commandHistoryDialogVisible ||
+                this.processDialogVisible ||
+                this.ptyDialogVisible;
+
+            anyDialogOpen ? this.lockBody() : this.unlockBody();
+        }
 
     },
     mounted() {
@@ -77,7 +111,10 @@ createApp({
         this.statusTickTimer = setInterval(() => {
             this.statusNowTick = Date.now();
         }, 30 * 1000);
+
+        this.updateBodyDialogLock();
     },
+
 
     beforeUnmount() {
         if (this.eventSource) this.eventSource.close();
@@ -89,6 +126,8 @@ createApp({
             clearInterval(this.statusTickTimer);
             this.statusTickTimer = null;
         }
+
+        document.body.classList.remove('dialog-open');
     },
 
 

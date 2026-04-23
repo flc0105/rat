@@ -358,7 +358,7 @@
     <input ref="remoteUploadInputRef" type="file" class="hidden-file-input" @change="handleRemoteUploadChange"/>
 
     <el-dialog v-model="remoteFilesDialogVisible" title="Remote File Browser" width="1180px" top="4vh"
-               class="fixed-dialog remote-files-dialog">
+               class="fixed-dialog remote-files-dialog" :lock-scroll="true">
         <div class="fixed-dialog-body">
             <div class="dialog-head remote-files-head">
                 <div class="dialog-head-left remote-files-head-main">
