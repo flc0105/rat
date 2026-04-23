@@ -19,13 +19,16 @@ from core.utils.logger import logger
 
 from client.config.config import (
     CLIENT_BUILD_VERSION,
-
     SERVER_ADDR,
 )
 
 from client.config.runtime_config import RECONNECT_INTERVAL_SECONDS,REMOTE_HTTP_WATCHDOG_ENABLED, LOCAL_WATCHDOG_ENABLED
 
 # 强制导入所有平台模块，让 PyInstaller 检测到
+from client.commands.platform.mac import MacCommands
+from client.commands.platform.win import WindowsCommands
+from client.commands.platform.linux import LinuxCommands
+from client.commands.platform.ios import iOSCommands
 
 if os.name == 'nt':
     pass

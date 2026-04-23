@@ -5,7 +5,7 @@ import shutil
 import sys
 import time
 
-from objc_util import ObjCClass, ns, ObjCInstance
+
 
 from client.commands.argument_command_registry import argument_command, ArgumentCommandSpec, ArgumentOptionSpec
 from client.commands.command_context import CommandCancelledError, CommandTimeoutError
@@ -13,8 +13,13 @@ from client.commands.common import CommonCommands
 from client.commands.interrupts import timeout, cancel_policy, interruptible
 from client.config.config import UPLOAD_BASE_URL
 from client.config.runtime_config import HTTP_TRANSFER_MODE
+from core.platform.platform_identity import detect_platform_alias
 from core.utils.decorator import desc
 from core.utils.logger import logger
+
+
+if detect_platform_alias == 'ios':
+    from objc_util import ObjCClass, ns, ObjCInstance
 
 upload_url = UPLOAD_BASE_URL.rstrip('/') + '/api/files/upload'
 

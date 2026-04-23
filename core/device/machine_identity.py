@@ -8,7 +8,6 @@ import subprocess
 
 from core.platform.platform_identity import PlatformAlias, detect_platform_info
 
-
 MACHINE_ID_VERSION = 'v1'
 
 
@@ -96,7 +95,6 @@ def _detect_ios_arch() -> str:
     return 'na'
 
 
-
 def _read_linux_os_release() -> dict:
     content = _read_first_existing_text_file([
         '/etc/os-release',
@@ -121,21 +119,20 @@ def _read_linux_os_release() -> dict:
     return data
 
 
-
 def _detect_linux_distribution_name_and_version() -> tuple[str, str]:
     os_release = _read_linux_os_release()
 
     os_name = (
-        _safe_text(os_release.get('NAME')).strip()
-        or _safe_text(os_release.get('ID')).strip()
-        or 'Linux'
+            _safe_text(os_release.get('NAME')).strip()
+            or _safe_text(os_release.get('ID')).strip()
+            or 'Linux'
     )
 
     os_version = (
-        _safe_text(os_release.get('VERSION_ID')).strip()
-        or _safe_text(os_release.get('VERSION')).strip()
-        or _safe_text(platform.release()).strip()
-        or _safe_text(platform.version()).strip()
+            _safe_text(os_release.get('VERSION_ID')).strip()
+            or _safe_text(os_release.get('VERSION')).strip()
+            or _safe_text(platform.release()).strip()
+            or _safe_text(platform.version()).strip()
     )
 
     return os_name, os_version

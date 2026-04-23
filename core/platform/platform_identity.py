@@ -25,7 +25,6 @@ _PLATFORM_INFO_MAP = {
 }
 
 
-
 def detect_platform_info() -> PlatformInfo:
     system_name = platform.system()
 
@@ -43,7 +42,6 @@ def detect_platform_info() -> PlatformInfo:
         display_name=normalized_system_name,
         system_name=normalized_system_name,
     )
-
 
 
 def detect_platform_alias() -> str:

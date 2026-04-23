@@ -88,7 +88,7 @@ class ClientGuardManager:
         if self._started:
             return
 
-        self._log_startup_once()
+        # self._log_startup_once()
 
         if LOCAL_WATCHDOG_ENABLED:
             self._ensure_local_watchdog_feeder()
