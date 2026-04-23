@@ -81,7 +81,7 @@ class RecentDeviceStore:
             record = {
                 'recent_device_key': key,
                 'machine_id': machine_id,
-                'machine_id_version': str(connection_payload.get('machine_id_version') or previous.get('machine_id_version') or ''),
+                # 'machine_id_version': str(connection_payload.get('machine_id_version') or previous.get('machine_id_version') or ''),
                 'machine_fingerprint_basis': str(connection_payload.get('machine_fingerprint_basis') or previous.get('machine_fingerprint_basis') or ''),
                 'hostname': str(connection_payload.get('hostname') or previous.get('hostname') or ''),
                 'client_id': str(connection_payload.get('client_id') or previous.get('client_id') or ''),
@@ -89,6 +89,14 @@ class RecentDeviceStore:
                 'os_type': str(connection_payload.get('os_type') or previous.get('os_type') or ''),
                 'os_alias': str(connection_payload.get('os_alias') or previous.get('os_alias') or 'unknown'),
                 'os_ver': str(connection_payload.get('os_ver') or previous.get('os_ver') or ''),
+
+
+                'os_name': str(connection_payload.get('os_name') or previous.get('os_name') or ''),
+                'os_full': str(connection_payload.get('os_full') or previous.get('os_full') or ''),
+                'arch': str(connection_payload.get('arch') or previous.get('arch') or ''),
+                'manufacturer': str(connection_payload.get('manufacturer') or previous.get('manufacturer') or ''),
+                'model': str(connection_payload.get('model') or previous.get('model') or ''),
+
                 'integrity': str(connection_payload.get('integrity') or previous.get('integrity') or ''),
                 'cwd': str(connection_payload.get('cwd') or previous.get('cwd') or ''),
                 'build_version': str(connection_payload.get('build_version') or previous.get('build_version') or ''),

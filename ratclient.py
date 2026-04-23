@@ -12,9 +12,9 @@ from client.config.runtime_config import HTTP_TRANSFER_MODE, PYTHON_EXECUTION_MO
 from client.connection.server_connection import ServerConnection
 from client.watchdog.client_guard_manager import ClientGuardManager
 from client.watchdog.watchdog_process import run_watchdog_worker_from_argv
-from core.device.machine_identity import build_machine_identity_payload
+from core.device.machine_identity import build_machine_identity_payload, _detect_machine_identity_components
 from core.platform.platform_identity import detect_platform_info
-from core.utils.client_util import check_privilege, get_system_paths
+from core.utils.client_util import check_privilege, get_system_paths, get_executable_path
 from core.utils.logger import logger
 
 from client.config.config import (
@@ -122,8 +122,8 @@ class Client:
         except Exception:
             command_manifest = []
 
-        executable_path = os.path.realpath(sys.executable)
-        script_path = os.path.realpath(''.join(sys.argv))
+        # executable_path = os.path.realpath(sys.executable)
+        # script_path = os.path.realpath(''.join(sys.argv))
 
         try:
             import psutil
@@ -139,6 +139,8 @@ class Client:
         platform_info = detect_platform_info()
         machine_identity = build_machine_identity_payload()
 
+        machine_info = _detect_machine_identity_components()
+
         return {
             'id': self.client_id,
             'type': 'info',
@@ -147,26 +149,36 @@ class Client:
 
             'os_type': platform_info.display_name,
             'os_alias': platform_info.alias,
+            'os_full': platform.platform(),
 
-            'os_ver': platform.platform(),
+            'os_name': machine_info.get('os_name'),
+            'os_ver': machine_info.get('os_version'),
+            'arch': machine_info.get('arch'),
+            'manufacturer': machine_info.get('manufacturer'),
+            'model': machine_info.get('model'),
+
             'hostname': socket.gethostname(),
-            'machine_id': machine_identity['machine_id_hash'],
-            'machine_id_version': machine_identity['machine_id_version'],
-            'machine_fingerprint_basis': machine_identity['fingerprint_basis'],
             'integrity': check_privilege(),
+            'machine_id': machine_identity['machine_id_hash'],
+            # 'machine_id_version': machine_identity['machine_id_version'],
+            'machine_fingerprint_basis': machine_identity['fingerprint_basis'],
+            'build_version': CLIENT_BUILD_VERSION,
+
             'cwd': os.getcwd(),
-            'command_manifest': command_manifest,
-            'system_paths': get_system_paths(),
+
             'python_ver': platform.python_version(),
             'process_id': os.getpid(),
-            'launch_command': f'{executable_path} {script_path}',
+            # 'launch_command': f'{executable_path} {script_path}',
+            'launch_command':get_executable_path(),
             'username': username,
             'process_name': process_name,
             'http_transfer_mode': HTTP_TRANSFER_MODE,
             'python_execution_mode': PYTHON_EXECUTION_MODE,
             'remote_watchdog_enabled': REMOTE_HTTP_WATCHDOG_ENABLED,
             'local_watchdog_enabled': LOCAL_WATCHDOG_ENABLED,
-            'build_version': CLIENT_BUILD_VERSION,
+
+            'command_manifest': command_manifest,
+            'system_paths': get_system_paths(),
         }
 
     def _connect_socket(self):
