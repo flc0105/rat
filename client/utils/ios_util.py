@@ -5,7 +5,7 @@ from core.platform.platform_identity import detect_platform_alias
 from core.utils.formatting import get_size, seconds_to_readable_text, timestamp_to_readable_time
 
 if detect_platform_alias() == 'ios':
-    from objc_util import ObjCClass
+    from objc_util import ObjCClass, ns, ObjCInstance
 
 
 def _safe_call(fn, default=None):
@@ -145,3 +145,100 @@ def get_ios_bundle_info():
         pass
 
     return info
+
+
+def contact_to_dict(c):
+    family_name = str(c.familyName() or '')
+    middle_name = str(c.middleName() or '')
+    given_name = str(c.givenName() or '')
+
+    full_name = ' '.join(x for x in [family_name, middle_name, given_name] if x).strip()
+    if not full_name:
+        full_name = ' '.join(x for x in [given_name, middle_name, family_name] if x).strip()
+    if not full_name:
+        full_name = str(c.organizationName() or '').strip() or '(no name)'
+
+    phone_numbers = []
+    nums = c.phoneNumbers()
+    for j in range(int(nums.count())):
+        item = ObjCInstance(nums.objectAtIndex_(j))
+        label = str(item.label()) if item.label() else ''
+        value_obj = item.value()
+        value = str(value_obj.stringValue()) if value_obj else ''
+        if value:
+            phone_numbers.append({
+                'label': label,
+                'value': value,
+            })
+
+    email_addresses = []
+    emails = c.emailAddresses()
+    for j in range(int(emails.count())):
+        item = ObjCInstance(emails.objectAtIndex_(j))
+        label = str(item.label()) if item.label() else ''
+        value = str(item.value()) if item.value() else ''
+        if value:
+            email_addresses.append({
+                'label': label,
+                'value': value,
+            })
+
+    return {
+        'full_name': full_name,
+        'family_name': family_name,
+        'middle_name': middle_name,
+        'given_name': given_name,
+        'organization': str(c.organizationName() or ''),
+        'job_title': str(c.jobTitle() or ''),
+        'phone': phone_numbers,
+        'email': email_addresses,
+    }
+
+
+def get_ios_contacts():
+    CNContactStore = ObjCClass('CNContactStore')
+    CNContact = ObjCClass('CNContact')
+
+    store = CNContactStore.alloc().init()
+
+    keys = ns([
+        'givenName',
+        'familyName',
+        'middleName',
+        'organizationName',
+        'jobTitle',
+        'phoneNumbers',
+        'emailAddresses',
+    ])
+
+    results = []
+    seen = set()
+
+    containers = store.containersMatchingPredicate_error_(None, None)
+
+    for i in range(int(containers.count())):
+        container = ObjCInstance(containers.objectAtIndex_(i))
+        container_id = str(container.identifier())
+
+        contacts = store.unifiedContactsMatchingPredicate_keysToFetch_error_(
+            CNContact.predicateForContactsInContainerWithIdentifier_(container_id),
+            keys,
+            None
+        )
+
+        for j in range(int(contacts.count())):
+            c = ObjCInstance(contacts.objectAtIndex_(j))
+            item = contact_to_dict(c)
+
+            uniq = (
+                item['full_name'],
+                tuple((x['label'], x['value']) for x in item['phone']),
+                tuple((x['label'], x['value']) for x in item['email']),
+            )
+            if uniq in seen:
+                continue
+            seen.add(uniq)
+
+            results.append(item)
+
+    return results
