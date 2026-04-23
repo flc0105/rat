@@ -609,8 +609,7 @@ class iOSCommands(CommonCommands):
                     category='Pythonista',
                     upload_url=upload_url,
                     client_id=getattr(self.socket, 'client_id', '') or '',
-                    # filename='photo.jpg',
-                    # content_type='image/jpeg',
+                    filename='photo.jpg',
                 )
 
             elif kind == 'file':
