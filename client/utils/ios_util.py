@@ -7,6 +7,7 @@ from core.utils.formatting import get_size, seconds_to_readable_text, timestamp_
 if detect_platform_alias() == 'ios':
     from objc_util import ObjCClass
 
+
 def _safe_call(fn, default=None):
     try:
         return fn()
@@ -20,8 +21,6 @@ def get_ios_username():
         if value:
             return value
     return _safe_call(os.getlogin, 'unknown')
-
-
 
 
 def get_ios_process_info():
@@ -50,7 +49,8 @@ def get_ios_process_info():
         info['physical_memory'] = get_size(physical_memory) if physical_memory is not None else None
         system_uptime = _safe_call(lambda: int(proc.systemUptime()))
         info['system_uptime'] = seconds_to_readable_text(system_uptime) if system_uptime is not None else None
-        info['system_boot_time'] = timestamp_to_readable_time(int(time.time() - system_uptime)) if system_uptime is not None else None
+        info['system_boot_time'] = timestamp_to_readable_time(
+            int(time.time() - system_uptime)) if system_uptime is not None else None
         info['operating_system_version_string'] = _safe_call(lambda: str(proc.operatingSystemVersionString()))
         info['low_power_mode_enabled'] = _safe_call(lambda: bool(proc.isLowPowerModeEnabled()))
     except Exception:

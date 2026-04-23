@@ -331,29 +331,76 @@ def is_process_alive(pid: int) -> bool:
 
 
 
-def upload_file_via_http(file_obj, filename, upload_url, category='', client_id=None):
-    """给脚本使用的工具方法"""
+# def upload_file_via_http(file_obj, filename, upload_url, category='', client_id=None):
+#     """给脚本使用的工具方法"""
+#     form_data = {
+#         'artifact_type': 'files',
+#         'category': category,
+#         'client_id': client_id,
+#     }
+#     try:
+#         file_obj.seek(0)
+#     except Exception:
+#         pass
+#
+#     files = {
+#         'file': (filename, file_obj)
+#     }
+#
+#     import requests
+#     return requests.post(
+#         upload_url,
+#         files=files,
+#         data=form_data,
+#         timeout=30,
+#     )
+
+
+
+def upload_file_via_http(file_source=None, filename=None, upload_url=None, category=None, client_id=None):
+    import os
+    import requests
+
     form_data = {
         'artifact_type': 'files',
         'category': category,
         'client_id': client_id,
     }
+
+    close_after = False
+
+    if isinstance(file_source, str):
+        file_obj = open(file_source, 'rb')
+        close_after = True
+        upload_name = filename or os.path.basename(file_source)
+    else:
+        file_obj = file_source
+        upload_name = filename or getattr(file_obj, 'name', None) or 'upload.bin'
+
     try:
-        file_obj.seek(0)
-    except Exception:
-        pass
+        try:
+            file_obj.seek(0)
+        except Exception:
+            pass
 
-    files = {
-        'file': (filename, file_obj)
-    }
+        files = {
+            'file': (upload_name, file_obj)
+        }
 
-    import requests
-    return requests.post(
-        upload_url,
-        files=files,
-        data=form_data,
-        timeout=30,
-    )
+        response = requests.post(
+            upload_url,
+            files=files,
+            data=form_data,
+            timeout=30,
+        )
 
+        return response
+
+    finally:
+        if close_after:
+            try:
+                file_obj.close()
+            except Exception:
+                pass
 
 

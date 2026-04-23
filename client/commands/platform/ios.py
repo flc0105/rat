@@ -16,7 +16,7 @@ from client.config.runtime_config import HTTP_TRANSFER_MODE
 from client.utils.ios_util import _safe_call, get_ios_process_info, get_ios_device_info, get_ios_bundle_info, \
     get_ios_username
 from core.platform.platform_identity import detect_platform_alias
-from core.utils.client_util import get_executable_path
+from core.utils.client_util import get_executable_path, upload_file_via_http
 from core.utils.command_output import StructuredCommandResult
 from core.utils.decorator import desc
 from core.utils.formatting import get_size
@@ -43,57 +43,57 @@ class iOSCommands(CommonCommands):
     def __init__(self, socket):
         super().__init__(socket)
 
-    def upload_file_via_http(
-            self,
-            file_source,
-            category=None,
-            filename=None
-    ):
-        import os
-        import requests
-
-        form_data = {
-            'artifact_type': 'files',
-            'category': (category or '').strip() or 'default',
-            'client_id': getattr(self.socket, 'client_id', '') or '',
-        }
-
-        close_after = False
-
-        if isinstance(file_source, str):
-            file_obj = open(file_source, 'rb')
-            close_after = True
-            upload_name = filename or os.path.basename(file_source)
-        else:
-            file_obj = file_source
-            upload_name = filename or getattr(file_obj, 'name', None) or 'upload.bin'
-
-        try:
-            # 尽量从头开始读
-            try:
-                file_obj.seek(0)
-            except Exception:
-                pass
-
-            files = {
-                'file': (upload_name, file_obj)
-            }
-
-            response = requests.post(
-                upload_url,
-                files=files,
-                data=form_data,
-                timeout=30,
-            )
-
-            return response
-
-        finally:
-            if close_after:
-                try:
-                    file_obj.close()
-                except Exception:
-                    pass
+    # def upload_file_via_http(
+    #         self,
+    #         file_source,
+    #         category=None,
+    #         filename=None
+    # ):
+    #     import os
+    #     import requests
+    #
+    #     form_data = {
+    #         'artifact_type': 'files',
+    #         'category': (category or '').strip() or 'default',
+    #         'client_id': getattr(self.socket, 'client_id', '') or '',
+    #     }
+    #
+    #     close_after = False
+    #
+    #     if isinstance(file_source, str):
+    #         file_obj = open(file_source, 'rb')
+    #         close_after = True
+    #         upload_name = filename or os.path.basename(file_source)
+    #     else:
+    #         file_obj = file_source
+    #         upload_name = filename or getattr(file_obj, 'name', None) or 'upload.bin'
+    #
+    #     try:
+    #         # 尽量从头开始读
+    #         try:
+    #             file_obj.seek(0)
+    #         except Exception:
+    #             pass
+    #
+    #         files = {
+    #             'file': (upload_name, file_obj)
+    #         }
+    #
+    #         response = requests.post(
+    #             upload_url,
+    #             files=files,
+    #             data=form_data,
+    #             timeout=30,
+    #         )
+    #
+    #         return response
+    #
+    #     finally:
+    #         if close_after:
+    #             try:
+    #                 file_obj.close()
+    #             except Exception:
+    #                 pass
 
     # ------------------ 基础 shell ------------------ #
 
@@ -604,10 +604,12 @@ class iOSCommands(CommonCommands):
                 image.save(buf, format='JPEG', quality=90)
                 buf.seek(0)
 
-                response = self.upload_file_via_http(
-                    buf,
+                response = upload_file_via_http(
+                    file_source=buf,
                     category='Pythonista',
-                    filename='photo.jpg',
+                    upload_url=upload_url,
+                    client_id=getattr(self.socket, 'client_id', '') or '',
+                    # filename='photo.jpg',
                     # content_type='image/jpeg',
                 )
 
@@ -622,10 +624,12 @@ class iOSCommands(CommonCommands):
                     'filename': os.path.basename(file_path),
                 }
 
-                response = self.upload_file_via_http(
-                    file_path,
+                response = upload_file_via_http(
+                    file_source=file_path,
                     category='Pythonista',
-                    filename=os.path.basename(file_path)
+                    upload_url=upload_url,
+                    filename=os.path.basename(file_path),
+                    client_id=getattr(self.socket, 'client_id', '') or '',
                 )
 
             else:
