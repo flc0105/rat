@@ -113,12 +113,12 @@ export default {
             this.commandText = row.command;
             this.commandHistoryDialogVisible = false;
 
-            Vue.nextTick(() => {
-                const input = this.$refs.commandInputRef;
-                if (input && typeof input.focus === 'function') {
-                    input.focus();
-                }
-            });
+this.$nextTick(() => {
+    const input = this.$refs.commandInputRef;
+    if (input && typeof input.focus === 'function') {
+        input.focus();
+    }
+});
         },
 
         openCommandExecutionDetail(row) {

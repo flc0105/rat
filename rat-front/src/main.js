@@ -8,7 +8,7 @@ import ElementPlus, {
 } from 'element-plus'
 
 import 'element-plus/dist/index.css'
-import './assets/app.css'
+// import './assets/app.css'
 
 import AppStateModule from './legacy/core/state.js'
 import AppUtilsModule from './legacy/modules/utils.js'

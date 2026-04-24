@@ -530,10 +530,10 @@ export default {
         },
 
         scrollToBottom() {
-            Vue.nextTick(() => {
-                const el = this.$refs.terminalRef;
-                if (el) el.scrollTop = el.scrollHeight;
-            });
+this.$nextTick(() => {
+    const el = this.$refs.terminalRef;
+    if (el) el.scrollTop = el.scrollHeight;
+});
         },
     },
 
