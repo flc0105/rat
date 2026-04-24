@@ -1487,180 +1487,39 @@
 />
 
 
-    <el-dialog v-model="processDialogVisible" title="Process Manager" width="1100px" top="5vh"
-               class="fixed-dialog process-dialog" @close="closeProcessDialog">
-        <div class="fixed-dialog-body">
-            <div class="dialog-head process-dialog-head">
-    <div class="dialog-head-left process-dialog-head-left">
-        <el-button
-                size="small"
-                @click="refreshProcessManager"
-                :loading="processActiveTab === 'apps' ? appsLoading : processesLoading"
-        >
-            Refresh
-        </el-button>
-        <el-input
-                v-model="processFilterText"
-                placeholder="Filter by PID, name"
-                size="small"
-                class="process-dialog-filter-input"
-                clearable
-        />
-    </div>
-    <div class="dialog-head-right process-dialog-head-right">
-        <span class="process-count">{{ processManagerSummaryText }}</span>
-    </div>
-</div>
+ <ProcessDialogs
+  v-model:process-dialog-visible="processDialogVisible"
+  v-model:process-detail-dialog-visible="processDetailDialogVisible"
+  v-model:process-active-tab="processActiveTab"
+  v-model:filter-text="processFilterText"
+  :process-manager-summary-text="processManagerSummaryText"
+  :process-tab-label="processTabLabel"
+  :app-tab-label="appTabLabel"
+  :filtered-processes="filteredProcesses"
+  :filtered-apps="filteredApps"
+  :processes-loading="processesLoading"
+  :apps-loading="appsLoading"
+  :process-detail-loading="processDetailLoading"
+  :process-detail="processDetail"
+  :process-detail-basic-rows="processDetailBasicRows"
+  :process-detail-command-line-text="processDetailCommandLineText"
+  @close="closeProcessDialog"
+  @refresh="refreshProcessManager"
+  @open-detail="openProcessDetail"
+  @kill-process="killProcess"
+  @kill-app="killApp"
+/>
 
-            <el-tabs v-model="processActiveTab" style="margin-top: 12px;">
-<el-tab-pane :label="processTabLabel" name="processes">
-                    <div class="dialog-table-shell" style="height: 450px;">
-                        <el-table :data="filteredProcesses" v-loading="processesLoading" stripe height="100%"
-                                  table-layout="fixed">
-                            <el-table-column prop="pid" label="PID" width="100" align="center"></el-table-column><!--align="center"-->
-                            <el-table-column prop="name" label="Name" min-width="200"
-                                             show-overflow-tooltip></el-table-column>
-                            <el-table-column prop="status" label="Status" width="160" align="center"></el-table-column>
-                            <el-table-column label="Actions" width="240" align="center" fixed="right">
-                                <template #default="{ row }">
-                                    <el-space>
-                                        <el-button size="small" link type="primary" @click="openProcessDetail(row.pid)">Details</el-button>
-                            <el-button size="small" link type="danger" @click="killProcess(row.pid, row.name)">Kill</el-button>
-                                    </el-space>
-                                </template>
-                            </el-table-column>
-                        </el-table>
-                    </div>
-                </el-tab-pane>
+  <AgentBuilderDialog
+  v-model:visible="agentBuilderDialogVisible"
+  :form="agentForm"
+  :builder-alert-text="agentBuilderAlertText"
+  :building="agentBuilding"
+  :target-os-disabled="isAgentTargetOsDisabled"
+  :target-arch-disabled="isAgentTargetArchDisabled"
+  @build="buildAgent"
+/>
 
-<el-tab-pane :label="appTabLabel" name="apps">                    <div class="dialog-table-shell" style="height: 450px;">
-                        <el-table :data="filteredApps" v-loading="appsLoading" stripe height="100%"
-                                  table-layout="fixed">
-                            <el-table-column prop="pid" label="PID" width="100" align="center"></el-table-column>
-                            <el-table-column prop="name" label="Name" min-width="200"
-                                             show-overflow-tooltip></el-table-column>
-                            <el-table-column prop="status" label="Status" min-width="120"
-                                             show-overflow-tooltip></el-table-column>
-
-<!--                            <el-table-column prop="exe" label="Executable Path" min-width="500"-->
-<!--                 show-overflow-tooltip></el-table-column>-->
-
-
-
-                            <el-table-column label="Actions" width="220" align="center" fixed="right">
-                                <template #default="{ row }">
-                                    <el-space>
-                                                         <el-button size="small" link type="primary" @click="openProcessDetail(row.pid)">Details</el-button>
-                            <el-button size="small" link type="danger" @click="killApp(row.pid, row.name)">Kill</el-button>
-<!--                                        <el-button size="small" @click="openProcessDetail(row.pid)">-->
-<!--                                            Details-->
-<!--                                        </el-button>-->
-<!--                                        <el-button size="small" type="danger" plain @click="killApp(row.pid, row.name)">-->
-<!--                                            Kill-->
-<!--                                        </el-button>-->
-                                    </el-space>
-                                </template>
-                            </el-table-column>
-                        </el-table>
-                    </div>
-                </el-tab-pane>
-            </el-tabs>
-        </div>
-    </el-dialog>
-
-    <el-dialog v-model="processDetailDialogVisible" title="Process Details" width="980px" top="6vh" class="fixed-dialog">
-        <div v-loading="processDetailLoading" style="min-height: 280px;">
-            <template v-if="processDetail && !processDetailLoading">
-                <div style="margin-bottom: 18px;">
-                    <div style="font-weight: 600; font-size: 14px; margin-bottom: 10px;">Basic Info</div>
-                    <div
-                            v-for="item in processDetailBasicRows"
-                            :key="item.key"
-                            style="display: grid; grid-template-columns: 180px 1fr; gap: 12px; padding: 8px 0; border-bottom: 1px solid #ebeef5;"
-                    >
-                        <div style="color: #606266; font-weight: 500;">{{ item.label }}</div>
-                        <div style="word-break: break-word;">{{ item.value }}</div>
-                    </div>
-                </div>
-
-                <div style="margin-bottom: 18px;">
-                    <div style="font-weight: 600; font-size: 14px; margin-bottom: 10px;">Command Line</div>
-                    <div style="padding: 10px 12px; background: #f5f7fa; border-radius: 8px; word-break: break-word; white-space: pre-wrap; font-family: monospace; font-size: 12px; line-height: 1.6;">{{ processDetailCommandLineText || '-' }}</div>
-                </div>
-
-                <div style="margin-bottom: 18px;">
-                    <div style="font-weight: 600; font-size: 14px; margin-bottom: 10px;">Network Connections ({{ (processDetail.connections || []).length }})</div>
-                    <el-table :data="processDetail.connections || []" stripe border max-height="220" empty-text="No network connections">
-                        <el-table-column prop="local_address" label="Local Address" min-width="160" show-overflow-tooltip></el-table-column>
-                        <el-table-column prop="remote_address" label="Remote Address" min-width="160" show-overflow-tooltip></el-table-column>
-                        <el-table-column prop="status" label="Status" width="140" align="center"></el-table-column>
-                        <el-table-column prop="family" label="Family" width="200" align="center"></el-table-column>
-                    </el-table>
-                </div>
-
-                <div>
-                    <div style="font-weight: 600; font-size: 14px; margin-bottom: 10px;">Open Files ({{ (processDetail.open_files || []).length }})</div>
-                    <el-table :data="processDetail.open_files || []" stripe border max-height="240" empty-text="No open files">
-                        <el-table-column prop="path" label="Path" show-overflow-tooltip></el-table-column>
-<!--                        <el-table-column prop="fd" label="FD" width="100" align="center"></el-table-column>-->
-                    </el-table>
-                </div>
-            </template>
-        </div>
-    </el-dialog>
-
-    <el-dialog v-model="agentBuilderDialogVisible" title="Build Agent" width="640px">
-        <el-form :model="agentForm" label-width="100px">
-            <el-form-item label="Server IP" required>
-                <el-input v-model="agentForm.server_host" placeholder="e.g., 192.168.1.100"/>
-            </el-form-item>
-            <el-form-item label="Server Port" required>
-                <el-input v-model.number="agentForm.server_port" type="number" placeholder="8000"/>
-            </el-form-item>
-            <el-form-item label="Web Port" required>
-                <el-input v-model.number="agentForm.web_port" type="number" placeholder="8000"/>
-            </el-form-item>
-            <el-form-item label="Target OS">
-                <el-radio-group v-model="agentForm.target_os" :disabled="isAgentTargetOsDisabled">
-                    <el-radio label="mac">macOS</el-radio>
-                    <el-radio label="win">Windows</el-radio>
-                    <el-radio label="linux">Linux</el-radio>
-                </el-radio-group>
-            </el-form-item>
-            <el-form-item label="Builder">
-                <el-radio-group v-model="agentForm.builder">
-                    <el-radio label="bundle">Bundle</el-radio>
-                    <el-radio label="pyinstaller">PyInstaller</el-radio>
-                    <el-radio label="go">Go (Simple)</el-radio>
-                    <el-radio label="go_loader">Go (Loader)</el-radio>
-                </el-radio-group>
-            </el-form-item>
-            <el-form-item label="Target Arch">
-                <el-radio-group v-model="agentForm.target_arch" :disabled="isAgentTargetArchDisabled">
-                    <el-radio label="amd64">amd64</el-radio>
-                    <el-radio label="arm64">arm64</el-radio>
-                </el-radio-group>
-            </el-form-item>
-            <el-alert
-
-                    type="info"
-                    :closable="false"
-                    show-icon
-            >
-                <template #default>
-                    <div style="white-space: pre-line; line-height: 1.7; font-size: 12px">{{ agentBuilderAlertText }}
-                    </div>
-                </template>
-            </el-alert>
-        </el-form>
-        <template #footer>
-            <el-button @click="agentBuilderDialogVisible = false">Cancel</el-button>
-            <el-button type="primary" @click="buildAgent" :loading="agentBuilding">
-                Build & Download
-            </el-button>
-
-        </template>
-    </el-dialog>
 
     <el-dialog
         v-model="terminalJsonDialogVisible"
@@ -1952,9 +1811,13 @@ import TerminalToolbar from "./components/TerminalToolbar.vue";
 import CommandInputBar from "./components/CommandInputBar.vue";
 import TerminalOutput from "./components/TerminalOutput.vue";
 import ConnectionInfoDialogs from "./components/ConnectionInfoDialogs.vue";
+import ProcessDialogs from "./components/ProcessDialogs.vue";
+import AgentBuilderDialog from "./components/AgentBuilderDialog.vue";
 
 export default {
   components: {
+    AgentBuilderDialog,
+    ProcessDialogs,
     ConnectionInfoDialogs,
     TerminalOutput, CommandInputBar, TerminalToolbar, ConnectionInfoCards, DeviceSidebar},
   data() {
