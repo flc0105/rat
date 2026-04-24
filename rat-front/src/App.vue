@@ -418,60 +418,15 @@
   @build="buildAgent"
 />
 
-
-    <el-dialog
-        v-model="terminalJsonDialogVisible"
-        :title="terminalJsonDialogTitle"
-        width="980px"
-        top="8vh"
-        class="fixed-dialog"
->
-    <template v-if="terminalJsonDisplayMode === 'table'">
-        <div style="max-height: 65vh; overflow: auto;">
-            <el-table
-                    :data="terminalJsonTableRows"
-                    border
-                    stripe
-                    style="width: 100%;"
-            >
-                <el-table-column
-                        v-for="column in terminalJsonTableColumns"
-                        :key="column.prop"
-                        :prop="column.prop"
-                        :label="column.label"
-                        min-width="140"
-                        show-overflow-tooltip
-                />
-            </el-table>
-        </div>
-    </template>
-
-    <template v-else-if="terminalJsonDisplayMode === 'flat'">
-        <div style="max-height: 65vh; overflow: auto;">
-            <div
-                    v-for="item in terminalJsonFlatRows"
-                    :key="item.key"
-                    style="display: grid; grid-template-columns: 220px 1fr; gap: 12px; padding: 8px 0; border-bottom: 1px solid #ebeef5;"
-            >
-                <div style="color: #606266; font-weight: 500; word-break: break-word;">
-                    {{ item.label }}
-                </div>
-                <div style="word-break: break-word;">
-                    {{ item.value }}
-                </div>
-            </div>
-        </div>
-    </template>
-
-    <template v-else>
-        <div style="max-height: 65vh; overflow: auto;">
-            <pre
-                    style="margin: 0; white-space: pre-wrap; word-break: break-word; font-family: monospace; font-size: 13px; line-height: 1.6;"
-            >{{ terminalJsonText }}</pre>
-        </div>
-    </template>
-</el-dialog>
-
+<TerminalJsonDialog
+  v-model:visible="terminalJsonDialogVisible"
+  :title="terminalJsonDialogTitle"
+  :display-mode="terminalJsonDisplayMode"
+  :table-rows="terminalJsonTableRows"
+  :table-columns="terminalJsonTableColumns"
+  :flat-rows="terminalJsonFlatRows"
+  :text="terminalJsonText"
+/>
 
 
   <PreviewImageInfoDialog
@@ -566,9 +521,11 @@ import BackgroundJobStartDialog from "./components/BackgroundJobStartDialog.vue"
 import BackgroundJobsDialog from "./components/BackgroundJobsDialog.vue";
 import PreviewDialog from "./components/PreviewDialog.vue";
 import PreviewImageInfoDialog from "./components/PreviewImageInfoDialog.vue";
+import TerminalJsonDialog from "./components/TerminalJsonDialog.vue";
 
 export default {
   components: {
+    TerminalJsonDialog,
     PreviewImageInfoDialog,
     PreviewDialog,
     BackgroundJobsDialog,
