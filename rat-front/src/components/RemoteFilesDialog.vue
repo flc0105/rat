@@ -8,7 +8,10 @@
       modal-class="remote-files-overlay"
       @update:model-value="handleVisibleChange"
   >
-    <div class="fixed-dialog-body">
+    <div
+        class="fixed-dialog-body"
+        :class="{ 'remote-mobile-panel-collapsed': remoteMobilePanelCollapsed }"
+    >
       <div class="dialog-head remote-files-head">
         <div class="dialog-head-left remote-files-head-main">
           <div class="remote-breadcrumb-bar">
@@ -29,6 +32,14 @@
 
             <span v-else class="remote-breadcrumb-empty">No path</span>
           </div>
+
+          <el-button size="small"
+
+              class="remote-mobile-panel-toggle"
+              @click="toggleRemoteMobilePanel"
+          >
+            {{ remoteMobilePanelCollapsed ? 'Show tools' : 'Hide tools' }}
+          </el-button>
 
           <div class="remote-files-toolbar">
             <div class="remote-toolbar-group">
@@ -403,7 +414,7 @@
             This folder is empty
           </div>
 
-          <div v-else class="mobile-file-grid">
+          <div v-else class="mobile-file-grid" ref="remoteMobileFileGridRef">
             <div
                 v-for="row in displayRemoteFilesEntries"
                 :key="`${row.is_parent_entry ? 'parent-' : ''}${row.path}`"
@@ -622,6 +633,8 @@ export default {
       remoteClipboardPaths: [],
       remoteClipboardMode: '',
       remoteClipboardSourcePath: '',
+
+      remoteMobilePanelCollapsed: true,
     }
   },
 
@@ -705,6 +718,26 @@ export default {
   },
 
   methods: {
+
+    scrollRemoteMobileFileListToTop() {
+  this.$nextTick(() => {
+    const el = this.$refs.remoteMobileFileGridRef
+
+    if (el && typeof el.scrollTo === 'function') {
+      el.scrollTo({
+        top: 0,
+        left: 0,
+        behavior: 'auto',
+      })
+      return
+    }
+
+    if (el) {
+      el.scrollTop = 0
+    }
+  })
+},
+
     handleVisibleChange(value) {
       this.visible = value
       this.$emit('visible-change', value)
@@ -738,6 +771,10 @@ export default {
       if (table && typeof table.clearSelection === 'function') {
         table.clearSelection()
       }
+    },
+
+    toggleRemoteMobilePanel() {
+      this.remoteMobilePanelCollapsed = !this.remoteMobilePanelCollapsed
     },
 
     triggerRemoteUpload() {
@@ -863,6 +900,7 @@ export default {
         this.showHiddenFiles = !!summary.show_hidden
         this.remoteSelectedPaths = []
         this.clearTableSelection()
+        this.scrollRemoteMobileFileListToTop() // 切换目录后，移动端文件列表回到顶部
       } catch (e) {
         ElMessage.error(e.message || 'Failed to load remote directory')
       } finally {
@@ -1848,6 +1886,7 @@ export default {
       this.remotePinnedJumpItems = []
       this.remotePinnedJumpLoading = false
       this.pinManagerVisible = false
+      this.remoteMobilePanelCollapsed = false
       this.clearRemoteClipboard()
       this.clearTableSelection()
     },
@@ -1921,6 +1960,10 @@ export default {
 .remote-breadcrumb-empty {
   color: var(--muted-2);
   font-size: 13px;
+}
+
+.remote-mobile-panel-toggle {
+  display: none;
 }
 
 .remote-files-toolbar {
@@ -2194,6 +2237,21 @@ export default {
     white-space: nowrap;
     text-align: left;
   }
+
+  .remote-mobile-panel-toggle {
+        display: inline-flex;
+    align-self: flex-start;
+    width: auto;
+    margin: 0;
+  }
+
+  .remote-mobile-panel-collapsed .remote-files-toolbar {
+    display: none;
+  }
+
+  .remote-mobile-panel-collapsed :deep(.dialog-pagination-wrap) {
+    display: none !important;
+  }
 }
 
 @media (max-width: 960px) {
@@ -2291,8 +2349,8 @@ export default {
   .remote-files-overlay .el-dialog {
     width: 100vw !important;
     max-width: 100vw !important;
-    height: 100vh !important;
-    max-height: 100vh !important;
+    height: 100dvh !important;
+    max-height: 100dvh !important;
     margin: 0 !important;
     border-radius: 0 !important;
   }
@@ -2319,6 +2377,9 @@ export default {
     height: 100% !important;
     min-height: 0 !important;
     overflow-y: auto !important;
+    /*给移动端文件列表底部加 padding*/
+    /*padding-bottom: calc(96px + env(safe-area-inset-bottom)) !important;
+    box-sizing: border-box !important;*/
   }
 }
 </style>
