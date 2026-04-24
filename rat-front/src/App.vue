@@ -232,61 +232,18 @@
 
 
 
-<el-dialog v-model="scriptRunDialogVisible"
-           :title="pendingRunScriptItem ? `Run ${pendingRunScriptItem.display_name || pendingRunScriptItem.script_name}` : 'Run Script'"
-           width="680px"
-           top="10vh"
-           class="fixed-dialog">
-    <div v-if="pendingRunScriptItem" class="fixed-dialog-body">
-        <div class="script-run-dialog-top">
-            <div class="background-job-module-key mono">{{ pendingRunScriptItem.path || pendingRunScriptItem.script_name }}</div>
-            <div v-if="pendingRunScriptItem.description" class="script-library-description">{{ pendingRunScriptItem.description }}</div>
-
-            <div class="background-job-module-tags" style="margin-top: 10px;">
-                <el-tag size="small" :type="isScriptSupportedForCurrentConnection(pendingRunScriptItem) ? 'info' : 'danger'">
-                    {{ formatScriptPlatformLabel(pendingRunScriptItem) }}
-                </el-tag>
-                <el-tag v-if="pendingRunScriptParamSpecs.length" size="small" type="warning">Params</el-tag>
-            </div>
-        </div>
-
-        <el-form v-if="pendingRunScriptParamSpecs.length" label-position="top" class="script-library-form">
-            <el-form-item v-for="param in pendingRunScriptParamSpecs"
-                          :key="`script-param-${param.name}`"
-                          :label="`${param.name} (${param.type || 'string'})`">
-                <el-switch v-if="param.type === 'boolean'" v-model="scriptParamForm[param.name]"></el-switch>
-
-                <el-select v-else-if="param.type === 'select' && param.options && param.options.length"
-                           v-model="scriptParamForm[param.name]"
-                           style="width: 100%">
-                    <el-option v-for="option in param.options"
-                               :key="`${param.name}-${option}`"
-                               :label="option"
-                               :value="option"></el-option>
-                </el-select>
-
-                <el-input v-else
-                          v-model="scriptParamForm[param.name]"
-                          :placeholder="param.description || param.name"></el-input>
-
-                <div class="hint-text" style="margin-top: 6px;">
-                    {{ param.description || 'No description' }}
-                    <template v-if="param.required"> · required</template>
-                    <template v-if="param.default !== undefined && param.default !== null && param.type !== 'boolean'"> · default: {{ param.default }}</template>
-                    <template v-if="param.min !== undefined"> · min: {{ param.min }}</template>
-                    <template v-if="param.max !== undefined"> · max: {{ param.max }}</template>
-                </div>
-            </el-form-item>
-        </el-form>
-
-        <div v-else class="empty-state" style="min-height: 96px;">This script has no declared parameters.</div>
-    </div>
-
-    <template #footer>
-        <el-button @click="closeScriptRunDialog">Cancel</el-button>
-        <el-button type="primary" :loading="scriptRunSubmitting" @click="confirmRunScript">Run</el-button>
-    </template>
-</el-dialog>
+<ScriptRunDialog
+  v-model:visible="scriptRunDialogVisible"
+  :item="pendingRunScriptItem"
+  :param-specs="pendingRunScriptParamSpecs"
+  :param-form="scriptParamForm"
+  :submitting="scriptRunSubmitting"
+  :is-script-supported-for-current-connection="isScriptSupportedForCurrentConnection"
+  :format-script-platform-label="formatScriptPlatformLabel"
+  @update-param="updateScriptParam"
+  @cancel="closeScriptRunDialog"
+  @confirm="confirmRunScript"
+/>
 
     <el-dialog v-model="backgroundJobsDialogVisible" title="Background Jobs" width="1180px" top="5vh"
                class="fixed-dialog  background-jobs-dialog">
@@ -956,9 +913,11 @@ import CommandHistoryDialog from "./components/CommandHistoryDialog.vue";
 import RemoteFilesDialog from "./components/RemoteFilesDialog.vue";
 import ArtifactDialog from "./components/ArtifactDialog.vue";
 import ScriptLibraryDialog from "./components/ScriptLibraryDialog.vue";
+import ScriptRunDialog from "./components/ScriptRunDialog.vue";
 
 export default {
   components: {
+    ScriptRunDialog,
     ScriptLibraryDialog,
     ArtifactDialog,
     RemoteFilesDialog,
@@ -1035,6 +994,16 @@ export default {
     ...AppHistoryModule.methods,
     ...AppArtifactsModule.methods,
     ...AppPreviewModule.methods,
+
+updateScriptParam(name, value) {
+  if (!name) return
+
+  this.scriptParamForm = {
+    ...this.scriptParamForm,
+    [name]: value,
+  }
+},
+
   },
 
   mounted() {
