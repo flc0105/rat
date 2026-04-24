@@ -719,7 +719,13 @@ body {
   flex-direction: column;
 }
 
-.remote-files-dialog .fixed-dialog-body,
+/*.remote-files-dialog .fixed-dialog-body,*/
+/*.recent-files-dialog .fixed-dialog-body {*/
+/*  height: 100%;*/
+/*  min-height: 0;*/
+/*  overflow: hidden;*/
+/*}*/
+
 .recent-files-dialog .fixed-dialog-body {
   height: 100%;
   min-height: 0;
@@ -748,89 +754,89 @@ body {
   width: 100%;
 }
 
-.remote-files-head {
-  display: block;
-  margin-bottom: 10px;
-}
+/*.remote-files-head {*/
+/*  display: block;*/
+/*  margin-bottom: 10px;*/
+/*}*/
 
-.remote-files-head-main {
-  display: flex;
-  flex-direction: column;
-  align-items: stretch;
-  gap: 8px;
-  width: 100%;
-}
+/*.remote-files-head-main {*/
+/*  display: flex;*/
+/*  flex-direction: column;*/
+/*  align-items: stretch;*/
+/*  gap: 8px;*/
+/*  width: 100%;*/
+/*}*/
 
-.remote-breadcrumb-bar {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 2px;
-  min-height: 28px;
-  padding: 0 2px;
-}
+/*.remote-breadcrumb-bar {*/
+/*  display: flex;*/
+/*  align-items: center;*/
+/*  flex-wrap: wrap;*/
+/*  gap: 2px;*/
+/*  min-height: 28px;*/
+/*  padding: 0 2px;*/
+/*}*/
 
-.remote-breadcrumb-item {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  border: none;
-  background: transparent;
-  color: var(--muted-2);
-  padding: 3px 6px;
-  border-radius: 8px;
-  cursor: pointer;
-  font-size: 14px;
-}
+/*.remote-breadcrumb-item {*/
+/*  display: inline-flex;*/
+/*  align-items: center;*/
+/*  gap: 6px;*/
+/*  border: none;*/
+/*  background: transparent;*/
+/*  color: var(--muted-2);*/
+/*  padding: 3px 6px;*/
+/*  border-radius: 8px;*/
+/*  cursor: pointer;*/
+/*  font-size: 14px;*/
+/*}*/
 
-.remote-breadcrumb-item:hover {
-  background: rgba(148, 163, 184, 0.12);
-  color: var(--text);
-}
+/*.remote-breadcrumb-item:hover {*/
+/*  background: rgba(148, 163, 184, 0.12);*/
+/*  color: var(--text);*/
+/*}*/
 
-.remote-breadcrumb-item.active {
-  color: var(--text);
-  font-weight: 400;
-  cursor: default;
-}
+/*.remote-breadcrumb-item.active {*/
+/*  color: var(--text);*/
+/*  font-weight: 400;*/
+/*  cursor: default;*/
+/*}*/
 
-.remote-breadcrumb-item:disabled {
-  opacity: 1;
-}
+/*.remote-breadcrumb-item:disabled {*/
+/*  opacity: 1;*/
+/*}*/
 
-.remote-breadcrumb-sep {
-  color: var(--muted-2);
-  margin-right: 2px;
-}
+/*.remote-breadcrumb-sep {*/
+/*  color: var(--muted-2);*/
+/*  margin-right: 2px;*/
+/*}*/
 
-.remote-breadcrumb-empty {
-  color: var(--muted-2);
-  font-size: 13px;
-}
+/*.remote-breadcrumb-empty {*/
+/*  color: var(--muted-2);*/
+/*  font-size: 13px;*/
+/*}*/
 
-.remote-files-toolbar {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 8px;
-}
+/*.remote-files-toolbar {*/
+/*  display: flex;*/
+/*  align-items: center;*/
+/*  flex-wrap: wrap;*/
+/*  gap: 8px;*/
+/*}*/
 
-.remote-toolbar-group {
-  display: inline-flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 8px;
-}
+/*.remote-toolbar-group {*/
+/*  display: inline-flex;*/
+/*  align-items: center;*/
+/*  flex-wrap: wrap;*/
+/*  gap: 8px;*/
+/*}*/
 
-.remote-toolbar-divider {
-  width: 1px;
-  height: 18px;
-  background: rgba(148, 163, 184, 0.25);
-}
+/*.remote-toolbar-divider {*/
+/*  width: 1px;*/
+/*  height: 18px;*/
+/*  background: rgba(148, 163, 184, 0.25);*/
+/*}*/
 
-.remote-files-meta-row {
-  margin-bottom: 8px;
-}
+/*.remote-files-meta-row {*/
+/*  margin-bottom: 8px;*/
+/*}*/
 
 /* ========== 命令历史对话框 ========== */
 .command-history-toolbar {
@@ -878,10 +884,10 @@ body {
   flex-wrap: wrap;
 }
 
-.remote-files-dialog .dialog-head-left,
-.remote-files-dialog .dialog-action-group {
-  justify-content: center;
-}
+/*.remote-files-dialog .dialog-head-left,*/
+/*.remote-files-dialog .dialog-action-group {*/
+/*  justify-content: center;*/
+/*}*/
 
 .dialog-head-left .el-button {
   height: 32px;
@@ -920,32 +926,58 @@ body {
   max-height: calc(78vh - 150px);
 }
 
-.remote-files-dialog .dialog-table-shell {
-  height: calc(78vh - 252px);
-  min-height: 280px;
-  max-height: calc(78vh - 252px);
-}
+/*.remote-files-dialog .dialog-table-shell {*/
+/*  height: calc(78vh - 252px);*/
+/*  min-height: 280px;*/
+/*  max-height: calc(78vh - 252px);*/
+/*}*/
 
-.remote-files-dialog .dialog-table-shell .el-table,
+/*.remote-files-dialog .dialog-table-shell .el-table,*/
+/*.recent-files-dialog .dialog-table-shell .el-table,*/
+/*.quick-history-table-shell .el-table {*/
+/*  width: 100%;*/
+/*  height: 100% !important;*/
+/*}*/
+
+
 .recent-files-dialog .dialog-table-shell .el-table,
 .quick-history-table-shell .el-table {
   width: 100%;
   height: 100% !important;
 }
 
-.remote-files-dialog .dialog-table-shell .el-table__inner-wrapper,
+
+/*.remote-files-dialog .dialog-table-shell .el-table__inner-wrapper,*/
+/*.recent-files-dialog .dialog-table-shell .el-table__inner-wrapper,*/
+/*.quick-history-table-shell .el-table__inner-wrapper {*/
+/*  height: 100% !important;*/
+/*}*/
+
+
 .recent-files-dialog .dialog-table-shell .el-table__inner-wrapper,
 .quick-history-table-shell .el-table__inner-wrapper {
   height: 100% !important;
 }
 
-.remote-files-dialog .dialog-table-shell .el-scrollbar,
+/*.remote-files-dialog .dialog-table-shell .el-scrollbar,*/
+/*.recent-files-dialog .dialog-table-shell .el-scrollbar,*/
+/*.quick-history-table-shell .el-scrollbar {*/
+/*  height: 100% !important;*/
+/*}*/
+
 .recent-files-dialog .dialog-table-shell .el-scrollbar,
 .quick-history-table-shell .el-scrollbar {
   height: 100% !important;
 }
 
-.remote-files-dialog .dialog-table-shell .el-scrollbar__wrap,
+/*.remote-files-dialog .dialog-table-shell .el-scrollbar__wrap,*/
+/*.recent-files-dialog .dialog-table-shell .el-scrollbar__wrap,*/
+/*.quick-history-table-shell .el-scrollbar__wrap {*/
+/*  height: 100% !important;*/
+/*  overflow-y: auto !important;*/
+/*  overflow-x: auto !important;*/
+/*}*/
+
 .recent-files-dialog .dialog-table-shell .el-scrollbar__wrap,
 .quick-history-table-shell .el-scrollbar__wrap {
   height: 100% !important;
@@ -953,7 +985,12 @@ body {
   overflow-x: auto !important;
 }
 
-.remote-files-dialog .dialog-table-shell .el-table__body-wrapper,
+/*.remote-files-dialog .dialog-table-shell .el-table__body-wrapper,*/
+/*.recent-files-dialog .dialog-table-shell .el-table__body-wrapper,*/
+/*.quick-history-table-shell .el-table__body-wrapper {*/
+/*  overflow-y: auto !important;*/
+/*}*/
+
 .recent-files-dialog .dialog-table-shell .el-table__body-wrapper,
 .quick-history-table-shell .el-table__body-wrapper {
   overflow-y: auto !important;
@@ -2064,10 +2101,10 @@ body {
     max-height: calc(84vh - 150px);
   }
 
-  .remote-files-dialog .dialog-table-shell {
-    height: calc(84vh - 196px);
-    max-height: calc(84vh - 196px);
-  }
+  /*.remote-files-dialog .dialog-table-shell {*/
+  /*  height: calc(84vh - 196px);*/
+  /*  max-height: calc(84vh - 196px);*/
+  /*}*/
 
   .background-job-summary-card,
   .command-execution-card {
@@ -2080,13 +2117,23 @@ body {
   }
 }
 
-@media (max-width: 900px) {
-  .remote-files-dialog .dialog-table-shell {
-    height: calc(78vh - 316px);
-    max-height: calc(78vh - 316px);
-    min-height: 240px;
-  }
+/*@media (max-width: 900px) {*/
+/*  .remote-files-dialog .dialog-table-shell {*/
+/*    height: calc(78vh - 316px);*/
+/*    max-height: calc(78vh - 316px);*/
+/*    min-height: 240px;*/
+/*  }*/
 
+/*  .dialog-pagination-bar {*/
+/*    padding: 12px;*/
+/*  }*/
+
+/*  .dialog-pagination-meta {*/
+/*    width: 100%;*/
+/*  }*/
+/*}*/
+
+@media (max-width: 900px) {
   .dialog-pagination-bar {
     padding: 12px;
   }
@@ -2095,6 +2142,7 @@ body {
     width: 100%;
   }
 }
+
 
 @media (max-width: 768px), (max-height: 720px) {
   .fixed-dialog .el-dialog {
@@ -2114,29 +2162,50 @@ body {
     padding: 10px 12px 12px;
   }
 
-  .remote-files-dialog .dialog-table-shell,
+  /*.remote-files-dialog .dialog-table-shell,*/
+  /*.artifact-dialog .dialog-table-shell,*/
+  /*.command-history-dialog .quick-history-table-shell {*/
+  /*  display: none;*/
+  /*}*/
+
   .artifact-dialog .dialog-table-shell,
-  .command-history-dialog .quick-history-table-shell {
-    display: none;
-  }
+.command-history-dialog .quick-history-table-shell {
+  display: none;
+}
 
-  .remote-files-dialog .mobile-file-list-shell,
+  /*.remote-files-dialog .mobile-file-list-shell,*/
+  /*.artifact-dialog .mobile-file-list-shell,*/
+  /*.command-history-dialog .quick-history-mobile-shell {*/
+  /*  display: flex;*/
+  /*  flex: 1 1 auto;*/
+  /*  min-height: 0;*/
+  /*  overflow: hidden;*/
+  /*}*/
+
   .artifact-dialog .mobile-file-list-shell,
-  .command-history-dialog .quick-history-mobile-shell {
-    display: flex;
-    flex: 1 1 auto;
-    min-height: 0;
-    overflow: hidden;
-  }
+.command-history-dialog .quick-history-mobile-shell {
+  display: flex;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+}
 
-  .remote-files-dialog .mobile-file-list,
+  /*.remote-files-dialog .mobile-file-list,*/
+  /*.artifact-dialog .mobile-file-list,*/
+  /*.command-history-dialog .quick-history-mobile-shell .mobile-file-list {*/
+  /*  display: block;*/
+  /*  flex: 1 1 auto;*/
+  /*  min-height: 0;*/
+  /*  overflow: hidden;*/
+  /*}*/
+
   .artifact-dialog .mobile-file-list,
-  .command-history-dialog .quick-history-mobile-shell .mobile-file-list {
-    display: block;
-    flex: 1 1 auto;
-    min-height: 0;
-    overflow: hidden;
-  }
+.command-history-dialog .quick-history-mobile-shell .mobile-file-list {
+  display: block;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+}
 
   .dialog-head-left {
     flex-wrap: wrap;
@@ -2386,15 +2455,15 @@ body {
     flex-shrink: 0;
 }
 
-@media (max-width: 960px) {
-  .remote-toolbar-divider {
-    display: none;
-  }
+/*@media (max-width: 960px) {*/
+/*  .remote-toolbar-divider {*/
+/*    display: none;*/
+/*  }*/
 
-  .remote-files-toolbar {
-    gap: 6px 10px;
-  }
-}
+/*  .remote-files-toolbar {*/
+/*    gap: 6px 10px;*/
+/*  }*/
+/*}*/
 
 
 /* ========== Background job card layout stabilization ========== */
@@ -3024,114 +3093,114 @@ body {
 
 
 
-@media (max-width: 768px) {
-  /* ===== Remote file breadcrumb: mobile only ===== */
+/*@media (max-width: 768px) {*/
+/*  !* ===== Remote file breadcrumb: mobile only ===== *!*/
 
-  .remote-files-head,
-  .remote-files-head-main,
-  .dialog-head-left {
-    min-width: 0;
-  }
+/*  .remote-files-head,*/
+/*  .remote-files-head-main,*/
+/*  .dialog-head-left {*/
+/*    min-width: 0;*/
+/*  }*/
 
-  .remote-breadcrumb-bar {
-    display: block;
-    width: 100%;
-    min-width: 0;
-    min-height: 32px;
-    padding: 2px 0 6px;
-    overflow-x: auto;
-    overflow-y: hidden;
-    white-space: nowrap;
-    text-align: left;
-    -webkit-overflow-scrolling: touch;
-    touch-action: pan-x;
-    overscroll-behavior-x: contain;
-    scrollbar-width: thin;
-  }
+/*  .remote-breadcrumb-bar {*/
+/*    display: block;*/
+/*    width: 100%;*/
+/*    min-width: 0;*/
+/*    min-height: 32px;*/
+/*    padding: 2px 0 6px;*/
+/*    overflow-x: auto;*/
+/*    overflow-y: hidden;*/
+/*    white-space: nowrap;*/
+/*    text-align: left;*/
+/*    -webkit-overflow-scrolling: touch;*/
+/*    touch-action: pan-x;*/
+/*    overscroll-behavior-x: contain;*/
+/*    scrollbar-width: thin;*/
+/*  }*/
 
-  .remote-breadcrumb-bar::-webkit-scrollbar {
-    height: 4px;
-  }
+/*  .remote-breadcrumb-bar::-webkit-scrollbar {*/
+/*    height: 4px;*/
+/*  }*/
 
-  .remote-breadcrumb-item {
-    display: inline-flex;
-    vertical-align: middle;
-    align-items: center;
-    justify-content: flex-start;
-    max-width: 72vw;
-    min-width: 0;
-    margin: 0 2px 0 0;
-    padding: 4px 6px;
-    text-align: left;
-    white-space: nowrap;
-  }
+/*  .remote-breadcrumb-item {*/
+/*    display: inline-flex;*/
+/*    vertical-align: middle;*/
+/*    align-items: center;*/
+/*    justify-content: flex-start;*/
+/*    max-width: 72vw;*/
+/*    min-width: 0;*/
+/*    margin: 0 2px 0 0;*/
+/*    padding: 4px 6px;*/
+/*    text-align: left;*/
+/*    white-space: nowrap;*/
+/*  }*/
 
-  .remote-breadcrumb-item > span:last-child {
-    display: inline-block;
-    min-width: 0;
-    max-width: 100%;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    text-align: left;
-  }
+/*  .remote-breadcrumb-item > span:last-child {*/
+/*    display: inline-block;*/
+/*    min-width: 0;*/
+/*    max-width: 100%;*/
+/*    overflow: hidden;*/
+/*    text-overflow: ellipsis;*/
+/*    white-space: nowrap;*/
+/*    text-align: left;*/
+/*  }*/
 
-  .remote-breadcrumb-sep {
-    flex: 0 0 auto;
-    margin-right: 4px;
-  }
+/*  .remote-breadcrumb-sep {*/
+/*    flex: 0 0 auto;*/
+/*    margin-right: 4px;*/
+/*  }*/
 
-  .remote-breadcrumb-empty {
-    display: inline-block;
-    white-space: nowrap;
-    text-align: left;
-  }
+/*  .remote-breadcrumb-empty {*/
+/*    display: inline-block;*/
+/*    white-space: nowrap;*/
+/*    text-align: left;*/
+/*  }*/
 
-  /* ===== Remote file pagination: mobile only ===== */
+/*  !* ===== Remote file pagination: mobile only ===== *!*/
 
-  .dialog-pagination-wrap {
-    justify-content: stretch;
-    margin: 12px 0 10px;
-  }
+/*  .dialog-pagination-wrap {*/
+/*    justify-content: stretch;*/
+/*    margin: 12px 0 10px;*/
+/*  }*/
 
-  .dialog-pagination-bar {
-    width: 100%;
-    max-width: none;
-    align-items: flex-start;
-    justify-content: flex-start;
-    gap: 10px;
-    padding: 12px;
-  }
+/*  .dialog-pagination-bar {*/
+/*    width: 100%;*/
+/*    max-width: none;*/
+/*    align-items: flex-start;*/
+/*    justify-content: flex-start;*/
+/*    gap: 10px;*/
+/*    padding: 12px;*/
+/*  }*/
 
-  .dialog-pagination-meta {
-    width: 100%;
-    justify-content: flex-start;
-    text-align: left;
-    line-height: 1.5;
-  }
+/*  .dialog-pagination-meta {*/
+/*    width: 100%;*/
+/*    justify-content: flex-start;*/
+/*    text-align: left;*/
+/*    line-height: 1.5;*/
+/*  }*/
 
-  .dialog-pagination-bar .el-pagination {
-    width: 100%;
-    display: flex;
-    flex-wrap: wrap;
-    justify-content: flex-start;
-    row-gap: 8px;
-    column-gap: 6px;
-  }
+/*  .dialog-pagination-bar .el-pagination {*/
+/*    width: 100%;*/
+/*    display: flex;*/
+/*    flex-wrap: wrap;*/
+/*    justify-content: flex-start;*/
+/*    row-gap: 8px;*/
+/*    column-gap: 6px;*/
+/*  }*/
 
-  .dialog-pagination-bar .el-pagination > * {
-    /*margin: 0 !important;*/
-  }
+/*  .dialog-pagination-bar .el-pagination > * {*/
+/*    !*margin: 0 !important;*!*/
+/*  }*/
 
-  .dialog-pagination-bar .el-pagination .el-select,
-  .dialog-pagination-bar .el-pagination .btn-prev,
-  .dialog-pagination-bar .el-pagination .btn-next,
-  .dialog-pagination-bar .el-pagination .el-pager li,
-  .dialog-pagination-bar .el-pagination .el-pagination__total,
-  .dialog-pagination-bar .el-pagination .el-pagination__jump {
-    /*margin: 0 !important;*/
-  }
-}
+/*  .dialog-pagination-bar .el-pagination .el-select,*/
+/*  .dialog-pagination-bar .el-pagination .btn-prev,*/
+/*  .dialog-pagination-bar .el-pagination .btn-next,*/
+/*  .dialog-pagination-bar .el-pagination .el-pager li,*/
+/*  .dialog-pagination-bar .el-pagination .el-pagination__total,*/
+/*  .dialog-pagination-bar .el-pagination .el-pagination__jump {*/
+/*    !*margin: 0 !important;*!*/
+/*  }*/
+/*}*/
 
 @media (max-width: 768px) {
   .dialog-pagination-meta {

@@ -1,12 +1,13 @@
 <template>
-  <el-dialog
-    :model-value="visible"
-    title="Remote File Browser"
-    width="1180px"
-    top="4vh"
-    class="fixed-dialog remote-files-dialog"
-    @update:model-value="handleVisibleChange"
-  >
+<el-dialog
+  :model-value="visible"
+  title="Remote File Browser"
+  width="1180px"
+  top="4vh"
+  class="fixed-dialog remote-files-dialog"
+  modal-class="remote-files-overlay"
+  @update:model-value="handleVisibleChange"
+>
     <div class="fixed-dialog-body">
       <div class="dialog-head remote-files-head">
         <div class="dialog-head-left remote-files-head-main">
@@ -562,11 +563,14 @@
     title="Manage Pinned Paths"
     width="760px"
     top="6vh"
-    class="fixed-dialog"
+    class="fixed-dialog remote-pins-dialog"
+      modal-class="remote-pins-overlay"
+
     @update:model-value="pinManagerVisible = $event"
   >
     <div class="fixed-dialog-body">
-      <div class="dialog-table-shell" style="height: 420px; min-height: 220px;">
+      <div class="dialog-table-shell">
+<!--      <div class="dialog-table-shell" style="height: 420px; min-height: 220px;">-->
         <el-table
           :data="remotePinnedJumpItems"
           stripe
@@ -1852,6 +1856,7 @@ export default {
 <style scoped>
 .remote-files-head {
   display: block;
+  flex: 0 0 auto;
   margin-bottom: 10px;
 }
 
@@ -1861,6 +1866,7 @@ export default {
   align-items: stretch;
   gap: 8px;
   width: 100%;
+  min-width: 0;
 }
 
 .remote-breadcrumb-bar {
@@ -1868,7 +1874,7 @@ export default {
   align-items: center;
   flex-wrap: wrap;
   gap: 2px;
-  min-height: 30px;
+  min-height: 28px;
   padding: 0 2px;
 }
 
@@ -1879,10 +1885,10 @@ export default {
   border: none;
   background: transparent;
   color: var(--muted-2);
-  padding: 4px 7px;
+  padding: 3px 6px;
   border-radius: 8px;
   cursor: pointer;
-  font-size: 13px;
+  font-size: 14px;
   line-height: 1.4;
 }
 
@@ -1893,7 +1899,7 @@ export default {
 
 .remote-breadcrumb-item.active {
   color: var(--text);
-  font-weight: 500;
+  font-weight: 400;
   cursor: default;
 }
 
@@ -1933,65 +1939,59 @@ export default {
 }
 
 .remote-files-meta-row {
+  flex: 0 0 auto;
   margin-bottom: 8px;
 }
 
+/* 按钮只微调，不改变布局逻辑 */
 .remote-files-toolbar :deep(.el-button) {
   height: 32px;
   min-height: 32px;
   padding-inline: 12px;
   border-radius: 10px;
   margin: 0;
-  font-size: 12px;
 }
 
 .remote-files-toolbar :deep(.el-button + .el-button) {
   margin-left: 0;
 }
 
-.remote-files-toolbar :deep(.el-dropdown) {
-  line-height: 1;
+/* 桌面表格：只吃剩余高度，只内部滚动 */
+:deep(.dialog-table-shell) {
+  flex: 1 1 auto !important;
+  min-height: 0 !important;
+  height: auto !important;
+  max-height: none !important;
+  overflow: hidden !important;
 }
 
-:deep(.remote-files-dialog .fixed-dialog-body) {
-  height: 100%;
-  min-height: 0;
-  overflow: hidden;
-}
-
-:deep(.remote-files-dialog .dialog-head-left),
-:deep(.remote-files-dialog .dialog-action-group) {
-  justify-content: flex-start;
-}
-
-:deep(.remote-files-dialog .dialog-table-shell) {
-  height: calc(78vh - 252px);
-  min-height: 280px;
-  max-height: calc(78vh - 252px);
-}
-
-:deep(.remote-files-dialog .dialog-table-shell .el-table) {
+:deep(.dialog-table-shell .el-table) {
   width: 100%;
   height: 100% !important;
 }
 
-:deep(.remote-files-dialog .dialog-table-shell .el-table__inner-wrapper),
-:deep(.remote-files-dialog .dialog-table-shell .el-scrollbar),
-:deep(.remote-files-dialog .dialog-table-shell .el-scrollbar__wrap) {
+:deep(.dialog-table-shell .el-table__inner-wrapper),
+:deep(.dialog-table-shell .el-scrollbar),
+:deep(.dialog-table-shell .el-scrollbar__wrap) {
   height: 100% !important;
 }
 
-:deep(.remote-files-dialog .dialog-table-shell .el-scrollbar__wrap) {
+:deep(.dialog-table-shell .el-scrollbar__wrap) {
   overflow-y: auto !important;
   overflow-x: auto !important;
 }
 
-:deep(.remote-files-dialog .dialog-table-shell .el-table__body-wrapper) {
+:deep(.dialog-table-shell .el-table__body-wrapper) {
   overflow-y: auto !important;
 }
 
-:deep(.remote-files-dialog .mobile-file-list-shell),
-:deep(.remote-files-dialog .mobile-file-list) {
+:deep(.dialog-pagination-wrap) {
+  flex: 0 0 auto;
+}
+
+/* 移动端卡片：默认隐藏，移动端显示 */
+:deep(.mobile-file-list-shell),
+:deep(.mobile-file-list) {
   display: none;
 }
 
@@ -1999,8 +1999,9 @@ export default {
   display: grid;
   grid-template-columns: 1fr;
   gap: 12px;
-  overflow-y: auto;
+  height: 100%;
   min-height: 0;
+  overflow-y: auto;
   padding-right: 2px;
 }
 
@@ -2079,11 +2080,77 @@ export default {
   gap: 8px;
 }
 
+.mobile-file-actions :deep(.el-button),
+.mobile-file-actions :deep(.table-action-link) {
+  margin: 0;
+}
+
 .mobile-file-actions :deep(.el-button) {
   min-height: 32px;
-  margin: 0;
   border-radius: 10px;
   padding-inline: 12px;
+}
+
+/* 移动端 breadcrumb 还原横向滚动 */
+@media (max-width: 768px) {
+  .remote-files-head,
+  .remote-files-head-main {
+    min-width: 0;
+  }
+
+  .remote-breadcrumb-bar {
+    display: block;
+    width: 100%;
+    min-width: 0;
+    min-height: 32px;
+    padding: 2px 0 6px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    white-space: nowrap;
+    text-align: left;
+    -webkit-overflow-scrolling: touch;
+    touch-action: pan-x;
+    overscroll-behavior-x: contain;
+    scrollbar-width: thin;
+  }
+
+  .remote-breadcrumb-bar::-webkit-scrollbar {
+    height: 4px;
+  }
+
+  .remote-breadcrumb-item {
+    display: inline-flex;
+    vertical-align: middle;
+    align-items: center;
+    justify-content: flex-start;
+    max-width: 72vw;
+    min-width: 0;
+    margin: 0 2px 0 0;
+    padding: 4px 6px;
+    text-align: left;
+    white-space: nowrap;
+  }
+
+  .remote-breadcrumb-item > span:last-child {
+    display: inline-block;
+    min-width: 0;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    text-align: left;
+  }
+
+  .remote-breadcrumb-sep {
+    flex: 0 0 auto;
+    margin-right: 4px;
+  }
+
+  .remote-breadcrumb-empty {
+    display: inline-block;
+    white-space: nowrap;
+    text-align: left;
+  }
 }
 
 @media (max-width: 960px) {
@@ -2094,38 +2161,25 @@ export default {
   .remote-files-toolbar {
     gap: 6px 10px;
   }
-
-  :deep(.remote-files-dialog .dialog-table-shell) {
-    height: calc(84vh - 196px);
-    max-height: calc(84vh - 196px);
-  }
-}
-
-@media (max-width: 900px) {
-  :deep(.remote-files-dialog .dialog-table-shell) {
-    height: calc(78vh - 316px);
-    max-height: calc(78vh - 316px);
-    min-height: 240px;
-  }
 }
 
 @media (max-width: 768px), (max-height: 720px) {
-  :deep(.remote-files-dialog .dialog-table-shell) {
-    display: none;
+  :deep(.dialog-table-shell) {
+    display: none !important;
   }
 
-  :deep(.remote-files-dialog .mobile-file-list-shell) {
-    display: flex;
-    flex: 1 1 auto;
-    min-height: 0;
-    overflow: hidden;
+  :deep(.mobile-file-list-shell) {
+    display: flex !important;
+    flex: 1 1 auto !important;
+    min-height: 0 !important;
+    overflow: hidden !important;
   }
 
-  :deep(.remote-files-dialog .mobile-file-list) {
-    display: block;
-    flex: 1 1 auto;
-    min-height: 0;
-    overflow: hidden;
+  :deep(.mobile-file-list) {
+    display: block !important;
+    flex: 1 1 auto !important;
+    min-height: 0 !important;
+    overflow: hidden !important;
   }
 }
 
@@ -2141,6 +2195,169 @@ export default {
   .mobile-file-actions :deep(.el-button) {
     flex: 1 1 calc(50% - 6px);
     justify-content: center;
+  }
+}
+</style>
+
+
+<style>
+/* RemoteFilesDialog: 强制固定弹窗高度，禁止被内容撑开 */
+.remote-files-overlay .el-overlay-dialog {
+  overflow: hidden !important;
+}
+
+.remote-files-overlay .el-dialog {
+  height: 78vh !important;
+  max-height: 78vh !important;
+  margin-top: 4vh !important;
+  display: flex !important;
+  flex-direction: column !important;
+  overflow: hidden !important;
+}
+
+.remote-files-overlay .el-dialog__header {
+  flex: 0 0 auto !important;
+}
+
+.remote-files-overlay .el-dialog__body {
+  flex: 1 1 auto !important;
+  min-height: 0 !important;
+  overflow: hidden !important;
+  padding-top: 12px !important;
+  padding-bottom: 12px !important;
+}
+
+.remote-files-overlay .fixed-dialog-body {
+  height: 100% !important;
+  min-height: 0 !important;
+  overflow: hidden !important;
+  display: flex !important;
+  flex-direction: column !important;
+}
+
+/* 桌面：文件表格滚，不许撑 dialog */
+.remote-files-overlay .dialog-table-shell {
+  flex: 1 1 auto !important;
+  min-height: 0 !important;
+  height: auto !important;
+  max-height: none !important;
+  overflow: hidden !important;
+}
+
+.remote-files-overlay .dialog-table-shell .el-table,
+.remote-files-overlay .dialog-table-shell .el-table__inner-wrapper,
+.remote-files-overlay .dialog-table-shell .el-scrollbar,
+.remote-files-overlay .dialog-table-shell .el-scrollbar__wrap {
+  height: 100% !important;
+}
+
+.remote-files-overlay .dialog-table-shell .el-scrollbar__wrap {
+  overflow-y: auto !important;
+  overflow-x: auto !important;
+}
+
+/* 移动端：恢复卡片列表，不显示表格 */
+@media (max-width: 768px), (max-height: 720px) {
+  .remote-files-overlay .el-dialog {
+    width: 100vw !important;
+    max-width: 100vw !important;
+    height: 100vh !important;
+    max-height: 100vh !important;
+    margin: 0 !important;
+    border-radius: 0 !important;
+  }
+
+  .remote-files-overlay .dialog-table-shell {
+    display: none !important;
+  }
+
+  .remote-files-overlay .mobile-file-list-shell {
+    display: flex !important;
+    flex: 1 1 auto !important;
+    min-height: 0 !important;
+    overflow: hidden !important;
+  }
+
+  .remote-files-overlay .mobile-file-list {
+    display: block !important;
+    flex: 1 1 auto !important;
+    min-height: 0 !important;
+    overflow: hidden !important;
+  }
+
+  .remote-files-overlay .mobile-file-grid {
+    height: 100% !important;
+    min-height: 0 !important;
+    overflow-y: auto !important;
+  }
+}
+</style>
+
+<style>
+/* Manage Pins dialog：固定宽高，内部表格滚动，不允许内容撑高 */
+.remote-pins-overlay .el-overlay-dialog {
+  overflow: hidden !important;
+}
+
+.remote-pins-overlay .el-dialog {
+  width: 760px !important;
+  max-width: calc(100vw - 32px) !important;
+  height: 560px !important;
+  max-height: calc(100vh - 12vh) !important;
+  margin-top: 6vh !important;
+  display: flex !important;
+  flex-direction: column !important;
+  overflow: hidden !important;
+}
+
+.remote-pins-overlay .el-dialog__header {
+  flex: 0 0 auto !important;
+}
+
+.remote-pins-overlay .el-dialog__body {
+  flex: 1 1 auto !important;
+  min-height: 0 !important;
+  overflow: hidden !important;
+  padding-top: 12px !important;
+  padding-bottom: 12px !important;
+}
+
+.remote-pins-overlay .fixed-dialog-body {
+  height: 100% !important;
+  min-height: 0 !important;
+  display: flex !important;
+  flex-direction: column !important;
+  overflow: hidden !important;
+}
+
+.remote-pins-overlay .dialog-table-shell {
+  flex: 1 1 auto !important;
+  height: auto !important;
+  min-height: 0 !important;
+  max-height: none !important;
+  overflow: hidden !important;
+}
+
+.remote-pins-overlay .dialog-table-shell .el-table,
+.remote-pins-overlay .dialog-table-shell .el-table__inner-wrapper,
+.remote-pins-overlay .dialog-table-shell .el-scrollbar,
+.remote-pins-overlay .dialog-table-shell .el-scrollbar__wrap {
+  height: 100% !important;
+}
+
+.remote-pins-overlay .dialog-table-shell .el-scrollbar__wrap {
+  overflow-y: auto !important;
+  overflow-x: auto !important;
+}
+
+@media (max-width: 768px), (max-height: 720px) {
+  .remote-pins-overlay .el-dialog {
+    width: 100vw !important;
+    max-width: 100vw !important;
+    height: 100vh !important;
+    max-height: 100vh !important;
+    margin: 0 !important;
+    border-radius: 0 !important;
   }
 }
 </style>

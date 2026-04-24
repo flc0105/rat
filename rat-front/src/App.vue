@@ -415,7 +415,7 @@
 import AppStateModule from './legacy/core/state.js'
 import AppUtilsModule from './legacy/modules/utils.js'
 import AppCommandsModule from './legacy/modules/commands.js'
-import AppFilesModule from './legacy/modules/files.js'
+// import AppFilesModule from './legacy/modules/files.js'
 import AppJobsModule from './legacy/modules/jobs.js'
 import AppScriptsModule from './legacy/modules/scripts.js'
 import AppSseModule from './legacy/modules/sse.js'
@@ -480,7 +480,7 @@ export default {
       ...AppArtifactsModule.data(),
       ...AppAgentModule.data(),
       ...AppProcessModule.data(),
-      ...AppFilesModule.data(),
+      // ...AppFilesModule.data(),
       ...AppPreviewModule.data(),
       ...AppJobsModule.data(),
       ...AppScriptsModule.data(),
@@ -492,6 +492,11 @@ export default {
       ...AppCommandsModule.data(),
       ...AppTaskModule.data(),
       ...AppSseModule.data(),
+
+
+      remoteFilesDialogVisible: false,
+pendingRemoteUploadRefresh: null,
+
     }
   },
 
@@ -504,7 +509,7 @@ export default {
     ...AppTerminalModule.computed,
     ...AppTaskModule.computed,
     ...AppHistoryModule.computed,
-    ...AppFilesModule.computed,
+    // ...AppFilesModule.computed,
     ...AppArtifactsModule.computed,
     ...AppJobsModule.computed,
     ...AppScriptsModule.computed,
@@ -516,7 +521,7 @@ export default {
     ...AppProcessModule.watch,
     ...AppTerminalModule.watch,
     ...AppPreviewModule.watch,
-    ...AppFilesModule.watch,
+    // ...AppFilesModule.watch,
     ...AppArtifactsModule.watch,
     ...AppJobsModule.watch,
     ...AppScriptsModule.watch,
@@ -526,7 +531,7 @@ export default {
   methods: {
     ...AppUtilsModule.methods,
     ...AppCommandsModule.methods,
-    ...AppFilesModule.methods,
+    // ...AppFilesModule.methods,
     ...AppJobsModule.methods,
     ...AppScriptsModule.methods,
     ...AppSseModule.methods,
