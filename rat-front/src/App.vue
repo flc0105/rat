@@ -86,81 +86,13 @@
   @cancel="cancelCurrentTask"
 />
 
-                                <div class="terminal-output" ref="terminalRef">
-                                    <div v-if="!currentOutputLines.length" class="terminal-empty">
-                                        <div class="terminal-empty-title">Console ready</div>
-                                        <div class="terminal-empty-text">Run a command to start streaming output from
-                                            the selected device.
-                                        </div>
-                                    </div>
-
-                                    <template v-else>
-                                        <template v-for="(line, index) in currentOutputLines" :key="index">
-                                            <template
-                                                    v-if="
-                (line.text || '').startsWith('[Command finished]')
-                || (line.text || '').startsWith('[命令结束]')
-            "
-                                            >
-                                                <div
-                                                        v-if="getTerminalTailActionItems(currentOutputLines, index).length > 0"
-                                                        class="terminal-line"
-                                                        :class="`line-${line.kind || 'default'}`"
-                                                >
-                                                    <a
-                                                            v-for="(actionItem, actionIndex) in getTerminalTailActionItems(currentOutputLines, index)"
-                                                            :key="actionItem.key"
-                                                            href="#"
-                                                            class="table-action-link-aux terminal-text"
-                                                            :style="actionIndex > 0 ? 'margin-left: 12px;' : ''"
-                                                            @click.prevent.stop="handleTerminalActionClick(actionItem)"
-                                                    >
-                                                        [ {{ actionItem.type === 'preview' ? 'Preview' : 'View JSON' }}
-                                                        ]
-                                                    </a>
-                                                </div>
-
-                                                <div
-                                                        class="terminal-line"
-                                                        :class="`line-${line.kind || 'default'}`"
-                                                >
-                                                    <span class="terminal-text">{{ line.text }}</span>
-                                                </div>
-                                            </template>
-
-                                            <div
-                                                    v-else
-                                                    class="terminal-line"
-                                                    :class="[
-                `line-${line.kind || 'default'}`,
-                { 'terminal-line-with-inline-action': getTerminalInlineActionItems(currentOutputLines, index).length > 0 }
-            ]"
-                                            >
-                                                <div class="terminal-line-content">
-                                                    <span v-if="line.kind === 'command'"
-                                                          class="terminal-prefix">$</span>
-                                                    <span class="terminal-text">{{ line.text }}</span>
-                                                </div>
-
-                                                <div
-                                                        v-if="getTerminalInlineActionItems(currentOutputLines, index).length > 0"
-                                                        class="terminal-line-inline-actions"
-                                                >
-                                                    <a
-                                                            v-for="(actionItem, actionIndex) in getTerminalInlineActionItems(currentOutputLines, index)"
-                                                            :key="actionItem.key"
-                                                            href="#"
-                                                            class="table-action-link-aux terminal-text"
-                                                            :style="actionIndex > 0 ? 'margin-left: 12px;' : ''"
-                                                            @click.prevent.stop="handleTerminalActionClick(actionItem)"
-                                                    >
-                                                        [ {{ actionItem.type === 'preview' ? 'Preview' : 'JSON' }} ]
-                                                    </a>
-                                                </div>
-                                            </div>
-                                        </template>
-                                    </template>
-                                </div>
+                                <TerminalOutput
+  ref="terminalOutputRef"
+  :lines="currentOutputLines"
+  :get-terminal-tail-action-items="getTerminalTailActionItems"
+  :get-terminal-inline-action-items="getTerminalInlineActionItems"
+  @action-click="handleTerminalActionClick"
+/>
                             </div>
                         </section>
                     </div>
@@ -2050,9 +1982,10 @@ import DeviceSidebar from "./components/DeviceSidebar.vue";
 import ConnectionInfoCards from "./components/ConnectionInfoCards.vue";
 import TerminalToolbar from "./components/TerminalToolbar.vue";
 import CommandInputBar from "./components/CommandInputBar.vue";
+import TerminalOutput from "./components/TerminalOutput.vue";
 
 export default {
-  components: {CommandInputBar, TerminalToolbar, ConnectionInfoCards, DeviceSidebar},
+  components: {TerminalOutput, CommandInputBar, TerminalToolbar, ConnectionInfoCards, DeviceSidebar},
   data() {
     return {
       ...AppStateModule.data(),

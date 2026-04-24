@@ -363,21 +363,21 @@ export default {
         // },
 
         getTerminalCommandGroupStartIndex(lines, endIndex) {
-    const safeLines = Array.isArray(lines) ? lines : [];
-    for (let i = endIndex; i >= 0; i--) {
-        const line = safeLines[i];
-        if (!line) continue;
+            const safeLines = Array.isArray(lines) ? lines : [];
+            for (let i = endIndex; i >= 0; i--) {
+                const line = safeLines[i];
+                if (!line) continue;
 
-        if (line.kind === 'command') {
-            return i;
-        }
+                if (line.kind === 'command') {
+                    return i;
+                }
 
-        if (i < endIndex && this.isCommandFinishedLine(line)) {
-            return i + 1;
-        }
-    }
-    return 0;
-},
+                if (i < endIndex && this.isCommandFinishedLine(line)) {
+                    return i + 1;
+                }
+            }
+            return 0;
+        },
 
         getTerminalCommandGroupLines(lines, endIndex) {
             const safeLines = Array.isArray(lines) ? lines : [];
@@ -530,10 +530,16 @@ export default {
         },
 
         scrollToBottom() {
-this.$nextTick(() => {
-    const el = this.$refs.terminalRef;
-    if (el) el.scrollTop = el.scrollHeight;
-});
+            this.$nextTick(() => {
+                const terminalOutput = this.$refs.terminalOutputRef;
+
+                if (
+                    terminalOutput &&
+                    typeof terminalOutput.scrollToBottom === 'function'
+                ) {
+                    terminalOutput.scrollToBottom();
+                }
+            });
         },
     },
 
