@@ -310,99 +310,30 @@
 />
 
 
-    <el-dialog v-model="previewDialogVisible" :title="previewTitle || 'File Preview'" width="1080px" top="5vh"
-               class="fixed-dialog preview-dialog">
-        <div v-loading="previewLoading" class="preview-wrap">
-            <div class="preview-toolbar" v-if="previewType === 'image' || previewType === 'text'">
-                <div class="preview-toolbar-left">
-                    <template v-if="previewType === 'text'">
-                        <el-button size="small" @click="copyPreviewText">
-                            Copy
-                        </el-button>
-                        <el-button
-                                v-if="!previewEditMode && !previewTruncated"
-                                size="small"
-                                type="primary"
-                                @click="enterEditMode"
-                        >
-                            Edit
-                        </el-button>
-                        <template v-else-if="previewEditMode">
+<PreviewDialog
+  v-model:visible="previewDialogVisible"
+  :loading="previewLoading"
+  :type="previewType"
+  :title="previewTitle"
+  :url="previewUrl"
+  :edit-mode="previewEditMode"
+  :saving="previewSaving"
+  :truncated="previewTruncated"
+  :source-label="previewSourceLabel"
+  :file-size="previewFileSize"
+  :file-encoding="previewFileEncoding"
+  :detected-language="previewDetectedLanguage"
+  :image-info="previewImageInfo"
+  @copy-text="copyPreviewText"
+  @enter-edit="enterEditMode"
+  @save="saveEditedContent"
+  @cancel-edit="cancelEditMode"
+  @clear-content="clearPreviewContent"
+  @open-image-info="openPreviewImageInfoDialog"
+  @open-original="openPreviewOriginal"
+/>
 
-                            <el-button
-                                    size="small"
-                                    type="primary"
-                                    :loading="previewSaving"
-                                    @click="saveEditedContent"
-                            >
-                                Save
-                            </el-button>
-                            <el-button
-                                    size="small"
-                                    @click="cancelEditMode"
-                            >
-                                Cancel
-                            </el-button>
-                                        <el-button
-                                    size="small"
-                                    type="danger"
-                                    plain
-                                    @click="clearPreviewContent"
-                            >
-                                Clear
-                            </el-button>
-                        </template>
-                    </template>
-      <template v-if="previewType === 'image' && previewUrl">
-    <el-button
-            v-if="previewImageInfo"
-            size="small"
-            @click="openPreviewImageInfoDialog"
-    >
-        Image Info
-    </el-button>
-    <el-button size="small" @click="openPreviewOriginal">
-        Open Original
-    </el-button>
-</template>
-                </div>
 
-                <div class="preview-toolbar-right">
-                    <template v-if="previewType === 'text'">
-                        <div class="preview-info-tags">
-                            <el-tag size="small" type="primary">
-                                {{ previewSourceLabel }}
-                            </el-tag>
-                            <el-tag size="small" type="info">{{ previewFileSize }}</el-tag>
-                            <el-tag size="small" type="info">{{ previewFileEncoding }}</el-tag>
-                         <el-tag size="small" type="info">{{ previewDetectedLanguage }}</el-tag>
-
-                            <el-tag v-if="previewTruncated" size="small" type="danger">
-                                Truncated - Edit disabled
-                            </el-tag>
-                            <el-tag v-else size="small" type="success">Full content</el-tag>
-                        </div>
-                    </template>
-                </div>
-            </div>
-
-            <template v-if="previewType === 'image' && previewUrl">
-                <div class="image-preview-box"><img :src="previewUrl" alt="preview" class="preview-image"/></div>
-            </template>
-
-            <template v-else-if="previewType === 'text'">
-                <!-- Monaco Editor 容器 -->
-                <div id="monaco-editor-container" class="monaco-editor-container"></div>
-            </template>
-
-            <template v-else-if="previewType === 'unsupported'">
-                <div class="empty-state">This file type is not supported for preview.</div>
-            </template>
-            <template v-else>
-                <div class="empty-state">No preview available.</div>
-            </template>
-        </div>
-    </el-dialog>
 
   <CommandHistoryDialog
   v-model:visible="commandHistoryDialogVisible"
@@ -540,68 +471,14 @@
         </div>
     </template>
 </el-dialog>
-   <el-dialog
-        v-model="previewImageInfoDialogVisible"
-        title="Image Info"
-        width="760px"
-        top="8vh"
-        class="fixed-dialog"
->
-    <div style="max-height: 65vh; overflow: auto;">
-        <template v-if="previewImageInfo">
-            <div
-                    v-if="formatPreviewImageInfo(previewImageInfo).basic.length"
-                    style="margin-bottom: 20px;"
-            >
-                <div style="font-weight: 600; font-size: 14px; margin-bottom: 10px;">
-                    Basic
-                </div>
-                <div
-                        v-for="item in formatPreviewImageInfo(previewImageInfo).basic"
-                        :key="'basic-' + item.key"
-                        style="display: grid; grid-template-columns: 180px 1fr; gap: 12px; padding: 8px 0; border-bottom: 1px solid #ebeef5;"
-                >
-                    <div style="color: #606266; font-weight: 500;">{{ item.label }}</div>
-                    <div style="word-break: break-word;">{{ item.value }}</div>
-                </div>
-            </div>
 
-            <div
-                    v-if="formatPreviewImageInfo(previewImageInfo).exif.length"
-                    style="margin-bottom: 20px;"
-            >
-                <div style="font-weight: 600; font-size: 14px; margin-bottom: 10px;">
-                    EXIF
-                </div>
-                <div
-                        v-for="item in formatPreviewImageInfo(previewImageInfo).exif"
-                        :key="'exif-' + item.key"
-                        style="display: grid; grid-template-columns: 180px 1fr; gap: 12px; padding: 8px 0; border-bottom: 1px solid #ebeef5;"
-                >
-                    <div style="color: #606266; font-weight: 500;">{{ item.label }}</div>
-                    <div style="word-break: break-word;">{{ item.value }}</div>
-                </div>
-            </div>
 
-            <div v-if="formatPreviewImageInfo(previewImageInfo).other.length">
-                <div style="font-weight: 600; font-size: 14px; margin-bottom: 10px;">
-                    Other
-                </div>
-                <div
-                        v-for="item in formatPreviewImageInfo(previewImageInfo).other"
-                        :key="'other-' + item.key"
-                        style="display: grid; grid-template-columns: 180px 1fr; gap: 12px; padding: 8px 0; border-bottom: 1px solid #ebeef5;"
-                >
-                    <div style="color: #606266; font-weight: 500;">{{ item.label }}</div>
-                    <div style="word-break: break-word;">{{ item.value }}</div>
-                </div>
-            </div>
-        </template>
 
-        <el-empty v-else description="No image info available"></el-empty>
-    </div>
-</el-dialog>
-
+  <PreviewImageInfoDialog
+  v-model:visible="previewImageInfoDialogVisible"
+  :info="previewImageInfo"
+  :format-preview-image-info="formatPreviewImageInfo"
+/>
 
 
 <AgentOutputsDialog
@@ -687,9 +564,13 @@ import BackgroundJobMessageDialog from "./components/BackgroundJobMessageDialog.
 import BackgroundJobDetailDialog from "./components/BackgroundJobDetailDialog.vue";
 import BackgroundJobStartDialog from "./components/BackgroundJobStartDialog.vue";
 import BackgroundJobsDialog from "./components/BackgroundJobsDialog.vue";
+import PreviewDialog from "./components/PreviewDialog.vue";
+import PreviewImageInfoDialog from "./components/PreviewImageInfoDialog.vue";
 
 export default {
   components: {
+    PreviewImageInfoDialog,
+    PreviewDialog,
     BackgroundJobsDialog,
     BackgroundJobStartDialog,
     BackgroundJobDetailDialog,
