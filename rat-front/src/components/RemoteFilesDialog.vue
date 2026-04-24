@@ -1,26 +1,26 @@
 <template>
-<el-dialog
-  :model-value="visible"
-  title="Remote File Browser"
-  width="1180px"
-  top="4vh"
-  class="fixed-dialog remote-files-dialog"
-  modal-class="remote-files-overlay"
-  @update:model-value="handleVisibleChange"
->
+  <el-dialog
+      :model-value="visible"
+      title="Remote File Browser"
+      width="1180px"
+      top="4vh"
+      class="fixed-dialog remote-files-dialog"
+      modal-class="remote-files-overlay"
+      @update:model-value="handleVisibleChange"
+  >
     <div class="fixed-dialog-body">
       <div class="dialog-head remote-files-head">
         <div class="dialog-head-left remote-files-head-main">
           <div class="remote-breadcrumb-bar">
             <template v-if="remoteBreadcrumbItems.length">
               <button
-                v-for="(item, index) in remoteBreadcrumbItems"
-                :key="`breadcrumb-${index}-${item.path}`"
-                type="button"
-                class="remote-breadcrumb-item"
-                :class="{ active: item.isCurrent }"
-                :disabled="item.isCurrent"
-                @click="goToRemoteBreadcrumb(item)"
+                  v-for="(item, index) in remoteBreadcrumbItems"
+                  :key="`breadcrumb-${index}-${item.path}`"
+                  type="button"
+                  class="remote-breadcrumb-item"
+                  :class="{ active: item.isCurrent }"
+                  :disabled="item.isCurrent"
+                  @click="goToRemoteBreadcrumb(item)"
               >
                 <span v-if="index > 0" class="remote-breadcrumb-sep">/</span>
                 <span>{{ item.label }}</span>
@@ -37,16 +37,16 @@
               </el-button>
 
               <el-button
-                size="small"
-                :disabled="!remoteFilesParentPath"
-                @click="goToRemoteParent"
+                  size="small"
+                  :disabled="!remoteFilesParentPath"
+                  @click="goToRemoteParent"
               >
                 Up
               </el-button>
 
               <el-dropdown
-                :loading="quickJumpLoading || remotePinnedJumpLoading"
-                @command="jumpToPath"
+                  :loading="quickJumpLoading || remotePinnedJumpLoading"
+                  @command="jumpToPath"
               >
                 <el-button size="small">
                   Quick Jump
@@ -64,10 +64,10 @@
                     </el-dropdown-item>
 
                     <el-dropdown-item
-                      v-for="(item, index) in remotePinnedJumpItems"
-                      :key="`pinned-jump-${item.display_name}-${item.path}`"
-                      :divided="index === 0"
-                      :command="{
+                        v-for="(item, index) in remotePinnedJumpItems"
+                        :key="`pinned-jump-${item.display_name}-${item.path}`"
+                        :divided="index === 0"
+                        :command="{
                         type: 'pinned_jump',
                         display_name: item.display_name,
                         path: item.path,
@@ -92,19 +92,19 @@
               </el-button>
 
               <el-button
-                size="small"
-                :loading="remoteUploadLoading"
-                @click="triggerRemoteUpload"
+                  size="small"
+                  :loading="remoteUploadLoading"
+                  @click="triggerRemoteUpload"
               >
                 Upload
               </el-button>
 
               <el-button
-                size="small"
-                type="primary"
-                :disabled="!hasRemoteSelection"
-                :loading="remoteZipDownloading"
-                @click="downloadSelectedRemoteEntries"
+                  size="small"
+                  type="primary"
+                  :disabled="!hasRemoteSelection"
+                  :loading="remoteZipDownloading"
+                  @click="downloadSelectedRemoteEntries"
               >
                 Download
                 <span v-if="remoteSelectedPaths.length">
@@ -113,10 +113,10 @@
               </el-button>
 
               <el-button
-                size="small"
-                type="danger"
-                :disabled="!hasRemoteSelection"
-                @click="deleteSelectedRemoteEntries"
+                  size="small"
+                  type="danger"
+                  :disabled="!hasRemoteSelection"
+                  @click="deleteSelectedRemoteEntries"
               >
                 Delete
                 <span v-if="remoteSelectedPaths.length">
@@ -129,8 +129,8 @@
 
             <div class="remote-toolbar-group">
               <el-dropdown
-                trigger="click"
-                @command="handleRemoteToolbarMoreCommand"
+                  trigger="click"
+                  @command="handleRemoteToolbarMoreCommand"
               >
                 <el-button size="small">More</el-button>
 
@@ -141,16 +141,16 @@
                     </el-dropdown-item>
 
                     <el-dropdown-item
-                      v-if="hasPinnedQuickJumps"
-                      command="manage_pins"
+                        v-if="hasPinnedQuickJumps"
+                        command="manage_pins"
                     >
                       Manage Pins
                     </el-dropdown-item>
 
                     <el-dropdown-item
-                      command="copy"
-                      :disabled="!hasRemoteSelection"
-                      divided
+                        command="copy"
+                        :disabled="!hasRemoteSelection"
+                        divided
                     >
                       Copy
                       <span v-if="remoteSelectedPaths.length">
@@ -159,8 +159,8 @@
                     </el-dropdown-item>
 
                     <el-dropdown-item
-                      command="cut"
-                      :disabled="!hasRemoteSelection"
+                        command="cut"
+                        :disabled="!hasRemoteSelection"
                     >
                       Cut
                       <span v-if="remoteSelectedPaths.length">
@@ -169,8 +169,8 @@
                     </el-dropdown-item>
 
                     <el-dropdown-item
-                      command="paste"
-                      :disabled="!hasRemoteClipboard"
+                        command="paste"
+                        :disabled="!hasRemoteClipboard"
                     >
                       Paste
                       <span v-if="hasRemoteClipboard">
@@ -179,16 +179,23 @@
                     </el-dropdown-item>
 
                     <el-dropdown-item
-                      command="clear_clipboard"
-                      :disabled="!hasRemoteClipboard"
+                        command="clear_clipboard"
+                        :disabled="!hasRemoteClipboard"
                     >
                       Clear Clipboard
                     </el-dropdown-item>
 
                     <el-dropdown-item
-                      command="clear_selection"
-                      :disabled="!hasRemoteSelection"
-                      divided
+                        command="toggle_select_all"
+                        divided
+                        :disabled="!visibleRemoteSelectablePaths.length"
+                    >
+                      {{ remoteSelectAllText }}
+                    </el-dropdown-item>
+
+                    <el-dropdown-item
+                        command="clear_selection"
+                        :disabled="!hasRemoteSelection"
                     >
                       Clear Selection
                     </el-dropdown-item>
@@ -215,22 +222,22 @@
 
       <div class="dialog-table-shell">
         <el-table
-          ref="remoteFilesTableRef"
-          :data="displayRemoteFilesEntries"
-          v-loading="remoteFilesLoading"
-          stripe
-          width="100%"
-          height="100%"
-          empty-text="This folder is empty"
-          table-layout="fixed"
-          @row-dblclick="handleRemoteRowDblClick"
-          @selection-change="handleRemoteSelectionChange"
+            ref="remoteFilesTableRef"
+            :data="displayRemoteFilesEntries"
+            v-loading="remoteFilesLoading"
+            stripe
+            width="100%"
+            height="100%"
+            empty-text="This folder is empty"
+            table-layout="fixed"
+            @row-dblclick="handleRemoteRowDblClick"
+            @selection-change="handleRemoteSelectionChange"
         >
           <el-table-column
-            type="selection"
-            width="52"
-            align="center"
-            :selectable="row => !row.is_parent_entry"
+              type="selection"
+              width="52"
+              align="center"
+              :selectable="row => !row.is_parent_entry"
           />
 
           <el-table-column label="Name" min-width="320" show-overflow-tooltip>
@@ -250,9 +257,9 @@
                 </el-tag>
 
                 <el-tag
-                  v-if="!row.is_parent_entry && row.is_hidden"
-                  size="small"
-                  type="warning"
+                    v-if="!row.is_parent_entry && row.is_hidden"
+                    size="small"
+                    type="warning"
                 >
                   Hidden
                 </el-tag>
@@ -273,10 +280,10 @@
           </el-table-column>
 
           <el-table-column
-            prop="modified_at"
-            label="Modified"
-            width="180"
-            show-overflow-tooltip
+              prop="modified_at"
+              label="Modified"
+              width="180"
+              show-overflow-tooltip
           >
             <template #default="{ row }">
               <div class="ellipsis">
@@ -290,10 +297,10 @@
               <div class="table-actions table-actions-links">
                 <template v-if="row.is_parent_entry">
                   <el-button
-                    size="small"
-                    link
-                    type="primary"
-                    @click="goToRemoteParent"
+                      size="small"
+                      link
+                      type="primary"
+                      @click="goToRemoteParent"
                   >
                     Open
                   </el-button>
@@ -301,38 +308,38 @@
 
                 <template v-else>
                   <el-button
-                    v-if="row.is_dir"
-                    size="small"
-                    link
-                    type="primary"
-                    @click="enterRemoteDirectory(row)"
+                      v-if="row.is_dir"
+                      size="small"
+                      link
+                      type="primary"
+                      @click="enterRemoteDirectory(row)"
                   >
                     Open
                   </el-button>
 
                   <template v-if="!row.is_dir">
                     <el-button
-                      size="small"
-                      link
-                      type="primary"
-                      @click="previewRow(row)"
+                        size="small"
+                        link
+                        type="primary"
+                        @click="previewRow(row)"
                     >
                       Preview
                     </el-button>
 
                     <el-button
-                      size="small"
-                      link
-                      type="primary"
-                      @click="downloadRemoteEntry(row)"
+                        size="small"
+                        link
+                        type="primary"
+                        @click="downloadRemoteEntry(row)"
                     >
                       Download
                     </el-button>
                   </template>
 
                   <el-dropdown
-                    trigger="click"
-                    @command="command => handleRemoteMoreAction(command, row)"
+                      trigger="click"
+                      @command="command => handleRemoteMoreAction(command, row)"
                   >
                     <el-button size="small" link type="primary">
                       More
@@ -374,15 +381,15 @@
           </div>
 
           <el-pagination
-            background
-            layout="total, sizes, prev, pager, next"
-            :current-page="remoteFilesPage"
-            :page-size="remoteFilesPageSize"
-            :page-sizes="remoteFilesPageSizeOptions"
-            :total="remoteFilesTotal"
-            :pager-count="5"
-            @current-change="handleRemotePageChange"
-            @size-change="handleRemotePageSizeChange"
+              background
+              layout="total, sizes, prev, pager, next"
+              :current-page="remoteFilesPage"
+              :page-size="remoteFilesPageSize"
+              :page-sizes="remoteFilesPageSizeOptions"
+              :total="remoteFilesTotal"
+              :pager-count="5"
+              @current-change="handleRemotePageChange"
+              @size-change="handleRemotePageSizeChange"
           />
         </div>
       </div>
@@ -390,26 +397,26 @@
       <div class="mobile-file-list-shell">
         <div class="mobile-file-list" v-loading="remoteFilesLoading">
           <div
-            v-if="!displayRemoteFilesEntries.length && !remoteFilesLoading"
-            class="empty-state"
+              v-if="!displayRemoteFilesEntries.length && !remoteFilesLoading"
+              class="empty-state"
           >
             This folder is empty
           </div>
 
           <div v-else class="mobile-file-grid">
             <div
-              v-for="row in displayRemoteFilesEntries"
-              :key="`${row.is_parent_entry ? 'parent-' : ''}${row.path}`"
-              class="mobile-file-card"
-              style="position: relative;"
+                v-for="row in displayRemoteFilesEntries"
+                :key="`${row.is_parent_entry ? 'parent-' : ''}${row.path}`"
+                class="mobile-file-card"
+                style="position: relative;"
             >
               <div
-                v-if="!row.is_parent_entry"
-                style="position:absolute; top:6px; right:12px; z-index:1;"
+                  v-if="!row.is_parent_entry"
+                  style="position:absolute; top:6px; right:12px; z-index:1;"
               >
                 <el-checkbox
-                  :model-value="isRemoteEntrySelected(row)"
-                  @change="toggleRemoteSelection(row)"
+                    :model-value="isRemoteEntrySelected(row)"
+                    @change="toggleRemoteSelection(row)"
                 />
               </div>
 
@@ -420,8 +427,8 @@
 
                 <div class="mobile-file-main">
                   <div
-                    class="mobile-file-name"
-                    :style="row.is_parent_entry ? '' : 'padding-right: 42px;'"
+                      class="mobile-file-name"
+                      :style="row.is_parent_entry ? '' : 'padding-right: 42px;'"
                   >
                     {{ row.is_parent_entry ? '..' : row.name }}
                   </div>
@@ -432,17 +439,17 @@
                     </el-tag>
 
                     <el-tag
-                      v-if="!row.is_parent_entry && row.is_symlink"
-                      size="small"
-                      type="info"
+                        v-if="!row.is_parent_entry && row.is_symlink"
+                        size="small"
+                        type="info"
                     >
                       Link
                     </el-tag>
 
                     <el-tag
-                      v-if="!row.is_parent_entry && row.is_hidden"
-                      size="small"
-                      type="warning"
+                        v-if="!row.is_parent_entry && row.is_hidden"
+                        size="small"
+                        type="warning"
                     >
                       Hidden
                     </el-tag>
@@ -465,90 +472,80 @@
                   </div>
 
                   <div class="mobile-file-actions">
-                    <template v-if="row.is_parent_entry">
-                      <el-button
-                        size="small"
-                        type="primary"
-                        plain
-                        @click="goToRemoteParent"
-                      >
-                        Open
-                      </el-button>
-                    </template>
+  <template v-if="row.is_parent_entry">
+    <div class="mobile-file-action-item">
+      <el-button
+        size="small"
+        type="primary"
+        plain
+        @click="goToRemoteParent"
+      >
+        Open
+      </el-button>
+    </div>
+  </template>
 
-                    <template v-else>
-                      <el-button
-                        v-if="row.is_dir"
-                        size="small"
-                        type="primary"
-                        plain
-                        @click="enterRemoteDirectory(row)"
-                      >
-                        Open
-                      </el-button>
+  <template v-else>
+    <template v-if="row.is_dir">
+      <div class="mobile-file-action-item">
+        <el-button
+          size="small"
+          type="primary"
+          plain
+          @click="enterRemoteDirectory(row)"
+        >
+          Open
+        </el-button>
+      </div>
+    </template>
 
-                      <template v-if="!row.is_dir">
-                        <el-button
-                          size="small"
-                          type="primary"
-                          plain
-                          @click="previewRow(row)"
-                        >
-                          Preview
-                        </el-button>
+    <template v-else>
+      <div class="mobile-file-action-item">
+        <el-button
+          size="small"
+          type="primary"
+          plain
+          @click="previewRow(row)"
+        >
+          Preview
+        </el-button>
+      </div>
 
-                        <el-button
-                          size="small"
-                          type="primary"
-                          plain
-                          @click="downloadRemoteEntry(row)"
-                        >
-                          Download
-                        </el-button>
-                      </template>
+      <div class="mobile-file-action-item">
+        <el-button
+          size="small"
+          type="primary"
+          plain
+          @click="downloadRemoteEntry(row)"
+        >
+          Download
+        </el-button>
+      </div>
+    </template>
 
-                      <el-button
-                        size="small"
-                        plain
-                        @click="copySingleRemoteEntry(row)"
-                      >
-                        Copy
-                      </el-button>
+    <div class="mobile-file-action-item">
+      <el-dropdown
+        trigger="click"
+        class="mobile-file-more"
+        @command="command => handleRemoteMoreAction(command, row)"
+      >
+        <el-button size="small" plain>
+          More
+        </el-button>
 
-                      <el-button
-                        size="small"
-                        plain
-                        @click="cutSingleRemoteEntry(row)"
-                      >
-                        Cut
-                      </el-button>
-
-                      <el-button
-                        size="small"
-                        plain
-                        @click="renameRemoteEntry(row)"
-                      >
-                        Rename
-                      </el-button>
-
-                      <el-button
-                        size="small"
-                        plain
-                        @click="copyRemotePath(row)"
-                      >
-                        Copy Path
-                      </el-button>
-
-                      <el-button
-                        size="small"
-                        type="danger"
-                        plain
-                        @click="deleteRemoteEntry(row)"
-                      >
-                        Delete
-                      </el-button>
-                    </template>
-                  </div>
+        <template #dropdown>
+          <el-dropdown-menu>
+            <el-dropdown-item command="rename">Rename</el-dropdown-item>
+            <el-dropdown-item command="copy">Copy</el-dropdown-item>
+            <el-dropdown-item command="cut">Cut</el-dropdown-item>
+            <el-dropdown-item command="copy_path">Copy Path</el-dropdown-item>
+            <el-dropdown-item command="delete">Delete</el-dropdown-item>
+          </el-dropdown-menu>
+        </template>
+      </el-dropdown>
+    </div>
+  </template>
+</div>
                 </div>
               </div>
             </div>
@@ -558,85 +555,30 @@
     </div>
   </el-dialog>
 
-  <el-dialog
-    :model-value="pinManagerVisible"
-    title="Manage Pinned Paths"
-    width="760px"
-    top="6vh"
-    class="fixed-dialog remote-pins-dialog"
-      modal-class="remote-pins-overlay"
 
-    @update:model-value="pinManagerVisible = $event"
-  >
-    <div class="fixed-dialog-body">
-      <div class="dialog-table-shell">
-<!--      <div class="dialog-table-shell" style="height: 420px; min-height: 220px;">-->
-        <el-table
-          :data="remotePinnedJumpItems"
-          stripe
-          width="100%"
-          height="100%"
-          empty-text="No pinned paths"
-          table-layout="fixed"
-        >
-          <el-table-column
-            prop="display_name"
-            label="Display Name"
-            min-width="180"
-            show-overflow-tooltip
-          />
-
-          <el-table-column
-            prop="path"
-            label="Path"
-            min-width="360"
-            show-overflow-tooltip
-          />
-
-          <el-table-column
-            label="Actions"
-            width="160"
-            align="center"
-            fixed="right"
-          >
-            <template #default="{ row }">
-              <div class="table-actions table-actions-links">
-                <el-button
-                  size="small"
-                  link
-                  type="primary"
-                  @click="promptEditPinnedQuickJump(row)"
-                >
-                  Edit
-                </el-button>
-
-                <el-button
-                  size="small"
-                  link
-                  type="danger"
-                  @click="deletePinnedQuickJump(row)"
-                >
-                  Delete
-                </el-button>
-              </div>
-            </template>
-          </el-table-column>
-        </el-table>
-      </div>
-    </div>
-  </el-dialog>
+  <RemotePinsDialog
+      v-model="pinManagerVisible"
+      :selected-id="selectedId"
+      :items="remotePinnedJumpItems"
+      @updated="handlePinnedQuickJumpsUpdated"
+  />
 </template>
 
 <script>
-import { ElMessage, ElMessageBox } from 'element-plus'
+import {ElMessage, ElMessageBox} from 'element-plus'
+import RemotePinsDialog from './RemotePinsDialog.vue'
 
 export default {
   name: 'RemoteFilesDialog',
 
+  components: {
+    RemotePinsDialog,
+  },
+
   props: {
-    selectedId: { type: String, default: '' },
-    formatBytes: { type: Function, required: true },
-    getTabScopedHeaders: { type: Function, required: true },
+    selectedId: {type: String, default: ''},
+    formatBytes: {type: Function, required: true},
+    getTabScopedHeaders: {type: Function, required: true},
   },
 
   emits: [
@@ -686,8 +628,8 @@ export default {
   computed: {
     displayRemoteFilesEntries() {
       const entries = Array.isArray(this.remoteFilesEntries)
-        ? [...this.remoteFilesEntries]
-        : []
+          ? [...this.remoteFilesEntries]
+          : []
 
       if (this.remoteFilesParentPath && this.remoteFilesPage === 1) {
         entries.unshift({
@@ -707,6 +649,24 @@ export default {
 
     hasRemoteSelection() {
       return this.remoteSelectedPaths.length > 0
+    },
+
+    visibleRemoteSelectablePaths() {
+      return this.displayRemoteFilesEntries
+          .filter(row => row && !row.is_parent_entry && row.path)
+          .map(row => row.path)
+    },
+
+    isRemoteCurrentPageAllSelected() {
+      const paths = this.visibleRemoteSelectablePaths
+
+      if (!paths.length) return false
+
+      return paths.every(path => this.remoteSelectedPaths.includes(path))
+    },
+
+    remoteSelectAllText() {
+      return this.isRemoteCurrentPageAllSelected ? 'Clear Page Selection' : 'Select All'
     },
 
     hasRemoteClipboard() {
@@ -815,10 +775,10 @@ export default {
       this.remoteUploadLoading = true
 
       this.$emit(
-        'append-output',
-        this.selectedId,
-        `> [Remote Upload] ${file.name} -> ${this.remoteFilesCurrentPath}`,
-        'command'
+          'append-output',
+          this.selectedId,
+          `> [Remote Upload] ${file.name} -> ${this.remoteFilesCurrentPath}`,
+          'command'
       )
 
       try {
@@ -846,10 +806,10 @@ export default {
         ElMessage.success(`Upload started: ${file.name}`)
       } catch (e) {
         this.$emit(
-          'append-output',
-          this.selectedId,
-          `[Upload failed] ${e.message || 'unknown error'}`,
-          'error'
+            'append-output',
+            this.selectedId,
+            `[Upload failed] ${e.message || 'unknown error'}`,
+            'error'
         )
 
         ElMessage.error(e.message || 'Upload failed')
@@ -869,8 +829,8 @@ export default {
 
       try {
         const url = new URL(
-          `/api/connections/${encodeURIComponent(this.selectedId)}/remote-files`,
-          window.location.origin
+            `/api/connections/${encodeURIComponent(this.selectedId)}/remote-files`,
+            window.location.origin
         )
 
         if (path) url.searchParams.set('path', path)
@@ -959,11 +919,11 @@ export default {
 
     handleRemoteSelectionChange(rows) {
       this.remoteSelectedPaths = Array.isArray(rows)
-        ? rows
-          .filter(item => item && !item.is_parent_entry)
-          .map(item => item.path)
-          .filter(Boolean)
-        : []
+          ? rows
+              .filter(item => item && !item.is_parent_entry)
+              .map(item => item.path)
+              .filter(Boolean)
+          : []
     },
 
     isRemoteEntrySelected(row) {
@@ -988,19 +948,117 @@ export default {
       this.clearTableSelection()
     },
 
-    async copyRemotePath(row) {
-      if (!row || !row.path || row.is_parent_entry) {
-        ElMessage.warning('Invalid path')
+    toggleRemoteCurrentPageSelection() {
+      const paths = this.visibleRemoteSelectablePaths
+
+      if (!paths.length) return
+
+      if (this.isRemoteCurrentPageAllSelected) {
+        this.remoteSelectedPaths = this.remoteSelectedPaths.filter(path => {
+          return !paths.includes(path)
+        })
+
+        const table = this.$refs.remoteFilesTableRef
+
+        if (table && typeof table.toggleRowSelection === 'function') {
+          this.displayRemoteFilesEntries.forEach(row => {
+            if (row && !row.is_parent_entry && row.path && paths.includes(row.path)) {
+              table.toggleRowSelection(row, false)
+            }
+          })
+        }
+
         return
       }
 
-      try {
-        await navigator.clipboard.writeText(row.path)
-        ElMessage.success('Path copied')
-      } catch (e) {
-        ElMessage.error('Failed to copy path')
+      const next = new Set(this.remoteSelectedPaths)
+
+      paths.forEach(path => {
+        next.add(path)
+      })
+
+      this.remoteSelectedPaths = Array.from(next)
+
+      const table = this.$refs.remoteFilesTableRef
+
+      if (table && typeof table.toggleRowSelection === 'function') {
+        this.displayRemoteFilesEntries.forEach(row => {
+          if (row && !row.is_parent_entry && row.path && paths.includes(row.path)) {
+            table.toggleRowSelection(row, true)
+          }
+        })
       }
     },
+
+    async copyRemotePath(row) {
+  if (!row || !row.path || row.is_parent_entry) {
+    ElMessage.warning('Invalid path')
+    return
+  }
+
+  const text = String(row.path)
+
+  try {
+    if (
+      window.isSecureContext &&
+      navigator.clipboard &&
+      typeof navigator.clipboard.writeText === 'function'
+    ) {
+      await navigator.clipboard.writeText(text)
+      ElMessage.success('Path copied')
+      return
+    }
+
+    this.copyTextFallback(text)
+    ElMessage.success('Path copied')
+  } catch (e) {
+    try {
+      this.copyTextFallback(text)
+      ElMessage.success('Path copied')
+    } catch (fallbackError) {
+      ElMessage.error('Failed to copy path')
+    }
+  }
+},
+
+    copyTextFallback(text) {
+  const textarea = document.createElement('textarea')
+
+  textarea.value = String(text || '')
+  textarea.setAttribute('readonly', '')
+  textarea.style.position = 'fixed'
+  textarea.style.left = '-9999px'
+  textarea.style.top = '0'
+  textarea.style.opacity = '0'
+
+  document.body.appendChild(textarea)
+
+  textarea.focus()
+  textarea.select()
+  textarea.setSelectionRange(0, textarea.value.length)
+
+  const ok = document.execCommand('copy')
+
+  document.body.removeChild(textarea)
+
+  if (!ok) {
+    throw new Error('Fallback copy failed')
+  }
+},
+
+    // async copyRemotePath(row) {
+    //   if (!row || !row.path || row.is_parent_entry) {
+    //     ElMessage.warning('Invalid path')
+    //     return
+    //   }
+    //
+    //   try {
+    //     await navigator.clipboard.writeText(row.path)
+    //     ElMessage.success('Path copied')
+    //   } catch (e) {
+    //     ElMessage.error('Failed to copy path')
+    //   }
+    // },
 
     cacheRemoteClipboard(mode) {
       const paths = [...this.remoteSelectedPaths]
@@ -1065,7 +1123,7 @@ export default {
       try {
         const res = await fetch(`/api/connections/${encodeURIComponent(this.selectedId)}/remote-files/paste`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: {'Content-Type': 'application/json'},
           body: JSON.stringify({
             paths,
             destination_dir: this.remoteFilesCurrentPath,
@@ -1120,6 +1178,11 @@ export default {
 
       if (command === 'cut') {
         this.cutSelectedRemoteEntries()
+        return
+      }
+
+      if (command === 'toggle_select_all') {
+        this.toggleRemoteCurrentPageSelection()
         return
       }
 
@@ -1178,15 +1241,15 @@ export default {
       }
 
       try {
-        const { value } = await ElMessageBox.prompt(
-          'Enter the new folder name',
-          'Create Directory',
-          {
-            confirmButtonText: 'Create',
-            cancelButtonText: 'Cancel',
-            inputPattern: /.+/,
-            inputErrorMessage: 'Folder name is required',
-          }
+        const {value} = await ElMessageBox.prompt(
+            'Enter the new folder name',
+            'Create Directory',
+            {
+              confirmButtonText: 'Create',
+              cancelButtonText: 'Cancel',
+              inputPattern: /.+/,
+              inputErrorMessage: 'Folder name is required',
+            }
         )
 
         const folderName = String(value || '').trim()
@@ -1198,8 +1261,8 @@ export default {
 
         const res = await fetch(`/api/connections/${encodeURIComponent(this.selectedId)}/remote-files/mkdir`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ path: fullPath }),
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({path: fullPath}),
         })
 
         const json = await res.json()
@@ -1223,16 +1286,16 @@ export default {
       }
 
       try {
-        const { value } = await ElMessageBox.prompt(
-          'Enter the new name',
-          'Rename',
-          {
-            confirmButtonText: 'Rename',
-            cancelButtonText: 'Cancel',
-            inputValue: row.name || '',
-            inputPattern: /.+/,
-            inputErrorMessage: 'New name is required',
-          }
+        const {value} = await ElMessageBox.prompt(
+            'Enter the new name',
+            'Rename',
+            {
+              confirmButtonText: 'Rename',
+              cancelButtonText: 'Cancel',
+              inputValue: row.name || '',
+              inputPattern: /.+/,
+              inputErrorMessage: 'New name is required',
+            }
         )
 
         const newName = String(value || '').trim()
@@ -1240,7 +1303,7 @@ export default {
 
         const res = await fetch(`/api/connections/${encodeURIComponent(this.selectedId)}/remote-files/rename`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: {'Content-Type': 'application/json'},
           body: JSON.stringify({
             old_path: row.path,
             new_name: newName,
@@ -1269,13 +1332,13 @@ export default {
 
       try {
         const url = new URL(
-          `/api/connections/${encodeURIComponent(this.selectedId)}/remote-files/download`,
-          window.location.origin
+            `/api/connections/${encodeURIComponent(this.selectedId)}/remote-files/download`,
+            window.location.origin
         )
 
         url.searchParams.set('path', row.path)
 
-        const res = await fetch(url.pathname + url.search, { method: 'POST' })
+        const res = await fetch(url.pathname + url.search, {method: 'POST'})
         const json = await res.json()
 
         if (!res.ok || json.code !== 0) {
@@ -1316,7 +1379,7 @@ export default {
       try {
         const res = await fetch(`/api/connections/${encodeURIComponent(this.selectedId)}/remote-files/download-zip`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: {'Content-Type': 'application/json'},
           body: JSON.stringify({
             paths,
             archive_name: '',
@@ -1355,23 +1418,23 @@ export default {
 
       try {
         await ElMessageBox.confirm(
-          `Delete "${row.name}"?${row.is_dir ? ' All nested contents will be removed as well.' : ''}`,
-          'Delete Confirmation',
-          {
-            type: 'warning',
-            confirmButtonText: 'Delete',
-            cancelButtonText: 'Cancel',
-          }
+            `Delete "${row.name}"?${row.is_dir ? ' All nested contents will be removed as well.' : ''}`,
+            'Delete Confirmation',
+            {
+              type: 'warning',
+              confirmButtonText: 'Delete',
+              cancelButtonText: 'Cancel',
+            }
         )
 
         const url = new URL(
-          `/api/connections/${encodeURIComponent(this.selectedId)}/remote-files`,
-          window.location.origin
+            `/api/connections/${encodeURIComponent(this.selectedId)}/remote-files`,
+            window.location.origin
         )
 
         url.searchParams.set('path', row.path)
 
-        const res = await fetch(url.pathname + url.search, { method: 'DELETE' })
+        const res = await fetch(url.pathname + url.search, {method: 'DELETE'})
         const json = await res.json()
 
         if (!res.ok || json.code !== 0) {
@@ -1401,21 +1464,21 @@ export default {
 
       try {
         await ElMessageBox.confirm(
-          `Delete ${paths.length} selected item(s)?`,
-          'Delete Multiple Items',
-          {
-            type: 'warning',
-            confirmButtonText: 'Delete',
-            cancelButtonText: 'Cancel',
-            confirmButtonClass: 'el-button--danger',
-            dangerouslyUseHTMLString: false,
-          }
+            `Delete ${paths.length} selected item(s)?`,
+            'Delete Multiple Items',
+            {
+              type: 'warning',
+              confirmButtonText: 'Delete',
+              cancelButtonText: 'Cancel',
+              confirmButtonClass: 'el-button--danger',
+              dangerouslyUseHTMLString: false,
+            }
         )
 
         const res = await fetch(`/api/connections/${encodeURIComponent(this.selectedId)}/remote-files/batch`, {
           method: 'DELETE',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ paths }),
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({paths}),
         })
 
         const json = await res.json()
@@ -1450,8 +1513,8 @@ export default {
 
         if (res.ok && json.code === 0 && json.data) {
           this.remotePinnedJumpItems = Array.isArray(json.data.items)
-            ? json.data.items
-            : []
+              ? json.data.items
+              : []
         }
       } catch (e) {
         console.error('Failed to load pinned paths:', e)
@@ -1474,29 +1537,29 @@ export default {
       }
 
       const currentItems = Array.isArray(this.remotePinnedJumpItems)
-        ? this.remotePinnedJumpItems
-        : []
+          ? this.remotePinnedJumpItems
+          : []
 
       const currentPinnedItem = this.currentPinnedQuickJumpItem
 
       const currentDirectoryName = currentPath
-        .replace(/[\\/]+$/, '')
-        .split(/[\\/]/)
-        .filter(Boolean)
-        .pop() || 'Pinned Path'
+          .replace(/[\\/]+$/, '')
+          .split(/[\\/]/)
+          .filter(Boolean)
+          .pop() || 'Pinned Path'
 
       try {
-        const { value } = await ElMessageBox.prompt(
-          `Current path:<br><span style="word-break: break-all; color: var(--muted);">${this.escapeRemoteHtml(currentPath)}</span>`,
-          currentPinnedItem ? 'Edit Pinned Path' : 'Pin Path',
-          {
-            confirmButtonText: currentPinnedItem ? 'Update' : 'Save',
-            cancelButtonText: 'Cancel',
-            dangerouslyUseHTMLString: true,
-            inputValue: currentPinnedItem?.display_name || currentDirectoryName,
-            inputPattern: /.+/,
-            inputErrorMessage: 'Display name is required',
-          }
+        const {value} = await ElMessageBox.prompt(
+            `Current path:<br><span style="word-break: break-all; color: var(--muted);">${this.escapeRemoteHtml(currentPath)}</span>`,
+            currentPinnedItem ? 'Edit Pinned Path' : 'Pin Path',
+            {
+              confirmButtonText: currentPinnedItem ? 'Update' : 'Save',
+              cancelButtonText: 'Cancel',
+              dangerouslyUseHTMLString: true,
+              inputValue: currentPinnedItem?.display_name || currentDirectoryName,
+              inputPattern: /.+/,
+              inputErrorMessage: 'Display name is required',
+            }
         )
 
         const displayName = String(value || '').trim()
@@ -1507,39 +1570,39 @@ export default {
         })
 
         if (
-          exists &&
-          (
-            !currentPinnedItem ||
-            (exists.display_name || '').trim() !== (currentPinnedItem.display_name || '').trim()
-          )
+            exists &&
+            (
+                !currentPinnedItem ||
+                (exists.display_name || '').trim() !== (currentPinnedItem.display_name || '').trim()
+            )
         ) {
           await ElMessageBox.confirm(
-            `A pinned path named "${this.escapeRemoteHtml(displayName)}" already exists. Update it to the current path?`,
-            'Overwrite Pinned Path',
-            {
-              confirmButtonText: 'Overwrite',
-              cancelButtonText: 'Cancel',
-              type: 'warning',
-              dangerouslyUseHTMLString: true,
-            }
+              `A pinned path named "${this.escapeRemoteHtml(displayName)}" already exists. Update it to the current path?`,
+              'Overwrite Pinned Path',
+              {
+                confirmButtonText: 'Overwrite',
+                cancelButtonText: 'Cancel',
+                type: 'warning',
+                dangerouslyUseHTMLString: true,
+              }
           )
         }
 
         const method = currentPinnedItem ? 'PUT' : 'POST'
         const body = currentPinnedItem
-          ? {
+            ? {
               original_display_name: currentPinnedItem.display_name,
               display_name: displayName,
               path: currentPath,
             }
-          : {
+            : {
               display_name: displayName,
               path: currentPath,
             }
 
         const res = await fetch(`/api/connections/${encodeURIComponent(this.selectedId)}/pinned_paths`, {
           method,
-          headers: { 'Content-Type': 'application/json' },
+          headers: {'Content-Type': 'application/json'},
           body: JSON.stringify(body),
         })
 
@@ -1550,8 +1613,8 @@ export default {
         }
 
         this.remotePinnedJumpItems = Array.isArray(json.data?.items)
-          ? json.data.items
-          : []
+            ? json.data.items
+            : []
 
         ElMessage.success(json.data?.message || 'Pinned path saved')
       } catch (e) {
@@ -1568,21 +1631,21 @@ export default {
       try {
         if (shouldConfirm) {
           await ElMessageBox.confirm(
-            `Remove pinned path "${this.escapeRemoteHtml(item.display_name)}"?`,
-            'Delete Pinned path',
-            {
-              confirmButtonText: 'Delete',
-              cancelButtonText: 'Cancel',
-              type: 'warning',
-              dangerouslyUseHTMLString: true,
-            }
+              `Remove pinned path "${this.escapeRemoteHtml(item.display_name)}"?`,
+              'Delete Pinned path',
+              {
+                confirmButtonText: 'Delete',
+                cancelButtonText: 'Cancel',
+                type: 'warning',
+                dangerouslyUseHTMLString: true,
+              }
           )
         }
 
         const res = await fetch(`/api/connections/${encodeURIComponent(this.selectedId)}/pinned_paths`, {
           method: 'DELETE',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ display_name: item.display_name }),
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({display_name: item.display_name}),
         })
 
         const json = await res.json()
@@ -1592,8 +1655,8 @@ export default {
         }
 
         this.remotePinnedJumpItems = Array.isArray(json.data?.items)
-          ? json.data.items
-          : []
+            ? json.data.items
+            : []
 
         if (options.toast !== false) {
           ElMessage.success(json.data?.message || 'Pinned path removed')
@@ -1607,67 +1670,6 @@ export default {
       }
     },
 
-    async promptEditPinnedQuickJump(item) {
-      if (!this.selectedId || !item?.display_name) return
-
-      try {
-        const { value: displayNameValue } = await ElMessageBox.prompt(
-          `Edit display name for:<br><span style="word-break: break-all; color: var(--muted);">${this.escapeRemoteHtml(item.path || '')}</span>`,
-          'Edit Pinned Path',
-          {
-            confirmButtonText: 'Next',
-            cancelButtonText: 'Cancel',
-            dangerouslyUseHTMLString: true,
-            inputValue: item.display_name || '',
-            inputPattern: /.+/,
-            inputErrorMessage: 'Display name is required',
-          }
-        )
-
-        const displayName = String(displayNameValue || '').trim()
-        if (!displayName) return
-
-        const { value: pathValue } = await ElMessageBox.prompt(
-          'Edit target path',
-          'Edit Pinned Path',
-          {
-            confirmButtonText: 'Save',
-            cancelButtonText: 'Cancel',
-            inputValue: item.path || '',
-            inputPattern: /.+/,
-            inputErrorMessage: 'Path is required',
-          }
-        )
-
-        const path = String(pathValue || '').trim()
-        if (!path) return
-
-        const res = await fetch(`/api/connections/${encodeURIComponent(this.selectedId)}/pinned_paths`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            original_display_name: item.display_name,
-            display_name: displayName,
-            path,
-          }),
-        })
-
-        const json = await res.json()
-
-        if (!res.ok || json.code !== 0) {
-          throw new Error(json.message || 'Failed to update pinned path')
-        }
-
-        this.remotePinnedJumpItems = Array.isArray(json.data?.items)
-          ? json.data.items
-          : []
-
-        ElMessage.success(json.data?.message || 'Pinned path updated')
-      } catch (e) {
-        if (this.isDialogCancel(e)) return
-        ElMessage.error(e.message || 'Failed to update pinned path')
-      }
-    },
 
     async toggleCurrentPinnedQuickJump() {
       const currentItem = this.currentPinnedQuickJumpItem
@@ -1682,6 +1684,10 @@ export default {
 
     openPinnedQuickJumpManager() {
       this.pinManagerVisible = true
+    },
+
+    handlePinnedQuickJumpsUpdated(items) {
+      this.remotePinnedJumpItems = Array.isArray(items) ? items : []
     },
 
     async loadQuickJumpPaths() {
@@ -1735,16 +1741,16 @@ export default {
 
     async promptRemotePathNavigate() {
       try {
-        const { value } = await ElMessageBox.prompt(
-          'Enter the target path',
-          'Go to Folder',
-          {
-            confirmButtonText: 'Go',
-            cancelButtonText: 'Cancel',
-            inputValue: this.remoteFilesCurrentPath || this.remoteFilesPathInput || '',
-            inputPattern: /.+/,
-            inputErrorMessage: 'Path is required',
-          }
+        const {value} = await ElMessageBox.prompt(
+            'Enter the target path',
+            'Go to Folder',
+            {
+              confirmButtonText: 'Go',
+              cancelButtonText: 'Cancel',
+              inputValue: this.remoteFilesCurrentPath || this.remoteFilesPathInput || '',
+              inputPattern: /.+/,
+              inputErrorMessage: 'Path is required',
+            }
         )
 
         const path = String(value || '').trim()
@@ -1768,12 +1774,12 @@ export default {
         const drive = windowsMatch[1]
         const rest = String(windowsMatch[2] || '').replace(/^[\\/]+/, '')
         const parts = rest ? rest.split(/[\\/]+/).filter(Boolean) : []
-        const items = [{ label: drive, path: `${drive}\\` }]
+        const items = [{label: drive, path: `${drive}\\`}]
         let accumulated = `${drive}\\`
 
         parts.forEach(part => {
           accumulated = accumulated.replace(/[\\/]+$/, '') + '\\' + part
-          items.push({ label: part, path: accumulated })
+          items.push({label: part, path: accumulated})
         })
 
         return items
@@ -1784,7 +1790,7 @@ export default {
       const items = []
 
       if (isAbsolute) {
-        items.push({ label: 'Root', path: '/' })
+        items.push({label: 'Root', path: '/'})
       }
 
       let accumulated = ''
@@ -1796,11 +1802,11 @@ export default {
           accumulated = accumulated ? `${accumulated}/${part}` : part
         }
 
-        items.push({ label: part, path: accumulated })
+        items.push({label: part, path: accumulated})
       })
 
       if (!items.length && isAbsolute) {
-        items.push({ label: 'Root', path: '/' })
+        items.push({label: 'Root', path: '/'})
       }
 
       return items
@@ -1818,11 +1824,11 @@ export default {
 
     escapeRemoteHtml(text) {
       return String(text || '')
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;')
-        .replace(/'/g, '&#39;')
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;')
+          .replace(/"/g, '&quot;')
+          .replace(/'/g, '&#39;')
     },
 
     resetRemoteFilesState() {
@@ -2073,23 +2079,60 @@ export default {
   line-height: 1.4;
 }
 
+
+/*mobile file actions*/
 .mobile-file-actions {
   margin-top: 12px;
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 8px;
+  align-items: stretch;
+}
+
+.mobile-file-action-item {
+  min-width: 0;
+}
+
+/* 如果动作数是奇数，最后一个独占整行 */
+.mobile-file-actions > .mobile-file-action-item:last-child:nth-child(odd) {
+  grid-column: 1 / -1;
 }
 
 .mobile-file-actions :deep(.el-button),
-.mobile-file-actions :deep(.table-action-link) {
+.mobile-file-actions :deep(.table-action-link),
+.mobile-file-actions :deep(.el-dropdown),
+.mobile-file-actions :deep(.mobile-file-more) {
+  width: 100%;
+  min-width: 0;
   margin: 0;
 }
 
 .mobile-file-actions :deep(.el-button) {
   min-height: 32px;
+  height: 32px;
   border-radius: 10px;
   padding-inline: 12px;
+  justify-content: center;
 }
+
+.mobile-file-actions :deep(.el-dropdown) {
+  display: block;
+}
+
+.mobile-file-actions :deep(.el-dropdown .el-button) {
+  width: 100%;
+}
+
+@media (max-width: 640px) {
+  .mobile-file-meta {
+    grid-template-columns: 1fr;
+  }
+
+  .mobile-file-actions {
+    gap: 6px;
+  }
+}
+
 
 /* 移动端 breadcrumb 还原横向滚动 */
 @media (max-width: 768px) {
@@ -2183,20 +2226,7 @@ export default {
   }
 }
 
-@media (max-width: 640px) {
-  .mobile-file-meta {
-    grid-template-columns: 1fr;
-  }
 
-  .mobile-file-actions {
-    gap: 6px;
-  }
-
-  .mobile-file-actions :deep(.el-button) {
-    flex: 1 1 calc(50% - 6px);
-    justify-content: center;
-  }
-}
 </style>
 
 
@@ -2289,75 +2319,6 @@ export default {
     height: 100% !important;
     min-height: 0 !important;
     overflow-y: auto !important;
-  }
-}
-</style>
-
-<style>
-/* Manage Pins dialog：固定宽高，内部表格滚动，不允许内容撑高 */
-.remote-pins-overlay .el-overlay-dialog {
-  overflow: hidden !important;
-}
-
-.remote-pins-overlay .el-dialog {
-  width: 760px !important;
-  max-width: calc(100vw - 32px) !important;
-  height: 560px !important;
-  max-height: calc(100vh - 12vh) !important;
-  margin-top: 6vh !important;
-  display: flex !important;
-  flex-direction: column !important;
-  overflow: hidden !important;
-}
-
-.remote-pins-overlay .el-dialog__header {
-  flex: 0 0 auto !important;
-}
-
-.remote-pins-overlay .el-dialog__body {
-  flex: 1 1 auto !important;
-  min-height: 0 !important;
-  overflow: hidden !important;
-  padding-top: 12px !important;
-  padding-bottom: 12px !important;
-}
-
-.remote-pins-overlay .fixed-dialog-body {
-  height: 100% !important;
-  min-height: 0 !important;
-  display: flex !important;
-  flex-direction: column !important;
-  overflow: hidden !important;
-}
-
-.remote-pins-overlay .dialog-table-shell {
-  flex: 1 1 auto !important;
-  height: auto !important;
-  min-height: 0 !important;
-  max-height: none !important;
-  overflow: hidden !important;
-}
-
-.remote-pins-overlay .dialog-table-shell .el-table,
-.remote-pins-overlay .dialog-table-shell .el-table__inner-wrapper,
-.remote-pins-overlay .dialog-table-shell .el-scrollbar,
-.remote-pins-overlay .dialog-table-shell .el-scrollbar__wrap {
-  height: 100% !important;
-}
-
-.remote-pins-overlay .dialog-table-shell .el-scrollbar__wrap {
-  overflow-y: auto !important;
-  overflow-x: auto !important;
-}
-
-@media (max-width: 768px), (max-height: 720px) {
-  .remote-pins-overlay .el-dialog {
-    width: 100vw !important;
-    max-width: 100vw !important;
-    height: 100vh !important;
-    max-height: 100vh !important;
-    margin: 0 !important;
-    border-radius: 0 !important;
   }
 }
 </style>
