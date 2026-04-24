@@ -187,234 +187,50 @@
 
 
 
-    <el-dialog v-model="artifactDialogVisible" title="Artifact Manager" width="1160px" top="5vh"
-               class="fixed-dialog recent-files-dialog artifact-dialog">
-        <div class="fixed-dialog-body">
-            <div class="dialog-head">
-                <div class="dialog-head-left">
-                    <el-button size="small" @click="loadArtifacts">Refresh</el-button>
-                    <el-button size="small" type="danger" :loading="artifactClearing" @click="clearArtifactCategory">
-                        Clear
-                    </el-button>
-                </div>
-                <div class="dialog-head-right">
-                    <div class="dialog-path-box artifact-filter-box">
-                        <el-select v-model="artifactMachineIdFilter" clearable filterable
-                                   placeholder="Filter by device" @change="loadArtifacts">
-                            <el-option v-for="item in artifactMachines" :key="item.machine_id" :label="item.hostname || item.machine_id" :value="item.machine_id"/>
-                        </el-select>
-                    </div>
-                </div>
-            </div>
+<ArtifactDialog
+  v-model:visible="artifactDialogVisible"
+  v-model:active-tab="artifactActiveTab"
+  v-model:machine-id-filter="artifactMachineIdFilter"
+  :loading="artifactLoading"
+  :clearing="artifactClearing"
+  :items="filteredArtifactItems"
+  :machines="artifactMachines"
+  :count-map="artifactCountMap"
+  :format-bytes="formatBytes"
+  @refresh="loadArtifacts"
+  @clear="clearArtifactCategory"
+  @tab-change="loadArtifacts"
+  @filter-change="loadArtifacts"
+  @preview="previewArtifact"
+  @delete="deleteArtifact"
+/>
 
-            <el-tabs v-model="artifactActiveTab" class="command-history-tabs" @tab-change="loadArtifacts">
-                <el-tab-pane name="files">
-                    <template #label>Files ({{ artifactCountMap.files || 0 }})</template>
-                </el-tab-pane>
-                <el-tab-pane name="previews">
-                    <template #label>Previews ({{ artifactCountMap.previews || 0 }})</template>
-                </el-tab-pane>
-            </el-tabs>
 
-            <div class="dialog-table-shell">
-                <el-table :data="filteredArtifactItems" v-loading="artifactLoading" stripe width="100%" height="100%"
-                          empty-text="No artifacts available" table-layout="fixed">
-                    <el-table-column prop="original_name" label="Name" min-width="280" show-overflow-tooltip>
-                        <template #default="{ row }">
-                            <div class="ellipsis">{{ row.original_name || row.stored_name }}</div>
-                        </template>
-                    </el-table-column>
-                    <el-table-column label="Hostname" min-width="180" show-overflow-tooltip>
-                        <template #default="{ row }">
-                            <div class="ellipsis">{{ row.hostname || '-' }}</div>
-                        </template>
-                    </el-table-column>
-                    <el-table-column label="Category" min-width="160" show-overflow-tooltip>
-                        <template #default="{ row }">
-                            <div class="ellipsis">{{ row.category || '-' }}</div>
-                        </template>
-                    </el-table-column>
-                    <el-table-column label="Size" width="110" align="center">
-                        <template #default="{ row }">{{ formatBytes(row.size) }}</template>
-                    </el-table-column>
-                    <el-table-column label="Created" width="170" show-overflow-tooltip>
-                        <template #default="{ row }">
-                            <div class="ellipsis">{{ row.created_at || '-' }}</div>
-                        </template>
-                    </el-table-column>
-                    <el-table-column label="Actions" width="200" align="center" fixed="right">
-                        <template #default="{ row }">
-                            <div class="table-actions table-actions-links">
-                                <a href="#" class="table-action-link" @click.prevent="previewArtifact(row)">Preview</a>
-                                <a class="table-action-link" :href="row.download_url" target="_blank">Download</a>
-                                <a href="#" class="table-action-link danger"
-                                   @click.prevent="deleteArtifact(row)">Delete</a>
-                            </div>
-                        </template>
-                    </el-table-column>
-                </el-table>
-            </div>
+<ScriptLibraryDialog
+  v-model:visible="scriptLibraryDialogVisible"
+  :loading="scriptLibraryLoading"
+  :upload-loading="serverScriptUploadLoading"
+  :selected-directory="selectedScriptDirectory"
+  :directory-tree-data="scriptDirectoryTreeData"
+  :directory-items="currentScriptDirectoryItems"
+  :is-script-supported-for-current-connection="isScriptSupportedForCurrentConnection"
+  :format-script-platform-label="formatScriptPlatformLabel"
+  :script-has-params="scriptHasParams"
+  @create-script="createRemoteScriptPrompt"
+  @trigger-upload="triggerScriptUpload"
+  @upload-change="handleServerScriptUpload"
+  @create-folder="createRemoteScriptFolderPrompt"
+  @rename-folder="renameRemoteScriptFolder"
+  @delete-folder="deleteRemoteScriptFolder"
+  @refresh="loadScriptCatalog"
+  @tree-node-click="handleScriptTreeNodeClick"
+  @run-script="openScriptRunDialog"
+  @edit-script="openRemoteScriptEditor"
+  @rename-script="renameServerScript"
+  @delete-script="deleteServerScript"
+/>
 
-            <div class="mobile-file-list-shell">
-                <div class="mobile-file-list" v-loading="artifactLoading">
-                    <div v-if="!filteredArtifactItems.length && !artifactLoading" class="empty-state">No artifacts
-                        available
-                    </div>
-                    <div v-else class="mobile-file-grid">
-                        <div v-for="row in filteredArtifactItems" :key="row.artifact_id" class="mobile-file-card">
-                            <div class="mobile-file-card-top">
-                                <div class="mobile-file-icon">📄</div>
-                                <div class="mobile-file-main">
-                                    <div class="mobile-file-name">{{ row.original_name || row.stored_name }}</div>
-                                    <div class="mobile-file-tags">
-                                        <el-tag v-if="row.hostname" size="small">{{ row.hostname }}</el-tag>
-                                    </div>
-                                    <div class="mobile-file-meta">
-                                        <div class="mobile-file-meta-item">
-                                            <div class="mobile-file-meta-label">Category</div>
-                                            <div class="mobile-file-meta-value">{{ row.category || '-' }}
-                                            </div>
-                                        </div>
-                                        <div class="mobile-file-meta-item">
-                                            <div class="mobile-file-meta-label">Size</div>
-                                            <div class="mobile-file-meta-value">{{ formatBytes(row.size) }}</div>
-                                        </div>
-                                        <div class="mobile-file-meta-item">
-                                            <div class="mobile-file-meta-label">Created</div>
-                                            <div class="mobile-file-meta-value">{{ row.created_at || '-' }}</div>
-                                        </div>
-                                    </div>
-                                    <div class="mobile-file-actions">
-                                        <el-button size="small" type="primary" plain @click="previewArtifact(row)">
-                                            Preview
-                                        </el-button>
-                                        <a class="table-action-link" :href="row.download_url"
-                                           target="_blank">Download</a>
-                                        <el-button size="small" type="danger" plain @click="deleteArtifact(row)">
-                                            Delete
-                                        </el-button>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
 
-        </div>
-    </el-dialog>
-
-<el-dialog v-model="scriptLibraryDialogVisible" title="Script Library" width="1180px" top="6vh"
-           class="fixed-dialog script-library-dialog">
-    <div class="fixed-dialog-body script-library-body" v-loading="scriptLibraryLoading">
-        <div class="background-jobs-toolbar script-library-toolbar">
-            <div class="script-library-toolbar-left">
-<el-button size="small" class="toolbar-btn" type="primary" plain @click="createRemoteScriptPrompt()">New</el-button>
-<el-button size="small" class="toolbar-btn" @click="triggerScriptUpload" :loading="serverScriptUploadLoading">Upload</el-button>
-<el-button size="small" class="toolbar-btn" @click="createRemoteScriptFolderPrompt">New Folder</el-button>
-<el-button size="small" class="toolbar-btn" @click="renameRemoteScriptFolder" :disabled="!selectedScriptDirectory">Rename Folder</el-button>
-<el-button size="small" class="toolbar-btn" type="danger" plain @click="deleteRemoteScriptFolder" :disabled="!selectedScriptDirectory">Delete Folder</el-button>
-
-<el-button size="small" class="toolbar-btn" @click="loadScriptCatalog" :loading="scriptLibraryLoading">Refresh</el-button>
-                <input id="server-script-upload-input"
-                       type="file"
-                       accept=".py,text/x-python"
-                       style="display: none"
-                       @change="handleServerScriptUpload">
-            </div>
-
-            <div class="script-library-toolbar-right">
-                <span class="background-job-module-key mono">
-                    Upload Target: {{ selectedScriptDirectory || 'root' }}
-                </span>
-            </div>
-        </div>
-
-        <div class="script-library-shell">
-            <div class="script-library-tree panel-lite">
-                <div class="background-jobs-section-title">Folders</div>
-
-                <div class="script-library-pane-scroll">
-                    <el-tree
-                            :data="scriptDirectoryTreeData"
-                            node-key="key"
-                            default-expand-all
-                            highlight-current
-                            :expand-on-click-node="true"
-                            class="script-library-tree-view"
-                            @node-click="handleScriptTreeNodeClick">
-                        <template #default="{ data }">
-                            <span class="script-tree-node">
-                                <span class="script-tree-node-label">{{ data.label }}</span>
-                            </span>
-                        </template>
-                    </el-tree>
-
-                </div>
-            </div>
-
-            <div class="script-library-directory panel-lite">
-                <div class="script-library-directory-top">
-                    <div>
-                        <div class="background-jobs-section-title">{{ selectedScriptDirectory || 'Scripts' }}</div>
-                        <div class="background-job-module-key mono">
-                            {{ currentScriptDirectoryItems.length }} script<span v-if="currentScriptDirectoryItems.length !== 1">s</span>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="script-library-pane-scroll">
-                    <div v-if="currentScriptDirectoryItems.length" class="script-library-card-list script-library-card-list-single">
-                        <div v-for="item in currentScriptDirectoryItems"
-                             :key="item.script_name"
-                             class="script-library-card">
-                            <div class="script-library-card-main">
-                                <div class="script-library-card-title"
-                                     :title="item.display_name || item.script_name">
-                                    {{ item.display_name || item.script_name }}
-                                </div>
-
-                                <div class="script-library-card-path mono"
-                                     :title="item.path || item.script_name">
-                                    {{ item.path || item.script_name }}
-                                </div>
-
-                                <div class="script-library-card-description"
-                                     :title="item.description || ''">
-                                    {{ item.description || 'No description' }}
-                                </div>
-
-                                <div class="script-tags script-library-card-tags">
-                                    <el-tag size="small"
-                                            :type="isScriptSupportedForCurrentConnection(item) ? 'info' : 'danger'">
-                                        {{ formatScriptPlatformLabel(item) }}
-                                    </el-tag>
-                                    <el-tag v-if="scriptHasParams(item)" size="small" type="warning">Params</el-tag>
-                                </div>
-                            </div>
-
-                            <div class="script-library-card-actions">
-<!--                                <el-button size="small" type="primary" plain @click="openScriptRunDialog(item)">Run</el-button>-->
-                                <el-button size="small"
-                                   type="primary"
-                                   plain
-                                   :disabled="!isScriptSupportedForCurrentConnection(item)"
-                                   @click="openScriptRunDialog(item)">
-                                    Run
-                                </el-button>
-                                <el-button size="small" plain @click="openRemoteScriptEditor(item.script_name)">Edit</el-button>
-                                <el-button size="small" plain @click="renameServerScript(item.script_name)">Rename</el-button>
-                                <el-button size="small" type="danger" plain @click="deleteServerScript(item.script_name)">Delete</el-button>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div v-else class="empty-state">No scripts in this folder</div>
-                </div>
-            </div>
-        </div>
-    </div>
-</el-dialog>
 
 <el-dialog v-model="scriptRunDialogVisible"
            :title="pendingRunScriptItem ? `Run ${pendingRunScriptItem.display_name || pendingRunScriptItem.script_name}` : 'Run Script'"
@@ -1138,9 +954,13 @@ import AgentOutputsDialog from "./components/AgentOutputsDialog.vue";
 import CommandExecutionDetailDialog from "./components/CommandExecutionDetailDialog.vue";
 import CommandHistoryDialog from "./components/CommandHistoryDialog.vue";
 import RemoteFilesDialog from "./components/RemoteFilesDialog.vue";
+import ArtifactDialog from "./components/ArtifactDialog.vue";
+import ScriptLibraryDialog from "./components/ScriptLibraryDialog.vue";
 
 export default {
   components: {
+    ScriptLibraryDialog,
+    ArtifactDialog,
     RemoteFilesDialog,
     CommandHistoryDialog,
     CommandExecutionDetailDialog,
