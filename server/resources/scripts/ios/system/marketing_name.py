@@ -1,6 +1,6 @@
 SCRIPT_METADATA = {
-    "name": "apple/recon/device_model",
-    "display_name": "Apple Device Model",
+    "name": "apple/recon/marketing_name",
+    "display_name": "Apple Device Markneting Name",
     "description": "Detect marketing name on iOS and macOS",
     "platforms": ["ios", "macos"],
     "category": "Recon",

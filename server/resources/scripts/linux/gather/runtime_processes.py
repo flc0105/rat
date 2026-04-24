@@ -1,7 +1,7 @@
 SCRIPT_METADATA = {
     "name": "linux/recon/runtime_processes",
     "display_name": "Discover Runtime Processes",
-    "description": "Find all processes of a specific runtime (python, node, java) and enumerate their listening ports and web services",
+    "description": "Find all processes of a specific runtime and enumerate their listening ports and web services",
     "platforms": ["linux"],
     "category": "Recon",
     "params": [

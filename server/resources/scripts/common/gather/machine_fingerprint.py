@@ -1,7 +1,7 @@
 SCRIPT_METADATA = {
     "name": "common/recon/machine_fingerprint",
     "display_name": "Machine Fingerprint",
-    "description": "Generate a unique machine fingerprint based on hardware and OS characteristics across Windows, macOS, Linux, and iOS",
+    "description": "Generate a unique machine fingerprint based on hardware and OS characteristics",
     "platforms": ["common"],
     "category": "Recon",
     "params": []

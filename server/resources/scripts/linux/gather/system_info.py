@@ -1,7 +1,7 @@
 SCRIPT_METADATA = {
     "name": "linux/recon/system_info",
     "display_name": "System Information",
-    "description": "Collect comprehensive system information including OS, kernel, CPU, memory, GPU, network, and environment details",
+    "description": "Collect comprehensive system information",
     "platforms": ["linux"],
     "category": "Recon",
     "params": []

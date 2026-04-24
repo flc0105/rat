@@ -1,7 +1,7 @@
 SCRIPT_METADATA = {
     "name": "ios/recon/photo_counts",
     "display_name": "Photo Counts",
-    "description": "Retrieve photo and video counts (visible, hidden, total) from the iOS Photos library",
+    "description": "Retrieve photo and video counts from the iOS Photos library",
     "platforms": ["ios"],
     "category": "Recon",
     "params": []

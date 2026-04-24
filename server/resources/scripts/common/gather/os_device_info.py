@@ -1,7 +1,7 @@
 SCRIPT_METADATA = {
     "name": "common/recon/os_device_info",
     "display_name": "OS and Device Information",
-    "description": "Retrieve human-readable operating system and device model information across Windows, macOS, Linux, and iOS",
+    "description": "Retrieve human-readable operating system and device model information",
     "platforms": ["common"],
     "category": "Recon",
     "params": []

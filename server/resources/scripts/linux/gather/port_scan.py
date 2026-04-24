@@ -1,7 +1,7 @@
 SCRIPT_METADATA = {
     "name": "common/recon/port_scan",
     "display_name": "Quick Port Scan",
-    "description": "Scan common high-frequency port ranges (5000-5009, 8000-8009, 8080-8089, etc.) for open TCP services and web applications",
+    "description": "Scan common high-frequency port ranges for open TCP services and web applications",
     "platforms": ["common"],
     "category": "Recon",
     "params": [
