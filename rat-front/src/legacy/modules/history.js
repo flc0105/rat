@@ -114,9 +114,9 @@ export default {
             this.commandHistoryDialogVisible = false;
 
 this.$nextTick(() => {
-    const input = this.$refs.commandInputRef;
-    if (input && typeof input.focus === 'function') {
-        input.focus();
+    const commandInputBar = this.$refs.commandInputBarRef;
+    if (commandInputBar && typeof commandInputBar.focusInput === 'function') {
+        commandInputBar.focusInput();
     }
 });
         },

@@ -11,10 +11,15 @@ export default {
             const command = (this.commandText || '').trim();
 
             // add 暂时关闭命令自动补全下拉 2026-04-07
-            const commandInput = this.$refs.commandInputRef;
-            if (commandInput && typeof commandInput.close === 'function') {
-                commandInput.close();
-            }
+            // const commandInput = this.$refs.commandInputRef;
+            // if (commandInput && typeof commandInput.close === 'function') {
+            //     commandInput.close();
+            // }
+
+            const commandInputBar = this.$refs.commandInputBarRef;
+if (commandInputBar && typeof commandInputBar.closeAutocomplete === 'function') {
+    commandInputBar.closeAutocomplete();
+}
 
             if (!this.selectedId) {
                 ElementPlus.ElMessage.warning('Please select a device');

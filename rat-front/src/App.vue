@@ -47,180 +47,44 @@
             <main class="main panel">
                 <template v-if="currentConnection">
                     <div class="main-body">
-                        <section class="info-grid">
-                            <div class="info-card">
-                                <div class="info-label">Hostname</div>
-                                <div class="info-value">{{ currentConnection.hostname || '-' }}</div>
-                            </div>
-                            <div class="info-card">
-                                <div class="info-label">IP Address</div>
-                                <div class="info-value">{{ formatAddress(currentConnection.addr) || '-' }}</div>
-                            </div>
-                            <div class="info-card">
-                                <div class="info-label">Platform</div>
-                                <div class="info-value">{{ formatOsLabel(currentConnection.os_type,
-                                    currentConnection.os_ver) }}
-                                </div>
-                            </div>
-                            <div class="info-card">
-                                <div class="info-label">Status</div>
-                                <div class="info-value">{{ getConnectionStatusText(currentConnection) }}</div>
-                            </div>
-                            <div class="info-card">
-                                <div class="info-label">RTT</div>
-                                <div class="info-value">{{ formatConnectionRtt(currentConnection) }}</div>
-                            </div>
-                            <div class="info-card">
-                                <div class="info-label">Integrity</div>
-                                <div class="info-value">{{ currentConnection.integrity }}</div>
-                            </div>
-                            <div class="info-card  info-card-wide-2">
-                                <div class="info-label">Client ID</div>
-                                <div class="info-value">{{ currentConnection.client_id }}</div>
-                            </div>
-                            <div class="info-card info-card-wide-2">
-                                <div class="info-label">Working Directory</div>
-                                <div class="info-value mono">{{ currentConnection.cwd || '-' }}</div>
-                            </div>
-                        </section>
+                        <ConnectionInfoCards
+  :connection="currentConnection"
+  :format-address="formatAddress"
+  :format-os-label="formatOsLabel"
+  :get-connection-status-text="getConnectionStatusText"
+  :format-connection-rtt="formatConnectionRtt"
+/>
 
                         <section class="terminal-panel">
                             <div class="terminal-frame">
-                                <div class="terminal-topbar">
-                                    <div class="terminal-topbar-left">
-                                        <span class="dot dot-red"></span>
-                                        <span class="dot dot-yellow"></span>
-                                        <span class="dot dot-green"></span>
-                                        <span class="terminal-title">Interactive Shell</span>
-                                    </div>
+                                <TerminalToolbar
+  :selected-id="selectedId"
+  @open-remote-files="openRemoteFilesDialog"
+  @open-artifacts="openArtifactDialog"
+  @open-info="openConnectionInfoDialog"
+  @open-jobs="openBackgroundJobsDialog"
+  @open-scripts="openScriptLibraryDialog"
+  @open-agents="openAgentOutputsDialog"
+  @open-history="openCommandHistoryDialog"
+  @open-pty="openPtyDialog"
+  @open-processes="openProcessDialog"
+  @control-action="handleControlActionCommand"
+  @disconnect="killConnection"
+  @clear="clearOutput"
+  @bottom="scrollToBottom"
+/>
 
-                                    <div class="terminal-tools">
-
-                                        <el-button size="small" class="tool-btn tool-btn-accent"
-                                                   @click="openRemoteFilesDialog">Remote Files
-                                        </el-button>
-
-                                        <el-button size="small" class="tool-btn tool-btn-accent"
-                                                   @click="openArtifactDialog">Artifacts
-                                        </el-button>
-                                        <el-button size="small" class="tool-btn" @click="openConnectionInfoDialog">
-                                            Info
-                                        </el-button>
-                                        <el-button size="small" class="tool-btn" @click="openBackgroundJobsDialog">
-                                            Jobs
-                                        </el-button>
-                                        <el-button size="small" class="tool-btn" @click="openScriptLibraryDialog">
-                                            Scripts
-                                        </el-button>
-
-                                                        <el-button size="small" class="tool-btn" @click="openAgentOutputsDialog">
-                                            Agents
-                                        </el-button>
-
-                                        <el-button size="small" class="tool-btn" @click="openCommandHistoryDialog">
-                                            History
-                                        </el-button>
-
-                                        <el-button size="small" class="tool-btn" @click="openPtyDialog" :disabled="!selectedId">
-                                            PTY
-                                        </el-button>
-
-                                        <el-button size="small" class="tool-btn tool-btn-accent"
-                                                   @click="openProcessDialog">Processes
-                                        </el-button>
-
-
-
-<!--                                        <el-dropdown-item divided command="disconnect"></el-dropdown-item>-->
-
-                                        <el-dropdown trigger="click" @command="handleControlActionCommand">
-    <el-button size="small" class="tool-btn tool-btn-accent">
-        Control
-    </el-button>
-    <template #dropdown>
-        <el-dropdown-menu>
-            <el-dropdown-item command="kill">Force Kill</el-dropdown-item>
-            <el-dropdown-item command="reset">Force Reset</el-dropdown-item>
-            <el-dropdown-item command="spawn">Force Spawn</el-dropdown-item>
-
-        </el-dropdown-menu>
-    </template>
-</el-dropdown>
-
-                                                                       <el-button size="small" class="tool-btn tool-btn-danger"
-                                                   @click="killConnection">Disconnect
-                                        </el-button>
-
-                                        <span class="tool-separator"></span>
-                                        <el-button size="small" class="tool-btn" @click="clearOutput">Clear</el-button>
-                                        <el-button size="small" class="tool-btn" @click="scrollToBottom">Bottom
-                                        </el-button>
-
-                                    </div>
-                                </div>
-
-                                <div class="command-row">
-                                    <div class="command-box command-box-full"
-                                         style="display: flex; gap: 8px; align-items: center;">
-                                        <div class="command-autocomplete-shell" style="flex: 1; min-width: 0;">
-                                            <el-autocomplete
-                                                    ref="commandInputRef"
-                                                    v-model="commandText"
-                                                    :fetch-suggestions="queryCommandCandidates"
-                                                    popper-class="command-autocomplete-popper"
-                                                    class="command-autocomplete"
-                                                    value-key="value"
-                                                    placeholder="Enter a command."
-                                                    autocomplete="off"
-                                                    @select="handleCommandCandidateSelect"
-                                                    @keyup.enter="sendCommand"
-                                            >
-                                                <template #default="{ item }">
-                                                    <div class="command-autocomplete-item">
-                                                        <div class="command-autocomplete-item-main">
-                                                            <div
-    class="command-autocomplete-item-name"
-    :title="item.template || item.value || '-'"
->
-    {{ item.template || item.value || '-' }}
-</div>
-<div
-    v-if="item.help"
-    class="command-autocomplete-item-desc"
-    :title="item.help"
->
-    {{ item.help }}
-</div>
-                                                        </div>
-                                                        <div v-if="item.groupLabel"
-                                                             class="command-autocomplete-item-group">{{ item.groupLabel
-                                                            }}
-                                                        </div>
-                                                    </div>
-                                                </template>
-                                            </el-autocomplete>
-                                        </div>
-                                        <button
-                                                class="run-button"
-                                                :disabled="sending || hasRunningWebTask"
-                                                @click="sendCommand"
-                                                style="white-space: nowrap;"
-                                        >
-                                            <span v-if="!sending && !hasRunningWebTask">Run</span>
-                                            <span v-else-if="sending">...</span>
-                                            <span v-else>Busy</span>
-                                        </button>
-                                        <el-button
-                                                class="run-button tool-btn-danger"
-                                                :disabled="!hasRunningWebTask"
-                                                :loading="currentTaskIsCancelling"
-                                                @click="cancelCurrentTask"
-                                                style="white-space: nowrap;"
-                                        >
-                                            Cancel
-                                        </el-button>
-                                    </div>
-                                </div>
+                                <CommandInputBar
+  ref="commandInputBarRef"
+  v-model="commandText"
+  :sending="sending"
+  :has-running-web-task="hasRunningWebTask"
+  :current-task-is-cancelling="currentTaskIsCancelling"
+  :query-command-candidates="queryCommandCandidates"
+  @select-candidate="handleCommandCandidateSelect"
+  @run="sendCommand"
+  @cancel="cancelCurrentTask"
+/>
 
                                 <div class="terminal-output" ref="terminalRef">
                                     <div v-if="!currentOutputLines.length" class="terminal-empty">
@@ -2183,9 +2047,12 @@ import AppHistoryModule from './legacy/modules/history.js'
 import AppArtifactsModule from './legacy/modules/artifacts.js'
 import AppPreviewModule from './legacy/modules/preview.js'
 import DeviceSidebar from "./components/DeviceSidebar.vue";
+import ConnectionInfoCards from "./components/ConnectionInfoCards.vue";
+import TerminalToolbar from "./components/TerminalToolbar.vue";
+import CommandInputBar from "./components/CommandInputBar.vue";
 
 export default {
-  components: {DeviceSidebar},
+  components: {CommandInputBar, TerminalToolbar, ConnectionInfoCards, DeviceSidebar},
   data() {
     return {
       ...AppStateModule.data(),
