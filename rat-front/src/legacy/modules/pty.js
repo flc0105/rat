@@ -125,11 +125,11 @@ export default {
         },
 
         initPtyTerminal() {
-            if (this.ptyTerm) return;
-            const host = this.$refs.ptyTerminalRef;
-            if (!host) return;
+    if (this.ptyTerm) return;
+    const host = this.$refs.ptyDialogRef?.getTerminalHost?.();
+    if (!host) return;
 
-            const term = new window.Terminal({
+    const term = new window.Terminal({
                 cursorBlink: true,
                 convertEol: false,
                 scrollback: 5000,

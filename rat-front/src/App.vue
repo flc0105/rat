@@ -453,33 +453,17 @@
 />
 
 
-    <el-dialog
-        v-model="ptyDialogVisible"
-        title="Remote PTY"
-        width="900px"
-        top="6vh"
-        class="fixed-dialog pty-dialog"
-        @closed="handlePtyDialogClosed"
-    >
-        <div class="pty-shell">
-            <div class="pty-toolbar">
-                <div class="pty-toolbar-left">
-                    <span class="pty-badge">{{ currentConnection ? (currentConnection.hostname || currentConnection.client_id) : 'No device' }}</span>
-                    <span class="pty-badge pty-badge-status">{{ ptyStatus || 'idle' }}</span>
-                    <span v-if="ptyError" class="pty-error-text">{{ ptyError }}</span>
-                </div>
-                <div class="pty-toolbar-right">
-                    <el-input v-model="ptyShellPath" size="small" placeholder="Optional shell path" class="pty-shell-input"/>
-                    <el-button size="small" @click="focusPtyInput">Focus</el-button>
-                    <el-button size="small" @click="closePtyDialog">Close</el-button>
-                </div>
-            </div>
-            <div class="pty-screen-shell xterm-shell" @click="focusPtyInput">
-                <div ref="ptyTerminalRef" class="pty-terminal-host"></div>
-            </div>
-            <div class="pty-hint">Powered by xterm.js. Supports ANSI control sequences, vim/less/top style full-screen apps, sudo prompts, paste and resize.</div>
-        </div>
-    </el-dialog>
+  <PtyDialog
+  ref="ptyDialogRef"
+  v-model:visible="ptyDialogVisible"
+  v-model:shell-path="ptyShellPath"
+  :current-connection="currentConnection"
+  :pty-status="ptyStatus"
+  :pty-error="ptyError"
+  @closed="handlePtyDialogClosed"
+  @focus="focusPtyInput"
+  @close="closePtyDialog"
+/>
 </template>
 
 <script>
@@ -522,9 +506,11 @@ import BackgroundJobsDialog from "./components/BackgroundJobsDialog.vue";
 import PreviewDialog from "./components/PreviewDialog.vue";
 import PreviewImageInfoDialog from "./components/PreviewImageInfoDialog.vue";
 import TerminalJsonDialog from "./components/TerminalJsonDialog.vue";
+import PtyDialog from "./components/PtyDialog.vue";
 
 export default {
   components: {
+    PtyDialog,
     TerminalJsonDialog,
     PreviewImageInfoDialog,
     PreviewDialog,
