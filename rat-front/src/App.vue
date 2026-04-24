@@ -1371,109 +1371,20 @@
         </div>
     </el-dialog>
 
-    <el-dialog v-model="commandExecutionDetailDialogVisible"
-               :title="selectedCommandExecutionEntry ? (selectedCommandExecutionEntry.command || 'Execution Detail') : 'Execution Detail'"
-               width="1000px" top="5vh" class="fixed-dialog command-execution-detail-dialog">
-        <div class="fixed-dialog-body" v-if="selectedCommandExecutionEntry">
-            <div class="background-job-stats">
-                <div class="background-job-stat">
-                    <div class="background-job-stat-label">Status</div>
-                    <div class="background-job-stat-value">
-                        <el-tag :type="buildCommandExecutionStatusTagType(selectedCommandExecutionEntry.status)"
-                                size="small">{{ selectedCommandExecutionEntry.status || 'unknown' }}
-                        </el-tag>
-                    </div>
-                </div>
-                <div class="background-job-stat">
-                    <div class="background-job-stat-label">Source</div>
-                    <div class="background-job-stat-value">{{ selectedCommandExecutionEntry.source || '-' }}</div>
-                </div>
-                <div class="background-job-stat">
-                    <div class="background-job-stat-label">Duration</div>
-                    <div class="background-job-stat-value">{{
-                        formatCommandExecutionDuration(selectedCommandExecutionEntry.duration_ms) }}
-                    </div>
-                </div>
-                <div class="background-job-stat">
-                    <div class="background-job-stat-label">Started</div>
-                    <div class="background-job-stat-value">{{ selectedCommandExecutionEntry.started_at || '-' }}</div>
-                </div>
-                <div class="background-job-stat">
-                    <div class="background-job-stat-label">Finished</div>
-                    <div class="background-job-stat-value">{{ selectedCommandExecutionEntry.finished_at || '-' }}</div>
-                </div>
-                <div class="background-job-stat">
-                    <div class="background-job-stat-label">Files</div>
-                    <div class="background-job-stat-value">{{ selectedCommandExecutionEntry.file_count || 0 }}</div>
-                </div>
-            </div>
-
-            <div class="command-execution-detail-section">
-                <div class="command-execution-detail-label">Summary</div>
-                <div class="command-execution-detail-summary">{{
-                    buildCommandExecutionSummary(selectedCommandExecutionEntry) }}
-                </div>
-            </div>
-
-            <div class="command-execution-detail-panels">
-                <div class="background-job-panel">
-                    <div class="background-job-panel-title command-output-panel-title">
-                        <span>Output Records</span>
-                        <el-button size="small" plain @click="toggleCommandExecutionOutputSort">{{
-                            commandExecutionOutputSortOrder === 'desc' ? 'Oldest first' : 'Newest first' }}
-                        </el-button>
-                    </div>
-                    <div class="background-job-message-list">
-                        <div v-for="(record, index) in selectedCommandExecutionOutputRecordsDesc"
-                             :key="`${selectedCommandExecutionEntry.entry_id}-output-${index}`"
-                             class="background-job-message-item">
-                            <div class="background-job-message-time">{{ record.time || '-' }}</div>
-                            <div class="background-job-message-text"
-                                 :class="{ 'is-error': record.status === 0, 'is-success': record.status === 1 }">{{
-                                formatCommandExecutionRecordText(record.text || '') }}
-                            </div>
-                        </div>
-                        <div v-if="selectedCommandExecutionEntry.output_truncated" class="empty-state compact">Output
-                            was truncated for storage safety
-                        </div>
-                        <div v-if="!selectedCommandExecutionEntry.output_records || !selectedCommandExecutionEntry.output_records.length"
-                             class="empty-state compact">No output records
-                        </div>
-                    </div>
-                </div>
-
-                <div class="background-job-panel">
-                    <div class="background-job-panel-title">Produced Files</div>
-                    <div class="background-job-file-list">
-                        <div v-for="(file, index) in selectedCommandExecutionEntry.files"
-                             :key="`${selectedCommandExecutionEntry.entry_id}-file-${index}`"
-                             class="background-job-file-item">
-                            <div class="background-job-file-main">
-                                <div class="background-job-file-name">{{ file.original_name || file.stored_name || '-'
-                                    }}
-                                </div>
-                                <div class="background-job-file-meta">
-                                    <span>{{ formatBytes(file.size || 0) }}</span>
-                                    <span>{{ file.created_at || '-' }}</span>
-                                    <span v-if="getCommandExecutionFileStatusText(file)">[{{ getCommandExecutionFileStatusText(file) }}]</span>
-                                </div>
-                            </div>
-                            <div class="background-job-file-actions">
-                                <a v-if="file.download_url && file.is_available" style="cursor:pointer"
-                                   class="table-action-link" @click="previewArtifact(file)">Preview</a>
-                                <a v-if="file.download_url && file.is_available" class="table-action-link"
-                                   :href="file.download_url" target="_blank">Download</a>
-                            </div>
-                        </div>
-                        <div v-if="!selectedCommandExecutionEntry.files || !selectedCommandExecutionEntry.files.length"
-                             class="empty-state compact">No files produced
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </el-dialog>
-
+<CommandExecutionDetailDialog
+  v-model:visible="commandExecutionDetailDialogVisible"
+  :entry="selectedCommandExecutionEntry"
+  :output-records="selectedCommandExecutionOutputRecordsDesc"
+  :output-sort-order="commandExecutionOutputSortOrder"
+  :build-command-execution-status-tag-type="buildCommandExecutionStatusTagType"
+  :format-command-execution-duration="formatCommandExecutionDuration"
+  :build-command-execution-summary="buildCommandExecutionSummary"
+  :format-command-execution-record-text="formatCommandExecutionRecordText"
+  :get-command-execution-file-status-text="getCommandExecutionFileStatusText"
+  :format-bytes="formatBytes"
+  @toggle-output-sort="toggleCommandExecutionOutputSort"
+  @preview-file="previewArtifact"
+/>
 
 <ConnectionInfoDialogs
   v-model:info-visible="connectionInfoDialogVisible"
@@ -1710,9 +1621,11 @@ import ConnectionInfoDialogs from "./components/ConnectionInfoDialogs.vue";
 import ProcessDialogs from "./components/ProcessDialogs.vue";
 import AgentBuilderDialog from "./components/AgentBuilderDialog.vue";
 import AgentOutputsDialog from "./components/AgentOutputsDialog.vue";
+import CommandExecutionDetailDialog from "./components/CommandExecutionDetailDialog.vue";
 
 export default {
   components: {
+    CommandExecutionDetailDialog,
     AgentOutputsDialog,
     AgentBuilderDialog,
     ProcessDialogs,
