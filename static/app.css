@@ -1310,7 +1310,7 @@ body {
   flex-direction: column;
   gap: 12px;
   max-height: 52vh;
-  overflow-y: auto;
+  /*overflow-y: auto;*/
   padding-right: 2px;
 }
 
@@ -3487,3 +3487,26 @@ body {
     overflow: hidden !important;
   }
 }
+
+.background-jobs-modules  {
+  max-height: 500px;
+    min-height: 500px;
+  overflow-y: auto;
+}
+
+
+.background-jobs-body{
+  max-height: 600px;
+}
+
+.background-jobs-list-shell {
+    max-height: 500px;
+  min-height: 500px;
+  overflow-y: auto;
+}
+
+/*.quick-history-table-shell {*/
+/*  height: 540px;*/
+/*  min-height: 540px;*/
+/*  max-height: 540px;*/
+/*}*/
