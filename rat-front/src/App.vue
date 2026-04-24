@@ -32,40 +32,17 @@
         </header>
 
         <div class="content">
-            <aside class="sidebar panel">
-                <div class="panel-header">
-                    <div class="panel-title">Devices</div>
-                    <el-button size="small" @click="loadConnections">Refresh</el-button>
-                </div>
-
-                <div class="sidebar-body">
-                    <div v-if="connections.length === 0" class="empty-state">
-                        No active devices
-                    </div>
-
-                    <div
-                            v-for="item in connections"
-                            :key="item.client_id"
-                            class="device-item"
-                            :class="{ active: selectedId === item.client_id }"
-                            @click="selectConnection(item.client_id)"
-                    >
-                        <div class="device-item-top">
-                            <div class="device-text">
-                                <div class="device-name">{{ item.hostname || 'Unknown Host' }}</div>
-                                <div class="device-os">{{ formatOsLabel(item.os_type, item.os_ver) }}</div>
-                            </div>
-                            <div class="device-dot" :class="getConnectionStatusDotClass(item)"></div>
-                        </div>
-                        <div class="device-ip">{{ formatAddress(item.addr) }}</div>
-                        <div class="device-status-row">
-                            <span class="device-status-text">{{ getConnectionStatusText(item) }}</span>
-                            <span class="device-status-sep">·</span>
-                            <span class="device-status-text">last seen {{ formatConnectionLastSeenRelative(item) }}</span>
-                        </div>
-                    </div>
-                </div>
-            </aside>
+            <DeviceSidebar
+  :connections="connections"
+  :selected-id="selectedId"
+  :format-os-label="formatOsLabel"
+  :format-address="formatAddress"
+  :get-connection-status-dot-class="getConnectionStatusDotClass"
+  :get-connection-status-text="getConnectionStatusText"
+  :format-connection-last-seen-relative="formatConnectionLastSeenRelative"
+  @refresh="loadConnections"
+  @select="selectConnection"
+/>
 
             <main class="main panel">
                 <template v-if="currentConnection">
@@ -2205,8 +2182,10 @@ import AppCandidatesModule from './legacy/modules/candidates.js'
 import AppHistoryModule from './legacy/modules/history.js'
 import AppArtifactsModule from './legacy/modules/artifacts.js'
 import AppPreviewModule from './legacy/modules/preview.js'
+import DeviceSidebar from "./components/DeviceSidebar.vue";
 
 export default {
+  components: {DeviceSidebar},
   data() {
     return {
       ...AppStateModule.data(),
