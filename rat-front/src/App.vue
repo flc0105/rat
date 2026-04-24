@@ -1474,50 +1474,18 @@
         </div>
     </el-dialog>
 
-    <el-dialog v-model="connectionInfoDialogVisible" title="Connection Info" width="980px" top="6vh"
-               class="fixed-dialog connection-info-dialog">
-        <div class="fixed-dialog-body" v-loading="connectionInfoLoading">
-            <div class="background-job-stats connection-info-stats-grid">
-    <div v-for="item in connectionInfoCards"
-         :key="item.label"
-         class="background-job-stat connection-info-stat connection-info-stat-expandable"
-         @click="openConnectionInfoValueDialog(item)">
-        <div class="background-job-stat-label connection-info-stat-label">
-            {{ item.label }}
-        </div>
-        <div class="background-job-stat-value connection-info-stat-value"
-             :class="{ mono: item.mono }">
-            {{ item.fullValue }}
-        </div>
-    </div>
-</div>
 
-            <div class="background-job-panel connection-command-panel">
-                <div class="background-job-panel-title">Command List</div>
-                <div class="background-job-message-list">
-                    <div v-for="(item, index) in connectionInfoClientCommands" :key="`${item.template}-${index}`"
-                         class="background-job-message-item">
-                        <div class="background-job-message-time"><span v-if="item.group">{{ item.group }}</span></div>
-                        <div class="background-job-message-text"><span
-                                class="mono">{{ item.name || item.template }}</span><span v-if="item.help"> — {{ item.help }}</span>
-                        </div>
-                    </div>
-                    <div v-if="!connectionInfoClientCommands.length" class="empty-state compact">No commands available
-                    </div>
-                </div>
-            </div>
-        </div>
-    </el-dialog>
+<ConnectionInfoDialogs
+  v-model:info-visible="connectionInfoDialogVisible"
+  v-model:value-visible="connectionInfoValueDialogVisible"
+  :loading="connectionInfoLoading"
+  :cards="connectionInfoCards"
+  :commands="connectionInfoClientCommands"
+  :value-title="connectionInfoValueDialogTitle"
+  :value-value="connectionInfoValueDialogValue"
+  @open-value="openConnectionInfoValueDialog"
+/>
 
-    <el-dialog v-model="connectionInfoValueDialogVisible"
-           :title="connectionInfoValueDialogTitle || 'Details'"
-           width="760px"
-           top="12vh"
-           class="fixed-dialog">
-    <div class="fixed-dialog-body">
-        <pre class="connection-info-full-value">{{ connectionInfoValueDialogValue || '-' }}</pre>
-    </div>
-</el-dialog>
 
     <el-dialog v-model="processDialogVisible" title="Process Manager" width="1100px" top="5vh"
                class="fixed-dialog process-dialog" @close="closeProcessDialog">
@@ -1983,9 +1951,12 @@ import ConnectionInfoCards from "./components/ConnectionInfoCards.vue";
 import TerminalToolbar from "./components/TerminalToolbar.vue";
 import CommandInputBar from "./components/CommandInputBar.vue";
 import TerminalOutput from "./components/TerminalOutput.vue";
+import ConnectionInfoDialogs from "./components/ConnectionInfoDialogs.vue";
 
 export default {
-  components: {TerminalOutput, CommandInputBar, TerminalToolbar, ConnectionInfoCards, DeviceSidebar},
+  components: {
+    ConnectionInfoDialogs,
+    TerminalOutput, CommandInputBar, TerminalToolbar, ConnectionInfoCards, DeviceSidebar},
   data() {
     return {
       ...AppStateModule.data(),
