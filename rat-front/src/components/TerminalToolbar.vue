@@ -18,7 +18,7 @@
 
       <el-button
         size="small"
-        class="tool-btn tool-btn-accent"
+        class="tool-btn tool-btn-accent ml-0"
         @click="$emit('open-artifacts')"
       >
         Artifacts
@@ -26,7 +26,7 @@
 
       <el-button
         size="small"
-        class="tool-btn"
+        class="tool-btn ml-0"
         @click="$emit('open-info')"
       >
         Info
@@ -34,7 +34,7 @@
 
       <el-button
         size="small"
-        class="tool-btn"
+        class="tool-btn ml-0"
         @click="$emit('open-jobs')"
       >
         Jobs
@@ -42,7 +42,7 @@
 
       <el-button
         size="small"
-        class="tool-btn"
+        class="tool-btn ml-0"
         @click="$emit('open-scripts')"
       >
         Scripts
@@ -50,7 +50,7 @@
 
       <el-button
         size="small"
-        class="tool-btn"
+        class="tool-btn ml-0"
         @click="$emit('open-agents')"
       >
         Agents
@@ -58,7 +58,7 @@
 
       <el-button
         size="small"
-        class="tool-btn"
+        class="tool-btn ml-0"
         @click="$emit('open-history')"
       >
         History
@@ -66,7 +66,7 @@
 
       <el-button
         size="small"
-        class="tool-btn"
+        class="tool-btn ml-0"
         :disabled="!selectedId"
         @click="$emit('open-pty')"
       >
@@ -75,7 +75,7 @@
 
       <el-button
         size="small"
-        class="tool-btn tool-btn-accent"
+        class="tool-btn tool-btn-accent ml-0"
         @click="$emit('open-processes')"
       >
         Processes
@@ -118,7 +118,7 @@
 
       <el-button
         size="small"
-        class="tool-btn"
+        class="tool-btn ml-0"
         @click="$emit('bottom')"
       >
         Bottom
