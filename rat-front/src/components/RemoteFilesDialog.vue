@@ -35,8 +35,8 @@
 
           <el-button size="small"
 
-              class="remote-mobile-panel-toggle"
-              @click="toggleRemoteMobilePanel"
+                     class="remote-mobile-panel-toggle"
+                     @click="toggleRemoteMobilePanel"
           >
             {{ remoteMobilePanelCollapsed ? 'Show tools' : 'Hide tools' }}
           </el-button>
@@ -197,14 +197,16 @@
                     </el-dropdown-item>
 
                     <el-dropdown-item
+                        v-if="!isRemoteCurrentPageAllSelected"
                         command="toggle_select_all"
                         divided
                         :disabled="!visibleRemoteSelectablePaths.length"
                     >
-                      {{ remoteSelectAllText }}
+                      Select All
                     </el-dropdown-item>
 
                     <el-dropdown-item
+                        :divided="isRemoteCurrentPageAllSelected"
                         command="clear_selection"
                         :disabled="!hasRemoteSelection"
                     >
@@ -222,14 +224,14 @@
         </div>
       </div>
 
-      <div class="dialog-path-row remote-files-meta-row">
-        <div v-if="hasRemoteClipboard" class="dialog-pagination-meta">
-          Clipboard: {{ remoteClipboardActionText }} {{ remoteClipboardPaths.length }} item(s)
-          <span v-if="remoteClipboardSourcePath">
-            · From {{ remoteClipboardSourcePath }}
-          </span>
-        </div>
-      </div>
+<!--      <div class="dialog-path-row remote-files-meta-row">-->
+<!--        <div v-if="hasRemoteClipboard" class="dialog-pagination-meta">-->
+<!--          Clipboard: {{ remoteClipboardActionText }} {{ remoteClipboardPaths.length }} item(s)-->
+<!--          <span v-if="remoteClipboardSourcePath">-->
+<!--            · From {{ remoteClipboardSourcePath }}-->
+<!--          </span>-->
+<!--        </div>-->
+<!--      </div>-->
 
       <div class="dialog-table-shell">
         <el-table
@@ -376,7 +378,13 @@
       <div class="dialog-pagination-wrap">
         <div class="dialog-pagination-bar">
           <div class="dialog-pagination-meta">
-            <span>Visible {{ remoteFilesTotal }} items</span>
+
+            <span v-if="hasRemoteClipboard">
+              {{ remoteClipboardActionText }} {{ remoteClipboardPaths.length }} ·
+            </span>
+
+
+            <span>Visible {{ remoteFilesTotal }} </span>
 
             <span v-if="!showHiddenFiles && remoteFilesHiddenTotal > 0">
               · Hidden {{ remoteFilesHiddenTotal }}
@@ -389,6 +397,10 @@
             <span v-if="remoteFilesTotalPages > 1">
               · Page {{ remoteFilesPage }} / {{ remoteFilesTotalPages }}
             </span>
+
+
+
+
           </div>
 
           <el-pagination
@@ -483,80 +495,80 @@
                   </div>
 
                   <div class="mobile-file-actions">
-  <template v-if="row.is_parent_entry">
-    <div class="mobile-file-action-item">
-      <el-button
-        size="small"
-        type="primary"
-        plain
-        @click="goToRemoteParent"
-      >
-        Open
-      </el-button>
-    </div>
-  </template>
+                    <template v-if="row.is_parent_entry">
+                      <div class="mobile-file-action-item">
+                        <el-button
+                            size="small"
+                            type="primary"
+                            plain
+                            @click="goToRemoteParent"
+                        >
+                          Open
+                        </el-button>
+                      </div>
+                    </template>
 
-  <template v-else>
-    <template v-if="row.is_dir">
-      <div class="mobile-file-action-item">
-        <el-button
-          size="small"
-          type="primary"
-          plain
-          @click="enterRemoteDirectory(row)"
-        >
-          Open
-        </el-button>
-      </div>
-    </template>
+                    <template v-else>
+                      <template v-if="row.is_dir">
+                        <div class="mobile-file-action-item">
+                          <el-button
+                              size="small"
+                              type="primary"
+                              plain
+                              @click="enterRemoteDirectory(row)"
+                          >
+                            Open
+                          </el-button>
+                        </div>
+                      </template>
 
-    <template v-else>
-      <div class="mobile-file-action-item">
-        <el-button
-          size="small"
-          type="primary"
-          plain
-          @click="previewRow(row)"
-        >
-          Preview
-        </el-button>
-      </div>
+                      <template v-else>
+                        <div class="mobile-file-action-item">
+                          <el-button
+                              size="small"
+                              type="primary"
+                              plain
+                              @click="previewRow(row)"
+                          >
+                            Preview
+                          </el-button>
+                        </div>
 
-      <div class="mobile-file-action-item">
-        <el-button
-          size="small"
-          type="primary"
-          plain
-          @click="downloadRemoteEntry(row)"
-        >
-          Download
-        </el-button>
-      </div>
-    </template>
+                        <div class="mobile-file-action-item">
+                          <el-button
+                              size="small"
+                              type="primary"
+                              plain
+                              @click="downloadRemoteEntry(row)"
+                          >
+                            Download
+                          </el-button>
+                        </div>
+                      </template>
 
-    <div class="mobile-file-action-item">
-      <el-dropdown
-        trigger="click"
-        class="mobile-file-more"
-        @command="command => handleRemoteMoreAction(command, row)"
-      >
-        <el-button size="small" plain>
-          More
-        </el-button>
+                      <div class="mobile-file-action-item">
+                        <el-dropdown
+                            trigger="click"
+                            class="mobile-file-more"
+                            @command="command => handleRemoteMoreAction(command, row)"
+                        >
+                          <el-button size="small" plain>
+                            More
+                          </el-button>
 
-        <template #dropdown>
-          <el-dropdown-menu>
-            <el-dropdown-item command="rename">Rename</el-dropdown-item>
-            <el-dropdown-item command="copy">Copy</el-dropdown-item>
-            <el-dropdown-item command="cut">Cut</el-dropdown-item>
-            <el-dropdown-item command="copy_path">Copy Path</el-dropdown-item>
-            <el-dropdown-item command="delete">Delete</el-dropdown-item>
-          </el-dropdown-menu>
-        </template>
-      </el-dropdown>
-    </div>
-  </template>
-</div>
+                          <template #dropdown>
+                            <el-dropdown-menu>
+                              <el-dropdown-item command="rename">Rename</el-dropdown-item>
+                              <el-dropdown-item command="copy">Copy</el-dropdown-item>
+                              <el-dropdown-item command="cut">Cut</el-dropdown-item>
+                              <el-dropdown-item command="copy_path">Copy Path</el-dropdown-item>
+                              <el-dropdown-item command="delete">Delete</el-dropdown-item>
+                            </el-dropdown-menu>
+                          </template>
+                        </el-dropdown>
+                      </div>
+                    </template>
+                  </div>
                 </div>
               </div>
             </div>
@@ -678,9 +690,9 @@ export default {
       return paths.every(path => this.remoteSelectedPaths.includes(path))
     },
 
-    remoteSelectAllText() {
-      return this.isRemoteCurrentPageAllSelected ? 'Clear Page Selection' : 'Select All'
-    },
+    // remoteSelectAllText() {
+    //   return this.isRemoteCurrentPageAllSelected ? 'Clear Page Selection' : 'Select All'
+    // },
 
     hasRemoteClipboard() {
       return this.remoteClipboardPaths.length > 0 && !!this.remoteClipboardMode
@@ -720,23 +732,23 @@ export default {
   methods: {
 
     scrollRemoteMobileFileListToTop() {
-  this.$nextTick(() => {
-    const el = this.$refs.remoteMobileFileGridRef
+      this.$nextTick(() => {
+        const el = this.$refs.remoteMobileFileGridRef
 
-    if (el && typeof el.scrollTo === 'function') {
-      el.scrollTo({
-        top: 0,
-        left: 0,
-        behavior: 'auto',
+        if (el && typeof el.scrollTo === 'function') {
+          el.scrollTo({
+            top: 0,
+            left: 0,
+            behavior: 'auto',
+          })
+          return
+        }
+
+        if (el) {
+          el.scrollTop = 0
+        }
       })
-      return
-    }
-
-    if (el) {
-      el.scrollTop = 0
-    }
-  })
-},
+    },
 
     handleVisibleChange(value) {
       this.visible = value
@@ -1029,60 +1041,60 @@ export default {
     },
 
     async copyRemotePath(row) {
-  if (!row || !row.path || row.is_parent_entry) {
-    ElMessage.warning('Invalid path')
-    return
-  }
+      if (!row || !row.path || row.is_parent_entry) {
+        ElMessage.warning('Invalid path')
+        return
+      }
 
-  const text = String(row.path)
+      const text = String(row.path)
 
-  try {
-    if (
-      window.isSecureContext &&
-      navigator.clipboard &&
-      typeof navigator.clipboard.writeText === 'function'
-    ) {
-      await navigator.clipboard.writeText(text)
-      ElMessage.success('Path copied')
-      return
-    }
+      try {
+        if (
+            window.isSecureContext &&
+            navigator.clipboard &&
+            typeof navigator.clipboard.writeText === 'function'
+        ) {
+          await navigator.clipboard.writeText(text)
+          ElMessage.success('Path copied')
+          return
+        }
 
-    this.copyTextFallback(text)
-    ElMessage.success('Path copied')
-  } catch (e) {
-    try {
-      this.copyTextFallback(text)
-      ElMessage.success('Path copied')
-    } catch (fallbackError) {
-      ElMessage.error('Failed to copy path')
-    }
-  }
-},
+        this.copyTextFallback(text)
+        ElMessage.success('Path copied')
+      } catch (e) {
+        try {
+          this.copyTextFallback(text)
+          ElMessage.success('Path copied')
+        } catch (fallbackError) {
+          ElMessage.error('Failed to copy path')
+        }
+      }
+    },
 
     copyTextFallback(text) {
-  const textarea = document.createElement('textarea')
+      const textarea = document.createElement('textarea')
 
-  textarea.value = String(text || '')
-  textarea.setAttribute('readonly', '')
-  textarea.style.position = 'fixed'
-  textarea.style.left = '-9999px'
-  textarea.style.top = '0'
-  textarea.style.opacity = '0'
+      textarea.value = String(text || '')
+      textarea.setAttribute('readonly', '')
+      textarea.style.position = 'fixed'
+      textarea.style.left = '-9999px'
+      textarea.style.top = '0'
+      textarea.style.opacity = '0'
 
-  document.body.appendChild(textarea)
+      document.body.appendChild(textarea)
 
-  textarea.focus()
-  textarea.select()
-  textarea.setSelectionRange(0, textarea.value.length)
+      textarea.focus()
+      textarea.select()
+      textarea.setSelectionRange(0, textarea.value.length)
 
-  const ok = document.execCommand('copy')
+      const ok = document.execCommand('copy')
 
-  document.body.removeChild(textarea)
+      document.body.removeChild(textarea)
 
-  if (!ok) {
-    throw new Error('Fallback copy failed')
-  }
-},
+      if (!ok) {
+        throw new Error('Fallback copy failed')
+      }
+    },
 
     // async copyRemotePath(row) {
     //   if (!row || !row.path || row.is_parent_entry) {
@@ -2239,7 +2251,7 @@ export default {
   }
 
   .remote-mobile-panel-toggle {
-        display: inline-flex;
+    display: inline-flex;
     align-self: flex-start;
     width: auto;
     margin: 0;
