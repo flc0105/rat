@@ -1,4 +1,4 @@
-window.AppPreviewModule = {
+export default {
     data() {
         return {
             previewDialogVisible: false,

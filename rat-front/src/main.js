@@ -1,5 +1,12 @@
+import * as Vue from 'vue'
 import { createApp } from 'vue'
-import ElementPlus from 'element-plus'
+import ElementPlus, {
+  ElMessage,
+  ElMessageBox,
+  ElNotification,
+  ElLoading,
+} from 'element-plus'
+
 import 'element-plus/dist/index.css'
 import './assets/app.css'
 
@@ -21,8 +28,16 @@ import AppHistoryModule from './legacy/modules/history.js'
 import AppArtifactsModule from './legacy/modules/artifacts.js'
 import AppPreviewModule from './legacy/modules/preview.js'
 
+
+window.Vue = Vue
 // 先保留这个全局变量，因为很多旧模块里还在用 ElementPlus.ElMessage / ElMessageBox
-window.ElementPlus = ElementPlus
+window.ElementPlus = {
+  ...ElementPlus,
+  ElMessage,
+  ElMessageBox,
+  ElNotification,
+  ElLoading,
+}
 
 createApp({
   data() {

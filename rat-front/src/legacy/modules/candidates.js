@@ -1,4 +1,4 @@
-window.AppCandidatesModule = {
+export default {
     data() {
         return {
             commandCandidates: [],

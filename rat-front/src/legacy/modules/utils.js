@@ -1,4 +1,4 @@
-window.AppUtilsModule = {
+export default {
     methods: {
 
         formatBytes(size) {

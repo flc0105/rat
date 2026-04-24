@@ -1,4 +1,4 @@
-window.AppAgentModule = {
+export default {
     data() {
         return {
             agentBuilderDialogVisible: false,

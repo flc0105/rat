@@ -1,4 +1,4 @@
-window.AppTaskModule = {
+export default {
     data() {
         return {
             activeTaskIds: {},

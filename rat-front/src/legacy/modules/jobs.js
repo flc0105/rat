@@ -1,4 +1,4 @@
-window.AppJobsModule = {
+export default {
     data() {
         return {
             backgroundJobsDialogVisible: false,

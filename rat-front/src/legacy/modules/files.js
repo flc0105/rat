@@ -1,4 +1,4 @@
-window.AppFilesModule = {
+export default {
     data() {
         return {
             remoteFilesDialogVisible: false,

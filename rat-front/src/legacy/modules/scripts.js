@@ -1,4 +1,4 @@
-window.AppScriptsModule = {
+export default {
     data() {
         return {
             scriptLibraryDialogVisible: false,

@@ -1,4 +1,4 @@
-window.AppCommandsModule = {
+export default {
     data() {
         return {
             commandText: '',

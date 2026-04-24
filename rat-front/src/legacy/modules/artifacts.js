@@ -1,4 +1,4 @@
-window.AppArtifactsModule = {
+export default {
     data() {
         return {
             artifactDialogVisible: false,

@@ -1,4 +1,4 @@
-window.AppConnectionModule = {
+export default {
     data() {
         return {
             connections: [],

@@ -1,4 +1,4 @@
-window.AppPtyModule = {
+export default {
     data() {
         return {
             ptyDialogVisible: false,
@@ -87,7 +87,7 @@ window.AppPtyModule = {
 
                 ElementPlus.ElMessage.error(this.ptyError || 'Failed to open PTY');
             } finally {
-                this.ptyStatus = 'error';
+                // this.ptyStatus = 'error';
                 this.ptyLoading = false;
             }
         },
@@ -257,84 +257,158 @@ window.AppPtyModule = {
             this.sendPtyWs({ type: 'resize', cols, rows });
         },
 
-               openPtySocket() {
-            this.closePtySocket();
-            if (!this.ptyWsPath) return;
-            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-            const url = `${protocol}//${window.location.host}${this.ptyWsPath}`;
-            const ws = new WebSocket(url);
-            this.ptyWs = ws;
+buildPtyWsUrl() {
+    const raw = String(this.ptyWsPath || '').trim();
 
-            const applyChunks = (chunks) => {
-                if (!Array.isArray(chunks)) return;
-                chunks.forEach((chunk) => {
-                    const seq = Number(chunk?.seq || 0);
-                    if (seq > this.ptySeq) this.ptySeq = seq;
-                    const text = String(chunk?.text || '');
-                    if (text) this.writePtyOutput(text);
-                });
-            };
+    if (!raw) {
+        return '';
+    }
 
-            ws.onopen = () => {
-                this.ptyStatus = this.ptyStatus === 'error' ? this.ptyStatus : 'open';
-                this.ptyWsConnectedOnce = true;
-                this.focusPtyInput();
-                this.schedulePtyResize();
-                ElementPlus.ElMessage({ type: 'success', message: 'PTY connected', duration: 1200 });
-            };
+    // 后端如果直接返回 ws:// 或 wss://，直接使用
+    if (/^wss?:\/\//i.test(raw)) {
+        return raw;
+    }
 
-            ws.onmessage = (event) => {
-                try {
-                    const payload = JSON.parse(String(event.data || '{}'));
-                    console.log('PTY WS payload:', payload);
+    // 后端如果返回 /api/xxx/ws，就通过 Vite dev server 代理
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const path = raw.startsWith('/') ? raw : `/${raw}`;
 
-                    // asgi websocket: output/status
-                    if (payload.type === 'output') {
-                        applyChunks(payload.chunks);
-                    }
+    return `${protocol}//${window.location.host}${path}`;
+},
 
-                    // legacy websocket server: snapshot/pty_update
-                    if (payload.type === 'snapshot' || payload.type === 'pty_update') {
-                        applyChunks(payload.chunks);
-                    }
+openPtySocket() {
+    this.closePtySocket();
 
-                    if (payload.status) this.ptyStatus = payload.status;
-                    if (payload.error) this.ptyError = payload.error;
-                    if (payload.seq) this.ptySeq = Math.max(this.ptySeq, Number(payload.seq || 0));
+    if (!this.ptyWsPath) {
+        this.ptyStatus = 'error';
+        this.ptyError = 'PTY websocket path is empty';
+        ElementPlus.ElMessage.error(this.ptyError);
+        return;
+    }
 
-                    if (
-                        payload.type === 'status' ||
-                        payload.type === 'snapshot' ||
-                        payload.type === 'pty_update'
-                    ) {
-                        if (payload.status === 'closed' || payload.status === 'error') {
-                            this.closePtySocket();
-                        }
-                    }
-                } catch (e) {
-                    console.error('PTY ws message parse failed', e);
+    const url = this.buildPtyWsUrl();
+
+    if (!url) {
+        this.ptyStatus = 'error';
+        this.ptyError = 'Invalid PTY websocket URL';
+        ElementPlus.ElMessage.error(this.ptyError);
+        return;
+    }
+
+    console.log('PTY WS URL:', url);
+
+    const ws = new WebSocket(url);
+    this.ptyWs = ws;
+
+    const applyChunks = (chunks) => {
+        if (!Array.isArray(chunks)) return;
+
+        chunks.forEach((chunk) => {
+            const seq = Number(chunk?.seq || 0);
+            if (seq > this.ptySeq) this.ptySeq = seq;
+
+            const text = String(chunk?.text || '');
+            if (text) this.writePtyOutput(text);
+        });
+    };
+
+    ws.onopen = () => {
+        this.ptyStatus = 'open';
+        this.ptyWsConnectedOnce = true;
+        this.ptyError = '';
+
+        this.focusPtyInput();
+        this.schedulePtyResize();
+
+        ElementPlus.ElMessage({
+            type: 'success',
+            message: 'PTY connected',
+            duration: 1200,
+        });
+    };
+
+    ws.onmessage = (event) => {
+        try {
+            const payload = JSON.parse(String(event.data || '{}'));
+            console.log('PTY WS payload:', payload);
+
+            if (payload.type === 'output') {
+                applyChunks(payload.chunks);
+            }
+
+            if (payload.type === 'snapshot' || payload.type === 'pty_update') {
+                applyChunks(payload.chunks);
+            }
+
+            if (payload.status) {
+                this.ptyStatus = payload.status;
+            }
+
+            if (payload.error) {
+                this.ptyError = payload.error;
+            }
+
+            if (payload.seq) {
+                this.ptySeq = Math.max(this.ptySeq, Number(payload.seq || 0));
+            }
+
+            if (
+                payload.type === 'status' ||
+                payload.type === 'snapshot' ||
+                payload.type === 'pty_update'
+            ) {
+                if (payload.status === 'closed' || payload.status === 'error') {
+                    this.closePtySocket();
                 }
-            };
+            }
+        } catch (e) {
+            console.error('PTY ws message parse failed', e);
+        }
+    };
 
-            ws.onerror = () => {
-                this.ptyError = this.ptyError || 'PTY websocket error';
-            };
+    ws.onerror = (event) => {
+        console.error('PTY WS error:', event);
 
-            ws.onclose = () => {
-                const unexpected = !this.ptyUserClosing && this.ptyDialogVisible && this.ptyStatus !== 'error';
-                if (this.ptyDialogVisible && this.ptyStatus !== 'closed' && this.ptyStatus !== 'error') {
-                    this.ptyStatus = 'closed';
-                }
-                this.ptyWs = null;
-                if (unexpected) {
-                    ElementPlus.ElMessage({
-                        type: 'warning',
-                        message: this.ptyWsConnectedOnce ? 'PTY disconnected' : 'PTY connection closed',
-                        duration: 1800,
-                    });
-                }
-            };
-        },
+        this.ptyError = this.ptyError || 'PTY websocket error';
+
+        if (!this.ptyWsConnectedOnce) {
+            this.ptyStatus = 'error';
+        }
+    };
+
+    ws.onclose = (event) => {
+        console.log('PTY WS closed:', {
+            code: event.code,
+            reason: event.reason,
+            wasClean: event.wasClean,
+        });
+
+        const unexpected =
+            !this.ptyUserClosing &&
+            this.ptyDialogVisible &&
+            this.ptyStatus !== 'error';
+
+        if (
+            this.ptyDialogVisible &&
+            this.ptyStatus !== 'closed' &&
+            this.ptyStatus !== 'error'
+        ) {
+            this.ptyStatus = this.ptyWsConnectedOnce ? 'closed' : 'error';
+        }
+
+        this.ptyWs = null;
+
+        if (unexpected) {
+            ElementPlus.ElMessage({
+                type: this.ptyWsConnectedOnce ? 'warning' : 'error',
+                message: this.ptyWsConnectedOnce
+                    ? 'PTY disconnected'
+                    : 'PTY connection failed',
+                duration: 1800,
+            });
+        }
+    };
+},
 
         closePtySocket() {
             if (this.ptyWs) {

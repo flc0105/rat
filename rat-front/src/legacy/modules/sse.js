@@ -1,4 +1,4 @@
-window.AppSseModule = {
+export default {
     data() {
         return {
             tabId: '',

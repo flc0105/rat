@@ -1,4 +1,4 @@
-window.AppHistoryModule = {
+export default {
     data() {
         return {
             commandHistoryDialogVisible: false,

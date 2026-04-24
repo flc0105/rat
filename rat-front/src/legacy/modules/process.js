@@ -1,4 +1,4 @@
-window.AppProcessModule = {
+export default {
     data() {
         return {
             processDialogVisible: false,

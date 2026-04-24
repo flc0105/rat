@@ -1,4 +1,4 @@
-window.AppTerminalModule = {
+export default {
     data() {
         return {
             outputs: {},
