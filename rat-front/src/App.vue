@@ -110,79 +110,24 @@
         </div>
     </div>
 
-    <input ref="remoteUploadInputRef" type="file" class="hidden-file-input" @change="handleRemoteUploadChange"/>
-
+<input
+  ref="remoteUploadInputRef"
+  type="file"
+  class="hidden-file-input"
+  @change="handleRemoteUploadChange"
+/>
 <RemoteFilesDialog
   ref="remoteFilesDialogRef"
-  v-model:visible="remoteFilesDialogVisible"
-  v-model:pin-manager-visible="remotePinManagerDialogVisible"
-
-  :remote-breadcrumb-items="remoteBreadcrumbItems"
-  :remote-files-parent-path="remoteFilesParentPath"
-
-  :quick-jump-loading="quickJumpLoading"
-  :remote-pinned-jump-loading="remotePinnedJumpLoading"
-  :remote-pinned-jump-items="remotePinnedJumpItems"
-
-  :remote-upload-loading="remoteUploadLoading"
-  :has-remote-selection="hasRemoteSelection"
-  :remote-zip-downloading="remoteZipDownloading"
-  :remote-selected-paths="remoteSelectedPaths"
-
-  :remote-pin-button-text="remotePinButtonText"
-  :has-pinned-quick-jumps="hasPinnedQuickJumps"
-
-  :has-remote-clipboard="hasRemoteClipboard"
-  :remote-clipboard-paths="remoteClipboardPaths"
-  :remote-clipboard-action-text="remoteClipboardActionText"
-  :remote-clipboard-source-path="remoteClipboardSourcePath"
-
-  :show-hidden-files="showHiddenFiles"
-
-  :display-remote-files-entries="displayRemoteFilesEntries"
-  :remote-files-loading="remoteFilesLoading"
-
-  :remote-files-total="remoteFilesTotal"
-  :remote-files-hidden-total="remoteFilesHiddenTotal"
-  :remote-files-all-total="remoteFilesAllTotal"
-  :remote-files-total-pages="remoteFilesTotalPages"
-  :remote-files-page="remoteFilesPage"
-  :remote-files-page-size="remoteFilesPageSize"
-  :remote-files-page-size-options="remoteFilesPageSizeOptions"
-
+  :selected-id="selectedId"
   :format-bytes="formatBytes"
-  :is-remote-entry-selected="isRemoteEntrySelected"
-
-  @breadcrumb="goToRemoteBreadcrumb"
-  @refresh="refreshRemoteDirectory"
-  @parent="goToRemoteParent"
-  @jump="jumpToPath"
-
-  @create-folder="createRemoteDirectory"
-  @trigger-upload="triggerRemoteUpload"
-  @download-selected="downloadSelectedRemoteEntries"
-  @delete-selected="deleteSelectedRemoteEntries"
-  @more-command="handleRemoteToolbarMoreCommand"
-
-  @row-dblclick="handleRemoteRowDblClick"
-  @selection-change="handleRemoteSelectionChange"
-  @enter-dir="enterRemoteDirectory"
+  :get-tab-scoped-headers="getTabScopedHeaders"
+  @append-output="appendOutput"
+  @set-active-task="setActiveTask"
   @preview="previewRemoteEntry"
-  @download="downloadRemoteEntry"
-  @row-more-action="handleRemoteMoreAction"
-
-  @page-change="handleRemotePageChange"
-  @size-change="handleRemotePageSizeChange"
-
-  @toggle-select="toggleRemoteSelection"
-  @copy-one="row => { remoteSelectedPaths = [row.path]; copySelectedRemoteEntries() }"
-  @cut-one="row => { remoteSelectedPaths = [row.path]; cutSelectedRemoteEntries() }"
-  @rename="renameRemoteEntry"
-  @copy-path="copyRemotePath"
-  @delete="deleteRemoteEntry"
-
-  @edit-pin="promptEditPinnedQuickJump"
-  @delete-pin="deletePinnedQuickJump"
+  @request-upload="triggerRemoteUploadInput"
+  @upload-started="pendingRemoteUploadRefresh = $event"
+  @visible-change="remoteFilesDialogVisible = $event"
+  @artifacts-maybe-changed="artifactDialogVisible && loadArtifacts()"
 />
 
 
@@ -612,6 +557,33 @@ updateScriptParam(name, value) {
     ...this.backgroundJobParamForm,
     [name]: value,
   }
+},
+
+
+
+    openRemoteFilesDialog() {
+  this.$refs.remoteFilesDialogRef?.open()
+},
+
+triggerRemoteUploadInput() {
+  const input = this.$refs.remoteUploadInputRef
+
+  if (input) {
+    input.value = ''
+    input.click()
+  }
+},
+
+handleRemoteUploadChange(event) {
+  this.$refs.remoteFilesDialogRef?.handleUploadChange(event)
+},
+
+loadRemoteDirectory(path = '', page = 1) {
+  return this.$refs.remoteFilesDialogRef?.loadRemoteDirectory(path, page)
+},
+
+refreshRemoteDirectory() {
+  return this.$refs.remoteFilesDialogRef?.refreshRemoteDirectory()
 },
 
   },

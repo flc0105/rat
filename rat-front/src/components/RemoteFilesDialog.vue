@@ -5,7 +5,7 @@
     width="1180px"
     top="4vh"
     class="fixed-dialog remote-files-dialog"
-    @update:model-value="$emit('update:visible', $event)"
+    @update:model-value="handleVisibleChange"
   >
     <div class="fixed-dialog-body">
       <div class="dialog-head remote-files-head">
@@ -19,7 +19,7 @@
                 class="remote-breadcrumb-item"
                 :class="{ active: item.isCurrent }"
                 :disabled="item.isCurrent"
-                @click="$emit('breadcrumb', item)"
+                @click="goToRemoteBreadcrumb(item)"
               >
                 <span v-if="index > 0" class="remote-breadcrumb-sep">/</span>
                 <span>{{ item.label }}</span>
@@ -31,21 +31,21 @@
 
           <div class="remote-files-toolbar">
             <div class="remote-toolbar-group">
-              <el-button size="small" @click="$emit('refresh')">
+              <el-button size="small" @click="refreshRemoteDirectory">
                 Refresh
               </el-button>
 
               <el-button
                 size="small"
                 :disabled="!remoteFilesParentPath"
-                @click="$emit('parent')"
+                @click="goToRemoteParent"
               >
                 Up
               </el-button>
 
               <el-dropdown
                 :loading="quickJumpLoading || remotePinnedJumpLoading"
-                @command="$emit('jump', $event)"
+                @command="jumpToPath"
               >
                 <el-button size="small">
                   Quick Jump
@@ -58,7 +58,9 @@
                     <el-dropdown-item command="desktop">Desktop</el-dropdown-item>
                     <el-dropdown-item command="documents">Documents</el-dropdown-item>
                     <el-dropdown-item command="downloads">Downloads</el-dropdown-item>
-                    <el-dropdown-item command="executable">Program Directory</el-dropdown-item>
+                    <el-dropdown-item command="executable">
+                      Program Directory
+                    </el-dropdown-item>
 
                     <el-dropdown-item
                       v-for="(item, index) in remotePinnedJumpItems"
@@ -84,14 +86,14 @@
             <span class="remote-toolbar-divider"></span>
 
             <div class="remote-toolbar-group">
-              <el-button size="small" @click="$emit('create-folder')">
+              <el-button size="small" @click="createRemoteDirectory">
                 New Folder
               </el-button>
 
               <el-button
                 size="small"
                 :loading="remoteUploadLoading"
-                @click="$emit('trigger-upload')"
+                @click="triggerRemoteUpload"
               >
                 Upload
               </el-button>
@@ -101,7 +103,7 @@
                 type="primary"
                 :disabled="!hasRemoteSelection"
                 :loading="remoteZipDownloading"
-                @click="$emit('download-selected')"
+                @click="downloadSelectedRemoteEntries"
               >
                 Download
                 <span v-if="remoteSelectedPaths.length">
@@ -113,7 +115,7 @@
                 size="small"
                 type="danger"
                 :disabled="!hasRemoteSelection"
-                @click="$emit('delete-selected')"
+                @click="deleteSelectedRemoteEntries"
               >
                 Delete
                 <span v-if="remoteSelectedPaths.length">
@@ -127,7 +129,7 @@
             <div class="remote-toolbar-group">
               <el-dropdown
                 trigger="click"
-                @command="$emit('more-command', $event)"
+                @command="handleRemoteToolbarMoreCommand"
               >
                 <el-button size="small">More</el-button>
 
@@ -220,8 +222,8 @@
           height="100%"
           empty-text="This folder is empty"
           table-layout="fixed"
-          @row-dblclick="$emit('row-dblclick', $event)"
-          @selection-change="$emit('selection-change', $event)"
+          @row-dblclick="handleRemoteRowDblClick"
+          @selection-change="handleRemoteSelectionChange"
         >
           <el-table-column
             type="selection"
@@ -290,7 +292,7 @@
                     size="small"
                     link
                     type="primary"
-                    @click="$emit('parent')"
+                    @click="goToRemoteParent"
                   >
                     Open
                   </el-button>
@@ -302,7 +304,7 @@
                     size="small"
                     link
                     type="primary"
-                    @click="$emit('enter-dir', row)"
+                    @click="enterRemoteDirectory(row)"
                   >
                     Open
                   </el-button>
@@ -312,7 +314,7 @@
                       size="small"
                       link
                       type="primary"
-                      @click="$emit('preview', row)"
+                      @click="previewRow(row)"
                     >
                       Preview
                     </el-button>
@@ -321,7 +323,7 @@
                       size="small"
                       link
                       type="primary"
-                      @click="$emit('download', row)"
+                      @click="downloadRemoteEntry(row)"
                     >
                       Download
                     </el-button>
@@ -329,7 +331,7 @@
 
                   <el-dropdown
                     trigger="click"
-                    @command="$emit('row-more-action', $event, row)"
+                    @command="command => handleRemoteMoreAction(command, row)"
                   >
                     <el-button size="small" link type="primary">
                       More
@@ -378,8 +380,8 @@
             :page-sizes="remoteFilesPageSizeOptions"
             :total="remoteFilesTotal"
             :pager-count="5"
-            @current-change="$emit('page-change', $event)"
-            @size-change="$emit('size-change', $event)"
+            @current-change="handleRemotePageChange"
+            @size-change="handleRemotePageSizeChange"
           />
         </div>
       </div>
@@ -406,7 +408,7 @@
               >
                 <el-checkbox
                   :model-value="isRemoteEntrySelected(row)"
-                  @change="$emit('toggle-select', row)"
+                  @change="toggleRemoteSelection(row)"
                 />
               </div>
 
@@ -467,7 +469,7 @@
                         size="small"
                         type="primary"
                         plain
-                        @click="$emit('parent')"
+                        @click="goToRemoteParent"
                       >
                         Open
                       </el-button>
@@ -479,7 +481,7 @@
                         size="small"
                         type="primary"
                         plain
-                        @click="$emit('enter-dir', row)"
+                        @click="enterRemoteDirectory(row)"
                       >
                         Open
                       </el-button>
@@ -489,7 +491,7 @@
                           size="small"
                           type="primary"
                           plain
-                          @click="$emit('preview', row)"
+                          @click="previewRow(row)"
                         >
                           Preview
                         </el-button>
@@ -498,7 +500,7 @@
                           size="small"
                           type="primary"
                           plain
-                          @click="$emit('download', row)"
+                          @click="downloadRemoteEntry(row)"
                         >
                           Download
                         </el-button>
@@ -507,7 +509,7 @@
                       <el-button
                         size="small"
                         plain
-                        @click="$emit('copy-one', row)"
+                        @click="copySingleRemoteEntry(row)"
                       >
                         Copy
                       </el-button>
@@ -515,7 +517,7 @@
                       <el-button
                         size="small"
                         plain
-                        @click="$emit('cut-one', row)"
+                        @click="cutSingleRemoteEntry(row)"
                       >
                         Cut
                       </el-button>
@@ -523,7 +525,7 @@
                       <el-button
                         size="small"
                         plain
-                        @click="$emit('rename', row)"
+                        @click="renameRemoteEntry(row)"
                       >
                         Rename
                       </el-button>
@@ -531,7 +533,7 @@
                       <el-button
                         size="small"
                         plain
-                        @click="$emit('copy-path', row)"
+                        @click="copyRemotePath(row)"
                       >
                         Copy Path
                       </el-button>
@@ -540,7 +542,7 @@
                         size="small"
                         type="danger"
                         plain
-                        @click="$emit('delete', row)"
+                        @click="deleteRemoteEntry(row)"
                       >
                         Delete
                       </el-button>
@@ -561,7 +563,7 @@
     width="760px"
     top="6vh"
     class="fixed-dialog"
-    @update:model-value="$emit('update:pinManagerVisible', $event)"
+    @update:model-value="pinManagerVisible = $event"
   >
     <div class="fixed-dialog-body">
       <div class="dialog-table-shell" style="height: 420px; min-height: 220px;">
@@ -599,7 +601,7 @@
                   size="small"
                   link
                   type="primary"
-                  @click="$emit('edit-pin', row)"
+                  @click="promptEditPinnedQuickJump(row)"
                 >
                   Edit
                 </el-button>
@@ -608,7 +610,7 @@
                   size="small"
                   link
                   type="danger"
-                  @click="$emit('delete-pin', row)"
+                  @click="deletePinnedQuickJump(row)"
                 >
                   Delete
                 </el-button>
@@ -622,87 +624,150 @@
 </template>
 
 <script>
+import { ElMessage, ElMessageBox } from 'element-plus'
+
 export default {
   name: 'RemoteFilesDialog',
 
   props: {
-    visible: { type: Boolean, default: false },
-    pinManagerVisible: { type: Boolean, default: false },
-
-    remoteBreadcrumbItems: { type: Array, default: () => [] },
-    remoteFilesParentPath: { type: String, default: '' },
-
-    quickJumpLoading: { type: Boolean, default: false },
-    remotePinnedJumpLoading: { type: Boolean, default: false },
-    remotePinnedJumpItems: { type: Array, default: () => [] },
-
-    remoteUploadLoading: { type: Boolean, default: false },
-    hasRemoteSelection: { type: Boolean, default: false },
-    remoteZipDownloading: { type: Boolean, default: false },
-    remoteSelectedPaths: { type: Array, default: () => [] },
-
-    remotePinButtonText: { type: String, default: '' },
-    hasPinnedQuickJumps: { type: Boolean, default: false },
-
-    hasRemoteClipboard: { type: Boolean, default: false },
-    remoteClipboardPaths: { type: Array, default: () => [] },
-    remoteClipboardActionText: { type: String, default: '' },
-    remoteClipboardSourcePath: { type: String, default: '' },
-
-    showHiddenFiles: { type: Boolean, default: false },
-
-    displayRemoteFilesEntries: { type: Array, default: () => [] },
-    remoteFilesLoading: { type: Boolean, default: false },
-
-    remoteFilesTotal: { type: Number, default: 0 },
-    remoteFilesHiddenTotal: { type: Number, default: 0 },
-    remoteFilesAllTotal: { type: Number, default: 0 },
-    remoteFilesTotalPages: { type: Number, default: 1 },
-    remoteFilesPage: { type: Number, default: 1 },
-    remoteFilesPageSize: { type: Number, default: 50 },
-    remoteFilesPageSizeOptions: { type: Array, default: () => [50, 100, 200] },
-
+    selectedId: { type: String, default: '' },
     formatBytes: { type: Function, required: true },
-    isRemoteEntrySelected: { type: Function, required: true },
+    getTabScopedHeaders: { type: Function, required: true },
   },
 
   emits: [
-    'update:visible',
-    'update:pinManagerVisible',
-
-    'breadcrumb',
-    'refresh',
-    'parent',
-    'jump',
-
-    'create-folder',
-    'trigger-upload',
-    'download-selected',
-    'delete-selected',
-    'more-command',
-
-    'row-dblclick',
-    'selection-change',
-    'enter-dir',
+    'append-output',
+    'set-active-task',
     'preview',
-    'download',
-    'row-more-action',
-
-    'page-change',
-    'size-change',
-
-    'toggle-select',
-    'copy-one',
-    'cut-one',
-    'rename',
-    'copy-path',
-    'delete',
-
-    'edit-pin',
-    'delete-pin',
+    'request-upload',
+    'upload-started',
+    'visible-change',
+    'artifacts-maybe-changed',
   ],
 
+  data() {
+    return {
+      visible: false,
+      pinManagerVisible: false,
+
+      remoteFilesLoading: false,
+      remoteFilesCurrentPath: '',
+      remoteFilesParentPath: '',
+      remoteFilesEntries: [],
+      remoteFilesPathInput: '',
+      remoteFilesPage: 1,
+      remoteFilesPageSize: 50,
+      remoteFilesPageSizeOptions: [50, 100, 200],
+      remoteFilesTotal: 0,
+      remoteFilesTotalPages: 1,
+      remoteFilesAllTotal: 0,
+      remoteFilesHiddenTotal: 0,
+
+      remoteUploadLoading: false,
+      showHiddenFiles: false,
+      remoteSelectedPaths: [],
+      remoteZipDownloading: false,
+
+      quickJumpPaths: {},
+      quickJumpLoading: false,
+      remotePinnedJumpItems: [],
+      remotePinnedJumpLoading: false,
+
+      remoteClipboardPaths: [],
+      remoteClipboardMode: '',
+      remoteClipboardSourcePath: '',
+    }
+  },
+
+  computed: {
+    displayRemoteFilesEntries() {
+      const entries = Array.isArray(this.remoteFilesEntries)
+        ? [...this.remoteFilesEntries]
+        : []
+
+      if (this.remoteFilesParentPath && this.remoteFilesPage === 1) {
+        entries.unshift({
+          name: '..',
+          path: this.remoteFilesParentPath,
+          is_dir: true,
+          is_symlink: false,
+          is_hidden: false,
+          size: 0,
+          modified_at: '',
+          is_parent_entry: true,
+        })
+      }
+
+      return entries
+    },
+
+    hasRemoteSelection() {
+      return this.remoteSelectedPaths.length > 0
+    },
+
+    hasRemoteClipboard() {
+      return this.remoteClipboardPaths.length > 0 && !!this.remoteClipboardMode
+    },
+
+    remoteClipboardActionText() {
+      return this.remoteClipboardMode === 'move' ? 'Cut' : 'Copy'
+    },
+
+    remoteBreadcrumbItems() {
+      const items = this.buildRemoteBreadcrumbItems(this.remoteFilesCurrentPath || '')
+
+      return items.map(item => ({
+        ...item,
+        isCurrent: item.path === (this.remoteFilesCurrentPath || ''),
+      }))
+    },
+
+    hasPinnedQuickJumps() {
+      return Array.isArray(this.remotePinnedJumpItems) && this.remotePinnedJumpItems.length > 0
+    },
+
+    currentPinnedQuickJumpItem() {
+      const currentPath = String(this.remoteFilesCurrentPath || '').trim()
+      if (!currentPath) return null
+
+      return (this.remotePinnedJumpItems || []).find(item => {
+        return String(item?.path || '').trim() === currentPath
+      }) || null
+    },
+
+    remotePinButtonText() {
+      return this.currentPinnedQuickJumpItem ? 'Unpin' : 'Pin'
+    },
+  },
+
   methods: {
+    handleVisibleChange(value) {
+      this.visible = value
+      this.$emit('visible-change', value)
+
+      if (!value) {
+        this.resetRemoteFilesState()
+      }
+    },
+
+    async open() {
+      if (!this.selectedId) {
+        ElMessage.warning('Please select a device')
+        return
+      }
+
+      this.visible = true
+      this.$emit('visible-change', true)
+
+      this.loadQuickJumpPaths()
+      this.loadPinnedQuickJumps()
+      await this.loadRemoteDirectory('', 1)
+    },
+
+    close() {
+      this.handleVisibleChange(false)
+    },
+
     clearTableSelection() {
       const table = this.$refs.remoteFilesTableRef
 
@@ -710,6 +775,1372 @@ export default {
         table.clearSelection()
       }
     },
+
+    triggerRemoteUpload() {
+      if (!this.selectedId) {
+        ElMessage.warning('Please select a device')
+        return
+      }
+
+      if (!this.remoteFilesCurrentPath) {
+        ElMessage.warning('Current directory is empty')
+        return
+      }
+
+      this.$emit('request-upload')
+    },
+
+    async handleUploadChange(event) {
+      const file = event.target.files && event.target.files[0]
+      if (!file) return
+
+      if (!this.selectedId) {
+        ElMessage.warning('Please select a device')
+        return
+      }
+
+      if (!this.remoteFilesCurrentPath) {
+        ElMessage.warning('Current directory is empty')
+        return
+      }
+
+      const formData = new FormData()
+      formData.append('file', file)
+      formData.append('target_path', this.remoteFilesCurrentPath)
+
+      this.remoteUploadLoading = true
+
+      this.$emit(
+        'append-output',
+        this.selectedId,
+        `> [Remote Upload] ${file.name} -> ${this.remoteFilesCurrentPath}`,
+        'command'
+      )
+
+      try {
+        const res = await fetch(`/api/connections/${encodeURIComponent(this.selectedId)}/upload`, {
+          method: 'POST',
+          headers: this.getTabScopedHeaders(),
+          body: formData,
+        })
+
+        const json = await res.json()
+
+        if (!res.ok || json.code !== 0) {
+          throw new Error(json.message || 'Upload failed')
+        }
+
+        const taskId = json.data && json.data.task_id
+
+        this.$emit('set-active-task', this.selectedId, taskId || '')
+        this.$emit('upload-started', {
+          taskId: taskId || '',
+          clientId: this.selectedId,
+          path: this.remoteFilesCurrentPath || '',
+        })
+
+        ElMessage.success(`Upload started: ${file.name}`)
+      } catch (e) {
+        this.$emit(
+          'append-output',
+          this.selectedId,
+          `[Upload failed] ${e.message || 'unknown error'}`,
+          'error'
+        )
+
+        ElMessage.error(e.message || 'Upload failed')
+      } finally {
+        this.remoteUploadLoading = false
+        if (event?.target) event.target.value = ''
+      }
+    },
+
+    async loadRemoteDirectory(path = '', page = 1) {
+      if (!this.selectedId) {
+        ElMessage.warning('Please select a device')
+        return
+      }
+
+      this.remoteFilesLoading = true
+
+      try {
+        const url = new URL(
+          `/api/connections/${encodeURIComponent(this.selectedId)}/remote-files`,
+          window.location.origin
+        )
+
+        if (path) url.searchParams.set('path', path)
+
+        url.searchParams.set('page', String(page || 1))
+        url.searchParams.set('page_size', String(this.remoteFilesPageSize || 50))
+        url.searchParams.set('show_hidden', this.showHiddenFiles ? 'true' : 'false')
+
+        const res = await fetch(url.pathname + url.search)
+        const json = await res.json()
+
+        if (!res.ok || json.code !== 0) {
+          throw new Error(json.message || 'Failed to load remote directory')
+        }
+
+        const data = json.data || {}
+        const pagination = data.pagination || {}
+        const summary = data.summary || {}
+
+        this.remoteFilesCurrentPath = data.current_path || ''
+        this.remoteFilesParentPath = data.parent_path || ''
+        this.remoteFilesEntries = data.entries || []
+        this.remoteFilesPathInput = this.remoteFilesCurrentPath || ''
+        this.remoteFilesPage = Number(pagination.page || page || 1)
+        this.remoteFilesPageSize = Number(pagination.page_size || this.remoteFilesPageSize || 50)
+        this.remoteFilesTotal = Number(pagination.total_visible || 0)
+        this.remoteFilesTotalPages = Number(pagination.total_pages || 1)
+        this.remoteFilesAllTotal = Number(summary.total_all || this.remoteFilesTotal || 0)
+        this.remoteFilesHiddenTotal = Number(summary.total_hidden || 0)
+        this.showHiddenFiles = !!summary.show_hidden
+        this.remoteSelectedPaths = []
+        this.clearTableSelection()
+      } catch (e) {
+        ElMessage.error(e.message || 'Failed to load remote directory')
+      } finally {
+        this.remoteFilesLoading = false
+      }
+    },
+
+    async refreshRemoteDirectory() {
+      await this.loadRemoteDirectory(this.remoteFilesCurrentPath || '', this.remoteFilesPage || 1)
+    },
+
+    async goToRemoteParent() {
+      if (!this.remoteFilesParentPath) return
+      await this.loadRemoteDirectory(this.remoteFilesParentPath, 1)
+    },
+
+    async enterRemoteDirectory(row) {
+      if (!row || !row.is_dir) return
+
+      if (row.is_parent_entry) {
+        await this.goToRemoteParent()
+        return
+      }
+
+      await this.loadRemoteDirectory(row.path, 1)
+    },
+
+    async handleRemotePageChange(page) {
+      await this.loadRemoteDirectory(this.remoteFilesCurrentPath || '', page || 1)
+    },
+
+    async handleRemotePageSizeChange(pageSize) {
+      this.remoteFilesPageSize = Number(pageSize || 50)
+      await this.loadRemoteDirectory(this.remoteFilesCurrentPath || '', 1)
+    },
+
+    async toggleRemoteHiddenFiles() {
+      this.showHiddenFiles = !this.showHiddenFiles
+      await this.loadRemoteDirectory(this.remoteFilesCurrentPath || '', 1)
+    },
+
+    handleRemoteRowDblClick(row) {
+      if (!row) return
+
+      if (row.is_parent_entry) {
+        this.goToRemoteParent()
+        return
+      }
+
+      if (row.is_dir) {
+        this.enterRemoteDirectory(row)
+      }
+    },
+
+    handleRemoteSelectionChange(rows) {
+      this.remoteSelectedPaths = Array.isArray(rows)
+        ? rows
+          .filter(item => item && !item.is_parent_entry)
+          .map(item => item.path)
+          .filter(Boolean)
+        : []
+    },
+
+    isRemoteEntrySelected(row) {
+      if (!row || row.is_parent_entry) return false
+      return !!(row.path && this.remoteSelectedPaths.includes(row.path))
+    },
+
+    toggleRemoteSelection(row) {
+      if (!row || !row.path || row.is_parent_entry) return
+
+      const exists = this.remoteSelectedPaths.includes(row.path)
+
+      if (exists) {
+        this.remoteSelectedPaths = this.remoteSelectedPaths.filter(item => item !== row.path)
+      } else {
+        this.remoteSelectedPaths = [...this.remoteSelectedPaths, row.path]
+      }
+    },
+
+    clearRemoteSelection() {
+      this.remoteSelectedPaths = []
+      this.clearTableSelection()
+    },
+
+    async copyRemotePath(row) {
+      if (!row || !row.path || row.is_parent_entry) {
+        ElMessage.warning('Invalid path')
+        return
+      }
+
+      try {
+        await navigator.clipboard.writeText(row.path)
+        ElMessage.success('Path copied')
+      } catch (e) {
+        ElMessage.error('Failed to copy path')
+      }
+    },
+
+    cacheRemoteClipboard(mode) {
+      const paths = [...this.remoteSelectedPaths]
+
+      if (!paths.length) {
+        ElMessage.warning('Please select at least one file or folder')
+        return
+      }
+
+      this.remoteClipboardPaths = paths
+      this.remoteClipboardMode = mode === 'move' ? 'move' : 'copy'
+      this.remoteClipboardSourcePath = this.remoteFilesCurrentPath || ''
+
+      const actionText = this.remoteClipboardMode === 'move' ? 'Cut' : 'Copied'
+      ElMessage.success(`${actionText} ${paths.length} item(s)`)
+    },
+
+    copySelectedRemoteEntries() {
+      this.cacheRemoteClipboard('copy')
+    },
+
+    cutSelectedRemoteEntries() {
+      this.cacheRemoteClipboard('move')
+    },
+
+    copySingleRemoteEntry(row) {
+      if (!row?.path) return
+      this.remoteSelectedPaths = [row.path]
+      this.copySelectedRemoteEntries()
+    },
+
+    cutSingleRemoteEntry(row) {
+      if (!row?.path) return
+      this.remoteSelectedPaths = [row.path]
+      this.cutSelectedRemoteEntries()
+    },
+
+    clearRemoteClipboard() {
+      this.remoteClipboardPaths = []
+      this.remoteClipboardMode = ''
+      this.remoteClipboardSourcePath = ''
+    },
+
+    async pasteRemoteClipboard() {
+      if (!this.selectedId) {
+        ElMessage.warning('Please select a device')
+        return
+      }
+
+      if (!this.remoteFilesCurrentPath) {
+        ElMessage.warning('Current directory is empty')
+        return
+      }
+
+      const paths = [...this.remoteClipboardPaths]
+
+      if (!paths.length || !this.remoteClipboardMode) {
+        ElMessage.warning('Clipboard is empty')
+        return
+      }
+
+      try {
+        const res = await fetch(`/api/connections/${encodeURIComponent(this.selectedId)}/remote-files/paste`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            paths,
+            destination_dir: this.remoteFilesCurrentPath,
+            operation: this.remoteClipboardMode,
+          }),
+        })
+
+        const json = await res.json()
+
+        if (!res.ok || json.code !== 0) {
+          throw new Error(json.message || 'Paste failed')
+        }
+
+        const actionText = this.remoteClipboardMode === 'move' ? 'Moved' : 'Copied'
+        const message = json.data?.message || `${actionText} ${paths.length} item(s)`
+
+        ElMessage.success(`${actionText} ${paths.length} item(s)`)
+        await this.refreshRemoteDirectory()
+
+        if (this.remoteClipboardMode === 'move') {
+          this.clearRemoteClipboard()
+        }
+
+        if (message && !message.startsWith(`${actionText} ${paths.length} item(s)`)) {
+          ElMessage.info(message)
+        }
+      } catch (e) {
+        ElMessage.error(e.message || 'Paste failed')
+      }
+    },
+
+    handleRemoteToolbarMoreCommand(command) {
+      if (command === 'toggle_pin') {
+        this.toggleCurrentPinnedQuickJump()
+        return
+      }
+
+      if (command === 'manage_pins') {
+        this.openPinnedQuickJumpManager()
+        return
+      }
+
+      if (command === 'paste') {
+        this.pasteRemoteClipboard()
+        return
+      }
+
+      if (command === 'copy') {
+        this.copySelectedRemoteEntries()
+        return
+      }
+
+      if (command === 'cut') {
+        this.cutSelectedRemoteEntries()
+        return
+      }
+
+      if (command === 'clear_clipboard') {
+        this.clearRemoteClipboard()
+        return
+      }
+
+      if (command === 'clear_selection') {
+        this.clearRemoteSelection()
+        return
+      }
+
+      if (command === 'toggle_hidden') {
+        this.toggleRemoteHiddenFiles()
+      }
+    },
+
+    handleRemoteMoreAction(command, row) {
+      if (!row || row.is_parent_entry) return
+
+      if (command === 'rename') {
+        this.renameRemoteEntry(row)
+        return
+      }
+
+      if (command === 'copy_path') {
+        this.copyRemotePath(row)
+        return
+      }
+
+      if (command === 'copy') {
+        this.copySingleRemoteEntry(row)
+        return
+      }
+
+      if (command === 'cut') {
+        this.cutSingleRemoteEntry(row)
+        return
+      }
+
+      if (command === 'delete') {
+        this.deleteRemoteEntry(row)
+      }
+    },
+
+    async createRemoteDirectory() {
+      if (!this.selectedId) {
+        ElMessage.warning('Please select a device')
+        return
+      }
+
+      if (!this.remoteFilesCurrentPath) {
+        ElMessage.warning('Current directory is empty')
+        return
+      }
+
+      try {
+        const { value } = await ElMessageBox.prompt(
+          'Enter the new folder name',
+          'Create Directory',
+          {
+            confirmButtonText: 'Create',
+            cancelButtonText: 'Cancel',
+            inputPattern: /.+/,
+            inputErrorMessage: 'Folder name is required',
+          }
+        )
+
+        const folderName = String(value || '').trim()
+        if (!folderName) return
+
+        const base = this.remoteFilesCurrentPath.replace(/[\\/]+$/, '')
+        const separator = base.includes('\\') ? '\\' : '/'
+        const fullPath = `${base}${base ? separator : ''}${folderName}`
+
+        const res = await fetch(`/api/connections/${encodeURIComponent(this.selectedId)}/remote-files/mkdir`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ path: fullPath }),
+        })
+
+        const json = await res.json()
+
+        if (!res.ok || json.code !== 0) {
+          throw new Error(json.message || 'Create directory failed')
+        }
+
+        ElMessage.success('Directory created')
+        await this.refreshRemoteDirectory()
+      } catch (e) {
+        if (this.isDialogCancel(e)) return
+        ElMessage.error(e.message || 'Create directory failed')
+      }
+    },
+
+    async renameRemoteEntry(row) {
+      if (!row || !row.path || row.is_parent_entry) {
+        ElMessage.warning('Invalid path')
+        return
+      }
+
+      try {
+        const { value } = await ElMessageBox.prompt(
+          'Enter the new name',
+          'Rename',
+          {
+            confirmButtonText: 'Rename',
+            cancelButtonText: 'Cancel',
+            inputValue: row.name || '',
+            inputPattern: /.+/,
+            inputErrorMessage: 'New name is required',
+          }
+        )
+
+        const newName = String(value || '').trim()
+        if (!newName || newName === row.name) return
+
+        const res = await fetch(`/api/connections/${encodeURIComponent(this.selectedId)}/remote-files/rename`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            old_path: row.path,
+            new_name: newName,
+          }),
+        })
+
+        const json = await res.json()
+
+        if (!res.ok || json.code !== 0) {
+          throw new Error(json.message || 'Rename failed')
+        }
+
+        ElMessage.success('Renamed')
+        await this.refreshRemoteDirectory()
+      } catch (e) {
+        if (this.isDialogCancel(e)) return
+        ElMessage.error(e.message || 'Rename failed')
+      }
+    },
+
+    async downloadRemoteEntry(row) {
+      if (!row || !row.path || row.is_dir || row.is_parent_entry) {
+        ElMessage.warning('Please select a file')
+        return
+      }
+
+      try {
+        const url = new URL(
+          `/api/connections/${encodeURIComponent(this.selectedId)}/remote-files/download`,
+          window.location.origin
+        )
+
+        url.searchParams.set('path', row.path)
+
+        const res = await fetch(url.pathname + url.search, { method: 'POST' })
+        const json = await res.json()
+
+        if (!res.ok || json.code !== 0) {
+          throw new Error(json.message || 'Download failed')
+        }
+
+        const file = (json.data && (json.data.file || json.data.artifact)) || null
+
+        if (!file || !file.artifact_id) {
+          throw new Error('Download finished, but artifact was not found')
+        }
+
+        const downloadUrl = file.download_url || `/api/artifacts/${encodeURIComponent(file.artifact_id)}/download`
+        window.open(downloadUrl, '_blank')
+
+        ElMessage.success(`Downloaded: ${row.name}`)
+        this.$emit('artifacts-maybe-changed')
+      } catch (e) {
+        ElMessage.error(e.message || 'Download failed')
+      }
+    },
+
+    async downloadSelectedRemoteEntries() {
+      if (!this.selectedId) {
+        ElMessage.warning('Please select a device')
+        return
+      }
+
+      const paths = [...this.remoteSelectedPaths]
+
+      if (!paths.length) {
+        ElMessage.warning('Please select at least one file or folder')
+        return
+      }
+
+      this.remoteZipDownloading = true
+
+      try {
+        const res = await fetch(`/api/connections/${encodeURIComponent(this.selectedId)}/remote-files/download-zip`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            paths,
+            archive_name: '',
+          }),
+        })
+
+        const json = await res.json()
+
+        if (!res.ok || json.code !== 0) {
+          throw new Error(json.message || 'ZIP download failed')
+        }
+
+        const file = (json.data && (json.data.file || json.data.artifact)) || null
+
+        if (!file || !file.artifact_id) {
+          throw new Error('ZIP download finished, but artifact was not found')
+        }
+
+        const downloadUrl = file.download_url || `/api/artifacts/${encodeURIComponent(file.artifact_id)}/download`
+        window.open(downloadUrl, '_blank')
+
+        ElMessage.success(`ZIP ready: ${file.original_name || file.stored_name}`)
+        this.$emit('artifacts-maybe-changed')
+      } catch (e) {
+        ElMessage.error(e.message || 'ZIP download failed')
+      } finally {
+        this.remoteZipDownloading = false
+      }
+    },
+
+    async deleteRemoteEntry(row) {
+      if (!row || !row.path || row.is_parent_entry) {
+        ElMessage.warning('Invalid path')
+        return
+      }
+
+      try {
+        await ElMessageBox.confirm(
+          `Delete "${row.name}"?${row.is_dir ? ' All nested contents will be removed as well.' : ''}`,
+          'Delete Confirmation',
+          {
+            type: 'warning',
+            confirmButtonText: 'Delete',
+            cancelButtonText: 'Cancel',
+          }
+        )
+
+        const url = new URL(
+          `/api/connections/${encodeURIComponent(this.selectedId)}/remote-files`,
+          window.location.origin
+        )
+
+        url.searchParams.set('path', row.path)
+
+        const res = await fetch(url.pathname + url.search, { method: 'DELETE' })
+        const json = await res.json()
+
+        if (!res.ok || json.code !== 0) {
+          throw new Error(json.message || 'Delete failed')
+        }
+
+        ElMessage.success('Deleted')
+        await this.refreshRemoteDirectory()
+      } catch (e) {
+        if (this.isDialogCancel(e)) return
+        ElMessage.error(e.message || 'Delete failed')
+      }
+    },
+
+    async deleteSelectedRemoteEntries() {
+      if (!this.selectedId) {
+        ElMessage.warning('Please select a device')
+        return
+      }
+
+      const paths = [...this.remoteSelectedPaths]
+
+      if (!paths.length) {
+        ElMessage.warning('Please select at least one file or folder to delete')
+        return
+      }
+
+      try {
+        await ElMessageBox.confirm(
+          `Delete ${paths.length} selected item(s)?`,
+          'Delete Multiple Items',
+          {
+            type: 'warning',
+            confirmButtonText: 'Delete',
+            cancelButtonText: 'Cancel',
+            confirmButtonClass: 'el-button--danger',
+            dangerouslyUseHTMLString: false,
+          }
+        )
+
+        const res = await fetch(`/api/connections/${encodeURIComponent(this.selectedId)}/remote-files/batch`, {
+          method: 'DELETE',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ paths }),
+        })
+
+        const json = await res.json()
+
+        if (!res.ok || json.code !== 0) {
+          throw new Error(json.message || 'Batch delete failed')
+        }
+
+        const message = json.data?.message || 'Delete completed'
+
+        ElMessage.success(`Deleted ${paths.length} item(s)`)
+        await this.refreshRemoteDirectory()
+        this.clearRemoteSelection()
+
+        if (message && message !== 'Delete completed') {
+          ElMessage.info(message)
+        }
+      } catch (e) {
+        if (this.isDialogCancel(e)) return
+        ElMessage.error(e.message || 'Batch delete failed')
+      }
+    },
+
+    async loadPinnedQuickJumps() {
+      if (!this.selectedId) return
+
+      this.remotePinnedJumpLoading = true
+
+      try {
+        const res = await fetch(`/api/connections/${encodeURIComponent(this.selectedId)}/pinned_paths`)
+        const json = await res.json()
+
+        if (res.ok && json.code === 0 && json.data) {
+          this.remotePinnedJumpItems = Array.isArray(json.data.items)
+            ? json.data.items
+            : []
+        }
+      } catch (e) {
+        console.error('Failed to load pinned paths:', e)
+      } finally {
+        this.remotePinnedJumpLoading = false
+      }
+    },
+
+    async promptSavePinnedQuickJump() {
+      if (!this.selectedId) {
+        ElMessage.warning('Please select a device')
+        return
+      }
+
+      const currentPath = String(this.remoteFilesCurrentPath || '').trim()
+
+      if (!currentPath) {
+        ElMessage.warning('Current directory is empty')
+        return
+      }
+
+      const currentItems = Array.isArray(this.remotePinnedJumpItems)
+        ? this.remotePinnedJumpItems
+        : []
+
+      const currentPinnedItem = this.currentPinnedQuickJumpItem
+
+      const currentDirectoryName = currentPath
+        .replace(/[\\/]+$/, '')
+        .split(/[\\/]/)
+        .filter(Boolean)
+        .pop() || 'Pinned Path'
+
+      try {
+        const { value } = await ElMessageBox.prompt(
+          `Current path:<br><span style="word-break: break-all; color: var(--muted);">${this.escapeRemoteHtml(currentPath)}</span>`,
+          currentPinnedItem ? 'Edit Pinned Path' : 'Pin Path',
+          {
+            confirmButtonText: currentPinnedItem ? 'Update' : 'Save',
+            cancelButtonText: 'Cancel',
+            dangerouslyUseHTMLString: true,
+            inputValue: currentPinnedItem?.display_name || currentDirectoryName,
+            inputPattern: /.+/,
+            inputErrorMessage: 'Display name is required',
+          }
+        )
+
+        const displayName = String(value || '').trim()
+        if (!displayName) return
+
+        const exists = currentItems.find(item => {
+          return (item?.display_name || '').trim() === displayName
+        })
+
+        if (
+          exists &&
+          (
+            !currentPinnedItem ||
+            (exists.display_name || '').trim() !== (currentPinnedItem.display_name || '').trim()
+          )
+        ) {
+          await ElMessageBox.confirm(
+            `A pinned path named "${this.escapeRemoteHtml(displayName)}" already exists. Update it to the current path?`,
+            'Overwrite Pinned Path',
+            {
+              confirmButtonText: 'Overwrite',
+              cancelButtonText: 'Cancel',
+              type: 'warning',
+              dangerouslyUseHTMLString: true,
+            }
+          )
+        }
+
+        const method = currentPinnedItem ? 'PUT' : 'POST'
+        const body = currentPinnedItem
+          ? {
+              original_display_name: currentPinnedItem.display_name,
+              display_name: displayName,
+              path: currentPath,
+            }
+          : {
+              display_name: displayName,
+              path: currentPath,
+            }
+
+        const res = await fetch(`/api/connections/${encodeURIComponent(this.selectedId)}/pinned_paths`, {
+          method,
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        })
+
+        const json = await res.json()
+
+        if (!res.ok || json.code !== 0) {
+          throw new Error(json.message || 'Failed to save pinned path')
+        }
+
+        this.remotePinnedJumpItems = Array.isArray(json.data?.items)
+          ? json.data.items
+          : []
+
+        ElMessage.success(json.data?.message || 'Pinned path saved')
+      } catch (e) {
+        if (this.isDialogCancel(e)) return
+        ElMessage.error(e.message || 'Failed to save pinned path')
+      }
+    },
+
+    async deletePinnedQuickJump(item, options = {}) {
+      if (!this.selectedId || !item?.display_name) return false
+
+      const shouldConfirm = options.confirm !== false
+
+      try {
+        if (shouldConfirm) {
+          await ElMessageBox.confirm(
+            `Remove pinned path "${this.escapeRemoteHtml(item.display_name)}"?`,
+            'Delete Pinned path',
+            {
+              confirmButtonText: 'Delete',
+              cancelButtonText: 'Cancel',
+              type: 'warning',
+              dangerouslyUseHTMLString: true,
+            }
+          )
+        }
+
+        const res = await fetch(`/api/connections/${encodeURIComponent(this.selectedId)}/pinned_paths`, {
+          method: 'DELETE',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ display_name: item.display_name }),
+        })
+
+        const json = await res.json()
+
+        if (!res.ok || json.code !== 0) {
+          throw new Error(json.message || 'Failed to delete pinned path')
+        }
+
+        this.remotePinnedJumpItems = Array.isArray(json.data?.items)
+          ? json.data.items
+          : []
+
+        if (options.toast !== false) {
+          ElMessage.success(json.data?.message || 'Pinned path removed')
+        }
+
+        return true
+      } catch (e) {
+        if (this.isDialogCancel(e)) return false
+        ElMessage.error(e.message || 'Failed to delete pinned path')
+        return false
+      }
+    },
+
+    async promptEditPinnedQuickJump(item) {
+      if (!this.selectedId || !item?.display_name) return
+
+      try {
+        const { value: displayNameValue } = await ElMessageBox.prompt(
+          `Edit display name for:<br><span style="word-break: break-all; color: var(--muted);">${this.escapeRemoteHtml(item.path || '')}</span>`,
+          'Edit Pinned Path',
+          {
+            confirmButtonText: 'Next',
+            cancelButtonText: 'Cancel',
+            dangerouslyUseHTMLString: true,
+            inputValue: item.display_name || '',
+            inputPattern: /.+/,
+            inputErrorMessage: 'Display name is required',
+          }
+        )
+
+        const displayName = String(displayNameValue || '').trim()
+        if (!displayName) return
+
+        const { value: pathValue } = await ElMessageBox.prompt(
+          'Edit target path',
+          'Edit Pinned Path',
+          {
+            confirmButtonText: 'Save',
+            cancelButtonText: 'Cancel',
+            inputValue: item.path || '',
+            inputPattern: /.+/,
+            inputErrorMessage: 'Path is required',
+          }
+        )
+
+        const path = String(pathValue || '').trim()
+        if (!path) return
+
+        const res = await fetch(`/api/connections/${encodeURIComponent(this.selectedId)}/pinned_paths`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            original_display_name: item.display_name,
+            display_name: displayName,
+            path,
+          }),
+        })
+
+        const json = await res.json()
+
+        if (!res.ok || json.code !== 0) {
+          throw new Error(json.message || 'Failed to update pinned path')
+        }
+
+        this.remotePinnedJumpItems = Array.isArray(json.data?.items)
+          ? json.data.items
+          : []
+
+        ElMessage.success(json.data?.message || 'Pinned path updated')
+      } catch (e) {
+        if (this.isDialogCancel(e)) return
+        ElMessage.error(e.message || 'Failed to update pinned path')
+      }
+    },
+
+    async toggleCurrentPinnedQuickJump() {
+      const currentItem = this.currentPinnedQuickJumpItem
+
+      if (currentItem) {
+        await this.deletePinnedQuickJump(currentItem)
+        return
+      }
+
+      await this.promptSavePinnedQuickJump()
+    },
+
+    openPinnedQuickJumpManager() {
+      this.pinManagerVisible = true
+    },
+
+    async loadQuickJumpPaths() {
+      if (!this.selectedId) return
+
+      this.quickJumpLoading = true
+
+      try {
+        const res = await fetch(`/api/connections/${encodeURIComponent(this.selectedId)}/system-paths`)
+        const json = await res.json()
+
+        if (res.ok && json.code === 0 && json.data) {
+          this.quickJumpPaths = json.data
+        }
+      } catch (e) {
+        console.error('Failed to load system paths:', e)
+      } finally {
+        this.quickJumpLoading = false
+      }
+    },
+
+    async jumpToPath(command) {
+      if (command === 'input_navigate') {
+        await this.promptRemotePathNavigate()
+        return
+      }
+
+      if (command && typeof command === 'object') {
+        if (command.type === 'pinned_jump') {
+          const path = String(command.path || '').trim()
+
+          if (!path) {
+            ElMessage.warning('Path not available')
+            return
+          }
+
+          await this.loadRemoteDirectory(path, 1)
+          return
+        }
+      }
+
+      const path = this.quickJumpPaths[command]
+
+      if (!path) {
+        ElMessage.warning('Path not available')
+        return
+      }
+
+      await this.loadRemoteDirectory(path, 1)
+    },
+
+    async promptRemotePathNavigate() {
+      try {
+        const { value } = await ElMessageBox.prompt(
+          'Enter the target path',
+          'Go to Folder',
+          {
+            confirmButtonText: 'Go',
+            cancelButtonText: 'Cancel',
+            inputValue: this.remoteFilesCurrentPath || this.remoteFilesPathInput || '',
+            inputPattern: /.+/,
+            inputErrorMessage: 'Path is required',
+          }
+        )
+
+        const path = String(value || '').trim()
+        if (!path) return
+
+        this.remoteFilesPathInput = path
+        await this.loadRemoteDirectory(path, 1)
+      } catch (e) {
+        if (this.isDialogCancel(e)) return
+        ElMessage.error(e.message || 'Navigate failed')
+      }
+    },
+
+    buildRemoteBreadcrumbItems(path) {
+      const currentPath = String(path || '').trim()
+      if (!currentPath) return []
+
+      const windowsMatch = currentPath.match(/^([A-Za-z]:)([\\/].*)?$/)
+
+      if (windowsMatch) {
+        const drive = windowsMatch[1]
+        const rest = String(windowsMatch[2] || '').replace(/^[\\/]+/, '')
+        const parts = rest ? rest.split(/[\\/]+/).filter(Boolean) : []
+        const items = [{ label: drive, path: `${drive}\\` }]
+        let accumulated = `${drive}\\`
+
+        parts.forEach(part => {
+          accumulated = accumulated.replace(/[\\/]+$/, '') + '\\' + part
+          items.push({ label: part, path: accumulated })
+        })
+
+        return items
+      }
+
+      const isAbsolute = currentPath.startsWith('/')
+      const parts = currentPath.split('/').filter(Boolean)
+      const items = []
+
+      if (isAbsolute) {
+        items.push({ label: 'Root', path: '/' })
+      }
+
+      let accumulated = ''
+
+      parts.forEach(part => {
+        if (isAbsolute) {
+          accumulated += `/${part}`
+        } else {
+          accumulated = accumulated ? `${accumulated}/${part}` : part
+        }
+
+        items.push({ label: part, path: accumulated })
+      })
+
+      if (!items.length && isAbsolute) {
+        items.push({ label: 'Root', path: '/' })
+      }
+
+      return items
+    },
+
+    async goToRemoteBreadcrumb(item) {
+      if (!item || !item.path || item.isCurrent) return
+      await this.loadRemoteDirectory(item.path, 1)
+    },
+
+    previewRow(row) {
+      if (!row || row.is_dir || row.is_parent_entry) return
+      this.$emit('preview', row)
+    },
+
+    escapeRemoteHtml(text) {
+      return String(text || '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;')
+    },
+
+    resetRemoteFilesState() {
+      this.remoteFilesCurrentPath = ''
+      this.remoteFilesParentPath = ''
+      this.remoteFilesEntries = []
+      this.remoteFilesPathInput = ''
+      this.remoteFilesPage = 1
+      this.remoteFilesPageSize = 50
+      this.remoteFilesTotal = 0
+      this.remoteFilesTotalPages = 1
+      this.remoteFilesAllTotal = 0
+      this.remoteFilesHiddenTotal = 0
+      this.showHiddenFiles = false
+      this.remoteSelectedPaths = []
+      this.remoteZipDownloading = false
+      this.remotePinnedJumpItems = []
+      this.remotePinnedJumpLoading = false
+      this.pinManagerVisible = false
+      this.clearRemoteClipboard()
+      this.clearTableSelection()
+    },
+
+    isDialogCancel(e) {
+      return e === 'cancel' || e === 'close' || e?.toString?.().includes('cancel')
+    },
   },
 }
 </script>
+
+<style scoped>
+.remote-files-head {
+  display: block;
+  margin-bottom: 10px;
+}
+
+.remote-files-head-main {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+  width: 100%;
+}
+
+.remote-breadcrumb-bar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 2px;
+  min-height: 30px;
+  padding: 0 2px;
+}
+
+.remote-breadcrumb-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: none;
+  background: transparent;
+  color: var(--muted-2);
+  padding: 4px 7px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.remote-breadcrumb-item:hover {
+  background: rgba(148, 163, 184, 0.12);
+  color: var(--text);
+}
+
+.remote-breadcrumb-item.active {
+  color: var(--text);
+  font-weight: 500;
+  cursor: default;
+}
+
+.remote-breadcrumb-item:disabled {
+  opacity: 1;
+}
+
+.remote-breadcrumb-sep {
+  color: var(--muted-2);
+  margin-right: 2px;
+}
+
+.remote-breadcrumb-empty {
+  color: var(--muted-2);
+  font-size: 13px;
+}
+
+.remote-files-toolbar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.remote-toolbar-group {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.remote-toolbar-divider {
+  width: 1px;
+  height: 18px;
+  flex: 0 0 auto;
+  background: rgba(148, 163, 184, 0.25);
+}
+
+.remote-files-meta-row {
+  margin-bottom: 8px;
+}
+
+.remote-files-toolbar :deep(.el-button) {
+  height: 32px;
+  min-height: 32px;
+  padding-inline: 12px;
+  border-radius: 10px;
+  margin: 0;
+  font-size: 12px;
+}
+
+.remote-files-toolbar :deep(.el-button + .el-button) {
+  margin-left: 0;
+}
+
+.remote-files-toolbar :deep(.el-dropdown) {
+  line-height: 1;
+}
+
+:deep(.remote-files-dialog .fixed-dialog-body) {
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+}
+
+:deep(.remote-files-dialog .dialog-head-left),
+:deep(.remote-files-dialog .dialog-action-group) {
+  justify-content: flex-start;
+}
+
+:deep(.remote-files-dialog .dialog-table-shell) {
+  height: calc(78vh - 252px);
+  min-height: 280px;
+  max-height: calc(78vh - 252px);
+}
+
+:deep(.remote-files-dialog .dialog-table-shell .el-table) {
+  width: 100%;
+  height: 100% !important;
+}
+
+:deep(.remote-files-dialog .dialog-table-shell .el-table__inner-wrapper),
+:deep(.remote-files-dialog .dialog-table-shell .el-scrollbar),
+:deep(.remote-files-dialog .dialog-table-shell .el-scrollbar__wrap) {
+  height: 100% !important;
+}
+
+:deep(.remote-files-dialog .dialog-table-shell .el-scrollbar__wrap) {
+  overflow-y: auto !important;
+  overflow-x: auto !important;
+}
+
+:deep(.remote-files-dialog .dialog-table-shell .el-table__body-wrapper) {
+  overflow-y: auto !important;
+}
+
+:deep(.remote-files-dialog .mobile-file-list-shell),
+:deep(.remote-files-dialog .mobile-file-list) {
+  display: none;
+}
+
+.mobile-file-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+  overflow-y: auto;
+  min-height: 0;
+  padding-right: 2px;
+}
+
+.mobile-file-card {
+  background: #fff;
+  border: 1px solid rgba(15, 23, 42, 0.06);
+  border-radius: 14px;
+  padding: 12px;
+  box-shadow: 0 4px 14px rgba(15, 23, 42, 0.04);
+}
+
+.mobile-file-card-top {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  min-width: 0;
+}
+
+.mobile-file-icon {
+  flex: 0 0 auto;
+  font-size: 20px;
+  line-height: 1;
+  margin-top: 2px;
+}
+
+.mobile-file-main {
+  min-width: 0;
+  flex: 1;
+}
+
+.mobile-file-name {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text);
+  line-height: 1.4;
+  word-break: break-word;
+}
+
+.mobile-file-tags {
+  margin-top: 10px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.mobile-file-meta {
+  margin-top: 8px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px 10px;
+}
+
+.mobile-file-meta-item {
+  min-width: 0;
+}
+
+.mobile-file-meta-label {
+  font-size: 11px;
+  color: var(--muted-2);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.mobile-file-meta-value {
+  margin-top: 2px;
+  font-size: 12px;
+  color: var(--text);
+  word-break: break-word;
+  line-height: 1.4;
+}
+
+.mobile-file-actions {
+  margin-top: 12px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.mobile-file-actions :deep(.el-button) {
+  min-height: 32px;
+  margin: 0;
+  border-radius: 10px;
+  padding-inline: 12px;
+}
+
+@media (max-width: 960px) {
+  .remote-toolbar-divider {
+    display: none;
+  }
+
+  .remote-files-toolbar {
+    gap: 6px 10px;
+  }
+
+  :deep(.remote-files-dialog .dialog-table-shell) {
+    height: calc(84vh - 196px);
+    max-height: calc(84vh - 196px);
+  }
+}
+
+@media (max-width: 900px) {
+  :deep(.remote-files-dialog .dialog-table-shell) {
+    height: calc(78vh - 316px);
+    max-height: calc(78vh - 316px);
+    min-height: 240px;
+  }
+}
+
+@media (max-width: 768px), (max-height: 720px) {
+  :deep(.remote-files-dialog .dialog-table-shell) {
+    display: none;
+  }
+
+  :deep(.remote-files-dialog .mobile-file-list-shell) {
+    display: flex;
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  :deep(.remote-files-dialog .mobile-file-list) {
+    display: block;
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: hidden;
+  }
+}
+
+@media (max-width: 640px) {
+  .mobile-file-meta {
+    grid-template-columns: 1fr;
+  }
+
+  .mobile-file-actions {
+    gap: 6px;
+  }
+
+  .mobile-file-actions :deep(.el-button) {
+    flex: 1 1 calc(50% - 6px);
+    justify-content: center;
+  }
+}
+</style>
