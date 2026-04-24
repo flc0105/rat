@@ -245,301 +245,70 @@
   @confirm="confirmRunScript"
 />
 
-    <el-dialog v-model="backgroundJobsDialogVisible" title="Background Jobs" width="1180px" top="5vh"
-               class="fixed-dialog  background-jobs-dialog">
-        <div class="fixed-dialog-body background-jobs-body">
-            <el-tabs v-model="backgroundJobsActiveTab" class="background-jobs-tabs">
-                <el-tab-pane label="Modules" name="modules">
-                    <div class="background-jobs-toolbar">
-                                <el-button size="small" type="primary" class="toolbar-btn" plain @click="createRemoteJobPrompt()">
-                            New
-                        </el-button>
-                                                <el-button size="small" class="toolbar-btn" @click="triggerServerJobUpload"
-                                   :loading="serverJobUploadLoading">Upload
-                        </el-button>
 
-                        <el-button size="small" class="toolbar-btn" @click="loadBackgroundJobModules"
-                                   :loading="backgroundJobModulesLoading">Refresh
-                        </el-button>
+  <BackgroundJobsDialog
+  v-model:visible="backgroundJobsDialogVisible"
+  :active-tab="backgroundJobsActiveTab"
+  :modules="backgroundJobModules || []"
+  :jobs="sortedBackgroundJobs || []"
+  :modules-loading="backgroundJobModulesLoading"
+  :jobs-loading="backgroundJobsLoading"
+  :upload-loading="serverJobUploadLoading"
+  :is-job-supported-for-current-connection="isJobSupportedForCurrentConnection"
+  :format-job-platform-label="formatJobPlatformLabel"
+  :has-background-job-params="hasBackgroundJobParams"
+  :is-background-job-start-disabled="isBackgroundJobStartDisabled"
+  :build-background-job-state-tag-type="buildBackgroundJobStateTagType"
+  :format-background-job-duration="formatBackgroundJobDuration"
+  :format-date-time-standard="formatDateTimeStandard"
+  @update:active-tab="backgroundJobsActiveTab = $event"
+  @create-job="createRemoteJobPrompt"
+  @trigger-upload="triggerServerJobUpload"
+  @upload-change="handleServerJobUpload"
+  @refresh-modules="loadBackgroundJobModules"
+  @start-job="openBackgroundJobStartDialog"
+  @edit-job="openRemoteJobEditor"
+  @delete-job="deleteRemoteScript"
+  @refresh-jobs="loadBackgroundJobs"
+  @open-detail="openBackgroundJobDetail"
+  @stop-job="stopBackgroundJob"
+/>
 
+<BackgroundJobStartDialog
+  v-model:visible="backgroundJobStartDialogVisible"
+  :item="pendingStartJobModule"
+  :params="pendingStartJobModule?.metadata?.params || []"
+  :param-form="backgroundJobParamForm || {}"
+  :submitting="backgroundJobStartSubmitting"
+  :is-job-supported-for-current-connection="isJobSupportedForCurrentConnection"
+  :format-job-platform-label="formatJobPlatformLabel"
+  @update-param="updateBackgroundJobParam"
+  @cancel="closeBackgroundJobStartDialog"
+  @confirm="confirmStartBackgroundJobWithParams"
+/>
 
-                        <input id="server-job-upload-input"
-                               type="file"
-                               accept=".py,text/x-python"
-                               style="display: none"
-                               @change="handleServerJobUpload">
-                    </div>
-                    <div class="background-jobs-modules panel-lite">
-                        <div class="background-jobs-section-title">Available Jobs</div>
-                        <div v-if="!backgroundJobModules.length && !backgroundJobModulesLoading" class="empty-state">No
-                            background jobs available
-                        </div>
-                        <!-- 统一展示远程 background job -->
-                        <div class="background-job-module-list" v-else>
-                            <div v-for="item in backgroundJobModules"
-     :key="item.module_id || `job:${item.job_name}`"
-     class="background-job-module-card">
-    <div class="background-job-module-main">
-        <div class="background-job-module-name"
-             :title="item.display_name || item.job_name">
-            {{ item.display_name || item.job_name }}
-        </div>
+<BackgroundJobDetailDialog
+  v-model:visible="backgroundJobDetailDialogVisible"
+  :item="selectedBackgroundJob"
+  :messages="selectedBackgroundJobMessagesDesc || []"
+  :files="selectedBackgroundJob?.files || []"
+  :build-background-job-state-tag-type="buildBackgroundJobStateTagType"
+  :format-background-job-duration="formatBackgroundJobDuration"
+  :format-date-time-standard="formatDateTimeStandard"
+  :format-background-job-message-text="formatBackgroundJobMessageText"
+  :format-bytes="formatBytes"
+  @stop-job="stopBackgroundJob"
+  @open-message="openBackgroundJobMessageDialog"
+  @preview-file="previewBackgroundJobFile"
+/>
 
-        <div v-if="item.subtitle"
-             class="background-job-module-key mono"
-             :title="item.subtitle">
-            {{ item.subtitle }}
-        </div>
+<BackgroundJobMessageDialog
+  v-model:visible="backgroundJobMessageDialogVisible"
+  :message="selectedBackgroundJobMessage || {}"
+  :format-date-time-standard="formatDateTimeStandard"
+  :format-background-job-message-text="formatBackgroundJobMessageText"
+/>
 
-        <div v-if="item.description"
-             class="background-job-module-desc"
-             :title="item.description">
-            {{ item.description }}
-        </div>
-
-        <div class="background-job-module-tags">
-            <el-tag size="small"
-                    :type="isJobSupportedForCurrentConnection(item) ? 'info' : 'danger'">
-                {{ formatJobPlatformLabel(item.metadata?.platforms || []) }}
-            </el-tag>
-            <el-tag v-if="hasBackgroundJobParams(item)" size="small" type="warning">
-                Params
-            </el-tag>
-        </div>
-    </div>
-
-    <div class="background-job-module-actions">
-        <el-button
-            size="small"
-            type="primary"
-            plain
-            @click="openBackgroundJobStartDialog(item)"
-            :disabled="isBackgroundJobStartDisabled(item)"
-        >
-            Start
-        </el-button>
-        <el-button size="small"
-                   plain
-                   @click="openRemoteJobEditor(item.job_name)">
-            Edit
-        </el-button>
-        <el-button size="small"
-                   type="danger"
-                   plain
-                   @click="deleteRemoteScript(item.job_name)">
-            Delete
-        </el-button>
-    </div>
-</div>
-                        </div>
-                    </div>
-                </el-tab-pane>
-
-                <el-tab-pane label="Jobs" name="jobs">
-                    <div class="background-jobs-toolbar">
-                        <el-button size="small" class="toolbar-btn" @click="loadBackgroundJobs" :loading="backgroundJobsLoading">Refresh
-                        </el-button>
-                    </div>
-                    <div class="background-jobs-list-shell panel-lite" v-loading="backgroundJobsLoading">
-                        <div class="background-jobs-section-title">Reported Jobs</div>
-                        <div v-if="!sortedBackgroundJobs.length && !backgroundJobsLoading" class="empty-state">No
-                            background jobs reported for this connection
-                        </div>
-                        <div v-else class="background-jobs-list">
-                            <div v-for="job in sortedBackgroundJobs" :key="job.job_id"
-                                 class="background-job-summary-card">
-                                <div class="background-job-summary-main">
-                                    <div class="background-job-summary-top">
-                                        <div class="background-job-summary-title-wrap">
-                                            <div class="background-job-summary-title-line">
-                                                <span class="background-job-summary-title">{{ job.display_name || job.job_name }}</span>
-                                                <el-tag :type="buildBackgroundJobStateTagType(job.state)" size="small">
-                                                    {{ job.state || 'unknown' }}
-                                                </el-tag>
-                                            </div>
-                                            <div class="background-job-summary-subtitle mono">{{ job.job_name }} / {{
-                                                job.job_key || '-' }}
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <div class="background-job-summary-stats">
-                                        <span>{{ formatBackgroundJobDuration(job.duration_seconds) }}</span>
-                                        <span>{{ job.message_count || 0 }} msgs</span>
-                                        <span>{{ job.file_count || 0 }} files</span>
-                                        <span>{{ job.thread_name || '-' }}</span>
-                                        <span>{{ formatDateTimeStandard(job.started_at) || '-' }}</span>
-                                    </div>
-                                </div>
-                                <div class="background-job-summary-actions">
-                                    <el-button size="small" plain @click="openBackgroundJobDetail(job)">Details
-                                    </el-button>
-                                    <el-button size="small" type="danger" plain @click="stopBackgroundJob(job)"
-                                               :disabled="!job.job_key || job.state === 'stopped'">Stop
-                                    </el-button>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </el-tab-pane>
-            </el-tabs>
-        </div>
-    </el-dialog>
-
-    <el-dialog v-model="backgroundJobStartDialogVisible"
-               :title="pendingStartJobModule ? `Start ${pendingStartJobModule.display_name || pendingStartJobModule.job_name}` : 'Start Background Job'"
-               width="640px" top="10vh" class="fixed-dialog">
-        <div v-if="pendingStartJobModule" class="fixed-dialog-body">
-            <div class="background-jobs-section-title">{{ pendingStartJobModule.description || 'Configure job parameters before starting' }}</div>
-            <div class="background-job-module-tags" style="margin-bottom: 12px;">
-                <el-tag size="small" :type="isJobSupportedForCurrentConnection(pendingStartJobModule) ? 'info' : 'danger'">
-                    {{ formatJobPlatformLabel(pendingStartJobModule.metadata?.platforms || []) }}
-                </el-tag>
-            </div>
-            <el-form label-position="top">
-                <el-form-item v-for="param in (pendingStartJobModule.metadata?.params || [])"
-                              :key="`job-param-${param.name}`"
-                              :label="`${param.name} (${param.type || 'string'})`">
-                    <el-input v-model="backgroundJobParamForm[param.name]"
-                              :placeholder="param.description || param.name"></el-input>
-                    <div class="hint-text" style="margin-top: 6px;">
-                        {{ param.description || 'No description' }}
-                        <template v-if="param.required"> · required</template>
-                        <template v-if="param.default !== undefined && param.default !== null"> · default: {{ param.default }}</template>
-                        <template v-if="param.min !== undefined"> · min: {{ param.min }}</template>
-                        <template v-if="param.max !== undefined"> · max: {{ param.max }}</template>
-                    </div>
-                </el-form-item>
-            </el-form>
-        </div>
-        <template #footer>
-            <el-button @click="closeBackgroundJobStartDialog">Cancel</el-button>
-            <el-button type="primary"
-                       :loading="backgroundJobStartSubmitting"
-                       @click="confirmStartBackgroundJobWithParams">
-                Start
-            </el-button>
-        </template>
-    </el-dialog>
-
-    <el-dialog v-model="backgroundJobDetailDialogVisible"
-               :title="selectedBackgroundJob ? (selectedBackgroundJob.display_name || selectedBackgroundJob.job_name || 'Background Job') : 'Background Job Detail'"
-               width="1080px" top="5vh" class="fixed-dialog background-job-detail-dialog">
-        <div class="fixed-dialog-body" v-if="selectedBackgroundJob">
-            <div class="background-job-detail-head">
-                <div class="background-job-detail-head-left">
-                    <div class="background-job-title-line">
-                        <div class="background-job-title">{{ selectedBackgroundJob.display_name ||
-                            selectedBackgroundJob.job_name }}
-                        </div>
-                        <el-tag :type="buildBackgroundJobStateTagType(selectedBackgroundJob.state)" size="small">{{
-                            selectedBackgroundJob.state || 'unknown' }}
-                        </el-tag>
-                    </div>
-                    <div class="background-job-subtitle mono">{{ selectedBackgroundJob.job_name }} / {{
-                        selectedBackgroundJob.job_key || '-' }}
-                    </div>
-                </div>
-                <div class="background-job-card-head-right">
-                    <el-button size="small" type="danger" plain @click="stopBackgroundJob(selectedBackgroundJob)"
-                               :disabled="!selectedBackgroundJob.job_key || selectedBackgroundJob.state === 'stopped'">
-                        Stop
-                    </el-button>
-                </div>
-            </div>
-
-            <div class="background-job-stats">
-                <div class="background-job-stat">
-                    <div class="background-job-stat-label">Duration</div>
-                    <div class="background-job-stat-value">{{
-                        formatBackgroundJobDuration(selectedBackgroundJob.duration_seconds) }}
-                    </div>
-                </div>
-                <div class="background-job-stat">
-                    <div class="background-job-stat-label">Messages</div>
-                    <div class="background-job-stat-value">{{ selectedBackgroundJob.message_count || 0 }}</div>
-                </div>
-                <div class="background-job-stat">
-                    <div class="background-job-stat-label">Files</div>
-                    <div class="background-job-stat-value">{{ selectedBackgroundJob.file_count || 0 }}</div>
-                </div>
-                <div class="background-job-stat">
-                    <div class="background-job-stat-label">Started</div>
-                    <div class="background-job-stat-value">{{ formatDateTimeStandard(selectedBackgroundJob.started_at)
-                        || '-' }}
-                    </div>
-                </div>
-                <div class="background-job-stat">
-                    <div class="background-job-stat-label">Stopped</div>
-                    <div class="background-job-stat-value">{{ formatDateTimeStandard(selectedBackgroundJob.stopped_at)
-                        || '-' }}
-                    </div>
-                </div>
-                <div class="background-job-stat">
-                    <div class="background-job-stat-label">Thread</div>
-                    <div class="background-job-stat-value mono">{{ selectedBackgroundJob.thread_name || '-' }}</div>
-                </div>
-            </div>
-
-            <div class="background-job-panels">
-                <div class="background-job-panel">
-                    <div class="background-job-panel-title">Messages</div>
-                    <div class="background-job-message-list">
-                        <div v-for="(message, index) in selectedBackgroundJobMessagesDesc"
-                             :key="`${selectedBackgroundJob.job_id}-msg-${index}`"
-                             class="background-job-message-item clickable"
-                             @click="openBackgroundJobMessageDialog(message)">
-                            <div class="background-job-message-time">{{ formatDateTimeStandard(message.time) || '-' }}
-                            </div>
-                            <div class="background-job-message-text single-line"
-                                 :class="{ 'is-error': message.status === 0, 'is-success': message.status === 1 }">{{
-                                formatBackgroundJobMessageText(message.text || '') }}
-                            </div>
-                        </div>
-                        <div v-if="!selectedBackgroundJob.messages || !selectedBackgroundJob.messages.length"
-                             class="empty-state compact">No messages
-                        </div>
-                    </div>
-                </div>
-
-                <div class="background-job-panel">
-                    <div class="background-job-panel-title">Files</div>
-                    <div class="background-job-file-list">
-                        <div v-for="(file, index) in selectedBackgroundJob.files"
-                             :key="`${selectedBackgroundJob.job_id}-file-${index}`" class="background-job-file-item">
-                            <div class="background-job-file-main">
-                                <div class="background-job-file-name">{{ file.original_name || file.stored_name || '-'
-                                    }}
-                                </div>
-                                <div class="background-job-file-meta">
-                                    <span>{{ formatBytes(file.size || 0) }}</span>
-                                    <span>{{ formatDateTimeStandard(file.time) || '-' }}</span>
-                                </div>
-                            </div>
-                            <div class="background-job-file-actions">
-                                <a class="table-action-link" style="cursor:pointer"
-                                   @click="previewBackgroundJobFile(file)">Preview</a>
-                                <a class="table-action-link" :href="file.download_url" target="_blank">Download</a>
-                            </div>
-                        </div>
-                        <div v-if="!selectedBackgroundJob.files || !selectedBackgroundJob.files.length"
-                             class="empty-state compact">No files
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </el-dialog>
-
-    <el-dialog v-model="backgroundJobMessageDialogVisible" title="Message" width="760px" top="8vh"
-               class="fixed-dialog background-job-message-dialog">
-        <div class="fixed-dialog-body">
-            <div class="background-job-full-message-time">{{ formatDateTimeStandard(selectedBackgroundJobMessage.time)
-                || '-' }}
-            </div>
-            <pre class="background-job-full-message-text"
-                 :class="{ 'is-error': selectedBackgroundJobMessage.status === 0, 'is-success': selectedBackgroundJobMessage.status === 1 }">{{ formatBackgroundJobMessageText(selectedBackgroundJobMessage.text || '') }}</pre>
-        </div>
-    </el-dialog>
 
     <el-dialog v-model="previewDialogVisible" :title="previewTitle || 'File Preview'" width="1080px" top="5vh"
                class="fixed-dialog preview-dialog">
@@ -914,9 +683,17 @@ import RemoteFilesDialog from "./components/RemoteFilesDialog.vue";
 import ArtifactDialog from "./components/ArtifactDialog.vue";
 import ScriptLibraryDialog from "./components/ScriptLibraryDialog.vue";
 import ScriptRunDialog from "./components/ScriptRunDialog.vue";
+import BackgroundJobMessageDialog from "./components/BackgroundJobMessageDialog.vue";
+import BackgroundJobDetailDialog from "./components/BackgroundJobDetailDialog.vue";
+import BackgroundJobStartDialog from "./components/BackgroundJobStartDialog.vue";
+import BackgroundJobsDialog from "./components/BackgroundJobsDialog.vue";
 
 export default {
   components: {
+    BackgroundJobsDialog,
+    BackgroundJobStartDialog,
+    BackgroundJobDetailDialog,
+    BackgroundJobMessageDialog,
     ScriptRunDialog,
     ScriptLibraryDialog,
     ArtifactDialog,
@@ -1000,6 +777,15 @@ updateScriptParam(name, value) {
 
   this.scriptParamForm = {
     ...this.scriptParamForm,
+    [name]: value,
+  }
+},
+
+    updateBackgroundJobParam(name, value) {
+  if (!name) return
+
+  this.backgroundJobParamForm = {
+    ...this.backgroundJobParamForm,
     [name]: value,
   }
 },

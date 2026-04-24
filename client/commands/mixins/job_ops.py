@@ -245,13 +245,31 @@ class CommandJobMixin:
             raise ValueError('job name is required')
 
         url = f'{UPLOAD_BASE_URL.rstrip("/")}/api/jobs/download'
-        response = requests.get(
-            url,
-            params={'name': normalized_name},
-            timeout=30,
-        )
+
+        try:
+            response = requests.get(
+                url,
+                params={'name': normalized_name},
+                timeout=30,
+            )
+        except Exception as e:
+            raise RuntimeError(
+                f'Failed to download job from {url}?name={normalized_name}: '
+                f'{type(e).__name__}: {e}'
+            ) from e
 
         if response.status_code != 200:
-            raise RuntimeError(f'Failed to download job: {response.text}')
+            body = (response.text or '').strip()
+            raise RuntimeError(
+                f'Failed to download job from {response.url}: '
+                f'HTTP {response.status_code} {response.reason}. '
+                f'Body: {body[:500] if body else "<empty>"}'
+            )
 
-        return response.text
+        text = response.text or ''
+        if not text.strip():
+            raise RuntimeError(
+                f'Downloaded empty job from {response.url}'
+            )
+
+        return text
