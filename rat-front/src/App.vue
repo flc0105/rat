@@ -112,363 +112,80 @@
 
     <input ref="remoteUploadInputRef" type="file" class="hidden-file-input" @change="handleRemoteUploadChange"/>
 
-    <el-dialog v-model="remoteFilesDialogVisible" title="Remote File Browser" width="1180px" top="4vh"
-               class="fixed-dialog remote-files-dialog">
-        <div class="fixed-dialog-body">
-            <div class="dialog-head remote-files-head">
-                <div class="dialog-head-left remote-files-head-main">
-                    <div class="remote-breadcrumb-bar">
-                        <template v-if="remoteBreadcrumbItems.length">
-                            <button
-                                    v-for="(item, index) in remoteBreadcrumbItems"
-                                    :key="`breadcrumb-${index}-${item.path}`"
-                                    type="button"
-                                    class="remote-breadcrumb-item"
-                                    :class="{ active: item.isCurrent }"
-                                    :disabled="item.isCurrent"
-                                    @click="goToRemoteBreadcrumb(item)"
-                            >
-                                <span v-if="index > 0" class="remote-breadcrumb-sep">/</span>
-                                <span>{{ item.label }}</span>
-                            </button>
-                        </template>
-                        <span v-else class="remote-breadcrumb-empty">No path</span>
-                    </div>
+<RemoteFilesDialog
+  ref="remoteFilesDialogRef"
+  v-model:visible="remoteFilesDialogVisible"
+  v-model:pin-manager-visible="remotePinManagerDialogVisible"
 
-                    <div class="remote-files-toolbar">
-                        <div class="remote-toolbar-group">
-                            <el-button size="small" @click="refreshRemoteDirectory">Refresh</el-button>
-                            <el-button size="small" @click="goToRemoteParent" :disabled="!remoteFilesParentPath">Up</el-button>
+  :remote-breadcrumb-items="remoteBreadcrumbItems"
+  :remote-files-parent-path="remoteFilesParentPath"
 
-                            <el-dropdown @command="jumpToPath" :loading="quickJumpLoading || remotePinnedJumpLoading">
-                                <el-button size="small">
-                                    Quick Jump
-                                </el-button>
-                                <template #dropdown>
-                                    <el-dropdown-menu>
-                                        <el-dropdown-item command="root">Root</el-dropdown-item>
-                                        <el-dropdown-item command="home">Home</el-dropdown-item>
-                                        <el-dropdown-item command="desktop">Desktop</el-dropdown-item>
-                                        <el-dropdown-item command="documents">Documents</el-dropdown-item>
-                                        <el-dropdown-item command="downloads">Downloads</el-dropdown-item>
-                                        <el-dropdown-item command="executable">Program Directory</el-dropdown-item>
+  :quick-jump-loading="quickJumpLoading"
+  :remote-pinned-jump-loading="remotePinnedJumpLoading"
+  :remote-pinned-jump-items="remotePinnedJumpItems"
 
+  :remote-upload-loading="remoteUploadLoading"
+  :has-remote-selection="hasRemoteSelection"
+  :remote-zip-downloading="remoteZipDownloading"
+  :remote-selected-paths="remoteSelectedPaths"
 
-                                        <el-dropdown-item
-                                                v-for="(item, index) in remotePinnedJumpItems"
-                                                :key="`pinned-jump-${item.display_name}-${item.path}`"
-                                                :divided="index === 0"
-                                                :command="{ type: 'pinned_jump', display_name: item.display_name, path: item.path }"
-                                        >
-                                            {{ item.display_name }}
-                                        </el-dropdown-item>
+  :remote-pin-button-text="remotePinButtonText"
+  :has-pinned-quick-jumps="hasPinnedQuickJumps"
 
-                                        <el-dropdown-item divided command="input_navigate">Go to Folder</el-dropdown-item>
+  :has-remote-clipboard="hasRemoteClipboard"
+  :remote-clipboard-paths="remoteClipboardPaths"
+  :remote-clipboard-action-text="remoteClipboardActionText"
+  :remote-clipboard-source-path="remoteClipboardSourcePath"
 
+  :show-hidden-files="showHiddenFiles"
 
-                                    </el-dropdown-menu>
-                                </template>
-                            </el-dropdown>
-                        </div>
+  :display-remote-files-entries="displayRemoteFilesEntries"
+  :remote-files-loading="remoteFilesLoading"
 
-                        <span class="remote-toolbar-divider"></span>
+  :remote-files-total="remoteFilesTotal"
+  :remote-files-hidden-total="remoteFilesHiddenTotal"
+  :remote-files-all-total="remoteFilesAllTotal"
+  :remote-files-total-pages="remoteFilesTotalPages"
+  :remote-files-page="remoteFilesPage"
+  :remote-files-page-size="remoteFilesPageSize"
+  :remote-files-page-size-options="remoteFilesPageSizeOptions"
 
-                        <div class="remote-toolbar-group">
-                            <el-button size="small" @click="createRemoteDirectory">New Folder</el-button>
-                            <el-button size="small" :loading="remoteUploadLoading" @click="triggerRemoteUpload">Upload</el-button>
-                            <el-button size="small" type="primary" :disabled="!hasRemoteSelection"
-                                       :loading="remoteZipDownloading" @click="downloadSelectedRemoteEntries">
-                                Download<span v-if="remoteSelectedPaths.length"> ({{ remoteSelectedPaths.length }})</span>
-                            </el-button>
-                            <el-button size="small" type="danger" :disabled="!hasRemoteSelection"
-                                       @click="deleteSelectedRemoteEntries">
-                                Delete<span v-if="remoteSelectedPaths.length"> ({{ remoteSelectedPaths.length }})</span>
-                            </el-button>
-                        </div>
+  :format-bytes="formatBytes"
+  :is-remote-entry-selected="isRemoteEntrySelected"
 
-                        <span class="remote-toolbar-divider"></span>
+  @breadcrumb="goToRemoteBreadcrumb"
+  @refresh="refreshRemoteDirectory"
+  @parent="goToRemoteParent"
+  @jump="jumpToPath"
 
-<div class="remote-toolbar-group">
-    <el-dropdown trigger="click" @command="handleRemoteToolbarMoreCommand">
-        <el-button size="small">More</el-button>
-        <template #dropdown>
-            <el-dropdown-menu>
-                <el-dropdown-item command="toggle_pin">{{ remotePinButtonText }}</el-dropdown-item>
+  @create-folder="createRemoteDirectory"
+  @trigger-upload="triggerRemoteUpload"
+  @download-selected="downloadSelectedRemoteEntries"
+  @delete-selected="deleteSelectedRemoteEntries"
+  @more-command="handleRemoteToolbarMoreCommand"
 
-                                                        <el-dropdown-item
-                                                v-if="hasPinnedQuickJumps"
+  @row-dblclick="handleRemoteRowDblClick"
+  @selection-change="handleRemoteSelectionChange"
+  @enter-dir="enterRemoteDirectory"
+  @preview="previewRemoteEntry"
+  @download="downloadRemoteEntry"
+  @row-more-action="handleRemoteMoreAction"
 
-                                                command="manage_pins"
-                                        >
-                                            Manage Pins
-                                        </el-dropdown-item>
+  @page-change="handleRemotePageChange"
+  @size-change="handleRemotePageSizeChange"
 
-                <el-dropdown-item command="copy" :disabled="!hasRemoteSelection" divided>
-                    Copy<span v-if="remoteSelectedPaths.length"> ({{ remoteSelectedPaths.length }})</span>
-                </el-dropdown-item>
-                <el-dropdown-item command="cut" :disabled="!hasRemoteSelection">
-                    Cut<span v-if="remoteSelectedPaths.length"> ({{ remoteSelectedPaths.length }})</span>
-                </el-dropdown-item>
+  @toggle-select="toggleRemoteSelection"
+  @copy-one="row => { remoteSelectedPaths = [row.path]; copySelectedRemoteEntries() }"
+  @cut-one="row => { remoteSelectedPaths = [row.path]; cutSelectedRemoteEntries() }"
+  @rename="renameRemoteEntry"
+  @copy-path="copyRemotePath"
+  @delete="deleteRemoteEntry"
 
-                <el-dropdown-item command="paste" :disabled="!hasRemoteClipboard">
-    Paste<span v-if="hasRemoteClipboard"> ({{ remoteClipboardPaths.length }})</span>
-</el-dropdown-item>
-
-                <el-dropdown-item command="clear_clipboard" :disabled="!hasRemoteClipboard">
-                    Clear Clipboard
-                </el-dropdown-item>
+  @edit-pin="promptEditPinnedQuickJump"
+  @delete-pin="deletePinnedQuickJump"
+/>
 
 
-                <el-dropdown-item command="clear_selection" :disabled="!hasRemoteSelection" divided>
-                    Clear Selection
-                </el-dropdown-item>
-
-
-                <el-dropdown-item command="toggle_hidden">
-                    {{ showHiddenFiles ? 'Hide Hidden' : 'Show Hidden' }}
-                </el-dropdown-item>
-            </el-dropdown-menu>
-        </template>
-    </el-dropdown>
-</div>
-                    </div>
-                </div>
-            </div>
-
-            <div class="dialog-path-row remote-files-meta-row">
-                <div v-if="hasRemoteClipboard" class="dialog-pagination-meta">
-                    Clipboard: {{ remoteClipboardActionText }} {{ remoteClipboardPaths.length }} item(s)
-                    <span v-if="remoteClipboardSourcePath"> · From {{ remoteClipboardSourcePath }}</span>
-                </div>
-            </div>
-
-
-            <div class="dialog-table-shell">
-                <el-table
-                        ref="remoteFilesTableRef"
-                        :data="displayRemoteFilesEntries"
-                        v-loading="remoteFilesLoading"
-                        stripe width="100%" height="100%" empty-text="This folder is empty" table-layout="fixed"
-                        @row-dblclick="handleRemoteRowDblClick"
-                        @selection-change="handleRemoteSelectionChange"
-                >
-                    <el-table-column type="selection" width="52" align="center"
-                                     :selectable="row => !row.is_parent_entry"></el-table-column>
-                    <el-table-column label="Name" min-width="320" show-overflow-tooltip>
-                        <template #default="{ row }">
-                            <div class="file-cell">
-                                <span>{{ row.is_dir ? '📁' : '📄' }}</span>
-                                <span class="file-cell-text">{{ row.is_parent_entry ? '..' : row.name }}</span>
-                                <el-tag v-if="row.is_parent_entry" size="small" type="info">Parent</el-tag>
-                                <el-tag v-else-if="row.is_symlink" size="small" type="info">Link</el-tag>
-                                <el-tag v-if="!row.is_parent_entry && row.is_hidden" size="small" type="warning">
-                                    Hidden
-                                </el-tag>
-                            </div>
-                        </template>
-                    </el-table-column>
-                    <el-table-column label="Type" width="110" align="center">
-                        <template #default="{ row }">{{ row.is_parent_entry ? 'Parent' : (row.is_dir ? 'Folder' :
-                            'File') }}
-                        </template>
-                    </el-table-column>
-                    <el-table-column label="Size" width="120" align="center">
-                        <template #default="{ row }">{{ row.is_dir ? '-' : formatBytes(row.size) }}</template>
-                    </el-table-column>
-                    <el-table-column prop="modified_at" label="Modified" width="180" show-overflow-tooltip>
-                        <template #default="{ row }">
-                            <div class="ellipsis">{{ row.is_parent_entry ? '-' : (row.modified_at || '-') }}</div>
-                        </template>
-                    </el-table-column>
-                    <el-table-column label="Actions" width="220" align="center" fixed="right">
-                        <template #default="{ row }">
-                            <div class="table-actions table-actions-links">
-                                <template v-if="row.is_parent_entry">
-                                    <el-button size="small" link type="primary" @click="goToRemoteParent">Open
-                                    </el-button>
-                                </template>
-                                <template v-else>
-                                    <el-button v-if="row.is_dir" size="small" link type="primary"
-                                               @click="enterRemoteDirectory(row)">Open
-                                    </el-button>
-                                    <template v-if="!row.is_dir">
-                                        <el-button size="small" link type="primary" @click="previewRemoteEntry(row)">
-                                            Preview
-                                        </el-button>
-                                        <el-button size="small" link type="primary" @click="downloadRemoteEntry(row)">
-                                            Download
-                                        </el-button>
-                                    </template>
-                                    <el-dropdown trigger="click"
-                                                 @command="(command) => handleRemoteMoreAction(command, row)">
-                                        <el-button size="small" link type="primary">More</el-button>
-                                        <template #dropdown>
-                                            <el-dropdown-menu>
-                                                <el-dropdown-item command="rename">Rename</el-dropdown-item>
-                                                <el-dropdown-item command="copy">Copy</el-dropdown-item>
-                                                <el-dropdown-item command="cut">Cut</el-dropdown-item>
-                                                <el-dropdown-item command="copy_path">Copy Path</el-dropdown-item>
-                                                <el-dropdown-item command="delete">Delete</el-dropdown-item>
-                                            </el-dropdown-menu>
-                                        </template>
-                                    </el-dropdown>
-                                </template>
-                            </div>
-                        </template>
-                    </el-table-column>
-                </el-table>
-            </div>
-
-            <div class="dialog-pagination-wrap">
-                <div class="dialog-pagination-bar">
-                    <div class="dialog-pagination-meta">
-                        <span>Visible {{ remoteFilesTotal }} items</span>
-                        <span v-if="!showHiddenFiles && remoteFilesHiddenTotal > 0">· Hidden {{ remoteFilesHiddenTotal }}</span>
-                        <span v-if="remoteFilesAllTotal > remoteFilesTotal">· All {{ remoteFilesAllTotal }}</span>
-                        <span v-if="remoteFilesTotalPages > 1">· Page {{ remoteFilesPage }} / {{ remoteFilesTotalPages }}</span>
-                    </div>
-                    <el-pagination
-                            background
-                            layout="total, sizes, prev, pager, next"
-                            :current-page="remoteFilesPage"
-                            :page-size="remoteFilesPageSize"
-                            :page-sizes="remoteFilesPageSizeOptions"
-                            :total="remoteFilesTotal"
-                            :pager-count="5"
-                            @current-change="handleRemotePageChange"
-                            @size-change="handleRemotePageSizeChange"
-                    />
-                </div>
-            </div>
-
-            <div class="mobile-file-list-shell">
-                <div class="mobile-file-list" v-loading="remoteFilesLoading">
-                    <div v-if="!displayRemoteFilesEntries.length && !remoteFilesLoading" class="empty-state">This folder
-                        is empty
-                    </div>
-                    <div v-else class="mobile-file-grid">
-                        <div
-                                v-for="row in displayRemoteFilesEntries"
-                                :key="`${row.is_parent_entry ? 'parent-' : ''}${row.path}`"
-                                class="mobile-file-card"
-                                style="position: relative;"
-                        >
-                            <div v-if="!row.is_parent_entry" style="position:absolute; top:6px; right:12px; z-index:1;">
-                                <el-checkbox :model-value="isRemoteEntrySelected(row)"
-                                             @change="toggleRemoteSelection(row)"/>
-                            </div>
-
-                            <div class="mobile-file-card-top">
-                                <div class="mobile-file-icon">{{ row.is_dir ? '📁' : '📄' }}</div>
-                                <div class="mobile-file-main">
-                                    <div class="mobile-file-name"
-                                         :style="row.is_parent_entry ? '' : 'padding-right: 42px;'">
-                                        {{ row.is_parent_entry ? '..' : row.name }}
-                                    </div>
-                                    <div class="mobile-file-tags">
-                                        <el-tag size="small" type="info">{{ row.is_parent_entry ? 'Parent' : (row.is_dir
-                                            ? 'Folder' : 'File') }}
-                                        </el-tag>
-                                        <el-tag v-if="!row.is_parent_entry && row.is_symlink" size="small" type="info">
-                                            Link
-                                        </el-tag>
-                                        <el-tag v-if="!row.is_parent_entry && row.is_hidden" size="small"
-                                                type="warning">Hidden
-                                        </el-tag>
-                                    </div>
-                                    <div class="mobile-file-meta">
-                                        <div class="mobile-file-meta-item">
-                                            <div class="mobile-file-meta-label">Size</div>
-                                            <div class="mobile-file-meta-value">{{ row.is_dir ? '-' :
-                                                formatBytes(row.size) }}
-                                            </div>
-                                        </div>
-                                        <div class="mobile-file-meta-item">
-                                            <div class="mobile-file-meta-label">Modified</div>
-                                            <div class="mobile-file-meta-value">{{ row.is_parent_entry ? '-' :
-                                                (row.modified_at || '-') }}
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <div class="mobile-file-actions">
-                                        <template v-if="row.is_parent_entry">
-                                            <el-button size="small" type="primary" plain @click="goToRemoteParent">
-                                                Open
-                                            </el-button>
-                                        </template>
-                                        <template v-else>
-                                            <el-button v-if="row.is_dir" size="small" type="primary" plain
-                                                       @click="enterRemoteDirectory(row)">Open
-                                            </el-button>
-                                            <template v-if="!row.is_dir">
-                                                <el-button size="small" type="primary" plain
-                                                           @click="previewRemoteEntry(row)">Preview
-                                                </el-button>
-                                                <el-button size="small" type="primary" plain
-                                                           @click="downloadRemoteEntry(row)">Download
-                                                </el-button>
-                                            </template>
-                                            <el-button size="small" plain @click="remoteSelectedPaths = [row.path]; copySelectedRemoteEntries()">Copy
-                                            </el-button>
-                                            <el-button size="small" plain @click="remoteSelectedPaths = [row.path]; cutSelectedRemoteEntries()">Cut
-                                            </el-button>
-                                            <el-button size="small" plain @click="renameRemoteEntry(row)">Rename
-                                            </el-button>
-                                            <el-button size="small" plain @click="copyRemotePath(row)">Copy Path
-                                            </el-button>
-                                            <el-button size="small" type="danger" plain @click="deleteRemoteEntry(row)">
-                                                Delete
-                                            </el-button>
-                                        </template>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-        </div>
-    </el-dialog>
-
-<el-dialog v-model="remotePinManagerDialogVisible" title="Manage Pinned Paths" width="760px" top="6vh"
-           class="fixed-dialog">
-    <div class="fixed-dialog-body">
-        <div class="dialog-table-shell" style="height: 420px; min-height: 220px;">
-            <el-table
-                    :data="remotePinnedJumpItems"
-                    stripe
-                    width="100%"
-                    height="100%"
-                    empty-text="No pinned paths"
-                    table-layout="fixed"
-            >
-                <el-table-column
-                        prop="display_name"
-                        label="Display Name"
-                        min-width="180"
-                        show-overflow-tooltip
-                ></el-table-column>
-
-                <el-table-column
-                        prop="path"
-                        label="Path"
-                        min-width="360"
-                        show-overflow-tooltip
-                ></el-table-column>
-
-                <el-table-column label="Actions" width="160" align="center" fixed="right">
-                    <template #default="{ row }">
-                        <div class="table-actions table-actions-links">
-                            <el-button size="small" link type="primary" @click="promptEditPinnedQuickJump(row)">Edit</el-button>
-                            <el-button size="small" link type="danger" @click="deletePinnedQuickJump(row)">Delete</el-button>
-                        </div>
-                    </template>
-                </el-table-column>
-            </el-table>
-        </div>
-    </div>
-</el-dialog>
 
     <el-dialog v-model="artifactDialogVisible" title="Artifact Manager" width="1160px" top="5vh"
                class="fixed-dialog recent-files-dialog artifact-dialog">
@@ -1145,231 +862,28 @@
         </div>
     </el-dialog>
 
-    <el-dialog v-model="commandHistoryDialogVisible" title="Command History" width="1120px" top="5vh"
-               class="fixed-dialog recent-files-dialog command-history-dialog">
-        <div class="fixed-dialog-body">
-            <div class="dialog-head">
-                <div class="dialog-head-left">
-                    <el-button size="small" @click="openCommandHistoryDialog">Refresh</el-button>
-                    <el-button size="small" type="danger" @click="clearCommandHistory">Clear History</el-button>
-                </div>
-                <div class="dialog-head-right">
-                    <div class="command-history-toolbar">
-                        <el-input
-                                v-model="commandHistorySearchText"
-                                size="small"
-                                clearable
-                                class="command-history-search-input"
-                                placeholder="Search by command name"
-                        />
-                        <div class="command-history-search-summary">
-                            <span>Quick {{ commandHistorySearchSummary.quickVisible }} / {{ commandHistorySearchSummary.quickTotal }}</span>
-                            <span>Execution {{ commandHistorySearchSummary.fullVisible }} / {{ commandHistorySearchSummary.fullTotal }}</span>
-                            <el-button size="small" plain @click="clearCommandHistorySearch"
-                                       :disabled="!commandHistorySearchText">Clear Search
-                            </el-button>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <el-tabs v-model="commandHistoryActiveTab" class="command-history-tabs">
-                <el-tab-pane label="Quick History" name="quick">
-                    <div class="dialog-table-shell quick-history-table-shell">
-                        <el-table :data="filteredCommandHistoryItems" v-loading="commandHistoryLoading" stripe
-                                  width="100%"
-                                  height="100%"
-                                  :empty-text="commandHistorySearchText ? 'No matching commands' : 'No command history available'"
-                                  table-layout="fixed"
-                                  @row-dblclick="applyHistoryCommand">
-                            <el-table-column prop="index" label="#" width="90" align="center">
-                                <template #default="{ row }">
-                                    <div class="ellipsis">{{ row.is_pinned ? '⭐ ' : '' }}{{ row.index || '-' }}</div>
-                                </template>
-                            </el-table-column>
-                            <el-table-column prop="command" label="Command" min-width="280" show-overflow-tooltip>
-                                <template #default="{ row }">
-                                    <div class="ellipsis mono">{{ row.command || '-' }}</div>
-                                </template>
-                            </el-table-column>
-                            <el-table-column prop="time" label="Last Used" width="220" show-overflow-tooltip>
-                                <template #default="{ row }">
-                                    <div class="ellipsis">{{ row.time || '-' }}</div>
-                                </template>
-                            </el-table-column>
-                            <el-table-column prop="status" label="Status" width="120" align="center">
-                                <template #default="{ row }">
-                                    <el-tag :type="buildCommandExecutionStatusTagType(row.status)" size="small">{{
-                                        row.status || '-' }}
-                                    </el-tag>
-                                </template>
-                            </el-table-column>
-                            <el-table-column label="Actions" width="220" align="center" fixed="right">
-                                <template #default="{ row }">
-<div class="table-actions table-actions-links history-actions-row">
-    <div class="history-actions-group">
-        <a href="#" class="table-action-link" @click.prevent="applyHistoryCommand(row)">Use</a>
-        <a href="#" class="table-action-link"
-           @click.prevent="toggleCommandHistoryPinned(row)">{{ row.is_pinned ? 'Unpin' : 'Pin' }}</a>
-    </div>
-
-    <template v-if="row.is_pinned">
-        <span class="history-actions-divider"></span>
-
-        <div class="history-actions-move-group">
-            <a href="#"
-               class="table-action-link"
-               :class="{ 'history-action-disabled': !row.can_move_up }"
-               @click.prevent="row.can_move_up && moveCommandHistoryPinned(row, 'up')">Up</a>
-
-            <a href="#"
-               class="table-action-link"
-               :class="{ 'history-action-disabled': !row.can_move_down }"
-               @click.prevent="row.can_move_down && moveCommandHistoryPinned(row, 'down')">Down</a>
-        </div>
-    </template>
-</div>
-                                </template>
-                            </el-table-column>
-                        </el-table>
-                    </div>
-
-                    <div class="quick-history-mobile-shell">
-                        <div class="mobile-file-list" v-loading="commandHistoryLoading">
-                            <div v-if="!filteredCommandHistoryItems.length && !commandHistoryLoading"
-                                 class="empty-state">No
-                                command history available
-                            </div>
-                            <div v-else class="mobile-file-grid">
-                                <div v-for="row in filteredCommandHistoryItems"
-                                     :key="`${row.index}-${row.command}-${row.time}`"
-                                     class="mobile-file-card quick-history-card">
-                                    <div class="mobile-file-card-top">
-                                        <div class="mobile-file-icon">⌘</div>
-                                        <div class="mobile-file-main">
-                                            <div class="mobile-file-name mono">{{ row.is_pinned ? '⭐ ' : '' }}{{
-                                                row.command || '-' }}
-                                            </div>
-                                            <div class="mobile-file-tags">
-                                                <el-tag size="small" type="info">#{{ row.index || '-' }}</el-tag>
-                                                <el-tag size="small"
-                                                        :type="buildCommandExecutionStatusTagType(row.status)">{{
-                                                    row.status || '-' }}
-                                                </el-tag>
-                                            </div>
-                                            <div class="mobile-file-meta">
-                                                <div class="mobile-file-meta-item">
-                                                    <div class="mobile-file-meta-label">Last Used</div>
-                                                    <div class="mobile-file-meta-value">{{ row.time || '-' }}</div>
-                                                </div>
-                                            </div>
-                                                                  <div class="mobile-file-actions mobile-history-actions-row">
-    <el-button size="small" type="primary" plain
-               @click="applyHistoryCommand(row)">Use
-    </el-button>
-
-    <el-button size="small" plain
-               @click="toggleCommandHistoryPinned(row)">{{ row.is_pinned ? 'Unpin' : 'Pin' }}
-    </el-button>
-
-    <template v-if="row.is_pinned">
-        <span class="mobile-history-actions-divider"></span>
-
-        <div class="mobile-history-move-group">
-            <el-button size="small" plain
-                       class="mobile-history-disabled-btn"
-                       :class="{ 'is-disabled': !row.can_move_up }"
-                       :disabled="!row.can_move_up"
-                       @click="row.can_move_up && moveCommandHistoryPinned(row, 'up')">Up
-            </el-button>
-
-            <el-button size="small" plain
-                       class="mobile-history-disabled-btn"
-                       :class="{ 'is-disabled': !row.can_move_down }"
-                       :disabled="!row.can_move_down"
-                       @click="row.can_move_down && moveCommandHistoryPinned(row, 'down')">Down
-            </el-button>
-        </div>
-    </template>
-</div>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </el-tab-pane>
-
-                <el-tab-pane label="Execution History" name="full">
-                    <div class="command-execution-list-shell" v-loading="commandExecutionHistoryLoading">
-                        <div v-if="!filteredCommandExecutionItems.length && !commandExecutionHistoryLoading"
-                             class="empty-state">{{ commandHistorySearchText ? 'No matching executions' : 'No execution history available' }}
-                        </div>
-                        <div v-else class="command-execution-list">
-                            <div v-for="item in filteredCommandExecutionItems" :key="item.entry_id"
-                                 class="execution-card">
-                                <!-- 卡片头部：命令和状态 -->
-                                <div class="execution-card-header">
-                                    <div class="execution-command mono">{{ item.command || '-' }}</div>
-                                    <div class="execution-badges">
-                                        <el-tag :type="buildCommandExecutionStatusTagType(item.status)" size="small">
-                                            {{ item.status || '-' }}
-                                    </el-tag>
-                                        <el-tag type="primary" size="small" v-if="item.has_files"> 📎 {{ item.file_count || 0 }}</el-tag>
-
-                                        <el-tag type="warning" size="small" v-if="item.output_truncated">✂️ truncated</el-tag>
-                                    </div>
-                                </div>
-
-                                <!-- 卡片元数据：时间和来源 -->
-                                <div class="execution-meta">
-                                    <span class="meta-source">{{ item.source || '-' }}</span>
-                                    <span class="meta-separator">•</span>
-                                    <span class="meta-time">{{ formatDateTimeStandard(item.started_at) || '-' }}</span>
-                                </div>
-
-                                <!-- 统计信息行 -->
-                                <div class="execution-stats">
-                                    <div class="stat-item">
-                                        <span class="stat-label">Duration</span>
-                                        <span class="stat-value">{{ formatCommandExecutionDuration(item.duration_ms) }}</span>
-                                    </div>
-                                    <div class="stat-item">
-                                        <span class="stat-label">Chunks</span>
-                                        <span class="stat-value">{{ item.output_chunk_count || 0 }}</span>
-                                    </div>
-                                    <div class="stat-item">
-                                        <span class="stat-label">Lines</span>
-                                        <span class="stat-value">{{ item.output_line_count || 0 }}</span>
-                                    </div>
-                                </div>
-
-                                <!-- 输出摘要 -->
-                                <div class="execution-summary" :title="buildCommandExecutionSingleLineSummary(item)">
-                                    {{ buildCommandExecutionSingleLineSummary(item) }}
-                                </div>
-
-                                <!-- 操作按钮 -->
-                                <div class="execution-actions">
-                                    <el-button type="" plain size="small" @click="applyHistoryCommand(item)">
-                                        Use
-                                    </el-button>
-                                    <el-button type="" plain size="small"
-                                            @click="openCommandExecutionDetail(item)">
-                                        Details
-                                    </el-button>
-                                    <el-button type="danger" plain size="small"
-                                            @click="deleteCommandExecutionItem(item)">
-                                        Delete
-                                    </el-button>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </el-tab-pane>
-            </el-tabs>
-        </div>
-    </el-dialog>
+  <CommandHistoryDialog
+  v-model:visible="commandHistoryDialogVisible"
+  v-model:active-tab="commandHistoryActiveTab"
+  v-model:search-text="commandHistorySearchText"
+  :search-summary="commandHistorySearchSummary"
+  :quick-items="filteredCommandHistoryItems"
+  :execution-items="filteredCommandExecutionItems"
+  :quick-loading="commandHistoryLoading"
+  :execution-loading="commandExecutionHistoryLoading"
+  :build-command-execution-status-tag-type="buildCommandExecutionStatusTagType"
+  :format-date-time-standard="formatDateTimeStandard"
+  :format-command-execution-duration="formatCommandExecutionDuration"
+  :build-command-execution-single-line-summary="buildCommandExecutionSingleLineSummary"
+  @refresh="openCommandHistoryDialog"
+  @clear-history="clearCommandHistory"
+  @clear-search="clearCommandHistorySearch"
+  @apply="applyHistoryCommand"
+  @toggle-pin="toggleCommandHistoryPinned"
+  @move-pin="moveCommandHistoryPinned"
+  @open-detail="openCommandExecutionDetail"
+  @delete-execution="deleteCommandExecutionItem"
+/>
 
 <CommandExecutionDetailDialog
   v-model:visible="commandExecutionDetailDialogVisible"
@@ -1622,9 +1136,13 @@ import ProcessDialogs from "./components/ProcessDialogs.vue";
 import AgentBuilderDialog from "./components/AgentBuilderDialog.vue";
 import AgentOutputsDialog from "./components/AgentOutputsDialog.vue";
 import CommandExecutionDetailDialog from "./components/CommandExecutionDetailDialog.vue";
+import CommandHistoryDialog from "./components/CommandHistoryDialog.vue";
+import RemoteFilesDialog from "./components/RemoteFilesDialog.vue";
 
 export default {
   components: {
+    RemoteFilesDialog,
+    CommandHistoryDialog,
     CommandExecutionDetailDialog,
     AgentOutputsDialog,
     AgentBuilderDialog,

@@ -243,13 +243,18 @@ export default {
             }
         },
 
-        clearRemoteSelection() {
-            this.remoteSelectedPaths = [];
-            const tableRef = this.$refs.remoteFilesTableRef;
-            if (tableRef && typeof tableRef.clearSelection === 'function') {
-                tableRef.clearSelection();
-            }
-        },
+clearRemoteSelection() {
+    this.remoteSelectedPaths = [];
+
+    const dialogRef = this.$refs.remoteFilesDialogRef;
+
+    if (
+        dialogRef &&
+        typeof dialogRef.clearTableSelection === 'function'
+    ) {
+        dialogRef.clearTableSelection();
+    }
+},
 
         async copyRemotePath(row) {
             if (!row || !row.path || row.is_parent_entry) {
