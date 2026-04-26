@@ -151,14 +151,13 @@
                   Preview
                 </a>
 
-<a
-  class="mobile-file-download-button"
-  :href="row.download_url"
-  target="_blank"
-  rel="noopener noreferrer"
->
-  Download
-</a>
+                <a
+                  class="table-action-link"
+                  :href="row.download_url"
+                  target="_blank"
+                >
+                  Download
+                </a>
 
                 <a
                   href="#"
@@ -243,15 +242,11 @@
                     >
                       Preview
                     </el-button>
-
-                    <a
-                      class="table-action-link"
-                      :href="row.download_url"
-                      target="_blank"
-                    >
-                      Download
-                    </a>
-
+<a :href="row.download_url" target="_blank">
+  <el-button size="small" type="primary" plain>
+    Download
+  </el-button>
+</a>
                     <el-button
                       size="small"
                       type="danger"
@@ -709,12 +704,26 @@ export default {
 }
 
 .mobile-file-actions :deep(.el-button),
-.mobile-file-actions .table-action-link {
+.mobile-file-actions .table-action-link,
+.mobile-file-actions a{
   flex: 1 1 calc(33.333% - 8px);
   min-height: 32px;
   margin: 0;
   border-radius: 10px;
   justify-content: center;
+}
+
+.mobile-file-actions a {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-decoration: none;
+}
+
+.mobile-file-actions a .el-button {
+  width: 100%;
+  height: 100%;
+  margin: 0;
 }
 
 .mobile-file-actions .table-action-link {
