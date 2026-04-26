@@ -1831,18 +1831,11 @@ export default {
     margin-top: 12px;
   }
 
-  .background-job-summary-stats {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 6px 10px;
-    line-height: 1.4;
-  }
+
 }
 
 @media (max-width: 640px) {
-  .background-job-summary-stats {
-    grid-template-columns: 1fr;
-  }
+
 }
 </style>
 
