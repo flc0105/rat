@@ -343,28 +343,28 @@
                     </span>
                   </div>
 
-                  <div class="execution-history-stats">
-                    <div class="execution-history-stat-item">
-                      <span class="execution-history-stat-label">Duration</span>
-                      <span class="execution-history-stat-value">
-                        {{ formatCommandExecutionDuration(item.duration_ms) }}
-                      </span>
-                    </div>
+<!--                  <div class="execution-history-stats">-->
+<!--                    <div class="execution-history-stat-item">-->
+<!--                      <span class="execution-history-stat-label">Duration</span>-->
+<!--                      <span class="execution-history-stat-value">-->
+<!--                        {{ formatCommandExecutionDuration(item.duration_ms) }}-->
+<!--                      </span>-->
+<!--                    </div>-->
 
-                    <div class="execution-history-stat-item">
-                      <span class="execution-history-stat-label">Chunks</span>
-                      <span class="execution-history-stat-value">
-                        {{ item.output_chunk_count || 0 }}
-                      </span>
-                    </div>
+<!--                    <div class="execution-history-stat-item">-->
+<!--                      <span class="execution-history-stat-label">Chunks</span>-->
+<!--                      <span class="execution-history-stat-value">-->
+<!--                        {{ item.output_chunk_count || 0 }}-->
+<!--                      </span>-->
+<!--                    </div>-->
 
-                    <div class="execution-history-stat-item">
-                      <span class="execution-history-stat-label">Lines</span>
-                      <span class="execution-history-stat-value">
-                        {{ item.output_line_count || 0 }}
-                      </span>
-                    </div>
-                  </div>
+<!--                    <div class="execution-history-stat-item">-->
+<!--                      <span class="execution-history-stat-label">Lines</span>-->
+<!--                      <span class="execution-history-stat-value">-->
+<!--                        {{ item.output_line_count || 0 }}-->
+<!--                      </span>-->
+<!--                    </div>-->
+<!--                  </div>-->
 
                   <div
                     class="execution-history-summary"
