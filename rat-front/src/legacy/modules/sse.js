@@ -129,17 +129,20 @@ export default {
 
             es.addEventListener('background_job_status', async (event) => {
                 const payload = JSON.parse(event.data);
-                this.scheduleBackgroundJobsRefresh(payload.client_id);
+                // this.scheduleBackgroundJobsRefresh(payload.client_id);
+                this.scheduleBackgroundJobsRefresh?.(payload.client_id);
             });
 
             es.addEventListener('background_job_message', async (event) => {
                 const payload = JSON.parse(event.data);
-                this.scheduleBackgroundJobsRefresh(payload.client_id);
+                this.scheduleBackgroundJobsRefresh?.(payload.client_id);
+                // this.scheduleBackgroundJobsRefresh(payload.client_id);
             });
 
             es.addEventListener('background_job_file', async (event) => {
                 const payload = JSON.parse(event.data);
-                this.scheduleBackgroundJobsRefresh(payload.client_id);
+                // this.scheduleBackgroundJobsRefresh(payload.client_id);
+                this.scheduleBackgroundJobsRefresh?.(payload.client_id);
 
                 await this.refreshArtifactsIfOpen?.();
             });

@@ -180,69 +180,19 @@
 />
 
 
-  <BackgroundJobsDialog
-  v-model:visible="backgroundJobsDialogVisible"
-  :active-tab="backgroundJobsActiveTab"
-  :modules="backgroundJobModules || []"
-  :jobs="sortedBackgroundJobs || []"
-  :modules-loading="backgroundJobModulesLoading"
-  :jobs-loading="backgroundJobsLoading"
-  :upload-loading="serverJobUploadLoading"
-  :is-job-supported-for-current-connection="isJobSupportedForCurrentConnection"
-  :format-job-platform-label="formatJobPlatformLabel"
-  :has-background-job-params="hasBackgroundJobParams"
-  :is-background-job-start-disabled="isBackgroundJobStartDisabled"
-  :build-background-job-state-tag-type="buildBackgroundJobStateTagType"
-  :format-background-job-duration="formatBackgroundJobDuration"
+<BackgroundJobsDialog
+  ref="backgroundJobsDialogRef"
+  :selected-id="selectedId"
+  :current-connection="currentConnection"
+  :get-tab-scoped-headers="getTabScopedHeaders"
   :format-date-time-standard="formatDateTimeStandard"
-  @update:active-tab="backgroundJobsActiveTab = $event"
-  @create-job="createRemoteJobPrompt"
-  @trigger-upload="triggerServerJobUpload"
-  @upload-change="handleServerJobUpload"
-  @refresh-modules="loadBackgroundJobModules"
-  @start-job="openBackgroundJobStartDialog"
-  @edit-job="openRemoteJobEditor"
-  @delete-job="deleteRemoteScript"
-  @refresh-jobs="loadBackgroundJobs"
-  @open-detail="openBackgroundJobDetail"
-  @stop-job="stopBackgroundJob"
-/>
-
-<BackgroundJobStartDialog
-  v-model:visible="backgroundJobStartDialogVisible"
-  :item="pendingStartJobModule"
-  :params="pendingStartJobModule?.metadata?.params || []"
-  :param-form="backgroundJobParamForm || {}"
-  :submitting="backgroundJobStartSubmitting"
-  :is-job-supported-for-current-connection="isJobSupportedForCurrentConnection"
-  :format-job-platform-label="formatJobPlatformLabel"
-  @update-param="updateBackgroundJobParam"
-  @cancel="closeBackgroundJobStartDialog"
-  @confirm="confirmStartBackgroundJobWithParams"
-/>
-
-<BackgroundJobDetailDialog
-  v-model:visible="backgroundJobDetailDialogVisible"
-  :item="selectedBackgroundJob"
-  :messages="selectedBackgroundJobMessagesDesc || []"
-  :files="selectedBackgroundJob?.files || []"
-  :build-background-job-state-tag-type="buildBackgroundJobStateTagType"
-  :format-background-job-duration="formatBackgroundJobDuration"
-  :format-date-time-standard="formatDateTimeStandard"
-  :format-background-job-message-text="formatBackgroundJobMessageText"
   :format-bytes="formatBytes"
-  @stop-job="stopBackgroundJob"
-  @open-message="openBackgroundJobMessageDialog"
+  @set-active-task="setActiveTask"
   @preview-file="previewBackgroundJobFile"
+  @open-job-editor="openRemoteJobEditor"
+  @open-new-job-editor="openNewRemoteJobEditor"
+  @job-deleted="handleBackgroundJobDeleted"
 />
-
-<BackgroundJobMessageDialog
-  v-model:visible="backgroundJobMessageDialogVisible"
-  :message="selectedBackgroundJobMessage || {}"
-  :format-date-time-standard="formatDateTimeStandard"
-  :format-background-job-message-text="formatBackgroundJobMessageText"
-/>
-
 
 <PreviewDialog
   v-model:visible="previewDialogVisible"
@@ -377,7 +327,7 @@
 import AppStateModule from './legacy/core/state.js'
 import AppUtilsModule from './legacy/modules/utils.js'
 import AppCommandsModule from './legacy/modules/commands.js'
-import AppJobsModule from './legacy/modules/jobs.js'
+// import AppJobsModule from './legacy/modules/jobs.js'
 import AppScriptsModule from './legacy/modules/scripts.js'
 import AppSseModule from './legacy/modules/sse.js'
 import AppAgentModule from './legacy/modules/agent.js'
@@ -404,9 +354,9 @@ import RemoteFilesDialog from "./components/RemoteFilesDialog.vue";
 import ArtifactDialog from "./components/ArtifactDialog.vue";
 import ScriptLibraryDialog from "./components/ScriptLibraryDialog.vue";
 import ScriptRunDialog from "./components/ScriptRunDialog.vue";
-import BackgroundJobMessageDialog from "./components/BackgroundJobMessageDialog.vue";
-import BackgroundJobDetailDialog from "./components/BackgroundJobDetailDialog.vue";
-import BackgroundJobStartDialog from "./components/BackgroundJobStartDialog.vue";
+// import BackgroundJobMessageDialog from "./components/BackgroundJobMessageDialog.vue";
+// import BackgroundJobDetailDialog from "./components/BackgroundJobDetailDialog.vue";
+// import BackgroundJobStartDialog from "./components/BackgroundJobStartDialog.vue";
 import BackgroundJobsDialog from "./components/BackgroundJobsDialog.vue";
 import PreviewDialog from "./components/PreviewDialog.vue";
 import PreviewImageInfoDialog from "./components/PreviewImageInfoDialog.vue";
@@ -420,9 +370,9 @@ export default {
     PreviewImageInfoDialog,
     PreviewDialog,
     BackgroundJobsDialog,
-    BackgroundJobStartDialog,
-    BackgroundJobDetailDialog,
-    BackgroundJobMessageDialog,
+    // BackgroundJobStartDialog,
+    // BackgroundJobDetailDialog,
+    // BackgroundJobMessageDialog,
     ScriptRunDialog,
     ScriptLibraryDialog,
     ArtifactDialog,
@@ -440,7 +390,7 @@ export default {
       ...AppAgentModule.data(),
       ...AppProcessModule.data(),
       ...AppPreviewModule.data(),
-      ...AppJobsModule.data(),
+      // ...AppJobsModule.data(),
       ...AppScriptsModule.data(),
       ...AppCandidatesModule.data(),
       // ...AppHistoryModule.data(),
@@ -467,7 +417,7 @@ pendingRemoteUploadRefresh: null,
     ...AppTerminalModule.computed,
     ...AppTaskModule.computed,
     // ...AppHistoryModule.computed,
-    ...AppJobsModule.computed,
+    // ...AppJobsModule.computed,
     ...AppScriptsModule.computed,
   },
 
@@ -477,7 +427,7 @@ pendingRemoteUploadRefresh: null,
     ...AppProcessModule.watch,
     ...AppTerminalModule.watch,
     ...AppPreviewModule.watch,
-    ...AppJobsModule.watch,
+    // ...AppJobsModule.watch,
     ...AppScriptsModule.watch,
     // ...AppHistoryModule.watch,
   },
@@ -485,7 +435,7 @@ pendingRemoteUploadRefresh: null,
   methods: {
     ...AppUtilsModule.methods,
     ...AppCommandsModule.methods,
-    ...AppJobsModule.methods,
+    // ...AppJobsModule.methods,
     ...AppScriptsModule.methods,
     ...AppSseModule.methods,
     ...AppAgentModule.methods,
@@ -507,14 +457,14 @@ updateScriptParam(name, value) {
   }
 },
 
-    updateBackgroundJobParam(name, value) {
-  if (!name) return
-
-  this.backgroundJobParamForm = {
-    ...this.backgroundJobParamForm,
-    [name]: value,
-  }
-},
+//     updateBackgroundJobParam(name, value) {
+//   if (!name) return
+//
+//   this.backgroundJobParamForm = {
+//     ...this.backgroundJobParamForm,
+//     [name]: value,
+//   }
+// },
 
 
 
@@ -550,6 +500,41 @@ loadRemoteDirectory(path = '', page = 1) {
 
 refreshRemoteDirectory() {
   return this.$refs.remoteFilesDialogRef?.refreshRemoteDirectory()
+},
+
+
+
+    openBackgroundJobsDialog() {
+  return this.$refs.backgroundJobsDialogRef?.open()
+},
+
+refreshBackgroundJobsIfOpen() {
+  return this.$refs.backgroundJobsDialogRef?.refreshIfOpen()
+},
+
+refreshBackgroundJobModulesIfOpen() {
+  return this.$refs.backgroundJobsDialogRef?.refreshModulesIfOpen()
+},
+
+scheduleBackgroundJobsRefresh(clientId = '') {
+  this.$refs.backgroundJobsDialogRef?.scheduleBackgroundJobsRefresh(clientId)
+},
+
+handleBackgroundJobDeleted(normalizedName) {
+  if (
+    this.previewDialogVisible &&
+    (this.previewSource === 'server_job' || this.previewSource === 'background_job')
+  ) {
+    const currentPreviewName = this.normalizeServerJobFilename(this.previewFilePath || this.previewTitle || '')
+
+    if (currentPreviewName === normalizedName) {
+      this.previewDialogVisible = false
+
+      if (typeof this.destroyMonacoEditor === 'function') {
+        this.destroyMonacoEditor()
+      }
+    }
+  }
 },
 
 
@@ -596,10 +581,10 @@ async reloadCommandCandidatesFromHistory(options = {}) {
   beforeUnmount() {
     if (this.eventSource) this.eventSource.close()
 
-    if (this.backgroundJobsRefreshTimer) {
-      clearTimeout(this.backgroundJobsRefreshTimer)
-      this.backgroundJobsRefreshTimer = null
-    }
+    // if (this.backgroundJobsRefreshTimer) {
+    //   clearTimeout(this.backgroundJobsRefreshTimer)
+    //   this.backgroundJobsRefreshTimer = null
+    // }
 
     if (this.statusTickTimer) {
       clearInterval(this.statusTickTimer)

@@ -123,10 +123,14 @@ export default {
             this.loadCommandCandidates(clientId);
             this.scrollToBottom();
 
-            if (this.backgroundJobsDialogVisible) {
-                this.loadBackgroundJobModules();
-                this.loadBackgroundJobs();
-            }
+            // if (this.backgroundJobsDialogVisible) {
+            //     this.loadBackgroundJobModules();
+            //     this.loadBackgroundJobs();
+            // }
+
+            this.refreshBackgroundJobsIfOpen?.();
+
+
         },
 
         upsertConnection(conn) {

@@ -338,10 +338,8 @@ export default {
                 this.previewEditMode = false;
                 this.setMonacoEditorReadOnly(true);
 
-                // 刷新 Jobs 列表
-                if (this.backgroundJobsDialogVisible) {
-                    await this.loadBackgroundJobModules();
-                }
+// 刷新 Jobs 列表
+await this.refreshBackgroundJobModulesIfOpen?.();
 
             } catch (e) {
                 ElementPlus.ElMessage.error(e.message || 'Failed to save job');
@@ -667,6 +665,33 @@ print(value)
 # value = kwargs.get('example', '')
 `;
         },
+
+
+normalizeServerJobFilename(scriptName, fallbackName = 'new_job.py') {
+    let normalized = String(scriptName || '').trim().replace(/\\/g, '/').replace(/^\/+/, '');
+    if (!normalized) {
+        normalized = fallbackName;
+    }
+    if (!/\.py$/i.test(normalized)) {
+        normalized = `${normalized}.py`;
+    }
+    return normalized;
+},
+
+buildServerJobTemplate(scriptName = 'new_job.py') {
+    const normalizedScriptName = this.normalizeServerJobFilename(scriptName);
+    const classBaseName = normalizedScriptName
+        .replace(/\.py$/i, '')
+        .split('/')
+        .pop()
+        .split(/[^a-zA-Z0-9]+/)
+        .filter(Boolean)
+        .map(part => part.charAt(0).toUpperCase() + part.slice(1))
+        .join('') || 'NewBackgroundJob';
+
+    return `JOB_METADATA = {\n    "name": "${normalizedScriptName.replace(/\.py$/i, '')}",\n    "display_name": "${classBaseName}",\n    "description": "Describe what this job does",\n    "platforms": ["mac"],\n    "params": [\n        {\n            "name": "interval_seconds",\n            "type": "integer",\n            "required": False,\n            "default": 10,\n            "min": 1,\n            "description": "Loop interval in seconds"\n        }\n    ]\n}\n\nimport time\n\nfrom client.jobs.core.job import Job\n\n\nclass ${classBaseName}(Job):\n    def __init__(self):\n        super().__init__()\n        self.interval = 10\n\n    def on_context_bound(self):\n        self.interval = int(self.get_job_param("interval_seconds", 10) or 10)\n\n    def run(self):\n        self.mark_running()\n        self.send_to_server(1, "${normalizedScriptName} started")\n\n        try:\n            while not self.stop_event.is_set():\n                self.send_to_server(1, f"heartbeat: {time.strftime('%Y-%m-%d %H:%M:%S')}")\n                time.sleep(self.interval)\n        finally:\n            self.send_to_server(1, "${normalizedScriptName} stopped")\n            self.mark_stopped()\n\n    def stop(self, notify=True):\n        self.request_stop(notify=notify)\n`;
+},
+
 
         openNewRemoteScriptEditor(scriptName = 'new_script.py') {
             if (!this.selectedId) {
