@@ -37,12 +37,18 @@
               placeholder="Filter by device"
               @change="handleMachineFilterChange"
             >
+<!--              <el-option-->
+<!--                v-for="item in artifactMachines"-->
+<!--                :key="item.machine_id"-->
+<!--                :label="item.hostname || item.machine_id"-->
+<!--                :value="item.machine_id"-->
+<!--              />-->
               <el-option
-                v-for="item in artifactMachines"
-                :key="item.machine_id"
-                :label="item.hostname || item.machine_id"
-                :value="item.machine_id"
-              />
+  v-for="item in artifactMachines"
+  :key="item.machine_id"
+  :label="formatArtifactMachineOptionLabel(item)"
+  :value="item.machine_id"
+/>
             </el-select>
           </div>
         </div>
@@ -272,12 +278,17 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 export default {
   name: 'ArtifactDialog',
 
-  props: {
-    formatBytes: {
-      type: Function,
-      required: true,
-    },
+props: {
+  formatBytes: {
+    type: Function,
+    required: true,
   },
+
+  currentConnection: {
+    type: Object,
+    default: null,
+  },
+},
 
   emits: ['preview'],
 
@@ -324,10 +335,41 @@ export default {
   },
 
   methods: {
+    // async open() {
+    //   this.visible = true
+    //   await this.loadArtifacts()
+    // },
+
     async open() {
-      this.visible = true
-      await this.loadArtifacts()
-    },
+  this.artifactMachineIdFilter = this.getCurrentMachineId()
+  this.visible = true
+  await this.loadArtifacts()
+},
+
+    normalizeMachineId(value) {
+  return String(value || '').trim()
+},
+
+getCurrentMachineId() {
+  return this.normalizeMachineId(this.currentConnection?.machine_id)
+},
+
+shortenMachineId(machineId) {
+  const value = this.normalizeMachineId(machineId)
+  if (!value) return '-'
+
+  return value.length > 12 ? value.slice(0, 12) : value
+},
+
+formatArtifactMachineOptionLabel(machine) {
+  const machineId = this.normalizeMachineId(machine?.machine_id)
+  if (!machineId) return '-'
+
+  const shortId = this.shortenMachineId(machineId)
+  const hostname = String(machine?.hostname || '').trim()
+
+  return hostname ? `${shortId} (${hostname})` : shortId
+},
 
     isOpen() {
       return this.visible
@@ -507,13 +549,13 @@ export default {
 .artifact-filter-box {
   display: flex;
   justify-content: flex-end;
-  min-width: 260px;
+  min-width: 300px;
   margin-left: auto;
 }
 
 .artifact-filter-box :deep(.el-select) {
   display: block;
-  width: 260px;
+  width: 300px;
   font-size: 12px;
 }
 

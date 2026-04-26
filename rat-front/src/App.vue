@@ -135,6 +135,7 @@
 <ArtifactDialog
   ref="artifactDialogRef"
   :format-bytes="formatBytes"
+  :current-connection="currentConnection"
   @preview="previewArtifact"
 />
 
