@@ -154,19 +154,19 @@
                         <a
                           href="#"
                           class="table-action-link"
-                          :class="{ 'history-action-disabled': !row.can_move_up }"
-                          @click.prevent="row.can_move_up && moveCommandHistoryPinned(row, 'up')"
+                          :class="{ 'history-action-disabled': !canMovePinned(row, 'up') }"
+                          @click.prevent="canMovePinned(row, 'up') && moveCommandHistoryPinned(row, 'up')"
                         >
-                          Up
+                          ↑
                         </a>
 
                         <a
                           href="#"
                           class="table-action-link"
-                          :class="{ 'history-action-disabled': !row.can_move_down }"
-                          @click.prevent="row.can_move_down && moveCommandHistoryPinned(row, 'down')"
+                          :class="{ 'history-action-disabled': !canMovePinned(row, 'down') }"
+                          @click.prevent="canMovePinned(row, 'down') && moveCommandHistoryPinned(row, 'down')"
                         >
-                          Down
+                          ↓
                         </a>
                       </div>
                     </template>
@@ -253,9 +253,9 @@
                               size="small"
                               plain
                               class="mobile-history-disabled-btn"
-                              :class="{ 'is-disabled': !row.can_move_up }"
-                              :disabled="!row.can_move_up"
-                              @click="row.can_move_up && moveCommandHistoryPinned(row, 'up')"
+                              :class="{ 'is-disabled': !canMovePinned(row, 'up') }"
+                              :disabled="!canMovePinned(row, 'up')"
+                              @click="canMovePinned(row, 'up') && moveCommandHistoryPinned(row, 'up')"
                             >
                               Up
                             </el-button>
@@ -264,9 +264,9 @@
                               size="small"
                               plain
                               class="mobile-history-disabled-btn"
-                              :class="{ 'is-disabled': !row.can_move_down }"
-                              :disabled="!row.can_move_down"
-                              @click="row.can_move_down && moveCommandHistoryPinned(row, 'down')"
+                              :class="{ 'is-disabled': !canMovePinned(row, 'down') }"
+                              :disabled="!canMovePinned(row, 'down')"
+                              @click="canMovePinned(row, 'down') && moveCommandHistoryPinned(row, 'down')"
                             >
                               Down
                             </el-button>
@@ -719,6 +719,19 @@ export default {
       }
     },
 
+    canMovePinned(row, direction) {
+  if (!row || !row.is_pinned) return false
+
+  const pinnedItems = (this.commandHistoryItems || []).filter(item => item?.is_pinned)
+  const index = pinnedItems.findIndex(item => item === row || item.command === row.command)
+
+  if (index < 0) return false
+  if (direction === 'up') return index > 0
+  if (direction === 'down') return index < pinnedItems.length - 1
+
+  return false
+},
+
     async moveCommandHistoryPinned(row, direction) {
       if (!this.selectedId) {
         ElMessage.warning('Please select a device')
@@ -737,8 +750,8 @@ export default {
       const directionText = String(direction || '').trim().toLowerCase()
 
       if (!['up', 'down'].includes(directionText)) return
-      if (directionText === 'up' && !row.can_move_up) return
-      if (directionText === 'down' && !row.can_move_down) return
+      if (directionText === 'up' && !this.canMovePinned(row, 'up')) return
+      if (directionText === 'down' && !this.canMovePinned(row, 'down')) return
 
       try {
         const res = await fetch(`/api/machines/${encodeURIComponent(machineId)}/command-history/pin/move`, {
@@ -1121,19 +1134,32 @@ export default {
   display: inline-block;
   width: 1px;
   height: 14px;
-  margin: 0 12px;
+  //margin: 0 12px;
+    margin-left: 10px;
+  margin-right: 4px;
   background: #dcdfe6;
   vertical-align: middle;
 }
 
 .history-actions-move-group {
   display: inline-grid;
-  grid-template-columns: 28px 42px;
+  grid-template-columns: 24px 24px;
   align-items: center;
   column-gap: 0;
 }
 
 .history-action-disabled {
+  color: #c0c4cc !important;
+  cursor: not-allowed !important;
+  pointer-events: none !important;
+  text-decoration: none !important;
+}
+
+.table-action-link.history-action-disabled,
+.table-action-link.history-action-disabled:link,
+.table-action-link.history-action-disabled:visited,
+.table-action-link.history-action-disabled:active,
+.table-action-link.history-action-disabled:hover {
   color: #c0c4cc !important;
   cursor: not-allowed !important;
   pointer-events: none !important;
@@ -1249,6 +1275,7 @@ export default {
 
 .mobile-history-actions-divider {
   width: 1px;
+
   align-self: stretch;
   background: #dcdfe6;
   margin: 0 2px;
@@ -1606,3 +1633,4 @@ export default {
   }
 }
 </style>
+
