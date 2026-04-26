@@ -76,7 +76,7 @@
                   size="small"
                   clearable
                   class="background-job-module-search"
-                  placeholder="Search display name / job_key"
+                  placeholder="Search"
                 />
               </div>
             </div>
@@ -475,6 +475,11 @@ export default {
           if (normalized && !map.has(normalized)) {
             map.set(normalized, displayName)
           }
+
+          const looseNormalized = this.normalizeBackgroundJobLooseLookupKey(key)
+          if (looseNormalized && !map.has(`loose:${looseNormalized}`)) {
+            map.set(`loose:${looseNormalized}`, displayName)
+          }
         }
       }
 
@@ -500,11 +505,14 @@ export default {
         const state = String(job?.state || '').trim().toLowerCase()
         if (!['running', 'stopping'].includes(state)) continue
 
-        const rawKey = String(job?.job_key || job?.job_name || '').trim()
-          .replace(/\\/g, '/')
-          .replace(/\.py$/i, '')
-        const key = rawKey.split('/').pop()
-        if (key) set.add(key)
+        const keys = [job?.job_key, job?.job_name]
+        for (const key of keys) {
+          const normalized = this.normalizeBackgroundJobLookupKey(key)
+          if (normalized) set.add(normalized)
+
+          const looseNormalized = this.normalizeBackgroundJobLooseLookupKey(key)
+          if (looseNormalized) set.add(`loose:${looseNormalized}`)
+        }
       }
 
       return set
@@ -752,23 +760,58 @@ export default {
     normalizeBackgroundJobLookupKey(value) {
       const normalized = String(value || '').trim()
         .replace(/\\/g, '/')
+        .replace(/#.*/, '')
         .replace(/\.py$/i, '')
 
       return normalized.split('/').pop() || normalized
     },
 
-    getBackgroundJobDisplayName(job) {
-      const ownDisplayName = String(job?.display_name || '').trim()
-      if (ownDisplayName) return ownDisplayName
+    normalizeBackgroundJobLooseLookupKey(value) {
+      return this.normalizeBackgroundJobLookupKey(value)
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '')
+    },
 
-      const keys = [job?.job_key, job?.job_name]
+    findBackgroundJobModuleDisplayName(keys = []) {
       for (const key of keys) {
         const normalized = this.normalizeBackgroundJobLookupKey(key)
         const displayName = this.backgroundJobModuleDisplayNameMap.get(normalized)
         if (displayName) return displayName
+
+        const looseNormalized = this.normalizeBackgroundJobLooseLookupKey(key)
+        const looseDisplayName = this.backgroundJobModuleDisplayNameMap.get(`loose:${looseNormalized}`)
+        if (looseDisplayName) return looseDisplayName
       }
 
-      return String(job?.job_name || job?.job_key || '').trim() || '-'
+      return ''
+    },
+
+    humanizeBackgroundJobName(value) {
+      const normalized = this.normalizeBackgroundJobLookupKey(value)
+      if (!normalized) return '-'
+
+      const withSpaces = normalized
+        .replace(/[_-]+/g, ' ')
+        .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+        .trim()
+
+      if (!withSpaces) return normalized
+
+      return withSpaces.replace(/\b\w/g, char => char.toUpperCase())
+    },
+
+    getBackgroundJobDisplayName(job) {
+      const ownDisplayName = String(job?.display_name || '').trim()
+      const catalogDisplayName = this.findBackgroundJobModuleDisplayName([
+        job?.job_key,
+        job?.job_name,
+        ownDisplayName,
+      ])
+
+      if (catalogDisplayName) return catalogDisplayName
+      if (ownDisplayName && !ownDisplayName.includes('#')) return ownDisplayName
+
+      return this.humanizeBackgroundJobName(job?.job_name || job?.job_key || ownDisplayName)
     },
 
     formatJobPlatformLabel(platforms) {
@@ -1302,7 +1345,9 @@ export default {
 
     isBackgroundJobStartDisabled(item) {
       const key = this.normalizeBackgroundJobLookupKey(item?.job_key || item?.job_name || '')
-      const isActive = !!key && this.activeBackgroundJobKeySet.has(key)
+      const looseKey = this.normalizeBackgroundJobLooseLookupKey(item?.job_key || item?.job_name || '')
+      const isActive = (!!key && this.activeBackgroundJobKeySet.has(key))
+        || (!!looseKey && this.activeBackgroundJobKeySet.has(`loose:${looseKey}`))
       const isUnsupported = !this.isJobSupportedForCurrentConnection(item)
 
       return isActive || isUnsupported
@@ -1314,24 +1359,30 @@ export default {
 <style scoped>
 /* BackgroundJobsDialog 收口：列表状态、请求逻辑、轮询刷新和主样式都留在组件内。 */
 .background-jobs-body {
+  height: 100%;
+  min-height: 0;
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  overflow: hidden;
 }
 
 .background-jobs-tabs {
+  flex: 1 1 0;
+  height: auto;
   min-height: 0;
-  height: 100%;
   display: flex;
   flex-direction: column;
+  overflow: hidden;
 }
 
 .background-jobs-tabs :deep(.el-tabs__header) {
+  flex: 0 0 auto;
   margin-bottom: 12px;
 }
 
 .background-jobs-tabs :deep(.el-tabs__content) {
-  flex: 1 1 auto;
+  flex: 1 1 0;
+  height: 0;
   min-height: 0;
   overflow: hidden;
 }
@@ -1347,15 +1398,17 @@ export default {
   min-height: 0;
   display: flex;
   flex-direction: column;
+  overflow: hidden;
 }
 
 .background-jobs-toolbar {
+  flex: 0 0 auto;
   margin-bottom: 10px;
+  min-width: 0;
   display: grid;
   grid-template-columns: minmax(0, auto) minmax(320px, 1fr);
   gap: 8px 12px;
   align-items: center;
-  flex-shrink: 0;
 }
 
 .background-jobs-toolbar-left,
@@ -1397,13 +1450,19 @@ export default {
 }
 
 .panel-lite {
+  flex: 1 1 0;
+  min-height: 0;
   background: #fff;
   border: 1px solid rgba(15, 23, 42, 0.06);
   border-radius: 14px;
   padding: 14px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
 
 .background-jobs-section-title {
+  flex: 0 0 auto;
   font-size: 14px;
   font-weight: 700;
   color: var(--text);
@@ -1412,23 +1471,29 @@ export default {
 
 .background-jobs-modules,
 .background-jobs-list-shell {
-  flex: 1 1 auto;
   height: auto;
-  min-height: 0;
-  overflow-y: auto;
 }
 
 .background-job-module-list {
+  flex: 1 1 0;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding-right: 4px;
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
   gap: 16px;
-  align-items: stretch;
+  align-items: start;
   align-content: start;
 }
 
 .background-job-module-card {
+  flex: 0 0 auto;
+  width: 100%;
   min-width: 0;
   min-height: 200px;
+  height: auto;
+  box-sizing: border-box;
   padding: 14px;
   border: 1px solid rgba(15, 23, 42, 0.06);
   border-radius: 12px;
@@ -1436,6 +1501,7 @@ export default {
   display: flex;
   flex-direction: column;
   gap: 10px;
+  overflow: hidden;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
   transition: box-shadow 0.2s ease, transform 0.2s ease;
 }
@@ -1447,6 +1513,7 @@ export default {
 
 .background-job-module-main {
   flex: 1 1 auto;
+  min-width: 0;
   min-height: 0;
   display: flex;
   flex-direction: column;
@@ -1497,7 +1564,7 @@ export default {
   align-items: flex-start;
   align-content: flex-start;
   min-height: 0;
-  margin: auto 0 10px 0;
+  margin-top: auto;
 }
 
 .background-job-module-tags :deep(.el-tag) {
@@ -1505,11 +1572,11 @@ export default {
 }
 
 .background-job-module-actions {
-  margin-top: auto;
+  flex: 0 0 auto;
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 8px;
-  align-items: end;
+  align-items: stretch;
 }
 
 .background-job-module-actions :deep(.el-button) {
@@ -1520,14 +1587,22 @@ export default {
 }
 
 .background-jobs-list {
+  flex: 1 1 0;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding-right: 4px;
   display: flex;
   flex-direction: column;
   gap: 12px;
-  min-height: 0;
-  padding-right: 2px;
 }
 
 .background-job-summary-card {
+  flex: 0 0 auto;
+  width: 100%;
+  min-width: 0;
+  height: auto;
+  box-sizing: border-box;
   border: 1px solid rgba(15, 23, 42, 0.06);
   border-radius: 14px;
   padding: 14px;
@@ -1536,6 +1611,7 @@ export default {
   grid-template-columns: minmax(0, 1fr) auto;
   gap: 12px;
   align-items: center;
+  overflow: hidden;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.02);
 }
 
@@ -1569,6 +1645,8 @@ export default {
   margin-top: 8px;
   color: var(--muted);
   font-size: 12px;
+  line-height: 1.4;
+  word-break: break-word;
 }
 
 .background-job-summary-stats {
@@ -1593,14 +1671,11 @@ export default {
 }
 
 .empty-state {
+  flex: 1 1 auto;
+  min-height: 220px;
   color: var(--muted-2);
   text-align: center;
   padding: 24px;
-}
-
-.background-jobs-modules .empty-state,
-.background-jobs-list-shell .empty-state {
-  min-height: 220px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1623,6 +1698,7 @@ export default {
 @media (max-width: 768px), (max-height: 720px) {
   .background-jobs-toolbar {
     grid-template-columns: 1fr;
+    gap: 8px;
   }
 
   .background-jobs-toolbar-left,
@@ -1631,18 +1707,51 @@ export default {
     justify-content: flex-start;
   }
 
+  .background-jobs-toolbar-left :deep(.el-button) {
+    flex: 1 1 0;
+    width: auto;
+    height: 32px !important;
+    min-height: 32px !important;
+  }
+
   .background-job-platform-filter,
   .background-job-module-search {
     flex: 1 1 100%;
     width: 100%;
   }
 
+  .background-job-platform-filter :deep(.el-select__wrapper),
+  .background-job-module-search :deep(.el-input__wrapper) {
+    height: 32px !important;
+    min-height: 32px !important;
+  }
+
+  .panel-lite {
+    padding: 12px;
+    border-radius: 14px;
+  }
+
   .background-job-module-list {
-    grid-template-columns: 1fr;
+    display: block;
+    padding-right: 2px;
+    padding-bottom: calc(16px + env(safe-area-inset-bottom));
   }
 
   .background-job-module-card {
     min-height: 0;
+    height: auto !important;
+    padding: 12px;
+    border-radius: 14px;
+    overflow: hidden;
+    box-shadow: 0 4px 14px rgba(15, 23, 42, 0.04);
+  }
+
+  .background-job-module-card + .background-job-module-card {
+    margin-top: 12px;
+  }
+
+  .background-job-module-card:hover {
+    transform: none;
   }
 
   .background-job-module-name,
@@ -1653,50 +1762,90 @@ export default {
     word-break: break-word;
   }
 
+  .background-job-module-name,
+  .background-job-summary-title {
+    font-size: 14px;
+    line-height: 1.4;
+  }
+
+  .background-job-module-key {
+    line-height: 1.4;
+  }
+
   .background-job-module-desc {
     display: block;
     overflow: visible;
     -webkit-line-clamp: unset;
+    line-height: 1.5;
   }
 
   .background-job-module-tags {
-    margin-bottom: 6px;
-  }
-
-  .background-job-summary-card {
-    grid-template-columns: 1fr;
-    align-items: stretch;
+    margin-top: 10px;
+    margin-bottom: 0;
+    gap: 6px;
   }
 
   .background-job-module-actions,
   .background-job-summary-actions {
-    grid-template-columns: 1fr;
+    margin-top: 12px;
     display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     width: 100%;
     gap: 8px;
+    align-items: stretch;
   }
 
   .background-job-module-actions :deep(.el-button),
   .background-job-summary-actions :deep(.el-button) {
     width: 100%;
-    min-height: 38px;
+    min-width: 0;
+    height: 32px !important;
+    min-height: 32px !important;
+    margin: 0;
     justify-content: center;
+  }
+
+  .background-job-module-actions :deep(.el-button:last-child:nth-child(odd)) {
+    grid-column: 1 / -1;
+  }
+
+  .background-jobs-list {
+    display: block;
+    padding-right: 2px;
+    padding-bottom: calc(16px + env(safe-area-inset-bottom));
+  }
+
+  .background-job-summary-card {
+    display: block;
+    height: auto !important;
+    min-height: 0;
+    padding: 12px;
+    border-radius: 14px;
+    overflow: hidden;
+    box-shadow: 0 4px 14px rgba(15, 23, 42, 0.04);
+  }
+
+  .background-job-summary-card + .background-job-summary-card {
+    margin-top: 12px;
+  }
+
+  .background-job-summary-stats {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 6px 10px;
+    line-height: 1.4;
   }
 }
 
 @media (max-width: 640px) {
-  .background-jobs-toolbar-left {
-    align-items: stretch;
-  }
-
-  .background-jobs-toolbar-left :deep(.el-button) {
-    flex: 1 1 calc(33.333% - 8px);
+  .background-job-summary-stats {
+    grid-template-columns: 1fr;
   }
 }
 </style>
 
 <style>
-/* Background job 子弹窗样式收口：Start / Detail / Message 仍是独立组件，但样式随 Jobs 组件加载。 */
+/* BackgroundJobsDialog: 固定弹窗高度，禁止内容撑开，列表内部滚动。 */
 .background-jobs-overlay .el-overlay-dialog {
   overflow: hidden !important;
 }
@@ -1728,6 +1877,45 @@ export default {
   overflow: hidden !important;
   display: flex !important;
   flex-direction: column !important;
+}
+
+.background-jobs-overlay .background-jobs-tabs {
+  flex: 1 1 0 !important;
+  height: auto !important;
+  min-height: 0 !important;
+  overflow: hidden !important;
+}
+
+.background-jobs-overlay .background-jobs-tabs .el-tabs__header {
+  flex: 0 0 auto !important;
+}
+
+.background-jobs-overlay .background-jobs-tabs .el-tabs__content {
+  flex: 1 1 0 !important;
+  height: 0 !important;
+  min-height: 0 !important;
+  overflow: hidden !important;
+}
+
+.background-jobs-overlay .background-jobs-tabs .el-tab-pane,
+.background-jobs-overlay .background-jobs-tab-panel {
+  height: 100% !important;
+  min-height: 0 !important;
+  overflow: hidden !important;
+}
+
+.background-jobs-overlay .background-jobs-modules,
+.background-jobs-overlay .background-jobs-list-shell {
+  flex: 1 1 auto !important;
+  min-height: 0 !important;
+  overflow: hidden !important;
+}
+
+.background-jobs-overlay .background-job-module-list,
+.background-jobs-overlay .background-jobs-list {
+  flex: 1 1 0 !important;
+  min-height: 0 !important;
+  overflow-y: auto !important;
 }
 
 @media (max-width: 768px), (max-height: 720px) {
