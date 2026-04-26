@@ -141,9 +141,7 @@ export default {
                 const payload = JSON.parse(event.data);
                 this.scheduleBackgroundJobsRefresh(payload.client_id);
 
-                if (this.artifactDialogVisible) {
-                    await this.loadArtifacts();
-                }
+                await this.refreshArtifactsIfOpen?.();
             });
 
             es.addEventListener('artifact_created', async (event) => {
@@ -192,9 +190,7 @@ export default {
                     });
                 }
 
-                if (this.artifactDialogVisible) {
-                    await this.loadArtifacts();
-                }
+await this.refreshArtifactsIfOpen?.();
             });
 
 

@@ -4,15 +4,16 @@
     title="Artifact Manager"
     width="1160px"
     top="5vh"
-    class="fixed-dialog recent-files-dialog artifact-dialog"
-    @update:model-value="$emit('update:visible', $event)"
+    class="fixed-dialog artifact-dialog"
+    modal-class="artifact-overlay"
+    @update:model-value="handleVisibleChange"
   >
     <div class="fixed-dialog-body">
       <div class="dialog-head">
         <div class="dialog-head-left">
           <el-button
             size="small"
-            @click="$emit('refresh')"
+            @click="loadArtifacts"
           >
             Refresh
           </el-button>
@@ -20,8 +21,8 @@
           <el-button
             size="small"
             type="danger"
-            :loading="clearing"
-            @click="$emit('clear')"
+            :loading="artifactClearing"
+            @click="clearArtifactCategory"
           >
             Clear
           </el-button>
@@ -30,15 +31,14 @@
         <div class="dialog-head-right">
           <div class="dialog-path-box artifact-filter-box">
             <el-select
-              :model-value="machineIdFilter"
+              v-model="artifactMachineIdFilter"
               clearable
               filterable
               placeholder="Filter by device"
-              @update:model-value="$emit('update:machineIdFilter', $event)"
-              @change="$emit('filter-change', $event)"
+              @change="handleMachineFilterChange"
             >
               <el-option
-                v-for="item in machines"
+                v-for="item in artifactMachines"
                 :key="item.machine_id"
                 :label="item.hostname || item.machine_id"
                 :value="item.machine_id"
@@ -49,28 +49,27 @@
       </div>
 
       <el-tabs
-        :model-value="activeTab"
-        class="command-history-tabs"
-        @update:model-value="$emit('update:activeTab', $event)"
-        @tab-change="$emit('tab-change', $event)"
+        :model-value="artifactActiveTab"
+        class="artifact-tabs"
+        @update:model-value="handleActiveTabChange"
       >
         <el-tab-pane name="files">
           <template #label>
-            Files ({{ countMap.files || 0 }})
+            Files ({{ artifactCountMap.files || 0 }})
           </template>
         </el-tab-pane>
 
         <el-tab-pane name="previews">
           <template #label>
-            Previews ({{ countMap.previews || 0 }})
+            Previews ({{ artifactCountMap.previews || 0 }})
           </template>
         </el-tab-pane>
       </el-tabs>
 
       <div class="dialog-table-shell">
         <el-table
-          :data="items"
-          v-loading="loading"
+          :data="filteredArtifactItems"
+          v-loading="artifactLoading"
           stripe
           width="100%"
           height="100%"
@@ -152,18 +151,19 @@
                   Preview
                 </a>
 
-                <a
-                  class="table-action-link"
-                  :href="row.download_url"
-                  target="_blank"
-                >
-                  Download
-                </a>
+<a
+  class="mobile-file-download-button"
+  :href="row.download_url"
+  target="_blank"
+  rel="noopener noreferrer"
+>
+  Download
+</a>
 
                 <a
                   href="#"
                   class="table-action-link danger"
-                  @click.prevent="$emit('delete', row)"
+                  @click.prevent="deleteArtifact(row)"
                 >
                   Delete
                 </a>
@@ -176,10 +176,10 @@
       <div class="mobile-file-list-shell">
         <div
           class="mobile-file-list"
-          v-loading="loading"
+          v-loading="artifactLoading"
         >
           <div
-            v-if="!items.length && !loading"
+            v-if="!filteredArtifactItems.length && !artifactLoading"
             class="empty-state"
           >
             No artifacts available
@@ -190,7 +190,7 @@
             class="mobile-file-grid"
           >
             <div
-              v-for="row in items"
+              v-for="row in filteredArtifactItems"
               :key="row.artifact_id"
               class="mobile-file-card"
             >
@@ -256,7 +256,7 @@
                       size="small"
                       type="danger"
                       plain
-                      @click="$emit('delete', row)"
+                      @click="deleteArtifact(row)"
                     >
                       Delete
                     </el-button>
@@ -267,75 +267,635 @@
           </div>
         </div>
       </div>
-
     </div>
   </el-dialog>
 </template>
 
 <script>
+import { ElMessage, ElMessageBox } from 'element-plus'
+
 export default {
   name: 'ArtifactDialog',
 
   props: {
-    visible: {
-      type: Boolean,
-      default: false,
-    },
-
-    loading: {
-      type: Boolean,
-      default: false,
-    },
-
-    clearing: {
-      type: Boolean,
-      default: false,
-    },
-
-    items: {
-      type: Array,
-      default: () => [],
-    },
-
-    machines: {
-      type: Array,
-      default: () => [],
-    },
-
-    activeTab: {
-      type: String,
-      default: 'files',
-    },
-
-    machineIdFilter: {
-      type: String,
-      default: '',
-    },
-
-    countMap: {
-      type: Object,
-      default: () => ({
-        files: 0,
-        previews: 0,
-      }),
-    },
-
     formatBytes: {
       type: Function,
       required: true,
     },
   },
 
-  emits: [
-    'update:visible',
-    'update:activeTab',
-    'update:machineIdFilter',
-    'tab-change',
-    'filter-change',
-    'refresh',
-    'clear',
-    'preview',
-    'delete',
-  ],
+  emits: ['preview'],
+
+  data() {
+    return {
+      visible: false,
+      artifactLoading: false,
+      artifactItems: [],
+      artifactMachines: [],
+      artifactActiveTab: 'files',
+      artifactMachineIdFilter: '',
+      artifactClearing: false,
+    }
+  },
+
+  computed: {
+    filteredArtifactItems() {
+      const activeType = String(this.artifactActiveTab || '').trim()
+      const machineId = String(this.artifactMachineIdFilter || '').trim()
+
+      return (this.artifactItems || []).filter(item => {
+        if (activeType && item.artifact_type !== activeType) return false
+        if (machineId && item.machine_id !== machineId) return false
+        return true
+      })
+    },
+
+    artifactCountMap() {
+      const machineId = String(this.artifactMachineIdFilter || '').trim()
+      const counts = { files: 0, previews: 0 }
+
+      ;(this.artifactItems || []).forEach(item => {
+        if (!item) return
+        if (machineId && item.machine_id !== machineId) return
+
+        const type = String(item.artifact_type || '').trim()
+        if (Object.prototype.hasOwnProperty.call(counts, type)) {
+          counts[type] += 1
+        }
+      })
+
+      return counts
+    },
+  },
+
+  methods: {
+    async open() {
+      this.visible = true
+      await this.loadArtifacts()
+    },
+
+    isOpen() {
+      return this.visible
+    },
+
+    async refreshIfOpen() {
+      if (!this.visible) return
+      await this.loadArtifacts()
+    },
+
+    handleVisibleChange(value) {
+      this.visible = value
+
+      if (!value) {
+        this.artifactMachineIdFilter = ''
+      }
+    },
+
+    async handleActiveTabChange(tabName) {
+      this.artifactActiveTab = tabName || 'files'
+      await this.loadArtifacts()
+    },
+
+    async handleMachineFilterChange() {
+      await this.loadArtifacts()
+    },
+
+    async loadArtifacts() {
+      this.artifactLoading = true
+
+      try {
+        const url = new URL('/api/artifacts', window.location.origin)
+        const machineId = String(this.artifactMachineIdFilter || '').trim()
+
+        if (machineId) url.searchParams.set('machine_id', machineId)
+
+        const res = await fetch(url.pathname + url.search)
+        const json = await res.json()
+
+        if (!res.ok || json.code !== 0) {
+          throw new Error(json.message || 'Failed to load artifacts')
+        }
+
+        const data = json.data || {}
+        this.artifactItems = Array.isArray(data.items) ? data.items : []
+        this.artifactMachines = Array.isArray(data.machines) ? data.machines : []
+      } catch (e) {
+        this.artifactItems = []
+        this.artifactMachines = []
+        ElMessage.error(e.message || 'Failed to load artifacts')
+      } finally {
+        this.artifactLoading = false
+      }
+    },
+
+    async deleteArtifact(row) {
+      if (!row || !row.artifact_id) {
+        ElMessage.warning('Invalid artifact')
+        return
+      }
+
+      try {
+        await ElMessageBox.confirm(
+          `Delete "${row.original_name || row.stored_name}"?`,
+          'Delete Confirmation',
+          { type: 'warning', confirmButtonText: 'Delete', cancelButtonText: 'Cancel' }
+        )
+
+        const res = await fetch(`/api/artifacts/${encodeURIComponent(row.artifact_id)}`, {
+          method: 'DELETE',
+        })
+        const json = await res.json()
+
+        if (!res.ok || json.code !== 0) {
+          throw new Error(json.message || 'Delete failed')
+        }
+
+        ElMessage.success('Deleted')
+        await this.loadArtifacts()
+      } catch (e) {
+        if (e === 'cancel' || e === 'close' || e?.toString?.().includes('cancel')) return
+        ElMessage.error(e.message || 'Delete failed')
+      }
+    },
+
+    async clearArtifactCategory() {
+      const activeType = String(this.artifactActiveTab || '').trim()
+
+      if (!activeType) {
+        ElMessage.warning('Please select a category')
+        return
+      }
+
+      try {
+        const suffix = this.artifactMachineIdFilter ? ' for selected device' : ''
+
+        await ElMessageBox.confirm(
+          `Clear all ${activeType}${suffix}?`,
+          'Clear Artifacts',
+          { type: 'warning', confirmButtonText: 'Clear', cancelButtonText: 'Cancel' }
+        )
+
+        this.artifactClearing = true
+
+        const res = await fetch('/api/artifacts/clear', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            type: activeType,
+            machine_id: this.artifactMachineIdFilter || '',
+          }),
+        })
+
+        const json = await res.json()
+        if (!res.ok || json.code !== 0) {
+          throw new Error(json.message || 'Clear failed')
+        }
+
+        ElMessage.success(`Cleared ${json.data?.deleted_count || 0} item(s)`)
+        await this.loadArtifacts()
+      } catch (e) {
+        if (e === 'cancel' || e === 'close' || e?.toString?.().includes('cancel')) return
+        ElMessage.error(e.message || 'Clear failed')
+      } finally {
+        this.artifactClearing = false
+      }
+    },
+  },
 }
 </script>
+
+<style scoped>
+/* ArtifactDialog 逻辑和样式都收在组件内，App 只负责打开和预览回调。 */
+.fixed-dialog-body {
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.dialog-head {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 10px;
+  align-items: center;
+  margin-bottom: 12px;
+  flex-shrink: 0;
+}
+
+.dialog-head-left {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+.dialog-head-left :deep(.el-button) {
+  height: 32px;
+  min-height: 32px;
+  margin: 0;
+  padding-inline: 12px;
+  border-radius: 10px;
+}
+
+.dialog-head-right {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex: 1 1 auto;
+  min-width: 0;
+  width: 100%;
+  margin-left: auto;
+}
+
+.artifact-filter-box {
+  display: flex;
+  justify-content: flex-end;
+  min-width: 260px;
+  margin-left: auto;
+}
+
+.artifact-filter-box :deep(.el-select) {
+  display: block;
+  width: 260px;
+  font-size: 12px;
+}
+
+.artifact-filter-box :deep(.el-select__wrapper),
+.artifact-filter-box :deep(.el-input__wrapper) {
+  min-height: 32px;
+  height: 32px;
+  border-radius: 10px;
+  font-size: 12px;
+}
+
+.artifact-tabs {
+  flex: 0 0 auto;
+  min-height: 0;
+}
+
+.artifact-tabs :deep(.el-tabs__header) {
+  margin-bottom: 12px;
+}
+
+.dialog-table-shell {
+  flex: 1 1 auto;
+  min-height: 320px;
+  height: auto;
+  max-height: none;
+  overflow: hidden;
+}
+
+.dialog-table-shell :deep(.el-table),
+.dialog-table-shell :deep(.el-table__inner-wrapper),
+.dialog-table-shell :deep(.el-scrollbar),
+.dialog-table-shell :deep(.el-scrollbar__wrap) {
+  width: 100%;
+  height: 100% !important;
+}
+
+.dialog-table-shell :deep(.el-scrollbar__wrap) {
+  overflow-y: auto !important;
+  overflow-x: auto !important;
+}
+
+.dialog-table-shell :deep(.el-table__body-wrapper) {
+  overflow-y: auto !important;
+}
+
+.dialog-table-shell :deep(.el-table th.el-table__cell) {
+  background: #f8fafc !important;
+  color: #475569;
+  font-weight: 700;
+}
+
+.dialog-table-shell :deep(.el-table tr) {
+  background: #fff;
+}
+
+.dialog-table-shell :deep(.el-table .cell) {
+  line-height: 1.5;
+}
+
+.ellipsis {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.table-actions {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: nowrap;
+  min-height: 28px;
+  white-space: nowrap;
+}
+
+.table-actions-links {
+  gap: 10px;
+}
+
+.table-action-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+  color: var(--el-color-primary);
+  text-decoration: none;
+  font-size: 12px;
+  white-space: nowrap;
+  vertical-align: middle;
+}
+
+.table-action-link:hover {
+  color: var(--el-color-primary-light-5);
+  text-decoration: underline;
+}
+
+.table-action-link.danger {
+  color: var(--danger);
+}
+
+.mobile-file-list-shell,
+.mobile-file-list {
+  display: none;
+}
+
+.mobile-file-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+  height: 100%;
+  min-height: 0;
+  overflow-y: auto;
+  padding-right: 2px;
+}
+
+.mobile-file-card {
+  background: #fff;
+  border: 1px solid rgba(15, 23, 42, 0.06);
+  border-radius: 14px;
+  padding: 12px;
+  box-shadow: 0 4px 14px rgba(15, 23, 42, 0.04);
+}
+
+.mobile-file-card-top {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  min-width: 0;
+}
+
+.mobile-file-icon {
+  flex: 0 0 auto;
+  font-size: 20px;
+  line-height: 1;
+  margin-top: 2px;
+}
+
+.mobile-file-main {
+  min-width: 0;
+  flex: 1;
+}
+
+.mobile-file-name {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text);
+  line-height: 1.4;
+  word-break: break-word;
+}
+
+.mobile-file-tags {
+  margin-top: 10px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.mobile-file-meta {
+  margin-top: 8px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px 10px;
+}
+
+.mobile-file-meta-item {
+  min-width: 0;
+}
+
+.mobile-file-meta-label {
+  font-size: 11px;
+  color: var(--muted-2);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.mobile-file-meta-value {
+  margin-top: 2px;
+  font-size: 12px;
+  color: var(--text);
+  word-break: break-word;
+  line-height: 1.4;
+}
+
+.mobile-file-actions {
+  margin-top: 12px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.mobile-file-actions :deep(.el-button),
+.mobile-file-actions .table-action-link {
+  flex: 1 1 calc(33.333% - 8px);
+  min-height: 32px;
+  margin: 0;
+  border-radius: 10px;
+  justify-content: center;
+}
+
+.mobile-file-actions .table-action-link {
+  height: auto;
+  padding: 6px 10px;
+  background: #f8fafc;
+  border: 1px solid rgba(15, 23, 42, 0.06);
+}
+
+.empty-state {
+  padding: 32px 12px;
+  color: var(--muted);
+  text-align: center;
+  font-size: 13px;
+}
+
+@media (max-width: 960px) {
+  .dialog-head {
+    grid-template-columns: 1fr;
+  }
+
+  .dialog-head-left,
+  .dialog-head-right {
+    width: 100%;
+  }
+
+  .dialog-head-right,
+  .artifact-filter-box {
+    justify-content: flex-start;
+    margin-left: 0;
+  }
+}
+
+@media (max-width: 768px), (max-height: 720px) {
+  .dialog-table-shell {
+    display: none !important;
+  }
+
+  .mobile-file-list-shell {
+    display: flex !important;
+    flex: 1 1 auto !important;
+    min-height: 0 !important;
+    overflow: hidden !important;
+  }
+
+  .mobile-file-list {
+    display: block !important;
+    flex: 1 1 auto !important;
+    min-height: 0 !important;
+    overflow: hidden !important;
+  }
+
+  .mobile-file-grid {
+    height: 100% !important;
+    min-height: 0 !important;
+    overflow-y: auto !important;
+  }
+}
+
+@media (max-width: 640px) {
+  .dialog-head-left {
+    flex-wrap: wrap;
+    align-items: stretch;
+  }
+
+  .artifact-filter-box,
+  .artifact-filter-box :deep(.el-select) {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .mobile-file-meta {
+    grid-template-columns: 1fr;
+  }
+
+  .mobile-file-actions {
+    gap: 6px;
+  }
+
+  .mobile-file-actions :deep(.el-button),
+  .mobile-file-actions .table-action-link {
+    flex: 1 1 calc(50% - 6px);
+  }
+}
+</style>
+
+<style>
+/* ArtifactDialog: 固定高度，只让表格或移动卡片内部滚动。 */
+.artifact-overlay .el-overlay-dialog {
+  overflow: hidden !important;
+}
+
+.artifact-overlay .el-dialog {
+  height: 78vh !important;
+  max-height: 78vh !important;
+  margin-top: 5vh !important;
+  display: flex !important;
+  flex-direction: column !important;
+  overflow: hidden !important;
+}
+
+.artifact-overlay .el-dialog__header {
+  flex: 0 0 auto !important;
+}
+
+.artifact-overlay .el-dialog__body {
+  flex: 1 1 auto !important;
+  min-height: 0 !important;
+  overflow: hidden !important;
+  padding-top: 12px !important;
+  padding-bottom: 12px !important;
+}
+
+.artifact-overlay .fixed-dialog-body {
+  height: 100% !important;
+  min-height: 0 !important;
+  overflow: hidden !important;
+  display: flex !important;
+  flex-direction: column !important;
+}
+
+.artifact-overlay .dialog-table-shell {
+  flex: 1 1 auto !important;
+  min-height: 320px !important;
+  height: auto !important;
+  max-height: none !important;
+  overflow: hidden !important;
+}
+
+.artifact-overlay .dialog-table-shell .el-table,
+.artifact-overlay .dialog-table-shell .el-table__inner-wrapper,
+.artifact-overlay .dialog-table-shell .el-scrollbar,
+.artifact-overlay .dialog-table-shell .el-scrollbar__wrap {
+  height: 100% !important;
+}
+
+.artifact-overlay .dialog-table-shell .el-scrollbar__wrap {
+  overflow-y: auto !important;
+  overflow-x: auto !important;
+}
+
+@media (max-width: 768px), (max-height: 720px) {
+  .artifact-overlay .el-dialog {
+    width: 100vw !important;
+    max-width: 100vw !important;
+    height: 100dvh !important;
+    max-height: 100dvh !important;
+    margin: 0 !important;
+    border-radius: 0 !important;
+  }
+
+  .artifact-overlay .el-dialog__header {
+    padding: 14px 16px 10px !important;
+  }
+
+  .artifact-overlay .el-dialog__body {
+    padding: 10px 12px 12px !important;
+  }
+
+  .artifact-overlay .dialog-table-shell {
+    display: none !important;
+  }
+
+  .artifact-overlay .mobile-file-list-shell {
+    display: flex !important;
+    flex: 1 1 auto !important;
+    min-height: 0 !important;
+    overflow: hidden !important;
+  }
+
+  .artifact-overlay .mobile-file-list {
+    display: block !important;
+    flex: 1 1 auto !important;
+    min-height: 0 !important;
+    overflow: hidden !important;
+  }
+
+  .artifact-overlay .mobile-file-grid {
+    height: 100% !important;
+    min-height: 0 !important;
+    overflow-y: auto !important;
+  }
+}
+</style>

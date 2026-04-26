@@ -429,9 +429,8 @@ export default {
                 }
 
                 // 刷新 Artifact 列表
-                if (this.artifactDialogVisible) {
-                    await this.loadArtifacts();
-                }
+// 刷新 Artifact 列表
+await this.refreshArtifactsIfOpen?.();
 
                 // 触发 artifact_created 事件，通知其他组件
                 if (this.previewArtifactInfo) {

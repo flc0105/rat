@@ -127,27 +127,15 @@
   @request-upload="triggerRemoteUploadInput"
   @upload-started="pendingRemoteUploadRefresh = $event"
   @visible-change="remoteFilesDialogVisible = $event"
-  @artifacts-maybe-changed="artifactDialogVisible && loadArtifacts()"
+  @artifacts-maybe-changed="refreshArtifactsIfOpen"
 />
 
 
 
 <ArtifactDialog
-  v-model:visible="artifactDialogVisible"
-  v-model:active-tab="artifactActiveTab"
-  v-model:machine-id-filter="artifactMachineIdFilter"
-  :loading="artifactLoading"
-  :clearing="artifactClearing"
-  :items="filteredArtifactItems"
-  :machines="artifactMachines"
-  :count-map="artifactCountMap"
+  ref="artifactDialogRef"
   :format-bytes="formatBytes"
-  @refresh="loadArtifacts"
-  @clear="clearArtifactCategory"
-  @tab-change="loadArtifacts"
-  @filter-change="loadArtifacts"
   @preview="previewArtifact"
-  @delete="deleteArtifact"
 />
 
 
@@ -415,7 +403,6 @@
 import AppStateModule from './legacy/core/state.js'
 import AppUtilsModule from './legacy/modules/utils.js'
 import AppCommandsModule from './legacy/modules/commands.js'
-// import AppFilesModule from './legacy/modules/files.js'
 import AppJobsModule from './legacy/modules/jobs.js'
 import AppScriptsModule from './legacy/modules/scripts.js'
 import AppSseModule from './legacy/modules/sse.js'
@@ -427,7 +414,6 @@ import AppTerminalModule from './legacy/modules/terminal.js'
 import AppPtyModule from './legacy/modules/pty.js'
 import AppCandidatesModule from './legacy/modules/candidates.js'
 import AppHistoryModule from './legacy/modules/history.js'
-import AppArtifactsModule from './legacy/modules/artifacts.js'
 import AppPreviewModule from './legacy/modules/preview.js'
 import DeviceSidebar from "./components/DeviceSidebar.vue";
 import ConnectionInfoCards from "./components/ConnectionInfoCards.vue";
@@ -477,10 +463,8 @@ export default {
   data() {
     return {
       ...AppStateModule.data(),
-      ...AppArtifactsModule.data(),
       ...AppAgentModule.data(),
       ...AppProcessModule.data(),
-      // ...AppFilesModule.data(),
       ...AppPreviewModule.data(),
       ...AppJobsModule.data(),
       ...AppScriptsModule.data(),
@@ -509,8 +493,6 @@ pendingRemoteUploadRefresh: null,
     ...AppTerminalModule.computed,
     ...AppTaskModule.computed,
     ...AppHistoryModule.computed,
-    // ...AppFilesModule.computed,
-    ...AppArtifactsModule.computed,
     ...AppJobsModule.computed,
     ...AppScriptsModule.computed,
   },
@@ -521,8 +503,6 @@ pendingRemoteUploadRefresh: null,
     ...AppProcessModule.watch,
     ...AppTerminalModule.watch,
     ...AppPreviewModule.watch,
-    // ...AppFilesModule.watch,
-    ...AppArtifactsModule.watch,
     ...AppJobsModule.watch,
     ...AppScriptsModule.watch,
     ...AppHistoryModule.watch,
@@ -531,7 +511,6 @@ pendingRemoteUploadRefresh: null,
   methods: {
     ...AppUtilsModule.methods,
     ...AppCommandsModule.methods,
-    // ...AppFilesModule.methods,
     ...AppJobsModule.methods,
     ...AppScriptsModule.methods,
     ...AppSseModule.methods,
@@ -543,7 +522,6 @@ pendingRemoteUploadRefresh: null,
     ...AppPtyModule.methods,
     ...AppCandidatesModule.methods,
     ...AppHistoryModule.methods,
-    ...AppArtifactsModule.methods,
     ...AppPreviewModule.methods,
 
 updateScriptParam(name, value) {
@@ -565,6 +543,15 @@ updateScriptParam(name, value) {
 },
 
 
+
+
+openArtifactDialog() {
+  return this.$refs.artifactDialogRef?.open()
+},
+
+refreshArtifactsIfOpen() {
+  return this.$refs.artifactDialogRef?.refreshIfOpen()
+},
 
     openRemoteFilesDialog() {
   this.$refs.remoteFilesDialogRef?.open()
