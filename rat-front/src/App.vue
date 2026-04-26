@@ -268,44 +268,17 @@
 />
 
 
-
-  <CommandHistoryDialog
-  v-model:visible="commandHistoryDialogVisible"
-  v-model:active-tab="commandHistoryActiveTab"
-  v-model:search-text="commandHistorySearchText"
-  :search-summary="commandHistorySearchSummary"
-  :quick-items="filteredCommandHistoryItems"
-  :execution-items="filteredCommandExecutionItems"
-  :quick-loading="commandHistoryLoading"
-  :execution-loading="commandExecutionHistoryLoading"
-  :build-command-execution-status-tag-type="buildCommandExecutionStatusTagType"
+<CommandHistoryDialog
+  ref="commandHistoryDialogRef"
+  :selected-id="selectedId"
+  :current-connection="currentConnection"
   :format-date-time-standard="formatDateTimeStandard"
-  :format-command-execution-duration="formatCommandExecutionDuration"
-  :build-command-execution-single-line-summary="buildCommandExecutionSingleLineSummary"
-  @refresh="openCommandHistoryDialog"
-  @clear-history="clearCommandHistory"
-  @clear-search="clearCommandHistorySearch"
-  @apply="applyHistoryCommand"
-  @toggle-pin="toggleCommandHistoryPinned"
-  @move-pin="moveCommandHistoryPinned"
-  @open-detail="openCommandExecutionDetail"
-  @delete-execution="deleteCommandExecutionItem"
-/>
-
-<CommandExecutionDetailDialog
-  v-model:visible="commandExecutionDetailDialogVisible"
-  :entry="selectedCommandExecutionEntry"
-  :output-records="selectedCommandExecutionOutputRecordsDesc"
-  :output-sort-order="commandExecutionOutputSortOrder"
-  :build-command-execution-status-tag-type="buildCommandExecutionStatusTagType"
-  :format-command-execution-duration="formatCommandExecutionDuration"
-  :build-command-execution-summary="buildCommandExecutionSummary"
-  :format-command-execution-record-text="formatCommandExecutionRecordText"
-  :get-command-execution-file-status-text="getCommandExecutionFileStatusText"
   :format-bytes="formatBytes"
-  @toggle-output-sort="toggleCommandExecutionOutputSort"
+  :reload-command-candidates="reloadCommandCandidatesFromHistory"
+  @apply-command="applyHistoryCommand"
   @preview-file="previewArtifact"
 />
+
 
 <ConnectionInfoDialogs
   v-model:info-visible="connectionInfoDialogVisible"
@@ -414,7 +387,7 @@ import AppTaskModule from './legacy/modules/task.js'
 import AppTerminalModule from './legacy/modules/terminal.js'
 import AppPtyModule from './legacy/modules/pty.js'
 import AppCandidatesModule from './legacy/modules/candidates.js'
-import AppHistoryModule from './legacy/modules/history.js'
+// import AppHistoryModule from './legacy/modules/history.js'
 import AppPreviewModule from './legacy/modules/preview.js'
 import DeviceSidebar from "./components/DeviceSidebar.vue";
 import ConnectionInfoCards from "./components/ConnectionInfoCards.vue";
@@ -425,7 +398,7 @@ import ConnectionInfoDialogs from "./components/ConnectionInfoDialogs.vue";
 import ProcessDialogs from "./components/ProcessDialogs.vue";
 import AgentBuilderDialog from "./components/AgentBuilderDialog.vue";
 import AgentOutputsDialog from "./components/AgentOutputsDialog.vue";
-import CommandExecutionDetailDialog from "./components/CommandExecutionDetailDialog.vue";
+// import CommandExecutionDetailDialog from "./components/CommandExecutionDetailDialog.vue";
 import CommandHistoryDialog from "./components/CommandHistoryDialog.vue";
 import RemoteFilesDialog from "./components/RemoteFilesDialog.vue";
 import ArtifactDialog from "./components/ArtifactDialog.vue";
@@ -455,7 +428,7 @@ export default {
     ArtifactDialog,
     RemoteFilesDialog,
     CommandHistoryDialog,
-    CommandExecutionDetailDialog,
+    // CommandExecutionDetailDialog,
     AgentOutputsDialog,
     AgentBuilderDialog,
     ProcessDialogs,
@@ -470,7 +443,7 @@ export default {
       ...AppJobsModule.data(),
       ...AppScriptsModule.data(),
       ...AppCandidatesModule.data(),
-      ...AppHistoryModule.data(),
+      // ...AppHistoryModule.data(),
       ...AppTerminalModule.data(),
       ...AppPtyModule.data(),
       ...AppConnectionModule.data(),
@@ -493,7 +466,7 @@ pendingRemoteUploadRefresh: null,
     ...AppConnectionModule.computed,
     ...AppTerminalModule.computed,
     ...AppTaskModule.computed,
-    ...AppHistoryModule.computed,
+    // ...AppHistoryModule.computed,
     ...AppJobsModule.computed,
     ...AppScriptsModule.computed,
   },
@@ -506,7 +479,7 @@ pendingRemoteUploadRefresh: null,
     ...AppPreviewModule.watch,
     ...AppJobsModule.watch,
     ...AppScriptsModule.watch,
-    ...AppHistoryModule.watch,
+    // ...AppHistoryModule.watch,
   },
 
   methods: {
@@ -522,7 +495,7 @@ pendingRemoteUploadRefresh: null,
     ...AppTerminalModule.methods,
     ...AppPtyModule.methods,
     ...AppCandidatesModule.methods,
-    ...AppHistoryModule.methods,
+    // ...AppHistoryModule.methods,
     ...AppPreviewModule.methods,
 
 updateScriptParam(name, value) {
@@ -577,6 +550,35 @@ loadRemoteDirectory(path = '', page = 1) {
 
 refreshRemoteDirectory() {
   return this.$refs.remoteFilesDialogRef?.refreshRemoteDirectory()
+},
+
+
+    openCommandHistoryDialog() {
+  return this.$refs.commandHistoryDialogRef?.open()
+},
+
+applyHistoryCommand(row) {
+  if (!row || !row.command) return
+
+  this.commandText = row.command
+
+  this.$nextTick(() => {
+    const commandInputBar = this.$refs.commandInputBarRef
+
+    if (commandInputBar && typeof commandInputBar.focusInput === 'function') {
+      commandInputBar.focusInput()
+    }
+  })
+},
+
+async reloadCommandCandidatesFromHistory(options = {}) {
+  if (options?.reset) {
+    this.commandCandidatesLoadedFor = ''
+  }
+
+  if (!this.selectedId) return
+
+  await this.loadCommandCandidates(this.selectedId)
 },
 
   },
