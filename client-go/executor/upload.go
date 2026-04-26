@@ -51,7 +51,7 @@ func (s *Session) uploadFileToServer(filePath string, category string) (map[stri
 	_ = writer.WriteField("client_id", s.ClientID)
 	_ = writer.WriteField("hostname", s.HostName)
 // 	_ = writer.WriteField("source_type", "client_upload")
-	_ = writer.WriteField("related_path", "")
+// 	_ = writer.WriteField("related_path", "")
 	if s.CurrentCommandID > 0 {
 		_ = writer.WriteField("source_command_id", strconv.Itoa(s.CurrentCommandID))
 	}

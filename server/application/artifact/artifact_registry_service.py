@@ -130,7 +130,9 @@ class ArtifactRegistryService:
                             original_name: str, stored_name: str, file_path: str, size: int,
                             # source_type: str = '',
                             source_command_id=None, client_id: str = '', addr: str = '', job_id: str = '',
-                            job_name: str = '', job_key: str = '', related_path: str = '', extra: dict | None = None) -> dict:
+                            job_name: str = '', job_key: str = '',
+                            # related_path: str = '',
+                            extra: dict | None = None) -> dict:
         payload = {
             'artifact_id': artifact_id,
             'artifact_type': self._normalize_artifact_type(artifact_type),
@@ -149,7 +151,7 @@ class ArtifactRegistryService:
             'job_id': job_id,
             'job_name': job_name,
             'job_key': job_key,
-            'related_path': related_path,
+            # 'related_path': related_path,
         }
         payload.update(self._build_artifact_urls(artifact_id))
         if isinstance(extra, dict):
@@ -180,7 +182,8 @@ class ArtifactRegistryService:
 
                                       # source_type: str = '',
                                       source_command_id=None, client_id: str = '', addr: str = '',
-                                      job_id: str = '', job_name: str = '', job_key: str = '', related_path: str = '',
+                                      job_id: str = '', job_name: str = '', job_key: str = '',
+                                      # related_path: str = '',
                                       extra: dict | None = None) -> dict:
         artifact_id = uuid.uuid4().hex
         file_size = os.path.getsize(file_path) if os.path.isfile(file_path) else 0
@@ -201,7 +204,7 @@ class ArtifactRegistryService:
             job_id=job_id,
             job_name=job_name,
             job_key=job_key,
-            related_path=related_path,
+            # related_path=related_path,
             extra=extra,
         )
         self._write_meta(meta_path, meta)
@@ -212,7 +215,8 @@ class ArtifactRegistryService:
                                    original_name: str, file_path: str, meta_path: str, stored_name: str,
                                    # source_type: str = '',
                                    source_command_id=None, client_id: str = '', addr: str = '',
-                                   job_id: str = '', job_name: str = '', job_key: str = '', related_path: str = '',
+                                   job_id: str = '', job_name: str = '', job_key: str = '',
+                                   # related_path: str = '',
                                    extra: dict | None = None) -> dict:
         with self._lock:
             return self._finalize_registered_artifact(
@@ -231,7 +235,7 @@ class ArtifactRegistryService:
                 job_id=job_id,
                 job_name=job_name,
                 job_key=job_key,
-                related_path=related_path,
+                # related_path=related_path,
                 extra=extra,
             )
 
@@ -240,7 +244,8 @@ class ArtifactRegistryService:
                                 job_key: str = '',
                                 # source_type: str = '',
                                 source_command_id=None, addr: str = '',
-                                related_path: str = '', extra: dict | None = None) -> dict:
+                                # related_path: str = '',
+                                extra: dict | None = None) -> dict:
         normalized_type = self._normalize_artifact_type(artifact_type or self.CATEGORY_FILES)
         normalized_category = (category or '').strip() or 'default'
         normalized_hostname = (hostname or '').strip() or 'unknown_host'
@@ -269,7 +274,7 @@ class ArtifactRegistryService:
             job_id=job_id,
             job_name=job_name,
             job_key=job_key,
-            related_path=related_path,
+            # related_path=related_path,
             extra=extra,
         )
 

@@ -79,7 +79,7 @@ def create_artifacts_blueprint(server_instance):
             job_name = get_optional_form_text('job_name', '')
             job_key = get_optional_form_text('job_key', '')
             # source_type = get_optional_form_text('source_type', 'client_upload')
-            related_path = get_optional_form_text('related_path', '')
+            # related_path = get_optional_form_text('related_path', '')
             source_command_id = parse_optional_int_form('source_command_id')
             extra = parse_optional_json_form('extra')
             return artifact_api.save_http_uploaded_file(
@@ -93,7 +93,7 @@ def create_artifacts_blueprint(server_instance):
                 job_name=job_name,
                 job_key=job_key,
                 # source_type=source_type,
-                related_path=related_path,
+                # related_path=related_path,
                 source_command_id=source_command_id,
                 extra=extra,
             )

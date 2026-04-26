@@ -28,7 +28,7 @@ class CommandHttpFileTransferService:
         artifact_type: str,
         category: str,
         # source_type: str,
-        related_path: str = '',
+        # related_path: str = '',
         extra: dict | None = None,
     ) -> dict:
         client_id = getattr(self.owner.socket, 'client_id', '') or ''
@@ -39,7 +39,7 @@ class CommandHttpFileTransferService:
             'client_id': client_id,
             # 'source_type': (source_type or 'client_upload').strip() or 'client_upload',
             'source_command_id': self.owner.command_id if self.owner.command_id is not None else '',
-            'related_path': (related_path or '').strip(),
+            # 'related_path': (related_path or '').strip(),
         }
 
         if isinstance(extra, dict) and extra:
@@ -89,7 +89,7 @@ class CommandHttpFileTransferService:
         artifact_type: str = 'files',
         category: str = 'default',
         # source_type: str = 'client_upload',
-        related_path: str = '',
+        # related_path: str = '',
         extra: dict | None = None,
     ):
         upload_url = UPLOAD_BASE_URL.rstrip('/') + '/api/files/upload'
@@ -97,7 +97,7 @@ class CommandHttpFileTransferService:
             artifact_type=artifact_type,
             category=category,
             # source_type=source_type,
-            related_path=related_path,
+            # related_path=related_path,
             extra=extra,
         )
 
@@ -111,7 +111,7 @@ class CommandHttpFileTransferService:
         artifact_type: str = 'files',
         category: str = 'default',
         # source_type: str = 'client_upload',
-        related_path: str = '',
+        # related_path: str = '',
         extra: dict | None = None,
     ):
         file_size = os.path.getsize(file_path)
@@ -124,7 +124,7 @@ class CommandHttpFileTransferService:
             artifact_type=artifact_type,
             category=category,
             # source_type=source_type,
-            related_path=related_path,
+            # related_path=related_path,
             extra=extra,
         )
         response.raise_for_status()
@@ -145,7 +145,7 @@ class CommandHttpFileTransferService:
         artifact_type: str = 'files',
         category: str = 'default',
         # source_type: str = 'client_upload',
-        related_path: str = '',
+        # related_path: str = '',
         extra: dict | None = None,
     ):
         temp_archive_path = ''
@@ -159,7 +159,7 @@ class CommandHttpFileTransferService:
                 artifact_type=artifact_type,
                 category=category,
                 # source_type=source_type,
-                related_path=related_path,
+                # related_path=related_path,
                 extra=extra,
             )
         finally:

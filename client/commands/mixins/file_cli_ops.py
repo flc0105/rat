@@ -27,7 +27,7 @@ class CommandFileCliMixin:
             file_path = self._require_existing_file_from_arg(filename)
             return self._upload_single_file_to_server_result(
                 file_path,
-                category='files'
+                category='download'
             )
         except Exception as e:
             return 0, f'Failed to download file: {e}'

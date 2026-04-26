@@ -51,7 +51,10 @@ class WebArtifactService:
 
                                    # source_type: str = '',
                                    source_command_id=None, client_id: str = '', addr: str = '',
-                                   job_id: str = '', job_name: str = '', job_key: str = '', related_path: str = '',
+                                   job_id: str = '',
+                                   job_name: str = '',
+                                   job_key: str = '',
+                                   # related_path: str = '',
                                    extra: dict | None = None) -> dict:
         return self.registry_service.register_existing_artifact(
             artifact_type=artifact_type,
@@ -69,7 +72,7 @@ class WebArtifactService:
             job_id=job_id,
             job_name=job_name,
             job_key=job_key,
-            related_path=related_path,
+            # related_path=related_path,
             extra=extra,
         )
 
@@ -78,7 +81,8 @@ class WebArtifactService:
                                 job_key: str = '',
                                 # source_type: str = '',
                                 source_command_id=None, addr: str = '',
-                                related_path: str = '', extra: dict | None = None) -> dict:
+                                # related_path: str = '',
+                                extra: dict | None = None) -> dict:
         return self.registry_service.save_http_uploaded_file(
             file,
             artifact_type=artifact_type,
@@ -92,7 +96,7 @@ class WebArtifactService:
             # source_type=source_type,
             source_command_id=source_command_id,
             addr=addr,
-            related_path=related_path,
+            # related_path=related_path,
             extra=extra,
         )
 

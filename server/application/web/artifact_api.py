@@ -87,7 +87,7 @@ class WebArtifactApi:
                                 hostname: str = '', machine_id: str = '', job_id: str = '', job_name: str = '',
                                 job_key: str = '',
                                 # source_type: str = 'client_upload',
-                                related_path: str = '',
+                                # related_path: str = '',
                                 source_command_id=None, extra=None):
         resolved_hostname, resolved_machine_id, addr = self.resolve_client_context(client_id)
         hostname = hostname or resolved_hostname
@@ -105,7 +105,7 @@ class WebArtifactApi:
             # source_type=source_type,
             source_command_id=source_command_id,
             addr=addr,
-            related_path=related_path,
+            # related_path=related_path,
             extra=extra,
         )
         try:

@@ -21,7 +21,7 @@ class ArtifactRecord:
     job_id: str = ''
     job_name: str = ''
     job_key: str = ''
-    related_path: str = ''
+    # related_path: str = ''
 
     download_url: str = ''
     raw_url: str = ''
@@ -52,7 +52,7 @@ class ArtifactRecord:
             job_id=payload.get('job_id', ''),
             job_name=payload.get('job_name', ''),
             job_key=payload.get('job_key', ''),
-            related_path=payload.get('related_path', ''),
+            # related_path=payload.get('related_path', ''),
             download_url=payload.get('download_url', ''),
             raw_url=payload.get('raw_url', ''),
             preview_url=payload.get('preview_url', ''),
@@ -78,7 +78,7 @@ class ArtifactRecord:
             'job_id': self.job_id,
             'job_name': self.job_name,
             'job_key': self.job_key,
-            'related_path': self.related_path,
+            # 'related_path': self.related_path,
             'download_url': self.download_url,
             'raw_url': self.raw_url,
             'preview_url': self.preview_url,

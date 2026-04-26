@@ -11,6 +11,7 @@ from client.commands.platform.utils.ios_util import get_ios_username, _safe_call
 from client.config.config import UPLOAD_BASE_URL
 from core.utils.client_util import get_executable_path, upload_file_via_http
 from core.utils.command_output import StructuredCommandResult
+from core.utils.formatting import get_time
 from core.utils.logger import logger
 
 upload_url = UPLOAD_BASE_URL.rstrip('/') + '/api/files/upload'
@@ -376,10 +377,10 @@ class iOSPlatformService:
 
                 response = upload_file_via_http(
                     file_source=buf,
-                    category='Pythonista',
+                    category='download',
                     upload_url=upload_url,
                     client_id=getattr(self.owner.socket, 'client_id', '') or '',
-                    filename='photo.jpg',
+                    filename=f'photo_{get_time()}.png',
                 )
 
             elif kind == 'file':
@@ -389,7 +390,7 @@ class iOSPlatformService:
 
                 response = upload_file_via_http(
                     file_source=file_path,
-                    category='Pythonista',
+                    category='download',
                     upload_url=upload_url,
                     filename=os.path.basename(file_path),
                     client_id=getattr(self.owner.socket, 'client_id', '') or '',

@@ -160,7 +160,7 @@ class Job(ABC):
         *,
         artifact_type: str = 'files',
         # source_type: str = 'client_upload',
-        related_path: str = '',
+        # related_path: str = '',
         extra: dict | None = None,
     ):
         form_data = {
@@ -173,7 +173,7 @@ class Job(ABC):
             'job_key': self.job_key,
             # 'source_type': (source_type or 'client_upload').strip() or 'client_upload',
             'source_command_id': self.command_id if self.command_id is not None else '',
-            'related_path': (related_path or '').strip(),
+            # 'related_path': (related_path or '').strip(),
         }
 
         if isinstance(extra, dict) and extra:

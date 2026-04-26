@@ -65,14 +65,14 @@ class CommandFileWebMixin:
         artifact_type: str,
         category: str,
         # source_type: str,
-        related_path: str = '',
+        # related_path: str = '',
         extra: dict | None = None,
     ) -> dict:
         return self._get_http_file_transfer_service().build_http_upload_form_data(
             artifact_type=artifact_type,
             category=category,
             # source_type=source_type,
-            related_path=related_path,
+            # related_path=related_path,
             extra=extra,
         )
 
@@ -98,7 +98,7 @@ class CommandFileWebMixin:
         artifact_type: str = 'files',
         category: str = 'default',
         # source_type: str = 'client_upload',
-        related_path: str = '',
+        # related_path: str = '',
         extra: dict | None = None,
     ):
         return self._get_http_file_transfer_service().upload_file_to_server_via_http(
@@ -106,7 +106,7 @@ class CommandFileWebMixin:
             artifact_type=artifact_type,
             category=category,
             # source_type=source_type,
-            related_path=related_path,
+            # related_path=related_path,
             extra=extra,
         )
 
@@ -117,7 +117,7 @@ class CommandFileWebMixin:
         artifact_type: str = 'files',
         category: str = 'default',
         # source_type: str = 'client_upload',
-        related_path: str = '',
+        # related_path: str = '',
         extra: dict | None = None,
     ):
         return self._get_http_file_transfer_service().upload_single_file_to_server_result(
@@ -125,7 +125,7 @@ class CommandFileWebMixin:
             artifact_type=artifact_type,
             category=category,
             # source_type=source_type,
-            related_path=related_path,
+            # related_path=related_path,
             extra=extra,
         )
 
@@ -137,7 +137,7 @@ class CommandFileWebMixin:
         artifact_type: str = 'files',
         category: str = 'default',
         # source_type: str = 'client_upload',
-        related_path: str = '',
+        # related_path: str = '',
         extra: dict | None = None,
     ):
         return self._get_http_file_transfer_service().upload_paths_as_zip_to_server_result(
@@ -146,7 +146,7 @@ class CommandFileWebMixin:
             artifact_type=artifact_type,
             category=category,
             # source_type=source_type,
-            related_path=related_path,
+            # related_path=related_path,
             extra=extra,
         )
 
@@ -172,9 +172,9 @@ class CommandFileWebMixin:
             return self._upload_single_file_to_server_result(
                 file_path,
                 artifact_type='files',
-                category='remote_browser_download',
+                category='download',
                 # source_type='client_upload',
-                related_path=file_path,
+                # related_path=file_path,
             )
         except CommandCancelledError:
             return 0, 'Command cancelled'
@@ -201,15 +201,15 @@ class CommandFileWebMixin:
                 return 0, 'paths is required'
 
             resolved_paths = self._require_existing_paths_from_list(raw_paths)
-            related_path = '\n'.join(resolved_paths)
+            # related_path = '\n'.join(resolved_paths)
 
             return self._upload_paths_as_zip_to_server_result(
                 resolved_paths,
                 archive_name=archive_name,
                 artifact_type='files',
-                category='remote_browser_bundle',
+                category='bundle',
                 # source_type='client_upload',
-                related_path=related_path,
+                # related_path=related_path,
             )
         except CommandCancelledError:
             return 0, 'Command cancelled'
@@ -231,7 +231,7 @@ class CommandFileWebMixin:
                 artifact_type='previews',
                 category='preview_cache',
                 # source_type='client_upload',
-                related_path=file_path,
+                # related_path=file_path,
             )
         except CommandCancelledError:
             return 0, 'Command cancelled'

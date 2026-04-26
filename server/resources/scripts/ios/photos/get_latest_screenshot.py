@@ -63,7 +63,7 @@ def main():
     ctx = kwargs.get('__context__', {})
     client_id = ctx.get('client_id', '')
 
-    resp = upload_file_via_http(buf, filename=filename, upload_url=UPLOAD_URL, category='Pythonista', client_id=client_id)
+    resp = upload_file_via_http(buf, filename=filename, upload_url=UPLOAD_URL, category='download', client_id=client_id)
 
     try:
         payload = resp.json()
