@@ -74,19 +74,19 @@ class iOSCommands(CommonCommands):
 
     # ------------------ 手机常用 ------------------ #
 
-    @desc('Open URL', group='mobile')
+    @desc('Open URL', group='console')
     def openurl(self, url):
         return self._ios_platform_service.open_url(url)
 
-    @desc('Clear console output', group='mobile')
+    @desc('Clear console output', group='console')
     def clearconsole(self):
         return self._ios_platform_service.clear_console()
 
-    @desc('QuickLook preview file', group='mobile')
+    @desc('QuickLook preview file', group='console')
     def quicklook(self, path):
         return self._ios_platform_service.quick_look(path)
 
-    @desc('Open file in other app', group='mobile')
+    @desc('Open file in other app', group='console')
     def openin(self, path):
         return self._ios_platform_service.open_in(path)
 
@@ -103,10 +103,23 @@ class iOSCommands(CommonCommands):
     def listcontacts(self):
         return self._ios_platform_service.list_contacts()
 
-    @desc('Pick photo or file and upload', group='mobile')
+    @desc('Pick photo or file and upload', group='console')
     @interruptible()
     def pickupload(self, kind='photo'):
         return self._ios_platform_service.pick_upload(kind)
+
+    @desc('Keep screen awake', group='console')
+    def keepawake(self, arg):
+        import console
+        if arg=='on':
+            console.set_idle_timer_disabled(True)
+            return 1, 'Screen will stay awake'
+        elif arg=='off':
+            console.set_idle_timer_disabled(False)
+            return 1, 'Screen sleep restored'
+        else:
+            return 0, 'keepawake [on/off]'
+
 
     @argument_command('alert', spec=ALERT_ARGUMENT_SPEC)
     def alert(self, args_dict, payload=None):
@@ -138,3 +151,6 @@ class iOSCommands(CommonCommands):
     @interruptible()
     def wget(self, args_dict, payload=None):
         return self._ios_platform_service.acmd_wget(args_dict)
+
+
+
