@@ -41,7 +41,9 @@
     "clean_ds": "find . -name \"._*\" -type f -delete && find . -name \".DS_Store\" -type f -delete",
     "pause": "kill -STOP <pid>",
     "resume": "kill -CONT <pid>",
-    "wifipass": "security find-generic-password -wa <ssid>"
+    "wifipass": "security find-generic-password -wa <ssid>",
+    "public_ip": "curl -s ifconfig.me;echo"
   },
-  "linux": {}
+  "linux": {},
+  "ios": {}
 }
