@@ -41,7 +41,7 @@ class BackgroundJobFileRef:
     stored_name: str = ''
     size: int = 0
     created_at: str = ''
-    source_type: str = ''
+    # source_type: str = ''
     download_url: str = ''
     raw_url: str = ''
     preview_url: str = ''
@@ -64,7 +64,7 @@ class BackgroundJobFileRef:
             stored_name=payload.get('stored_name', ''),
             size=int(payload.get('size', 0) or 0),
             created_at=payload.get('created_at', ''),
-            source_type=payload.get('source_type', ''),
+            # source_type=payload.get('source_type', ''),
             download_url=payload.get('download_url', ''),
             raw_url=payload.get('raw_url', ''),
             preview_url=payload.get('preview_url', ''),
@@ -84,7 +84,7 @@ class BackgroundJobFileRef:
             'stored_name': self.stored_name,
             'size': self.size,
             'created_at': self.created_at,
-            'source_type': self.source_type,
+            # 'source_type': self.source_type,
             'download_url': self.download_url,
             'raw_url': self.raw_url,
             'preview_url': self.preview_url,

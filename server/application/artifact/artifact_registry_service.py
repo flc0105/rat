@@ -127,7 +127,8 @@ class ArtifactRegistryService:
         }
 
     def _build_meta_payload(self, *, artifact_id: str, artifact_type: str, category: str, hostname: str, machine_id: str,
-                            original_name: str, stored_name: str, file_path: str, size: int, source_type: str = '',
+                            original_name: str, stored_name: str, file_path: str, size: int,
+                            # source_type: str = '',
                             source_command_id=None, client_id: str = '', addr: str = '', job_id: str = '',
                             job_name: str = '', job_key: str = '', related_path: str = '', extra: dict | None = None) -> dict:
         payload = {
@@ -143,7 +144,7 @@ class ArtifactRegistryService:
             'saved_path': file_path,
             'size': int(size or 0),
             'created_at': self._now_text(),
-            'source_type': source_type,
+            # 'source_type': source_type,
             'source_command_id': source_command_id,
             'job_id': job_id,
             'job_name': job_name,
@@ -176,7 +177,9 @@ class ArtifactRegistryService:
 
     def _finalize_registered_artifact(self, *, artifact_type: str, category: str, hostname: str, machine_id: str,
                                       original_name: str, file_path: str, meta_path: str, stored_name: str,
-                                      source_type: str = '', source_command_id=None, client_id: str = '', addr: str = '',
+
+                                      # source_type: str = '',
+                                      source_command_id=None, client_id: str = '', addr: str = '',
                                       job_id: str = '', job_name: str = '', job_key: str = '', related_path: str = '',
                                       extra: dict | None = None) -> dict:
         artifact_id = uuid.uuid4().hex
@@ -191,7 +194,7 @@ class ArtifactRegistryService:
             stored_name=stored_name,
             file_path=file_path,
             size=file_size,
-            source_type=source_type,
+            # source_type=source_type,
             source_command_id=source_command_id,
             client_id=client_id,
             addr=addr,
@@ -207,7 +210,8 @@ class ArtifactRegistryService:
 
     def register_existing_artifact(self, *, artifact_type: str, category: str, hostname: str, machine_id: str,
                                    original_name: str, file_path: str, meta_path: str, stored_name: str,
-                                   source_type: str = '', source_command_id=None, client_id: str = '', addr: str = '',
+                                   # source_type: str = '',
+                                   source_command_id=None, client_id: str = '', addr: str = '',
                                    job_id: str = '', job_name: str = '', job_key: str = '', related_path: str = '',
                                    extra: dict | None = None) -> dict:
         with self._lock:
@@ -220,7 +224,7 @@ class ArtifactRegistryService:
                 file_path=file_path,
                 meta_path=meta_path,
                 stored_name=stored_name,
-                source_type=source_type,
+                # source_type=source_type,
                 source_command_id=source_command_id,
                 client_id=client_id,
                 addr=addr,
@@ -233,7 +237,9 @@ class ArtifactRegistryService:
 
     def save_http_uploaded_file(self, file, artifact_type: str = '', category: str = '', client_id: str = '',
                                 hostname: str = '', machine_id: str = '', job_id: str = '', job_name: str = '',
-                                job_key: str = '', source_type: str = '', source_command_id=None, addr: str = '',
+                                job_key: str = '',
+                                # source_type: str = '',
+                                source_command_id=None, addr: str = '',
                                 related_path: str = '', extra: dict | None = None) -> dict:
         normalized_type = self._normalize_artifact_type(artifact_type or self.CATEGORY_FILES)
         normalized_category = (category or '').strip() or 'default'
@@ -256,7 +262,7 @@ class ArtifactRegistryService:
             file_path=file_path,
             meta_path=allocated['meta_path'],
             stored_name=allocated['stored_name'],
-            source_type=source_type or 'client_upload',
+            # source_type=source_type or 'client_upload',
             source_command_id=source_command_id,
             client_id=client_id,
             addr=addr,

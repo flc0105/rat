@@ -64,14 +64,14 @@ class CommandFileWebMixin:
         *,
         artifact_type: str,
         category: str,
-        source_type: str,
+        # source_type: str,
         related_path: str = '',
         extra: dict | None = None,
     ) -> dict:
         return self._get_http_file_transfer_service().build_http_upload_form_data(
             artifact_type=artifact_type,
             category=category,
-            source_type=source_type,
+            # source_type=source_type,
             related_path=related_path,
             extra=extra,
         )
@@ -97,7 +97,7 @@ class CommandFileWebMixin:
         *,
         artifact_type: str = 'files',
         category: str = 'default',
-        source_type: str = 'client_upload',
+        # source_type: str = 'client_upload',
         related_path: str = '',
         extra: dict | None = None,
     ):
@@ -105,7 +105,7 @@ class CommandFileWebMixin:
             file_path,
             artifact_type=artifact_type,
             category=category,
-            source_type=source_type,
+            # source_type=source_type,
             related_path=related_path,
             extra=extra,
         )
@@ -116,7 +116,7 @@ class CommandFileWebMixin:
         *,
         artifact_type: str = 'files',
         category: str = 'default',
-        source_type: str = 'client_upload',
+        # source_type: str = 'client_upload',
         related_path: str = '',
         extra: dict | None = None,
     ):
@@ -124,7 +124,7 @@ class CommandFileWebMixin:
             file_path,
             artifact_type=artifact_type,
             category=category,
-            source_type=source_type,
+            # source_type=source_type,
             related_path=related_path,
             extra=extra,
         )
@@ -136,7 +136,7 @@ class CommandFileWebMixin:
         archive_name: str = '',
         artifact_type: str = 'files',
         category: str = 'default',
-        source_type: str = 'client_upload',
+        # source_type: str = 'client_upload',
         related_path: str = '',
         extra: dict | None = None,
     ):
@@ -145,7 +145,7 @@ class CommandFileWebMixin:
             archive_name=archive_name,
             artifact_type=artifact_type,
             category=category,
-            source_type=source_type,
+            # source_type=source_type,
             related_path=related_path,
             extra=extra,
         )
@@ -173,7 +173,7 @@ class CommandFileWebMixin:
                 file_path,
                 artifact_type='files',
                 category='remote_browser_download',
-                source_type='client_upload',
+                # source_type='client_upload',
                 related_path=file_path,
             )
         except CommandCancelledError:
@@ -208,7 +208,7 @@ class CommandFileWebMixin:
                 archive_name=archive_name,
                 artifact_type='files',
                 category='remote_browser_bundle',
-                source_type='client_upload',
+                # source_type='client_upload',
                 related_path=related_path,
             )
         except CommandCancelledError:
@@ -230,7 +230,7 @@ class CommandFileWebMixin:
                 file_path,
                 artifact_type='previews',
                 category='preview_cache',
-                source_type='client_upload',
+                # source_type='client_upload',
                 related_path=file_path,
             )
         except CommandCancelledError:

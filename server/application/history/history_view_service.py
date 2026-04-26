@@ -34,7 +34,7 @@ class HistoryViewService:
                     'download_url': artifact.get('download_url', copied.get('download_url', '')),
                     'raw_url': artifact.get('raw_url', copied.get('raw_url', '')),
                     'preview_url': artifact.get('preview_url', copied.get('preview_url', '')),
-                    'source_type': artifact.get('source_type', copied.get('source_type', '')),
+                    # 'source_type': artifact.get('source_type', copied.get('source_type', '')),
                     'related_path': artifact.get('related_path', copied.get('related_path', '')),
                     'is_available': artifact.get('is_available', True),
                     'status_text': artifact.get('status_text', ''),

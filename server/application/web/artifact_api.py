@@ -45,7 +45,7 @@ class WebArtifactApi:
             'stored_name': artifact_info.get('stored_name', ''),
             'size': artifact_info.get('size', 0),
             'created_at': artifact_info.get('created_at', ''),
-            'source_type': artifact_info.get('source_type', ''),
+            # 'source_type': artifact_info.get('source_type', ''),
             'download_url': artifact_info.get('download_url', ''),
             'preview_url': artifact_info.get('preview_url', ''),
         })
@@ -85,7 +85,9 @@ class WebArtifactApi:
 
     def save_http_uploaded_file(self, upload, artifact_type: str = 'files', category: str = '', client_id: str = '',
                                 hostname: str = '', machine_id: str = '', job_id: str = '', job_name: str = '',
-                                job_key: str = '', source_type: str = 'client_upload', related_path: str = '',
+                                job_key: str = '',
+                                # source_type: str = 'client_upload',
+                                related_path: str = '',
                                 source_command_id=None, extra=None):
         resolved_hostname, resolved_machine_id, addr = self.resolve_client_context(client_id)
         hostname = hostname or resolved_hostname
@@ -100,7 +102,7 @@ class WebArtifactApi:
             job_id=job_id,
             job_name=job_name,
             job_key=job_key,
-            source_type=source_type,
+            # source_type=source_type,
             source_command_id=source_command_id,
             addr=addr,
             related_path=related_path,

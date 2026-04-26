@@ -41,7 +41,7 @@ class HistoryFileRef:
     download_url: str = ''
     raw_url: str = ''
     preview_url: str = ''
-    source_type: str = ''
+    # source_type: str = ''
     related_path: str = ''
     is_available: bool = True
     status_text: str = ''
@@ -65,7 +65,7 @@ class HistoryFileRef:
             download_url=payload.get('download_url', ''),
             raw_url=payload.get('raw_url', ''),
             preview_url=payload.get('preview_url', ''),
-            source_type=payload.get('source_type', ''),
+            # source_type=payload.get('source_type', ''),
             related_path=payload.get('related_path', ''),
             is_available=bool(payload.get('is_available', True)),
             status_text=payload.get('status_text', ''),
@@ -87,7 +87,7 @@ class HistoryFileRef:
             'download_url': self.download_url,
             'raw_url': self.raw_url,
             'preview_url': self.preview_url,
-            'source_type': self.source_type,
+            # 'source_type': self.source_type,
             'related_path': self.related_path,
             'is_available': self.is_available,
             'status_text': self.status_text,

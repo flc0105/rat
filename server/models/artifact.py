@@ -16,7 +16,7 @@ class ArtifactRecord:
     saved_path: str = ''
     size: int = 0
     created_at: str = ''
-    source_type: str = ''
+    # source_type: str = ''
     source_command_id: Any = None
     job_id: str = ''
     job_name: str = ''
@@ -47,7 +47,7 @@ class ArtifactRecord:
             saved_path=payload.get('saved_path', ''),
             size=int(payload.get('size', 0) or 0),
             created_at=payload.get('created_at', ''),
-            source_type=payload.get('source_type', ''),
+            # source_type=payload.get('source_type', ''),
             source_command_id=payload.get('source_command_id'),
             job_id=payload.get('job_id', ''),
             job_name=payload.get('job_name', ''),
@@ -73,7 +73,7 @@ class ArtifactRecord:
             'saved_path': self.saved_path,
             'size': int(self.size or 0),
             'created_at': self.created_at,
-            'source_type': self.source_type,
+            # 'source_type': self.source_type,
             'source_command_id': self.source_command_id,
             'job_id': self.job_id,
             'job_name': self.job_name,

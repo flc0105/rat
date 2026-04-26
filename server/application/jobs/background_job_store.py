@@ -147,7 +147,7 @@ class BackgroundJobStore:
                 'stored_name': file_info.get('stored_name', ''),
                 'relative_path': file_info.get('relative_path', ''),
                 'size': file_info.get('size', 0),
-                'source_type': file_info.get('source_type', ''),
+                # 'source_type': file_info.get('source_type', ''),
                 'download_url': file_info.get('download_url', ''),
                 'raw_url': file_info.get('raw_url', ''),
                 'preview_url': file_info.get('preview_url', ''),

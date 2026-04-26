@@ -145,7 +145,7 @@ class Job(ABC):
                     'category': file_info.get('category', ''),
                     'hostname': file_info.get('hostname', ''),
                     'client_id': file_info.get('client_id', ''),
-                    'source_type': file_info.get('source_type', ''),
+                    # 'source_type': file_info.get('source_type', ''),
                     'download_url': file_info.get('download_url', ''),
                     'raw_url': file_info.get('raw_url', ''),
                     'preview_url': file_info.get('preview_url', ''),
@@ -159,7 +159,7 @@ class Job(ABC):
         category=None,
         *,
         artifact_type: str = 'files',
-        source_type: str = 'client_upload',
+        # source_type: str = 'client_upload',
         related_path: str = '',
         extra: dict | None = None,
     ):
@@ -171,7 +171,7 @@ class Job(ABC):
             'job_id': self.job_id,
             'job_name': self.job_name,
             'job_key': self.job_key,
-            'source_type': (source_type or 'client_upload').strip() or 'client_upload',
+            # 'source_type': (source_type or 'client_upload').strip() or 'client_upload',
             'source_command_id': self.command_id if self.command_id is not None else '',
             'related_path': (related_path or '').strip(),
         }

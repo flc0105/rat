@@ -48,7 +48,9 @@ class WebArtifactService:
 
     def register_existing_artifact(self, *, artifact_type: str, category: str, hostname: str, machine_id: str,
                                    original_name: str, file_path: str, meta_path: str, stored_name: str,
-                                   source_type: str = '', source_command_id=None, client_id: str = '', addr: str = '',
+
+                                   # source_type: str = '',
+                                   source_command_id=None, client_id: str = '', addr: str = '',
                                    job_id: str = '', job_name: str = '', job_key: str = '', related_path: str = '',
                                    extra: dict | None = None) -> dict:
         return self.registry_service.register_existing_artifact(
@@ -60,7 +62,7 @@ class WebArtifactService:
             file_path=file_path,
             meta_path=meta_path,
             stored_name=stored_name,
-            source_type=source_type,
+            # source_type=source_type,
             source_command_id=source_command_id,
             client_id=client_id,
             addr=addr,
@@ -73,7 +75,9 @@ class WebArtifactService:
 
     def save_http_uploaded_file(self, file, artifact_type: str = '', category: str = '', client_id: str = '',
                                 hostname: str = '', machine_id: str = '', job_id: str = '', job_name: str = '',
-                                job_key: str = '', source_type: str = '', source_command_id=None, addr: str = '',
+                                job_key: str = '',
+                                # source_type: str = '',
+                                source_command_id=None, addr: str = '',
                                 related_path: str = '', extra: dict | None = None) -> dict:
         return self.registry_service.save_http_uploaded_file(
             file,
@@ -85,7 +89,7 @@ class WebArtifactService:
             job_id=job_id,
             job_name=job_name,
             job_key=job_key,
-            source_type=source_type,
+            # source_type=source_type,
             source_command_id=source_command_id,
             addr=addr,
             related_path=related_path,

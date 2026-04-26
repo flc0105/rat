@@ -167,7 +167,7 @@ window.AppSseModule = {
                                 size: payload.size || 0,
                                 hostname: payload.hostname || '',
                                 category: payload.category || '',
-                                source_type: payload.source_type || ''
+                                // source_type: payload.source_type || ''
                             }
                         }
                     );

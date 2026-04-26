@@ -27,7 +27,7 @@ class CommandHttpFileTransferService:
         *,
         artifact_type: str,
         category: str,
-        source_type: str,
+        # source_type: str,
         related_path: str = '',
         extra: dict | None = None,
     ) -> dict:
@@ -37,7 +37,7 @@ class CommandHttpFileTransferService:
             'artifact_type': (artifact_type or 'files').strip() or 'files',
             'category': (category or '').strip() or 'default',
             'client_id': client_id,
-            'source_type': (source_type or 'client_upload').strip() or 'client_upload',
+            # 'source_type': (source_type or 'client_upload').strip() or 'client_upload',
             'source_command_id': self.owner.command_id if self.owner.command_id is not None else '',
             'related_path': (related_path or '').strip(),
         }
@@ -88,7 +88,7 @@ class CommandHttpFileTransferService:
         *,
         artifact_type: str = 'files',
         category: str = 'default',
-        source_type: str = 'client_upload',
+        # source_type: str = 'client_upload',
         related_path: str = '',
         extra: dict | None = None,
     ):
@@ -96,7 +96,7 @@ class CommandHttpFileTransferService:
         form_data = self.build_http_upload_form_data(
             artifact_type=artifact_type,
             category=category,
-            source_type=source_type,
+            # source_type=source_type,
             related_path=related_path,
             extra=extra,
         )
@@ -110,7 +110,7 @@ class CommandHttpFileTransferService:
         *,
         artifact_type: str = 'files',
         category: str = 'default',
-        source_type: str = 'client_upload',
+        # source_type: str = 'client_upload',
         related_path: str = '',
         extra: dict | None = None,
     ):
@@ -123,7 +123,7 @@ class CommandHttpFileTransferService:
             file_path,
             artifact_type=artifact_type,
             category=category,
-            source_type=source_type,
+            # source_type=source_type,
             related_path=related_path,
             extra=extra,
         )
@@ -144,7 +144,7 @@ class CommandHttpFileTransferService:
         archive_name: str = '',
         artifact_type: str = 'files',
         category: str = 'default',
-        source_type: str = 'client_upload',
+        # source_type: str = 'client_upload',
         related_path: str = '',
         extra: dict | None = None,
     ):
@@ -158,7 +158,7 @@ class CommandHttpFileTransferService:
                 temp_archive_path,
                 artifact_type=artifact_type,
                 category=category,
-                source_type=source_type,
+                # source_type=source_type,
                 related_path=related_path,
                 extra=extra,
             )
