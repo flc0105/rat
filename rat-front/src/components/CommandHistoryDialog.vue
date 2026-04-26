@@ -82,7 +82,7 @@
               <el-table-column
                 prop="command"
                 label="Command"
-                min-width="280"
+                min-width="260"
                 show-overflow-tooltip
               >
                 <template #default="{ row }">
@@ -95,7 +95,7 @@
               <el-table-column
                 prop="time"
                 label="Last Used"
-                width="220"
+                width="240"
                 show-overflow-tooltip
               >
                 <template #default="{ row }">
@@ -123,7 +123,7 @@
 
               <el-table-column
                 label="Actions"
-                width="220"
+                width="240"
                 align="center"
                 fixed="right"
               >
