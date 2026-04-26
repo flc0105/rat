@@ -1178,8 +1178,8 @@ export default {
   overflow-y: auto;
   min-height: 0;
   padding-right: 2px;
+  align-content: start;
 }
-
 .mobile-file-card {
   background: #fff;
   border: 1px solid rgba(15, 23, 42, 0.06);
@@ -1476,12 +1476,13 @@ export default {
     overflow: hidden;
   }
 
-  .quick-history-mobile-shell .mobile-file-grid {
-    height: 100%;
-    min-height: 0;
-    overflow-y: auto;
-    -webkit-overflow-scrolling: touch;
-  }
+.quick-history-mobile-shell .mobile-file-grid {
+  height: 100%;
+  min-height: 0;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  align-content: start;
+}
 
   .dialog-head-left {
     flex-wrap: wrap;
