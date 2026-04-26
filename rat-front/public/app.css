@@ -3564,9 +3564,9 @@ body {
 }
 
 
-.background-jobs-body{
-  max-height: 600px;
-}
+/*.background-jobs-body{*/
+/*  max-height: 600px;*/
+/*}*/
 
 .background-jobs-list-shell {
     max-height: 500px;

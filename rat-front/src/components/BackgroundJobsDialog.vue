@@ -1357,8 +1357,9 @@ export default {
 </script>
 
 <style scoped>
-/* BackgroundJobsDialog 收口：列表状态、请求逻辑、轮询刷新和主样式都留在组件内。 */
+/* BackgroundJobsDialog 收口：主弹窗固定高度，只有 job/module 列表内部滚动。 */
 .background-jobs-body {
+  flex: 1 1 0;
   height: 100%;
   min-height: 0;
   display: flex;
@@ -1368,7 +1369,7 @@ export default {
 
 .background-jobs-tabs {
   flex: 1 1 0;
-  height: auto;
+  height: 100%;
   min-height: 0;
   display: flex;
   flex-direction: column;
@@ -1394,6 +1395,7 @@ export default {
 }
 
 .background-jobs-tab-panel {
+  flex: 1 1 0;
   height: 100%;
   min-height: 0;
   display: flex;
@@ -1477,9 +1479,10 @@ export default {
 .background-job-module-list {
   flex: 1 1 0;
   min-height: 0;
+  max-height: none !important;
   overflow-y: auto;
   overscroll-behavior: contain;
-  padding-right: 4px;
+  padding: 4px 4px 4px 0;
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
   gap: 16px;
@@ -1501,14 +1504,13 @@ export default {
   display: flex;
   flex-direction: column;
   gap: 10px;
-  overflow: hidden;
+  overflow: visible;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
-  transition: box-shadow 0.2s ease, transform 0.2s ease;
+  transition: box-shadow 0.2s ease;
 }
 
 .background-job-module-card:hover {
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
-  transform: translateY(-1px);
 }
 
 .background-job-module-main {
@@ -1589,9 +1591,10 @@ export default {
 .background-jobs-list {
   flex: 1 1 0;
   min-height: 0;
+  max-height: none !important;
   overflow-y: auto;
   overscroll-behavior: contain;
-  padding-right: 4px;
+  padding: 4px 4px 4px 0;
   display: flex;
   flex-direction: column;
   gap: 12px;
@@ -1611,7 +1614,7 @@ export default {
   grid-template-columns: minmax(0, 1fr) auto;
   gap: 12px;
   align-items: center;
-  overflow: hidden;
+  overflow: visible;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.02);
 }
 
@@ -1671,7 +1674,7 @@ export default {
 }
 
 .empty-state {
-  flex: 1 1 auto;
+  flex: 1 1 0;
   min-height: 220px;
   color: var(--muted-2);
   text-align: center;
@@ -1733,8 +1736,7 @@ export default {
 
   .background-job-module-list {
     display: block;
-    padding-right: 2px;
-    padding-bottom: calc(16px + env(safe-area-inset-bottom));
+    padding: 4px 2px calc(16px + env(safe-area-inset-bottom)) 0;
   }
 
   .background-job-module-card {
@@ -1742,16 +1744,12 @@ export default {
     height: auto !important;
     padding: 12px;
     border-radius: 14px;
-    overflow: hidden;
+    overflow: visible;
     box-shadow: 0 4px 14px rgba(15, 23, 42, 0.04);
   }
 
   .background-job-module-card + .background-job-module-card {
     margin-top: 12px;
-  }
-
-  .background-job-module-card:hover {
-    transform: none;
   }
 
   .background-job-module-name,
@@ -1811,8 +1809,7 @@ export default {
 
   .background-jobs-list {
     display: block;
-    padding-right: 2px;
-    padding-bottom: calc(16px + env(safe-area-inset-bottom));
+    padding: 4px 2px calc(16px + env(safe-area-inset-bottom)) 0;
   }
 
   .background-job-summary-card {
@@ -1821,7 +1818,7 @@ export default {
     min-height: 0;
     padding: 12px;
     border-radius: 14px;
-    overflow: hidden;
+    overflow: visible;
     box-shadow: 0 4px 14px rgba(15, 23, 42, 0.04);
   }
 
@@ -1846,6 +1843,7 @@ export default {
 
 <style>
 /* BackgroundJobsDialog: 固定弹窗高度，禁止内容撑开，列表内部滚动。 */
+/* BackgroundJobsDialog: 固定弹窗高度，禁止内容撑开，列表内部滚动。 */
 .background-jobs-overlay .el-overlay-dialog {
   overflow: hidden !important;
 }
@@ -1857,6 +1855,7 @@ export default {
   display: flex !important;
   flex-direction: column !important;
   overflow: hidden !important;
+  box-sizing: border-box !important;
 }
 
 .background-jobs-overlay .el-dialog__header {
@@ -1864,15 +1863,20 @@ export default {
 }
 
 .background-jobs-overlay .el-dialog__body {
-  flex: 1 1 auto !important;
+  flex: 1 1 0 !important;
   min-height: 0 !important;
   overflow: hidden !important;
+  display: flex !important;
+  flex-direction: column !important;
   padding-top: 12px !important;
   padding-bottom: 12px !important;
+  box-sizing: border-box !important;
 }
 
-.background-jobs-overlay .fixed-dialog-body {
-  height: 100% !important;
+.background-jobs-overlay .fixed-dialog-body,
+.background-jobs-overlay .background-jobs-body {
+  flex: 1 1 0 !important;
+  height: auto !important;
   min-height: 0 !important;
   overflow: hidden !important;
   display: flex !important;
@@ -1881,8 +1885,10 @@ export default {
 
 .background-jobs-overlay .background-jobs-tabs {
   flex: 1 1 0 !important;
-  height: auto !important;
+  height: 100% !important;
   min-height: 0 !important;
+  display: flex !important;
+  flex-direction: column !important;
   overflow: hidden !important;
 }
 
@@ -1906,20 +1912,27 @@ export default {
 
 .background-jobs-overlay .background-jobs-modules,
 .background-jobs-overlay .background-jobs-list-shell {
-  flex: 1 1 auto !important;
+  flex: 1 1 0 !important;
+  height: auto !important;
   min-height: 0 !important;
+  max-height: none !important;
   overflow: hidden !important;
+  display: flex !important;
+  flex-direction: column !important;
 }
 
 .background-jobs-overlay .background-job-module-list,
 .background-jobs-overlay .background-jobs-list {
   flex: 1 1 0 !important;
   min-height: 0 !important;
+  max-height: none !important;
   overflow-y: auto !important;
 }
 
 @media (max-width: 768px), (max-height: 720px) {
   .background-jobs-overlay .el-dialog {
+    position: fixed !important;
+    inset: 0 !important;
     width: 100vw !important;
     max-width: 100vw !important;
     height: 100dvh !important;
@@ -1933,6 +1946,9 @@ export default {
   }
 
   .background-jobs-overlay .el-dialog__body {
+    flex: 1 1 0 !important;
+    height: auto !important;
+    min-height: 0 !important;
     padding: 10px 12px 12px !important;
   }
 }
