@@ -1634,3 +1634,66 @@ export default {
 }
 </style>
 
+
+<style>
+/* CommandExecutionDetailDialog：只做紧凑对齐，不额外撑高。 */
+
+/* 1 / 2：顶部信息卡片统一为紧凑高度。 */
+.command-execution-detail-dialog .background-job-stats {
+  align-items: stretch;
+}
+
+.command-execution-detail-dialog .background-job-stat {
+  height: 64px;
+  min-height: 64px;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding-top: 8px;
+  padding-bottom: 8px;
+}
+
+.command-execution-detail-dialog .background-job-stat-value {
+  min-height: 20px;
+  display: flex;
+  align-items: center;
+}
+
+/* 3 / 4：两个面板标题栏统一为紧凑高度。 */
+.command-execution-detail-dialog .background-job-panel-title {
+  height: 38px;
+  min-height: 38px;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  padding-top: 8px;
+  padding-bottom: 8px;
+}
+
+
+
+
+@media (max-width: 768px), (max-height: 720px) {
+  .command-execution-detail-dialog .background-job-stat {
+    height: auto;
+    min-height: 64px;
+  }
+
+  .command-execution-detail-dialog .background-job-panel-title {
+    height: auto;
+    min-height: 38px;
+  }
+
+  .command-execution-detail-dialog .command-output-panel-title {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: nowrap;
+  }
+
+  .command-execution-detail-dialog .command-output-panel-title .el-button {
+    width: auto;
+  }
+}
+</style>
