@@ -5,6 +5,7 @@
     width="1180px"
     top="5vh"
     class="fixed-dialog background-jobs-dialog"
+    modal-class="background-jobs-overlay"
     @update:model-value="handleVisibleChange"
   >
     <div class="fixed-dialog-body background-jobs-body">
@@ -13,132 +14,165 @@
         class="background-jobs-tabs"
       >
         <el-tab-pane label="Modules" name="modules">
-          <div class="background-jobs-toolbar">
-            <el-button
-              size="small"
-              type="primary"
-              class="toolbar-btn"
-              plain
-              @click="createRemoteJobPrompt"
-            >
-              New
-            </el-button>
+          <div class="background-jobs-tab-panel">
+            <div class="background-jobs-toolbar">
+              <div class="background-jobs-toolbar-left">
+                <el-button
+                  size="small"
+                  type="primary"
+                  class="toolbar-btn"
+                  plain
+                  @click="createRemoteJobPrompt"
+                >
+                  New
+                </el-button>
 
-            <el-button
-              size="small"
-              class="toolbar-btn"
-              :loading="serverJobUploadLoading"
-              @click="triggerServerJobUpload"
-            >
-              Upload
-            </el-button>
+                <el-button
+                  size="small"
+                  class="toolbar-btn"
+                  :loading="serverJobUploadLoading"
+                  @click="triggerServerJobUpload"
+                >
+                  Upload
+                </el-button>
 
-            <el-button
-              size="small"
-              class="toolbar-btn"
-              :loading="backgroundJobModulesLoading"
-              @click="loadBackgroundJobModules"
-            >
-              Refresh
-            </el-button>
+                <el-button
+                  size="small"
+                  class="toolbar-btn"
+                  :loading="backgroundJobModulesLoading"
+                  @click="loadBackgroundJobModules"
+                >
+                  Refresh
+                </el-button>
 
-            <input
-              ref="serverJobUploadInputRef"
-              type="file"
-              accept=".py,text/x-python"
-              class="hidden-file-input"
-              @change="handleServerJobUpload"
-            >
-          </div>
+                <input
+                  ref="serverJobUploadInputRef"
+                  type="file"
+                  accept=".py,text/x-python"
+                  class="hidden-file-input"
+                  @change="handleServerJobUpload"
+                >
+              </div>
 
-          <div class="background-jobs-modules panel-lite">
-            <div class="background-jobs-section-title">Available Jobs</div>
+              <div class="background-jobs-toolbar-right">
+                <el-select
+                  v-model="backgroundJobPlatformFilter"
+                  size="small"
+                  clearable
+                  filterable
+                  class="background-job-platform-filter"
+                  placeholder="All platforms"
+                >
+                  <el-option
+                    v-for="option in backgroundJobPlatformOptions"
+                    :key="option.value"
+                    :label="option.label"
+                    :value="option.value"
+                  />
+                </el-select>
 
-            <div
-              v-if="!backgroundJobModules.length && !backgroundJobModulesLoading"
-              class="empty-state"
-            >
-              No background jobs available
+                <el-input
+                  v-model="backgroundJobModuleSearchText"
+                  size="small"
+                  clearable
+                  class="background-job-module-search"
+                  placeholder="Search display name / job_key"
+                />
+              </div>
             </div>
 
             <div
-              v-else
-              class="background-job-module-list"
+              class="background-jobs-modules panel-lite"
+              v-loading="backgroundJobModulesLoading"
             >
+              <div class="background-jobs-section-title">Available Jobs</div>
+
               <div
-                v-for="item in backgroundJobModules"
-                :key="item.module_id || `job:${item.job_name}`"
-                class="background-job-module-card"
+                v-if="!filteredBackgroundJobModules.length && !backgroundJobModulesLoading"
+                class="empty-state"
               >
-                <div class="background-job-module-main">
-                  <div
-                    class="background-job-module-name"
-                    :title="item.display_name || item.job_name"
-                  >
-                    {{ item.display_name || item.job_name }}
-                  </div>
+                {{ hasBackgroundJobModuleFilters ? 'No matching background jobs' : 'No background jobs available' }}
+              </div>
 
-                  <div
-                    v-if="item.subtitle"
-                    class="background-job-module-key mono"
-                    :title="item.subtitle"
-                  >
-                    {{ item.subtitle }}
-                  </div>
-
-                  <div
-                    v-if="item.description"
-                    class="background-job-module-desc"
-                    :title="item.description"
-                  >
-                    {{ item.description }}
-                  </div>
-
-                  <div class="background-job-module-tags">
-                    <el-tag
-                      size="small"
-                      :type="isJobSupportedForCurrentConnection(item) ? 'info' : 'danger'"
+              <div
+                v-else
+                class="background-job-module-list"
+              >
+                <div
+                  v-for="item in filteredBackgroundJobModules"
+                  :key="item.module_id || `job:${item.job_name}`"
+                  class="background-job-module-card"
+                >
+                  <div class="background-job-module-main">
+                    <div
+                      class="background-job-module-name"
+                      :title="item.display_name || item.job_name"
                     >
-                      {{ formatJobPlatformLabel(item.metadata?.platforms || []) }}
-                    </el-tag>
+                      {{ item.display_name || item.job_name }}
+                    </div>
 
-                    <el-tag
-                      v-if="hasBackgroundJobParams(item)"
-                      size="small"
-                      type="warning"
+                    <div
+                      v-if="item.subtitle"
+                      class="background-job-module-key mono"
+                      :title="item.subtitle"
                     >
-                      Params
-                    </el-tag>
+                      {{ item.subtitle }}
+                    </div>
+
+                    <div
+                      v-if="item.description"
+                      class="background-job-module-desc"
+                      :title="item.description"
+                    >
+                      {{ item.description }}
+                    </div>
+
+                    <div class="background-job-module-tags">
+                      <el-tag
+                        size="small"
+                        :type="isJobSupportedForCurrentConnection(item) ? 'info' : 'danger'"
+                      >
+                        {{ formatJobPlatformLabel(item.metadata?.platforms || []) }}
+                      </el-tag>
+
+                      <el-tag
+                        v-if="hasBackgroundJobParams(item)"
+                        size="small"
+                        type="warning"
+                      >
+                        Params
+                      </el-tag>
+                    </div>
                   </div>
-                </div>
 
-                <div class="background-job-module-actions">
-                  <el-button
-                    size="small"
-                    type="primary"
-                    plain
-                    :disabled="isBackgroundJobStartDisabled(item)"
-                    @click="openBackgroundJobStartDialog(item)"
-                  >
-                    Start
-                  </el-button>
+                  <div class="background-job-module-actions">
+                    <el-button
+                      size="small"
+                      type="primary"
+                      plain
+                      :disabled="isBackgroundJobStartDisabled(item)"
+                      @click="openBackgroundJobStartDialog(item)"
+                    >
+                      Start
+                    </el-button>
 
-                  <el-button
-                    size="small"
-                    plain
-                    @click="$emit('open-job-editor', item.job_name)"
-                  >
-                    Edit
-                  </el-button>
+                    <el-button
+                      size="small"
+                      plain
+                      @click="$emit('open-job-editor', item.job_name)"
+                    >
+                      Edit
+                    </el-button>
 
-                  <el-button
-                    size="small"
-                    type="danger"
-                    plain
-                    @click="deleteBackgroundJobModule(item.job_name)"
-                  >
-                    Delete
-                  </el-button>
+                    <el-button
+                      size="small"
+                      type="danger"
+                      plain
+                      @click="deleteBackgroundJobModule(item.job_name)"
+                    >
+                      Delete
+                    </el-button>
+                  </div>
                 </div>
               </div>
             </div>
@@ -146,88 +180,94 @@
         </el-tab-pane>
 
         <el-tab-pane label="Jobs" name="jobs">
-          <div class="background-jobs-toolbar">
-            <el-button
-              size="small"
-              class="toolbar-btn"
-              :loading="backgroundJobsLoading"
-              @click="loadBackgroundJobs"
-            >
-              Refresh
-            </el-button>
-          </div>
-
-          <div
-            class="background-jobs-list-shell panel-lite"
-            v-loading="backgroundJobsLoading"
-          >
-            <div class="background-jobs-section-title">Reported Jobs</div>
-
-            <div
-              v-if="!sortedBackgroundJobs.length && !backgroundJobsLoading"
-              class="empty-state"
-            >
-              No background jobs reported for this connection
+          <div class="background-jobs-tab-panel">
+            <div class="background-jobs-toolbar">
+              <div class="background-jobs-toolbar-left">
+                <el-button
+                  size="small"
+                  class="toolbar-btn"
+                  :loading="backgroundJobsLoading"
+                  @click="loadBackgroundJobs"
+                >
+                  Refresh
+                </el-button>
+              </div>
             </div>
 
             <div
-              v-else
-              class="background-jobs-list"
+              class="background-jobs-list-shell panel-lite"
+              v-loading="backgroundJobsLoading"
             >
+              <div class="background-jobs-section-title">Reported Jobs</div>
+
               <div
-                v-for="job in sortedBackgroundJobs"
-                :key="job.job_id"
-                class="background-job-summary-card"
+                v-if="!sortedBackgroundJobs.length && !backgroundJobsLoading"
+                class="empty-state"
               >
-                <div class="background-job-summary-main">
-                  <div class="background-job-summary-top">
-                    <div class="background-job-summary-title-wrap">
-                      <div class="background-job-summary-title-line">
-                        <span class="background-job-summary-title">
-                          {{ job.display_name || job.job_name }}
-                        </span>
+                No background jobs reported for this connection
+              </div>
 
-                        <el-tag
-                          :type="buildBackgroundJobStateTagType(job.state)"
-                          size="small"
+              <div
+                v-else
+                class="background-jobs-list"
+              >
+                <div
+                  v-for="job in sortedBackgroundJobs"
+                  :key="job.job_id"
+                  class="background-job-summary-card"
+                >
+                  <div class="background-job-summary-main">
+                    <div class="background-job-summary-top">
+                      <div class="background-job-summary-title-wrap">
+                        <div class="background-job-summary-title-line">
+                          <span class="background-job-summary-title">
+                            {{ job.job_name || job.job_key || getBackgroundJobDisplayName(job) }}
+                          </span>
+
+                          <el-tag
+                            :type="buildBackgroundJobStateTagType(job.state)"
+                            size="small"
+                          >
+                            {{ job.state || 'unknown' }}
+                          </el-tag>
+                        </div>
+
+                        <div
+                          class="background-job-summary-subtitle"
+                          :title="getBackgroundJobDisplayName(job)"
                         >
-                          {{ job.state || 'unknown' }}
-                        </el-tag>
+                          Display Name: {{ getBackgroundJobDisplayName(job) }}
+                        </div>
                       </div>
+                    </div>
 
-                      <div class="background-job-summary-subtitle mono">
-                        {{ job.job_name }} / {{ job.job_key || '-' }}
-                      </div>
+                    <div class="background-job-summary-stats">
+                      <span>{{ formatBackgroundJobDuration(job.duration_seconds) }}</span>
+                      <span>{{ job.message_count || 0 }} msgs</span>
+                      <span>{{ job.file_count || 0 }} files</span>
+                      <span>{{ formatDateTimeStandard(job.started_at) || '-' }}</span>
                     </div>
                   </div>
 
-                  <div class="background-job-summary-stats">
-                    <span>{{ formatBackgroundJobDuration(job.duration_seconds) }}</span>
-                    <span>{{ job.message_count || 0 }} msgs</span>
-                    <span>{{ job.file_count || 0 }} files</span>
-                    <span>{{ job.thread_name || '-' }}</span>
-                    <span>{{ formatDateTimeStandard(job.started_at) || '-' }}</span>
+                  <div class="background-job-summary-actions">
+                    <el-button
+                      size="small"
+                      plain
+                      @click="openBackgroundJobDetail(job)"
+                    >
+                      Details
+                    </el-button>
+
+                    <el-button
+                      size="small"
+                      type="danger"
+                      plain
+                      :disabled="!job.job_key || job.state === 'stopped'"
+                      @click="stopBackgroundJob(job)"
+                    >
+                      Stop
+                    </el-button>
                   </div>
-                </div>
-
-                <div class="background-job-summary-actions">
-                  <el-button
-                    size="small"
-                    plain
-                    @click="openBackgroundJobDetail(job)"
-                  >
-                    Details
-                  </el-button>
-
-                  <el-button
-                    size="small"
-                    type="danger"
-                    plain
-                    :disabled="!job.job_key || job.state === 'stopped'"
-                    @click="stopBackgroundJob(job)"
-                  >
-                    Stop
-                  </el-button>
                 </div>
               </div>
             </div>
@@ -341,12 +381,20 @@ export default {
       backgroundJobStartSubmitting: false,
       pendingStartJobModule: null,
       backgroundJobParamForm: {},
+      backgroundJobPlatformFilter: '',
+      backgroundJobModuleSearchText: '',
     }
   },
 
   computed: {
     selectedBackgroundJob() {
-      return this.backgroundJobs.find(item => item.job_id === this.selectedBackgroundJobId) || null
+      const job = this.backgroundJobs.find(item => item.job_id === this.selectedBackgroundJobId) || null
+      if (!job) return null
+
+      return {
+        ...job,
+        display_name: this.getBackgroundJobDisplayName(job),
+      }
     },
 
     sortedBackgroundJobs() {
@@ -355,6 +403,82 @@ export default {
         const tb = String(b.updated_at || b.started_at || b.created_at || '')
         return tb.localeCompare(ta)
       })
+    },
+
+    currentConnectionPlatform() {
+      return this.resolveCurrentConnectionPlatform()
+    },
+
+    hasBackgroundJobModuleFilters() {
+      return !!(String(this.backgroundJobPlatformFilter || '').trim() || String(this.backgroundJobModuleSearchText || '').trim())
+    },
+
+    backgroundJobPlatformOptions() {
+      const options = []
+      const seen = new Set()
+
+      const addOption = (platform) => {
+        const normalized = this.normalizeJobPlatform(platform)
+        if (!normalized || normalized === '*' || seen.has(normalized)) return
+
+        seen.add(normalized)
+        options.push({
+          value: normalized,
+          label: this.formatSingleJobPlatformLabel(normalized),
+        })
+      }
+
+      addOption(this.currentConnectionPlatform)
+
+      for (const item of this.backgroundJobModules || []) {
+        const metadata = this.normalizeJobMetadata(item?.metadata || {})
+        for (const platform of metadata.platforms || []) {
+          addOption(platform)
+        }
+      }
+
+      return options
+    },
+
+    filteredBackgroundJobModules() {
+      const keyword = String(this.backgroundJobModuleSearchText || '').trim().toLowerCase()
+      const platform = String(this.backgroundJobPlatformFilter || '').trim()
+
+      return (this.backgroundJobModules || []).filter(item => {
+        if (platform && !this.doesJobPlatformMatchFilter(item, platform)) return false
+
+        if (keyword) {
+          const displayName = String(item.display_name || '').toLowerCase()
+          const jobKey = String(item.job_key || item.job_name || '').toLowerCase()
+          if (!displayName.includes(keyword) && !jobKey.includes(keyword)) return false
+        }
+
+        return true
+      })
+    },
+
+    backgroundJobModuleDisplayNameMap() {
+      const map = new Map()
+
+      for (const item of this.backgroundJobModules || []) {
+        const displayName = String(item.display_name || '').trim()
+        if (!displayName) continue
+
+        const keys = [
+          item.job_key,
+          item.job_name,
+          String(item.module_id || '').replace(/^job:/, ''),
+        ]
+
+        for (const key of keys) {
+          const normalized = this.normalizeBackgroundJobLookupKey(key)
+          if (normalized && !map.has(normalized)) {
+            map.set(normalized, displayName)
+          }
+        }
+      }
+
+      return map
     },
 
     selectedBackgroundJobMessagesDesc() {
@@ -388,6 +512,11 @@ export default {
   },
 
   watch: {
+    selectedId() {
+      if (!this.visible) return
+      this.syncBackgroundJobPlatformFilterWithConnection()
+    },
+
     backgroundJobDetailDialogVisible(value) {
       if (!value) {
         this.selectedBackgroundJobId = ''
@@ -419,6 +548,7 @@ export default {
       }
 
       this.visible = true
+      this.syncBackgroundJobPlatformFilterWithConnection()
 
       await Promise.all([
         this.loadBackgroundJobModules(),
@@ -559,10 +689,10 @@ export default {
     normalizeJobPlatform(platform) {
       const value = String(platform || '').trim().toLowerCase()
       if (!value) return ''
-      if (['*', 'all', 'any'].includes(value)) return '*'
+      if (['*', 'all', 'any', 'common'].includes(value)) return '*'
       if (['darwin', 'mac', 'macos', 'osx'].includes(value)) return 'mac'
       if (['windows', 'win', 'win32', 'nt'].includes(value)) return 'win'
-      if (value === 'linux') return 'linux'
+      if (['linux', 'ubuntu', 'debian', 'centos', 'fedora', 'redhat', 'rhel', 'alpine', 'arch'].includes(value)) return 'linux'
       return value
     },
 
@@ -572,7 +702,73 @@ export default {
       if (value.includes('darwin') || value.includes('mac')) return 'mac'
       if (value.includes('win')) return 'win'
       if (value.includes('linux')) return 'linux'
+      if (/(ubuntu|debian|centos|fedora|redhat|rhel|alpine|arch)/.test(value)) return 'linux'
       return this.normalizeJobPlatform(value)
+    },
+
+    resolveCurrentConnectionPlatform() {
+      const conn = this.currentConnection || {}
+      const candidates = [
+        conn.os_alias,
+        conn.os_type,
+        conn.platform,
+        conn.system,
+        conn.os,
+        conn.os_name,
+      ]
+
+      for (const candidate of candidates) {
+        const normalized = this.normalizeClientPlatform(candidate)
+        if (['mac', 'win', 'linux', 'ios'].includes(normalized)) return normalized
+      }
+
+      for (const candidate of candidates) {
+        const normalized = this.normalizeClientPlatform(candidate)
+        if (normalized) return normalized
+      }
+
+      return ''
+    },
+
+    syncBackgroundJobPlatformFilterWithConnection() {
+      this.backgroundJobPlatformFilter = this.currentConnectionPlatform || ''
+    },
+
+    formatSingleJobPlatformLabel(platform) {
+      return this.formatJobPlatformLabel([platform])
+    },
+
+    doesJobPlatformMatchFilter(item, platform) {
+      const target = this.normalizeJobPlatform(platform)
+      if (!target) return true
+
+      const metadata = this.normalizeJobMetadata(item?.metadata || {})
+      const platforms = metadata.platforms || []
+      if (!platforms.length || platforms.includes('*')) return true
+
+      return platforms.includes(target)
+    },
+
+    normalizeBackgroundJobLookupKey(value) {
+      const normalized = String(value || '').trim()
+        .replace(/\\/g, '/')
+        .replace(/\.py$/i, '')
+
+      return normalized.split('/').pop() || normalized
+    },
+
+    getBackgroundJobDisplayName(job) {
+      const ownDisplayName = String(job?.display_name || '').trim()
+      if (ownDisplayName) return ownDisplayName
+
+      const keys = [job?.job_key, job?.job_name]
+      for (const key of keys) {
+        const normalized = this.normalizeBackgroundJobLookupKey(key)
+        const displayName = this.backgroundJobModuleDisplayNameMap.get(normalized)
+        if (displayName) return displayName
+      }
+
+      return String(job?.job_name || job?.job_key || '').trim() || '-'
     },
 
     formatJobPlatformLabel(platforms) {
@@ -598,7 +794,7 @@ export default {
       const platforms = metadata.platforms || []
       if (!platforms.length || platforms.includes('*')) return true
 
-      const current = this.normalizeClientPlatform(this.currentConnection?.os_type || '')
+      const current = this.currentConnectionPlatform
       if (!current) return true
 
       return platforms.includes(current)
@@ -1105,11 +1301,11 @@ export default {
     },
 
     isBackgroundJobStartDisabled(item) {
-      const rawKey = String(item?.job_key || item?.job_name || '').trim()
-        .replace(/\\/g, '/')
-        .replace(/\.py$/i, '')
-      const key = rawKey.split('/').pop()
-      return !!key && this.activeBackgroundJobKeySet.has(key)
+      const key = this.normalizeBackgroundJobLookupKey(item?.job_key || item?.job_name || '')
+      const isActive = !!key && this.activeBackgroundJobKeySet.has(key)
+      const isUnsupported = !this.isJobSupportedForCurrentConnection(item)
+
+      return isActive || isUnsupported
     },
   },
 }
@@ -1146,11 +1342,33 @@ export default {
   overflow: hidden;
 }
 
+.background-jobs-tab-panel {
+  height: 100%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
 .background-jobs-toolbar {
   margin-bottom: 10px;
+  display: grid;
+  grid-template-columns: minmax(0, auto) minmax(320px, 1fr);
+  gap: 8px 12px;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.background-jobs-toolbar-left,
+.background-jobs-toolbar-right {
+  min-width: 0;
   display: flex;
+  align-items: center;
   gap: 8px;
   flex-wrap: wrap;
+}
+
+.background-jobs-toolbar-right {
+  justify-content: flex-end;
 }
 
 .background-jobs-toolbar :deep(.el-button) {
@@ -1159,6 +1377,19 @@ export default {
   margin: 0;
   border-radius: 10px;
   padding-inline: 12px;
+}
+
+.background-job-platform-filter,
+.background-job-module-search {
+  width: 240px;
+  max-width: 100%;
+}
+
+.background-job-platform-filter :deep(.el-select__wrapper),
+.background-job-module-search :deep(.el-input__wrapper) {
+  min-height: 32px;
+  height: 32px;
+  border-radius: 10px;
 }
 
 .hidden-file-input {
@@ -1181,7 +1412,8 @@ export default {
 
 .background-jobs-modules,
 .background-jobs-list-shell {
-  height: calc(100% - 42px);
+  flex: 1 1 auto;
+  height: auto;
   min-height: 0;
   overflow-y: auto;
 }
@@ -1191,6 +1423,7 @@ export default {
   grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
   gap: 16px;
   align-items: stretch;
+  align-content: start;
 }
 
 .background-job-module-card {
@@ -1365,6 +1598,14 @@ export default {
   padding: 24px;
 }
 
+.background-jobs-modules .empty-state,
+.background-jobs-list-shell .empty-state {
+  min-height: 220px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
 .mono {
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
 }
@@ -1380,35 +1621,134 @@ export default {
 }
 
 @media (max-width: 768px), (max-height: 720px) {
+  .background-jobs-toolbar {
+    grid-template-columns: 1fr;
+  }
+
+  .background-jobs-toolbar-left,
+  .background-jobs-toolbar-right {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .background-job-platform-filter,
+  .background-job-module-search {
+    flex: 1 1 100%;
+    width: 100%;
+  }
+
   .background-job-module-list {
     grid-template-columns: 1fr;
   }
 
-  .background-jobs-modules,
-  .background-jobs-list-shell {
-    height: calc(100% - 42px);
+  .background-job-module-card {
+    min-height: 0;
   }
-}
 
-@media (max-width: 640px) {
+  .background-job-module-name,
+  .background-job-module-key {
+    white-space: normal;
+    overflow: visible;
+    text-overflow: clip;
+    word-break: break-word;
+  }
+
+  .background-job-module-desc {
+    display: block;
+    overflow: visible;
+    -webkit-line-clamp: unset;
+  }
+
+  .background-job-module-tags {
+    margin-bottom: 6px;
+  }
+
+  .background-job-summary-card {
+    grid-template-columns: 1fr;
+    align-items: stretch;
+  }
+
   .background-job-module-actions,
   .background-job-summary-actions {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: 1fr;
     display: grid;
     width: 100%;
-    gap: 6px;
+    gap: 8px;
   }
 
   .background-job-module-actions :deep(.el-button),
   .background-job-summary-actions :deep(.el-button) {
     width: 100%;
+    min-height: 38px;
     justify-content: center;
+  }
+}
+
+@media (max-width: 640px) {
+  .background-jobs-toolbar-left {
+    align-items: stretch;
+  }
+
+  .background-jobs-toolbar-left :deep(.el-button) {
+    flex: 1 1 calc(33.333% - 8px);
   }
 }
 </style>
 
 <style>
 /* Background job 子弹窗样式收口：Start / Detail / Message 仍是独立组件，但样式随 Jobs 组件加载。 */
+.background-jobs-overlay .el-overlay-dialog {
+  overflow: hidden !important;
+}
+
+.background-jobs-overlay .el-dialog {
+  height: 78vh !important;
+  max-height: 78vh !important;
+  margin-top: 5vh !important;
+  display: flex !important;
+  flex-direction: column !important;
+  overflow: hidden !important;
+}
+
+.background-jobs-overlay .el-dialog__header {
+  flex: 0 0 auto !important;
+}
+
+.background-jobs-overlay .el-dialog__body {
+  flex: 1 1 auto !important;
+  min-height: 0 !important;
+  overflow: hidden !important;
+  padding-top: 12px !important;
+  padding-bottom: 12px !important;
+}
+
+.background-jobs-overlay .fixed-dialog-body {
+  height: 100% !important;
+  min-height: 0 !important;
+  overflow: hidden !important;
+  display: flex !important;
+  flex-direction: column !important;
+}
+
+@media (max-width: 768px), (max-height: 720px) {
+  .background-jobs-overlay .el-dialog {
+    width: 100vw !important;
+    max-width: 100vw !important;
+    height: 100dvh !important;
+    max-height: 100dvh !important;
+    margin: 0 !important;
+    border-radius: 0 !important;
+  }
+
+  .background-jobs-overlay .el-dialog__header {
+    padding: 14px 16px 10px !important;
+  }
+
+  .background-jobs-overlay .el-dialog__body {
+    padding: 10px 12px 12px !important;
+  }
+}
+
 .background-job-start-tags {
   margin-bottom: 12px;
 }
