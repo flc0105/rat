@@ -221,7 +221,8 @@
                       <div class="background-job-summary-title-wrap">
                         <div class="background-job-summary-title-line">
                           <span class="background-job-summary-title">
-                            {{ job.job_name || job.job_key || getBackgroundJobDisplayName(job) }}
+                            {{ getBackgroundJobDisplayName(job) }}
+<!--                            {{ job.job_name || job.job_key || getBackgroundJobDisplayName(job) }}-->
                           </span>
 
                           <el-tag
@@ -236,7 +237,7 @@
                           class="background-job-summary-subtitle"
                           :title="getBackgroundJobDisplayName(job)"
                         >
-                          Display Name: {{ getBackgroundJobDisplayName(job) }}
+                          {{job.display_name || job.job_key}}
                         </div>
                       </div>
                     </div>
@@ -387,15 +388,19 @@ export default {
   },
 
   computed: {
-    selectedBackgroundJob() {
-      const job = this.backgroundJobs.find(item => item.job_id === this.selectedBackgroundJobId) || null
-      if (!job) return null
+    // selectedBackgroundJob() {
+    //   const job = this.backgroundJobs.find(item => item.job_id === this.selectedBackgroundJobId) || null
+    //   if (!job) return null
+    //
+    //   return {
+    //     ...job,
+    //     display_name: this.getBackgroundJobDisplayName(job),
+    //   }
+    // },
 
-      return {
-        ...job,
-        display_name: this.getBackgroundJobDisplayName(job),
-      }
-    },
+    selectedBackgroundJob() {
+  return this.backgroundJobs.find(item => item.job_id === this.selectedBackgroundJobId) || null
+},
 
     sortedBackgroundJobs() {
       return [...this.backgroundJobs].sort((a, b) => {
