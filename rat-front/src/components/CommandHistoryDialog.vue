@@ -29,14 +29,6 @@
 
         <div class="dialog-head-right">
           <div class="command-history-toolbar">
-            <el-input
-              v-model="commandHistorySearchText"
-              size="small"
-              clearable
-              class="command-history-search-input"
-              placeholder="Search by command name"
-            />
-
             <div class="command-history-search-summary">
               <span>
                 Quick {{ commandHistorySearchSummary.quickVisible }} / {{ commandHistorySearchSummary.quickTotal }}
@@ -45,16 +37,15 @@
               <span>
                 Execution {{ commandHistorySearchSummary.fullVisible }} / {{ commandHistorySearchSummary.fullTotal }}
               </span>
-
-              <el-button
-                size="small"
-                plain
-                :disabled="!commandHistorySearchText"
-                @click="clearCommandHistorySearch"
-              >
-                Clear Search
-              </el-button>
             </div>
+
+            <el-input
+              v-model="commandHistorySearchText"
+              size="small"
+              clearable
+              class="command-history-search-input"
+              placeholder="Search by command name"
+            />
           </div>
         </div>
       </div>
@@ -306,108 +297,111 @@
               v-else
               class="command-execution-list"
             >
-              <div
+              <el-card
                 v-for="item in filteredCommandExecutionItems"
                 :key="item.entry_id"
-                class="execution-card"
+                class="execution-history-card"
+                shadow="hover"
               >
-                <div class="execution-card-header">
-                  <div class="execution-command mono">
-                    {{ item.command || '-' }}
+                <div class="execution-history-card-inner">
+                  <div class="execution-history-card-header">
+                    <div class="execution-history-command mono">
+                      {{ item.command || '-' }}
+                    </div>
+
+                    <div class="execution-history-badges">
+                      <el-tag
+                        :type="buildCommandExecutionStatusTagType(item.status)"
+                        size="small"
+                      >
+                        {{ item.status || '-' }}
+                      </el-tag>
+
+                      <el-tag
+                        v-if="item.has_files"
+                        type="primary"
+                        size="small"
+                      >
+                        📎 {{ item.file_count || 0 }}
+                      </el-tag>
+
+                      <el-tag
+                        v-if="item.output_truncated"
+                        type="warning"
+                        size="small"
+                      >
+                        ✂️ truncated
+                      </el-tag>
+                    </div>
                   </div>
 
-                  <div class="execution-badges">
-                    <el-tag
-                      :type="buildCommandExecutionStatusTagType(item.status)"
-                      size="small"
-                    >
-                      {{ item.status || '-' }}
-                    </el-tag>
-
-                    <el-tag
-                      v-if="item.has_files"
-                      type="primary"
-                      size="small"
-                    >
-                      📎 {{ item.file_count || 0 }}
-                    </el-tag>
-
-                    <el-tag
-                      v-if="item.output_truncated"
-                      type="warning"
-                      size="small"
-                    >
-                      ✂️ truncated
-                    </el-tag>
-                  </div>
-                </div>
-
-                <div class="execution-meta">
-                  <span class="meta-source">{{ item.source || '-' }}</span>
-                  <span class="meta-separator">•</span>
-                  <span class="meta-time">
-                    {{ formatDateTimeStandard(item.started_at) || '-' }}
-                  </span>
-                </div>
-
-                <div class="execution-stats">
-                  <div class="stat-item">
-                    <span class="stat-label">Duration</span>
-                    <span class="stat-value">
-                      {{ formatCommandExecutionDuration(item.duration_ms) }}
+                  <div class="execution-history-meta">
+                    <span class="execution-history-source mono">{{ item.source || '-' }}</span>
+                    <span class="execution-history-separator">•</span>
+                    <span class="execution-history-time">
+                      {{ formatDateTimeStandard(item.started_at) || '-' }}
                     </span>
                   </div>
 
-                  <div class="stat-item">
-                    <span class="stat-label">Chunks</span>
-                    <span class="stat-value">
-                      {{ item.output_chunk_count || 0 }}
-                    </span>
+                  <div class="execution-history-stats">
+                    <div class="execution-history-stat-item">
+                      <span class="execution-history-stat-label">Duration</span>
+                      <span class="execution-history-stat-value">
+                        {{ formatCommandExecutionDuration(item.duration_ms) }}
+                      </span>
+                    </div>
+
+                    <div class="execution-history-stat-item">
+                      <span class="execution-history-stat-label">Chunks</span>
+                      <span class="execution-history-stat-value">
+                        {{ item.output_chunk_count || 0 }}
+                      </span>
+                    </div>
+
+                    <div class="execution-history-stat-item">
+                      <span class="execution-history-stat-label">Lines</span>
+                      <span class="execution-history-stat-value">
+                        {{ item.output_line_count || 0 }}
+                      </span>
+                    </div>
                   </div>
 
-                  <div class="stat-item">
-                    <span class="stat-label">Lines</span>
-                    <span class="stat-value">
-                      {{ item.output_line_count || 0 }}
-                    </span>
+                  <div
+                    class="execution-history-summary"
+                    :title="buildCommandExecutionSingleLineSummary(item)"
+                  >
+                    {{ buildCommandExecutionSingleLineSummary(item) }}
+                  </div>
+
+                  <div class="execution-history-actions">
+                    <el-button
+                      plain
+                      size="small"
+                      @click="applyHistoryCommand(item)"
+                    >
+                      Use
+                    </el-button>
+
+                    <el-button
+                      plain
+                      size="small"
+                      @click="openCommandExecutionDetail(item)"
+                    >
+                      Details
+                    </el-button>
+
+                    <el-button
+                      type="danger"
+                      plain
+                      size="small"
+                      :loading="commandExecutionDeletingEntryId === item.entry_id"
+                      @click="deleteCommandExecutionItem(item)"
+                    >
+                      Delete
+                    </el-button>
                   </div>
                 </div>
-
-                <div
-                  class="execution-summary"
-                  :title="buildCommandExecutionSingleLineSummary(item)"
-                >
-                  {{ buildCommandExecutionSingleLineSummary(item) }}
-                </div>
-
-                <div class="execution-actions">
-                  <el-button
-                    plain
-                    size="small"
-                    @click="applyHistoryCommand(item)"
-                  >
-                    Use
-                  </el-button>
-
-                  <el-button
-                    plain
-                    size="small"
-                    @click="openCommandExecutionDetail(item)"
-                  >
-                    Details
-                  </el-button>
-
-                  <el-button
-                    type="danger"
-                    plain
-                    size="small"
-                    :loading="commandExecutionDeletingEntryId === item.entry_id"
-                    @click="deleteCommandExecutionItem(item)"
-                  >
-                    Delete
-                  </el-button>
-                </div>
-              </div>
+              </el-card>
             </div>
           </div>
         </el-tab-pane>
@@ -588,10 +582,6 @@ export default {
         this.commandExecutionDetailDialogVisible = false
         this.selectedCommandExecutionEntryId = ''
       }
-    },
-
-    clearCommandHistorySearch() {
-      this.commandHistorySearchText = ''
     },
 
     async reloadCandidates(options = {}) {
@@ -930,7 +920,7 @@ export default {
 </script>
 
 <style scoped>
-/* History dialog：恢复原来的手写 execution card，不使用 el-card。 */
+/* History dialog：Execution History 使用 el-card 外壳，内部保留原来的卡片信息结构。 */
 .fixed-dialog-body {
   height: 100%;
   min-height: 0;
@@ -973,13 +963,13 @@ export default {
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  gap: 10px;
+  gap: 12px;
   flex-wrap: wrap;
   width: 100%;
 }
 
 .command-history-search-input {
-  width: min(360px, 100%);
+  width: min(380px, 100%);
 }
 
 .command-history-search-input :deep(.el-input__wrapper) {
@@ -997,8 +987,16 @@ export default {
   font-size: 12px;
 }
 
-.command-history-search-summary :deep(.el-button) {
-  margin: 0;
+.command-history-search-summary span {
+  display: inline-flex;
+  align-items: center;
+  height: 32px;
+  padding: 0 10px;
+  border: 1px solid rgba(15, 23, 42, 0.06);
+  border-radius: 10px;
+  background: #f8fafc;
+  color: #64748b;
+  white-space: nowrap;
 }
 
 .command-history-tabs {
@@ -1291,22 +1289,31 @@ export default {
   padding: 4px 2px 4px 0;
 }
 
-.execution-card {
-  background: #ffffff;
+.execution-history-card.el-card {
+  flex: 0 0 auto;
   border: 1px solid #eef2f6;
   border-radius: 16px;
-  padding: 16px 20px;
-  transition: all 0.2s ease;
+  background: #fff;
+  overflow: hidden;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.02);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
 }
 
-.execution-card:hover {
+.execution-history-card.el-card:hover {
   border-color: #e2e8f0;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.04);
   transform: translateY(-1px);
 }
 
-.execution-card-header {
+.execution-history-card :deep(.el-card__body) {
+  padding: 0 !important;
+}
+
+.execution-history-card-inner {
+  padding: 16px 20px;
+}
+
+.execution-history-card-header {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
@@ -1314,22 +1321,25 @@ export default {
   margin-bottom: 8px;
 }
 
-.execution-command {
+.execution-history-command {
   font-size: 14px;
   font-weight: 600;
   color: #1e293b;
   line-height: 1.4;
   word-break: break-word;
   flex: 1;
+  min-width: 0;
 }
 
-.execution-badges {
+.execution-history-badges {
   display: flex;
   gap: 8px;
   flex-shrink: 0;
+  flex-wrap: wrap;
+  justify-content: flex-end;
 }
 
-.execution-meta {
+.execution-history-meta {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -1338,15 +1348,15 @@ export default {
   color: #6b7280;
 }
 
-.meta-source {
-  font-family: monospace;
+.execution-history-source {
+  color: #475569;
 }
 
-.meta-separator {
+.execution-history-separator {
   color: #d1d5db;
 }
 
-.execution-stats {
+.execution-history-stats {
   display: flex;
   flex-wrap: wrap;
   gap: 16px;
@@ -1356,13 +1366,14 @@ export default {
   border-bottom: 1px solid #f0f2f5;
 }
 
-.stat-item {
+.execution-history-stat-item {
   display: flex;
   align-items: baseline;
   gap: 6px;
+  min-width: 0;
 }
 
-.stat-label {
+.execution-history-stat-label {
   font-size: 11px;
   font-weight: 500;
   color: #9ca3af;
@@ -1370,20 +1381,13 @@ export default {
   letter-spacing: 0.3px;
 }
 
-.stat-value {
+.execution-history-stat-value {
   font-size: 13px;
   font-weight: 500;
   color: #1e293b;
 }
 
-.stat-value-ellipsis {
-  max-width: 240px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.execution-summary {
+.execution-history-summary {
   font-size: 12px;
   color: #4b5563;
   line-height: 1.5;
@@ -1393,12 +1397,12 @@ export default {
   white-space: nowrap;
 }
 
-.execution-actions {
+.execution-history-actions {
   display: flex;
   justify-content: flex-end;
 }
 
-.execution-actions :deep(.el-button + .el-button) {
+.execution-history-actions :deep(.el-button + .el-button) {
   margin-left: 12px;
 }
 
@@ -1428,28 +1432,28 @@ export default {
     display: none;
   }
 
- .quick-history-mobile-shell {
-  display: flex;
-  flex: 1 1 auto;
-  height: 100%;
-  min-height: 0;
-  overflow: hidden;
-}
+  .quick-history-mobile-shell {
+    display: flex;
+    flex: 1 1 auto;
+    height: 100%;
+    min-height: 0;
+    overflow: hidden;
+  }
 
-.quick-history-mobile-shell .mobile-file-list {
-  display: block;
-  flex: 1 1 auto;
-  height: 100%;
-  min-height: 0;
-  overflow: hidden;
-}
+  .quick-history-mobile-shell .mobile-file-list {
+    display: block;
+    flex: 1 1 auto;
+    height: 100%;
+    min-height: 0;
+    overflow: hidden;
+  }
 
-.quick-history-mobile-shell .mobile-file-grid {
-  height: 100%;
-  min-height: 0;
-  overflow-y: auto;
-  -webkit-overflow-scrolling: touch;
-}
+  .quick-history-mobile-shell .mobile-file-grid {
+    height: 100%;
+    min-height: 0;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
 
   .dialog-head-left {
     flex-wrap: wrap;
@@ -1469,39 +1473,35 @@ export default {
     justify-content: space-between;
   }
 
-  .execution-card {
+  .execution-history-card-inner {
     padding: 14px 16px;
   }
 
-  .execution-card-header {
+  .execution-history-card-header {
     flex-direction: column;
     align-items: flex-start;
   }
 
-  .execution-badges {
-    flex-wrap: wrap;
+  .execution-history-badges {
+    justify-content: flex-start;
   }
 
-  .execution-stats {
+  .execution-history-stats {
     gap: 12px;
   }
 
-  .stat-value-ellipsis {
-    max-width: 150px;
-  }
-
-  .execution-summary {
+  .execution-history-summary {
     white-space: normal;
     word-break: break-word;
   }
 
-  .execution-actions {
+  .execution-history-actions {
     justify-content: flex-start;
     flex-wrap: wrap;
     gap: 8px;
   }
 
-  .execution-actions :deep(.el-button + .el-button) {
+  .execution-history-actions :deep(.el-button + .el-button) {
     margin-left: 0;
   }
 }
