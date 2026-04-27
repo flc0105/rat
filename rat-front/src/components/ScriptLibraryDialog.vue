@@ -666,16 +666,28 @@ export default {
         //   if (!hasCurrentDir) this.selectedDirectory = this.getFirstAvailableScriptDirectory()
         // }
 
+//         if (options?.selectForConnection) {
+//   const preferredDirectory = this.getPreferredScriptDirectoryForCurrentConnection()
+//   this.selectedDirectory = preferredDirectory || this.getFirstAvailableScriptDirectory()
+//
+//   if (this.selectedDirectory) {
+//     this.scriptTreeExpandedKeys = this.includeScriptTreeAncestorKeys([
+//       ...this.scriptTreeExpandedKeys,
+//       this.getScriptDirectoryTreeKey(this.selectedDirectory),
+//     ])
+//   }
+// } else if (!this.selectedDirectory) {
+
         if (options?.selectForConnection) {
   const preferredDirectory = this.getPreferredScriptDirectoryForCurrentConnection()
   this.selectedDirectory = preferredDirectory || this.getFirstAvailableScriptDirectory()
 
-  if (this.selectedDirectory) {
-    this.scriptTreeExpandedKeys = this.includeScriptTreeAncestorKeys([
-      ...this.scriptTreeExpandedKeys,
+  // 打开弹窗时只展开当前设备对应目录路径，不沿用上次手动展开状态。
+  this.scriptTreeExpandedKeys = this.selectedDirectory
+    ? this.includeScriptTreeAncestorKeys([
       this.getScriptDirectoryTreeKey(this.selectedDirectory),
     ])
-  }
+    : []
 } else if (!this.selectedDirectory) {
   this.selectedDirectory = this.getFirstAvailableScriptDirectory()
 } else {
