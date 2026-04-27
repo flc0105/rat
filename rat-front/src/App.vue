@@ -221,14 +221,9 @@
   :selected-id="selectedId"
 />
 
-  <AgentBuilderDialog
-  v-model:visible="agentBuilderDialogVisible"
-  :form="agentForm"
-  :builder-alert-text="agentBuilderAlertText"
-  :building="agentBuilding"
-  :target-os-disabled="isAgentTargetOsDisabled"
-  :target-arch-disabled="isAgentTargetArchDisabled"
-  @build="buildAgent"
+<AgentBuilderDialog
+  ref="agentBuilderDialogRef"
+  @built="refreshAgentOutputsIfOpen"
 />
 
 <TerminalJsonDialog
@@ -457,6 +452,16 @@ openPtyDialog() {
 
 openProcessDialog() {
   return this.$refs.processDialogRef?.open()
+},
+
+    openAgentBuilderDialog() {
+  return this.$refs.agentBuilderDialogRef?.open()
+},
+
+    refreshAgentOutputsIfOpen() {
+  if (!this.agentOutputsDialogVisible || typeof this.loadAgentOutputs !== 'function') return
+
+  return this.loadAgentOutputs({ silent: true })
 },
 
 openConnectionInfoDialog() {
