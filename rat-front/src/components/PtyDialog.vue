@@ -29,13 +29,19 @@
         </div>
 
         <div class="pty-toolbar-right">
-          <el-input
-            v-model="shellPath"
-            size="small"
-            placeholder="Optional shell path"
-            class="pty-shell-input"
-            :disabled="ptyLoading || !!ptySessionId"
-          />
+<!--          <span class="pty-badge">-->
+<!--  Shell: {{ shellPath || 'default' }}-->
+<!--</span>-->
+<!--          -->
+
+
+<!--          <el-input-->
+<!--            v-model="shellPath"-->
+<!--            size="small"-->
+<!--            placeholder="Optional shell path"-->
+<!--            class="pty-shell-input"-->
+<!--            :disabled="ptyLoading || !!ptySessionId"-->
+<!--          />-->
 
           <el-button
             size="small"
@@ -73,7 +79,7 @@
 </template>
 
 <script>
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 
 export default {
   name: 'PtyDialog',
@@ -140,6 +146,92 @@ export default {
   },
 
   methods: {
+
+//     async open() {
+//   if (!this.selectedId) {
+//     ElMessage.warning('Please select a device')
+//     return
+//   }
+//
+//   if (this.ptyLoading) return
+//
+//   if (!window.Terminal || !window.FitAddon || !window.FitAddon.FitAddon) {
+//     ElMessage.error('xterm.js failed to load')
+//     return
+//   }
+//
+//   let requestedShell = 'default'
+//
+//   try {
+//     const { value } = await ElMessageBox.prompt(
+//       'Enter shell path/name. Use "default" for auto-detect.',
+//       'Open PTY',
+//       {
+//         confirmButtonText: 'Open',
+//         cancelButtonText: 'Cancel',
+//         inputValue: this.shellPath || 'default',
+//         inputPlaceholder: 'default, bash, zsh, /bin/zsh, powershell.exe',
+//       }
+//     )
+//
+//     requestedShell = String(value || 'default').trim() || 'default'
+//   } catch (e) {
+//     if (e === 'cancel' || e === 'close') return
+//     throw e
+//   }
+//
+//   this.shellPath = requestedShell.toLowerCase() === 'default' ? '' : requestedShell
+//
+//   this.ptyLoading = true
+//   this.visible = true
+//   this.ptySessionId = ''
+//   this.ptySeq = 0
+//   this.ptyStatus = 'opening'
+//   this.ptyError = ''
+//   this.ptyUserClosing = false
+//   this.ptyWsConnectedOnce = false
+//   this.closePtySocket()
+//   this.resetPtyInputQueue()
+//
+//   try {
+//     await this.$nextTick()
+//     this.initPtyTerminal()
+//     this.clearPtyTerminal()
+//     this.writePtySystemLine('[opening PTY...]\r\n')
+//     ElMessage({ type: 'info', message: 'Opening PTY session...', duration: 1200 })
+//
+//     const dims = this.fitPtyTerminalAndGetSize()
+//     const res = await fetch(`/api/connections/${encodeURIComponent(this.selectedId)}/pty/open`, {
+//       method: 'POST',
+//       headers: this.buildJsonHeaders({ 'Content-Type': 'application/json' }),
+//       body: JSON.stringify({
+//         cols: dims.cols,
+//         rows: dims.rows,
+//         shell: this.shellPath || '',
+//       }),
+//     })
+//     const json = await res.json()
+//     if (!res.ok || json.code !== 0) {
+//       throw new Error(json.message || 'Failed to open PTY')
+//     }
+//
+//     this.ptySessionId = json.data?.pty_session_id || ''
+//     this.ptyStatus = json.data?.status || 'opening'
+//     this.ptyLastCols = dims.cols
+//     this.ptyLastRows = dims.rows
+//     this.ptyWsPath = json.data?.ws_path || ''
+//
+//     this.openPtySocket()
+//     this.focusPtyInput()
+//     this.schedulePtyResize()
+//   } catch (e) {
+//     this.ptyStatus = 'error'
+//     this.ptyError = e?.message || String(e)
+//     ElMessage.error(this.ptyError || 'Failed to open PTY')
+//   } finally {
+//     this.ptyLoading = false
+//   }
+// },
     async open() {
       if (!this.selectedId) {
         ElMessage.warning('Please select a device')
@@ -723,6 +815,10 @@ export default {
   .pty-screen-shell {
     min-height: 400px;
   }
+}
+
+.el-button+.el-button {
+  margin:0 !important;
 }
 </style>
 
