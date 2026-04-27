@@ -1,22 +1,23 @@
 <template>
   <el-dialog
-    :model-value="visible"
+    v-model="visible"
     title="Remote PTY"
     width="900px"
     top="6vh"
     class="fixed-dialog pty-dialog"
-    @update:model-value="$emit('update:visible', $event)"
-    @closed="$emit('closed')"
+    modal-class="pty-overlay"
+    @close="closePtyDialog"
+    @closed="handlePtyDialogClosed"
   >
-    <div class="pty-shell">
+    <div class="fixed-dialog-body pty-shell">
       <div class="pty-toolbar">
         <div class="pty-toolbar-left">
           <span class="pty-badge">
-            {{ currentConnection ? (currentConnection.hostname || currentConnection.client_id) : 'No device' }}
+            {{ connectionLabel }}
           </span>
 
           <span class="pty-badge pty-badge-status">
-            {{ ptyStatus || 'idle' }}
+            {{ statusText }}
           </span>
 
           <span
@@ -29,23 +30,25 @@
 
         <div class="pty-toolbar-right">
           <el-input
-            :model-value="shellPath"
+            v-model="shellPath"
             size="small"
             placeholder="Optional shell path"
             class="pty-shell-input"
-            @update:model-value="$emit('update:shell-path', $event)"
+            :disabled="ptyLoading || !!ptySessionId"
           />
 
           <el-button
             size="small"
-            @click="$emit('focus')"
+            :disabled="!ptyTerm"
+            @click="focusPtyInput"
           >
             Focus
           </el-button>
 
           <el-button
             size="small"
-            @click="$emit('close')"
+            :loading="ptyClosing"
+            @click="closePtyDialog"
           >
             Close
           </el-button>
@@ -54,7 +57,7 @@
 
       <div
         class="pty-screen-shell xterm-shell"
-        @click="$emit('focus')"
+        @click="focusPtyInput"
       >
         <div
           ref="ptyTerminalRef"
@@ -70,13 +73,15 @@
 </template>
 
 <script>
+import { ElMessage } from 'element-plus'
+
 export default {
   name: 'PtyDialog',
 
   props: {
-    visible: {
-      type: Boolean,
-      default: false,
+    selectedId: {
+      type: [String, Number],
+      default: '',
     },
 
     currentConnection: {
@@ -84,34 +89,651 @@ export default {
       default: null,
     },
 
-    ptyStatus: {
-      type: String,
-      default: '',
-    },
-
-    ptyError: {
-      type: String,
-      default: '',
-    },
-
-    shellPath: {
-      type: String,
-      default: '',
+    getTabScopedHeaders: {
+      type: Function,
+      default: null,
     },
   },
 
-  emits: [
-    'update:visible',
-    'update:shell-path',
-    'closed',
-    'focus',
-    'close',
-  ],
+  data() {
+    return {
+      visible: false,
+      shellPath: '',
+      ptyLoading: false,
+      ptyClosing: false,
+      ptySessionId: '',
+      ptySeq: 0,
+      ptyStatus: '',
+      ptyError: '',
+      ptyTerm: null,
+      ptyFitAddon: null,
+      ptyInputQueue: '',
+      ptyFlushTimer: null,
+      ptyLastCols: 0,
+      ptyLastRows: 0,
+      ptyWs: null,
+      ptyWsPath: '',
+      ptyUserClosing: false,
+      ptyWsConnectedOnce: false,
+      _ptyResizeTimer: null,
+      _ptyWindowResizeHandler: null,
+    }
+  },
+
+  computed: {
+    connectionLabel() {
+      const connection = this.currentConnection || {}
+      return connection.hostname || connection.client_id || 'No device'
+    },
+
+    statusText() {
+      return this.ptyStatus || 'idle'
+    },
+  },
+
+  beforeUnmount() {
+    this.resetPtyInputQueue()
+    this.clearPtyResizeTimer()
+    this.sendPtyWs({ type: 'close' })
+    this.closePtySocket()
+    this.disposePtyTerminal()
+  },
 
   methods: {
-    getTerminalHost() {
-      return this.$refs.ptyTerminalRef || null
+    async open() {
+      if (!this.selectedId) {
+        ElMessage.warning('Please select a device')
+        return
+      }
+
+      if (this.ptyLoading) return
+
+      if (!window.Terminal || !window.FitAddon || !window.FitAddon.FitAddon) {
+        ElMessage.error('xterm.js failed to load')
+        return
+      }
+
+      this.ptyLoading = true
+      this.visible = true
+      this.ptySessionId = ''
+      this.ptySeq = 0
+      this.ptyStatus = 'opening'
+      this.ptyError = ''
+      this.ptyUserClosing = false
+      this.ptyWsConnectedOnce = false
+      this.closePtySocket()
+      this.resetPtyInputQueue()
+
+      try {
+        await this.$nextTick()
+        this.initPtyTerminal()
+        this.clearPtyTerminal()
+        this.writePtySystemLine('[opening PTY...]\r\n')
+        ElMessage({ type: 'info', message: 'Opening PTY session...', duration: 1200 })
+
+        const dims = this.fitPtyTerminalAndGetSize()
+        const res = await fetch(`/api/connections/${encodeURIComponent(this.selectedId)}/pty/open`, {
+          method: 'POST',
+          headers: this.buildJsonHeaders({ 'Content-Type': 'application/json' }),
+          body: JSON.stringify({
+            cols: dims.cols,
+            rows: dims.rows,
+            shell: this.shellPath || '',
+          }),
+        })
+        const json = await res.json()
+        if (!res.ok || json.code !== 0) {
+          throw new Error(json.message || 'Failed to open PTY')
+        }
+
+        this.ptySessionId = json.data?.pty_session_id || ''
+        this.ptyStatus = json.data?.status || 'opening'
+        this.ptyLastCols = dims.cols
+        this.ptyLastRows = dims.rows
+        this.ptyWsPath = json.data?.ws_path || ''
+
+        this.openPtySocket()
+        this.focusPtyInput()
+        this.schedulePtyResize()
+      } catch (e) {
+        this.ptyStatus = 'error'
+        this.ptyError = e?.message || String(e)
+        ElMessage.error(this.ptyError || 'Failed to open PTY')
+      } finally {
+        this.ptyLoading = false
+      }
+    },
+
+    async closePtyDialog() {
+      if (this.ptyClosing) {
+        this.visible = false
+        return
+      }
+
+      this.ptyClosing = true
+      this.resetPtyInputQueue()
+      this.clearPtyResizeTimer()
+      this.ptyUserClosing = true
+      this.sendPtyWs({ type: 'close' })
+      this.closePtySocket()
+
+      const ptyId = this.ptySessionId
+      this.visible = false
+      this.ptySessionId = ''
+      this.ptyStatus = 'closed'
+
+      if (!ptyId) {
+        this.disposePtyTerminal()
+        this.ptyClosing = false
+        return
+      }
+
+      try {
+        await fetch(`/api/pty/${encodeURIComponent(ptyId)}/close`, {
+          method: 'POST',
+          headers: this.buildJsonHeaders({ 'Content-Type': 'application/json' }),
+          body: '{}',
+        })
+      } catch (_) {
+      } finally {
+        this.disposePtyTerminal()
+        this.ptyClosing = false
+      }
+    },
+
+    handlePtyDialogClosed() {
+      this.visible = false
+      this.resetPtyInputQueue()
+      this.clearPtyResizeTimer()
+      this.closePtySocket()
+      this.ptySessionId = ''
+      this.disposePtyTerminal()
+    },
+
+    buildJsonHeaders(extra = {}) {
+      if (typeof this.getTabScopedHeaders === 'function') {
+        return this.getTabScopedHeaders(extra)
+      }
+
+      return extra
+    },
+
+    initPtyTerminal() {
+      if (this.ptyTerm) return
+      const host = this.$refs.ptyTerminalRef
+      if (!host) return
+
+      const term = new window.Terminal({
+        cursorBlink: true,
+        convertEol: false,
+        scrollback: 5000,
+        fontSize: 12,
+        lineHeight: 1.32,
+        fontFamily: "'JetBrains Mono', 'SFMono-Regular', 'Cascadia Mono', 'Menlo', 'Consolas', monospace",
+        theme: {
+          background: '#000000',
+          foreground: '#e5e7eb',
+          cursor: '#e5e7eb',
+          cursorAccent: '#000000',
+          selectionBackground: 'rgba(148, 163, 184, 0.28)',
+        },
+        allowTransparency: false,
+      })
+
+      const fitAddon = new window.FitAddon.FitAddon()
+      term.loadAddon(fitAddon)
+      term.open(host)
+
+      try { fitAddon.fit() } catch (_) {}
+
+      term.onData((data) => {
+        this.queuePtyInput(data)
+      })
+
+      term.onTitleChange((title) => {
+        if (title) this.ptyStatus = this.ptyStatus || 'open'
+      })
+
+      this.ptyTerm = term
+      this.ptyFitAddon = fitAddon
+
+      this._ptyWindowResizeHandler = () => {
+        this.schedulePtyResize()
+      }
+      window.addEventListener('resize', this._ptyWindowResizeHandler, { passive: true })
+    },
+
+    disposePtyTerminal() {
+      if (this._ptyWindowResizeHandler) {
+        window.removeEventListener('resize', this._ptyWindowResizeHandler)
+        this._ptyWindowResizeHandler = null
+      }
+
+      this.clearPtyResizeTimer()
+
+      if (this.ptyTerm) {
+        try { this.ptyTerm.dispose() } catch (_) {}
+        this.ptyTerm = null
+      }
+
+      this.ptyFitAddon = null
+      this.ptyLastCols = 0
+      this.ptyLastRows = 0
+    },
+
+    clearPtyResizeTimer() {
+      if (this._ptyResizeTimer) {
+        clearTimeout(this._ptyResizeTimer)
+        this._ptyResizeTimer = null
+      }
+    },
+
+    clearPtyTerminal() {
+      if (this.ptyTerm) {
+        try { this.ptyTerm.clear() } catch (_) {}
+        try { this.ptyTerm.reset() } catch (_) {}
+      }
+    },
+
+    writePtyOutput(text) {
+      if (!text) return
+      if (this.ptyTerm) {
+        this.ptyTerm.write(text)
+      }
+    },
+
+    writePtySystemLine(text) {
+      if (this.ptyTerm) {
+        this.ptyTerm.write(text)
+      }
+    },
+
+    focusPtyInput() {
+      if (this.ptyTerm) {
+        try { this.ptyTerm.focus() } catch (_) {}
+      }
+    },
+
+    fitPtyTerminalAndGetSize() {
+      if (this.ptyFitAddon) {
+        try { this.ptyFitAddon.fit() } catch (_) {}
+      }
+      const cols = Math.max(20, Number(this.ptyTerm?.cols || 120))
+      const rows = Math.max(5, Number(this.ptyTerm?.rows || 32))
+      return { cols, rows }
+    },
+
+    schedulePtyResize() {
+      if (!this.visible || !this.ptySessionId || !this.ptyWs || this.ptyWs.readyState !== WebSocket.OPEN) return
+
+      this.clearPtyResizeTimer()
+      this._ptyResizeTimer = setTimeout(() => {
+        this._ptyResizeTimer = null
+        if (!this.visible || !this.ptySessionId) return
+        const size = this.fitPtyTerminalAndGetSize()
+        this.sendPtyResize(size.cols, size.rows)
+      }, 80)
+    },
+
+    sendPtyResize(cols, rows) {
+      if (!this.ptySessionId) return
+      const normalizedCols = Math.max(20, Number(cols || 0))
+      const normalizedRows = Math.max(5, Number(rows || 0))
+      if (!normalizedCols || !normalizedRows) return
+      if (this.ptyLastCols === normalizedCols && this.ptyLastRows === normalizedRows) return
+      this.ptyLastCols = normalizedCols
+      this.ptyLastRows = normalizedRows
+      this.sendPtyWs({ type: 'resize', cols: normalizedCols, rows: normalizedRows })
+    },
+
+    buildPtyWsUrl() {
+      const raw = String(this.ptyWsPath || '').trim()
+
+      if (!raw) {
+        return ''
+      }
+
+      // 后端如果直接返回 ws:// 或 wss://，直接使用
+      if (/^wss?:\/\//i.test(raw)) {
+        return raw
+      }
+
+      // 后端如果返回 /api/xxx/ws，就通过 Vite dev server 代理
+      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+      const path = raw.startsWith('/') ? raw : `/${raw}`
+
+      return `${protocol}//${window.location.host}${path}`
+    },
+
+    openPtySocket() {
+      this.closePtySocket()
+
+      if (!this.ptyWsPath) {
+        this.ptyStatus = 'error'
+        this.ptyError = 'PTY websocket path is empty'
+        ElMessage.error(this.ptyError)
+        return
+      }
+
+      const url = this.buildPtyWsUrl()
+
+      if (!url) {
+        this.ptyStatus = 'error'
+        this.ptyError = 'Invalid PTY websocket URL'
+        ElMessage.error(this.ptyError)
+        return
+      }
+
+      const ws = new WebSocket(url)
+      this.ptyWs = ws
+
+      const applyChunks = (chunks) => {
+        if (!Array.isArray(chunks)) return
+
+        chunks.forEach((chunk) => {
+          const seq = Number(chunk?.seq || 0)
+          if (seq > this.ptySeq) this.ptySeq = seq
+
+          const text = String(chunk?.text || '')
+          if (text) this.writePtyOutput(text)
+        })
+      }
+
+      ws.onopen = () => {
+        this.ptyStatus = 'open'
+        this.ptyWsConnectedOnce = true
+        this.ptyError = ''
+
+        this.focusPtyInput()
+        this.schedulePtyResize()
+
+        ElMessage({
+          type: 'success',
+          message: 'PTY connected',
+          duration: 1200,
+        })
+      }
+
+      ws.onmessage = (event) => {
+        try {
+          const payload = JSON.parse(String(event.data || '{}'))
+
+          if (payload.type === 'output') {
+            applyChunks(payload.chunks)
+          }
+
+          if (payload.type === 'snapshot' || payload.type === 'pty_update') {
+            applyChunks(payload.chunks)
+          }
+
+          if (payload.status) {
+            this.ptyStatus = payload.status
+          }
+
+          if (payload.error) {
+            this.ptyError = payload.error
+          }
+
+          if (payload.seq) {
+            this.ptySeq = Math.max(this.ptySeq, Number(payload.seq || 0))
+          }
+
+          if (
+            payload.type === 'status' ||
+            payload.type === 'snapshot' ||
+            payload.type === 'pty_update'
+          ) {
+            if (payload.status === 'closed' || payload.status === 'error') {
+              this.closePtySocket()
+            }
+          }
+        } catch (e) {
+          console.error('PTY ws message parse failed', e)
+        }
+      }
+
+      ws.onerror = (event) => {
+        console.error('PTY WS error:', event)
+
+        this.ptyError = this.ptyError || 'PTY websocket error'
+
+        if (!this.ptyWsConnectedOnce) {
+          this.ptyStatus = 'error'
+        }
+      }
+
+      ws.onclose = (event) => {
+        console.log('PTY WS closed:', {
+          code: event.code,
+          reason: event.reason,
+          wasClean: event.wasClean,
+        })
+
+        const unexpected =
+          !this.ptyUserClosing &&
+          this.visible &&
+          this.ptyStatus !== 'error'
+
+        if (
+          this.visible &&
+          this.ptyStatus !== 'closed' &&
+          this.ptyStatus !== 'error'
+        ) {
+          this.ptyStatus = this.ptyWsConnectedOnce ? 'closed' : 'error'
+        }
+
+        this.ptyWs = null
+
+        if (unexpected) {
+          ElMessage({
+            type: this.ptyWsConnectedOnce ? 'warning' : 'error',
+            message: this.ptyWsConnectedOnce
+              ? 'PTY disconnected'
+              : 'PTY connection failed',
+            duration: 1800,
+          })
+        }
+      }
+    },
+
+    closePtySocket() {
+      if (this.ptyWs) {
+        try { this.ptyWs.close() } catch (_) {}
+        this.ptyWs = null
+      }
+    },
+
+    sendPtyWs(payload) {
+      if (!this.ptyWs || this.ptyWs.readyState !== WebSocket.OPEN) return
+      try {
+        this.ptyWs.send(JSON.stringify(payload || {}))
+      } catch (_) {}
+    },
+
+    queuePtyInput(raw) {
+      if (!this.ptySessionId || !raw) return
+      this.ptyInputQueue = `${this.ptyInputQueue || ''}${raw}`
+      if (this.ptyFlushTimer) return
+      this.ptyFlushTimer = setTimeout(() => this.flushPtyInputQueue(), 10)
+    },
+
+    resetPtyInputQueue() {
+      this.ptyInputQueue = ''
+      if (this.ptyFlushTimer) {
+        clearTimeout(this.ptyFlushTimer)
+        this.ptyFlushTimer = null
+      }
+    },
+
+    flushPtyInputQueue() {
+      const payload = this.ptyInputQueue || ''
+      this.ptyInputQueue = ''
+      this.ptyFlushTimer = null
+      if (!this.ptySessionId || !payload) return
+      const encoded = this.encodePtyInput(payload)
+      this.sendPtyWs({ type: 'input', data: encoded })
+    },
+
+    encodePtyInput(raw) {
+      const bytes = new TextEncoder().encode(String(raw || ''))
+      let binary = ''
+      const chunkSize = 0x8000
+      for (let i = 0; i < bytes.length; i += chunkSize) {
+        const chunk = bytes.subarray(i, i + chunkSize)
+        binary += String.fromCharCode(...chunk)
+      }
+      return btoa(binary)
     },
   },
 }
 </script>
+
+<style scoped>
+.pty-shell {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.pty-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex: 0 0 auto;
+}
+
+.pty-toolbar-left,
+.pty-toolbar-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+.pty-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: rgba(148, 163, 184, 0.16);
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.pty-badge-status {
+  text-transform: capitalize;
+}
+
+.pty-shell-input {
+  width: 220px;
+}
+
+.pty-error-text {
+  color: #dc2626;
+  font-size: 12px;
+}
+
+.pty-screen-shell {
+  position: relative;
+  min-height: 520px;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: #000000;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
+  overflow: hidden;
+  flex: 1 1 auto;
+}
+
+.xterm-shell {
+  padding: 0;
+  background: #000000;
+}
+
+.pty-terminal-host {
+  width: 100%;
+  height: 100%;
+  min-height: 480px;
+  padding: 16px 18px 16px 16px;
+  box-sizing: border-box;
+}
+
+.pty-terminal-host :deep(.xterm) {
+  height: 100%;
+  padding-right: 8px;
+}
+
+.pty-terminal-host :deep(.xterm-viewport) {
+  overflow-y: auto !important;
+  background: #000000 !important;
+  scrollbar-gutter: stable;
+}
+
+.pty-terminal-host :deep(.xterm-viewport::-webkit-scrollbar) {
+  width: 10px;
+}
+
+.pty-terminal-host :deep(.xterm-viewport::-webkit-scrollbar-track) {
+  background: rgba(255, 255, 255, 0.04);
+  border-radius: 999px;
+}
+
+.pty-terminal-host :deep(.xterm-viewport::-webkit-scrollbar-thumb) {
+  background: rgba(148, 163, 184, 0.42);
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+
+.pty-terminal-host :deep(.xterm-viewport::-webkit-scrollbar-thumb:hover) {
+  background: rgba(148, 163, 184, 0.62);
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+
+.pty-terminal-host :deep(.xterm-screen),
+.pty-terminal-host :deep(.xterm-helpers) {
+  width: calc(100% - 8px) !important;
+}
+
+.pty-hint {
+  flex: 0 0 auto;
+  font-size: 12px;
+  color: #94a3b8;
+}
+
+@media (max-width: 768px) {
+  .pty-toolbar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .pty-toolbar-left,
+  .pty-toolbar-right,
+  .pty-shell-input {
+    width: 100%;
+  }
+
+  .pty-terminal-host {
+    min-height: 360px;
+    padding: 12px 14px 12px 12px;
+  }
+
+  .pty-screen-shell {
+    min-height: 400px;
+  }
+}
+</style>
+
+<style>
+/* PtyDialog: xterm 由组件内部管理，弹窗只负责固定高度和内部滚动。 */
+.pty-overlay .el-dialog {
+  overflow: hidden !important;
+}
+
+.pty-overlay .el-dialog__body {
+  padding-top: 10px !important;
+  overflow: hidden !important;
+}
+</style>

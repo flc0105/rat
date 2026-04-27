@@ -284,14 +284,9 @@
 
   <PtyDialog
   ref="ptyDialogRef"
-  v-model:visible="ptyDialogVisible"
-  v-model:shell-path="ptyShellPath"
+  :selected-id="selectedId"
   :current-connection="currentConnection"
-  :pty-status="ptyStatus"
-  :pty-error="ptyError"
-  @closed="handlePtyDialogClosed"
-  @focus="focusPtyInput"
-  @close="closePtyDialog"
+  :get-tab-scoped-headers="getTabScopedHeaders"
 />
 </template>
 
@@ -306,7 +301,6 @@ import AppProcessModule from './legacy/modules/process.js'
 import AppConnectionModule from './legacy/modules/connection.js'
 import AppTaskModule from './legacy/modules/task.js'
 import AppTerminalModule from './legacy/modules/terminal.js'
-import AppPtyModule from './legacy/modules/pty.js'
 import AppCandidatesModule from './legacy/modules/candidates.js'
 // import AppHistoryModule from './legacy/modules/history.js'
 import AppPreviewModule from './legacy/modules/preview.js'
@@ -363,7 +357,6 @@ export default {
       ...AppCandidatesModule.data(),
       // ...AppHistoryModule.data(),
       ...AppTerminalModule.data(),
-      ...AppPtyModule.data(),
       ...AppConnectionModule.data(),
       ...AppCommandsModule.data(),
       ...AppTaskModule.data(),
@@ -408,7 +401,6 @@ pendingRemoteUploadRefresh: null,
     ...AppConnectionModule.methods,
     ...AppTaskModule.methods,
     ...AppTerminalModule.methods,
-    ...AppPtyModule.methods,
     ...AppCandidatesModule.methods,
     // ...AppHistoryModule.methods,
     ...AppPreviewModule.methods,
@@ -478,6 +470,10 @@ openScriptLibraryDialog() {
 
 refreshScriptsIfOpen() {
   return this.$refs.scriptLibraryDialogRef?.refreshIfOpen()
+},
+
+openPtyDialog() {
+  return this.$refs.ptyDialogRef?.open()
 },
 
 scheduleBackgroundJobsRefresh(clientId = '') {
