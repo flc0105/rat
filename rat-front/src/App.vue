@@ -203,16 +203,17 @@
 
 
 <ConnectionInfoDialogs
-  v-model:info-visible="connectionInfoDialogVisible"
-  v-model:value-visible="connectionInfoValueDialogVisible"
-  :loading="connectionInfoLoading"
-  :cards="connectionInfoCards"
-  :commands="connectionInfoClientCommands"
-  :value-title="connectionInfoValueDialogTitle"
-  :value-value="connectionInfoValueDialogValue"
-  @open-value="openConnectionInfoValueDialog"
+  ref="connectionInfoDialogRef"
+  :selected-id="selectedId"
+  :current-connection="currentConnection"
+  :command-candidates="commandCandidates"
+  :command-candidates-loaded-for="commandCandidatesLoadedFor"
+  :load-command-candidates="loadCommandCandidates"
+  :get-connection-status-text="getConnectionStatusText"
+  :format-connection-last-seen="formatConnectionLastSeen"
+  :format-date-time-standard="formatDateTimeStandard"
+  :format-connection-rtt="formatConnectionRtt"
 />
-
 
  <ProcessDialogs
   v-model:process-dialog-visible="processDialogVisible"
@@ -474,6 +475,10 @@ refreshScriptsIfOpen() {
 
 openPtyDialog() {
   return this.$refs.ptyDialogRef?.open()
+},
+
+    openConnectionInfoDialog() {
+  return this.$refs.connectionInfoDialogRef?.open()
 },
 
 scheduleBackgroundJobsRefresh(clientId = '') {

@@ -3,12 +3,6 @@ export default {
         return {
             connections: [],
             selectedId: '',
-            connectionInfoDialogVisible: false,
-            connectionInfoLoading: false,
-            connectionInfoJobCount: 0,
-            connectionInfoValueDialogVisible: false,
-            connectionInfoValueDialogTitle: '',
-            connectionInfoValueDialogValue: '',
         }
     },
 
@@ -216,65 +210,6 @@ export default {
             this.connections = this.dedupeConnections(this.connections);
         },
 
-        async openConnectionInfoDialog() {
-            if (!this.selectedId) {
-                ElementPlus.ElMessage.warning('Please select a device');
-                return;
-            }
-
-            this.connectionInfoDialogVisible = true;
-            this.connectionInfoLoading = true;
-            this.connectionInfoJobCount = 0;
-            this.connectionInfoValueDialogVisible = false;
-            this.connectionInfoValueDialogTitle = '';
-            this.connectionInfoValueDialogValue = '';
-
-            try {
-                if (this.commandCandidatesLoadedFor !== this.selectedId || !this.commandCandidates.length) {
-                    await this.loadCommandCandidates(this.selectedId);
-                }
-
-                const res = await fetch(`/api/connections/${encodeURIComponent(this.selectedId)}/background-jobs`);
-                const json = await res.json();
-
-                if (res.ok && json.code === 0 && Array.isArray(json.data)) {
-                    this.connectionInfoJobCount = json.data.length;
-                }
-            } catch (e) {
-            } finally {
-                this.connectionInfoLoading = false;
-            }
-        },
-
-        normalizeConnectionInfoValue(value) {
-            if (value === null || value === undefined || value === '') return '-';
-            if (typeof value === 'boolean') return value ? 'true' : 'false';
-            if (Array.isArray(value)) {
-                return value.length ? value.join(', ') : '-';
-            }
-            if (typeof value === 'object') {
-                try {
-                    return JSON.stringify(value, null, 2);
-                } catch (_error) {
-                    return String(value);
-                }
-            }
-            return String(value);
-        },
-
-        isConnectionInfoValueExpandable(value) {
-            const text = this.normalizeConnectionInfoValue(value);
-            if (!text || text === '-') return false;
-            return text.length > 42 || text.includes('\n');
-        },
-
-        openConnectionInfoValueDialog(item) {
-            if (!item) return;
-            this.connectionInfoValueDialogTitle = item.label || 'Details';
-            this.connectionInfoValueDialogValue = item.fullValue || '-';
-            this.connectionInfoValueDialogVisible = true;
-        },
-
         getConnectionDisplayState(conn) {
             const state = String(conn && conn.connection_state || '').trim();
             if (state === 'offline') return 'offline';
@@ -379,59 +314,6 @@ export default {
 
         onlineConnectionsCount() {
             return (this.connections || []).filter(item => this.getConnectionDisplayState(item) === 'online').length;
-        },
-
-        connectionInfoCards() {
-            const conn = this.currentConnection || {};
-            const items = [
-                {label: 'Status', value: this.getConnectionStatusText(conn)},
-                {label: 'Hostname', value: conn.hostname || '-'},
-                {label: 'Address', value: conn.addr || '-', mono: true},
-                {label: 'Client ID', value: conn.client_id || '-', mono: true},
-                // {label: 'Platform', value: this.formatOsLabel(conn.os_type, conn.os_ver) || '-'},
-                {label: 'OS Type', value: conn.os_type},
-                {label: 'Platform', value: conn.os_full || '-'},
-                {label: 'OS Name', value: conn.os_name},
-                {label: 'OS Version', value: conn.os_ver},
-                {label: 'OS Alias', value: conn.os_alias},
-                {label: 'Arch', value: conn.arch},
-                {label: 'Manufacturer', value: conn.manufacturer},
-                {label: 'Model', value: conn.model},
-                {label: 'Integrity', value: conn.integrity || '-'},
-                {label: 'Build Version', value: conn.build_version || '-'},
-                {label: 'Machine ID', value: conn.machine_id || '-', mono: true},
-                // {label: 'Machine ID Version', value: conn.machine_id_version || '-'},
-                {label: 'Fingerprint Basis', value: conn.machine_fingerprint_basis || '-', mono: true},
-                {label: 'Last Seen', value: this.formatConnectionLastSeen(conn)},
-                {label: 'Connected At', value: this.formatDateTimeStandard(conn.connected_at) || '-'},
-                {label: 'Disconnected At', value: this.formatDateTimeStandard(conn.disconnected_at) || '-'},
-                {label: 'RTT', value: this.formatConnectionRtt(conn)},
-                {label: 'Working Directory', value: conn.cwd || '-', mono: true},
-                {label: 'PID', value: conn.process_id || '-'},
-                {label: 'Process Name', value: conn.process_name || '-'},
-                {label: 'Launch Command', value: conn.launch_command || '-'},
-                {label: 'Username', value: conn.username || '-'},
-                {label: 'Python Version', value: conn.python_ver || '-'},
-                {label: 'HTTP Transfer Mode', value: conn.http_transfer_mode || '-'},
-                {label: 'Python Execution Mode', value: conn.python_execution_mode || '-'},
-                {label: 'Remote Watchdog Enabled', value: conn.remote_watchdog_enabled},
-                {label: 'Local Watchdog Enabled', value: conn.local_watchdog_enabled},
-                {label: 'Reported Jobs', value: this.connectionInfoJobCount},
-                {label: 'Command Count', value: this.connectionInfoClientCommands.length},
-            ];
-
-            return items.map(item => {
-                const fullValue = this.normalizeConnectionInfoValue(item.value);
-                return {
-                    ...item,
-                    fullValue,
-                    expandable: this.isConnectionInfoValueExpandable(fullValue),
-                };
-            });
-        },
-
-        connectionInfoClientCommands() {
-            return (this.commandCandidates || []).filter(item => item && item.source === 'client');
         },
     }
 }
