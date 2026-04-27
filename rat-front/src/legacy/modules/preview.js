@@ -298,9 +298,9 @@ export default {
                 this.previewEditMode = false;
                 this.setMonacoEditorReadOnly(true);
 
-                if (this.scriptLibraryDialogVisible && typeof this.loadScriptCatalog === 'function') {
-                    await this.loadScriptCatalog();
-                }
+if (typeof this.refreshScriptsIfOpen === 'function') {
+    await this.refreshScriptsIfOpen();
+}
             } catch (e) {
                 ElementPlus.ElMessage.error(e.message || 'Failed to save script');
             } finally {

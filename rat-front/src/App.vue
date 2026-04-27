@@ -141,42 +141,14 @@
 
 
 <ScriptLibraryDialog
-  v-model:visible="scriptLibraryDialogVisible"
-  :loading="scriptLibraryLoading"
-  :upload-loading="serverScriptUploadLoading"
-  :selected-directory="selectedScriptDirectory"
-  :directory-tree-data="scriptDirectoryTreeData"
-  :directory-items="currentScriptDirectoryItems"
-  :is-script-supported-for-current-connection="isScriptSupportedForCurrentConnection"
-  :format-script-platform-label="formatScriptPlatformLabel"
-  :script-has-params="scriptHasParams"
-  @create-script="createRemoteScriptPrompt"
-  @trigger-upload="triggerScriptUpload"
-  @upload-change="handleServerScriptUpload"
-  @create-folder="createRemoteScriptFolderPrompt"
-  @rename-folder="renameRemoteScriptFolder"
-  @delete-folder="deleteRemoteScriptFolder"
-  @refresh="loadScriptCatalog"
-  @tree-node-click="handleScriptTreeNodeClick"
-  @run-script="openScriptRunDialog"
-  @edit-script="openRemoteScriptEditor"
-  @rename-script="renameServerScript"
-  @delete-script="deleteServerScript"
-/>
-
-
-
-<ScriptRunDialog
-  v-model:visible="scriptRunDialogVisible"
-  :item="pendingRunScriptItem"
-  :param-specs="pendingRunScriptParamSpecs"
-  :param-form="scriptParamForm"
-  :submitting="scriptRunSubmitting"
-  :is-script-supported-for-current-connection="isScriptSupportedForCurrentConnection"
-  :format-script-platform-label="formatScriptPlatformLabel"
-  @update-param="updateScriptParam"
-  @cancel="closeScriptRunDialog"
-  @confirm="confirmRunScript"
+  ref="scriptLibraryDialogRef"
+  :selected-id="selectedId"
+  :current-connection="currentConnection"
+  :get-tab-scoped-headers="getTabScopedHeaders"
+  :open-script-editor="openRemoteScriptEditorInternal"
+  :open-new-script-editor="openNewRemoteScriptEditor"
+  @append-output="appendOutput"
+  @set-active-task="setActiveTask"
 />
 
 
@@ -328,7 +300,6 @@ import AppStateModule from './legacy/core/state.js'
 import AppUtilsModule from './legacy/modules/utils.js'
 import AppCommandsModule from './legacy/modules/commands.js'
 // import AppJobsModule from './legacy/modules/jobs.js'
-import AppScriptsModule from './legacy/modules/scripts.js'
 import AppSseModule from './legacy/modules/sse.js'
 import AppAgentModule from './legacy/modules/agent.js'
 import AppProcessModule from './legacy/modules/process.js'
@@ -353,7 +324,6 @@ import CommandHistoryDialog from "./components/CommandHistoryDialog.vue";
 import RemoteFilesDialog from "./components/RemoteFilesDialog.vue";
 import ArtifactDialog from "./components/ArtifactDialog.vue";
 import ScriptLibraryDialog from "./components/ScriptLibraryDialog.vue";
-import ScriptRunDialog from "./components/ScriptRunDialog.vue";
 // import BackgroundJobMessageDialog from "./components/BackgroundJobMessageDialog.vue";
 // import BackgroundJobDetailDialog from "./components/BackgroundJobDetailDialog.vue";
 // import BackgroundJobStartDialog from "./components/BackgroundJobStartDialog.vue";
@@ -373,7 +343,6 @@ export default {
     // BackgroundJobStartDialog,
     // BackgroundJobDetailDialog,
     // BackgroundJobMessageDialog,
-    ScriptRunDialog,
     ScriptLibraryDialog,
     ArtifactDialog,
     RemoteFilesDialog,
@@ -391,7 +360,6 @@ export default {
       ...AppProcessModule.data(),
       ...AppPreviewModule.data(),
       // ...AppJobsModule.data(),
-      ...AppScriptsModule.data(),
       ...AppCandidatesModule.data(),
       // ...AppHistoryModule.data(),
       ...AppTerminalModule.data(),
@@ -418,7 +386,6 @@ pendingRemoteUploadRefresh: null,
     ...AppTaskModule.computed,
     // ...AppHistoryModule.computed,
     // ...AppJobsModule.computed,
-    ...AppScriptsModule.computed,
   },
 
   watch: {
@@ -428,7 +395,6 @@ pendingRemoteUploadRefresh: null,
     ...AppTerminalModule.watch,
     ...AppPreviewModule.watch,
     // ...AppJobsModule.watch,
-    ...AppScriptsModule.watch,
     // ...AppHistoryModule.watch,
   },
 
@@ -436,7 +402,6 @@ pendingRemoteUploadRefresh: null,
     ...AppUtilsModule.methods,
     ...AppCommandsModule.methods,
     // ...AppJobsModule.methods,
-    ...AppScriptsModule.methods,
     ...AppSseModule.methods,
     ...AppAgentModule.methods,
     ...AppProcessModule.methods,
@@ -447,15 +412,6 @@ pendingRemoteUploadRefresh: null,
     ...AppCandidatesModule.methods,
     // ...AppHistoryModule.methods,
     ...AppPreviewModule.methods,
-
-updateScriptParam(name, value) {
-  if (!name) return
-
-  this.scriptParamForm = {
-    ...this.scriptParamForm,
-    [name]: value,
-  }
-},
 
 //     updateBackgroundJobParam(name, value) {
 //   if (!name) return
@@ -514,6 +470,14 @@ refreshBackgroundJobsIfOpen() {
 
 refreshBackgroundJobModulesIfOpen() {
   return this.$refs.backgroundJobsDialogRef?.refreshModulesIfOpen()
+},
+
+openScriptLibraryDialog() {
+  return this.$refs.scriptLibraryDialogRef?.open()
+},
+
+refreshScriptsIfOpen() {
+  return this.$refs.scriptLibraryDialogRef?.refreshIfOpen()
 },
 
 scheduleBackgroundJobsRefresh(clientId = '') {
