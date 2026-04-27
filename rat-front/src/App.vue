@@ -221,7 +221,7 @@
   :selected-id="selectedId"
 />
 
-<AgentBuilderDialog
+  <AgentBuilderDialog
   ref="agentBuilderDialogRef"
   @built="refreshAgentOutputsIfOpen"
 />
@@ -245,19 +245,10 @@
 
 
 <AgentOutputsDialog
-  v-model:visible="agentOutputsDialogVisible"
-  :outputs="agentOutputs"
-  :loading="agentOutputsLoading"
-  :describe-agent-target-os="describeAgentTargetOs"
-  :format-agent-source-text="formatAgentSourceText"
-  :format-agent-listener-text="formatAgentListenerText"
-  :format-agent-web-listener-text="formatAgentWebListenerText"
+  ref="agentOutputsDialogRef"
   :format-date-time-standard="formatDateTimeStandard"
   :format-bytes="formatBytes"
-  :is-agent-output-deleting="isAgentOutputDeleting"
   @open-builder="openAgentBuilderDialog"
-  @refresh="loadAgentOutputs"
-  @delete-output="deleteAgentOutput"
 />
 
 
@@ -275,7 +266,6 @@ import AppUtilsModule from './legacy/modules/utils.js'
 import AppCommandsModule from './legacy/modules/commands.js'
 // import AppJobsModule from './legacy/modules/jobs.js'
 import AppSseModule from './legacy/modules/sse.js'
-import AppAgentModule from './legacy/modules/agent.js'
 import AppConnectionModule from './legacy/modules/connection.js'
 import AppTaskModule from './legacy/modules/task.js'
 import AppTerminalModule from './legacy/modules/terminal.js'
@@ -328,7 +318,6 @@ export default {
   data() {
     return {
       ...AppStateModule.data(),
-      ...AppAgentModule.data(),
       ...AppPreviewModule.data(),
       // ...AppJobsModule.data(),
       ...AppCandidatesModule.data(),
@@ -348,7 +337,6 @@ pendingRemoteUploadRefresh: null,
 
   computed: {
     ...AppStateModule.computed,
-    ...AppAgentModule.computed,
     ...AppPreviewModule.computed,
     ...AppConnectionModule.computed,
     ...AppTerminalModule.computed,
@@ -359,7 +347,6 @@ pendingRemoteUploadRefresh: null,
 
   watch: {
     ...AppStateModule.watch,
-    ...AppAgentModule.watch,
     ...AppTerminalModule.watch,
     ...AppPreviewModule.watch,
     // ...AppJobsModule.watch,
@@ -371,7 +358,6 @@ pendingRemoteUploadRefresh: null,
     ...AppCommandsModule.methods,
     // ...AppJobsModule.methods,
     ...AppSseModule.methods,
-    ...AppAgentModule.methods,
     ...AppConnectionModule.methods,
     ...AppTaskModule.methods,
     ...AppTerminalModule.methods,
@@ -454,14 +440,16 @@ openProcessDialog() {
   return this.$refs.processDialogRef?.open()
 },
 
-    openAgentBuilderDialog() {
+openAgentBuilderDialog() {
   return this.$refs.agentBuilderDialogRef?.open()
 },
 
-    refreshAgentOutputsIfOpen() {
-  if (!this.agentOutputsDialogVisible || typeof this.loadAgentOutputs !== 'function') return
+openAgentOutputsDialog() {
+  return this.$refs.agentOutputsDialogRef?.open()
+},
 
-  return this.loadAgentOutputs({ silent: true })
+refreshAgentOutputsIfOpen() {
+  return this.$refs.agentOutputsDialogRef?.refreshIfOpen({ silent: true })
 },
 
 openConnectionInfoDialog() {
