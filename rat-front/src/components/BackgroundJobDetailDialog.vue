@@ -27,7 +27,7 @@
           </div>
 
           <div class="background-job-subtitle mono">
-            {{ item.job_name }} / {{ item.job_key || '-' }}
+{{ item.job_key || '-' }}
           </div>
         </div>
 

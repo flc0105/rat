@@ -221,7 +221,8 @@
                       <div class="background-job-summary-title-wrap">
                         <div class="background-job-summary-title-line">
                           <span class="background-job-summary-title">
-                            {{ getBackgroundJobDisplayName(job) }}
+                            {{job.display_name || job.job_key}}
+
 <!--                            {{ job.job_name || job.job_key || getBackgroundJobDisplayName(job) }}-->
                           </span>
 
@@ -233,11 +234,13 @@
                           </el-tag>
                         </div>
 
+                        <!--                       :title="getBackgroundJobDisplayName(job)"-->
                         <div
                           class="background-job-summary-subtitle"
-                          :title="getBackgroundJobDisplayName(job)"
+
                         >
-                          {{job.display_name || job.job_key}}
+                          {{job.job_key || '-'}}
+<!--                          {{ getBackgroundJobDisplayName(job) }}-->
                         </div>
                       </div>
                     </div>
@@ -777,47 +780,47 @@ export default {
         .replace(/[^a-z0-9]+/g, '')
     },
 
-    findBackgroundJobModuleDisplayName(keys = []) {
-      for (const key of keys) {
-        const normalized = this.normalizeBackgroundJobLookupKey(key)
-        const displayName = this.backgroundJobModuleDisplayNameMap.get(normalized)
-        if (displayName) return displayName
+    // findBackgroundJobModuleDisplayName(keys = []) {
+    //   for (const key of keys) {
+    //     const normalized = this.normalizeBackgroundJobLookupKey(key)
+    //     const displayName = this.backgroundJobModuleDisplayNameMap.get(normalized)
+    //     if (displayName) return displayName
+    //
+    //     const looseNormalized = this.normalizeBackgroundJobLooseLookupKey(key)
+    //     const looseDisplayName = this.backgroundJobModuleDisplayNameMap.get(`loose:${looseNormalized}`)
+    //     if (looseDisplayName) return looseDisplayName
+    //   }
+    //
+    //   return ''
+    // },
 
-        const looseNormalized = this.normalizeBackgroundJobLooseLookupKey(key)
-        const looseDisplayName = this.backgroundJobModuleDisplayNameMap.get(`loose:${looseNormalized}`)
-        if (looseDisplayName) return looseDisplayName
-      }
+    // humanizeBackgroundJobName(value) {
+    //   const normalized = this.normalizeBackgroundJobLookupKey(value)
+    //   if (!normalized) return '-'
+    //
+    //   const withSpaces = normalized
+    //     .replace(/[_-]+/g, ' ')
+    //     .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+    //     .trim()
+    //
+    //   if (!withSpaces) return normalized
+    //
+    //   return withSpaces.replace(/\b\w/g, char => char.toUpperCase())
+    // },
 
-      return ''
-    },
-
-    humanizeBackgroundJobName(value) {
-      const normalized = this.normalizeBackgroundJobLookupKey(value)
-      if (!normalized) return '-'
-
-      const withSpaces = normalized
-        .replace(/[_-]+/g, ' ')
-        .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
-        .trim()
-
-      if (!withSpaces) return normalized
-
-      return withSpaces.replace(/\b\w/g, char => char.toUpperCase())
-    },
-
-    getBackgroundJobDisplayName(job) {
-      const ownDisplayName = String(job?.display_name || '').trim()
-      const catalogDisplayName = this.findBackgroundJobModuleDisplayName([
-        job?.job_key,
-        job?.job_name,
-        ownDisplayName,
-      ])
-
-      if (catalogDisplayName) return catalogDisplayName
-      if (ownDisplayName && !ownDisplayName.includes('#')) return ownDisplayName
-
-      return this.humanizeBackgroundJobName(job?.job_name || job?.job_key || ownDisplayName)
-    },
+    // getBackgroundJobDisplayName(job) {
+    //   const ownDisplayName = String(job?.display_name || '').trim()
+    //   const catalogDisplayName = this.findBackgroundJobModuleDisplayName([
+    //     job?.job_key,
+    //     job?.job_name,
+    //     ownDisplayName,
+    //   ])
+    //
+    //   if (catalogDisplayName) return catalogDisplayName
+    //   if (ownDisplayName && !ownDisplayName.includes('#')) return ownDisplayName
+    //
+    //   return this.humanizeBackgroundJobName(job?.job_name || job?.job_key || ownDisplayName)
+    // },
 
     formatJobPlatformLabel(platforms) {
       const normalized = this.normalizeJobPlatforms(platforms)
