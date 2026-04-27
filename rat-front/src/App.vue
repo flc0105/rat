@@ -215,27 +215,10 @@
   :format-connection-rtt="formatConnectionRtt"
 />
 
+
  <ProcessDialogs
-  v-model:process-dialog-visible="processDialogVisible"
-  v-model:process-detail-dialog-visible="processDetailDialogVisible"
-  v-model:process-active-tab="processActiveTab"
-  v-model:filter-text="processFilterText"
-  :process-manager-summary-text="processManagerSummaryText"
-  :process-tab-label="processTabLabel"
-  :app-tab-label="appTabLabel"
-  :filtered-processes="filteredProcesses"
-  :filtered-apps="filteredApps"
-  :processes-loading="processesLoading"
-  :apps-loading="appsLoading"
-  :process-detail-loading="processDetailLoading"
-  :process-detail="processDetail"
-  :process-detail-basic-rows="processDetailBasicRows"
-  :process-detail-command-line-text="processDetailCommandLineText"
-  @close="closeProcessDialog"
-  @refresh="refreshProcessManager"
-  @open-detail="openProcessDetail"
-  @kill-process="killProcess"
-  @kill-app="killApp"
+  ref="processDialogRef"
+  :selected-id="selectedId"
 />
 
   <AgentBuilderDialog
@@ -298,7 +281,6 @@ import AppCommandsModule from './legacy/modules/commands.js'
 // import AppJobsModule from './legacy/modules/jobs.js'
 import AppSseModule from './legacy/modules/sse.js'
 import AppAgentModule from './legacy/modules/agent.js'
-import AppProcessModule from './legacy/modules/process.js'
 import AppConnectionModule from './legacy/modules/connection.js'
 import AppTaskModule from './legacy/modules/task.js'
 import AppTerminalModule from './legacy/modules/terminal.js'
@@ -352,7 +334,6 @@ export default {
     return {
       ...AppStateModule.data(),
       ...AppAgentModule.data(),
-      ...AppProcessModule.data(),
       ...AppPreviewModule.data(),
       // ...AppJobsModule.data(),
       ...AppCandidatesModule.data(),
@@ -372,7 +353,6 @@ pendingRemoteUploadRefresh: null,
 
   computed: {
     ...AppStateModule.computed,
-    ...AppProcessModule.computed,
     ...AppAgentModule.computed,
     ...AppPreviewModule.computed,
     ...AppConnectionModule.computed,
@@ -385,7 +365,6 @@ pendingRemoteUploadRefresh: null,
   watch: {
     ...AppStateModule.watch,
     ...AppAgentModule.watch,
-    ...AppProcessModule.watch,
     ...AppTerminalModule.watch,
     ...AppPreviewModule.watch,
     // ...AppJobsModule.watch,
@@ -398,7 +377,6 @@ pendingRemoteUploadRefresh: null,
     // ...AppJobsModule.methods,
     ...AppSseModule.methods,
     ...AppAgentModule.methods,
-    ...AppProcessModule.methods,
     ...AppConnectionModule.methods,
     ...AppTaskModule.methods,
     ...AppTerminalModule.methods,
@@ -477,7 +455,11 @@ openPtyDialog() {
   return this.$refs.ptyDialogRef?.open()
 },
 
-    openConnectionInfoDialog() {
+openProcessDialog() {
+  return this.$refs.processDialogRef?.open()
+},
+
+openConnectionInfoDialog() {
   return this.$refs.connectionInfoDialogRef?.open()
 },
 

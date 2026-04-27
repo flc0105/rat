@@ -1,46 +1,48 @@
 <template>
   <el-dialog
-    :model-value="processDialogVisible"
+    v-model="processDialogVisible"
     title="Process Manager"
     width="1100px"
     top="5vh"
     class="fixed-dialog process-dialog"
-    @update:model-value="$emit('update:processDialogVisible', $event)"
-    @close="$emit('close')"
+    modal-class="process-overlay"
+    @closed="handleProcessDialogClosed"
   >
-    <div class="fixed-dialog-body">
-      <div class="dialog-head process-dialog-head">
-        <div class="dialog-head-left process-dialog-head-left">
+    <div class="fixed-dialog-body process-dialog-body">
+      <div class="process-toolbar">
+        <div class="process-toolbar-left">
           <el-button
             size="small"
+            class="toolbar-btn"
             :loading="processActiveTab === 'apps' ? appsLoading : processesLoading"
-            @click="$emit('refresh')"
+            @click="refreshProcessManager"
           >
             Refresh
           </el-button>
 
           <el-input
-            :model-value="filterText"
+            v-model="processFilterText"
             placeholder="Filter by PID, name"
             size="small"
             class="process-dialog-filter-input"
             clearable
-            @update:model-value="$emit('update:filterText', $event)"
           />
         </div>
 
-        <div class="dialog-head-right process-dialog-head-right">
+        <div class="process-toolbar-right">
           <span class="process-count">{{ processManagerSummaryText }}</span>
         </div>
       </div>
 
       <el-tabs
-        :model-value="processActiveTab"
-        style="margin-top: 12px;"
-        @update:model-value="$emit('update:processActiveTab', $event)"
+        v-model="processActiveTab"
+        class="process-tabs"
       >
-        <el-tab-pane :label="processTabLabel" name="processes">
-          <div class="dialog-table-shell" style="height: 450px;">
+        <el-tab-pane
+          :label="processTabLabel"
+          name="processes"
+        >
+          <div class="process-table-shell">
             <el-table
               :data="filteredProcesses"
               v-loading="processesLoading"
@@ -58,7 +60,7 @@
               <el-table-column
                 prop="name"
                 label="Name"
-                min-width="200"
+                min-width="240"
                 show-overflow-tooltip
               />
 
@@ -71,17 +73,17 @@
 
               <el-table-column
                 label="Actions"
-                width="240"
+                width="220"
                 align="center"
                 fixed="right"
               >
                 <template #default="{ row }">
-                  <el-space>
+                  <div class="process-action-buttons">
                     <el-button
                       size="small"
                       link
                       type="primary"
-                      @click="$emit('open-detail', row.pid)"
+                      @click="openProcessDetail(row.pid)"
                     >
                       Details
                     </el-button>
@@ -90,19 +92,22 @@
                       size="small"
                       link
                       type="danger"
-                      @click="$emit('kill-process', row.pid, row.name)"
+                      @click="killProcess(row.pid, row.name)"
                     >
                       Kill
                     </el-button>
-                  </el-space>
+                  </div>
                 </template>
               </el-table-column>
             </el-table>
           </div>
         </el-tab-pane>
 
-        <el-tab-pane :label="appTabLabel" name="apps">
-          <div class="dialog-table-shell" style="height: 450px;">
+        <el-tab-pane
+          :label="appTabLabel"
+          name="apps"
+        >
+          <div class="process-table-shell">
             <el-table
               :data="filteredApps"
               v-loading="appsLoading"
@@ -120,14 +125,14 @@
               <el-table-column
                 prop="name"
                 label="Name"
-                min-width="200"
+                min-width="240"
                 show-overflow-tooltip
               />
 
               <el-table-column
                 prop="status"
                 label="Status"
-                min-width="120"
+                min-width="160"
                 show-overflow-tooltip
               />
 
@@ -138,12 +143,12 @@
                 fixed="right"
               >
                 <template #default="{ row }">
-                  <el-space>
+                  <div class="process-action-buttons">
                     <el-button
                       size="small"
                       link
                       type="primary"
-                      @click="$emit('open-detail', row.pid)"
+                      @click="openProcessDetail(row.pid)"
                     >
                       Details
                     </el-button>
@@ -152,11 +157,11 @@
                       size="small"
                       link
                       type="danger"
-                      @click="$emit('kill-app', row.pid, row.name)"
+                      @click="killApp(row.pid, row.name)"
                     >
                       Kill
                     </el-button>
-                  </el-space>
+                  </div>
                 </template>
               </el-table-column>
             </el-table>
@@ -167,202 +172,782 @@
   </el-dialog>
 
   <el-dialog
-    :model-value="processDetailDialogVisible"
+    v-model="processDetailDialogVisible"
     title="Process Details"
     width="980px"
     top="6vh"
-    class="fixed-dialog"
-    @update:model-value="$emit('update:processDetailDialogVisible', $event)"
+    class="fixed-dialog process-detail-dialog"
+    modal-class="process-detail-overlay"
   >
-    <div v-loading="processDetailLoading" style="min-height: 280px;">
+    <div
+      v-loading="processDetailLoading"
+      class="fixed-dialog-body process-detail-body"
+    >
       <template v-if="processDetail && !processDetailLoading">
-        <div style="margin-bottom: 18px;">
-          <div style="font-weight: 600; font-size: 14px; margin-bottom: 10px;">
+        <section class="process-detail-section">
+          <div class="process-detail-section-title">
             Basic Info
           </div>
 
-          <div
-            v-for="item in processDetailBasicRows"
-            :key="item.key"
-            style="display: grid; grid-template-columns: 180px 1fr; gap: 12px; padding: 8px 0; border-bottom: 1px solid #ebeef5;"
-          >
-            <div style="color: #606266; font-weight: 500;">
-              {{ item.label }}
-            </div>
+          <div class="process-detail-basic-grid">
+            <div
+              v-for="item in processDetailBasicRows"
+              :key="item.key"
+              class="process-detail-basic-row"
+            >
+              <div class="process-detail-basic-label">
+                {{ item.label }}
+              </div>
 
-            <div style="word-break: break-word;">
-              {{ item.value }}
+              <div class="process-detail-basic-value">
+                {{ item.value }}
+              </div>
             </div>
           </div>
-        </div>
+        </section>
 
-        <div style="margin-bottom: 18px;">
-          <div style="font-weight: 600; font-size: 14px; margin-bottom: 10px;">
+        <section class="process-detail-section">
+          <div class="process-detail-section-title">
             Command Line
           </div>
 
-          <div style="padding: 10px 12px; background: #f5f7fa; border-radius: 8px; word-break: break-word; white-space: pre-wrap; font-family: monospace; font-size: 12px; line-height: 1.6;">
+          <div class="process-command-line mono">
             {{ processDetailCommandLineText || '-' }}
           </div>
-        </div>
+        </section>
 
-        <div style="margin-bottom: 18px;">
-          <div style="font-weight: 600; font-size: 14px; margin-bottom: 10px;">
+        <section class="process-detail-section">
+          <div class="process-detail-section-title">
             Network Connections ({{ (processDetail.connections || []).length }})
           </div>
 
-          <el-table
-            :data="processDetail.connections || []"
-            stripe
-            border
-            max-height="220"
-            empty-text="No network connections"
-          >
-            <el-table-column
-              prop="local_address"
-              label="Local Address"
-              min-width="160"
-              show-overflow-tooltip
-            />
+          <div class="process-detail-table-shell process-detail-table-shell-network">
+            <el-table
+              :data="processDetail.connections || []"
+              stripe
+              border
+              height="100%"
+              empty-text="No network connections"
+              table-layout="fixed"
+            >
+              <el-table-column
+                prop="local_address"
+                label="Local Address"
+                min-width="180"
+                show-overflow-tooltip
+              />
 
-            <el-table-column
-              prop="remote_address"
-              label="Remote Address"
-              min-width="160"
-              show-overflow-tooltip
-            />
+              <el-table-column
+                prop="remote_address"
+                label="Remote Address"
+                min-width="180"
+                show-overflow-tooltip
+              />
 
-            <el-table-column
-              prop="status"
-              label="Status"
-              width="140"
-              align="center"
-            />
+              <el-table-column
+                prop="status"
+                label="Status"
+                width="140"
+                align="center"
+              />
 
-            <el-table-column
-              prop="family"
-              label="Family"
-              width="200"
-              align="center"
-            />
-          </el-table>
-        </div>
+              <el-table-column
+                prop="family"
+                label="Family"
+                width="180"
+                align="center"
+              />
+            </el-table>
+          </div>
+        </section>
 
-        <div>
-          <div style="font-weight: 600; font-size: 14px; margin-bottom: 10px;">
+        <section class="process-detail-section">
+          <div class="process-detail-section-title">
             Open Files ({{ (processDetail.open_files || []).length }})
           </div>
 
-          <el-table
-            :data="processDetail.open_files || []"
-            stripe
-            border
-            max-height="240"
-            empty-text="No open files"
-          >
-            <el-table-column
-              prop="path"
-              label="Path"
-              show-overflow-tooltip
-            />
-          </el-table>
-        </div>
+          <div class="process-detail-table-shell process-detail-table-shell-files">
+            <el-table
+              :data="processDetail.open_files || []"
+              stripe
+              border
+              height="100%"
+              empty-text="No open files"
+              table-layout="fixed"
+            >
+              <el-table-column
+                prop="path"
+                label="Path"
+                show-overflow-tooltip
+              />
+            </el-table>
+          </div>
+        </section>
       </template>
     </div>
   </el-dialog>
 </template>
 
 <script>
+import { ElMessage, ElMessageBox } from 'element-plus'
+
 export default {
   name: 'ProcessDialogs',
 
   props: {
-    processDialogVisible: {
-      type: Boolean,
-      default: false,
-    },
-
-    processDetailDialogVisible: {
-      type: Boolean,
-      default: false,
-    },
-
-    processActiveTab: {
-      type: String,
-      default: 'processes',
-    },
-
-    filterText: {
-      type: String,
-      default: '',
-    },
-
-    processManagerSummaryText: {
-      type: String,
-      default: '',
-    },
-
-    processTabLabel: {
-      type: String,
-      default: 'Processes',
-    },
-
-    appTabLabel: {
-      type: String,
-      default: 'Apps',
-    },
-
-    filteredProcesses: {
-      type: Array,
-      default: () => [],
-    },
-
-    filteredApps: {
-      type: Array,
-      default: () => [],
-    },
-
-    processesLoading: {
-      type: Boolean,
-      default: false,
-    },
-
-    appsLoading: {
-      type: Boolean,
-      default: false,
-    },
-
-    processDetailLoading: {
-      type: Boolean,
-      default: false,
-    },
-
-    processDetail: {
-      type: Object,
-      default: null,
-    },
-
-    processDetailBasicRows: {
-      type: Array,
-      default: () => [],
-    },
-
-    processDetailCommandLineText: {
-      type: String,
+    selectedId: {
+      type: [String, Number],
       default: '',
     },
   },
 
-  emits: [
-    'update:processDialogVisible',
-    'update:processDetailDialogVisible',
-    'update:processActiveTab',
-    'update:filterText',
-    'close',
-    'refresh',
-    'open-detail',
-    'kill-process',
-    'kill-app',
-  ],
+  data() {
+    return {
+      processDialogVisible: false,
+      processActiveTab: 'processes',
+      // 进程数据
+      processes: [],
+      processesLoading: false,
+      // 应用数据
+      apps: [],
+      appsLoading: false,
+      // 过滤
+      processFilterText: '',
+      refreshTimer: null,
+      processDetailDialogVisible: false,
+      processDetailLoading: false,
+      processDetail: null,
+    }
+  },
+
+  computed: {
+    processManagerVisibleCount() {
+      return this.processActiveTab === 'apps'
+        ? this.filteredApps.length
+        : this.filteredProcesses.length
+    },
+
+    processManagerTotalCount() {
+      return this.processActiveTab === 'apps'
+        ? this.apps.length
+        : this.processes.length
+    },
+
+    processManagerSummaryText() {
+      if (this.processActiveTab === 'apps') {
+        return `Showing ${this.processManagerVisibleCount} / ${this.processManagerTotalCount} applications`
+      }
+
+      return `Showing ${this.processManagerVisibleCount} / ${this.processManagerTotalCount} processes`
+    },
+
+    processTabLabel() {
+      return `All Processes (${this.filteredProcesses.length})`
+    },
+
+    appTabLabel() {
+      return `Applications (${this.filteredApps.length})`
+    },
+
+    filteredProcesses() {
+      if (!this.processes.length) return []
+      if (!this.processFilterText) return this.processes
+
+      const kw = this.processFilterText.toLowerCase()
+      return this.processes.filter(p =>
+        String(p.pid).includes(kw) ||
+        (p.name || '').toLowerCase().includes(kw) ||
+        (p.username || '').toLowerCase().includes(kw)
+      )
+    },
+
+    filteredApps() {
+      if (!this.apps.length) return []
+      if (!this.processFilterText) return this.apps
+
+      const kw = this.processFilterText.toLowerCase()
+      return this.apps.filter(a =>
+        String(a.pid).includes(kw) ||
+        (a.name || '').toLowerCase().includes(kw) ||
+        (a.username || '').toLowerCase().includes(kw)
+      )
+    },
+
+    processDetailBasicRows() {
+      const detail = this.processDetail || {}
+      const fieldMap = [
+        ['pid', 'PID'],
+        ['name', 'Name'],
+        ['username', 'User'],
+        ['status', 'Status'],
+        ['ppid', 'Parent PID'],
+        ['exe', 'Executable Path'],
+        ['cwd', 'Working Directory'],
+        ['create_time', 'Create Time'],
+        ['cpu_percent', 'CPU %'],
+        ['memory_percent', 'Memory %'],
+        ['num_threads', 'Threads'],
+        ['num_fds', 'FD Count'],
+        ['num_handles', 'Handle Count'],
+      ]
+
+      return fieldMap
+        .filter(([key]) => detail[key] !== undefined && detail[key] !== null && detail[key] !== '')
+        .map(([key, label]) => ({ key, label, value: this.formatProcessDetailValue(detail[key]) }))
+    },
+
+    processDetailCommandLineText() {
+      const cmdline = (this.processDetail && this.processDetail.cmdline) || []
+      if (!Array.isArray(cmdline) || !cmdline.length) return ''
+      return cmdline.join(' ')
+    },
+  },
+
+  beforeUnmount() {
+    this.stopProcessAutoRefresh()
+  },
+
+  methods: {
+    open() {
+      if (!this.selectedId) {
+        ElMessage.warning('Please select a device first')
+        return
+      }
+
+      this.processDialogVisible = true
+      this.processes = []
+      this.apps = []
+      this.processDetail = null
+      this.processFilterText = ''
+
+      // 串行加载
+      this.loadProcesses().then(() => {
+        this.loadApps()
+      })
+
+      this.startProcessAutoRefresh()
+    },
+
+    handleProcessDialogClosed() {
+      this.closeProcessDialog()
+    },
+
+    startProcessAutoRefresh() {
+      this.stopProcessAutoRefresh()
+
+      this.refreshTimer = setInterval(() => {
+        if (!this.processDialogVisible || this.processDetailDialogVisible || this.processDetailLoading) {
+          return
+        }
+
+        // 只刷新当前 tab，避免无意义地同时抢占前台查询槽。
+        if (this.processActiveTab === 'apps') {
+          this.loadAppsSilent()
+          return
+        }
+
+        this.loadProcessesSilent()
+      }, 5000)
+    },
+
+    stopProcessAutoRefresh() {
+      if (this.refreshTimer) {
+        clearInterval(this.refreshTimer)
+        this.refreshTimer = null
+      }
+    },
+
+    closeProcessDialog() {
+      this.processDialogVisible = false
+      this.stopProcessAutoRefresh()
+    },
+
+    async refreshProcessManager() {
+      if (this.processActiveTab === 'apps') {
+        await this.loadApps()
+        return
+      }
+
+      await this.loadProcesses()
+    },
+
+    async loadProcesses() {
+      if (!this.selectedId) return
+      this.processesLoading = true
+
+      try {
+        const res = await fetch(`/api/connections/${encodeURIComponent(this.selectedId)}/processes`)
+        const json = await res.json()
+
+        if (res.ok && json.code === 0) {
+          this.processes = json.data || []
+          return
+        }
+
+        this.processes = []
+        ElMessage.error(
+          json?.message || `Error while fetching processes (HTTP ${res.status})`
+        )
+      } catch (e) {
+        this.processes = []
+        ElMessage.error('Error while fetching processes: ' + e.message)
+        console.error(e)
+      } finally {
+        this.processesLoading = false
+      }
+    },
+
+    async loadProcessesSilent() {
+      if (!this.selectedId || this.processesLoading) return
+
+      try {
+        const res = await fetch(`/api/connections/${encodeURIComponent(this.selectedId)}/processes`)
+        const json = await res.json()
+        if (res.ok && json.code === 0) {
+          this.processes = json.data || []
+        }
+      } catch (e) {
+        ElMessage.error('Error while fetching processes: ' + e.message)
+        console.error(e)
+      }
+    },
+
+    async loadApps() {
+      if (!this.selectedId) return
+      this.appsLoading = true
+
+      try {
+        const res = await fetch(`/api/connections/${encodeURIComponent(this.selectedId)}/apps`)
+        const json = await res.json()
+        if (res.ok && json.code === 0) {
+          this.apps = json.data || []
+          return
+        }
+
+        this.apps = []
+        ElMessage.error(
+          json?.message || `Error while fetching processes (HTTP ${res.status})`
+        )
+      } catch (e) {
+        console.error(e)
+        this.apps = []
+        ElMessage.error('Error while fetching processes: ' + e.message)
+      } finally {
+        this.appsLoading = false
+      }
+    },
+
+    async loadAppsSilent() {
+      if (!this.selectedId || this.appsLoading) return
+
+      try {
+        const res = await fetch(`/api/connections/${encodeURIComponent(this.selectedId)}/apps`)
+        const json = await res.json()
+        if (res.ok && json.code === 0) {
+          this.apps = json.data || []
+        }
+      } catch (e) {
+        console.error(e)
+        ElMessage.error('Error while fetching processes: ' + e.message)
+      }
+    },
+
+    async openProcessDetail(pid) {
+      // if (!this.selectedId || !pid) return;
+      if (!this.selectedId) return
+      this.processDetailDialogVisible = true
+      this.processDetailLoading = true
+      this.processDetail = null
+
+      try {
+        const res = await fetch(`/api/connections/${encodeURIComponent(this.selectedId)}/processes/${encodeURIComponent(pid)}/detail`)
+        const json = await res.json()
+        if (res.ok && json.code === 0) {
+          this.processDetail = json.data || {}
+        } else {
+          throw new Error(json.message || 'Failed to load process detail')
+        }
+      } catch (e) {
+        ElMessage.error(e.message || 'Failed to load process detail')
+        this.processDetailDialogVisible = false
+      } finally {
+        this.processDetailLoading = false
+      }
+    },
+
+    formatProcessDetailValue(value) {
+      if (value === null || value === undefined || value === '') return '-'
+      if (typeof value === 'number') return String(value)
+      return String(value)
+    },
+
+    async killProcess(pid, name) {
+      try {
+        await ElMessageBox.confirm(
+          `Kill "${name}" (PID: ${pid})?`,
+          'Confirm',
+          { type: 'warning' }
+        )
+
+        const res = await fetch(`/api/connections/${encodeURIComponent(this.selectedId)}/processes/${encodeURIComponent(pid)}/kill`, { method: 'POST' })
+        const json = await res.json()
+        if (res.ok && json.code === 0) {
+          ElMessage.success(`Process ${pid} killed`)
+          this.loadProcesses()
+          this.loadAppsSilent()
+        } else {
+          throw new Error(json.message)
+        }
+      } catch (e) {
+        if (e !== 'cancel') ElMessage.error(e.message || 'Kill failed')
+      }
+    },
+
+    async killApp(pid, name) {
+      try {
+        await ElMessageBox.confirm(
+          `Force quit "${name}" (PID: ${pid})?`,
+          'Confirm',
+          { type: 'warning' }
+        )
+
+        const res = await fetch(`/api/connections/${encodeURIComponent(this.selectedId)}/apps/${encodeURIComponent(pid)}/kill`, { method: 'POST' })
+        const json = await res.json()
+        if (res.ok && json.code === 0) {
+          ElMessage.success(`${name} force quit`)
+          this.loadApps()
+          this.loadProcessesSilent()
+        } else {
+          throw new Error(json.message)
+        }
+      } catch (e) {
+        if (e !== 'cancel') ElMessage.error(e.message || 'Force quit failed')
+      }
+    },
+  },
 }
 </script>
+
+<style scoped>
+.process-dialog-body {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  box-sizing: border-box;
+}
+
+.process-toolbar {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  min-width: 0;
+  gap: 12px;
+  margin-bottom: 12px;
+  box-sizing: border-box;
+}
+
+.process-toolbar :deep(.el-button.toolbar-btn) {
+  height: 32px;
+  min-height: 32px;
+  padding: 0 12px;
+  border-radius: 10px;
+  margin: 0;
+}
+
+.process-toolbar-left,
+.process-toolbar-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.process-toolbar-left {
+  flex: 1 1 auto;
+}
+
+.process-toolbar-right {
+  flex: 0 0 auto;
+  justify-content: flex-end;
+  margin-left: auto;
+}
+
+.process-count {
+  font-size: 13px;
+  color: #666;
+  white-space: nowrap;
+}
+
+.process-dialog-filter-input {
+  width: 280px;
+  max-width: 100%;
+}
+
+.process-tabs {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  width: 100%;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.process-tabs :deep(.el-tabs__header) {
+  flex: 0 0 auto;
+  width: 100%;
+  margin-bottom: 12px;
+}
+
+.process-tabs :deep(.el-tabs__content) {
+  display: flex;
+  flex: 1 1 auto;
+  width: 100%;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.process-tabs :deep(.el-tab-pane) {
+  flex: 1 1 auto;
+  width: 100%;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.process-table-shell {
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.process-table-shell :deep(.el-table) {
+  width: 100% !important;
+  height: 100% !important;
+}
+
+.process-table-shell :deep(.el-table__inner-wrapper),
+.process-table-shell :deep(.el-table__body-wrapper) {
+  min-height: 0;
+}
+
+.process-action-buttons {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  flex-wrap: nowrap;
+}
+
+.process-action-buttons :deep(.el-button) {
+  margin: 0;
+}
+
+.process-detail-body {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  width: 100%;
+  min-width: 0;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding-right: 4px;
+  box-sizing: border-box;
+}
+
+.process-detail-section {
+  flex: 0 0 auto;
+  margin-bottom: 18px;
+}
+
+.process-detail-section:last-child {
+  margin-bottom: 0;
+}
+
+.process-detail-section-title {
+  margin-bottom: 10px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.process-detail-basic-grid {
+  display: flex;
+  flex-direction: column;
+}
+
+.process-detail-basic-row {
+  display: grid;
+  grid-template-columns: 180px minmax(0, 1fr);
+  gap: 12px;
+  padding: 8px 0;
+  border-bottom: 1px solid #ebeef5;
+}
+
+.process-detail-basic-label {
+  color: #606266;
+  font-weight: 500;
+}
+
+.process-detail-basic-value {
+  min-width: 0;
+  word-break: break-word;
+}
+
+.process-command-line {
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: #f5f7fa;
+  font-size: 12px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.process-detail-table-shell {
+  width: 100%;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.process-detail-table-shell-network {
+  height: 220px;
+}
+
+.process-detail-table-shell-files {
+  height: 240px;
+}
+
+.process-detail-table-shell :deep(.el-table) {
+  width: 100% !important;
+  height: 100% !important;
+}
+
+@media (max-width: 768px) {
+  .process-toolbar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .process-toolbar-left,
+  .process-toolbar-right,
+  .process-dialog-filter-input {
+    width: 100%;
+  }
+
+  .process-toolbar-left {
+    flex-wrap: wrap;
+  }
+
+  .process-toolbar-right {
+    justify-content: flex-start;
+    margin-left: 0;
+  }
+
+  .process-detail-basic-row {
+    grid-template-columns: 1fr;
+    gap: 4px;
+  }
+}
+</style>
+
+<style>
+/* ProcessDialogs: 固定弹窗高度，表格内部滚动，避免内容把页面撑长。 */
+.process-overlay .el-dialog {
+  height: 78vh !important;
+  max-height: 78vh !important;
+  display: flex !important;
+  flex-direction: column !important;
+  overflow: hidden !important;
+}
+
+.process-overlay .el-dialog__header {
+  flex: 0 0 auto !important;
+}
+
+.process-overlay .el-dialog__body {
+  display: flex !important;
+  flex: 1 1 auto !important;
+  width: 100% !important;
+  min-width: 0 !important;
+  min-height: 0 !important;
+  overflow: hidden !important;
+  box-sizing: border-box !important;
+}
+
+.process-overlay .process-dialog-body {
+  flex: 1 1 auto !important;
+  width: 100% !important;
+  min-height: 0 !important;
+}
+
+.process-overlay .el-table {
+  width: 100% !important;
+}
+
+.process-overlay .el-table__body-wrapper {
+  overflow-y: auto !important;
+}
+
+.process-detail-overlay .el-dialog {
+  height: 78vh !important;
+  max-height: 78vh !important;
+  display: flex !important;
+  flex-direction: column !important;
+  overflow: hidden !important;
+}
+
+.process-detail-overlay .el-dialog__header {
+  flex: 0 0 auto !important;
+}
+
+.process-detail-overlay .el-dialog__body {
+  display: flex !important;
+  flex: 1 1 auto !important;
+  width: 100% !important;
+  min-width: 0 !important;
+  min-height: 0 !important;
+  overflow: hidden !important;
+  box-sizing: border-box !important;
+}
+
+.process-detail-overlay .process-detail-body {
+  flex: 1 1 auto !important;
+  width: 100% !important;
+  min-height: 0 !important;
+}
+
+@media (max-width: 768px) {
+  .process-overlay .el-dialog,
+  .process-detail-overlay .el-dialog {
+    width: 100vw !important;
+    max-width: 100vw !important;
+    height: 100dvh !important;
+    max-height: 100dvh !important;
+    margin: 0 !important;
+    border-radius: 0 !important;
+  }
+
+  .process-overlay .el-dialog__header,
+  .process-detail-overlay .el-dialog__header {
+    padding: 14px 16px 10px !important;
+  }
+
+  .process-overlay .el-dialog__body,
+  .process-detail-overlay .el-dialog__body {
+    padding: 10px 12px 12px !important;
+  }
+}
+</style>
