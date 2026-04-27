@@ -218,12 +218,12 @@ export default {
 .script-run-select {
   width: 100%;
 }
-
+/*
 .script-run-control :deep(.el-input__wrapper),
 .script-run-select :deep(.el-select__wrapper) {
   min-height: 34px;
   border-radius: 10px;
-}
+}*/
 
 .script-run-param-hint {
   margin-top: 6px;
@@ -240,6 +240,7 @@ export default {
   gap: 8px;
 }
 
+/*
 .script-run-footer :deep(.el-button) {
   height: 32px;
   min-height: 32px;
@@ -247,6 +248,8 @@ export default {
   padding-inline: 14px;
   border-radius: 10px;
 }
+*/
+
 </style>
 
 <style>

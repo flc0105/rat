@@ -80,9 +80,9 @@
         </div>
 
         <div class="script-library-toolbar-right">
-          <span class="script-library-upload-target-text mono">
-            Upload Target: {{ selectedDirectory || 'root' }}
-          </span>
+<!--          <span class="script-library-upload-target-text mono">-->
+<!--            Upload Target: {{ selectedDirectory || 'root' }}-->
+<!--          </span>-->
 
           <el-input
             v-model="scriptSearchText"
@@ -103,6 +103,7 @@
               :data="scriptDirectoryTreeData"
               node-key="key"
               :default-expand-all="false"
+              :default-expanded-keys="[]"
               highlight-current
               :expand-on-click-node="true"
               class="script-library-tree-view"
@@ -201,22 +202,29 @@
                     Edit
                   </el-button>
 
-                  <el-button
-                    size="small"
-                    plain
-                    @click="renameServerScript(item.script_name)"
+                  <el-dropdown
+                    trigger="click"
+                    @command="handleScriptMoreCommand(item, $event)"
                   >
-                    Rename
-                  </el-button>
+                    <el-button
+                      size="small"
+                      plain
+                    >
+                      More
+                    </el-button>
 
-                  <el-button
-                    size="small"
-                    type="danger"
-                    plain
-                    @click="deleteServerScript(item.script_name)"
-                  >
-                    Delete
-                  </el-button>
+                    <template #dropdown>
+                      <el-dropdown-menu>
+                        <el-dropdown-item command="rename">
+                          Rename
+                        </el-dropdown-item>
+
+                        <el-dropdown-item command="delete">
+                          Delete
+                        </el-dropdown-item>
+                      </el-dropdown-menu>
+                    </template>
+                  </el-dropdown>
                 </div>
               </div>
             </div>
@@ -350,11 +358,21 @@ export default {
 
     currentScriptDirectoryItems() {
       const currentDir = String(this.selectedDirectory || '').trim()
+      const items = (this.scriptCatalogItems || []).filter(item => this.getScriptItemDirectory(item) === currentDir)
+
+      return this.sortScriptItems(items)
+    },
+
+    currentScriptDirectoryRecursiveItems() {
+      const currentDir = String(this.selectedDirectory || '').trim()
+
       const items = (this.scriptCatalogItems || []).filter(item => {
-        const path = String(item.path || `${item.script_name || ''}.py`).replace(/^\/+/, '')
-        const parts = path.split('/').filter(Boolean)
-        const dirPath = parts.slice(0, -1).join('/')
-        return dirPath === currentDir
+        const dirPath = this.getScriptItemDirectory(item)
+
+        if (!currentDir) return true
+
+        // 搜索只递归当前选中目录及其子目录。
+        return dirPath === currentDir || dirPath.startsWith(`${currentDir}/`)
       })
 
       return this.sortScriptItems(items)
@@ -363,7 +381,7 @@ export default {
     filteredCurrentScriptDirectoryItems() {
       const keyword = String(this.scriptSearchText || '').trim().toLowerCase()
       const sourceItems = keyword
-        ? (this.scriptCatalogItems || [])
+        ? this.currentScriptDirectoryRecursiveItems
         : this.currentScriptDirectoryItems
 
       const items = sourceItems.filter(item => {
@@ -388,7 +406,7 @@ export default {
 
     scriptDirectoryItemCountText() {
       const total = this.hasScriptSearch
-        ? (this.scriptCatalogItems || []).length
+        ? this.currentScriptDirectoryRecursiveItems.length
         : this.currentScriptDirectoryItems.length
 
       const visible = this.filteredCurrentScriptDirectoryItems.length
@@ -462,6 +480,12 @@ export default {
       return extra
     },
 
+    getScriptItemDirectory(item) {
+      const path = String(item?.path || `${item?.script_name || ''}.py`).replace(/^\/+/, '')
+      const parts = path.split('/').filter(Boolean)
+      return parts.slice(0, -1).join('/')
+    },
+
     sortScriptItems(items) {
       return [...(items || [])].sort((a, b) => {
         const da = String(a.display_name || a.script_name || '').toLowerCase()
@@ -520,6 +544,19 @@ export default {
     handleScriptTreeNodeClick(node) {
       if (!node) return
       this.selectedDirectory = String(node.path || '').trim()
+    },
+
+    handleScriptMoreCommand(item, command) {
+      if (!item) return
+
+      if (command === 'rename') {
+        this.renameServerScript(item.script_name)
+        return
+      }
+
+      if (command === 'delete') {
+        this.deleteServerScript(item.script_name)
+      }
     },
 
     normalizeScriptMetadata(metadata = {}) {
@@ -1305,7 +1342,7 @@ export default {
 
 @media (max-width: 1024px) {
   .script-library-shell {
-    grid-template-columns: 1fr;
+    grid-template-columns: 220px minmax(0, 1fr);
   }
 
   .script-library-card {
@@ -1317,6 +1354,18 @@ export default {
     justify-content: flex-end;
     width: 100%;
     flex-wrap: wrap;
+  }
+}
+
+@media (max-width: 760px) {
+  .script-library-shell {
+    grid-template-columns: 1fr;
+    grid-template-rows: minmax(120px, 28%) minmax(0, 1fr);
+  }
+
+  .script-library-tree,
+  .script-library-directory {
+    height: auto;
   }
 }
 
