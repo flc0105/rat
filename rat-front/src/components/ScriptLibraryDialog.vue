@@ -467,7 +467,8 @@ export default {
       }
 
       this.visible = true
-      await this.loadScriptCatalog()
+      // await this.loadScriptCatalog()
+      await this.loadScriptCatalog({ selectForConnection: true })
     },
 
     isOpen() {
@@ -644,7 +645,7 @@ export default {
       return normalized
     },
 
-    async loadScriptCatalog() {
+    async loadScriptCatalog(options = {}) {
       this.loading = true
 
       try {
@@ -658,12 +659,29 @@ export default {
         this.scriptCatalogItems = Array.isArray(catalog.items) ? catalog.items : []
         this.scriptCatalogDirectories = Array.isArray(catalog.directories) ? catalog.directories : [{ key: 'dir:.', label: 'root', path: '' }]
 
-        if (!this.selectedDirectory) {
-          this.selectedDirectory = this.getFirstAvailableScriptDirectory()
-        } else {
-          const hasCurrentDir = this.scriptCatalogDirectories.some(item => this.normalizeScriptDirectoryPath(item?.path || '') === this.selectedDirectory)
-          if (!hasCurrentDir) this.selectedDirectory = this.getFirstAvailableScriptDirectory()
-        }
+        // if (!this.selectedDirectory) {
+        //   this.selectedDirectory = this.getFirstAvailableScriptDirectory()
+        // } else {
+        //   const hasCurrentDir = this.scriptCatalogDirectories.some(item => this.normalizeScriptDirectoryPath(item?.path || '') === this.selectedDirectory)
+        //   if (!hasCurrentDir) this.selectedDirectory = this.getFirstAvailableScriptDirectory()
+        // }
+
+        if (options?.selectForConnection) {
+  const preferredDirectory = this.getPreferredScriptDirectoryForCurrentConnection()
+  this.selectedDirectory = preferredDirectory || this.getFirstAvailableScriptDirectory()
+
+  if (this.selectedDirectory) {
+    this.scriptTreeExpandedKeys = this.includeScriptTreeAncestorKeys([
+      ...this.scriptTreeExpandedKeys,
+      this.getScriptDirectoryTreeKey(this.selectedDirectory),
+    ])
+  }
+} else if (!this.selectedDirectory) {
+  this.selectedDirectory = this.getFirstAvailableScriptDirectory()
+} else {
+  const hasCurrentDir = this.scriptCatalogDirectories.some(item => this.normalizeScriptDirectoryPath(item?.path || '') === this.selectedDirectory)
+  if (!hasCurrentDir) this.selectedDirectory = this.getFirstAvailableScriptDirectory()
+}
 
         this.scriptTreeExpandedKeys = this.filterExistingScriptTreeExpandedKeys(this.scriptTreeExpandedKeys)
         this.scriptTreeRenderKey += 1
@@ -678,6 +696,74 @@ export default {
       const dirs = (this.scriptCatalogDirectories || []).map(item => this.normalizeScriptDirectoryPath(item?.path || ''))
       return dirs.length ? dirs.sort()[0] : ''
     },
+
+    resolvePreferredScriptDirectoryPlatform() {
+  const connection = this.currentConnection || {}
+  const candidates = [
+    this.currentConnectionPlatform,
+    connection.os_alias,
+    connection.os_type,
+    connection.type,
+    connection.platform,
+    connection.system,
+    connection.os,
+    connection.os_name,
+  ]
+
+  for (const candidate of candidates) {
+    const text = String(candidate || '').trim().toLowerCase()
+    if (!text) continue
+
+    if (text.includes('ios') || text.includes('iphone') || text.includes('ipad')) {
+      return 'ios'
+    }
+
+    const normalized = this.normalizeClientPlatform(text)
+    if (normalized) return normalized
+  }
+
+  return ''
+},
+
+getPreferredScriptDirectoryForCurrentConnection() {
+  const platform = this.resolvePreferredScriptDirectoryPlatform()
+  const platformAliases = {
+    mac: ['mac', 'macos', 'darwin', 'osx'],
+    win: ['win', 'windows', 'win32', 'nt'],
+    linux: ['linux', 'ubuntu', 'debian', 'centos', 'fedora', 'redhat', 'rhel', 'alpine', 'arch'],
+    ios: ['ios', 'iphone', 'ipad', 'iphoneos', 'ipados'],
+  }
+
+  const aliases = platformAliases[platform] || (platform ? [platform] : [])
+  const aliasSet = new Set(aliases.map(item => String(item || '').toLowerCase()))
+
+  if (!aliasSet.size) return ''
+
+  const directories = (this.scriptCatalogDirectories || [])
+    .map(item => this.normalizeScriptDirectoryPath(item?.path || ''))
+    .filter(Boolean)
+    .sort((a, b) => a.localeCompare(b))
+
+  const matchesPlatformRoot = (directory) => {
+    const root = String(directory || '').split('/').filter(Boolean)[0]?.toLowerCase() || ''
+    return aliasSet.has(root)
+  }
+
+  const hasDirectScripts = (directory) => {
+    return (this.scriptCatalogItems || []).some(item => this.getScriptItemDirectory(item) === directory)
+  }
+
+  const exactDirectory = directories.find(directory => aliasSet.has(directory.toLowerCase()))
+
+  if (exactDirectory && hasDirectScripts(exactDirectory)) {
+    return exactDirectory
+  }
+
+  const scriptDirectory = directories.find(directory => matchesPlatformRoot(directory) && hasDirectScripts(directory))
+  if (scriptDirectory) return scriptDirectory
+
+  return exactDirectory || directories.find(matchesPlatformRoot) || ''
+},
 
     getParentScriptDirectory(directory) {
       const normalized = this.normalizeScriptDirectoryPath(directory)
