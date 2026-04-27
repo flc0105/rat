@@ -6,7 +6,7 @@ Chrome/Edge 历史记录提取模块
 SCRIPT_METADATA = {
     "name": "common/browser/get_chromium_history",
     "display_name": "Extract Chromium History",
-    "description": "Extract browsing history from Chromium-based browsers such as Chrome and Edge",
+    "description": "Extract browsing history from Chromium-based browsers",
     "platforms": ["common"],
     "category": "Browser",
     "params": [

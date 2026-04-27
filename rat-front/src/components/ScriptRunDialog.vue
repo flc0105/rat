@@ -42,11 +42,12 @@
         </div>
       </div>
 
-      <el-form
-        v-if="paramSpecs.length"
-        label-position="top"
-        class="script-run-form"
-      >
+<el-form
+  v-if="paramSpecs.length"
+  label-position="top"
+  class="script-run-form"
+  @submit.prevent="$emit('confirm')"
+>
         <el-form-item
           v-for="param in paramSpecs"
           :key="`script-param-${param.name}`"
@@ -183,8 +184,15 @@ export default {
 
 <style scoped>
 .script-run-body {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  min-height: 0;
+  max-height: calc(78vh - 150px);
+  overflow: hidden;
   gap: 14px;
 }
+
 
 .script-run-dialog-top {
   flex: 0 0 auto;
@@ -206,7 +214,8 @@ export default {
 .script-run-form {
   flex: 1 1 auto;
   min-height: 0;
-  overflow: auto;
+  overflow-y: auto;
+  overflow-x: hidden;
   padding-right: 4px;
 }
 
@@ -257,13 +266,17 @@ export default {
 .script-run-overlay .el-dialog {
   display: flex !important;
   flex-direction: column !important;
+  //height: 78vh !important;
   max-height: 78vh !important;
   overflow: hidden !important;
 }
 
 .script-run-overlay .el-dialog__body {
+  display: flex !important;
   flex: 1 1 auto !important;
   min-height: 0 !important;
+    max-height: calc(78vh - 130px) !important;
+
   overflow: hidden !important;
 }
 

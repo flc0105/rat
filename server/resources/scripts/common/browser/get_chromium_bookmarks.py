@@ -1,7 +1,7 @@
 SCRIPT_METADATA = {
     "name": "common/browser/get_chromium_bookmarks",
     "display_name": "Extract Chromium Bookmarks",
-    "description": "Extract bookmarks from Chromium-based browsers such as Chrome and Edge",
+    "description": "Extract bookmarks from Chromium-based browsers",
     "platforms": ["common"],
     "category": "Browser",
     "params": [

@@ -5,6 +5,7 @@ import sys
 import tempfile
 
 from client.commands.command_context import CommandCancelledError, CommandTimeoutError
+from client.config.runtime_config import RECONNECT_INTERVAL_SECONDS
 from core.platform.platform_identity import detect_platform_alias
 from core.utils.client_util import get_executable_path
 from core.utils.command_output import StructuredCommandResult
@@ -12,7 +13,8 @@ from core.utils.formatting import get_time
 from core.utils.logger import logger
 
 if detect_platform_alias() == 'win':
-    from client.commands.platform.utils.win_util import get_integrity_level
+    from client.commands.platform.utils.win_util import get_integrity_level, get_sam_compatible_name, get_locale_tag, \
+    get_windows_uid_gid_sid
 
 
 class WinPlatformService:
@@ -71,6 +73,13 @@ class WinPlatformService:
             proc = psutil.Process()
 
             info['username'] = proc.username()
+            # info['username_sam'] = get_sam_compatible_name()
+
+            info['locale'] = get_locale_tag()
+
+            sid_info = get_windows_uid_gid_sid()
+            info['uid']=sid_info.get('uid', '')
+            info['gid']=sid_info.get('gid', '')
 
             try:
                 info['integrity'] = get_integrity_level()
@@ -78,6 +87,7 @@ class WinPlatformService:
                 info['integrity'] = ''
 
             info['exec_path'] = get_executable_path()
+            info['reconnect_interval'] = RECONNECT_INTERVAL_SECONDS
             info['cwd'] = os.getcwd()
 
             # Python 信息
