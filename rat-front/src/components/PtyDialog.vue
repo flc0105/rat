@@ -684,6 +684,8 @@ export default {
 .pty-shell {
   display: flex;
   flex-direction: column;
+  height: 100%;
+  min-height: 0;
   gap: 10px;
 }
 
@@ -797,6 +799,7 @@ export default {
 
 @media (max-width: 768px) {
   .pty-toolbar {
+    flex: 0 0 auto;
     flex-direction: column;
     align-items: stretch;
   }
@@ -807,13 +810,19 @@ export default {
     width: 100%;
   }
 
+  .pty-screen-shell {
+    flex: 1 1 auto;
+    min-height: 0;
+  }
+
   .pty-terminal-host {
-    min-height: 360px;
+    height: 100%;
+    min-height: 0;
     padding: 12px 14px 12px 12px;
   }
 
-  .pty-screen-shell {
-    min-height: 400px;
+  .pty-hint {
+    display: none;
   }
 }
 
@@ -832,4 +841,60 @@ export default {
   padding-top: 10px !important;
   overflow: hidden !important;
 }
+
+/*@media (max-width: 768px), (max-height: 720px) {*/
+@media (max-width: 768px) {
+  .pty-overlay .el-dialog {
+    width: 100vw !important;
+    max-width: 100vw !important;
+    height: 100dvh !important;
+    max-height: 100dvh !important;
+    margin: 0 !important;
+    border-radius: 0 !important;
+    display: flex !important;
+    flex-direction: column !important;
+  }
+
+  .pty-overlay .el-dialog__header {
+    flex: 0 0 auto !important;
+    padding: 14px 16px 10px !important;
+  }
+
+  .pty-overlay .el-dialog__body {
+    display: flex !important;
+    flex: 1 1 auto !important;
+    min-height: 0 !important;
+    padding: 8px 12px 12px !important;
+    overflow: hidden !important;
+  }
+
+  .pty-overlay .pty-shell {
+    flex: 1 1 auto !important;
+    min-height: 0 !important;
+  }
+}
+
+
+
+@media (min-width: 769px) {
+  .pty-overlay .el-dialog {
+    width: 900px !important;
+    max-width: calc(100vw - 32px) !important;
+    height: 78vh !important;
+    max-height: 78vh !important;
+    margin: 6vh auto 0 !important;
+    border-radius: var(--el-border-radius-small) !important;
+    display: flex !important;
+    flex-direction: column !important;
+  }
+
+  .pty-overlay .el-dialog__body {
+    //display: flex !important;
+    flex: 1 1 auto !important;
+    min-height: 0 !important;
+    padding-top: 10px !important;
+    overflow: hidden !important;
+  }
+}
+
 </style>
