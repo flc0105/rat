@@ -100,14 +100,19 @@
 
           <div class="script-library-pane-scroll">
             <el-tree
+              :key="scriptTreeRenderKey"
+              ref="scriptDirectoryTreeRef"
               :data="scriptDirectoryTreeData"
               node-key="key"
               :default-expand-all="false"
-              :default-expanded-keys="[]"
+              :default-expanded-keys="scriptTreeExpandedKeys"
+              :current-node-key="selectedScriptDirectoryTreeKey"
               highlight-current
               :expand-on-click-node="true"
               class="script-library-tree-view"
               @node-click="handleScriptTreeNodeClick"
+              @node-expand="handleScriptTreeNodeExpand"
+              @node-collapse="handleScriptTreeNodeCollapse"
             >
               <template #default="{ data }">
                 <span class="script-tree-node">
@@ -307,6 +312,8 @@ export default {
       scriptCatalogDirectories: [],
       selectedDirectory: '',
       scriptSearchText: '',
+      scriptTreeRenderKey: 0,
+      scriptTreeExpandedKeys: [],
       scriptRunDialogVisible: false,
       scriptRunSubmitting: false,
       pendingRunScriptName: '',
@@ -332,7 +339,7 @@ export default {
         : [{ key: 'dir:.', label: 'root', path: '' }]
 
       directories.forEach((directory) => {
-        const path = String(directory?.path || '').trim().replace(/^\/+/, '')
+        const path = this.normalizeScriptDirectoryPath(directory?.path || '')
         const parts = path.split('/').filter(Boolean)
         let currentChildren = rootNode.children
         let currentPath = ''
@@ -354,6 +361,10 @@ export default {
 
       sortNodes(rootNode.children)
       return [rootNode]
+    },
+
+    selectedScriptDirectoryTreeKey() {
+      return this.getScriptDirectoryTreeKey(this.selectedDirectory)
     },
 
     currentScriptDirectoryItems() {
@@ -480,8 +491,140 @@ export default {
       return extra
     },
 
+    normalizeScriptDirectoryPath(directory) {
+      return String(directory || '').trim().replace(/\\/g, '/').replace(/^\/+/, '').replace(/\/+$/, '')
+    },
+
+    getScriptDirectoryTreeKey(directory) {
+      const normalized = this.normalizeScriptDirectoryPath(directory)
+      return normalized ? `dir:${normalized}` : 'dir:.'
+    },
+
+    getScriptDirectoryPathFromTreeKey(key) {
+      const value = String(key || '').trim()
+      if (value === 'dir:.') return ''
+      if (!value.startsWith('dir:')) return ''
+      return this.normalizeScriptDirectoryPath(value.slice(4))
+    },
+
+    normalizeScriptTreeExpandedKeys(keys) {
+      const result = []
+      const seen = new Set()
+
+      for (const key of keys || []) {
+        const normalized = String(key || '').trim()
+        if (!normalized || seen.has(normalized)) continue
+
+        seen.add(normalized)
+        result.push(normalized)
+      }
+
+      return result
+    },
+
+    includeScriptTreeAncestorKeys(keys) {
+      const result = [...this.normalizeScriptTreeExpandedKeys(keys)]
+
+      for (const key of result) {
+        const path = this.getScriptDirectoryPathFromTreeKey(key)
+        const parts = path.split('/').filter(Boolean)
+
+        if (!parts.length) continue
+
+        result.push('dir:.')
+
+        let currentPath = ''
+        for (let i = 0; i < parts.length - 1; i += 1) {
+          currentPath = currentPath ? `${currentPath}/${parts[i]}` : parts[i]
+          result.push(this.getScriptDirectoryTreeKey(currentPath))
+        }
+      }
+
+      return this.normalizeScriptTreeExpandedKeys(result)
+    },
+
+    getScriptTreeDirectoryKeySet() {
+      const keys = new Set(['dir:.'])
+
+      for (const directory of this.scriptCatalogDirectories || []) {
+        const path = this.normalizeScriptDirectoryPath(directory?.path || '')
+        const parts = path.split('/').filter(Boolean)
+
+        let currentPath = ''
+        for (const part of parts) {
+          currentPath = currentPath ? `${currentPath}/${part}` : part
+          keys.add(this.getScriptDirectoryTreeKey(currentPath))
+        }
+      }
+
+      return keys
+    },
+
+    filterExistingScriptTreeExpandedKeys(keys) {
+      const validKeys = this.getScriptTreeDirectoryKeySet()
+      return this.normalizeScriptTreeExpandedKeys(keys).filter(key => validKeys.has(key))
+    },
+
+    mapScriptTreeExpandedKeysForRename(keys, oldDirectory, newDirectory) {
+      const oldKey = this.getScriptDirectoryTreeKey(oldDirectory)
+      const newKey = this.getScriptDirectoryTreeKey(newDirectory)
+
+      if (oldKey === newKey) {
+        return this.normalizeScriptTreeExpandedKeys(keys)
+      }
+
+      const mappedKeys = (keys || []).map((key) => {
+        const currentKey = String(key || '').trim()
+
+        if (currentKey === oldKey) return newKey
+        if (oldKey !== 'dir:.' && currentKey.startsWith(`${oldKey}/`)) {
+          return `${newKey}${currentKey.slice(oldKey.length)}`
+        }
+
+        return currentKey
+      })
+
+      return this.includeScriptTreeAncestorKeys(mappedKeys)
+    },
+
+    filterScriptTreeExpandedKeysAfterDelete(keys, deletedDirectory) {
+      const deletedKey = this.getScriptDirectoryTreeKey(deletedDirectory)
+
+      if (deletedKey === 'dir:.') return []
+
+      return this.normalizeScriptTreeExpandedKeys(keys).filter((key) => {
+        const currentKey = String(key || '').trim()
+        return currentKey !== deletedKey && !currentKey.startsWith(`${deletedKey}/`)
+      })
+    },
+
+    handleScriptTreeNodeExpand(node) {
+      const key = String(node?.key || '').trim()
+      if (!key) return
+
+      this.scriptTreeExpandedKeys = this.includeScriptTreeAncestorKeys([
+        ...this.scriptTreeExpandedKeys,
+        key,
+      ])
+    },
+
+    handleScriptTreeNodeCollapse(node) {
+      const key = String(node?.key || '').trim()
+      if (!key) return
+
+      if (key === 'dir:.') {
+        this.scriptTreeExpandedKeys = []
+        return
+      }
+
+      this.scriptTreeExpandedKeys = this.normalizeScriptTreeExpandedKeys(this.scriptTreeExpandedKeys).filter((item) => {
+        const currentKey = String(item || '').trim()
+        return currentKey !== key && !currentKey.startsWith(`${key}/`)
+      })
+    },
+
     getScriptItemDirectory(item) {
-      const path = String(item?.path || `${item?.script_name || ''}.py`).replace(/^\/+/, '')
+      const path = this.normalizeScriptDirectoryPath(item?.path || `${item?.script_name || ''}.py`)
       const parts = path.split('/').filter(Boolean)
       return parts.slice(0, -1).join('/')
     },
@@ -518,9 +661,12 @@ export default {
         if (!this.selectedDirectory) {
           this.selectedDirectory = this.getFirstAvailableScriptDirectory()
         } else {
-          const hasCurrentDir = this.scriptCatalogDirectories.some(item => String(item?.path || '').trim() === this.selectedDirectory)
+          const hasCurrentDir = this.scriptCatalogDirectories.some(item => this.normalizeScriptDirectoryPath(item?.path || '') === this.selectedDirectory)
           if (!hasCurrentDir) this.selectedDirectory = this.getFirstAvailableScriptDirectory()
         }
+
+        this.scriptTreeExpandedKeys = this.filterExistingScriptTreeExpandedKeys(this.scriptTreeExpandedKeys)
+        this.scriptTreeRenderKey += 1
       } catch (e) {
         ElMessage.error(e.message || 'Failed to load script catalog')
       } finally {
@@ -529,12 +675,12 @@ export default {
     },
 
     getFirstAvailableScriptDirectory() {
-      const dirs = (this.scriptCatalogDirectories || []).map(item => String(item?.path || '').trim())
+      const dirs = (this.scriptCatalogDirectories || []).map(item => this.normalizeScriptDirectoryPath(item?.path || ''))
       return dirs.length ? dirs.sort()[0] : ''
     },
 
     getParentScriptDirectory(directory) {
-      const normalized = String(directory || '').trim().replace(/^\/+/, '').replace(/\/+$/, '')
+      const normalized = this.normalizeScriptDirectoryPath(directory)
       if (!normalized) return ''
 
       const parts = normalized.split('/').filter(Boolean)
@@ -543,7 +689,7 @@ export default {
 
     handleScriptTreeNodeClick(node) {
       if (!node) return
-      this.selectedDirectory = String(node.path || '').trim()
+      this.selectedDirectory = this.normalizeScriptDirectoryPath(node.path || '')
     },
 
     handleScriptMoreCommand(item, command) {
@@ -886,7 +1032,7 @@ export default {
           }
         )
 
-        const directory = String(value || '').trim().replace(/\\/g, '/').replace(/^\/+/, '').replace(/\/+$/, '')
+        const directory = this.normalizeScriptDirectoryPath(value)
         if (!directory) {
           ElMessage.warning('Folder path is required')
           return
@@ -910,13 +1056,14 @@ export default {
     },
 
     async renameRemoteScriptFolder() {
-      const currentDirectory = String(this.selectedDirectory || '').trim()
+      const currentDirectory = this.normalizeScriptDirectoryPath(this.selectedDirectory)
       if (!currentDirectory) {
         ElMessage.warning('Root folder cannot be renamed')
         return
       }
 
       try {
+        const expandedKeysBeforeRename = [...this.scriptTreeExpandedKeys]
         const { value } = await ElMessageBox.prompt(
           'Enter the new folder path',
           'Rename Folder',
@@ -928,7 +1075,7 @@ export default {
           }
         )
 
-        const newDirectory = String(value || '').trim().replace(/\\/g, '/').replace(/^\/+/, '').replace(/\/+$/, '')
+        const newDirectory = this.normalizeScriptDirectoryPath(value)
         if (!newDirectory) {
           ElMessage.warning('New folder path is required')
           return
@@ -946,6 +1093,8 @@ export default {
         if (!res.ok || json.code !== 0) throw new Error(json.message || 'Failed to rename folder')
 
         this.selectedDirectory = newDirectory
+        this.scriptTreeExpandedKeys = this.mapScriptTreeExpandedKeysForRename(expandedKeysBeforeRename, currentDirectory, newDirectory)
+
         ElMessage.success(`Folder renamed: ${newDirectory}`)
         await this.loadScriptCatalog()
       } catch (e) {
@@ -955,13 +1104,15 @@ export default {
     },
 
     async deleteRemoteScriptFolder() {
-      const currentDirectory = String(this.selectedDirectory || '').trim()
+      const currentDirectory = this.normalizeScriptDirectoryPath(this.selectedDirectory)
       if (!currentDirectory) {
         ElMessage.warning('Root folder cannot be deleted')
         return
       }
 
       try {
+        const expandedKeysBeforeDelete = [...this.scriptTreeExpandedKeys]
+
         await ElMessageBox.confirm(
           `Delete folder "${currentDirectory}" and all files/subfolders in it? This action cannot be undone.`,
           'Delete Folder',
@@ -983,6 +1134,8 @@ export default {
         if (!res.ok || json.code !== 0) throw new Error(json.message || 'Failed to delete folder')
 
         this.selectedDirectory = parentDirectory
+        this.scriptTreeExpandedKeys = this.filterScriptTreeExpandedKeysAfterDelete(expandedKeysBeforeDelete, currentDirectory)
+
         ElMessage.success(`Folder deleted: ${currentDirectory}`)
         await this.loadScriptCatalog()
       } catch (e) {
