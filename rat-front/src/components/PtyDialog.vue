@@ -742,6 +742,7 @@ export default {
 
 .xterm-shell {
   padding: 0;
+  padding-bottom: 14px;
   background: #000000;
 }
 

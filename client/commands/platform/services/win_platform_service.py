@@ -13,7 +13,7 @@ from core.utils.formatting import get_time
 from core.utils.logger import logger
 
 if detect_platform_alias() == 'win':
-    from client.commands.platform.utils.win_util import get_integrity_level, get_sam_compatible_name, get_locale_tag, \
+    from client.commands.platform.utils.win_util import get_integrity_level, get_locale_tag, \
     get_windows_uid_gid_sid
 
 

@@ -11,7 +11,7 @@ from core.utils.logger import logger
 
 class AgentBuilder:
 
-    EXCLUDE_DIRS = {'venv', '__pycache__', '.git', 'node_modules', 'dist', 'build', '.idea', '.vscode', 'runtime'}
+    EXCLUDE_DIRS = {'venv', '__pycache__', '.git', 'node_modules', 'dist', 'build', '.idea', '.vscode' } #'runtime'
     EXCLUDE_EXTENSIONS = {'.pyc', '.pyo', '.pyd'}
     BUNDLE_INCLUDE_PATHS = ('client', 'core', 'ratclient.py')
     SUPPORTED_TARGETS = {'win', 'mac', 'linux'}

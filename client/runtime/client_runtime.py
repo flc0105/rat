@@ -23,4 +23,6 @@ class ClientRuntime:
         """
         连接断开时清理依赖服务端连接的运行态。
         """
-        return self.job_manager.handle_connection_lost()
+        stopped_jobs = self.job_manager.handle_connection_lost()
+        self.pty_manager.close_all_sessions(notify=False)
+        return stopped_jobs
