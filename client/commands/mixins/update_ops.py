@@ -1,7 +1,9 @@
 import os
 import shutil
+import sys
 
 from client.commands.interrupts import interruptible
+from client.commands.platform.utils.ios_util import spawn
 from client.config.config import (
     SERVER_HOST,
     SERVER_PORT,
@@ -53,6 +55,123 @@ class CommandUpdateMixin:
             ensure_not_interrupted=self._ensure_not_interrupted,
         )
 
+    def _get_current_bundle_release_dir(self, release_dir: str) -> str:
+        """
+        当前仅识别 update bundle 运行模式：
+        ~/client_bundle/releases/<bundle_dir>/ratclient.py
+        """
+        if getattr(sys, 'frozen', False):
+            return ''
+
+        release_root = os.path.realpath(os.path.abspath(release_dir))
+        candidates = []
+
+        module_file = str(globals().get('__file__') or '').strip()
+        if module_file:
+            candidates.append(os.path.dirname(os.path.realpath(os.path.abspath(module_file))))
+
+        argv0 = str(sys.argv[0] or '').strip()
+        if argv0:
+            candidates.append(os.path.dirname(os.path.realpath(os.path.abspath(argv0))))
+
+        candidates.append(os.path.realpath(os.path.abspath(os.getcwd())))
+
+        for current_dir in candidates:
+            bundle_dir = self._resolve_bundle_release_dir_from_path(release_root, current_dir)
+            if bundle_dir:
+                return bundle_dir
+
+        return ''
+
+    def _resolve_bundle_release_dir_from_path(self, release_root: str, current_path: str) -> str:
+        try:
+            current_path = os.path.realpath(os.path.abspath(current_path))
+            if os.path.commonpath([release_root, current_path]) != release_root:
+                return ''
+
+            relative_path = os.path.relpath(current_path, release_root)
+            if not relative_path or relative_path == '.' or relative_path.startswith('..'):
+                return ''
+
+            release_name = relative_path.split(os.sep, 1)[0]
+            bundle_dir = os.path.realpath(os.path.join(release_root, release_name))
+            ratclient_path = os.path.join(bundle_dir, 'ratclient.py')
+
+            if not os.path.isdir(bundle_dir):
+                return ''
+            if not os.path.isfile(ratclient_path):
+                return ''
+
+            return bundle_dir
+        except Exception:
+            return ''
+
+    def _clean_outdated_bundle_releases(self, release_dir: str, current_bundle_dir: str) -> dict:
+        release_root = os.path.realpath(os.path.abspath(release_dir))
+        current_root = os.path.realpath(os.path.abspath(current_bundle_dir))
+
+        deleted_dirs = []
+        deleted_zips = []
+        skipped = []
+        errors = []
+
+        for name in sorted(os.listdir(release_root)):
+            self._ensure_not_interrupted()
+
+            path = os.path.realpath(os.path.join(release_root, name))
+
+            try:
+                if os.path.isdir(path):
+                    if path == current_root:
+                        skipped.append(path)
+                        continue
+                    shutil.rmtree(path)
+                    deleted_dirs.append(path)
+                    continue
+
+                if os.path.isfile(path) and name.lower().endswith('.zip'):
+                    os.remove(path)
+                    deleted_zips.append(path)
+                    continue
+            except Exception as e:
+                errors.append(f'{path}: {e}')
+
+        return {
+            'release_dir': release_root,
+            'current_bundle_dir': current_root,
+            'deleted_dirs': deleted_dirs,
+            'deleted_zips': deleted_zips,
+            'skipped': skipped,
+            'errors': errors,
+        }
+
+    def _format_clean_outdated_releases_result(self, result: dict) -> str:
+        lines = [
+            'Outdated bundle releases cleaned',
+            f'Release Dir: {result.get("release_dir", "")}',
+            f'Current Bundle Dir: {result.get("current_bundle_dir", "")}',
+            f'Deleted Version Dirs: {len(result.get("deleted_dirs") or [])}',
+            f'Deleted ZIP Files: {len(result.get("deleted_zips") or [])}',
+        ]
+
+        deleted_dirs = result.get('deleted_dirs') or []
+        deleted_zips = result.get('deleted_zips') or []
+        errors = result.get('errors') or []
+
+        if deleted_dirs:
+            lines.append('Deleted dirs:')
+            lines.extend(f'  {item}' for item in deleted_dirs)
+
+        if deleted_zips:
+            lines.append('Deleted zips:')
+            lines.extend(f'  {item}' for item in deleted_zips)
+
+        if errors:
+            lines.append('Errors:')
+            lines.extend(f'  {item}' for item in errors)
+
+        return '\n'.join(lines)
+
     @desc('Build, download, extract and launch the latest client bundle', group='session')
     @interruptible()
     def update(self, arg=''):
@@ -77,6 +196,19 @@ class CommandUpdateMixin:
             if detect_platform_alias() != 'ios':
                 process = spawn_detached_python_script(ratclient_path, cwd=extract_dir)
                 pid_str = f'PID: {process.pid}'
+            else:
+                import sys,time
+                spawn(ratclient_path)
+                self._send_final_result(1, f'Update bundle downloaded and started\n'
+                                           f'Build Version: {bundle_meta.get("build_version") or "-"}\n'
+                                           f'Downloaded Archive: {archive_path}\n'
+                                           f'Extracted Path: {extract_dir}\n'
+                                           f'Launch Script: {ratclient_path}\n'
+                                        + pid_str)
+                time.sleep(1)
+                self.socket.close()
+                raise SystemExit
+                # sys.exit(0)
 
             return 1, (
                 f'Update bundle downloaded and started\n'
@@ -88,3 +220,24 @@ class CommandUpdateMixin:
             )
         except Exception as e:
             return 0, f'Failed to update client bundle: {e}'
+
+    @desc('Clean outdated client bundle release directories and ZIP files', group='session')
+    @interruptible()
+    def clean(self, arg=''):
+        """
+        清理默认 releases 目录里的旧 update bundle。
+        当前只在自身运行于 update bundle 目录时执行。
+        """
+        try:
+            release_dir = get_client_bundle_release_dir()
+            current_bundle_dir = self._get_current_bundle_release_dir(release_dir)
+            if not current_bundle_dir:
+                return 1, (
+                    'Skipped: current client is not running from default update bundle releases directory\n'
+                    f'Release Dir: {release_dir}'
+                )
+
+            result = self._clean_outdated_bundle_releases(release_dir, current_bundle_dir)
+            return 1, self._format_clean_outdated_releases_result(result)
+        except Exception as e:
+            return 0, f'Failed to clean outdated releases: {e}'

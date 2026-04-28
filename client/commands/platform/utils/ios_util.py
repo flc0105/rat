@@ -285,3 +285,30 @@ def get_icloud_path(info):
         pass
 
     return "unavailable"
+
+
+
+
+
+def spawn(path):
+    import runpy
+    import sys
+    import os
+
+    def runner():
+
+        # 很多脚本依赖当前目录找配置、模块、资源
+        os.chdir(os.path.dirname(path))
+
+        # 很多脚本依赖 sys.argv
+        sys.argv = [path]
+
+        runpy.run_path(path, run_name='__main__')
+
+    import threading
+    t = threading.Thread(
+            target=runner,
+            name='handoff-main-py',
+            daemon=False,   # 关键：不要 daemon
+        )
+    t.start()
