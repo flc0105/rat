@@ -74,17 +74,16 @@
                     @bottom="scrollToBottom"
                 />
 
-                <CommandInputBar
-                    ref="commandInputBarRef"
-                    v-model="commandText"
-                    :sending="sending"
-                    :has-running-web-task="hasRunningWebTask"
-                    :current-task-is-cancelling="currentTaskIsCancelling"
-                    :query-command-candidates="queryCommandCandidates"
-                    @select-candidate="handleCommandCandidateSelect"
-                    @run="sendCommand"
-                    @cancel="cancelCurrentTask"
-                />
+<CommandInputBar
+  ref="commandInputBarRef"
+  v-model="commandText"
+  :sending="sending"
+  :has-running-web-task="hasRunningWebTask"
+  :current-task-is-cancelling="currentTaskIsCancelling"
+  :command-candidates="commandCandidates"
+  @run="sendCommand"
+  @cancel="cancelCurrentTask"
+/>
 
                 <TerminalOutput
                     ref="terminalOutputRef"
