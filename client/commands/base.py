@@ -4,7 +4,7 @@ from client.commands.services.archive_service import ArchiveService
 from client.commands.services.file_system_service import FileSystemService
 from client.commands.services.path_resolver import PathResolver
 from client.commands.services.structured_arg_codec import StructuredArgCodec
-
+from client.http.client_api import ClientApiClient
 
 class CommandBindingMixin:
     """
@@ -212,4 +212,12 @@ class CommandBase(
                 iter_interruptible=self._iter_interruptible,
             )
             self._archive_service = service
+        return service
+
+    @property
+    def client_api(self):
+        service = getattr(self, '_client_api', None)
+        if service is None:
+            service = ClientApiClient()
+            self._client_api = service
         return service

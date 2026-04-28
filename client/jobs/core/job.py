@@ -1,11 +1,10 @@
 import json
+import os
 import threading
 import uuid
 from abc import ABC, abstractmethod
 
-import requests
-
-from client.config.config import UPLOAD_BASE_URL
+from client.http.client_api import ClientApiClient
 
 
 class Job(ABC):
@@ -25,8 +24,7 @@ class Job(ABC):
         self.is_running = False
         self.stop_event = threading.Event()
 
-        self.upload_url = UPLOAD_BASE_URL.rstrip('/') + '/api/files/upload'
-        self.report_url = UPLOAD_BASE_URL.rstrip('/') + '/api/background-jobs/report'
+        self.client_api = ClientApiClient()
         self.client_id = None
         self.hostname = ''
         self.job_metadata = {}
@@ -86,11 +84,7 @@ class Job(ABC):
             return
 
         try:
-            requests.post(
-                self.report_url,
-                json=payload,
-                timeout=10,
-            )
+            self.client_api.post_background_job_report(payload, timeout=10)
         except Exception:
             pass
 
@@ -145,7 +139,6 @@ class Job(ABC):
                     'category': file_info.get('category', ''),
                     'hostname': file_info.get('hostname', ''),
                     'client_id': file_info.get('client_id', ''),
-                    # 'source_type': file_info.get('source_type', ''),
                     'download_url': file_info.get('download_url', ''),
                     'raw_url': file_info.get('raw_url', ''),
                     'preview_url': file_info.get('preview_url', ''),
@@ -153,16 +146,14 @@ class Job(ABC):
             )
         )
 
-    def upload_file_via_http(
+    def _build_upload_form_data(
         self,
         file_path,
         category=None,
         *,
         artifact_type: str = 'files',
-        # source_type: str = 'client_upload',
-        # related_path: str = '',
         extra: dict | None = None,
-    ):
+    ) -> dict:
         form_data = {
             'artifact_type': (artifact_type or 'files').strip() or 'files',
             'category': (category or '').strip() or 'default',
@@ -171,26 +162,36 @@ class Job(ABC):
             'job_id': self.job_id,
             'job_name': self.job_name,
             'job_key': self.job_key,
-            # 'source_type': (source_type or 'client_upload').strip() or 'client_upload',
             'source_command_id': self.command_id if self.command_id is not None else '',
-            # 'related_path': (related_path or '').strip(),
         }
 
         if isinstance(extra, dict) and extra:
             form_data['extra'] = json.dumps(extra, ensure_ascii=False)
 
-        with open(file_path, 'rb') as file_obj:
-            response = requests.post(
-                self.upload_url,
-                files={'file': (file_path.split('/')[-1], file_obj)},
-                data=form_data,
-                timeout=30,
-            )
+        return form_data
 
-        try:
-            payload = response.json()
-        except Exception:
-            payload = None
+    def upload_file_via_http(
+        self,
+        file_path,
+        category=None,
+        *,
+        artifact_type: str = 'files',
+        extra: dict | None = None,
+    ):
+        form_data = self._build_upload_form_data(
+            file_path,
+            category=category,
+            artifact_type=artifact_type,
+            extra=extra,
+        )
+
+        response = self.client_api.upload_file(
+            file_path,
+            form_data,
+            timeout=30,
+        )
+
+        payload = self.client_api.try_parse_json(response)
 
         if response.ok and isinstance(payload, dict):
             file_info = payload.get('data') or {}

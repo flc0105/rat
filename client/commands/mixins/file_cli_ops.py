@@ -32,6 +32,7 @@ class CommandFileCliMixin:
         except Exception as e:
             return 0, f'Failed to download file: {e}'
 
+
     @desc('Receive a file from server via HTTP', group='file', suggest=False)
     @interruptible()
     def receive_http_upload(self, arg=''):
@@ -64,7 +65,9 @@ class CommandFileCliMixin:
             if not url:
                 if not relative_url:
                     return 0, 'url or relative_url is required'
-                url = UPLOAD_BASE_URL.rstrip('/') + '/' + relative_url.lstrip('/')
+                url = self.client_api.normalize_server_url(relative_url)
+            else:
+                url = self.client_api.normalize_server_url(url)
 
             if not filename:
                 return 0, 'filename is required'

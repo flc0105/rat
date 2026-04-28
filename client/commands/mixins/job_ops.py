@@ -1,10 +1,7 @@
-import base64
-import json
 import os
 import tempfile
 import uuid
 
-from client.config.config import UPLOAD_BASE_URL
 from core.utils.decorator import desc
 from core.utils.formatting import format_dict
 
@@ -16,18 +13,8 @@ class CommandJobMixin:
             name = name[:-3]
         return name.strip('/').strip()
 
-    def _decode_job_payload_arg(self, raw):
-        text = str(raw or '').strip()
-        prefix = '__json__:'
-        if not text.startswith(prefix):
-            return text
-
-        encoded = text[len(prefix):]
-        decoded = base64.urlsafe_b64decode(encoded.encode()).decode('utf-8')
-        return json.loads(decoded)
-
     def _parse_start_job_request(self, raw):
-        payload = self._decode_job_payload_arg(raw)
+        payload = self.structured_arg_codec.decode(raw)
         if isinstance(payload, dict):
             job_name = self._normalize_job_name(payload.get('job_name') or payload.get('name') or '')
             job_params = payload.get('params') or {}
@@ -56,17 +43,7 @@ class CommandJobMixin:
         )
 
     def _list_remote_job_names(self) -> list[str]:
-        import requests
-
-        url = f'{UPLOAD_BASE_URL.rstrip("/")}/api/jobs/list'
-
-        response = requests.get(url, timeout=10)
-        if response.status_code != 200:
-            raise RuntimeError('Failed to fetch job list')
-
-        data = response.json()
-        payload = data.get('data') or []
-        jobs = payload.get('jobs', []) if isinstance(payload, dict) else payload
+        jobs = self.client_api.list_jobs(timeout=10)
 
         result = []
         for job in jobs:
@@ -238,38 +215,8 @@ class CommandJobMixin:
         """
         从服务端 API 获取 job 内容。
         """
-        import requests
-
         normalized_name = self._normalize_job_name(job_name)
         if not normalized_name:
             raise ValueError('job name is required')
 
-        url = f'{UPLOAD_BASE_URL.rstrip("/")}/api/jobs/download'
-
-        try:
-            response = requests.get(
-                url,
-                params={'name': normalized_name},
-                timeout=30,
-            )
-        except Exception as e:
-            raise RuntimeError(
-                f'Failed to download job from {url}?name={normalized_name}: '
-                f'{type(e).__name__}: {e}'
-            ) from e
-
-        if response.status_code != 200:
-            body = (response.text or '').strip()
-            raise RuntimeError(
-                f'Failed to download job from {response.url}: '
-                f'HTTP {response.status_code} {response.reason}. '
-                f'Body: {body[:500] if body else "<empty>"}'
-            )
-
-        text = response.text or ''
-        if not text.strip():
-            raise RuntimeError(
-                f'Downloaded empty job from {response.url}'
-            )
-
-        return text
+        return self.client_api.download_job(normalized_name, timeout=30)

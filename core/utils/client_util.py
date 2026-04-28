@@ -416,5 +416,3 @@ def upload_file_via_http(file_source=None, filename=None, upload_url=None, categ
                 file_obj.close()
             except Exception:
                 pass
-
-

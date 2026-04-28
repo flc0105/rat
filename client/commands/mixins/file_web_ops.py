@@ -51,6 +51,7 @@ class CommandFileWebMixin:
             service = CommandHttpFileTransferService(
                 self,
                 archive_service=self.archive_service,
+                client_api=self.client_api,
             )
             self._http_file_transfer_service = service
         return service

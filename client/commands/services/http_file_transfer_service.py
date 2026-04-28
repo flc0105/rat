@@ -2,7 +2,7 @@ import json
 import os
 
 from client.commands.http_transfer.factory import build_http_transfer_strategy
-from client.config.config import UPLOAD_BASE_URL
+from client.http.client_api import ClientApiClient
 
 
 class CommandHttpFileTransferService:
@@ -15,9 +15,10 @@ class CommandHttpFileTransferService:
     - 让命令 mixin 只保留“命令入口 + 参数组织”，减少横向隐式耦合
     """
 
-    def __init__(self, owner, archive_service=None):
+    def __init__(self, owner, archive_service=None, client_api=None):
         self.owner = owner
         self.archive_service = archive_service
+        self.client_api = client_api or getattr(owner, 'client_api', None) or ClientApiClient()
 
     def get_transfer_strategy(self):
         transfer_mode = getattr(self.owner, 'HTTP_TRANSFER_MODE', '')
@@ -44,18 +45,8 @@ class CommandHttpFileTransferService:
 
         return payload
 
-    def resolve_http_timeout(self, fallback_timeout=None):
-        timeout_value = self.owner._resolve_timeout(fallback_timeout)
-        if timeout_value is None:
-            return None
-        return max(float(timeout_value), 0.001)
-
     def parse_http_upload_response(self, response):
-        try:
-            payload = response.json()
-        except Exception:
-            payload = None
-        return payload
+        return self.client_api.try_parse_json(response)
 
     def build_http_upload_success_message(self, payload, file_path: str, fallback_message: str):
         if not isinstance(payload, dict):
@@ -87,7 +78,7 @@ class CommandHttpFileTransferService:
         category: str = 'default',
         extra: dict | None = None,
     ):
-        upload_url = UPLOAD_BASE_URL.rstrip('/') + '/api/files/upload'
+        upload_url = self.client_api.build_file_upload_url()
         form_data = self.build_http_upload_form_data(
             artifact_type=artifact_type,
             category=category,
@@ -122,7 +113,7 @@ class CommandHttpFileTransferService:
         message = self.build_http_upload_success_message(
             payload,
             file_path=file_path,
-            fallback_message='HTTP upload completed'
+            fallback_message='HTTP upload completed',
         )
         return 1, message
 
@@ -142,7 +133,7 @@ class CommandHttpFileTransferService:
         try:
             temp_archive_path = self.archive_service.create_zip_from_paths(
                 resolved_paths,
-                archive_name=archive_name
+                archive_name=archive_name,
             )
             return self.upload_single_file_to_server_result(
                 temp_archive_path,
@@ -159,4 +150,7 @@ class CommandHttpFileTransferService:
 
     def download_file_from_http(self, url: str, target_path: str):
         strategy = self.get_transfer_strategy()
-        return strategy.download_file(url, target_path)
+        return strategy.download_file(
+            self.client_api.normalize_server_url(url),
+            target_path,
+        )
