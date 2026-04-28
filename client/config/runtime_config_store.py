@@ -71,17 +71,36 @@ def save_runtime_overrides(overrides: dict):
 
     path = get_runtime_config_path()
     directory = os.path.dirname(os.path.abspath(path)) or '.'
-    os.makedirs(directory, exist_ok=True)
 
     normalized = {}
     for key, value in overrides.items():
         if isinstance(key, str) and key.isupper():
             normalized[key] = value
 
+    # 没有 override 时直接删除 JSON，避免以后误判为仍有本地配置。
+    if not normalized:
+        try:
+            if os.path.isfile(path):
+                os.remove(path)
+        except Exception:
+            pass
+        return path
+
+    os.makedirs(directory, exist_ok=True)
+
+    payload = {
+        '_meta': {
+            'warning': 'This file contains local overrides for client.config.runtime_config defaults.',
+            'note': 'Only keys different from runtime_config.py defaults should be stored here.',
+            'manage_with': 'set / set --reset KEY / set --reset-all',
+        }
+    }
+    payload.update(normalized)
+
     fd, temp_path = tempfile.mkstemp(prefix='.runtime_config_', suffix='.json.tmp', dir=directory)
     try:
         with os.fdopen(fd, 'w', encoding='utf-8') as file_obj:
-            json.dump(normalized, file_obj, ensure_ascii=False, indent=2, sort_keys=True)
+            json.dump(payload, file_obj, ensure_ascii=False, indent=2, sort_keys=True)
             file_obj.write('\n')
         os.replace(temp_path, path)
     except Exception:
@@ -104,3 +123,17 @@ def update_runtime_override(key: str, value):
     overrides = load_runtime_overrides()
     overrides[normalized_key] = value
     return save_runtime_overrides(overrides)
+
+
+def remove_runtime_override(key: str):
+    normalized_key = str(key or '').strip().upper()
+    if not normalized_key:
+        raise ValueError('runtime config key is required')
+
+    overrides = load_runtime_overrides()
+    overrides.pop(normalized_key, None)
+    return save_runtime_overrides(overrides)
+
+
+def clear_runtime_overrides():
+    return save_runtime_overrides({})

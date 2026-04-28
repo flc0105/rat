@@ -56,18 +56,35 @@ LOCAL_WATCHDOG_HEARTBEAT_INTERVAL_SECONDS = 5
 LOCAL_WATCHDOG_TIMEOUT_SECONDS = 15
 
 
+# 记录源码默认值。set 命令会用它判断 override 是否冗余。
+_RUNTIME_CONFIG_DEFAULTS = {
+    _key: _value
+    for _key, _value in list(globals().items())
+    if _key.isupper() and isinstance(_value, (str, int, float, bool, type(None)))
+}
+
+
 # 外部 runtime_config.json 覆盖默认值。这里不写源码文件，兼容打包场景。
 try:
-    from client.config.runtime_config_store import load_runtime_overrides
+    from client.config.runtime_config_store import load_runtime_overrides, get_runtime_config_path
+
+    _RUNTIME_CONFIG_OVERRIDE_PATH = get_runtime_config_path()
+    _RUNTIME_CONFIG_OVERRIDE_KEYS = []
 
     for _key, _value in load_runtime_overrides().items():
         if _key in globals() and _key.isupper():
             globals()[_key] = _value
+            _RUNTIME_CONFIG_OVERRIDE_KEYS.append(_key)
 except Exception:
-    pass
+    _RUNTIME_CONFIG_OVERRIDE_PATH = ''
+    _RUNTIME_CONFIG_OVERRIDE_KEYS = []
 finally:
     try:
         del load_runtime_overrides
+    except Exception:
+        pass
+    try:
+        del get_runtime_config_path
     except Exception:
         pass
     try:
