@@ -167,6 +167,37 @@ def reset(socket):
     os._exit(0)
 
 
+def reexec_restart(socket):
+    restart_command = get_executable_path()
+
+    try:
+        socket.close()
+    except Exception:
+        pass
+
+    if getattr(sys, 'frozen', False):
+        launch_cwd = os.path.dirname(os.path.realpath(sys.executable))
+    else:
+        launch_cwd = os.path.dirname(os.path.realpath(sys.argv[0]))
+
+    try:
+        os.chdir(launch_cwd)
+    except Exception:
+        pass
+
+    if os.name == 'nt':
+        argv = shlex.split(restart_command, posix=False)
+    elif os.name == 'posix':
+        argv = shlex.split(restart_command)
+    else:
+        raise RuntimeError(f'Unsupported os.name: {os.name}')
+
+    if not argv:
+        raise RuntimeError('Empty restart argv')
+
+    os.execv(argv[0], argv)
+
+
 def spawn_new_instance():
     restart_command = get_executable_path()
 

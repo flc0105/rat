@@ -1,11 +1,9 @@
 import os
-import shlex
 import subprocess
-import sys
 import time
 
 from client.commands.command_context import CommandCancelledError, CommandTimeoutError
-from client.commands.interrupts import interruptible, cancel_policy
+from client.commands.interrupts import interruptible
 from client.commands.python_execution.factory import (
     build_python_execution_strategy,
     get_python_execution_mode
@@ -16,37 +14,34 @@ from client.config.runtime_config import (
     COMMAND_DEFAULT_STREAM_TIMEOUT,
     COMMAND_PROCESS_WAIT_POLL_INTERVAL,
 )
-from core.utils.client_util import reset, spawn_new_instance
 from core.utils.decorator import desc
 
 
 class CommandExecutionMixin:
+    """
+    shell-like / Python script 执行命令。
+
+    这里只保留执行相关逻辑：
+    - shell
+    - spawn
+    - read
+    - pyexec_collect
+    - pyexec_stream
+    - execute_script_stream
+
+    session 控制已拆到 session_ops.py
+    system/network 命令已拆到 system_ops.py
+    """
+
     DEFAULT_SHELL_TIMEOUT = COMMAND_DEFAULT_SHELL_TIMEOUT
     DEFAULT_STREAM_TIMEOUT = COMMAND_DEFAULT_STREAM_TIMEOUT
     PROCESS_KILL_GRACE_SECONDS = 2
     PROCESS_WAIT_POLL_INTERVAL = COMMAND_PROCESS_WAIT_POLL_INTERVAL
 
     def __init__(self, *args, **kwargs):
-        self._command_runtime = None
         self._process_execution_service = None
         self._python_execution_strategy_cache = {}
         super().__init__(*args, **kwargs)
-
-    def set_command_runtime(self, runtime):
-        """
-        注入命令运行时对象（当前由 CommandExecutor 提供）
-        """
-        self._command_runtime = runtime
-
-    def get_argument_command_registry(self):
-        """
-        统一 acmd registry 归属，避免 introspection 每次自行 new 一份
-        """
-        if self._command_runtime is not None:
-            getter = getattr(self._command_runtime, 'get_argument_command_registry', None)
-            if callable(getter):
-                return getter()
-        return None
 
     # ------------------ Python 执行策略 ------------------ #
     def _get_python_execution_strategy(self, mode: str = '', default_mode: str = 'inproc'):
@@ -58,7 +53,6 @@ class CommandExecutionMixin:
                 default_mode=default_mode,
             )
         return self._python_execution_strategy_cache[cache_key]
-
 
     def _build_script_context(self):
         # 给脚本注入统一上下文，避免和平铺业务参数重名
@@ -177,20 +171,13 @@ class CommandExecutionMixin:
             timeout=effective_timeout,
         )
 
-    def _build_restart_command(self):
-        """
-        构造当前程序重启命令
-        """
-        from core.utils.client_util import get_executable_path
-        return get_executable_path()
-
     def _spawn_background_process(self, command: str):
         """
         启动后台进程并立即返回
         """
         return self._get_process_execution_service().spawn_background_process(command)
 
-    # ------------------ 基础命令 ------------------ #
+    # ------------------ 基础执行命令 ------------------ #
     @desc('Change working directory', group='shell')
     @interruptible()
     def cd(self, path):
@@ -265,7 +252,6 @@ class CommandExecutionMixin:
         except Exception as e:
             self._send_final_result(0, f'Failed to execute command: {e}')
 
-
     @desc('Execute Python code and collect output', group='shell')
     @interruptible()
     def pyexec_collect(self, code, kwargs=None):
@@ -305,211 +291,3 @@ class CommandExecutionMixin:
             return 0, 'Command timed out'
         except Exception as e:
             return 0, f'Failed to execute code: {e}'
-
-    # ------------------ 连接控制 ------------------ #
-    @desc('Terminate current session', group='session')
-    @interruptible()
-    def kill(self):
-        self.socket.close()
-        sys.exit(0)
-
-
-    @desc('Restart client process and reconnect', group='session')
-    @interruptible()
-    def reset(self):
-        reset(self.socket)
-
-    @desc('Restart current process by exec replacement', group='session')
-    @interruptible()
-    def reexec_restart(self):
-        from core.utils.client_util import get_executable_path
-
-        restart_command = get_executable_path()
-
-        try:
-            self.socket.close()
-        except Exception:
-            pass
-
-        if getattr(sys, 'frozen', False):
-            launch_cwd = os.path.dirname(os.path.realpath(sys.executable))
-        else:
-            launch_cwd = os.path.dirname(os.path.realpath(sys.argv[0]))
-
-        try:
-            os.chdir(launch_cwd)
-        except Exception:
-            pass
-
-        if os.name == 'nt':
-            argv = shlex.split(restart_command, posix=False)
-        elif os.name == 'posix':
-            argv = shlex.split(restart_command)
-        else:
-            raise RuntimeError(f'Unsupported os.name: {os.name}')
-
-        if not argv:
-            raise RuntimeError('Empty restart argv')
-
-        os.execv(argv[0], argv)
-
-
-    @desc('Start a new client instance without exiting current process', group='session')
-    @interruptible()
-    def spawn_instance(self):
-
-        process = spawn_new_instance()
-        return 1, f'New client instance started, pid={process.pid}'
-
-    @desc('Get current user ID/name', group='system')
-    @interruptible()
-    def getuid(self):
-        """获取当前用户名"""
-        import getpass
-        return 1, getpass.getuser()
-
-    @desc('Print working directory', group='system')
-    @interruptible()
-    def pwd(self):
-        """显示当前工作目录"""
-        return 1, os.getcwd()
-
-    @desc('Simulate keyboard input', group='system')
-    @interruptible()
-    def keyboard_send(self, text):
-        """模拟键盘输入文字"""
-        try:
-            import pyautogui
-            pyautogui.write(text)
-            return 1, f'Typed: {text}'
-        except ImportError:
-            return 0, 'pyautogui not installed'
-
-    @desc('Get current process ID', group='system')
-    @interruptible()
-    def getpid(self):
-        """获取当前进程PID"""
-        return 1, str(os.getpid())
-
-    @desc('Find processes by name', group='system')
-    @interruptible()
-    def pgrep(self, name):
-        """按进程名查找PID"""
-        import psutil
-        pids = []
-        for proc in psutil.process_iter(['pid', 'name']):
-            try:
-                if name.lower() in proc.info['name'].lower():
-                    pids.append(str(proc.info['pid']))
-            except:
-                continue
-        if pids:
-            return 1, '\n'.join(pids)
-        return 1, 'No matching processes'
-
-    @desc('Terminate processes by name', group='system')
-    @interruptible()
-    def pkill(self, name):
-        """按进程名终止进程"""
-        import psutil
-        killed = []
-        for proc in psutil.process_iter(['pid', 'name']):
-            try:
-                if name.lower() in proc.info['name'].lower():
-                    proc.terminate()
-                    killed.append(str(proc.info['pid']))
-            except:
-                continue
-        if killed:
-            return 1, f'Killed processes: {", ".join(killed)}'
-        return 1, 'No matching processes'
-
-    @desc('Show network IP addresses', group='network')
-    @interruptible()
-    def ip(self):
-        """显示内网IP、外网IP和归属地"""
-        import requests
-        import netifaces
-
-        local_ips = []
-        for iface in netifaces.interfaces():
-            addrs = netifaces.ifaddresses(iface)
-            if netifaces.AF_INET in addrs:
-                for addr in addrs[netifaces.AF_INET]:
-                    ip = addr['addr']
-                    if not ip.startswith('127.'):
-                        local_ips.append(ip)
-
-        try:
-            resp = requests.get('http://ip-api.com/json/', timeout=5)
-            data = resp.json()
-            public_ip = data.get('query', 'Unknown')
-            city = data.get('city', 'Unknown')
-            region = data.get('regionName', 'Unknown')
-            country = data.get('country', 'Unknown')
-            isp = data.get('isp', 'Unknown')
-            location = f"{city}, {region}, {country} ({isp})"
-        except:
-            public_ip = 'Unable to determine'
-            location = 'Unknown'
-
-        result = f"Local IPs:\n  {chr(10).join(local_ips)}\n\nPublic IP: {public_ip}\nLocation: {location}"
-        return 1, result
-
-    @desc('List system user accounts', group='system')
-    @interruptible()
-    def userenum(self):
-        """列出系统用户账户"""
-        import pwd
-
-        users = []
-        current_user = os.getlogin()
-
-        try:
-            for user in pwd.getpwall():
-                # macOS: 普通用户 UID 通常是 501 开始
-                # 包含当前用户和所有 UID >= 500 的用户
-                if user.pw_uid >= 500 or user.pw_name in ['root', 'admin', '_mbsetupuser']:
-                    marker = ' [current]' if user.pw_name == current_user else ''
-                    users.append(f"{user.pw_name} (UID: {user.pw_uid}){marker}")
-        except:
-            result = subprocess.run('net user', shell=True, capture_output=True, text=True)
-            return 1, result.stdout
-
-        return 1, '\n'.join(sorted(users, key=lambda x: x.split('UID:')[1].split(')')[0]))
-
-    @desc('Check if current session is root', group='system')
-    @interruptible()
-    def is_root(self):
-        """检查当前是否为 root 权限"""
-        if os.name == 'nt':
-            import ctypes
-            is_admin = ctypes.windll.shell32.IsUserAnAdmin() != 0
-            return 1, f'Is admin: {is_admin}'
-        else:
-            is_root = os.geteuid() == 0
-            return 1, f'Is root: {is_root}'
-
-    @desc('Show system uptime', group='system')
-    @interruptible()
-    def uptime(self):
-        """显示系统运行时间"""
-        import psutil
-        from datetime import datetime
-
-        boot_time = psutil.boot_time()
-        boot_dt = datetime.fromtimestamp(boot_time)
-        now = datetime.now()
-        uptime_seconds = (now - boot_dt).total_seconds()
-
-        days = int(uptime_seconds // 86400)
-        hours = int((uptime_seconds % 86400) // 3600)
-        minutes = int((uptime_seconds % 3600) // 60)
-
-        return 1, f"Boot time: {boot_dt.strftime('%Y-%m-%d %H:%M:%S')}\nUptime: {days}d {hours}h {minutes}m"
-
-
-
-
-
-

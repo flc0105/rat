@@ -1,23 +1,21 @@
 from client.commands.base import CommandBase
-from client.commands.mixins.execution_ops import CommandExecutionMixin
-from client.commands.mixins.file_cli_ops import CommandFileCliMixin
-from client.commands.mixins.file_web_ops import CommandFileWebMixin
-from client.commands.mixins.introspection_ops import CommandIntrospectionMixin
-from client.commands.mixins.job_ops import CommandJobMixin
-from client.commands.mixins.process_ops import CommandProcessMixin
-from client.commands.mixins.watchdog_ops import CommandWatchdogMixin
-from client.commands.mixins.update_ops import CommandUpdateMixin
+from client.commands.common_groups import (
+    CommonFileCommands,
+    CommonRuntimeCommands,
+    CommonShellCommands,
+)
+
 
 class CommonCommands(
-    CommandExecutionMixin,
-    CommandFileCliMixin,
-    CommandFileWebMixin,
-    CommandIntrospectionMixin,
-    CommandJobMixin,
-    CommandProcessMixin,
-    CommandWatchdogMixin,
-    CommandUpdateMixin,
+    CommonShellCommands,
+    CommonFileCommands,
+    CommonRuntimeCommands,
     CommandBase,
 ):
-    """跨平台通用命令集合"""
+    """
+    跨平台通用命令集合。
+
+    这里不直接堆一长串零散 mixin。
+    通用命令先按领域归组，再由平台命令类继承。
+    """
     pass
