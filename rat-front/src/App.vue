@@ -1,263 +1,260 @@
 <template>
-    <div class="app">
-        <header class="banner">
-            <div class="banner-left">
-                <div class="banner-title">Remote Control Hub</div>
-                <div class="banner-subtitle">Remote access, shell control, file browsing</div>
-            </div>
+  <div class="app">
+    <header class="banner">
+      <div class="banner-left">
+        <div class="banner-title">Remote Control Hub</div>
+        <div class="banner-subtitle">Remote access, shell control, file browsing</div>
+      </div>
 
-            <div class="banner-right">
-    <span class="banner-meta-label">Online Nodes</span>
-    <span class="banner-meta-value">{{ onlineConnectionsCount }}</span>
+      <div class="banner-right">
+        <span class="banner-meta-label">Online Nodes</span>
+        <span class="banner-meta-value">{{ onlineConnectionsCount }}</span>
 
-    <div class="banner-actions">
-        <div class="banner-action-links">
+        <div class="banner-actions">
+          <div class="banner-action-links">
             <span class="tool-separator" style="margin-right: 12px; margin-left: 6px"></span>
 
             <div class="banner-action-links">
-                    <button class="banner-inline-action"
-                type="button"
-                @click="openAgentBuilderDialog">
-            Build Agent
-        </button>
-            <button class="banner-inline-action"
-                    type="button"
-                    onclick="window.RatAuth && window.RatAuth.logout()">
+              <button class="banner-inline-action"
+                      type="button"
+                      @click="openAgentBuilderDialog">
+                Build Agent
+              </button>
+              <button class="banner-inline-action"
+                      type="button"
+                      onclick="window.RatAuth && window.RatAuth.logout()">
                 Sign out
-            </button>
+              </button>
             </div>
+          </div>
         </div>
+      </div>
+    </header>
+
+    <div class="content">
+      <DeviceSidebar
+          :connections="connections"
+          :selected-id="selectedId"
+          :format-os-label="formatOsLabel"
+          :format-address="formatAddress"
+          :get-connection-status-dot-class="getConnectionStatusDotClass"
+          :get-connection-status-text="getConnectionStatusText"
+          :format-connection-last-seen-relative="formatConnectionLastSeenRelative"
+          @refresh="loadConnections"
+          @select="selectConnection"
+      />
+
+      <main class="main panel">
+        <template v-if="currentConnection">
+          <div class="main-body">
+            <ConnectionInfoCards
+                :connection="currentConnection"
+                :format-address="formatAddress"
+                :format-os-label="formatOsLabel"
+                :get-connection-status-text="getConnectionStatusText"
+                :format-connection-rtt="formatConnectionRtt"
+            />
+
+            <section class="terminal-panel">
+              <div class="terminal-frame">
+                <TerminalToolbar
+                    :selected-id="selectedId"
+                    @open-remote-files="openRemoteFilesDialog"
+                    @open-artifacts="openArtifactDialog"
+                    @open-info="openConnectionInfoDialog"
+                    @open-jobs="openBackgroundJobsDialog"
+                    @open-scripts="openScriptLibraryDialog"
+                    @open-agents="openAgentOutputsDialog"
+                    @open-history="openCommandHistoryDialog"
+                    @open-pty="openPtyDialog"
+                    @open-processes="openProcessDialog"
+                    @control-action="handleControlActionCommand"
+                    @disconnect="killConnection"
+                    @clear="clearOutput"
+                    @bottom="scrollToBottom"
+                />
+
+                <CommandInputBar
+                    ref="commandInputBarRef"
+                    v-model="commandText"
+                    :sending="sending"
+                    :has-running-web-task="hasRunningWebTask"
+                    :current-task-is-cancelling="currentTaskIsCancelling"
+                    :query-command-candidates="queryCommandCandidates"
+                    @select-candidate="handleCommandCandidateSelect"
+                    @run="sendCommand"
+                    @cancel="cancelCurrentTask"
+                />
+
+                <TerminalOutput
+                    ref="terminalOutputRef"
+                    :lines="currentOutputLines"
+                    @action-click="handleTerminalActionClick"
+                />
+              </div>
+            </section>
+          </div>
+        </template>
+
+        <template v-else>
+          <div class="main-empty">
+            <div class="main-empty-title">No device selected</div>
+            <div class="main-empty-text">Choose a device from the left sidebar to start an interactive
+              session.
+            </div>
+          </div>
+        </template>
+      </main>
     </div>
-</div>
-        </header>
+  </div>
 
-        <div class="content">
-            <DeviceSidebar
-  :connections="connections"
-  :selected-id="selectedId"
-  :format-os-label="formatOsLabel"
-  :format-address="formatAddress"
-  :get-connection-status-dot-class="getConnectionStatusDotClass"
-  :get-connection-status-text="getConnectionStatusText"
-  :format-connection-last-seen-relative="formatConnectionLastSeenRelative"
-  @refresh="loadConnections"
-  @select="selectConnection"
-/>
-
-            <main class="main panel">
-                <template v-if="currentConnection">
-                    <div class="main-body">
-                        <ConnectionInfoCards
-  :connection="currentConnection"
-  :format-address="formatAddress"
-  :format-os-label="formatOsLabel"
-  :get-connection-status-text="getConnectionStatusText"
-  :format-connection-rtt="formatConnectionRtt"
-/>
-
-                        <section class="terminal-panel">
-                            <div class="terminal-frame">
-                                <TerminalToolbar
-  :selected-id="selectedId"
-  @open-remote-files="openRemoteFilesDialog"
-  @open-artifacts="openArtifactDialog"
-  @open-info="openConnectionInfoDialog"
-  @open-jobs="openBackgroundJobsDialog"
-  @open-scripts="openScriptLibraryDialog"
-  @open-agents="openAgentOutputsDialog"
-  @open-history="openCommandHistoryDialog"
-  @open-pty="openPtyDialog"
-  @open-processes="openProcessDialog"
-  @control-action="handleControlActionCommand"
-  @disconnect="killConnection"
-  @clear="clearOutput"
-  @bottom="scrollToBottom"
-/>
-
-                                <CommandInputBar
-  ref="commandInputBarRef"
-  v-model="commandText"
-  :sending="sending"
-  :has-running-web-task="hasRunningWebTask"
-  :current-task-is-cancelling="currentTaskIsCancelling"
-  :query-command-candidates="queryCommandCandidates"
-  @select-candidate="handleCommandCandidateSelect"
-  @run="sendCommand"
-  @cancel="cancelCurrentTask"
-/>
-
-                                <TerminalOutput
-  ref="terminalOutputRef"
-  :lines="currentOutputLines"
-  :get-terminal-tail-action-items="getTerminalTailActionItems"
-  :get-terminal-inline-action-items="getTerminalInlineActionItems"
-  @action-click="handleTerminalActionClick"
-/>
-                            </div>
-                        </section>
-                    </div>
-                </template>
-
-                <template v-else>
-                    <div class="main-empty">
-                        <div class="main-empty-title">No device selected</div>
-                        <div class="main-empty-text">Choose a device from the left sidebar to start an interactive
-                            session.
-                        </div>
-                    </div>
-                </template>
-            </main>
-        </div>
-    </div>
-
-<input
-  ref="remoteUploadInputRef"
-  type="file"
-  class="hidden-file-input"
-  @change="handleRemoteUploadChange"
-/>
-<RemoteFilesDialog
-  ref="remoteFilesDialogRef"
-  :selected-id="selectedId"
-  :format-bytes="formatBytes"
-  :get-tab-scoped-headers="getTabScopedHeaders"
-  @append-output="appendOutput"
-  @set-active-task="setActiveTask"
-  @preview="previewRemoteEntry"
-  @request-upload="triggerRemoteUploadInput"
-  @upload-started="pendingRemoteUploadRefresh = $event"
-  @visible-change="remoteFilesDialogVisible = $event"
-  @artifacts-maybe-changed="refreshArtifactsIfOpen"
-/>
+  <input
+      ref="remoteUploadInputRef"
+      type="file"
+      class="hidden-file-input"
+      @change="handleRemoteUploadChange"
+  />
+  <RemoteFilesDialog
+      ref="remoteFilesDialogRef"
+      :selected-id="selectedId"
+      :format-bytes="formatBytes"
+      :get-tab-scoped-headers="getTabScopedHeaders"
+      @append-output="appendOutput"
+      @set-active-task="setActiveTask"
+      @preview="previewRemoteEntry"
+      @request-upload="triggerRemoteUploadInput"
+      @upload-started="pendingRemoteUploadRefresh = $event"
+      @visible-change="remoteFilesDialogVisible = $event"
+      @artifacts-maybe-changed="refreshArtifactsIfOpen"
+  />
 
 
-
-<ArtifactDialog
-  ref="artifactDialogRef"
-  :format-bytes="formatBytes"
-  :current-connection="currentConnection"
-  @preview="previewArtifact"
-/>
-
-
-<ScriptLibraryDialog
-  ref="scriptLibraryDialogRef"
-  :selected-id="selectedId"
-  :current-connection="currentConnection"
-  :get-tab-scoped-headers="getTabScopedHeaders"
-  :open-script-editor="openRemoteScriptEditorInternal"
-  :open-new-script-editor="openNewRemoteScriptEditor"
-  @append-output="appendOutput"
-  @set-active-task="setActiveTask"
-/>
+  <ArtifactDialog
+      ref="artifactDialogRef"
+      :format-bytes="formatBytes"
+      :current-connection="currentConnection"
+      @preview="previewArtifact"
+  />
 
 
-<BackgroundJobsDialog
-  ref="backgroundJobsDialogRef"
-  :selected-id="selectedId"
-  :current-connection="currentConnection"
-  :get-tab-scoped-headers="getTabScopedHeaders"
-  :format-date-time-standard="formatDateTimeStandard"
-  :format-bytes="formatBytes"
-  @set-active-task="setActiveTask"
-  @preview-file="previewBackgroundJobFile"
-  @open-job-editor="openRemoteJobEditor"
-  @open-new-job-editor="openNewRemoteJobEditor"
-  @job-deleted="handleBackgroundJobDeleted"
-/>
-
-<PreviewDialog
-  v-model:visible="previewDialogVisible"
-  :loading="previewLoading"
-  :type="previewType"
-  :title="previewTitle"
-  :url="previewUrl"
-  :edit-mode="previewEditMode"
-  :saving="previewSaving"
-  :truncated="previewTruncated"
-  :source-label="previewSourceLabel"
-  :file-size="previewFileSize"
-  :file-encoding="previewFileEncoding"
-  :detected-language="previewDetectedLanguage"
-  :image-info="previewImageInfo"
-  @copy-text="copyPreviewText"
-  @enter-edit="enterEditMode"
-  @save="saveEditedContent"
-  @cancel-edit="cancelEditMode"
-  @clear-content="clearPreviewContent"
-  @open-image-info="openPreviewImageInfoDialog"
-  @open-original="openPreviewOriginal"
-/>
+  <ScriptLibraryDialog
+      ref="scriptLibraryDialogRef"
+      :selected-id="selectedId"
+      :current-connection="currentConnection"
+      :get-tab-scoped-headers="getTabScopedHeaders"
+      :open-script-editor="openRemoteScriptEditorInternal"
+      :open-new-script-editor="openNewRemoteScriptEditor"
+      @append-output="appendOutput"
+      @set-active-task="setActiveTask"
+  />
 
 
-<CommandHistoryDialog
-  ref="commandHistoryDialogRef"
-  :selected-id="selectedId"
-  :current-connection="currentConnection"
-  :format-date-time-standard="formatDateTimeStandard"
-  :format-bytes="formatBytes"
-  :reload-command-candidates="reloadCommandCandidatesFromHistory"
-  @apply-command="applyHistoryCommand"
-  @preview-file="previewArtifact"
-/>
+  <BackgroundJobsDialog
+      ref="backgroundJobsDialogRef"
+      :selected-id="selectedId"
+      :current-connection="currentConnection"
+      :get-tab-scoped-headers="getTabScopedHeaders"
+      :format-date-time-standard="formatDateTimeStandard"
+      :format-bytes="formatBytes"
+      @set-active-task="setActiveTask"
+      @preview-file="previewBackgroundJobFile"
+      @open-job-editor="openRemoteJobEditor"
+      @open-new-job-editor="openNewRemoteJobEditor"
+      @job-deleted="handleBackgroundJobDeleted"
+  />
+
+  <PreviewDialog
+      v-model:visible="previewDialogVisible"
+      :loading="previewLoading"
+      :type="previewType"
+      :title="previewTitle"
+      :url="previewUrl"
+      :edit-mode="previewEditMode"
+      :saving="previewSaving"
+      :truncated="previewTruncated"
+      :source-label="previewSourceLabel"
+      :file-size="previewFileSize"
+      :file-encoding="previewFileEncoding"
+      :detected-language="previewDetectedLanguage"
+      :image-info="previewImageInfo"
+      @copy-text="copyPreviewText"
+      @enter-edit="enterEditMode"
+      @save="saveEditedContent"
+      @cancel-edit="cancelEditMode"
+      @clear-content="clearPreviewContent"
+      @open-image-info="openPreviewImageInfoDialog"
+      @open-original="openPreviewOriginal"
+  />
 
 
-<ConnectionInfoDialogs
-  ref="connectionInfoDialogRef"
-  :selected-id="selectedId"
-  :current-connection="currentConnection"
-  :command-candidates="commandCandidates"
-  :command-candidates-loaded-for="commandCandidatesLoadedFor"
-  :load-command-candidates="loadCommandCandidates"
-  :get-connection-status-text="getConnectionStatusText"
-  :format-connection-last-seen="formatConnectionLastSeen"
-  :format-date-time-standard="formatDateTimeStandard"
-  :format-connection-rtt="formatConnectionRtt"
-/>
+  <CommandHistoryDialog
+      ref="commandHistoryDialogRef"
+      :selected-id="selectedId"
+      :current-connection="currentConnection"
+      :format-date-time-standard="formatDateTimeStandard"
+      :format-bytes="formatBytes"
+      :reload-command-candidates="reloadCommandCandidatesFromHistory"
+      @apply-command="applyHistoryCommand"
+      @preview-file="previewArtifact"
+  />
 
 
- <ProcessDialogs
-  ref="processDialogRef"
-  :selected-id="selectedId"
-/>
+  <ConnectionInfoDialogs
+      ref="connectionInfoDialogRef"
+      :selected-id="selectedId"
+      :current-connection="currentConnection"
+      :command-candidates="commandCandidates"
+      :command-candidates-loaded-for="commandCandidatesLoadedFor"
+      :load-command-candidates="loadCommandCandidates"
+      :get-connection-status-text="getConnectionStatusText"
+      :format-connection-last-seen="formatConnectionLastSeen"
+      :format-date-time-standard="formatDateTimeStandard"
+      :format-connection-rtt="formatConnectionRtt"
+  />
+
+
+  <ProcessDialogs
+      ref="processDialogRef"
+      :selected-id="selectedId"
+  />
 
   <AgentBuilderDialog
-  ref="agentBuilderDialogRef"
-  @built="refreshAgentOutputsIfOpen"
-/>
+      ref="agentBuilderDialogRef"
+      @built="refreshAgentOutputsIfOpen"
+  />
 
-<TerminalJsonDialog
-  v-model:visible="terminalJsonDialogVisible"
-  :title="terminalJsonDialogTitle"
-  :display-mode="terminalJsonDisplayMode"
-  :table-rows="terminalJsonTableRows"
-  :table-columns="terminalJsonTableColumns"
-  :flat-rows="terminalJsonFlatRows"
-  :text="terminalJsonText"
-/>
+  <TerminalJsonDialog
+      v-model:visible="terminalJsonDialogVisible"
+      :title="terminalJsonDialogTitle"
+      :display-mode="terminalJsonDisplayMode"
+      :table-rows="terminalJsonTableRows"
+      :table-columns="terminalJsonTableColumns"
+      :flat-rows="terminalJsonFlatRows"
+      :text="terminalJsonText"
+  />
 
 
   <PreviewImageInfoDialog
-  v-model:visible="previewImageInfoDialogVisible"
-  :info="previewImageInfo"
-  :format-preview-image-info="formatPreviewImageInfo"
-/>
+      v-model:visible="previewImageInfoDialogVisible"
+      :info="previewImageInfo"
+      :format-preview-image-info="formatPreviewImageInfo"
+  />
 
 
-<AgentOutputsDialog
-  ref="agentOutputsDialogRef"
-  :format-date-time-standard="formatDateTimeStandard"
-  :format-bytes="formatBytes"
-  @open-builder="openAgentBuilderDialog"
-/>
+  <AgentOutputsDialog
+      ref="agentOutputsDialogRef"
+      :format-date-time-standard="formatDateTimeStandard"
+      :format-bytes="formatBytes"
+      @open-builder="openAgentBuilderDialog"
+  />
 
 
   <PtyDialog
-  ref="ptyDialogRef"
-  :selected-id="selectedId"
-  :current-connection="currentConnection"
-  :get-tab-scoped-headers="getTabScopedHeaders"
-/>
+      ref="ptyDialogRef"
+      :selected-id="selectedId"
+      :current-connection="currentConnection"
+      :get-tab-scoped-headers="getTabScopedHeaders"
+  />
 </template>
 
 <script>
@@ -314,7 +311,8 @@ export default {
     AgentBuilderDialog,
     ProcessDialogs,
     ConnectionInfoDialogs,
-    TerminalOutput, CommandInputBar, TerminalToolbar, ConnectionInfoCards, DeviceSidebar},
+    TerminalOutput, CommandInputBar, TerminalToolbar, ConnectionInfoCards, DeviceSidebar
+  },
   data() {
     return {
       ...AppStateModule.data(),
@@ -330,7 +328,7 @@ export default {
 
 
       remoteFilesDialogVisible: false,
-pendingRemoteUploadRefresh: null,
+      pendingRemoteUploadRefresh: null,
 
     }
   },
@@ -375,136 +373,133 @@ pendingRemoteUploadRefresh: null,
 // },
 
 
+    openArtifactDialog() {
+      return this.$refs.artifactDialogRef?.open()
+    },
 
-
-openArtifactDialog() {
-  return this.$refs.artifactDialogRef?.open()
-},
-
-refreshArtifactsIfOpen() {
-  return this.$refs.artifactDialogRef?.refreshIfOpen()
-},
+    refreshArtifactsIfOpen() {
+      return this.$refs.artifactDialogRef?.refreshIfOpen()
+    },
 
     openRemoteFilesDialog() {
-  this.$refs.remoteFilesDialogRef?.open()
-},
+      this.$refs.remoteFilesDialogRef?.open()
+    },
 
-triggerRemoteUploadInput() {
-  const input = this.$refs.remoteUploadInputRef
+    triggerRemoteUploadInput() {
+      const input = this.$refs.remoteUploadInputRef
 
-  if (input) {
-    input.value = ''
-    input.click()
-  }
-},
+      if (input) {
+        input.value = ''
+        input.click()
+      }
+    },
 
-handleRemoteUploadChange(event) {
-  this.$refs.remoteFilesDialogRef?.handleUploadChange(event)
-},
+    handleRemoteUploadChange(event) {
+      this.$refs.remoteFilesDialogRef?.handleUploadChange(event)
+    },
 
-loadRemoteDirectory(path = '', page = 1) {
-  return this.$refs.remoteFilesDialogRef?.loadRemoteDirectory(path, page)
-},
+    loadRemoteDirectory(path = '', page = 1) {
+      return this.$refs.remoteFilesDialogRef?.loadRemoteDirectory(path, page)
+    },
 
-refreshRemoteDirectory() {
-  return this.$refs.remoteFilesDialogRef?.refreshRemoteDirectory()
-},
-
+    refreshRemoteDirectory() {
+      return this.$refs.remoteFilesDialogRef?.refreshRemoteDirectory()
+    },
 
 
     openBackgroundJobsDialog() {
-  return this.$refs.backgroundJobsDialogRef?.open()
-},
+      return this.$refs.backgroundJobsDialogRef?.open()
+    },
 
-refreshBackgroundJobsIfOpen() {
-  return this.$refs.backgroundJobsDialogRef?.refreshIfOpen()
-},
+    refreshBackgroundJobsIfOpen() {
+      return this.$refs.backgroundJobsDialogRef?.refreshIfOpen()
+    },
 
-refreshBackgroundJobModulesIfOpen() {
-  return this.$refs.backgroundJobsDialogRef?.refreshModulesIfOpen()
-},
+    refreshBackgroundJobModulesIfOpen() {
+      return this.$refs.backgroundJobsDialogRef?.refreshModulesIfOpen()
+    },
 
-openScriptLibraryDialog() {
-  return this.$refs.scriptLibraryDialogRef?.open()
-},
+    openScriptLibraryDialog() {
+      return this.$refs.scriptLibraryDialogRef?.open()
+    },
 
-refreshScriptsIfOpen() {
-  return this.$refs.scriptLibraryDialogRef?.refreshIfOpen()
-},
+    refreshScriptsIfOpen() {
+      return this.$refs.scriptLibraryDialogRef?.refreshIfOpen()
+    },
 
-openPtyDialog() {
-  return this.$refs.ptyDialogRef?.open()
-},
+    openPtyDialog() {
+      return this.$refs.ptyDialogRef?.open()
+    },
 
-openProcessDialog() {
-  return this.$refs.processDialogRef?.open()
-},
+    openProcessDialog() {
+      return this.$refs.processDialogRef?.open()
+    },
 
-openAgentBuilderDialog() {
-  return this.$refs.agentBuilderDialogRef?.open()
-},
+    openAgentBuilderDialog() {
+      return this.$refs.agentBuilderDialogRef?.open()
+    },
 
-openAgentOutputsDialog() {
-  return this.$refs.agentOutputsDialogRef?.open()
-},
+    openAgentOutputsDialog() {
+      return this.$refs.agentOutputsDialogRef?.open()
+    },
 
-refreshAgentOutputsIfOpen() {
-  return this.$refs.agentOutputsDialogRef?.refreshIfOpen({ silent: true })
-},
+    refreshAgentOutputsIfOpen() {
+      return this.$refs.agentOutputsDialogRef?.refreshIfOpen({silent: true})
+    },
 
-openConnectionInfoDialog() {
-  return this.$refs.connectionInfoDialogRef?.open()
-},
+    openConnectionInfoDialog() {
+      return this.$refs.connectionInfoDialogRef?.open()
+    },
 
-scheduleBackgroundJobsRefresh(clientId = '') {
-  this.$refs.backgroundJobsDialogRef?.scheduleBackgroundJobsRefresh(clientId)
-},
+    scheduleBackgroundJobsRefresh(clientId = '') {
+      this.$refs.backgroundJobsDialogRef?.scheduleBackgroundJobsRefresh(clientId)
+    },
 
-handleBackgroundJobDeleted(normalizedName) {
-  if (
-    this.previewDialogVisible &&
-    (this.previewSource === 'server_job' || this.previewSource === 'background_job')
-  ) {
-    const currentPreviewName = this.normalizeServerJobFilename(this.previewFilePath || this.previewTitle || '')
+    handleBackgroundJobDeleted(normalizedName) {
+      if (
+          this.previewDialogVisible &&
+          (this.previewSource === 'server_job' || this.previewSource === 'background_job')
+      ) {
+        const currentPreviewName = this.normalizeServerJobFilename(this.previewFilePath || this.previewTitle || '')
 
-    if (currentPreviewName === normalizedName) {
-      this.previewDialogVisible = false
+        if (currentPreviewName === normalizedName) {
+          this.previewDialogVisible = false
 
-      if (typeof this.destroyMonacoEditor === 'function') {
-        this.destroyMonacoEditor()
+          if (typeof this.destroyMonacoEditor === 'function') {
+            this.destroyMonacoEditor()
+          }
+        }
       }
-    }
-  }
-},
+    },
 
 
     openCommandHistoryDialog() {
-  return this.$refs.commandHistoryDialogRef?.open()
-},
+      return this.$refs.commandHistoryDialogRef?.open()
+    },
 
-applyHistoryCommand(row) {
-  if (!row || !row.command) return
+    applyHistoryCommand(row) {
+      if (!row || !row.command) return
 
-  this.commandText = row.command
+      this.commandText = row.command
 
-  this.$nextTick(() => {
-    const commandInputBar = this.$refs.commandInputBarRef
+      this.$nextTick(() => {
+        const commandInputBar = this.$refs.commandInputBarRef
 
-    if (commandInputBar && typeof commandInputBar.focusInput === 'function') {
-      commandInputBar.focusInput()
-    }
-  })
-},
+        if (commandInputBar && typeof commandInputBar.focusInput === 'function') {
+          commandInputBar.focusInput()
+        }
+      })
+    },
 
-async reloadCommandCandidatesFromHistory(options = {}) {
-  if (options?.reset) {
-    this.commandCandidatesLoadedFor = ''
-  }
+    async reloadCommandCandidatesFromHistory(options = {}) {
+      if (options?.reset) {
+        this.commandCandidatesLoadedFor = ''
+      }
 
-  if (!this.selectedId) return
+      if (!this.selectedId) return
 
-  await this.loadCommandCandidates(this.selectedId)
-},
+      await this.loadCommandCandidates(this.selectedId)
+    },
 
   },
 
