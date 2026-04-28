@@ -376,12 +376,15 @@ class iOSPlatformService:
                 image.save(buf, format='JPEG', quality=90)
                 buf.seek(0)
 
-                response = upload_file_via_http(
-                    file_source=buf,
+                form_data = self.owner.http_file_transfer_service.build_http_upload_form_data(
+                    artifact_type='files',
                     category='download',
-                    upload_url=upload_url,
-                    client_id=getattr(self.owner.socket, 'client_id', '') or '',
+                )
+                response = self.owner.client_api.upload_file_source(
+                    buf,
                     filename=f'photo_{get_time()}.png',
+                    form_data=form_data,
+                    timeout=30,
                 )
 
             elif kind == 'file':
@@ -389,12 +392,15 @@ class iOSPlatformService:
                 if not file_path:
                     return 0, 'No file selected'
 
-                response = upload_file_via_http(
-                    file_source=file_path,
+                form_data = self.owner.http_file_transfer_service.build_http_upload_form_data(
+                    artifact_type='files',
                     category='download',
-                    upload_url=upload_url,
+                )
+                response = self.owner.client_api.upload_file_source(
+                    file_path,
                     filename=os.path.basename(file_path),
-                    client_id=getattr(self.owner.socket, 'client_id', '') or '',
+                    form_data=form_data,
+                    timeout=30,
                 )
 
             else:

@@ -245,11 +245,49 @@ class ClientApiClient:
             timeout=timeout,
         )
 
-    def upload_file(self, file_path: str, form_data: dict, *, timeout=30):
-        with open(file_path, 'rb') as file_obj:
+    def upload_file_source(
+        self,
+        file_source,
+        *,
+        filename: str = '',
+        form_data: dict | None = None,
+        timeout=30,
+    ):
+        close_after = False
+
+        if isinstance(file_source, str):
+            file_obj = open(file_source, 'rb')
+            close_after = True
+            upload_name = filename or os.path.basename(file_source)
+        else:
+            file_obj = file_source
+            upload_name = filename or getattr(file_obj, 'name', None) or 'upload.bin'
+
+        try:
+            try:
+                file_obj.seek(0)
+            except Exception:
+                pass
+
             return requests.post(
                 self.build_file_upload_url(),
-                files={'file': (os.path.basename(file_path), file_obj)},
-                data=form_data,
+                files={
+                    'file': (upload_name, file_obj),
+                },
+                data=form_data or {},
                 timeout=timeout,
             )
+        finally:
+            if close_after:
+                try:
+                    file_obj.close()
+                except Exception:
+                    pass
+
+    def upload_file(self, file_path: str, form_data: dict, *, timeout=30):
+        return self.upload_file_source(
+            file_path,
+            filename=os.path.basename(file_path),
+            form_data=form_data,
+            timeout=timeout,
+        )

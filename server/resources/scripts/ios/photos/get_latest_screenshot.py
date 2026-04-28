@@ -9,16 +9,11 @@ SCRIPT_METADATA = {
 
 import io
 import json
-import os
 from datetime import datetime
 
 import photos
-import requests
 
-from client.config.config import UPLOAD_BASE_URL
-from core.utils.client_util import upload_file_via_http
-
-UPLOAD_URL = UPLOAD_BASE_URL.rstrip('/') + '/api/files/upload'
+from client.http.script_upload_api import upload_file
 
 UTI_EXT = {
     'public.jpeg': '.jpg',
@@ -60,10 +55,13 @@ def main():
     buf = io.BytesIO(data_io.getvalue())
     buf.name = filename
 
-    ctx = kwargs.get('__context__', {})
-    client_id = ctx.get('client_id', '')
-
-    resp = upload_file_via_http(buf, filename=filename, upload_url=UPLOAD_URL, category='download', client_id=client_id)
+    resp = upload_file(
+        buf,
+        filename=filename,
+        category='download',
+        context=kwargs,
+        metadata=SCRIPT_METADATA,
+    )
 
     try:
         payload = resp.json()

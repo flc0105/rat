@@ -59,6 +59,7 @@ class CommandExecutionMixin:
         context = {}
         socket_obj = getattr(self, 'socket', None)
         context['client_id'] = getattr(socket_obj, 'client_id', '') or ''
+        context['command_id'] = self.command_id if self.command_id is not None else ''
         return context
 
     def _merge_script_kwargs_with_context(self, kwargs=None):
