@@ -7,7 +7,7 @@ import time
 
 from client.commands.command_context import CommandCancelledError, CommandTimeoutError
 from client.commands.platform.utils.ios_util import get_ios_username, _safe_call, get_ios_device_info, \
-    get_ios_process_info, get_ios_bundle_info, get_ios_contacts
+    get_ios_process_info, get_ios_bundle_info, get_ios_contacts, get_icloud_path, read_info_plist
 from client.config.config import UPLOAD_BASE_URL
 from core.utils.client_util import get_executable_path, upload_file_via_http
 from core.utils.command_output import StructuredCommandResult
@@ -222,7 +222,8 @@ class iOSPlatformService:
                 'cwd': os.getcwd(),
                 'home': os.path.expanduser('~') or str(Path.home()),
                 'documents': os.path.expanduser('~/Documents'),
-                'temp': os.path.abspath(os.getenv('TMPDIR', '/tmp'))
+                'temp': os.path.abspath(os.getenv('TMPDIR', '/tmp')),
+                'icloud': get_icloud_path(read_info_plist())
             }
 
             return StructuredCommandResult(
@@ -583,3 +584,64 @@ class iOSPlatformService:
             return 1, out_path
         except Exception as e:
             return 0, f'wget failed: {e}'
+
+    def tcp_ping(self, host, port=80, count=4, timeout=2.0):
+        import socket
+        self.owner._send_interim_result(1, "TCP ping {}:{} count={} timeout={}s".format(
+            host, port, count, timeout
+        ))
+
+        try:
+            infos = socket.getaddrinfo(host, port, socket.AF_UNSPEC, socket.SOCK_STREAM)
+        except Exception as e:
+            self.owner._send_final_result(0, f"DNS failed: {repr(e)}")
+            return
+
+        addr = infos[0][4]
+        self.owner._send_interim_result(1, f"resolved: {addr}")
+
+        times = []
+
+        for i in range(count):
+            s = socket.socket(infos[0][0], socket.SOCK_STREAM)
+            s.settimeout(timeout)
+
+            start = time.time()
+
+            try:
+                s.connect(addr)
+                elapsed = (time.time() - start) * 1000.0
+                times.append(elapsed)
+                self.owner._send_interim_result(1, "reply {}: {:.1f} ms".format(i + 1, elapsed))
+
+            except Exception as e:
+                self.owner._send_interim_result(0, "timeout/error {}: {}".format(i + 1, repr(e)))
+                # print()
+
+            finally:
+                s.close()
+
+            time.sleep(1)
+
+        if times:
+            self.owner._send_interim_result(1, "")
+            self.owner._send_final_result(1, "min/avg/max = {:.1f}/{:.1f}/{:.1f} ms".format(
+                min(times),
+                sum(times) / len(times),
+                max(times)
+            ))
+        else:
+            self.owner._send_final_result(1, "\n")
+
+    def acmd_tcp_ping(self, args_dict):
+        try:
+            import urllib.request
+            host = str(args_dict.get('host') or '').strip()
+            port = int(args_dict.get('port') or '')
+            times = int(args_dict.get('times') or '')
+            return self.tcp_ping(host=host,port=port,count=times)
+        except Exception as e:
+            return 0, str(e)
+
+
+

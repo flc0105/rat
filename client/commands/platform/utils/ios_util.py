@@ -242,3 +242,46 @@ def get_ios_contacts():
             results.append(item)
 
     return results
+
+
+
+def get_icloud_container_ids(info):
+    containers = info.get("NSUbiquitousContainers", {})
+
+    if isinstance(containers, dict):
+        return list(containers.keys())
+
+    return []
+
+
+
+def read_info_plist():
+    import plistlib
+    NSBundle = ObjCClass("NSBundle")
+    bundle_path = str(NSBundle.mainBundle().bundlePath())
+    plist_path = os.path.join(bundle_path, "Info.plist")
+
+    with open(plist_path, "rb") as f:
+        return plistlib.load(f)
+
+
+def get_icloud_path(info):
+    NSFileManager = ObjCClass("NSFileManager")
+    fm = NSFileManager.defaultManager()
+
+    for cid in get_icloud_container_ids(info):
+        try:
+            url = fm.URLForUbiquityContainerIdentifier_(ns(cid))
+            if url:
+                return str(url.path())
+        except Exception:
+            pass
+
+    try:
+        url = fm.URLForUbiquityContainerIdentifier_(None)
+        if url:
+            return str(url.path())
+    except Exception:
+        pass
+
+    return "unavailable"

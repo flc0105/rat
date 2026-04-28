@@ -111,14 +111,22 @@ class iOSCommands(CommonCommands):
     @desc('Keep screen awake', group='console')
     def keepawake(self, arg):
         import console
-        if arg=='on':
+        if arg == 'on':
             console.set_idle_timer_disabled(True)
             return 1, 'Screen will stay awake'
-        elif arg=='off':
+        elif arg == 'off':
             console.set_idle_timer_disabled(False)
             return 1, 'Screen sleep restored'
         else:
             return 0, 'keepawake [on/off]'
+
+    @desc('Force quit app', group='console')
+    def killapp(self):
+        import time, os
+        delay = 0.2
+        time.sleep(delay)
+        os._exit(0)
+        return 1, ''
 
 
     @argument_command('alert', spec=ALERT_ARGUMENT_SPEC)
@@ -152,5 +160,7 @@ class iOSCommands(CommonCommands):
     def wget(self, args_dict, payload=None):
         return self._ios_platform_service.acmd_wget(args_dict)
 
-
-
+    @argument_command('tcp_ping', spec=TCP_PING_ARGUMENT_SPEC)
+    @interruptible()
+    def tcp_ping(self, args_dict, payload=None):
+        return self._ios_platform_service.acmd_tcp_ping(args_dict)

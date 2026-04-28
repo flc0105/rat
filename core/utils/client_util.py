@@ -116,6 +116,13 @@ def get_system_paths():
     system_paths['documents'] = str(Path.home() / 'Documents')
     system_paths['downloads'] = str(Path.home() / 'Downloads')
 
+    import tempfile
+    system_paths['temp'] = str(tempfile.gettempdir())
+
+    if detect_platform_alias() == 'ios':
+        from client.commands.platform.utils.ios_util import get_icloud_path, read_info_plist
+        system_paths['icloud'] = get_icloud_path(read_info_plist())
+
     if getattr(sys, 'frozen', False):
         system_paths['executable'] = os.path.dirname(sys.executable)
     else:

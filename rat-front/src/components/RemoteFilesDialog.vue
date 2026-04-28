@@ -70,6 +70,8 @@
                     <el-dropdown-item command="desktop">Desktop</el-dropdown-item>
                     <el-dropdown-item command="documents">Documents</el-dropdown-item>
                     <el-dropdown-item command="downloads">Downloads</el-dropdown-item>
+                    <el-dropdown-item command="temp">Temp</el-dropdown-item>
+<!--                    <el-dropdown-item command="icloud">iCloud</el-dropdown-item>-->
                     <el-dropdown-item command="executable">
                       Program Directory
                     </el-dropdown-item>
