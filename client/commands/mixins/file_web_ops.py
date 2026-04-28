@@ -44,98 +44,16 @@ class CommandFileWebMixin:
     HTTP_DOWNLOAD_CHUNK_SIZE = HTTP_DOWNLOAD_CHUNK_SIZE
     HTTP_UPLOAD_CHUNK_SIZE = HTTP_UPLOAD_CHUNK_SIZE
 
-    def __init__(self, *args, **kwargs):
-        self._http_file_transfer_service = None
-        super().__init__(*args, **kwargs)
-
-    def _get_http_file_transfer_service(self):
-        if self._http_file_transfer_service is None:
-            self._http_file_transfer_service = CommandHttpFileTransferService(self)
-        return self._http_file_transfer_service
-
-    def _get_http_transfer_strategy(self):
-        return self._get_http_file_transfer_service().get_transfer_strategy()
-
-    def _build_http_upload_form_data(
-        self,
-        *,
-        artifact_type: str,
-        category: str,
-        extra: dict | None = None,
-    ) -> dict:
-        return self._get_http_file_transfer_service().build_http_upload_form_data(
-            artifact_type=artifact_type,
-            category=category,
-            extra=extra,
-        )
-
-    def _resolve_http_timeout(self, fallback_timeout=None):
-        return self._get_http_file_transfer_service().resolve_http_timeout(
-            fallback_timeout=fallback_timeout
-        )
-
-    def _parse_http_upload_response(self, response):
-        return self._get_http_file_transfer_service().parse_http_upload_response(response)
-
-    def _build_http_upload_success_message(self, payload, file_path: str, fallback_message: str):
-        return self._get_http_file_transfer_service().build_http_upload_success_message(
-            payload,
-            file_path=file_path,
-            fallback_message=fallback_message,
-        )
-
-    def _upload_file_to_server_via_http(
-        self,
-        file_path: str,
-        *,
-        artifact_type: str = 'files',
-        category: str = 'default',
-        extra: dict | None = None,
-    ):
-        return self._get_http_file_transfer_service().upload_file_to_server_via_http(
-            file_path,
-            artifact_type=artifact_type,
-            category=category,
-            extra=extra,
-        )
-
-    def _upload_single_file_to_server_result(
-        self,
-        file_path: str,
-        *,
-        artifact_type: str = 'files',
-        category: str = 'default',
-        extra: dict | None = None,
-    ):
-        return self._get_http_file_transfer_service().upload_single_file_to_server_result(
-            file_path,
-            artifact_type=artifact_type,
-            category=category,
-            extra=extra,
-        )
-
-    def _upload_paths_as_zip_to_server_result(
-        self,
-        resolved_paths: list[str],
-        *,
-        archive_name: str = '',
-        artifact_type: str = 'files',
-        category: str = 'default',
-        extra: dict | None = None,
-    ):
-        return self._get_http_file_transfer_service().upload_paths_as_zip_to_server_result(
-            resolved_paths,
-            archive_name=archive_name,
-            artifact_type=artifact_type,
-            category=category,
-            extra=extra,
-        )
-
-    def _download_file_from_http(self, url: str, target_path: str):
-        return self._get_http_file_transfer_service().download_file_from_http(
-            url,
-            target_path
-        )
+    @property
+    def http_file_transfer_service(self):
+        service = getattr(self, '_http_file_transfer_service', None)
+        if service is None:
+            service = CommandHttpFileTransferService(
+                self,
+                archive_service=self.archive_service,
+            )
+            self._http_file_transfer_service = service
+        return service
 
     @desc('Download a file by path', group='file_path', suggest=False)
     @interruptible()
@@ -149,8 +67,8 @@ class CommandFileWebMixin:
                     supported=False,
                     message=HTTP_DOWNLOAD_CANCEL_UNSUPPORTED_MESSAGE)
 
-            file_path = self._require_existing_file_from_arg(path)
-            return self._upload_single_file_to_server_result(
+            file_path = self.path_resolver.require_existing_file_from_arg(path)
+            return self.http_file_transfer_service.upload_single_file_to_server_result(
                 file_path,
                 artifact_type='files',
                 category='download',
@@ -169,7 +87,7 @@ class CommandFileWebMixin:
         按路径列表打包上传到 server artifact files 区
         """
         try:
-            payload = self._decode_structured_arg(arg)
+            payload = self.structured_arg_codec.decode(arg)
             if not isinstance(payload, dict):
                 return 0, 'Invalid download payload'
 
@@ -179,9 +97,9 @@ class CommandFileWebMixin:
             if not isinstance(raw_paths, list) or not raw_paths:
                 return 0, 'paths is required'
 
-            resolved_paths = self._require_existing_paths_from_list(raw_paths)
+            resolved_paths = self.path_resolver.require_existing_paths_from_list(raw_paths)
 
-            return self._upload_paths_as_zip_to_server_result(
+            return self.http_file_transfer_service.upload_paths_as_zip_to_server_result(
                 resolved_paths,
                 archive_name=archive_name,
                 artifact_type='files',
@@ -201,8 +119,8 @@ class CommandFileWebMixin:
         拉取预览文件到 server artifact previews 区
         """
         try:
-            file_path = self._require_existing_file_from_arg(path)
-            return self._upload_single_file_to_server_result(
+            file_path = self.path_resolver.require_existing_file_from_arg(path)
+            return self.http_file_transfer_service.upload_single_file_to_server_result(
                 file_path,
                 artifact_type='previews',
                 category='preview_cache',
@@ -218,19 +136,19 @@ class CommandFileWebMixin:
     @interruptible()
     def browse_dir(self, path=''):
         try:
-            payload = self._decode_structured_arg(path)
+            payload = self.structured_arg_codec.decode(path)
             if isinstance(payload, dict):
-                directory = self._require_existing_directory_from_arg(payload.get('path', ''))
+                directory = self.path_resolver.require_existing_directory_from_arg(payload.get('path', ''))
                 page = payload.get('page', 1)
                 page_size = payload.get('page_size', 100)
                 show_hidden = payload.get('show_hidden', False)
             else:
-                directory = self._require_existing_directory_from_arg(path)
+                directory = self.path_resolver.require_existing_directory_from_arg(path)
                 page = 1
                 page_size = 100
                 show_hidden = False
 
-            result_payload = self._get_file_system_service().browse_directory(
+            result_payload = self.file_system_service.browse_directory(
                 directory,
                 page=page,
                 page_size=page_size,
@@ -248,8 +166,8 @@ class CommandFileWebMixin:
     @interruptible()
     def delete_path(self, path=''):
         try:
-            target_path = self._require_existing_path_from_arg(path)
-            return self._delete_target_path(target_path)
+            target_path = self.path_resolver.require_existing_path_from_arg(path)
+            return self.file_system_service.delete_target_path(target_path)
         except CommandCancelledError:
             return 0, 'Command cancelled'
         except CommandTimeoutError:
@@ -265,7 +183,7 @@ class CommandFileWebMixin:
         参数格式: __json__:base64编码的JSON {"paths": ["path1", "path2", ...]}
         """
         try:
-            payload = self._decode_structured_arg(arg)
+            payload = self.structured_arg_codec.decode(arg)
             if not isinstance(payload, dict):
                 return 0, 'Invalid delete payload'
 
@@ -273,7 +191,7 @@ class CommandFileWebMixin:
             if not isinstance(paths, list) or not paths:
                 return 0, 'paths is required and must be a non-empty list'
 
-            return self._get_file_system_service().delete_paths(paths)
+            return self.file_system_service.delete_paths(paths)
         except CommandCancelledError:
             return 0, 'Command cancelled'
         except CommandTimeoutError:
@@ -285,11 +203,13 @@ class CommandFileWebMixin:
     @interruptible()
     def mkdir_path(self, path=''):
         try:
-            target_path = self._resolve_target_path(self._extract_path_arg(path))
+            target_path = self.path_resolver.resolve_target_path(
+                self.structured_arg_codec.extract_path(path)
+            )
             if not target_path:
                 return 0, 'Path is required'
 
-            self._create_directory(target_path)
+            self.file_system_service.create_directory(target_path)
             return 1, f'Directory created: {target_path}'
         except CommandCancelledError:
             return 0, 'Command cancelled'
@@ -302,15 +222,15 @@ class CommandFileWebMixin:
     @interruptible()
     def rename_path(self, arg=''):
         try:
-            payload = self._decode_structured_arg(arg)
+            payload = self.structured_arg_codec.decode(arg)
             if not isinstance(payload, dict):
                 return 0, 'Invalid rename payload'
 
-            old_path = self._resolve_target_path(payload.get('old_path', ''))
+            old_path = self.path_resolver.resolve_target_path(payload.get('old_path', ''))
             new_name = (payload.get('new_name') or '').strip()
             new_path = (payload.get('new_path') or '').strip()
 
-            renamed_path = self._rename_target_path(
+            renamed_path = self.file_system_service.rename_target_path(
                 old_path=old_path,
                 new_name=new_name,
                 new_path=new_path
@@ -327,12 +247,12 @@ class CommandFileWebMixin:
     @interruptible()
     def paste_paths(self, arg=''):
         try:
-            payload = self._decode_structured_arg(arg)
+            payload = self.structured_arg_codec.decode(arg)
             if not isinstance(payload, dict):
                 return 0, 'Invalid paste payload'
 
             raw_paths = payload.get('paths') or []
-            destination_dir = self._require_existing_directory_from_arg(payload.get('destination_dir', ''))
+            destination_dir = self.path_resolver.require_existing_directory_from_arg(payload.get('destination_dir', ''))
             operation = str(payload.get('operation', 'copy') or 'copy').strip().lower()
 
             if operation not in ('copy', 'move'):
@@ -341,8 +261,8 @@ class CommandFileWebMixin:
             if not isinstance(raw_paths, list) or not raw_paths:
                 return 0, 'paths is required and must be a non-empty list'
 
-            resolved_paths = self._require_existing_paths_from_list(raw_paths)
-            return self._get_file_system_service().paste_paths(
+            resolved_paths = self.path_resolver.require_existing_paths_from_list(raw_paths)
+            return self.file_system_service.paste_paths(
                 resolved_paths,
                 destination_dir,
                 operation,
@@ -367,7 +287,7 @@ class CommandFileWebMixin:
         }
         """
         try:
-            payload = self._decode_structured_arg(arg)
+            payload = self.structured_arg_codec.decode(arg)
             if not isinstance(payload, dict):
                 return 0, 'Invalid save payload'
 
@@ -378,7 +298,7 @@ class CommandFileWebMixin:
             if not file_path:
                 return 0, 'path is required'
 
-            target_path, file_size, encoding = self._get_file_system_service().save_file_content(
+            target_path, file_size, encoding = self.file_system_service.save_file_content(
                 file_path,
                 content,
                 encoding,

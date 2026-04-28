@@ -24,8 +24,8 @@ class CommandFileCliMixin:
                     supported=False,
                     message=HTTP_DOWNLOAD_CANCEL_UNSUPPORTED_MESSAGE)
 
-            file_path = self._require_existing_file_from_arg(filename)
-            return self._upload_single_file_to_server_result(
+            file_path = self.path_resolver.require_existing_file_from_arg(filename)
+            return self.http_file_transfer_service.upload_single_file_to_server_result(
                 file_path,
                 category='download'
             )
@@ -52,7 +52,7 @@ class CommandFileCliMixin:
                     supported=False,
                     message=HTTP_UPLOAD_CANCEL_UNSUPPORTED_MESSAGE)
 
-            payload = self._decode_structured_arg(arg)
+            payload = self.structured_arg_codec.decode(arg)
             if not isinstance(payload, dict):
                 return 0, 'Invalid HTTP upload payload'
 
@@ -69,7 +69,7 @@ class CommandFileCliMixin:
             if not filename:
                 return 0, 'filename is required'
 
-            target_dir = self._resolve_target_path(save_dir or '.')
+            target_dir = self.path_resolver.resolve_target_path(save_dir or '.')
             if os.path.exists(target_dir) and not os.path.isdir(target_dir):
                 return 0, f'Target path is not a directory: {target_dir}'
 
@@ -77,7 +77,7 @@ class CommandFileCliMixin:
             target_path = os.path.join(target_dir, os.path.basename(filename))
 
             self._send_interim_result(1, f'Preparing HTTP download: {url}', 0)
-            self._download_file_from_http(url, target_path)
+            self.http_file_transfer_service.download_file_from_http(url, target_path)
             file_size = os.path.getsize(target_path)
 
             return 1, (
@@ -94,7 +94,7 @@ class CommandFileCliMixin:
         按命令行参数压缩目录。
         """
         try:
-            archive_path = self._create_zip_archive(dir_name)
+            archive_path = self.archive_service.create_zip_archive(dir_name)
             return 1, f'Archive created successfully: {archive_path}'
         except Exception as e:
             return 0, f'Failed to create archive: {e}'
@@ -105,8 +105,8 @@ class CommandFileCliMixin:
         按命令行参数解压压缩包到当前工作目录。
         """
         try:
-            archive_path = self._validate_file_exists(zip_name)
-            self._extract_archive_to_cwd(archive_path)
-            return 1, f'Archive extracted to: {self._get_current_directory()}'
+            archive_path = self.path_resolver.validate_file_exists(zip_name)
+            self.archive_service.extract_archive_to_cwd(archive_path)
+            return 1, f'Archive extracted to: {self.path_resolver.get_current_directory()}'
         except Exception as e:
             return 0, f'Failed to extract archive: {e}'

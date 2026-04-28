@@ -1,5 +1,10 @@
 from abc import ABC
 
+from client.commands.services.archive_service import ArchiveService
+from client.commands.services.file_system_service import FileSystemService
+from client.commands.services.path_resolver import PathResolver
+from client.commands.services.structured_arg_codec import StructuredArgCodec
+
 
 class CommandBindingMixin:
     """
@@ -147,12 +152,46 @@ class CommandBase(
     ABC,
 ):
     """命令基类，定义公共接口。"""
-    pass
 
+    @property
+    def structured_arg_codec(self):
+        service = getattr(self, '_structured_arg_codec', None)
+        if service is None:
+            service = StructuredArgCodec()
+            self._structured_arg_codec = service
+        return service
 
+    @property
+    def path_resolver(self):
+        service = getattr(self, '_path_resolver', None)
+        if service is None:
+            service = PathResolver(
+                codec=self.structured_arg_codec,
+                iter_interruptible=self._iter_interruptible,
+            )
+            self._path_resolver = service
+        return service
 
+    @property
+    def file_system_service(self):
+        service = getattr(self, '_file_system_service', None)
+        if service is None:
+            service = FileSystemService(
+                path_resolver=self.path_resolver,
+                run_interruptible=self._run_interruptible,
+                iter_interruptible=self._iter_interruptible,
+            )
+            self._file_system_service = service
+        return service
 
-
-
-
-
+    @property
+    def archive_service(self):
+        service = getattr(self, '_archive_service', None)
+        if service is None:
+            service = ArchiveService(
+                path_resolver=self.path_resolver,
+                ensure_not_interrupted=self._ensure_not_interrupted,
+                iter_interruptible=self._iter_interruptible,
+            )
+            self._archive_service = service
+        return service

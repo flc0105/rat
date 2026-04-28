@@ -15,8 +15,9 @@ class CommandHttpFileTransferService:
     - 让命令 mixin 只保留“命令入口 + 参数组织”，减少横向隐式耦合
     """
 
-    def __init__(self, owner):
+    def __init__(self, owner, archive_service=None):
         self.owner = owner
+        self.archive_service = archive_service
 
     def get_transfer_strategy(self):
         transfer_mode = getattr(self.owner, 'HTTP_TRANSFER_MODE', '')
@@ -27,8 +28,6 @@ class CommandHttpFileTransferService:
         *,
         artifact_type: str,
         category: str,
-        # source_type: str,
-        # related_path: str = '',
         extra: dict | None = None,
     ) -> dict:
         client_id = getattr(self.owner.socket, 'client_id', '') or ''
@@ -37,9 +36,7 @@ class CommandHttpFileTransferService:
             'artifact_type': (artifact_type or 'files').strip() or 'files',
             'category': (category or '').strip() or 'default',
             'client_id': client_id,
-            # 'source_type': (source_type or 'client_upload').strip() or 'client_upload',
             'source_command_id': self.owner.command_id if self.owner.command_id is not None else '',
-            # 'related_path': (related_path or '').strip(),
         }
 
         if isinstance(extra, dict) and extra:
@@ -88,16 +85,12 @@ class CommandHttpFileTransferService:
         *,
         artifact_type: str = 'files',
         category: str = 'default',
-        # source_type: str = 'client_upload',
-        # related_path: str = '',
         extra: dict | None = None,
     ):
         upload_url = UPLOAD_BASE_URL.rstrip('/') + '/api/files/upload'
         form_data = self.build_http_upload_form_data(
             artifact_type=artifact_type,
             category=category,
-            # source_type=source_type,
-            # related_path=related_path,
             extra=extra,
         )
 
@@ -110,8 +103,6 @@ class CommandHttpFileTransferService:
         *,
         artifact_type: str = 'files',
         category: str = 'default',
-        # source_type: str = 'client_upload',
-        # related_path: str = '',
         extra: dict | None = None,
     ):
         file_size = os.path.getsize(file_path)
@@ -123,8 +114,6 @@ class CommandHttpFileTransferService:
             file_path,
             artifact_type=artifact_type,
             category=category,
-            # source_type=source_type,
-            # related_path=related_path,
             extra=extra,
         )
         response.raise_for_status()
@@ -144,13 +133,14 @@ class CommandHttpFileTransferService:
         archive_name: str = '',
         artifact_type: str = 'files',
         category: str = 'default',
-        # source_type: str = 'client_upload',
-        # related_path: str = '',
         extra: dict | None = None,
     ):
+        if self.archive_service is None:
+            raise RuntimeError('archive_service is required')
+
         temp_archive_path = ''
         try:
-            temp_archive_path = self.owner._create_zip_from_paths(
+            temp_archive_path = self.archive_service.create_zip_from_paths(
                 resolved_paths,
                 archive_name=archive_name
             )
@@ -158,8 +148,6 @@ class CommandHttpFileTransferService:
                 temp_archive_path,
                 artifact_type=artifact_type,
                 category=category,
-                # source_type=source_type,
-                # related_path=related_path,
                 extra=extra,
             )
         finally:
@@ -172,11 +160,3 @@ class CommandHttpFileTransferService:
     def download_file_from_http(self, url: str, target_path: str):
         strategy = self.get_transfer_strategy()
         return strategy.download_file(url, target_path)
-
-
-
-
-
-
-
-

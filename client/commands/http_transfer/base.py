@@ -29,6 +29,12 @@ class HttpTransferStrategy:
             message=HTTP_DOWNLOAD_CANCEL_UNSUPPORTED_MESSAGE,
         )
 
+    def resolve_http_timeout(self, fallback_timeout=None):
+        timeout_value = self.owner._resolve_timeout(fallback_timeout)
+        if timeout_value is None:
+            return None
+        return max(float(timeout_value), 0.001)
+
     def upload_file(self, file_path: str, upload_url: str, form_data: dict):
         raise NotImplementedError
 
@@ -44,9 +50,3 @@ def normalize_http_transfer_mode(mode: str = '') -> str:
     if normalized_default in ('legacy', 'cancelable'):
         return normalized_default
     return 'cancelable'
-
-
-
-
-
-

@@ -96,7 +96,7 @@ class MacPlatformService:
                 return 0, result.stderr or 'Failed to capture screenshot'
 
             self.owner._send_interim_result(1, 'Screenshot captured successfully', 0)
-            return self.owner._upload_single_file_to_server_result(screenshot_path, category='screenshot')
+            return self.owner.http_file_transfer_service.upload_single_file_to_server_result(screenshot_path, category='screenshot')
         except CommandCancelledError:
             return 0, 'Screenshot command cancelled'
         except (CommandTimeoutError, subprocess.TimeoutExpired):
@@ -166,7 +166,7 @@ class MacPlatformService:
             )
 
             if os.path.getsize(temp_file.name) > 0:
-                self.owner._upload_single_file_to_server_result(temp_file.name, category='webcam')
+                self.owner.http_file_transfer_service.upload_single_file_to_server_result(temp_file.name, category='webcam')
                 file_size = get_size(os.path.getsize(temp_file.name))
                 return 1, f'Webcam photo captured: {temp_file.name} ({file_size})'
 
@@ -211,7 +211,7 @@ class MacPlatformService:
     def secure_delete_file(self, path):
         """安全删除文件（覆写后删除）"""
         try:
-            target = self.owner._resolve_target_path(path)
+            target = self.owner.path_resolver.resolve_target_path(path)
             if not os.path.exists(target):
                 return 0, f'Path not found: {target}'
 

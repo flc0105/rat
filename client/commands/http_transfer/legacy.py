@@ -2,13 +2,13 @@ import os
 
 import requests
 
+from client.commands.http_transfer.base import HttpTransferStrategy
 from client.config.runtime_config import (
     HTTP_DOWNLOAD_CHUNK_SIZE,
     HTTP_DOWNLOAD_CONNECT_TIMEOUT_LEGACY,
     HTTP_DOWNLOAD_READ_TIMEOUT_LEGACY,
     HTTP_UPLOAD_TIMEOUT_LEGACY,
 )
-from client.commands.http_transfer.base import HttpTransferStrategy
 
 
 class LegacyHttpTransferStrategy(HttpTransferStrategy):
@@ -23,7 +23,7 @@ class LegacyHttpTransferStrategy(HttpTransferStrategy):
                 upload_url,
                 files={'file': (os.path.basename(file_path), file_obj)},
                 data=form_data,
-                timeout=self.owner._resolve_http_timeout(HTTP_UPLOAD_TIMEOUT_LEGACY),
+                timeout=self.resolve_http_timeout(HTTP_UPLOAD_TIMEOUT_LEGACY),
             )
 
     def download_file(self, url: str, target_path: str):
@@ -43,9 +43,3 @@ class LegacyHttpTransferStrategy(HttpTransferStrategy):
                     if not chunk:
                         continue
                     file_obj.write(chunk)
-
-
-
-
-
-

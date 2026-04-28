@@ -123,7 +123,7 @@ class WinPlatformService:
 
             # 上传文件
             filename = f'screenshot_{get_time()}.png'
-            self.owner._upload_single_file_to_server_result(temp_file.name, category='screenshot')
+            self.owner.http_file_transfer_service.upload_single_file_to_server_result(temp_file.name, category='screenshot')
 
             self.owner._send_final_result(1, f'Screenshot uploaded: {filename}')
 

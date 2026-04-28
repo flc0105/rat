@@ -173,7 +173,7 @@ class CancelableHttpTransferStrategy(HttpTransferStrategy):
                     'Content-Type': stream.content_type,
                     'Content-Length': str(stream.content_length),
                 },
-                timeout=self.owner._resolve_http_timeout(HTTP_UPLOAD_TIMEOUT_CANCELABLE),
+                timeout=self.resolve_http_timeout(HTTP_UPLOAD_TIMEOUT_CANCELABLE),
             )
             self.owner._ensure_not_interrupted()
             return response
@@ -209,7 +209,7 @@ class CancelableHttpTransferStrategy(HttpTransferStrategy):
                 stream=True,
                 timeout=(
                     HTTP_DOWNLOAD_CONNECT_TIMEOUT_CANCELABLE,
-                    self.owner._resolve_http_timeout(HTTP_DOWNLOAD_READ_TIMEOUT_CANCELABLE),
+                    self.resolve_http_timeout(HTTP_DOWNLOAD_READ_TIMEOUT_CANCELABLE),
                 ),
             )
             response.raise_for_status()
@@ -246,9 +246,3 @@ class CancelableHttpTransferStrategy(HttpTransferStrategy):
             except Exception:
                 pass
             session.close()
-
-
-
-
-
-
