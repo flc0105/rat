@@ -1,0 +1,269 @@
+import os
+import shutil
+import stat as stat_module
+import time
+
+from client.commands.services.path_resolver import PathResolver
+
+
+class FileSystemService:
+    """
+    文件系统操作服务。
+    """
+
+    def __init__(self, path_resolver: PathResolver, run_interruptible=None, iter_interruptible=None):
+        self.path_resolver = path_resolver
+        self.run_interruptible = run_interruptible
+        self.iter_interruptible = iter_interruptible
+
+    def _run(self, func, *args, **kwargs):
+        if self.run_interruptible is None:
+            return func(*args, **kwargs)
+        return self.run_interruptible(func, *args, **kwargs)
+
+    def _iter(self, iterable, check_interval: int = 1):
+        if self.iter_interruptible is None:
+            return iterable
+        return self.iter_interruptible(iterable, check_interval=check_interval)
+
+    def build_directory_entry(self, entry):
+        stat_result = self._run(entry.stat, follow_symlinks=False)
+        is_dir = self._run(entry.is_dir, follow_symlinks=True)
+        is_symlink = self._run(entry.is_symlink)
+        is_hidden = self.is_hidden_entry(entry, stat_result)
+
+        return {
+            'name': entry.name,
+            'path': os.path.abspath(entry.path),
+            'is_dir': is_dir,
+            'is_symlink': is_symlink,
+            'is_hidden': is_hidden,
+            'size': 0 if is_dir else stat_result.st_size,
+            'modified_at': time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(stat_result.st_mtime))
+        }
+
+    def is_hidden_entry(self, entry, stat_result):
+        if entry.name.startswith('.'):
+            return True
+
+        if os.name == 'nt':
+            file_attrs = getattr(stat_result, 'st_file_attributes', 0)
+            if file_attrs & getattr(stat_module, 'FILE_ATTRIBUTE_HIDDEN', 0):
+                return True
+
+        return False
+
+    def browse_directory(self, directory: str, page=1, page_size=100, show_hidden=False) -> dict:
+        page = self._normalize_positive_int(page, default=1, maximum=None)
+        page_size = self._normalize_positive_int(page_size, default=100, maximum=500)
+        show_hidden = self._normalize_bool(show_hidden)
+
+        all_entries = []
+        with os.scandir(directory) as iterator:
+            for entry in self._iter(iterator):
+                try:
+                    all_entries.append(self.build_directory_entry(entry))
+                except Exception:
+                    continue
+
+        all_entries.sort(key=lambda item: (not item['is_dir'], item['name'].lower()))
+
+        total_all = len(all_entries)
+        total_hidden = sum(1 for item in all_entries if item.get('is_hidden'))
+
+        if show_hidden:
+            visible_entries = all_entries
+        else:
+            visible_entries = [
+                item for item in all_entries
+                if not item.get('is_hidden')
+            ]
+
+        total_visible = len(visible_entries)
+        total_pages = max((total_visible + page_size - 1) // page_size, 1)
+
+        if page > total_pages:
+            page = total_pages
+
+        start_index = (page - 1) * page_size
+        end_index = start_index + page_size
+        paged_entries = visible_entries[start_index:end_index]
+
+        return {
+            'current_path': directory,
+            'parent_path': self.path_resolver.build_parent_path(directory),
+            'entries': paged_entries,
+            'pagination': {
+                'page': page,
+                'page_size': page_size,
+                'total_visible': total_visible,
+                'total_pages': total_pages,
+                'returned': len(paged_entries),
+            },
+            'summary': {
+                'total_all': total_all,
+                'total_hidden': total_hidden,
+                'show_hidden': show_hidden,
+            }
+        }
+
+    def delete_target_path(self, target_path: str):
+        if os.path.isdir(target_path):
+            shutil.rmtree(target_path)
+            return 1, f'Directory deleted: {target_path}'
+
+        os.remove(target_path)
+        return 1, f'File deleted: {target_path}'
+
+    def delete_paths(self, paths: list) -> tuple[int, str]:
+        resolved_paths = []
+        errors = []
+        success_count = 0
+
+        for raw_path in paths:
+            try:
+                path_str = str(raw_path or '').strip()
+                if not path_str:
+                    continue
+
+                target_path = self.path_resolver.require_existing_path_from_arg(path_str)
+                resolved_paths.append(target_path)
+            except Exception as e:
+                errors.append(f'{raw_path}: {e}')
+
+        if not resolved_paths:
+            return 0, 'No valid paths to delete'
+
+        for target_path in resolved_paths:
+            try:
+                if os.path.isdir(target_path):
+                    shutil.rmtree(target_path)
+                    success_count += 1
+                else:
+                    os.remove(target_path)
+                    success_count += 1
+            except Exception as e:
+                errors.append(f'{target_path}: {e}')
+
+        result_msg = f'Deleted {success_count} of {len(resolved_paths)} items'
+        if errors:
+            result_msg += f'\nErrors:\n  ' + '\n  '.join(errors)
+
+        if success_count > 0:
+            return 1, result_msg
+        return 0, result_msg
+
+    def create_directory(self, target_path: str):
+        if os.path.exists(target_path):
+            raise FileExistsError(f'Path already exists: {target_path}')
+
+        os.makedirs(target_path, exist_ok=False)
+
+    def rename_target_path(self, old_path: str, new_name: str = '', new_path: str = '') -> str:
+        if not os.path.exists(old_path):
+            raise FileNotFoundError(f'Path not found: {old_path}')
+
+        if new_path:
+            target_path = self.path_resolver.resolve_target_path(new_path)
+        else:
+            if not new_name:
+                raise ValueError('New name is required')
+            target_path = os.path.join(os.path.dirname(old_path), new_name)
+
+        if os.path.exists(target_path):
+            raise FileExistsError(f'Target already exists: {target_path}')
+
+        os.rename(old_path, target_path)
+        return target_path
+
+    def is_sub_path(self, parent_path: str, target_path: str) -> bool:
+        try:
+            common = os.path.commonpath([os.path.abspath(parent_path), os.path.abspath(target_path)])
+            return common == os.path.abspath(parent_path)
+        except Exception:
+            return False
+
+    def copy_or_move_single_path(self, source_path: str, destination_dir: str, operation: str):
+        source_abs = os.path.abspath(source_path)
+        destination_dir_abs = os.path.abspath(destination_dir)
+        target_path = os.path.join(destination_dir_abs, os.path.basename(source_abs))
+
+        if source_abs == target_path:
+            raise ValueError(f'Source and target are the same: {source_abs}')
+
+        if os.path.exists(target_path):
+            raise FileExistsError(f'Target already exists: {target_path}')
+
+        if os.path.isdir(source_abs) and self.is_sub_path(source_abs, destination_dir_abs):
+            raise ValueError(f'Cannot {operation} a directory into itself or its subdirectory: {source_abs}')
+
+        if operation == 'copy':
+            if os.path.isdir(source_abs):
+                shutil.copytree(source_abs, target_path)
+            else:
+                shutil.copy2(source_abs, target_path)
+        elif operation == 'move':
+            shutil.move(source_abs, target_path)
+        else:
+            raise ValueError(f'Unsupported operation: {operation}')
+
+        return target_path
+
+    def paste_paths(self, source_paths: list[str], destination_dir: str, operation: str) -> tuple[int, str]:
+        success_count = 0
+        errors = []
+
+        for source_path in source_paths:
+            try:
+                self.copy_or_move_single_path(source_path, destination_dir, operation)
+                success_count += 1
+            except Exception as e:
+                errors.append(f'{source_path}: {e}')
+
+        action_text = 'Pasted'
+        if operation == 'move':
+            action_text = 'Moved'
+        elif operation == 'copy':
+            action_text = 'Copied'
+
+        result_msg = f'{action_text} {success_count} of {len(source_paths)} items to: {destination_dir}'
+        if errors:
+            result_msg += '\nErrors:\n  ' + '\n  '.join(errors)
+
+        if success_count > 0:
+            return 1, result_msg
+        return 0, result_msg
+
+    def save_file_content(self, file_path: str, content: str, encoding: str = 'utf-8') -> tuple[str, int, str]:
+        target_path = self.path_resolver.require_existing_path_from_arg(file_path)
+        if os.path.isdir(target_path):
+            raise IsADirectoryError(f'Cannot write to directory: {target_path}')
+
+        try:
+            with open(target_path, 'w', encoding=encoding) as f:
+                f.write(content)
+        except UnicodeEncodeError:
+            # 如果指定编码失败，尝试 utf-8
+            with open(target_path, 'w', encoding='utf-8') as f:
+                f.write(content)
+            encoding = 'utf-8'
+
+        file_size = os.path.getsize(target_path)
+        return target_path, file_size, encoding
+
+    def _normalize_positive_int(self, value, default: int, maximum: int | None = None) -> int:
+        try:
+            normalized = int(value)
+        except Exception:
+            normalized = default
+
+        if normalized <= 0:
+            normalized = default
+        if maximum is not None and normalized > maximum:
+            normalized = maximum
+        return normalized
+
+    def _normalize_bool(self, value) -> bool:
+        if isinstance(value, str):
+            return value.strip().lower() in ('1', 'true', 'yes', 'on')
+        return bool(value)

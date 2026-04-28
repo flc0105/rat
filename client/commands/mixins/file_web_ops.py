@@ -1,13 +1,10 @@
-import os
-import shutil
-import sys
+import json
 
 import requests
 
 from client.commands.command_context import CommandCancelledError, CommandTimeoutError
 from client.commands.interrupts import interruptible
 from client.commands.services.http_file_transfer_service import CommandHttpFileTransferService
-from client.config.config import UPLOAD_BASE_URL
 from client.config.runtime_config import (
     HTTP_DOWNLOAD_CHUNK_SIZE,
     HTTP_DOWNLOAD_CONNECT_TIMEOUT_CANCELABLE,
@@ -64,15 +61,11 @@ class CommandFileWebMixin:
         *,
         artifact_type: str,
         category: str,
-        # source_type: str,
-        # related_path: str = '',
         extra: dict | None = None,
     ) -> dict:
         return self._get_http_file_transfer_service().build_http_upload_form_data(
             artifact_type=artifact_type,
             category=category,
-            # source_type=source_type,
-            # related_path=related_path,
             extra=extra,
         )
 
@@ -97,16 +90,12 @@ class CommandFileWebMixin:
         *,
         artifact_type: str = 'files',
         category: str = 'default',
-        # source_type: str = 'client_upload',
-        # related_path: str = '',
         extra: dict | None = None,
     ):
         return self._get_http_file_transfer_service().upload_file_to_server_via_http(
             file_path,
             artifact_type=artifact_type,
             category=category,
-            # source_type=source_type,
-            # related_path=related_path,
             extra=extra,
         )
 
@@ -116,16 +105,12 @@ class CommandFileWebMixin:
         *,
         artifact_type: str = 'files',
         category: str = 'default',
-        # source_type: str = 'client_upload',
-        # related_path: str = '',
         extra: dict | None = None,
     ):
         return self._get_http_file_transfer_service().upload_single_file_to_server_result(
             file_path,
             artifact_type=artifact_type,
             category=category,
-            # source_type=source_type,
-            # related_path=related_path,
             extra=extra,
         )
 
@@ -136,8 +121,6 @@ class CommandFileWebMixin:
         archive_name: str = '',
         artifact_type: str = 'files',
         category: str = 'default',
-        # source_type: str = 'client_upload',
-        # related_path: str = '',
         extra: dict | None = None,
     ):
         return self._get_http_file_transfer_service().upload_paths_as_zip_to_server_result(
@@ -145,8 +128,6 @@ class CommandFileWebMixin:
             archive_name=archive_name,
             artifact_type=artifact_type,
             category=category,
-            # source_type=source_type,
-            # related_path=related_path,
             extra=extra,
         )
 
@@ -173,8 +154,6 @@ class CommandFileWebMixin:
                 file_path,
                 artifact_type='files',
                 category='download',
-                # source_type='client_upload',
-                # related_path=file_path,
             )
         except CommandCancelledError:
             return 0, 'Command cancelled'
@@ -201,15 +180,12 @@ class CommandFileWebMixin:
                 return 0, 'paths is required'
 
             resolved_paths = self._require_existing_paths_from_list(raw_paths)
-            # related_path = '\n'.join(resolved_paths)
 
             return self._upload_paths_as_zip_to_server_result(
                 resolved_paths,
                 archive_name=archive_name,
                 artifact_type='files',
                 category='bundle',
-                # source_type='client_upload',
-                # related_path=related_path,
             )
         except CommandCancelledError:
             return 0, 'Command cancelled'
@@ -230,8 +206,6 @@ class CommandFileWebMixin:
                 file_path,
                 artifact_type='previews',
                 category='preview_cache',
-                # source_type='client_upload',
-                # related_path=file_path,
             )
         except CommandCancelledError:
             return 0, 'Command cancelled'
@@ -256,77 +230,13 @@ class CommandFileWebMixin:
                 page_size = 100
                 show_hidden = False
 
-            try:
-                page = int(page)
-            except Exception:
-                page = 1
-
-            try:
-                page_size = int(page_size)
-            except Exception:
-                page_size = 100
-
-            if isinstance(show_hidden, str):
-                show_hidden = show_hidden.strip().lower() in ('1', 'true', 'yes', 'on')
-            else:
-                show_hidden = bool(show_hidden)
-
-            if page <= 0:
-                page = 1
-            if page_size <= 0:
-                page_size = 100
-            if page_size > 500:
-                page_size = 500
-
-            all_entries = []
-            with os.scandir(directory) as iterator:
-                for entry in self._iter_interruptible(iterator):
-                    try:
-                        all_entries.append(self._build_directory_entry(entry))
-                    except Exception:
-                        continue
-
-            all_entries.sort(key=lambda item: (not item['is_dir'], item['name'].lower()))
-
-            total_all = len(all_entries)
-            total_hidden = sum(1 for item in all_entries if item.get('is_hidden'))
-
-            if show_hidden:
-                visible_entries = all_entries
-            else:
-                visible_entries = [
-                    item for item in all_entries
-                    if not item.get('is_hidden')
-                ]
-
-            total_visible = len(visible_entries)
-            total_pages = max((total_visible + page_size - 1) // page_size, 1)
-
-            if page > total_pages:
-                page = total_pages
-
-            start_index = (page - 1) * page_size
-            end_index = start_index + page_size
-            paged_entries = visible_entries[start_index:end_index]
-
-            payload = {
-                'current_path': directory,
-                'parent_path': self._build_parent_path(directory),
-                'entries': paged_entries,
-                'pagination': {
-                    'page': page,
-                    'page_size': page_size,
-                    'total_visible': total_visible,
-                    'total_pages': total_pages,
-                    'returned': len(paged_entries),
-                },
-                'summary': {
-                    'total_all': total_all,
-                    'total_hidden': total_hidden,
-                    'show_hidden': show_hidden,
-                }
-            }
-            return 1, __import__('json').dumps(payload, ensure_ascii=False)
+            result_payload = self._get_file_system_service().browse_directory(
+                directory,
+                page=page,
+                page_size=page_size,
+                show_hidden=show_hidden,
+            )
+            return 1, json.dumps(result_payload, ensure_ascii=False)
         except CommandCancelledError:
             return 0, 'Command cancelled'
         except CommandTimeoutError:
@@ -363,43 +273,7 @@ class CommandFileWebMixin:
             if not isinstance(paths, list) or not paths:
                 return 0, 'paths is required and must be a non-empty list'
 
-            resolved_paths = []
-            errors = []
-            success_count = 0
-
-            for raw_path in paths:
-                try:
-                    path_str = str(raw_path or '').strip()
-                    if not path_str:
-                        continue
-
-                    target_path = self._require_existing_path_from_arg(path_str)
-                    resolved_paths.append(target_path)
-                except Exception as e:
-                    errors.append(f'{raw_path}: {e}')
-
-            if not resolved_paths:
-                return 0, 'No valid paths to delete'
-
-            for target_path in resolved_paths:
-                try:
-                    if os.path.isdir(target_path):
-                        shutil.rmtree(target_path)
-                        success_count += 1
-                    else:
-                        os.remove(target_path)
-                        success_count += 1
-                except Exception as e:
-                    errors.append(f'{target_path}: {e}')
-
-            result_msg = f'Deleted {success_count} of {len(resolved_paths)} items'
-            if errors:
-                result_msg += f'\nErrors:\n  ' + '\n  '.join(errors)
-
-            if success_count > 0:
-                return 1, result_msg
-            return 0, result_msg
-
+            return self._get_file_system_service().delete_paths(paths)
         except CommandCancelledError:
             return 0, 'Command cancelled'
         except CommandTimeoutError:
@@ -449,41 +323,6 @@ class CommandFileWebMixin:
         except Exception as e:
             return 0, f'Failed to rename path: {e}'
 
-
-    def _is_sub_path(self, parent_path: str, target_path: str) -> bool:
-        try:
-            common = os.path.commonpath([os.path.abspath(parent_path), os.path.abspath(target_path)])
-            return common == os.path.abspath(parent_path)
-        except Exception:
-            return False
-
-
-    def _copy_or_move_single_path(self, source_path: str, destination_dir: str, operation: str):
-        source_abs = os.path.abspath(source_path)
-        destination_dir_abs = os.path.abspath(destination_dir)
-        target_path = os.path.join(destination_dir_abs, os.path.basename(source_abs))
-
-        if source_abs == target_path:
-            raise ValueError(f'Source and target are the same: {source_abs}')
-
-        if os.path.exists(target_path):
-            raise FileExistsError(f'Target already exists: {target_path}')
-
-        if os.path.isdir(source_abs) and self._is_sub_path(source_abs, destination_dir_abs):
-            raise ValueError(f'Cannot {operation} a directory into itself or its subdirectory: {source_abs}')
-
-        if operation == 'copy':
-            if os.path.isdir(source_abs):
-                shutil.copytree(source_abs, target_path)
-            else:
-                shutil.copy2(source_abs, target_path)
-        elif operation == 'move':
-            shutil.move(source_abs, target_path)
-        else:
-            raise ValueError(f'Unsupported operation: {operation}')
-
-        return target_path
-
     @desc('Paste copied or moved files into a directory', group='file_path', suggest=False)
     @interruptible()
     def paste_paths(self, arg=''):
@@ -503,29 +342,11 @@ class CommandFileWebMixin:
                 return 0, 'paths is required and must be a non-empty list'
 
             resolved_paths = self._require_existing_paths_from_list(raw_paths)
-            success_count = 0
-            errors = []
-
-            for source_path in resolved_paths:
-                try:
-                    self._copy_or_move_single_path(source_path, destination_dir, operation)
-                    success_count += 1
-                except Exception as e:
-                    errors.append(f'{source_path}: {e}')
-
-            action_text = 'Pasted'
-            if operation == 'move':
-                action_text = 'Moved'
-            elif operation == 'copy':
-                action_text = 'Copied'
-
-            result_msg = f'{action_text} {success_count} of {len(resolved_paths)} items to: {destination_dir}'
-            if errors:
-                result_msg += '\nErrors:\n  ' + '\n  '.join(errors)
-
-            if success_count > 0:
-                return 1, result_msg
-            return 0, result_msg
+            return self._get_file_system_service().paste_paths(
+                resolved_paths,
+                destination_dir,
+                operation,
+            )
         except CommandCancelledError:
             return 0, 'Command cancelled'
         except CommandTimeoutError:
@@ -557,22 +378,11 @@ class CommandFileWebMixin:
             if not file_path:
                 return 0, 'path is required'
 
-            # 验证路径存在且是文件
-            target_path = self._require_existing_path_from_arg(file_path)
-            if os.path.isdir(target_path):
-                return 0, f'Cannot write to directory: {target_path}'
-
-            # 写入文件
-            try:
-                with open(target_path, 'w', encoding=encoding) as f:
-                    f.write(content)
-            except UnicodeEncodeError:
-                # 如果指定编码失败，尝试 utf-8
-                with open(target_path, 'w', encoding='utf-8') as f:
-                    f.write(content)
-                encoding = 'utf-8'
-
-            file_size = os.path.getsize(target_path)
+            target_path, file_size, encoding = self._get_file_system_service().save_file_content(
+                file_path,
+                content,
+                encoding,
+            )
 
             return 1, f'File saved successfully\nPath: {target_path}\nSize: {file_size} bytes\nEncoding: {encoding}'
 
@@ -582,11 +392,3 @@ class CommandFileWebMixin:
             return 0, 'Command timed out and was terminated'
         except Exception as e:
             return 0, f'Failed to save file: {e}'
-
-
-
-
-
-
-
-
