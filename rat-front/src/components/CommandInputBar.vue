@@ -56,7 +56,7 @@
       </button>
 
       <el-button
-        class="run-button tool-btn-danger"
+        class="run-button cancel-button"
         :disabled="!hasRunningWebTask"
         :loading="currentTaskIsCancelling"
         @click="$emit('cancel')"
@@ -96,6 +96,11 @@ export default {
       type: Array,
       default: () => [],
     },
+
+    currentConnection: {
+      type: Object,
+      default: null,
+    },
   },
 
   emits: [
@@ -108,11 +113,12 @@ export default {
     queryCommandCandidates(queryString, callback) {
       const keyword = String(queryString || '').trim().toLowerCase()
       const sourceList = Array.isArray(this.commandCandidates) ? this.commandCandidates : []
+      const visibleCandidates = this.filterExecScriptCandidatesByCurrentOs(sourceList)
 
       const quickHistoryShortcutCandidates = this.sortQuickHistoryShortcutCandidates(
-        sourceList.filter(item => item && item.source === 'quick_history_shortcut')
+        visibleCandidates.filter(item => item && item.source === 'quick_history_shortcut')
       )
-      const normalCandidates = sourceList.filter(item => !(item && item.source === 'quick_history_shortcut'))
+      const normalCandidates = visibleCandidates.filter(item => !(item && item.source === 'quick_history_shortcut'))
 
       if (!keyword) {
         callback(normalCandidates)
@@ -168,6 +174,116 @@ export default {
     handleCandidateSelect(item) {
       if (!item) return
       this.$emit('update:modelValue', String(item.template || item.value || ''))
+    },
+
+    filterExecScriptCandidatesByCurrentOs(candidates) {
+      const currentOsAlias = this.normalizeCurrentOsAlias(this.currentConnection?.os_alias)
+
+      if (!currentOsAlias) {
+        return Array.isArray(candidates) ? candidates : []
+      }
+
+      return (Array.isArray(candidates) ? candidates : []).filter(item => {
+        return this.shouldShowCandidateForCurrentOs(item, currentOsAlias)
+      })
+    },
+
+    shouldShowCandidateForCurrentOs(item, currentOsAlias) {
+      if (!this.isExecScriptCandidate(item)) {
+        return true
+      }
+
+      const scriptRoot = this.getExecScriptRoot(item)
+      if (!scriptRoot) {
+        return false
+      }
+
+      const normalizedRoot = this.normalizeExecScriptRoot(scriptRoot)
+
+      return normalizedRoot === 'common' || normalizedRoot === currentOsAlias
+    },
+
+    isExecScriptCandidate(item) {
+      if (!item) return false
+
+      const source = String(item.source || '').trim().toLowerCase()
+      const group = String(item.group || '').trim().toLowerCase()
+      const groupLabel = String(item.groupLabel || '').trim().toLowerCase()
+      const commandText = this.getCandidateCommandText(item)
+
+      return (
+        source === 'script' ||
+        group === 'script' ||
+        groupLabel === 'script' ||
+        /^exec\s+/i.test(commandText)
+      )
+    },
+
+    getCandidateCommandText(item) {
+      return String(item?.template || item?.value || item?.name || '').trim()
+    },
+
+    getExecScriptRoot(item) {
+      const commandText = this.getCandidateCommandText(item)
+      const match = commandText.match(/^exec\s+(.+)$/i)
+
+      if (!match) return ''
+
+      const scriptPath = this.stripCommandArgumentQuotes(match[1])
+        .replace(/\\/g, '/')
+        .trim()
+
+      return scriptPath.split('/').filter(Boolean)[0] || ''
+    },
+
+    stripCommandArgumentQuotes(value) {
+      const text = String(value || '').trim()
+      if (!text) return ''
+
+      const firstChar = text[0]
+      const quoteChars = ['"', "'"]
+
+      if (!quoteChars.includes(firstChar)) {
+        return text.split(/\s+/)[0] || ''
+      }
+
+      const endIndex = text.indexOf(firstChar, 1)
+      if (endIndex === -1) {
+        return text.slice(1)
+      }
+
+      return text.slice(1, endIndex)
+    },
+
+    normalizeCurrentOsAlias(value) {
+      const text = String(value || '').trim().toLowerCase()
+
+      if (!text) return ''
+      if (['windows', 'win', 'win32', 'nt'].includes(text)) return 'win'
+      if (['darwin', 'mac', 'macos', 'osx'].includes(text)) return 'mac'
+      if (['linux', 'ubuntu', 'debian', 'centos', 'fedora', 'redhat', 'rhel', 'alpine', 'arch'].includes(text)) return 'linux'
+      if (['ios', 'iphone', 'ipad', 'iphoneos', 'ipados'].includes(text)) return 'ios'
+
+      if (text.includes('win')) return 'win'
+      if (text.includes('darwin') || text.includes('mac')) return 'mac'
+      if (text.includes('linux')) return 'linux'
+      if (/(ubuntu|debian|centos|fedora|redhat|rhel|alpine|arch)/.test(text)) return 'linux'
+      if (text.includes('ios') || text.includes('iphone') || text.includes('ipad')) return 'ios'
+
+      return text
+    },
+
+    normalizeExecScriptRoot(value) {
+      const text = String(value || '').trim().toLowerCase()
+
+      if (!text) return ''
+      if (['common', 'shared'].includes(text)) return 'common'
+      if (['windows', 'win', 'win32', 'nt'].includes(text)) return 'win'
+      if (['darwin', 'mac', 'macos', 'osx'].includes(text)) return 'mac'
+      if (['linux', 'ubuntu', 'debian', 'centos', 'fedora', 'redhat', 'rhel', 'alpine', 'arch'].includes(text)) return 'linux'
+      if (['ios', 'iphone', 'ipad', 'iphoneos', 'ipados'].includes(text)) return 'ios'
+
+      return text
     },
 
     sortQuickHistoryShortcutCandidates(items) {
@@ -281,8 +397,48 @@ export default {
   white-space: nowrap;
 }
 
-.run-button:hover {
+.run-button:not(:disabled):not(.is-disabled):hover {
   background: #1d4ed8;
+}
+
+.run-button:disabled,
+.run-button.is-disabled {
+  background: rgba(71, 85, 105, 0.72) !important;
+  border: 1px solid rgba(148, 163, 184, 0.16) !important;
+  color: rgba(226, 232, 240, 0.52) !important;
+  cursor: not-allowed !important;
+  opacity: 1 !important;
+  box-shadow: none !important;
+}
+
+.cancel-button {
+  background: #dc2626 !important;
+  border: 1px solid rgba(248, 113, 113, 0.36) !important;
+  color: #fff !important;
+}
+
+.cancel-button:not(:disabled):not(.is-disabled):not(.is-loading):hover {
+  background: #b91c1c !important;
+  border-color: rgba(248, 113, 113, 0.52) !important;
+  color: #fff !important;
+}
+
+.cancel-button:disabled,
+.cancel-button.is-disabled {
+  background: rgba(127, 29, 29, 0.34) !important;
+  border: 1px solid rgba(248, 113, 113, 0.16) !important;
+  color: rgba(254, 202, 202, 0.46) !important;
+  cursor: not-allowed !important;
+  opacity: 1 !important;
+  box-shadow: none !important;
+}
+
+.cancel-button.is-loading {
+  background: #b91c1c !important;
+  border-color: rgba(248, 113, 113, 0.42) !important;
+  color: #fff !important;
+  cursor: default !important;
+  opacity: 1 !important;
 }
 
 :global(.command-autocomplete-popper) {

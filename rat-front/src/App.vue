@@ -81,6 +81,7 @@
   :has-running-web-task="hasRunningWebTask"
   :current-task-is-cancelling="currentTaskIsCancelling"
   :command-candidates="commandCandidates"
+  :current-connection="currentConnection"
   @run="sendCommand"
   @cancel="cancelCurrentTask"
 />
