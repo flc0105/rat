@@ -64,7 +64,7 @@ class CommandExecutionMixin:
         # 给脚本注入统一上下文，避免和平铺业务参数重名
         context = {}
         socket_obj = getattr(self, 'socket', None)
-        context['client_id'] = getattr(socket_obj, 'client_id', '') or '',
+        context['client_id'] = getattr(socket_obj, 'client_id', '') or ''
         return context
 
     def _merge_script_kwargs_with_context(self, kwargs=None):
