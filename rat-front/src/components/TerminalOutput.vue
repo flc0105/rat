@@ -336,6 +336,7 @@ export default {
 @media (max-width: 640px) {
   .terminal-output {
     min-height: 340px;
+    padding-bottom: calc(22px + env(safe-area-inset-bottom, 0px) + 24px);
   }
 }
 </style>

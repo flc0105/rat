@@ -2050,21 +2050,45 @@ body {
 }
 
 @media (max-width: 960px) {
+
   html,
-  body,
-  #app,
-  .app {
-    /*height: auto;*/ /*去掉这个可以让外层滚动条消失*/
-    overflow: auto;
-  }
-
   body {
-    overflow: auto;
+    height: 100%;
+    overflow: hidden;
+  }
+
+  #app {
+    height: 100vh;
+    height: 100dvh;
+    overflow-x: hidden;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
   }
 
   .app {
-    min-height: 100vh;
+    height: auto;
+    min-height: 100%;
+    overflow: visible;
+    padding-bottom: calc(14px + env(safe-area-inset-bottom, 0px) + 72px);
   }
+
+  /*html,*/
+  /*body,*/
+  /*#app,*/
+  /*.app {*/
+  /*  !*height: auto;*! !*去掉这个可以让外层滚动条消失*!*/
+  /*  overflow: auto;*/
+  /*}*/
+
+  /*body {*/
+  /*  overflow: auto;*/
+  /*}*/
+
+  /*.app {*/
+  /*  min-height: 100dvh;*/
+  /*}*/
+
+
 
   .content {
     grid-template-columns: 1fr;
@@ -2329,9 +2353,9 @@ body {
     font-size: 12px;
   }
 
-  .terminal-output {
-    min-height: 340px;
-  }
+  /*.terminal-output {*/
+  /*  min-height: 340px;*/
+  /*}*/
 
   .command-box {
     grid-template-columns: minmax(0, 1fr) 80px;
