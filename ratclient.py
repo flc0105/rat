@@ -7,6 +7,7 @@ import uuid
 
 from client.config.config import SERVER_ADDR
 from client.config.runtime_config import RECONNECT_INTERVAL_SECONDS
+from client.config.runtime_config_reporter import log_runtime_config_overrides_if_any
 from client.connection.server_connection import ServerConnection
 from client.runtime.client_info_builder import ClientInfoBuilder
 from client.watchdog.client_guard_manager import ClientGuardManager
@@ -30,6 +31,8 @@ class Client:
         self.guard_manager = ClientGuardManager(
             client_id=self.client_id,
         )
+
+        log_runtime_config_overrides_if_any()
 
         self._create_connection()
         self.guard_manager.start()
