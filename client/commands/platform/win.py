@@ -1,6 +1,9 @@
 from client.commands.common import CommonCommands
 from client.commands.interrupts import timeout, cancel_policy, interruptible
-from client.commands.platform.services.win_platform_service import WinPlatformService
+from client.commands.platform.services.win.media_service import WinMediaService
+from client.commands.platform.services.win.privilege_service import WinPrivilegeService
+from client.commands.platform.services.win.process_service import WinProcessService
+from client.commands.platform.services.win.system_service import WinSystemService
 from core.utils.decorator import desc
 
 
@@ -9,7 +12,10 @@ class WindowsCommands(CommonCommands):
 
     def __init__(self, socket):
         super().__init__(socket)
-        self._win_platform_service = WinPlatformService(self)
+        self.win_process = WinProcessService(self)
+        self.win_system = WinSystemService(self)
+        self.win_media = WinMediaService(self)
+        self.win_privilege = WinPrivilegeService(self)
 
     @desc('Run a program without waiting (detached)', group='shell')
     @interruptible()
@@ -17,7 +23,7 @@ class WindowsCommands(CommonCommands):
         """
         启动程序但不等待返回（独立运行）
         """
-        return self._win_platform_service.run(command)
+        return self.win_process.run(command)
 
     # ------------------ 截图 ------------------ #
     @desc('Capture screenshot', group='platform')
@@ -28,7 +34,7 @@ class WindowsCommands(CommonCommands):
         """
         截图并上传到服务器
         """
-        return self._win_platform_service.capture_screenshot()
+        return self.win_media.capture_screenshot()
 
     # ------------------ 系统信息 ------------------ #
     @desc('Get system information', group='platform')
@@ -39,7 +45,7 @@ class WindowsCommands(CommonCommands):
         """
         获取 Windows 系统信息
         """
-        return self._win_platform_service.collect_system_info()
+        return self.win_system.collect_system_info()
 
     # ------------------ 用户空闲时间 ------------------ #
     @desc('Get user idle time', group='platform')
@@ -50,7 +56,7 @@ class WindowsCommands(CommonCommands):
         """
         获取用户空闲时间（秒）
         """
-        return self._win_platform_service.get_user_idletime()
+        return self.win_system.get_user_idletime()
 
     @desc('Run command as admin', group='system')
     @interruptible()
@@ -58,4 +64,4 @@ class WindowsCommands(CommonCommands):
         """
         以管理员权限执行命令
         """
-        return self._win_platform_service.run_as_admin(command)
+        return self.win_privilege.run_as_admin(command)
