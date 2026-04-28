@@ -2050,11 +2050,14 @@ body {
 }
 
 @media (max-width: 960px) {
-
   html,
   body {
     height: 100%;
     overflow: hidden;
+  }
+
+  body {
+    overscroll-behavior-y: none;
   }
 
   #app {
@@ -2072,33 +2075,38 @@ body {
     padding-bottom: calc(14px + env(safe-area-inset-bottom, 0px) + 72px);
   }
 
-  /*html,*/
-  /*body,*/
-  /*#app,*/
-  /*.app {*/
-  /*  !*height: auto;*! !*去掉这个可以让外层滚动条消失*!*/
-  /*  overflow: auto;*/
-  /*}*/
-
-  /*body {*/
-  /*  overflow: auto;*/
-  /*}*/
-
-  /*.app {*/
-  /*  min-height: 100dvh;*/
-  /*}*/
-
-
-
   .content {
     grid-template-columns: 1fr;
     min-height: auto;
     overflow: visible;
   }
 
+  .main.panel,
+  .main,
+  .main-body,
+  .terminal-panel,
+  .terminal-frame {
+    overflow: visible;
+  }
+
+  .main {
+    min-height: auto;
+  }
+
   .main-body {
-    grid-template-rows: auto minmax(420px, auto);
+    grid-template-rows: auto auto;
     height: auto;
+    min-height: 0;
+  }
+
+  .terminal-panel {
+    min-height: 0;
+    padding-bottom: 14px; /*黑框和底部*/
+  }
+
+  .terminal-frame {
+    height: auto;
+    min-height: 0;
   }
 
   .dialog-head {
@@ -2125,11 +2133,6 @@ body {
     max-height: calc(84vh - 150px);
   }
 
-  /*.remote-files-dialog .dialog-table-shell {*/
-  /*  height: calc(84vh - 196px);*/
-  /*  max-height: calc(84vh - 196px);*/
-  /*}*/
-
   .background-job-summary-card,
   .command-execution-card {
     grid-template-columns: 1fr;
@@ -2140,6 +2143,98 @@ body {
     max-height: calc(84vh - 170px);
   }
 }
+
+/*@media (max-width: 960px) {*/
+
+/*  html,*/
+/*  body {*/
+/*    height: 100%;*/
+/*    overflow: hidden;*/
+/*  }*/
+
+/*  #app {*/
+/*    height: 100vh;*/
+/*    height: 100dvh;*/
+/*    overflow-x: hidden;*/
+/*    overflow-y: auto;*/
+/*    -webkit-overflow-scrolling: touch;*/
+/*  }*/
+
+/*  .app {*/
+/*    height: auto;*/
+/*    min-height: 100%;*/
+/*    overflow: visible;*/
+/*    padding-bottom: calc(14px + env(safe-area-inset-bottom, 0px) + 72px);*/
+/*  }*/
+
+/*  !*html,*!*/
+/*  !*body,*!*/
+/*  !*#app,*!*/
+/*  !*.app {*!*/
+/*  !*  !*height: auto;*! !*去掉这个可以让外层滚动条消失*!*!*/
+/*  !*  overflow: auto;*!*/
+/*  !*}*!*/
+
+/*  !*body {*!*/
+/*  !*  overflow: auto;*!*/
+/*  !*}*!*/
+
+/*  !*.app {*!*/
+/*  !*  min-height: 100dvh;*!*/
+/*  !*}*!*/
+
+
+
+/*  .content {*/
+/*    grid-template-columns: 1fr;*/
+/*    min-height: auto;*/
+/*    overflow: visible;*/
+/*  }*/
+
+/*  .main-body {*/
+/*    grid-template-rows: auto minmax(420px, auto);*/
+/*    height: auto;*/
+/*  }*/
+
+/*  .dialog-head {*/
+/*    grid-template-columns: 1fr;*/
+/*  }*/
+
+/*  .dialog-head-left,*/
+/*  .dialog-head-right {*/
+/*    width: 100%;*/
+/*  }*/
+
+/*  .el-dialog {*/
+/*    width: 96vw !important;*/
+/*    margin: 0 auto !important;*/
+/*  }*/
+
+/*  .fixed-dialog .el-dialog {*/
+/*    height: 84vh;*/
+/*    max-height: 84vh;*/
+/*  }*/
+
+/*  .recent-files-dialog .dialog-table-shell {*/
+/*    height: calc(84vh - 150px);*/
+/*    max-height: calc(84vh - 150px);*/
+/*  }*/
+
+/*  !*.remote-files-dialog .dialog-table-shell {*!*/
+/*  !*  height: calc(84vh - 196px);*!*/
+/*  !*  max-height: calc(84vh - 196px);*!*/
+/*  !*}*!*/
+
+/*  .background-job-summary-card,*/
+/*  .command-execution-card {*/
+/*    grid-template-columns: 1fr;*/
+/*  }*/
+
+/*  .command-execution-list-shell {*/
+/*    height: calc(84vh - 170px);*/
+/*    max-height: calc(84vh - 170px);*/
+/*  }*/
+/*}*/
 
 /*@media (max-width: 900px) {*/
 /*  .remote-files-dialog .dialog-table-shell {*/

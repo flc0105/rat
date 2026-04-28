@@ -223,13 +223,40 @@ export default {
     },
 
     scrollToBottom() {
-      this.$nextTick(() => {
-        const el = this.$refs.terminalOutputRef
-        if (el) {
-          el.scrollTop = el.scrollHeight
-        }
-      })
-    },
+  this.$nextTick(() => {
+    const el = this.$refs.terminalOutputRef
+    const isMobileLayout =
+      typeof window !== 'undefined' &&
+      window.matchMedia &&
+      window.matchMedia('(max-width: 960px)').matches
+
+    if (isMobileLayout) {
+      const appScrollRoot = document.getElementById('app')
+      const scrollRoot = appScrollRoot || document.scrollingElement || document.documentElement
+
+      if (scrollRoot) {
+        scrollRoot.scrollTop = scrollRoot.scrollHeight
+      } else if (typeof window !== 'undefined') {
+        window.scrollTo(0, document.documentElement.scrollHeight)
+      }
+
+      return
+    }
+
+    if (el) {
+      el.scrollTop = el.scrollHeight
+    }
+  })
+},
+
+    // scrollToBottom() {
+    //   this.$nextTick(() => {
+    //     const el = this.$refs.terminalOutputRef
+    //     if (el) {
+    //       el.scrollTop = el.scrollHeight
+    //     }
+    //   })
+    // },
   },
 }
 </script>
@@ -333,10 +360,17 @@ export default {
   color: var(--terminal-text);
 }
 
-@media (max-width: 640px) {
+@media (max-width: 960px) {
   .terminal-output {
+    flex: 0 0 auto;
     min-height: 340px;
-    padding-bottom: calc(22px + env(safe-area-inset-bottom, 0px) + 24px);
+    //min-height: max(340px, calc(100dvh - 260px));
+    overflow: visible;
+    //padding-bottom: calc(28px + env(safe-area-inset-bottom, 0px) + 88px);
+  }
+
+  .terminal-empty {
+    min-height: 340px;
   }
 }
 </style>

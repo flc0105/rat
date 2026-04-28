@@ -519,8 +519,132 @@ export default {
 }
 
 @media (max-width: 640px) {
+
+
   .run-button {
     width: 80px;
   }
 }
+
+/*
+@media (max-width: 960px) {
+  .command-row {
+    position: sticky;
+    top: 0;
+    top: env(safe-area-inset-top, 0px);
+    z-index: 80;
+    background: rgba(2, 6, 23, 0.92);
+    -webkit-backdrop-filter: blur(12px);
+    backdrop-filter: blur(12px);
+    box-shadow: 0 10px 24px rgba(2, 6, 23, 0.22);
+  }
+
+
+}
+*/
+
+@media (max-width: 960px) {
+  .command-row {
+    position: sticky;
+    top: 0;
+    top: env(safe-area-inset-top, 0px);
+    z-index: 80;
+    padding: 12px 12px 14px;
+    background: rgba(2, 6, 23, 0.92);
+    -webkit-backdrop-filter: blur(12px);
+    backdrop-filter: blur(12px);
+    box-shadow: 0 10px 24px rgba(2, 6, 23, 0.22);
+  }
+
+  .command-box {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 10px;
+    align-items: stretch;
+  }
+
+  .command-autocomplete-shell {
+    grid-column: 1 / -1;
+    width: 100%;
+    min-width: 0;
+  }
+
+  .command-autocomplete,
+  .command-autocomplete :deep(.el-input),
+  .command-autocomplete :deep(.el-input__wrapper),
+  .command-autocomplete :deep(.el-textarea),
+  .command-autocomplete :deep(.el-textarea__inner) {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .command-autocomplete :deep(.el-input__wrapper) {
+    height: 44px;
+  }
+
+  .command-autocomplete :deep(.el-textarea__inner),
+  .command-autocomplete-shell textarea {
+    min-height: 44px !important;
+    height: auto !important;
+    max-height: none !important;
+    overflow-y: hidden !important;
+    resize: none !important;
+  }
+
+  .run-button {
+    width: 100%;
+    height: 44px;
+  }
+
+  .run-button:not(.cancel-button) {
+    grid-column: 1 / 2;
+  }
+
+  .cancel-button {
+    grid-column: 2 / 3;
+    margin-left: 0 !important;
+  }
+}
+
+/*
+@media (max-width: 960px) {
+  .command-row {
+    position: sticky;
+    top: 0;
+    top: env(safe-area-inset-top, 0px);
+    z-index: 80;
+    padding: 12px 12px 14px;
+    background: rgba(2, 6, 23, 0.92);
+    -webkit-backdrop-filter: blur(12px);
+    backdrop-filter: blur(12px);
+    box-shadow: 0 10px 24px rgba(2, 6, 23, 0.22);
+  }
+
+  .command-box {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    align-items: stretch;
+  }
+
+  .command-autocomplete-shell {
+    grid-column: 1 / -1;
+    width: 100%;
+  }
+
+  .run-button {
+    width: 100%;
+    height: 44px;
+  }
+
+  .run-button:not(.cancel-button) {
+    grid-column: 1 / 2;
+  }
+
+  .cancel-button {
+    grid-column: 2 / 3;
+    margin-left: 0 !important;
+  }
+}
+ */
 </style>
