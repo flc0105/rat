@@ -1,0 +1,108 @@
+import os
+import platform
+import socket
+
+from client.commands.platform.utils.ios_util import get_ios_process_info
+from client.config.config import CLIENT_BUILD_VERSION
+from client.config.runtime_config import (
+    HTTP_TRANSFER_MODE,
+    LOCAL_WATCHDOG_ENABLED,
+    PYTHON_EXECUTION_MODE,
+    REMOTE_HTTP_WATCHDOG_ENABLED,
+)
+from core.device.machine_identity import (
+    _detect_machine_identity_components,
+    build_machine_identity_payload,
+)
+from core.platform.platform_identity import detect_platform_info
+from core.utils.client_util import check_privilege, get_executable_path, get_system_paths
+
+
+class ClientInfoBuilder:
+    """
+    构造客户端握手信息。
+    """
+
+    def __init__(self, client_id, command_executor=None):
+        self.client_id = client_id
+        self.command_executor = command_executor
+
+    def build(self):
+        """
+        构造客户端基础信息
+        """
+        platform_info = detect_platform_info()
+        machine_identity = build_machine_identity_payload()
+        machine_info = _detect_machine_identity_components()
+        process_info = self._build_process_info(platform_info)
+
+        info = {
+            'id': self.client_id,
+            'type': 'info',
+
+            'os_type': platform_info.display_name,
+            'os_alias': platform_info.alias,
+            'os_full': platform.platform(),
+            'os_name': machine_info.get('os_name'),
+            'os_ver': machine_info.get('os_version'),
+
+
+            'arch': machine_info.get('arch'),
+            'manufacturer': machine_info.get('manufacturer'),
+            'model': machine_info.get('model'),
+
+            'hostname': socket.gethostname(),
+            'machine_id': machine_identity['machine_id_hash'],
+            'machine_fingerprint_basis': machine_identity['fingerprint_basis'],
+            'build_version': CLIENT_BUILD_VERSION,
+
+            'process_id': os.getpid(),
+            'launch_command': get_executable_path(),
+            'username': process_info['username'],
+            'process_name': process_info['process_name'],
+            'integrity': check_privilege(),
+            'cwd': os.getcwd(),
+            'python_ver': platform.python_version(),
+
+            'http_transfer_mode': HTTP_TRANSFER_MODE,
+            'python_execution_mode': PYTHON_EXECUTION_MODE,
+            'remote_watchdog_enabled': REMOTE_HTTP_WATCHDOG_ENABLED,
+            'local_watchdog_enabled': LOCAL_WATCHDOG_ENABLED,
+
+            'command_manifest': self._build_command_manifest(),
+            'system_paths': get_system_paths(),
+        }
+        return info
+
+    def _build_command_manifest(self):
+        command_manifest = []
+        try:
+            if self.command_executor is not None:
+                commands = self.command_executor.get_commands()
+                if hasattr(commands, 'get_command_manifest_payload'):
+                    command_manifest = commands.get_command_manifest_payload()
+        except Exception:
+            command_manifest = []
+        return command_manifest
+
+    def _build_process_info(self, platform_info):
+        try:
+            if platform_info.alias == 'ios':
+                ios_process_info = get_ios_process_info()
+                username = ios_process_info.get('username')
+                process_name = ios_process_info.get('process_name')
+                # 记录process_uptime和system_uptime是没用的，因为这条消息是一次性传输的握手信息，并不会实时更新，容易产生误导。
+                # 如果要获取uptime相关信息请用getinfo命令
+            else:
+                import psutil
+                process = psutil.Process()
+                username = process.username()
+                process_name = process.name()
+        except Exception:
+            username = ""
+            process_name = ""
+
+        return {
+            'username': username,
+            'process_name': process_name,
+        }

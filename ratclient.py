@@ -1,4 +1,3 @@
-import os
 import queue
 import socket
 import sys
@@ -6,28 +5,13 @@ import threading
 import time
 import uuid
 
-from client.config.runtime_config import HTTP_TRANSFER_MODE, PYTHON_EXECUTION_MODE
+from client.config.config import SERVER_ADDR
+from client.config.runtime_config import RECONNECT_INTERVAL_SECONDS
 from client.connection.server_connection import ServerConnection
-from client.commands.platform.utils.ios_util import get_ios_process_info
+from client.runtime.client_info_builder import ClientInfoBuilder
 from client.watchdog.client_guard_manager import ClientGuardManager
 from client.watchdog.watchdog_process import run_watchdog_worker_from_argv
-from core.device.machine_identity import build_machine_identity_payload, _detect_machine_identity_components
-from core.platform.platform_identity import detect_platform_info
-from core.utils.client_util import check_privilege, get_system_paths, get_executable_path
 from core.utils.logger import logger
-
-from client.config.config import (
-    CLIENT_BUILD_VERSION,
-    SERVER_ADDR,
-)
-
-from client.config.runtime_config import RECONNECT_INTERVAL_SECONDS, REMOTE_HTTP_WATCHDOG_ENABLED, \
-    LOCAL_WATCHDOG_ENABLED
-
-# 强制导入所有平台模块，让 PyInstaller 检测到
-
-if os.name == 'nt':
-    pass
 
 
 class Client:
@@ -106,82 +90,6 @@ class Client:
         self._reset_receiver_runtime()
         self._create_connection()
 
-    def _build_client_info(self):
-        """
-        构造客户端基础信息
-        """
-        import platform, socket
-
-        command_manifest = []
-        try:
-            commands = self.server.command_executor.get_commands()
-            if hasattr(commands, 'get_command_manifest_payload'):
-                command_manifest = commands.get_command_manifest_payload()
-        except Exception:
-            command_manifest = []
-
-        platform_info = detect_platform_info()
-        machine_identity = build_machine_identity_payload()
-        machine_info = _detect_machine_identity_components()
-
-        try:
-            if platform_info.alias == 'ios':
-                ios_process_info = get_ios_process_info()
-                username = ios_process_info.get('username')
-                process_name = ios_process_info.get('process_name')
-                # 记录process_uptime和system_uptime是没用的，因为这条消息是一次性传输的握手信息，并不会实时更新，容易产生误导。
-                # 如果要获取uptime相关信息请用getinfo命令
-            else:
-                import psutil
-                process = psutil.Process()
-                username = process.username()
-                process_name = process.name()
-        except:
-            username = ""
-            process_name = ""
-
-        info = {
-            'id': self.client_id,
-            'type': 'info',
-
-            # 操作系统相关
-            'os_type': platform_info.display_name,
-            'os_alias': platform_info.alias,
-            'os_full': platform.platform(),
-            'os_name': machine_info.get('os_name'),
-            'os_ver': machine_info.get('os_version'),
-
-            # 设备相关
-            'arch': machine_info.get('arch'),
-            'manufacturer': machine_info.get('manufacturer'),
-            'model': machine_info.get('model'),
-
-            # 机器识别相关
-            'hostname': socket.gethostname(),
-            'machine_id': machine_identity['machine_id_hash'],
-            'machine_fingerprint_basis': machine_identity['fingerprint_basis'],
-            'build_version': CLIENT_BUILD_VERSION,
-
-            # 进程相关
-            'process_id': os.getpid(),
-            'launch_command': get_executable_path(),
-            'username': username,
-            'process_name': process_name,
-            'integrity': check_privilege(),
-            'cwd': os.getcwd(),
-
-            'python_ver': platform.python_version(),
-
-            'http_transfer_mode': HTTP_TRANSFER_MODE,
-            'python_execution_mode': PYTHON_EXECUTION_MODE,
-            'remote_watchdog_enabled': REMOTE_HTTP_WATCHDOG_ENABLED,
-            'local_watchdog_enabled': LOCAL_WATCHDOG_ENABLED,
-            'command_manifest': command_manifest,
-            'system_paths': get_system_paths(),
-        }
-        # print(json.dumps(info, indent=2))
-        return info
-
     def _connect_socket(self):
         """
         建立到底层服务端的连接；失败时持续重试
@@ -197,7 +105,10 @@ class Client:
         """
         连接建立后发送客户端握手信息
         """
-        info = self._build_client_info()
+        info = ClientInfoBuilder(
+            client_id=self.client_id,
+            command_executor=self.server.command_executor,
+        ).build()
         self.info = info
         self.server.send(info)
         self.server.mark_connected()
