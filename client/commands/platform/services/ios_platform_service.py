@@ -416,6 +416,23 @@ class iOSPlatformService:
         except Exception as e:
             return 0, f'Failed to pick/upload: {e}'
 
+    def keepawake(self, arg):
+        import console
+        if arg == 'on':
+            console.set_idle_timer_disabled(True)
+            return 1, 'Screen will stay awake'
+        elif arg == 'off':
+            console.set_idle_timer_disabled(False)
+            return 1, 'Screen sleep restored'
+        else:
+            return 0, 'keepawake [on/off]'
+
+    def killapp(self):
+        import time, os
+        time.sleep(0.2)
+        os._exit(0)
+        return 1, ''
+
     def acmd_alert(self, args_dict):
         try:
             title = args_dict.get('title', '')
@@ -638,10 +655,7 @@ class iOSPlatformService:
             import urllib.request
             host = str(args_dict.get('host') or '').strip()
             port = int(args_dict.get('port') or '')
-            times = int(args_dict.get('times') or '')
-            return self.tcp_ping(host=host,port=port,count=times)
+            count = int(args_dict.get('count') or '')
+            return self.tcp_ping(host=host, port=port, count=count)
         except Exception as e:
             return 0, str(e)
-
-
-

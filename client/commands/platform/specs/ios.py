@@ -93,14 +93,14 @@ WGET_ARGUMENT_SPEC = ArgumentCommandSpec(
 
 TCP_PING_ARGUMENT_SPEC = ArgumentCommandSpec(
     name='tcp_ping',
-    description='TCP Ping',
+    description='Measure TCP connection latency to a target host and port',
     options=[
         ArgumentOptionSpec(name='host', option_type='str', required=True, default=None, allow_empty=False,
-                           help_text='Host', positional_index=0),
+                           help_text='Target hostname or IP address', positional_index=0),
         ArgumentOptionSpec(name='port', option_type='int', required=False, default=80,
-                           help_text='Port (Default: 80)'),
-        ArgumentOptionSpec(name='times', option_type='int', required=False, default=4,
-                           help_text='Times (Default: 4)'),
+                           help_text='Target TCP port'),
+        ArgumentOptionSpec(name='count', option_type='int', required=False, default=4,
+                           help_text='Number of connection attempts'),
         ArgumentOptionSpec(name='help', option_type='flag', required=False, default=False,
                            help_text='Show this help message'),
     ]

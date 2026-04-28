@@ -110,24 +110,11 @@ class iOSCommands(CommonCommands):
 
     @desc('Keep screen awake', group='console')
     def keepawake(self, arg):
-        import console
-        if arg == 'on':
-            console.set_idle_timer_disabled(True)
-            return 1, 'Screen will stay awake'
-        elif arg == 'off':
-            console.set_idle_timer_disabled(False)
-            return 1, 'Screen sleep restored'
-        else:
-            return 0, 'keepawake [on/off]'
+        return self._ios_platform_service.keepawake(arg)
 
     @desc('Force quit app', group='console')
     def killapp(self):
-        import time, os
-        delay = 0.2
-        time.sleep(delay)
-        os._exit(0)
-        return 1, ''
-
+        return self._ios_platform_service.killapp()
 
     @argument_command('alert', spec=ALERT_ARGUMENT_SPEC)
     def alert(self, args_dict, payload=None):
