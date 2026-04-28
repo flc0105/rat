@@ -1,6 +1,7 @@
 import base64
 import json
 import os
+import threading
 from datetime import datetime
 
 
@@ -18,11 +19,15 @@ class BackgroundJobService:
     - 这里触发的前台远程命令统一走 foreground task 槽
     """
 
+    LIFECYCLE_STATES = {'running', 'stopped', 'error'}
+
     def __init__(self, event_bus, job_store, remote_execution_service, job_catalog_service):
         self.event_bus = event_bus
         self.job_store = job_store
         self.remote_execution_service = remote_execution_service
         self.job_catalog_service = job_catalog_service
+        self._lifecycle_event_keys = set()
+        self._lifecycle_lock = threading.RLock()
 
     def _encode_payload_arg(self, payload: dict) -> str:
         raw = json.dumps(payload, ensure_ascii=False).encode('utf-8')
@@ -41,7 +46,6 @@ class BackgroundJobService:
             'params': normalized_params,
         }
         return f'start_job {self._encode_payload_arg(payload)}'
-
 
     def _serialize_available_job(self, job_item: dict) -> dict:
         job_name = str(job_item.get('job_name') or job_item.get('name') or job_item.get('job_key') or '').strip()
@@ -160,6 +164,7 @@ class BackgroundJobService:
             job = self.job_store.apply_status_report(payload)
             serialized = self._serialize_job(job)
             self.event_bus.publish('background_job_status', serialized)
+            self._publish_background_job_lifecycle_if_needed(serialized)
             return serialized
 
         if event_type == 'message':
@@ -175,6 +180,36 @@ class BackgroundJobService:
             return serialized
 
         raise ValueError(f'Unsupported event_type: {event_type}')
+
+    def _publish_background_job_lifecycle_if_needed(self, serialized_job: dict):
+        state = str(serialized_job.get('state') or '').strip().lower()
+        if state not in self.LIFECYCLE_STATES:
+            return
+
+        client_id = str(serialized_job.get('client_id') or '').strip()
+        job_id = str(serialized_job.get('job_id') or '').strip()
+        if not client_id or not job_id:
+            return
+
+        event_key = (client_id, job_id, state)
+        with self._lifecycle_lock:
+            if event_key in self._lifecycle_event_keys:
+                return
+            self._lifecycle_event_keys.add(event_key)
+
+        self.event_bus.publish('background_job_lifecycle', {
+            'client_id': client_id,
+            'job_id': job_id,
+            'job_name': serialized_job.get('job_name', ''),
+            'job_key': serialized_job.get('job_key', ''),
+            'display_name': serialized_job.get('display_name', ''),
+            'state': state,
+            'status': state,
+            'started_at': serialized_job.get('started_at', ''),
+            'stopped_at': serialized_job.get('stopped_at', ''),
+            'duration_seconds': serialized_job.get('duration_seconds', 0),
+            'time': datetime.now().isoformat(),
+        })
 
     def _normalize_job_key(self, value: str) -> str:
         text = str(value or '').strip().replace('\\', '/')

@@ -17,6 +17,12 @@ export default {
             const es = new EventSource(streamUrl);
             this.eventSource = es;
 
+            const getConnectionLabel = (clientId) => {
+                const normalizedClientId = String(clientId || '').trim();
+                const conn = this.connections.find(item => item.client_id === normalizedClientId) || {};
+                return conn.hostname || conn.client_id || normalizedClientId || 'Unknown device';
+            };
+
             es.addEventListener('open', () => {
                 if (!this.sseReady) this.sseReady = true;
             });
@@ -133,6 +139,40 @@ export default {
                 this.scheduleBackgroundJobsRefresh?.(payload.client_id);
             });
 
+            es.addEventListener('background_job_lifecycle', async (event) => {
+                const payload = JSON.parse(event.data || '{}');
+                const state = String(payload.state || payload.status || '').trim().toLowerCase();
+                const jobName = payload.display_name || payload.job_key || payload.job_name || 'background job';
+                const deviceName = getConnectionLabel(payload.client_id);
+
+                let title = 'Background Job';
+                let type = 'info';
+                let stateText = state || 'updated';
+
+                if (state === 'running') {
+                    title = 'Background Job Started';
+                    type = 'success';
+                    stateText = 'started';
+                } else if (state === 'stopped') {
+                    title = 'Background Job Finished';
+                    type = 'success';
+                    stateText = 'finished';
+                } else if (state === 'error') {
+                    title = 'Background Job Error';
+                    type = 'error';
+                    stateText = 'ended with error';
+                }
+
+                ElementPlus.ElNotification({
+                    title,
+                    message: `${jobName} ${stateText} on ${deviceName}`,
+                    type,
+                    duration: 5000,
+                });
+
+                this.scheduleBackgroundJobsRefresh?.(payload.client_id);
+            });
+
             es.addEventListener('background_job_message', async (event) => {
                 const payload = JSON.parse(event.data);
                 this.scheduleBackgroundJobsRefresh?.(payload.client_id);
@@ -145,6 +185,34 @@ export default {
                 this.scheduleBackgroundJobsRefresh?.(payload.client_id);
 
                 await this.refreshArtifactsIfOpen?.();
+            });
+
+            es.addEventListener('pty_lifecycle', (event) => {
+                const payload = JSON.parse(event.data || '{}');
+                const state = String(payload.state || '').trim().toLowerCase();
+                const deviceName = getConnectionLabel(payload.client_id);
+
+                if (state === 'opened') {
+                    ElementPlus.ElNotification({
+                        title: 'PTY Started',
+                        message: `PTY session started on ${deviceName}`,
+                        type: 'success',
+                        duration: 4000,
+                    });
+                    return;
+                }
+
+                if (state === 'closed') {
+                    const exitCode = payload.exit_code === null || payload.exit_code === undefined
+                        ? ''
+                        : `, exit=${payload.exit_code}`;
+                    ElementPlus.ElNotification({
+                        title: 'PTY Stopped',
+                        message: `PTY session stopped on ${deviceName}${exitCode}`,
+                        type: 'warning',
+                        duration: 4000,
+                    });
+                }
             });
 
             es.addEventListener('artifact_created', async (event) => {
@@ -193,7 +261,7 @@ export default {
                     });
                 }
 
-await this.refreshArtifactsIfOpen?.();
+                await this.refreshArtifactsIfOpen?.();
             });
 
 
@@ -238,12 +306,3 @@ await this.refreshArtifactsIfOpen?.();
         },
     }
 };
-
-
-
-
-
-
-
-
-

@@ -107,7 +107,7 @@ class ServerApplicationAssembly:
         self.pinned_path_store = PinnedPathStore()
         self.agent_builder = AgentBuilder()
         self.agent_output_registry = AgentOutputRegistry(self.agent_builder.output_dir)
-        self.pty_session_service = PtySessionService(self.server)
+        self.pty_session_service = PtySessionService(self.server, event_bus=self.event_bus)
 
         # ------------------ web sub facades / apis ------------------ #
         self.connection_api = WebConnectionApi(

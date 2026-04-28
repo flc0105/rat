@@ -3,6 +3,7 @@ import secrets
 import threading
 import time
 import uuid
+from datetime import datetime
 
 from core.protocol.message_types import (
     MSG_TYPE_PTY_CLOSE,
@@ -13,8 +14,9 @@ from core.protocol.message_types import (
 
 
 class PtySessionService:
-    def __init__(self, server):
+    def __init__(self, server, event_bus=None):
         self.server = server
+        self.event_bus = event_bus
         self._lock = threading.RLock()
         self._sessions = {}
         self.max_chunks = 500
@@ -37,6 +39,9 @@ class PtySessionService:
             'seq': 0,
             'chunks': [],
             'error': '',
+            'exit_code': None,
+            'open_notified': False,
+            'close_notified': False,
             'ws_token': secrets.token_urlsafe(24),
         }
         with self._lock:
@@ -95,8 +100,7 @@ class PtySessionService:
         except Exception:
             pass
         with self._lock:
-            item['status'] = 'closed'
-            item['closed_at'] = time.time()
+            item['status'] = 'closing'
         return {'ok': True}
 
     def get_updates(self, pty_session_id: str, after_seq: int = 0) -> dict:
@@ -114,12 +118,20 @@ class PtySessionService:
             }
 
     def handle_client_opened(self, pty_session_id: str):
+        event_item = None
         with self._lock:
             item = self._sessions.get(pty_session_id)
             if not item:
                 return
             item['status'] = 'open'
             item['opened_at'] = time.time()
+
+            if not item.get('open_notified'):
+                item['open_notified'] = True
+                event_item = dict(item)
+
+        if event_item:
+            self._publish_pty_lifecycle_event(event_item, state='opened')
 
     def handle_client_output(self, pty_session_id: str, data: str):
         text = ''
@@ -138,6 +150,7 @@ class PtySessionService:
                 item['chunks'] = item['chunks'][-self.max_chunks:]
 
     def handle_client_closed(self, pty_session_id: str, exit_code=0):
+        event_item = None
         with self._lock:
             item = self._sessions.get(pty_session_id)
             if not item:
@@ -145,6 +158,13 @@ class PtySessionService:
             item['status'] = 'closed'
             item['closed_at'] = time.time()
             item['exit_code'] = exit_code
+
+            if item.get('open_notified') and not item.get('close_notified'):
+                item['close_notified'] = True
+                event_item = dict(item)
+
+        if event_item:
+            self._publish_pty_lifecycle_event(event_item, state='closed')
 
     def handle_client_error(self, pty_session_id: str, message: str):
         with self._lock:
@@ -159,7 +179,6 @@ class PtySessionService:
             if len(item['chunks']) > self.max_chunks:
                 item['chunks'] = item['chunks'][-self.max_chunks:]
 
-
     def authorize_ws(self, pty_session_id: str, token: str) -> bool:
         with self._lock:
             item = self._sessions.get(str(pty_session_id))
@@ -167,6 +186,24 @@ class PtySessionService:
                 return False
             expected = str(item.get('ws_token') or '')
         return bool(expected) and bool(token) and secrets.compare_digest(expected, str(token))
+
+    def _publish_pty_lifecycle_event(self, item: dict, state: str):
+        if self.event_bus is None:
+            return
+
+        try:
+            self.event_bus.publish('pty_lifecycle', {
+                'client_id': item.get('client_id', ''),
+                'pty_session_id': item.get('pty_session_id', ''),
+                'state': state,
+                'status': item.get('status', ''),
+                'shell': item.get('shell', ''),
+                'cwd': item.get('cwd', ''),
+                'exit_code': item.get('exit_code'),
+                'time': datetime.now().isoformat(),
+            })
+        except Exception:
+            pass
 
     def _get_required(self, pty_session_id: str) -> dict:
         with self._lock:
