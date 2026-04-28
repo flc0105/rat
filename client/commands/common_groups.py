@@ -4,6 +4,7 @@ from client.commands.mixins.file_web_ops import CommandFileWebMixin
 from client.commands.mixins.introspection_ops import CommandIntrospectionMixin
 from client.commands.mixins.job_ops import CommandJobMixin
 from client.commands.mixins.process_ops import CommandProcessMixin
+from client.commands.mixins.runtime_config_ops import CommandRuntimeConfigMixin
 from client.commands.mixins.session_ops import CommandSessionMixin
 from client.commands.mixins.system_ops import CommandSystemMixin
 from client.commands.mixins.update_ops import CommandUpdateMixin
@@ -35,6 +36,7 @@ class CommonRuntimeCommands(
     CommandIntrospectionMixin,
     CommandJobMixin,
     CommandProcessMixin,
+    CommandRuntimeConfigMixin,
     CommandWatchdogMixin,
     CommandUpdateMixin,
 ):

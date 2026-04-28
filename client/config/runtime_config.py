@@ -7,6 +7,7 @@
 - HTTP_TRANSFER_MODE:
   - legacy: 保留原版 requests files=... / iter_content() 行为，不支持取消
   - cancelable: 使用可取消 / 可超时的流式实现
+- 本文件只提供默认值；运行时 set 命令写入外部 runtime_config.json 覆盖文件，不修改本源码文件
 """
 
 # ------------------ command runtime ------------------ #
@@ -35,6 +36,11 @@ HTTP_DOWNLOAD_READ_TIMEOUT_CANCELABLE = 300
 HTTP_DOWNLOAD_CHUNK_SIZE = 64 * 1024
 HTTP_DOWNLOAD_CANCEL_UNSUPPORTED_MESSAGE = 'Current HTTP transfer mode is legacy; download cancellation is not supported'
 
+# ------------------ preview image compression ------------------ #
+# 只影响 preview_path 的 web 预览上传，不影响 download_path / 平台命令 / script 上传。
+PREVIEW_IMAGE_COMPRESS_ENABLED = False
+PREVIEW_IMAGE_COMPRESS_QUALITY = 75
+
 # ------------------ path / zip traversal ------------------ #
 ZIP_CANCEL_CHECK_INTERVAL = 64
 
@@ -50,7 +56,25 @@ LOCAL_WATCHDOG_HEARTBEAT_INTERVAL_SECONDS = 5
 LOCAL_WATCHDOG_TIMEOUT_SECONDS = 15
 
 
-# ------------------ preview image compression ------------------ #
-# 只影响 preview_path 的 web 预览上传，不影响 download_path / 平台命令 / script 上传。
-PREVIEW_IMAGE_COMPRESS_ENABLED = True
-PREVIEW_IMAGE_COMPRESS_QUALITY = 75
+# 外部 runtime_config.json 覆盖默认值。这里不写源码文件，兼容打包场景。
+try:
+    from client.config.runtime_config_store import load_runtime_overrides
+
+    for _key, _value in load_runtime_overrides().items():
+        if _key in globals() and _key.isupper():
+            globals()[_key] = _value
+except Exception:
+    pass
+finally:
+    try:
+        del load_runtime_overrides
+    except Exception:
+        pass
+    try:
+        del _key
+    except Exception:
+        pass
+    try:
+        del _value
+    except Exception:
+        pass
