@@ -65,12 +65,6 @@ class MacCommands(CommonCommands):
         """安全删除文件（覆写后删除）"""
         return self.mac_file_inspection.secure_delete_file(path)
 
-    @desc('Get/set system volume', group='system')
-    @interruptible()
-    def volume(self, level=None):
-        """获取或设置系统音量 (0-100)"""
-        return self.mac_automation.volume(level)
-
     @argument_command('msgbox', spec=MSGBOX_ARGUMENT_SPEC)
     def _acmd_msgbox(self, args_dict, payload=None):
         return self.mac_automation.acmd_msgbox(args_dict, payload)

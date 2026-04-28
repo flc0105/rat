@@ -49,3 +49,8 @@ LOCAL_WATCHDOG_ENABLED = False
 LOCAL_WATCHDOG_HEARTBEAT_INTERVAL_SECONDS = 5
 LOCAL_WATCHDOG_TIMEOUT_SECONDS = 15
 
+
+# ------------------ preview image compression ------------------ #
+# 只影响 preview_path 的 web 预览上传，不影响 download_path / 平台命令 / script 上传。
+PREVIEW_IMAGE_COMPRESS_ENABLED = True
+PREVIEW_IMAGE_COMPRESS_QUALITY = 75

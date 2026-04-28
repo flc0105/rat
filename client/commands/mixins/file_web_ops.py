@@ -5,6 +5,7 @@ import requests
 from client.commands.command_context import CommandCancelledError, CommandTimeoutError
 from client.commands.interrupts import interruptible
 from client.commands.services.http_file_transfer_service import CommandHttpFileTransferService
+from client.commands.services.preview_image_service import PreviewImageService
 from client.config.runtime_config import (
     HTTP_DOWNLOAD_CHUNK_SIZE,
     HTTP_DOWNLOAD_CONNECT_TIMEOUT_CANCELABLE,
@@ -54,6 +55,14 @@ class CommandFileWebMixin:
                 client_api=self.client_api,
             )
             self._http_file_transfer_service = service
+        return service
+
+    @property
+    def preview_image_service(self):
+        service = getattr(self, '_preview_image_service', None)
+        if service is None:
+            service = PreviewImageService()
+            self._preview_image_service = service
         return service
 
     @desc('Download a file by path', group='file_path', suggest=False)
@@ -113,18 +122,23 @@ class CommandFileWebMixin:
         except Exception as e:
             return 0, f'Failed to download paths via HTTP: {e}'
 
+
     @desc('Preview a file by path', group='file_path', suggest=False)
     @interruptible()
     def preview_path(self, path=''):
         """
-        拉取预览文件到 server artifact previews 区
+        拉取预览文件到 server artifact previews 区。
+        如果本地配置开启 preview 图片压缩，则只在这里尝试压缩图片后上传。
         """
+        prepared_file = None
         try:
             file_path = self.path_resolver.require_existing_file_from_arg(path)
+            prepared_file = self.preview_image_service.prepare_upload_file(file_path)
             return self.http_file_transfer_service.upload_single_file_to_server_result(
-                file_path,
+                prepared_file.upload_path,
                 artifact_type='previews',
                 category='preview_cache',
+                extra=prepared_file.extra,
             )
         except CommandCancelledError:
             return 0, 'Command cancelled'
@@ -132,6 +146,29 @@ class CommandFileWebMixin:
             return 0, 'HTTP upload timed out'
         except Exception as e:
             return 0, f'Failed to preview file via HTTP: {e}'
+        finally:
+            if prepared_file is not None:
+                self.preview_image_service.cleanup_upload_file(prepared_file)
+
+    # @desc('Preview a file by path', group='file_path', suggest=False)
+    # @interruptible()
+    # def preview_path(self, path=''):
+    #     """
+    #     拉取预览文件到 server artifact previews 区
+    #     """
+    #     try:
+    #         file_path = self.path_resolver.require_existing_file_from_arg(path)
+    #         return self.http_file_transfer_service.upload_single_file_to_server_result(
+    #             file_path,
+    #             artifact_type='previews',
+    #             category='preview_cache',
+    #         )
+    #     except CommandCancelledError:
+    #         return 0, 'Command cancelled'
+    #     except (CommandTimeoutError, requests.Timeout):
+    #         return 0, 'HTTP upload timed out'
+    #     except Exception as e:
+    #         return 0, f'Failed to preview file via HTTP: {e}'
 
     @desc('Browse directory as JSON payload', group='file_path', suggest=False)
     @interruptible()
