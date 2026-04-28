@@ -1,11 +1,9 @@
 import os
 import queue
 
-from client.commands.executor import CommandExecutor
 from client.connection.message_dispatcher import ClientInboundMessageDispatcher
 from client.connection.message_router import ClientInboundMessageRouter
-from client.jobs.core.manager import JobManager
-from client.pty.manager import PtyManager
+from client.runtime.client_runtime import ClientRuntime
 from core.protocol.message_types import MSG_TYPE_RESULT
 from core.protocol.ratsocket import RATSocket
 from core.utils.logger import logger
@@ -18,19 +16,17 @@ class ServerConnection(RATSocket):
     当前承载：
     - 普通消息收发
     - 命令执行结果回传
-    - 后台任务运行态管理
     - 入站消息分发与路由
+
+    本地运行能力统一放在 ClientRuntime 中，避免连接层继续膨胀。
     """
 
     def __init__(self):
         super().__init__()
         self.client_id = None
 
-        self.command_executor = CommandExecutor(self)
+        self.runtime = ClientRuntime(self)
         self.pending_message_queue = queue.Queue()
-
-        self.job_manager = JobManager(self)
-        self.pty_manager = PtyManager(self)
         self.is_connected = False
 
         self.message_router = ClientInboundMessageRouter(self)
@@ -84,12 +80,3 @@ class ServerConnection(RATSocket):
         except Exception as e:
             logger.error(e, exc_info=True)
             return data.get('id'), 0, f'{e}\n'
-
-
-
-
-
-
-
-
-

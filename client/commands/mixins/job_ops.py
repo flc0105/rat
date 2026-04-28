@@ -106,7 +106,7 @@ class CommandJobMixin:
         仅支持从服务端拉取 job 后运行。
         - 必须传任务名
         """
-        job_manager = self.socket.job_manager
+        job_manager = self.socket.runtime.job_manager
 
         try:
             request_info = self._parse_start_job_request(job_name)
@@ -134,7 +134,7 @@ class CommandJobMixin:
         不传任务名时，列出当前运行中的任务。
         """
         job_name = job_name.strip()
-        job_manager = self.socket.job_manager
+        job_manager = self.socket.runtime.job_manager
 
         if not job_name:
             running_jobs = job_manager.list_running_jobs()
@@ -169,7 +169,7 @@ class CommandJobMixin:
         """
         列出当前运行中的后台任务。
         """
-        job_manager = self.socket.job_manager
+        job_manager = self.socket.runtime.job_manager
         running_jobs = job_manager.list_running_jobs()
         if not running_jobs:
             return 1, 'No background jobs are currently running'
@@ -181,7 +181,7 @@ class CommandJobMixin:
         查看指定后台任务状态。
         """
         job_name = job_name.strip()
-        job_manager = self.socket.job_manager
+        job_manager = self.socket.runtime.job_manager
         if not job_name:
             return 0, 'Usage: job_status <job_name>'
 
@@ -197,7 +197,7 @@ class CommandJobMixin:
         停止所有后台任务。
         """
         try:
-            job_manager = self.socket.job_manager
+            job_manager = self.socket.runtime.job_manager
             stopped_jobs = job_manager.stop_all_jobs()
             if not stopped_jobs:
                 return 1, 'No background jobs are currently running'

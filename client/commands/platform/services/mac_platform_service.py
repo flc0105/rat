@@ -519,7 +519,7 @@ class MacPlatformService:
             except ImportError as e:
                 result['error'] = str(e)
 
-            return 1, format_dict(result)
+            return 1, format_dict(result, width=24)
 
         except Exception as e:
             return 0, f'Check failed: {e}'

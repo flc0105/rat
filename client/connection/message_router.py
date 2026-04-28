@@ -12,7 +12,7 @@ class ClientInboundMessageRouter(BaseMessageRouter):
 
     def handle_command_message(self, data: dict):
         command_id = data.get('id')
-        result = self.connection.command_executor.execute_command(
+        result = self.connection.runtime.command_executor.execute_command(
             command_id,
             data.get('text'),
             options=data.get('extra') if isinstance(data.get('extra'), dict) else None,
@@ -23,7 +23,7 @@ class ClientInboundMessageRouter(BaseMessageRouter):
 
     def handle_script_message(self, data: dict):
         command_id = data.get('id')
-        result = self.connection.command_executor.execute_script_command(
+        result = self.connection.runtime.command_executor.execute_script_command(
             command_id,
             data.get('text') or '',
             kwargs=data.get('extra'),
@@ -35,7 +35,7 @@ class ClientInboundMessageRouter(BaseMessageRouter):
 
     def handle_acmd_message(self, data: dict):
         command_id = data.get('id')
-        result = self.connection.command_executor.execute_argument_command(
+        result = self.connection.runtime.command_executor.execute_argument_command(
             command_id,
             data.get('extra') or {},
             options=data.get('extra') if isinstance(data.get('extra'), dict) else None,
@@ -46,7 +46,7 @@ class ClientInboundMessageRouter(BaseMessageRouter):
 
     def handle_cancel_message(self, data: dict):
         target_command_id = data.get('target_id')
-        cancel_result = self.connection.command_executor.cancel_command(target_command_id)
+        cancel_result = self.connection.runtime.command_executor.cancel_command(target_command_id)
         accepted = bool(cancel_result.get('accepted'))
         message = str(cancel_result.get('message') or '').strip()
 
@@ -76,7 +76,7 @@ class ClientInboundMessageRouter(BaseMessageRouter):
 
 
     def handle_pty_open_message(self, data: dict):
-        self.connection.pty_manager.open_session(
+        self.connection.runtime.pty_manager.open_session(
             data.get('pty_session_id') or '',
             shell=data.get('shell') or '',
             cwd=data.get('cwd') or '',
@@ -86,14 +86,14 @@ class ClientInboundMessageRouter(BaseMessageRouter):
         return None
 
     def handle_pty_input_message(self, data: dict):
-        self.connection.pty_manager.write_input(
+        self.connection.runtime.pty_manager.write_input(
             data.get('pty_session_id') or '',
             data.get('data') or '',
         )
         return None
 
     def handle_pty_resize_message(self, data: dict):
-        self.connection.pty_manager.resize_session(
+        self.connection.runtime.pty_manager.resize_session(
             data.get('pty_session_id') or '',
             data.get('cols') or 120,
             data.get('rows') or 32,
@@ -101,17 +101,8 @@ class ClientInboundMessageRouter(BaseMessageRouter):
         return None
 
     def handle_pty_close_message(self, data: dict):
-        self.connection.pty_manager.close_session(data.get('pty_session_id') or '')
+        self.connection.runtime.pty_manager.close_session(data.get('pty_session_id') or '')
         return None
 
     def handle_heartbeat_ack_message(self, data: dict):
         return None
-
-
-
-
-
-
-
-
-

@@ -107,7 +107,7 @@ class Client:
         """
         info = ClientInfoBuilder(
             client_id=self.client_id,
-            command_executor=self.server.command_executor,
+            command_executor=self.server.runtime.command_executor,
         ).build()
         self.info = info
         self.server.send(info)
@@ -196,7 +196,7 @@ class Client:
             pass
 
         try:
-            stopped_jobs = self.server.job_manager.handle_connection_lost()
+            stopped_jobs = self.server.runtime.handle_connection_lost()
             if stopped_jobs:
                 logger.info(f'Stopped background jobs after connection loss: {stopped_jobs}')
         except Exception as e:
