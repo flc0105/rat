@@ -94,39 +94,9 @@ export default {
       default: null,
     },
 
-    commandCandidates: {
-      type: Array,
-      default: () => [],
-    },
-
-    commandCandidatesLoadedFor: {
-      type: [String, Number],
-      default: '',
-    },
-
-    loadCommandCandidates: {
-      type: Function,
-      default: null,
-    },
-
-    getConnectionStatusText: {
-      type: Function,
-      default: null,
-    },
-
-    formatConnectionLastSeen: {
-      type: Function,
-      default: null,
-    },
-
-    formatDateTimeStandard: {
-      type: Function,
-      default: null,
-    },
-
-    formatConnectionRtt: {
-      type: Function,
-      default: null,
+    statusNowTick: {
+      type: Number,
+      default: () => Date.now(),
     },
   },
 
@@ -138,14 +108,11 @@ export default {
       jobCount: 0,
       valueTitle: '',
       valueValue: '',
+      connectionInfoClientCommands: [],
     }
   },
 
   computed: {
-    connectionInfoClientCommands() {
-      return (this.commandCandidates || []).filter(item => item && item.source === 'client')
-    },
-
     connectionInfoCards() {
       const conn = this.currentConnection || {}
       const items = [
@@ -153,7 +120,6 @@ export default {
         { label: 'Hostname', value: conn.hostname || '-' },
         { label: 'Address', value: conn.addr || '-', mono: true },
         { label: 'Client ID', value: conn.client_id || '-', mono: true },
-        // {label: 'Platform', value: this.formatOsLabel(conn.os_type, conn.os_ver) || '-'},
         { label: 'OS Type', value: conn.os_type },
         { label: 'Platform', value: conn.os_full || '-' },
         { label: 'OS Name', value: conn.os_name },
@@ -165,11 +131,10 @@ export default {
         { label: 'Integrity', value: conn.integrity || '-' },
         { label: 'Build Version', value: conn.build_version || '-' },
         { label: 'Machine ID', value: conn.machine_id || '-', mono: true },
-        // {label: 'Machine ID Version', value: conn.machine_id_version || '-'},
         { label: 'Fingerprint Basis', value: conn.machine_fingerprint_basis || '-', mono: true },
         { label: 'Last Seen', value: this.formatLastSeenText(conn) },
-        { label: 'Connected At', value: this.formatDateTime(conn.connected_at) || '-' },
-        { label: 'Disconnected At', value: this.formatDateTime(conn.disconnected_at) || '-' },
+        { label: 'Connected At', value: this.formatDateTimeStandard(conn.connected_at) || '-' },
+        { label: 'Disconnected At', value: this.formatDateTimeStandard(conn.disconnected_at) || '-' },
         { label: 'RTT', value: this.formatRttText(conn) },
         { label: 'Working Directory', value: conn.cwd || '-', mono: true },
         { label: 'PID', value: conn.process_id || '-' },
@@ -209,56 +174,111 @@ export default {
       this.valueVisible = false
       this.valueTitle = ''
       this.valueValue = ''
+      this.connectionInfoClientCommands = []
 
       try {
-        if (
-          typeof this.loadCommandCandidates === 'function' &&
-          (this.commandCandidatesLoadedFor !== this.selectedId || !this.commandCandidates.length)
-        ) {
-          await this.loadCommandCandidates(this.selectedId)
-        }
-
-        const res = await fetch(`/api/connections/${encodeURIComponent(this.selectedId)}/background-jobs`)
-        const json = await res.json()
-
-        if (res.ok && json.code === 0 && Array.isArray(json.data)) {
-          this.jobCount = json.data.length
-        }
+        await Promise.all([
+          this.loadConnectionInfoClientCommands(this.selectedId),
+          this.loadConnectionInfoJobCount(this.selectedId),
+        ])
       } catch (e) {
       } finally {
         this.loading = false
       }
     },
 
-    formatStatusText(conn) {
-      if (typeof this.getConnectionStatusText === 'function') {
-        return this.getConnectionStatusText(conn)
+    async loadConnectionInfoClientCommands(clientId) {
+      const res = await fetch(`/api/connections/${encodeURIComponent(clientId)}/command-candidates`)
+      const json = await res.json()
+
+      if (!res.ok || json.code !== 0) {
+        throw new Error(json.message || 'Failed to load command candidates')
       }
 
-      return conn?.connection_state || '-'
+      this.connectionInfoClientCommands = (Array.isArray(json.data) ? json.data : [])
+        .filter(item => item && item.source === 'client' && item.suggest !== false)
+        .map(item => this.normalizeConnectionInfoCommand(item))
+    },
+
+    async loadConnectionInfoJobCount(clientId) {
+      const res = await fetch(`/api/connections/${encodeURIComponent(clientId)}/background-jobs`)
+      const json = await res.json()
+
+      if (res.ok && json.code === 0 && Array.isArray(json.data)) {
+        this.jobCount = json.data.length
+      }
+    },
+
+    normalizeConnectionInfoCommand(item) {
+      const template = String(item.template || '').trim()
+      const name = String(item.name || template || '').trim()
+      const help = String(item.help || '').trim()
+      const group = String(item.group || '').trim()
+      const source = String(item.source || '').trim()
+
+      return {
+        ...item,
+        value: template,
+        name,
+        template,
+        help,
+        group,
+        source,
+      }
+    },
+
+    // 连接状态展示逻辑放在组件内，避免继续依赖 legacy connection formatter。
+    getConnectionDisplayState(conn) {
+      const state = String((conn && conn.connection_state) || '').trim()
+      if (state === 'offline') return 'offline'
+
+      if (conn && conn.is_transfer_active) {
+        return 'online'
+      }
+
+      const disconnectedAt = String((conn && conn.disconnected_at) || '').trim()
+      if (disconnectedAt) return 'offline'
+
+      const lastSeenAt = String((conn && conn.last_seen_at) || '').trim()
+      if (!lastSeenAt) return state || 'online'
+
+      const staleAfterSeconds = Number((conn && conn.stale_after_seconds) || 45)
+      const seenMs = Date.parse(lastSeenAt)
+      if (!Number.isFinite(seenMs)) return state || 'online'
+
+      const ageMs = Math.max(this.statusNowTick - seenMs, 0)
+      if (ageMs > staleAfterSeconds * 1000) return 'stale'
+
+      return 'online'
+    },
+
+    formatStatusText(conn) {
+      const state = this.getConnectionDisplayState(conn)
+      if (state === 'online') return 'online'
+      if (state === 'stale') return 'stale'
+      return 'offline'
     },
 
     formatLastSeenText(conn) {
-      if (typeof this.formatConnectionLastSeen === 'function') {
-        return this.formatConnectionLastSeen(conn)
+      if (!conn) return '-'
+
+      const state = this.getConnectionDisplayState(conn)
+      if (state === 'offline') {
+        return this.formatDateTimeStandard(conn.disconnected_at) || '-'
       }
 
-      return this.formatDateTime(conn?.last_seen_at) || '-'
+      return this.formatDateTimeStandard(conn.last_seen_at) || '-'
     },
 
-    formatDateTime(value) {
-      if (typeof this.formatDateTimeStandard === 'function') {
-        return this.formatDateTimeStandard(value)
-      }
+    formatDateTimeStandard(value) {
+      const text = String(value || '').trim()
+      if (!text) return '-'
 
-      return value || '-'
+      const normalized = text.replace('T', ' ').split('.')[0]
+      return normalized || '-'
     },
 
     formatRttText(conn) {
-      if (typeof this.formatConnectionRtt === 'function') {
-        return this.formatConnectionRtt(conn)
-      }
-
       const value = conn && conn.last_rtt_ms
       if (value === null || value === undefined || value === '') return '-'
       return `${value} ms`
@@ -322,22 +342,6 @@ export default {
   border: 1px solid rgba(15, 23, 42, 0.05);
 }
 
-/*
-.connection-info-stat-label {
-  font-size: 12px;
-  line-height: 16px;
-  font-weight: 400;
-  color: var(--muted);
-  overflow: hidden;
-  word-break: break-word;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  min-height: 16px;
-  font-family: inherit;
-}
-*/
-
 .connection-info-stat-label {
   font-size: 12px;
   line-height: 16px;
@@ -353,7 +357,6 @@ export default {
   min-height: 16px;
   font-family: inherit;
 }
-
 
 .connection-info-stat-value {
   margin-top: 4px;

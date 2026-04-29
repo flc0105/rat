@@ -192,18 +192,12 @@
   />
 
 
-  <ConnectionInfoDialogs
-      ref="connectionInfoDialogRef"
-      :selected-id="selectedId"
-      :current-connection="currentConnection"
-      :command-candidates="commandCandidates"
-      :command-candidates-loaded-for="commandCandidatesLoadedFor"
-      :load-command-candidates="loadCommandCandidates"
-      :get-connection-status-text="getConnectionStatusText"
-      :format-connection-last-seen="formatConnectionLastSeen"
-      :format-date-time-standard="formatDateTimeStandard"
-      :format-connection-rtt="formatConnectionRtt"
-  />
+<ConnectionInfoDialogs
+    ref="connectionInfoDialogRef"
+    :selected-id="selectedId"
+    :current-connection="currentConnection"
+    :status-now-tick="statusNowTick"
+/>
 
 
   <ProcessDialogs

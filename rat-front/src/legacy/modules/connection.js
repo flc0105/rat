@@ -240,24 +240,24 @@ export default {
         //     if (state === 'stale') return 'device-dot-stale';
         //     return 'device-dot-offline';
         // },
-
-        getConnectionStatusText(conn) {
-            const state = this.getConnectionDisplayState(conn);
-            if (state === 'online') return 'online';
-            if (state === 'stale') return 'stale';
-            return 'offline';
-        },
-
-        formatConnectionLastSeen(conn) {
-            if (!conn) return '-';
-
-            const state = this.getConnectionDisplayState(conn);
-            if (state === 'offline') {
-                return this.formatDateTimeStandard(conn.disconnected_at) || '-';
-            }
-
-            return this.formatDateTimeStandard(conn.last_seen_at) || '-';
-        },
+        //
+        // getConnectionStatusText(conn) {
+        //     const state = this.getConnectionDisplayState(conn);
+        //     if (state === 'online') return 'online';
+        //     if (state === 'stale') return 'stale';
+        //     return 'offline';
+        // },
+        //
+        // formatConnectionLastSeen(conn) {
+        //     if (!conn) return '-';
+        //
+        //     const state = this.getConnectionDisplayState(conn);
+        //     if (state === 'offline') {
+        //         return this.formatDateTimeStandard(conn.disconnected_at) || '-';
+        //     }
+        //
+        //     return this.formatDateTimeStandard(conn.last_seen_at) || '-';
+        // },
         //
         // formatConnectionLastSeenRelative(conn) {
         //     if (!conn) return '-';
@@ -287,12 +287,12 @@ export default {
         //     const diffDay = Math.floor(diffHour / 24);
         //     return `${diffDay}d ago`;
         // },
-
-        formatConnectionRtt(conn) {
-            const value = conn && conn.last_rtt_ms;
-            if (value === null || value === undefined || value === '') return '-';
-            return `${value} ms`;
-        },
+        //
+        // formatConnectionRtt(conn) {
+        //     const value = conn && conn.last_rtt_ms;
+        //     if (value === null || value === undefined || value === '') return '-';
+        //     return `${value} ms`;
+        // },
         //
         // formatOsLabel(osType, osVer) {
         //     const type = osType || 'Unknown';
