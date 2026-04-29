@@ -1,5 +1,9 @@
 <template>
-  <div class="terminal-output" ref="terminalOutputRef">
+  <div
+  class="terminal-output"
+  :class="{ 'terminal-output-empty': !lines.length }"
+  ref="terminalOutputRef"
+>
     <div v-if="!lines.length" class="terminal-empty">
       <div class="terminal-empty-title">Console ready</div>
       <div class="terminal-empty-text">
@@ -43,9 +47,7 @@
   <span
     v-if="line.kind === 'command'"
     class="terminal-prefix"
-  >
-    $
-  </span>
+  >$</span>
 
   <span class="terminal-text">{{ line.text }}</span>
 
@@ -370,5 +372,17 @@ export default {
 
 .line-default .terminal-text {
   color: var(--terminal-text);
+}
+
+
+
+@media (max-width: 960px) {
+  .terminal-output {
+    min-height: 340px;
+  }
+
+  .terminal-output.terminal-output-empty .terminal-empty {
+    min-height: 340px;
+  }
 }
 </style>
