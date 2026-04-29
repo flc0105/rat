@@ -31,13 +31,7 @@
   Copy
 </el-button>
 
-<el-button
-  v-if="previewEditMode"
-  size="small"
-  @click="pasteClipboardToPreview"
->
-  Paste
-</el-button>
+
 
             <el-button
               v-if="!previewEditMode && !previewTruncated"
@@ -1013,98 +1007,6 @@ copyTextFallback(text) {
     throw new Error('Fallback copy failed')
   }
 },
-
-async pasteClipboardToPreview() {
-  if (this.previewType !== 'text') {
-    ElMessage.warning('Only text content can be pasted')
-    return
-  }
-
-  if (!this.previewEditMode) {
-    ElMessage.warning('Please enter edit mode first')
-    return
-  }
-
-  let text = ''
-
-  try {
-    text = await this.readClipboardText()
-  } catch (e) {
-    ElMessage.error('Failed to read clipboard')
-    return
-  }
-
-  if (!text) {
-    ElMessage.warning('Clipboard is empty')
-    return
-  }
-
-  this.insertPreviewTextAtCursor(text)
-  ElMessage.success('Content pasted')
-},
-
-async readClipboardText() {
-  if (
-    window.isSecureContext &&
-    navigator.clipboard &&
-    typeof navigator.clipboard.readText === 'function'
-  ) {
-    return navigator.clipboard.readText()
-  }
-
-  throw new Error('Clipboard read is not available')
-},
-
-insertPreviewTextAtCursor(text) {
-  const insertText = String(text || '')
-  if (!insertText) return
-
-  const editor = getPreviewMonacoEditor(this)
-
-  if (
-    editor &&
-    typeof editor.executeEdits === 'function' &&
-    typeof editor.getValue === 'function'
-  ) {
-    const selection = typeof editor.getSelection === 'function'
-      ? editor.getSelection()
-      : null
-    const position = typeof editor.getPosition === 'function'
-      ? editor.getPosition()
-      : null
-
-    const range = selection || (
-      position
-        ? new monaco.Range(
-          position.lineNumber,
-          position.column,
-          position.lineNumber,
-          position.column,
-        )
-        : new monaco.Range(1, 1, 1, 1)
-    )
-
-    editor.executeEdits('preview-paste', [{
-      range,
-      text: insertText,
-      forceMoveMarkers: true,
-    }])
-
-    if (typeof editor.pushUndoStop === 'function') {
-      editor.pushUndoStop()
-    }
-
-    if (typeof editor.focus === 'function') {
-      editor.focus()
-    }
-
-    this.previewText = editor.getValue()
-    return
-  }
-
-  this.previewText = insertText + String(this.previewText || '')
-},
-
 
     // async copyPreviewText() {
     //   const content = this.getMonacoEditorContent()
