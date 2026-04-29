@@ -21,6 +21,7 @@ class ArgumentOptionSpec:
     default: Any = None
     allow_empty: bool = True
     help_text: str = ''
+    alias: str = ''
     positional_index: int | None = None
 
     @property
@@ -43,6 +44,31 @@ class ArgumentCommandSpec:
 
     def get_option_map(self) -> dict[str, ArgumentOptionSpec]:
         return {item.name: item for item in self.options}
+
+    def get_option_alias_map(self) -> dict[str, ArgumentOptionSpec]:
+        alias_map = {}
+        option_map = self.get_option_map()
+
+        for item in self.options:
+            alias = str(item.alias or '').strip()
+            if not alias:
+                continue
+            if len(alias) != 1 or alias.startswith('-'):
+                raise ArgumentCommandValidationError(
+                    f'Invalid alias for --{item.name}: alias must be a single character without dash'
+                )
+            if alias in option_map:
+                raise ArgumentCommandValidationError(
+                    f'Invalid alias for --{item.name}: -{alias} conflicts with option --{alias}'
+                )
+            if alias in alias_map:
+                exists = alias_map[alias].name
+                raise ArgumentCommandValidationError(
+                    f'Duplicate alias -{alias} for --{exists} and --{item.name}'
+                )
+            alias_map[alias] = item
+
+        return alias_map
 
 
 def argument_command(name: str, spec: ArgumentCommandSpec | None = None):
@@ -90,12 +116,9 @@ class ArgumentCommandHelpBuilder:
                 if option.default not in (None, '') and option.option_type != 'flag':
                     default_label = f' default={option.default}'
 
-                if option.option_type == 'flag':
-                    option_usage = f'--{option.name}'
-                else:
-                    option_usage = f'--{option.name} <value>'
-                    if option.is_positional:
-                        positional_label = f' positional[{option.positional_index}]'
+                option_usage = self._build_option_help_usage(option)
+                if option.option_type != 'flag' and option.is_positional:
+                    positional_label = f' positional[{option.positional_index}]'
 
                 lines.append(
                     f'  {option_usage:<22} {type_label:<7} {required_label:<8} '
@@ -150,14 +173,28 @@ class ArgumentCommandHelpBuilder:
             if option.is_positional and option.option_type != 'flag':
                 continue
 
+            option_token = self._build_option_usage_token(option)
             if option.option_type == 'flag':
-                parts.append(f'[--{option.name}]')
+                parts.append(f'[{option_token}]')
             elif option.required:
-                parts.append(f'[--{option.name} <value>]')
+                parts.append(f'[{option_token} <value>]')
             else:
-                parts.append(f'[--{option.name} <value>]')
+                parts.append(f'[{option_token} <value>]')
 
         return ' '.join(parts)
+
+    def _build_option_usage_token(self, option: ArgumentOptionSpec) -> str:
+        long_token = f'--{option.name}'
+        alias = str(option.alias or '').strip()
+        if alias:
+            return f'-{alias}|{long_token}'
+        return long_token
+
+    def _build_option_help_usage(self, option: ArgumentOptionSpec) -> str:
+        option_token = self._build_option_usage_token(option).replace('|', ', ')
+        if option.option_type == 'flag':
+            return option_token
+        return f'{option_token} <value>'
 
 
 class ArgumentCommandValidator:
@@ -172,6 +209,7 @@ class ArgumentCommandValidator:
         if not isinstance(raw_args, dict):
             raise ArgumentCommandValidationError('Invalid acmd args payload')
 
+        raw_args = self.normalize_arg_keys(spec, raw_args)
         option_map = spec.get_option_map()
         normalized = {}
 
@@ -214,12 +252,207 @@ class ArgumentCommandValidator:
 
         return normalized
 
+    def normalize_arg_keys(self, spec: ArgumentCommandSpec, raw_args: dict | None) -> dict:
+        if raw_args is None:
+            raw_args = {}
+
+        if not isinstance(raw_args, dict):
+            raise ArgumentCommandValidationError('Invalid acmd args payload')
+
+        option_map = spec.get_option_map()
+        alias_map = spec.get_option_alias_map()
+        raw_args = self._normalize_alias_args(option_map, alias_map, raw_args)
+        return self._normalize_inline_args(option_map, alias_map, raw_args)
+
+    def _normalize_alias_args(
+        self,
+        option_map: dict[str, ArgumentOptionSpec],
+        alias_map: dict[str, ArgumentOptionSpec],
+        raw_args: dict,
+    ) -> dict:
+        normalized_args = {}
+        source_keys = {}
+
+        for key, value in raw_args.items():
+            target_key = self._resolve_payload_option_key(option_map, alias_map, key)
+
+            # 同时传入长名和短名时，dict 无法表达顺序，直接拒绝避免隐式覆盖。
+            if target_key in normalized_args:
+                self._raise_duplicate_option(target_key, source_keys.get(target_key, ''), key)
+
+            normalized_args[target_key] = value
+            source_keys[target_key] = key
+
+        return normalized_args
+
+    def _normalize_inline_args(
+        self,
+        option_map: dict[str, ArgumentOptionSpec],
+        alias_map: dict[str, ArgumentOptionSpec],
+        raw_args: dict,
+    ) -> dict:
+        positional_args = raw_args.get('_args') or []
+        if not positional_args:
+            return raw_args
+
+        if not isinstance(positional_args, list):
+            raise ArgumentCommandValidationError('Invalid positional args payload')
+
+        normalized_args = {}
+        source_keys = {}
+
+        for key, value in raw_args.items():
+            if key == '_args':
+                continue
+            normalized_args[key] = value
+            source_keys[key] = key
+
+        clean_positional_args = []
+        index = 0
+
+        while index < len(positional_args):
+            item = positional_args[index]
+            token = str(item)
+            option_name, inline_value, has_inline_value = self._parse_inline_option_token(
+                option_map,
+                alias_map,
+                token,
+            )
+
+            if option_name is None:
+                clean_positional_args.append(item)
+                index += 1
+                continue
+
+            option_spec = option_map[option_name]
+
+            if option_spec.option_type == 'flag':
+                option_value = inline_value if has_inline_value else True
+                self._put_normalized_option(normalized_args, source_keys, option_name, option_value, token)
+                index += 1
+                continue
+
+            if has_inline_value:
+                option_value = inline_value
+                index += 1
+            else:
+                if index + 1 >= len(positional_args):
+                    raise ArgumentCommandValidationError(f'Option "--{option_name}" requires a value')
+                option_value = positional_args[index + 1]
+                index += 2
+
+            self._put_normalized_option(normalized_args, source_keys, option_name, option_value, token)
+
+        normalized_args['_args'] = clean_positional_args
+        return normalized_args
+
+    def _resolve_payload_option_key(
+        self,
+        option_map: dict[str, ArgumentOptionSpec],
+        alias_map: dict[str, ArgumentOptionSpec],
+        key: str,
+    ) -> str:
+        key_text = str(key or '').strip()
+        if key_text.startswith('_'):
+            return key
+
+        option_key = self._strip_option_prefix(key_text)
+        if option_key in option_map:
+            return option_key
+        if option_key in alias_map:
+            return alias_map[option_key].name
+        return key
+
+    def _parse_inline_option_token(
+        self,
+        option_map: dict[str, ArgumentOptionSpec],
+        alias_map: dict[str, ArgumentOptionSpec],
+        token: str,
+    ) -> tuple[str | None, Any, bool]:
+        if token == '--':
+            return None, None, False
+        if not token.startswith('-') or self._looks_like_negative_number(token):
+            return None, None, False
+
+        if token.startswith('--'):
+            option_key, inline_value, has_inline_value = self._split_inline_option_token(token[2:])
+        else:
+            option_key, inline_value, has_inline_value = self._split_inline_option_token(token[1:])
+
+        if option_key in option_map:
+            return option_key, inline_value, has_inline_value
+        if option_key in alias_map:
+            return alias_map[option_key].name, inline_value, has_inline_value
+
+        raise ArgumentCommandValidationError(f'Unknown option: {self._format_option_key(token)}')
+
+    def _split_inline_option_token(self, option_text: str) -> tuple[str, str, bool]:
+        if '=' not in option_text:
+            return option_text, '', False
+
+        option_key, inline_value = option_text.split('=', 1)
+        return option_key, inline_value, True
+
+    def _strip_option_prefix(self, key: str) -> str:
+        if key.startswith('--'):
+            return key[2:]
+        if key.startswith('-'):
+            return key[1:]
+        return key
+
+    def _looks_like_negative_number(self, value: str) -> bool:
+        try:
+            float(value)
+            return value.startswith('-') and len(value) > 1
+        except Exception:
+            return False
+
+    def _put_normalized_option(
+        self,
+        normalized_args: dict,
+        source_keys: dict,
+        target_key: str,
+        value: Any,
+        source_key: str,
+    ):
+        if target_key in normalized_args:
+            self._raise_duplicate_option(target_key, source_keys.get(target_key, ''), source_key)
+
+        normalized_args[target_key] = value
+        source_keys[target_key] = source_key
+
+    def _raise_duplicate_option(
+        self,
+        target_key: str,
+        existing_key: str,
+        incoming_key: str,
+    ):
+        if existing_key == incoming_key:
+            raise ArgumentCommandValidationError(
+                f'Duplicate option: {self._format_option_key(existing_key)}'
+            )
+
+        raise ArgumentCommandValidationError(
+            f'Duplicate option: {self._format_option_key(existing_key)} and '
+            f'{self._format_option_key(incoming_key)} for --{target_key}'
+        )
+
     def _validate_unknown_options(self, option_map: dict[str, ArgumentOptionSpec], raw_args: dict):
         for key in raw_args:
             if key.startswith('_'):
                 continue
             if key not in option_map:
-                raise ArgumentCommandValidationError(f'Unknown option: --{key}')
+                raise ArgumentCommandValidationError(
+                    f'Unknown option: {self._format_option_key(key)}'
+                )
+
+    def _format_option_key(self, key: str) -> str:
+        text = str(key or '')
+        if text.startswith('-'):
+            return text
+        if len(text) == 1:
+            return f'-{text}'
+        return f'--{text}'
 
     def _convert_value(self, option_spec: ArgumentOptionSpec, raw_value: Any):
         option_name = option_spec.name
@@ -419,8 +652,10 @@ class ArgumentCommandRegistry:
 
         try:
             if spec is not None:
-                help_flag = raw_args.get(self.HELP_OPTION_NAME, False)
-                normalized_help_flag = self._normalize_help_flag(help_flag)
+                raw_args_for_help = self.validator.normalize_arg_keys(spec, raw_args)
+                normalized_help_flag = self._normalize_help_flag(
+                    raw_args_for_help.get(self.HELP_OPTION_NAME, False)
+                )
                 if normalized_help_flag:
                     return 1, self.help_builder.build(spec)
 

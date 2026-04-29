@@ -31,7 +31,7 @@ FIND_ARGUMENT_SPEC = ArgumentCommandSpec(
     description='Find files by keyword',
     options=[
         ArgumentOptionSpec(name='path', option_type='str', required=False, default='.', allow_empty=True,
-                           help_text='Target directory'),
+                           help_text='Target directory', positional_index=0),
         ArgumentOptionSpec(name='keyword', option_type='str', required=True, default=None, allow_empty=False,
                            help_text='Keyword to search in file or directory names'),
         ArgumentOptionSpec(name='help', option_type='flag', required=False, default=False,
@@ -44,8 +44,8 @@ TREE_ARGUMENT_SPEC = ArgumentCommandSpec(
     description='Show directory tree',
     options=[
         ArgumentOptionSpec(name='path', option_type='str', required=False, default='.', allow_empty=True,
-                           help_text='Target directory'),
-        ArgumentOptionSpec(name='max_depth', option_type='int', required=False, default=3,
+                           help_text='Target directory', positional_index=0),
+        ArgumentOptionSpec(name='max_depth', option_type='int', required=False, default=3, alias="L",
                            help_text='Maximum recursion depth'),
         ArgumentOptionSpec(name='help', option_type='flag', required=False, default=False,
                            help_text='Show this help message'),
@@ -57,8 +57,8 @@ HEAD_ARGUMENT_SPEC = ArgumentCommandSpec(
     description='Show first N lines of a text file',
     options=[
         ArgumentOptionSpec(name='path', option_type='str', required=True, default=None, allow_empty=False,
-                           help_text='Text file path'),
-        ArgumentOptionSpec(name='lines', option_type='int', required=False, default=10,
+                           help_text='Text file path', positional_index=0),
+        ArgumentOptionSpec(name='lines', option_type='int', required=False, default=10, alias='n',
                            help_text='Number of lines to show'),
         ArgumentOptionSpec(name='help', option_type='flag', required=False, default=False,
                            help_text='Show this help message'),
@@ -70,8 +70,8 @@ TAIL_ARGUMENT_SPEC = ArgumentCommandSpec(
     description='Show last N lines of a text file',
     options=[
         ArgumentOptionSpec(name='path', option_type='str', required=True, default=None, allow_empty=False,
-                           help_text='Text file path'),
-        ArgumentOptionSpec(name='lines', option_type='int', required=False, default=10,
+                           help_text='Text file path', positional_index=0),
+        ArgumentOptionSpec(name='lines', option_type='int', required=False, default=10, alias='n',
                            help_text='Number of lines to show'),
         ArgumentOptionSpec(name='help', option_type='flag', required=False, default=False,
                            help_text='Show this help message'),
@@ -84,7 +84,7 @@ WGET_ARGUMENT_SPEC = ArgumentCommandSpec(
     options=[
         ArgumentOptionSpec(name='url', option_type='str', required=True, default=None, allow_empty=False,
                            help_text='Source URL', positional_index=0),
-        ArgumentOptionSpec(name='output', option_type='str', required=False, default='',
+        ArgumentOptionSpec(name='output', option_type='str', required=False, default='', alias='o',
                            help_text='Output file path'),
         ArgumentOptionSpec(name='help', option_type='flag', required=False, default=False,
                            help_text='Show this help message'),
@@ -97,11 +97,11 @@ TCP_PING_ARGUMENT_SPEC = ArgumentCommandSpec(
     options=[
         ArgumentOptionSpec(name='host', option_type='str', required=True, default=None, allow_empty=False,
                            help_text='Target hostname or IP address', positional_index=0),
-        ArgumentOptionSpec(name='port', option_type='int', required=False, default=80,
+        ArgumentOptionSpec(name='port', option_type='int', required=False, default=80, alias='p',
                            help_text='Target TCP port'),
-        ArgumentOptionSpec(name='count', option_type='int', required=False, default=4,
+        ArgumentOptionSpec(name='count', option_type='int', required=False, default=4, alias='c',
                            help_text='Number of connection attempts'),
-        ArgumentOptionSpec(name='help', option_type='flag', required=False, default=False,
+        ArgumentOptionSpec(name='help', option_type='flag', required=False, default=False, alias='h',
                            help_text='Show this help message'),
     ]
 )
@@ -112,9 +112,9 @@ PING_ARGUMENT_SPEC = ArgumentCommandSpec(
     options=[
         ArgumentOptionSpec(name='host', option_type='str', required=True, default=None, allow_empty=False,
                            help_text='Target hostname or IP address', positional_index=0),
-        ArgumentOptionSpec(name='count', option_type='int', required=False, default=4,
+        ArgumentOptionSpec(name='count', option_type='int', required=False, default=4, alias='c',
                            help_text='Number of ping requests'),
-        ArgumentOptionSpec(name='help', option_type='flag', required=False, default=False,
+        ArgumentOptionSpec(name='help', option_type='flag', required=False, default=False, alias='h',
                            help_text='Show this help message'),
     ]
 )
