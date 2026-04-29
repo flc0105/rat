@@ -354,7 +354,11 @@ export default {
         }
 
         const systemCandidates = Array.isArray(candidateJson.data) ? candidateJson.data : []
-        const historyItems = Array.isArray(historyJson.data) ? historyJson.data : []
+const historyItems = Array.isArray(historyJson.data) ? historyJson.data : []
+const pinnedHistoryItems = historyItems.filter(item => item && item.is_pinned)
+
+        // const systemCandidates = Array.isArray(candidateJson.data) ? candidateJson.data : []
+        // const historyItems = Array.isArray(historyJson.data) ? historyJson.data : []
 
         const merged = []
         const seen = new Set()
@@ -388,23 +392,42 @@ export default {
         aliasCandidates.forEach(pushUniqueCandidate)
         scriptCandidates.forEach(pushUniqueCandidate)
 
-        historyItems.forEach((item) => {
-          const command = String(item.command || '').trim()
-          if (!command || seen.has(command)) return
+        // historyItems.forEach((item) => {
+        //   const command = String(item.command || '').trim()
+        //   if (!command || seen.has(command)) return
+        //
+        //   seen.add(command)
+        //   merged.push(this.normalizeCandidateItem({
+        //     name: command,
+        //     template: command,
+        //     help: 'Recent command',
+        //     source: 'history',
+        //     group: 'history',
+        //   }))
+        // })
 
-          seen.add(command)
-          merged.push(this.normalizeCandidateItem({
-            name: command,
-            template: command,
-            help: 'Recent command',
-            source: 'history',
-            group: 'history',
-          }))
-        })
+        pinnedHistoryItems.forEach((item) => {
+  const command = String(item.command || '').trim()
+  if (!command || seen.has(command)) return
 
-        this.buildQuickHistoryShortcutCandidates(historyItems).forEach((item) => {
-          merged.push(item)
-        })
+  seen.add(command)
+  merged.push(this.normalizeCandidateItem({
+    name: command,
+    template: command,
+    help: 'Pinned recent command',
+    source: 'history',
+    group: 'history',
+  }))
+})
+
+        // this.buildQuickHistoryShortcutCandidates(historyItems).forEach((item) => {
+        //   merged.push(item)
+        // })
+
+
+        this.buildQuickHistoryShortcutCandidates(pinnedHistoryItems).forEach((item) => {
+  merged.push(item)
+})
 
         this.commandCandidates = merged
         this.commandCandidatesLoadedFor = clientId
