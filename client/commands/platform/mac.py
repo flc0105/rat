@@ -75,13 +75,7 @@ class MacCommands(CommonCommands):
 
     @argument_command('sqlite_query', spec=SQLITE_QUERY_SPEC)
     def _acmd_sqlite_query(self, args_dict, payload=None):
-        """
-        只读 SQLite 查询
-        Examples:
-            acmd sqlite_query --db /Users/flc/studio.db --query "PRAGMA table_list;"
-            acmd sqlite_query --db /Users/flc/studio.db --query "PRAGMA table_info('bookings')"
-            acmd sqlite_query --db /Users/flc/studio.db --query "select * from scenes"
-        """
+        """只读 SQLite 查询"""
         return self.mac_file_inspection.acmd_sqlite_query(args_dict, payload)
 
     @argument_command('image_info', spec=IMAGE_INFO_SPEC)

@@ -116,5 +116,9 @@ PING_ARGUMENT_SPEC = ArgumentCommandSpec(
                            help_text='Number of ping requests'),
         ArgumentOptionSpec(name='help', option_type='flag', required=False, default=False, alias='h',
                            help_text='Show this help message'),
+    ],
+    examples=[
+        'acmd ping 127.0.0.1',
+        'acmd ping 127.0.0.1 -c 8',
     ]
 )

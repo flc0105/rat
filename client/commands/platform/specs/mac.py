@@ -40,6 +40,11 @@ SQLITE_QUERY_SPEC = ArgumentCommandSpec(
                            help_text='Output as JSON'),
         ArgumentOptionSpec(name='help', option_type='flag', required=False, default=False,
                            help_text='Show this help message'),
+    ],
+    examples=[
+        'acmd sqlite_query --db /Users/flc/studio.db --query "PRAGMA table_list;"',
+        'acmd sqlite_query --db /Users/flc/studio.db --query "PRAGMA table_info(\'bookings\')"',
+        'acmd sqlite_query --db /Users/flc/studio.db --query "select * from scenes"'
     ]
 )
 

@@ -59,13 +59,7 @@ class MacFileInspectionService:
             return 0, f'Failed to shred file: {e}'
 
     def acmd_sqlite_query(self, args_dict, payload=None):
-        """
-        只读 SQLite 查询
-        Examples:
-            acmd sqlite_query --db /Users/flc/studio.db --query "PRAGMA table_list;"
-            acmd sqlite_query --db /Users/flc/studio.db --query "PRAGMA table_info('bookings')"
-            acmd sqlite_query --db /Users/flc/studio.db --query "select * from scenes"
-        """
+        """只读 SQLite 查询"""
         try:
             import sqlite3
 

@@ -41,6 +41,7 @@ class ArgumentCommandSpec:
     name: str
     description: str = ''
     options: list[ArgumentOptionSpec] = field(default_factory=list)
+    examples: list[str] = field(default_factory=list)
 
     def get_option_map(self) -> dict[str, ArgumentOptionSpec]:
         return {item.name: item for item in self.options}
@@ -124,6 +125,14 @@ class ArgumentCommandHelpBuilder:
                     f'  {option_usage:<22} {type_label:<7} {required_label:<8} '
                     f'{option.help_text}{default_label}{positional_label}'
                 )
+
+        if spec.examples:
+            lines.append('')
+            lines.append('Examples:')
+            for example in spec.examples:
+                example_text = str(example or '').strip()
+                if example_text:
+                    lines.append(f'  {example_text}')
 
         return '\n'.join(lines).rstrip()
 
