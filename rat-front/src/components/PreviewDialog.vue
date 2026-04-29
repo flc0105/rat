@@ -195,7 +195,7 @@ import 'monaco-editor/esm/vs/editor/contrib/comment/browser/comment'
 import 'monaco-editor/esm/vs/editor/contrib/format/browser/formatActions'
 import 'monaco-editor/esm/vs/editor/contrib/hover/browser/hover'
 import 'monaco-editor/esm/vs/editor/contrib/links/browser/links'
-import 'monaco-editor/esm/vs/editor/contrib/suggest/browser/suggestController'
+// import 'monaco-editor/esm/vs/editor/contrib/suggest/browser/suggestController'
 
 import 'monaco-editor/min/vs/editor/editor.main.css'
 import { formatBytes } from '../utils/formatters.js'
@@ -399,10 +399,23 @@ export default {
               editor.setValue(content)
             }
 
+            // editor.updateOptions({
+            //   readOnly,
+            //   contextmenu: true,
+            // })
             editor.updateOptions({
-              readOnly,
-              contextmenu: true,
-            })
+  readOnly,
+  contextmenu: true,
+  quickSuggestions: false,
+  suggestOnTriggerCharacters: false,
+  acceptSuggestionOnEnter: 'off',
+  tabCompletion: 'off',
+  wordBasedSuggestions: 'off',
+  snippetSuggestions: 'none',
+  parameterHints: {
+    enabled: false,
+  },
+})
           } else {
             // 不调用 dispose：避免 Monaco 在当前环境下销毁卡死。
             setPreviewMonacoEditor(this, null)
@@ -411,10 +424,25 @@ export default {
               value: content,
               language: lang,
               theme: 'vs',
-              readOnly,
-              contextmenu: true,
-              automaticLayout: true,
-              fontSize: 13,
+              // readOnly,
+              // contextmenu: true,
+              // automaticLayout: true,
+              // fontSize: 13,
+readOnly,
+contextmenu: true,
+quickSuggestions: false,
+suggestOnTriggerCharacters: false,
+acceptSuggestionOnEnter: 'off',
+tabCompletion: 'off',
+wordBasedSuggestions: 'off',
+snippetSuggestions: 'none',
+parameterHints: {
+  enabled: false,
+},
+automaticLayout: true,
+fontSize: 13,
+
+
               fontFamily: 'Monaco, Menlo, "Ubuntu Mono", Consolas, monospace',
               lineNumbers: 'on',
               minimap: { enabled: false },
@@ -1356,5 +1384,38 @@ print(value)
     display: flex;
     flex-direction: column;
   }
+}
+
+
+
+
+
+.monaco-menu-container,
+.monaco-menu-container .monaco-menu {
+  background: #ffffff !important;
+  color: #111827 !important;
+  border: 1px solid rgba(15, 23, 42, 0.12) !important;
+  border-radius: 10px !important;
+  box-shadow: 0 18px 45px rgba(15, 23, 42, 0.22) !important;
+  overflow: hidden !important;
+  z-index: 3000 !important;
+}
+
+.monaco-menu-container .monaco-action-bar .action-item {
+  color: #111827 !important;
+}
+
+.monaco-menu-container .monaco-action-bar .action-item .action-label {
+  color: #111827 !important;
+  background: transparent !important;
+}
+
+.monaco-menu-container .monaco-action-bar .action-item.focused,
+.monaco-menu-container .monaco-action-bar .action-item:hover {
+  background: #eef2ff !important;
+}
+
+.monaco-menu-container .monaco-action-bar .action-item.disabled .action-label {
+  color: #9ca3af !important;
 }
 </style>
