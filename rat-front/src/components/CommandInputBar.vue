@@ -724,8 +724,9 @@ const pinnedHistoryItems = historyItems.filter(item => item && item.is_pinned)
 }
 
 .command-box {
-  display: flex;
-  gap: 8px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 88px 88px;
+  gap: 10px;
   align-items: center;
   min-width: 0;
 }
@@ -735,46 +736,8 @@ const pinnedHistoryItems = historyItems.filter(item => item && item.is_pinned)
 }
 
 .command-autocomplete-shell {
-  flex: 1;
   width: 100%;
   min-width: 0;
-}
-
-.command-autocomplete,
-.command-autocomplete :deep(.el-input),
-.command-autocomplete :deep(.el-input__wrapper) {
-  width: 100%;
-  min-width: 0;
-}
-
-.command-autocomplete :deep(.el-input__wrapper) {
-  height: 42px;
-  padding: 0 14px;
-  border-radius: 12px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  outline: none;
-  background: rgba(255, 255, 255, 0.06) !important;
-  box-shadow: none !important;
-}
-
-.command-autocomplete :deep(.el-input__wrapper:hover) {
-  box-shadow: none !important;
-}
-
-.command-autocomplete :deep(.el-input__wrapper.is-focus) {
-  border-color: rgba(96, 165, 250, 0.5);
-  box-shadow: none !important;
-}
-
-.command-autocomplete :deep(.el-input__inner) {
-  height: 100%;
-  color: #f8fafc !important;
-  font-size: 14px;
-  background: transparent !important;
-}
-
-.command-autocomplete :deep(.el-input__inner::placeholder) {
-  color: #8ea2c0 !important;
 }
 
 .run-button {
@@ -835,84 +798,11 @@ const pinnedHistoryItems = historyItems.filter(item => item && item.is_pinned)
   opacity: 1 !important;
 }
 
-:global(.command-autocomplete-popper) {
-  background: #0f172a !important;
-  border: 1px solid rgba(255, 255, 255, 0.08) !important;
-  border-radius: 12px !important;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35) !important;
-  overflow: hidden;
-}
-
-:global(.command-autocomplete-popper .el-autocomplete-suggestion__wrap) {
-  padding: 8px 0;
-  background: #0f172a !important;
-}
-
-:global(.command-autocomplete-popper .el-scrollbar),
-:global(.command-autocomplete-popper .el-scrollbar__wrap),
-:global(.command-autocomplete-popper .el-scrollbar__view) {
-  background: #0f172a !important;
-}
-
-:global(.command-autocomplete-popper li) {
-  padding: 0 12px !important;
-  line-height: normal !important;
-  background: #0f172a !important;
-}
-
-:global(.command-autocomplete-popper li:hover),
-:global(.command-autocomplete-popper li.highlighted) {
-  background: rgba(96, 165, 250, 0.12) !important;
-}
-
-:global(.command-autocomplete-popper .command-autocomplete-item) {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 10px 2px;
-}
-
-:global(.command-autocomplete-popper .command-autocomplete-item-main) {
-  min-width: 0;
-  flex: 1;
-}
-
-:global(.command-autocomplete-popper .command-autocomplete-item-name) {
-  max-width: 520px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  color: #f8fafc !important;
-  font-size: 14px;
-  line-height: 1.5;
-  font-weight: 600;
-}
-
-:global(.command-autocomplete-popper .command-autocomplete-item-desc) {
-  max-width: 640px;
-  margin-top: 4px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  color: #8ea2c0 !important;
-  font-size: 12px;
-  line-height: 1.5;
-}
-
-:global(.command-autocomplete-popper .command-autocomplete-item-group) {
-  flex-shrink: 0;
-  align-self: center;
-  color: #60a5fa !important;
-  font-size: 12px;
-  line-height: 1.4;
-  padding: 2px 8px;
-  border-radius: 999px;
-  background: rgba(37, 99, 235, 0.12) !important;
-  border: 1px solid rgba(96, 165, 250, 0.18);
-}
-
 @media (max-width: 640px) {
+  .command-box {
+    grid-template-columns: minmax(0, 1fr) 80px 80px;
+  }
+
   .run-button {
     width: 80px;
   }
@@ -932,7 +822,6 @@ const pinnedHistoryItems = historyItems.filter(item => item && item.is_pinned)
   }
 
   .command-box {
-    display: grid;
     grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
     gap: 10px;
     align-items: stretch;
@@ -942,28 +831,6 @@ const pinnedHistoryItems = historyItems.filter(item => item && item.is_pinned)
     grid-column: 1 / -1;
     width: 100%;
     min-width: 0;
-  }
-
-  .command-autocomplete,
-  .command-autocomplete :deep(.el-input),
-  .command-autocomplete :deep(.el-input__wrapper),
-  .command-autocomplete :deep(.el-textarea),
-  .command-autocomplete :deep(.el-textarea__inner) {
-    width: 100%;
-    min-width: 0;
-  }
-
-  .command-autocomplete :deep(.el-input__wrapper) {
-    height: 44px;
-  }
-
-  .command-autocomplete :deep(.el-textarea__inner),
-  .command-autocomplete-shell textarea {
-    min-height: 44px !important;
-    height: auto !important;
-    max-height: none !important;
-    overflow-y: hidden !important;
-    resize: none !important;
   }
 
   .run-button {
@@ -978,6 +845,148 @@ const pinnedHistoryItems = historyItems.filter(item => item && item.is_pinned)
   .cancel-button {
     grid-column: 2 / 3;
     margin-left: 0 !important;
+  }
+}
+</style>
+
+<style>
+/* CommandInputBar: Element Plus 内部输入框样式必须放非 scoped，避免 el-input 内部 DOM 吃不到样式。 */
+.command-autocomplete,
+.command-autocomplete .el-input,
+.command-autocomplete .el-input__wrapper {
+  width: 100%;
+  min-width: 0;
+}
+
+.command-autocomplete .el-input__wrapper {
+  height: 42px;
+  padding: 0 14px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  outline: none;
+  background: rgba(255, 255, 255, 0.06) !important;
+  box-shadow: none !important;
+}
+
+.command-autocomplete .el-input__wrapper:hover {
+  box-shadow: none !important;
+}
+
+.command-autocomplete .el-input__wrapper.is-focus {
+  border-color: rgba(96, 165, 250, 0.5);
+  box-shadow: none !important;
+}
+
+.command-autocomplete .el-input__inner {
+  height: 100%;
+  color: #f8fafc !important;
+  font-size: 14px;
+  background: transparent !important;
+}
+
+.command-autocomplete .el-input__inner::placeholder {
+  color: #8ea2c0 !important;
+}
+
+.command-autocomplete-popper {
+  background: #0f172a !important;
+  border: 1px solid rgba(255, 255, 255, 0.08) !important;
+  border-radius: 12px !important;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35) !important;
+  overflow: hidden;
+}
+
+.command-autocomplete-popper .el-autocomplete-suggestion__wrap {
+  padding: 8px 0;
+  background: #0f172a !important;
+}
+
+.command-autocomplete-popper .el-scrollbar,
+.command-autocomplete-popper .el-scrollbar__wrap,
+.command-autocomplete-popper .el-scrollbar__view {
+  background: #0f172a !important;
+}
+
+.command-autocomplete-popper li {
+  padding: 0 12px !important;
+  line-height: normal !important;
+  background: #0f172a !important;
+}
+
+.command-autocomplete-popper li:hover,
+.command-autocomplete-popper li.highlighted {
+  background: rgba(96, 165, 250, 0.12) !important;
+}
+
+.command-autocomplete-popper .command-autocomplete-item {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 2px;
+}
+
+.command-autocomplete-popper .command-autocomplete-item-main {
+  min-width: 0;
+  flex: 1;
+}
+
+.command-autocomplete-popper .command-autocomplete-item-name,
+.command-autocomplete-popper .command-autocomplete-item-desc {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.command-autocomplete-popper .command-autocomplete-item-name {
+  max-width: 520px;
+  color: #f8fafc !important;
+  font-size: 14px;
+  line-height: 1.5;
+  font-weight: 600;
+}
+
+.command-autocomplete-popper .command-autocomplete-item-desc {
+  max-width: 640px;
+  margin-top: 4px;
+  color: #8ea2c0 !important;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.command-autocomplete-popper .command-autocomplete-item-group {
+  flex-shrink: 0;
+  align-self: center;
+  color: #60a5fa !important;
+  font-size: 12px;
+  line-height: 1.4;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: rgba(37, 99, 235, 0.12) !important;
+  border: 1px solid rgba(96, 165, 250, 0.18);
+}
+
+@media (max-width: 960px) {
+  .command-autocomplete,
+  .command-autocomplete .el-input,
+  .command-autocomplete .el-input__wrapper,
+  .command-autocomplete .el-textarea,
+  .command-autocomplete .el-textarea__inner {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .command-autocomplete .el-input__wrapper {
+    height: 44px;
+  }
+
+  .command-autocomplete .el-textarea__inner,
+  .command-autocomplete-shell textarea {
+    min-height: 44px !important;
+    height: auto !important;
+    max-height: none !important;
+    overflow-y: hidden !important;
+    resize: none !important;
   }
 }
 </style>
