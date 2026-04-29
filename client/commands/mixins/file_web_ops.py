@@ -150,26 +150,6 @@ class CommandFileWebMixin:
             if prepared_file is not None:
                 self.preview_image_service.cleanup_upload_file(prepared_file)
 
-    # @desc('Preview a file by path', group='file_path', suggest=False)
-    # @interruptible()
-    # def preview_path(self, path=''):
-    #     """
-    #     拉取预览文件到 server artifact previews 区
-    #     """
-    #     try:
-    #         file_path = self.path_resolver.require_existing_file_from_arg(path)
-    #         return self.http_file_transfer_service.upload_single_file_to_server_result(
-    #             file_path,
-    #             artifact_type='previews',
-    #             category='preview_cache',
-    #         )
-    #     except CommandCancelledError:
-    #         return 0, 'Command cancelled'
-    #     except (CommandTimeoutError, requests.Timeout):
-    #         return 0, 'HTTP upload timed out'
-    #     except Exception as e:
-    #         return 0, f'Failed to preview file via HTTP: {e}'
-
     @desc('Browse directory as JSON payload', group='file_path', suggest=False)
     @interruptible()
     def browse_dir(self, path=''):

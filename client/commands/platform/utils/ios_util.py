@@ -244,7 +244,6 @@ def get_ios_contacts():
     return results
 
 
-
 def get_icloud_container_ids(info):
     containers = info.get("NSUbiquitousContainers", {})
 
@@ -252,7 +251,6 @@ def get_icloud_container_ids(info):
         return list(containers.keys())
 
     return []
-
 
 
 def read_info_plist():
@@ -287,16 +285,12 @@ def get_icloud_path(info):
     return "unavailable"
 
 
-
-
-
 def spawn(path):
     import runpy
     import sys
     import os
 
     def runner():
-
         # 很多脚本依赖当前目录找配置、模块、资源
         os.chdir(os.path.dirname(path))
 
@@ -307,8 +301,8 @@ def spawn(path):
 
     import threading
     t = threading.Thread(
-            target=runner,
-            name='handoff-main-py',
-            daemon=False,   # 关键：不要 daemon
-        )
+        target=runner,
+        name='handoff-main-py',
+        daemon=False,  # 关键：不要 daemon
+    )
     t.start()

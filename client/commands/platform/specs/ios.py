@@ -105,3 +105,16 @@ TCP_PING_ARGUMENT_SPEC = ArgumentCommandSpec(
                            help_text='Show this help message'),
     ]
 )
+
+PING_ARGUMENT_SPEC = ArgumentCommandSpec(
+    name='ping',
+    description='Send ICMP echo requests to a target host to measure network latency',
+    options=[
+        ArgumentOptionSpec(name='host', option_type='str', required=True, default=None, allow_empty=False,
+                           help_text='Target hostname or IP address', positional_index=0),
+        ArgumentOptionSpec(name='count', option_type='int', required=False, default=4,
+                           help_text='Number of ping requests'),
+        ArgumentOptionSpec(name='help', option_type='flag', required=False, default=False,
+                           help_text='Show this help message'),
+    ]
+)

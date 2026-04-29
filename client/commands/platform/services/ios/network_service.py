@@ -1,6 +1,8 @@
 import socket
 import time
 
+from client.commands.platform.utils.network_util import do_one_ping
+
 
 class iOSNetworkService:
     """
@@ -62,3 +64,42 @@ class iOSNetworkService:
             return self.tcp_ping(host=host, port=port, count=count)
         except Exception as e:
             return 0, str(e)
+
+    def acmd_ping(self, args_dict):
+        host = str(args_dict.get('host') or '').strip()
+        count = int(args_dict.get('count') or '')
+        timeout = 2.0
+
+        self.owner._send_interim_result(1, "ICMP ping {} count={} timeout={}s".format(
+            host,
+            count,
+            timeout
+        ))
+
+        results = []
+
+        for seq in range(1, count + 1):
+            r = do_one_ping(host, timeout=timeout, seq=seq)
+
+            if r["ok"]:
+                results.append(r["rtt_ms"])
+                self.owner._send_interim_result(1, "reply from {}: seq={} time={:.1f} ms".format(
+                    r["from"],
+                    r["seq"],
+                    r["rtt_ms"]
+                ))
+            else:
+                if "ip" in r:
+                    self.owner._send_interim_result(0, "failed: {} ({})".format(r["error"], r["ip"]))
+                else:
+                    self.owner._send_interim_result(0, "failed:", r["error"])
+
+            time.sleep(1)
+
+        if results:
+            self.owner._send_interim_result(1, '')
+            self.owner._send_final_result(1, "min/avg/max = {:.1f}/{:.1f}/{:.1f} ms".format(
+                min(results),
+                sum(results) / len(results),
+                max(results)
+            ))

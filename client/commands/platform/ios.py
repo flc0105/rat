@@ -157,3 +157,8 @@ class iOSCommands(CommonCommands):
     @interruptible()
     def tcp_ping(self, args_dict, payload=None):
         return self.ios_network.acmd_tcp_ping(args_dict)
+
+    @argument_command('ping', spec=PING_ARGUMENT_SPEC)
+    @interruptible()
+    def ping(self, args_dict, payload=None):
+        return self.ios_network.acmd_ping(args_dict)

@@ -330,25 +330,3 @@ def get_locale_tag(default=""):
         except Exception:
             pass
 
-# def get_sam_compatible_name():
-#     import ctypes
-#     from ctypes import wintypes
-#
-#     secur32 = ctypes.WinDLL('secur32.dll')
-#
-#     GetUserNameEx = secur32.GetUserNameExW
-#     GetUserNameEx.argtypes = [wintypes.ULONG, wintypes.LPWSTR, ctypes.POINTER(wintypes.ULONG)]
-#     GetUserNameEx.restype = wintypes.BOOL
-#
-#     NameSamCompatible = 2  # 关键：这个就是 DESKTOP\username
-#
-#     size = wintypes.ULONG(0)
-#     GetUserNameEx(NameSamCompatible, None, ctypes.byref(size))
-#
-#     buffer = ctypes.create_unicode_buffer(size.value)
-#
-#     if GetUserNameEx(NameSamCompatible, buffer, ctypes.byref(size)):
-#         return buffer.value
-#     else:
-#         raise ctypes.WinError()
-#

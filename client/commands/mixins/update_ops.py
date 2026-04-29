@@ -195,15 +195,15 @@ class CommandUpdateMixin:
             if detect_platform_alias() == 'ios':
 
                 import sys, time
-                spawn(ratclient_path)
-                self._send_final_result(1, f'Update bundle downloaded and started\n'
+                # spawn(ratclient_path)
+                self._send_final_result(1, f'Update bundle downloaded\n'
                                            f'Build Version: {bundle_meta.get("build_version") or "-"}\n'
                                            f'Downloaded Archive: {archive_path}\n'
                                            f'Extracted Path: {extract_dir}\n'
                                            f'Launch Script: {ratclient_path}\n')
-                time.sleep(1)
-                self.socket.close()
-                raise SystemExit
+                # time.sleep(1)
+                # self.socket.close()
+                # raise SystemExit
 
             else:
                 process = spawn_detached_python_script(ratclient_path, cwd=extract_dir)
