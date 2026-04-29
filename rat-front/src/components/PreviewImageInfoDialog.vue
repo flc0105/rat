@@ -101,18 +101,20 @@ export default {
       type: Object,
       default: null,
     },
-
-    formatPreviewImageInfo: {
-      type: Function,
-      required: true,
-    },
   },
 
   emits: ['update:visible'],
 
   computed: {
     formatted() {
-      if (!this.info) {
+      return this.formatPreviewImageInfo(this.info)
+    },
+  },
+
+  methods: {
+    // 图片信息展示格式化逻辑归属在图片信息弹窗内。
+    formatPreviewImageInfo(info) {
+      if (!info || typeof info !== 'object') {
         return {
           basic: [],
           exif: [],
@@ -120,7 +122,88 @@ export default {
         }
       }
 
-      return this.formatPreviewImageInfo(this.info)
+      const basicFieldOrder = [
+        ['name', 'Name'],
+        ['width', 'Width'],
+        ['height', 'Height'],
+        ['size', 'Dimensions'],
+        ['format', 'Format'],
+        ['mode', 'Color Mode'],
+        ['file_size_bytes', 'File Size (Bytes)'],
+        ['artifact_id', 'Artifact ID'],
+      ]
+
+      const exifFieldOrder = [
+        ['make', 'Camera Make'],
+        ['model', 'Camera Model'],
+        ['lens_model', 'Lens Model'],
+        ['datetime_original', 'Date Taken'],
+        ['exposure_time', 'Exposure Time'],
+        ['f_number', 'F Number'],
+        ['iso', 'ISO'],
+        ['focal_length', 'Focal Length'],
+        ['color_space', 'Color Space'],
+        ['software', 'Software'],
+        ['user_comment', 'User Comment'],
+      ]
+
+      const usedKeys = new Set()
+      const basic = []
+      const exif = []
+      const other = []
+
+      basicFieldOrder.forEach(([key, label]) => {
+        if (key in info) {
+          basic.push({
+            key,
+            label,
+            value: this.formatPreviewImageInfoValue(info[key]),
+          })
+          usedKeys.add(key)
+        }
+      })
+
+      exifFieldOrder.forEach(([key, label]) => {
+        if (key in info) {
+          exif.push({
+            key,
+            label,
+            value: this.formatPreviewImageInfoValue(info[key]),
+          })
+          usedKeys.add(key)
+        }
+      })
+
+      Object.keys(info).forEach((key) => {
+        if (usedKeys.has(key)) return
+
+        other.push({
+          key,
+          label: key,
+          value: this.formatPreviewImageInfoValue(info[key]),
+        })
+      })
+
+      return {
+        basic,
+        exif,
+        other,
+      }
+    },
+
+    formatPreviewImageInfoValue(value) {
+      if (value === null || value === undefined || value === '') return '-'
+      if (Array.isArray(value)) return value.join(', ')
+
+      if (typeof value === 'object') {
+        try {
+          return JSON.stringify(value)
+        } catch (e) {
+          return String(value)
+        }
+      }
+
+      return String(value)
     },
   },
 }

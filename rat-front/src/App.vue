@@ -32,50 +32,50 @@
     </header>
 
     <div class="content">
-<DeviceSidebar
-    :connections="connections"
-    :selected-id="selectedId"
-    :status-now-tick="statusNowTick"
-    @refresh="loadConnections"
-    @select="selectConnection"
-/>
+      <DeviceSidebar
+          :connections="connections"
+          :selected-id="selectedId"
+          :status-now-tick="statusNowTick"
+          @refresh="loadConnections"
+          @select="selectConnection"
+      />
 
       <main class="main panel">
         <template v-if="currentConnection">
           <div class="main-body">
-<ConnectionInfoCards
-    :connection="currentConnection"
-    :status-now-tick="statusNowTick"
-/>
+            <ConnectionInfoCards
+                :connection="currentConnection"
+                :status-now-tick="statusNowTick"
+            />
 
             <section class="terminal-panel">
               <div class="terminal-frame">
                 <TerminalToolbar
-    :selected-id="selectedId"
-    @open-remote-files="openRemoteFilesDialog"
-    @open-artifacts="openArtifactDialog"
-    @open-info="openConnectionInfoDialog"
-    @open-jobs="openBackgroundJobsDialog"
-    @open-scripts="openScriptLibraryDialog"
-    @open-agents="openAgentOutputsDialog"
-    @open-history="openCommandHistoryDialog"
-    @open-pty="openPtyDialog"
-    @open-processes="openProcessDialog"
-    @clear="clearOutput"
-    @bottom="scrollToBottom"
-/>
+                    :selected-id="selectedId"
+                    @open-remote-files="openRemoteFilesDialog"
+                    @open-artifacts="openArtifactDialog"
+                    @open-info="openConnectionInfoDialog"
+                    @open-jobs="openBackgroundJobsDialog"
+                    @open-scripts="openScriptLibraryDialog"
+                    @open-agents="openAgentOutputsDialog"
+                    @open-history="openCommandHistoryDialog"
+                    @open-pty="openPtyDialog"
+                    @open-processes="openProcessDialog"
+                    @clear="clearOutput"
+                    @bottom="scrollToBottom"
+                />
 
-<CommandInputBar
-  ref="commandInputBarRef"
-  v-model="commandText"
-  :sending="sending"
-  :has-running-web-task="hasRunningWebTask"
-  :current-task-is-cancelling="currentTaskIsCancelling"
-  :command-candidates="commandCandidates"
-  :current-connection="currentConnection"
-  @run="sendCommand"
-  @cancel="cancelCurrentTask"
-/>
+                <CommandInputBar
+                    ref="commandInputBarRef"
+                    v-model="commandText"
+                    :sending="sending"
+                    :has-running-web-task="hasRunningWebTask"
+                    :current-task-is-cancelling="currentTaskIsCancelling"
+                    :command-candidates="commandCandidates"
+                    :current-connection="currentConnection"
+                    @run="sendCommand"
+                    @cancel="cancelCurrentTask"
+                />
 
                 <TerminalOutput
                     ref="terminalOutputRef"
@@ -190,12 +190,12 @@
   />
 
 
-<ConnectionInfoDialogs
-    ref="connectionInfoDialogRef"
-    :selected-id="selectedId"
-    :current-connection="currentConnection"
-    :status-now-tick="statusNowTick"
-/>
+  <ConnectionInfoDialogs
+      ref="connectionInfoDialogRef"
+      :selected-id="selectedId"
+      :current-connection="currentConnection"
+      :status-now-tick="statusNowTick"
+  />
 
 
   <ProcessDialogs
@@ -218,13 +218,10 @@
       :text="terminalJsonText"
   />
 
-
-  <PreviewImageInfoDialog
-      v-model:visible="previewImageInfoDialogVisible"
-      :info="previewImageInfo"
-      :format-preview-image-info="formatPreviewImageInfo"
-  />
-
+<PreviewImageInfoDialog
+    v-model:visible="previewImageInfoDialogVisible"
+    :info="previewImageInfo"
+/>
 
   <AgentOutputsDialog
       ref="agentOutputsDialogRef"
