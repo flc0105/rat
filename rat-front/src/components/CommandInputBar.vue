@@ -771,13 +771,11 @@ const pinnedHistoryItems = historyItems.filter(item => item && item.is_pinned)
 
 .cancel-button {
   background: #dc2626 !important;
-  //border: 1px solid rgba(248, 113, 113, 0.36) !important;
   color: #fff !important;
 }
 
 .cancel-button:not(:disabled):not(.is-disabled):not(.is-loading):hover {
   background: #b91c1c !important;
-  //border-color: rgba(248, 113, 113, 0.52) !important;
   color: #fff !important;
 }
 
@@ -793,7 +791,6 @@ const pinnedHistoryItems = historyItems.filter(item => item && item.is_pinned)
 
 .cancel-button.is-loading {
   background: #b91c1c !important;
-  //border-color: rgba(248, 113, 113, 0.42) !important;
   color: #fff !important;
   cursor: default !important;
   opacity: 1 !important;

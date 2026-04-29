@@ -890,7 +890,6 @@ export default {
   }
 
   .pty-overlay .el-dialog__body {
-    //display: flex !important;
     flex: 1 1 auto !important;
     min-height: 0 !important;
     padding-top: 10px !important;

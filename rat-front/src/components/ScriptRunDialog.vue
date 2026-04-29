@@ -266,7 +266,6 @@ export default {
 .script-run-overlay .el-dialog {
   display: flex !important;
   flex-direction: column !important;
-  //height: 78vh !important;
   max-height: 78vh !important;
   overflow: hidden !important;
 }

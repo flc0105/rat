@@ -1134,7 +1134,6 @@ export default {
   display: inline-block;
   width: 1px;
   height: 14px;
-  //margin: 0 12px;
     margin-left: 10px;
   margin-right: 4px;
   background: #dcdfe6;
