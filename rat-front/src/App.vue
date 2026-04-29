@@ -116,19 +116,18 @@
       class="hidden-file-input"
       @change="handleRemoteUploadChange"
   />
-  <RemoteFilesDialog
-      ref="remoteFilesDialogRef"
-      :selected-id="selectedId"
-      :format-bytes="formatBytes"
-      :get-tab-scoped-headers="getTabScopedHeaders"
-      @append-output="appendOutput"
-      @set-active-task="setActiveTask"
-      @preview="previewRemoteEntry"
-      @request-upload="triggerRemoteUploadInput"
-      @upload-started="pendingRemoteUploadRefresh = $event"
-      @visible-change="remoteFilesDialogVisible = $event"
-      @artifacts-maybe-changed="refreshArtifactsIfOpen"
-  />
+<RemoteFilesDialog
+    ref="remoteFilesDialogRef"
+    :selected-id="selectedId"
+    :get-tab-scoped-headers="getTabScopedHeaders"
+    @append-output="appendOutput"
+    @set-active-task="setActiveTask"
+    @preview="previewRemoteEntry"
+    @request-upload="triggerRemoteUploadInput"
+    @upload-started="pendingRemoteUploadRefresh = $event"
+    @visible-change="remoteFilesDialogVisible = $event"
+    @artifacts-maybe-changed="refreshArtifactsIfOpen"
+/>
 
 
 <ArtifactDialog

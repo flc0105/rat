@@ -592,6 +592,8 @@
 <script>
 import {ElMessage, ElMessageBox} from 'element-plus'
 import RemotePinsDialog from './RemotePinsDialog.vue'
+import { formatBytes as formatBytesValue } from '../utils/formatters.js'
+
 
 export default {
   name: 'RemoteFilesDialog',
@@ -602,7 +604,7 @@ export default {
 
   props: {
     selectedId: {type: String, default: ''},
-    formatBytes: {type: Function, required: true},
+    // formatBytes: {type: Function, required: true},
     getTabScopedHeaders: {type: Function, required: true},
   },
 
@@ -732,6 +734,10 @@ export default {
   },
 
   methods: {
+
+    formatBytes(value) {
+  return formatBytesValue(value)
+},
 
     scrollRemoteMobileFileListToTop() {
       this.$nextTick(() => {
