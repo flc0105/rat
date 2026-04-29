@@ -196,20 +196,21 @@
 
 <script>
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { formatBytes, formatDateTimeStandard } from '../utils/formatters.js'
 
 export default {
   name: 'AgentOutputsDialog',
 
   props: {
-    formatDateTimeStandard: {
-      type: Function,
-      default: null,
-    },
-
-    formatBytes: {
-      type: Function,
-      default: null,
-    },
+    // formatDateTimeStandard: {
+    //   type: Function,
+    //   default: null,
+    // },
+    //
+    // formatBytes: {
+    //   type: Function,
+    //   default: null,
+    // },
   },
 
   emits: [
@@ -286,25 +287,13 @@ export default {
       return `${scheme}://${host}:${port}`
     },
 
-    formatOutputDateTime(value) {
-      if (typeof this.formatDateTimeStandard === 'function') {
-        return this.formatDateTimeStandard(value)
-      }
+formatOutputDateTime(value) {
+  return formatDateTimeStandard(value)
+},
 
-      return value || '-'
-    },
-
-    formatOutputBytes(value) {
-      if (typeof this.formatBytes === 'function') {
-        return this.formatBytes(value)
-      }
-
-      const size = Number(value || 0)
-      if (!Number.isFinite(size) || size <= 0) return '-'
-      if (size < 1024) return `${size} B`
-      if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)} KB`
-      return `${(size / 1024 / 1024).toFixed(1)} MB`
-    },
+formatOutputBytes(value) {
+  return formatBytes(value)
+},
 
     isAgentOutputDeleting(fileName) {
       return Boolean(this.agentOutputsDeleting[String(fileName || '').trim()])

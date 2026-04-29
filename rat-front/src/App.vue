@@ -226,13 +226,10 @@
     :info="previewImageInfo"
 />
 
-  <AgentOutputsDialog
-      ref="agentOutputsDialogRef"
-      :format-date-time-standard="formatDateTimeStandard"
-      :format-bytes="formatBytes"
-      @open-builder="openAgentBuilderDialog"
-  />
-
+<AgentOutputsDialog
+    ref="agentOutputsDialogRef"
+    @open-builder="openAgentBuilderDialog"
+/>
 
   <PtyDialog
       ref="ptyDialogRef"
