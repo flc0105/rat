@@ -123,7 +123,10 @@ export default {
                     }
                 }
 
-                this.commandCandidatesLoadedFor = '';
+               this.reloadCommandCandidatesFromRuntime?.({
+    reset: true,
+    silent: true,
+});
                 await this.loadConnections();
             });
 

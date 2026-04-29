@@ -65,17 +65,27 @@
                     @bottom="scrollToBottom"
                 />
 
+<!--                <CommandInputBar-->
+<!--                    ref="commandInputBarRef"-->
+<!--                    v-model="commandText"-->
+<!--                    :sending="sending"-->
+<!--                    :has-running-web-task="hasRunningWebTask"-->
+<!--                    :current-task-is-cancelling="currentTaskIsCancelling"-->
+<!--                    :command-candidates="commandCandidates"-->
+<!--                    :current-connection="currentConnection"-->
+<!--                    @run="sendCommand"-->
+<!--                    @cancel="cancelCurrentTask"-->
+<!--                />-->
+
                 <CommandInputBar
-                    ref="commandInputBarRef"
-                    v-model="commandText"
-                    :sending="sending"
-                    :has-running-web-task="hasRunningWebTask"
-                    :current-task-is-cancelling="currentTaskIsCancelling"
-                    :command-candidates="commandCandidates"
-                    :current-connection="currentConnection"
-                    @run="sendCommand"
-                    @cancel="cancelCurrentTask"
-                />
+  ref="commandInputBarRef"
+  :selected-id="selectedId"
+  :current-connection="currentConnection"
+  :current-active-task-id="currentActiveTaskId"
+  :tab-id="tabId"
+  @append-output="appendOutput"
+  @set-active-task="setActiveTask"
+/>
 
                 <TerminalOutput
                     ref="terminalOutputRef"
@@ -242,13 +252,13 @@
 <script>
 import AppStateModule from './legacy/core/state.js'
 import AppUtilsModule from './legacy/modules/utils.js'
-import AppCommandsModule from './legacy/modules/commands.js'
+// import AppCommandsModule from './legacy/modules/commands.js'
 // import AppJobsModule from './legacy/modules/jobs.js'
 import AppSseModule from './legacy/modules/sse.js'
 import AppConnectionModule from './legacy/modules/connection.js'
 import AppTaskModule from './legacy/modules/task.js'
 import AppTerminalModule from './legacy/modules/terminal.js'
-import AppCandidatesModule from './legacy/modules/candidates.js'
+// import AppCandidatesModule from './legacy/modules/candidates.js'
 // import AppHistoryModule from './legacy/modules/history.js'
 import AppPreviewModule from './legacy/modules/preview.js'
 import DeviceSidebar from "./components/DeviceSidebar.vue";
@@ -300,11 +310,11 @@ export default {
       ...AppStateModule.data(),
       ...AppPreviewModule.data(),
       // ...AppJobsModule.data(),
-      ...AppCandidatesModule.data(),
+      // ...AppCandidatesModule.data(),
       // ...AppHistoryModule.data(),
       ...AppTerminalModule.data(),
       ...AppConnectionModule.data(),
-      ...AppCommandsModule.data(),
+      // ...AppCommandsModule.data(),
       ...AppTaskModule.data(),
       ...AppSseModule.data(),
 
@@ -335,13 +345,13 @@ export default {
 
   methods: {
     ...AppUtilsModule.methods,
-    ...AppCommandsModule.methods,
+    // ...AppCommandsModule.methods,
     // ...AppJobsModule.methods,
     ...AppSseModule.methods,
     ...AppConnectionModule.methods,
     ...AppTaskModule.methods,
     ...AppTerminalModule.methods,
-    ...AppCandidatesModule.methods,
+    // ...AppCandidatesModule.methods,
     // ...AppHistoryModule.methods,
     ...AppPreviewModule.methods,
 
@@ -459,29 +469,19 @@ export default {
       return this.$refs.commandHistoryDialogRef?.open()
     },
 
-    applyHistoryCommand(row) {
-      if (!row || !row.command) return
+applyHistoryCommand(row) {
+  if (!row || !row.command) return
 
-      this.commandText = row.command
+  this.$refs.commandInputBarRef?.setCommandText(row.command)
+},
 
-      this.$nextTick(() => {
-        const commandInputBar = this.$refs.commandInputBarRef
+async reloadCommandCandidatesFromHistory(options = {}) {
+  await this.$refs.commandInputBarRef?.reloadCommandCandidates(options)
+},
 
-        if (commandInputBar && typeof commandInputBar.focusInput === 'function') {
-          commandInputBar.focusInput()
-        }
-      })
-    },
-
-    async reloadCommandCandidatesFromHistory(options = {}) {
-      if (options?.reset) {
-        this.commandCandidatesLoadedFor = ''
-      }
-
-      if (!this.selectedId) return
-
-      await this.loadCommandCandidates(this.selectedId)
-    },
+async reloadCommandCandidatesFromRuntime(options = {}) {
+  await this.$refs.commandInputBarRef?.reloadCommandCandidates(options)
+},
 
   },
 

@@ -99,9 +99,12 @@ export default {
                     this.selectedId = this.connections.length > 0 ? this.connections[0].client_id : '';
                 }
 
-                if (this.selectedId) {
-                    await this.loadCommandCandidates(this.selectedId);
-                }
+if (this.selectedId) {
+    await this.reloadCommandCandidatesFromRuntime?.({
+        reset: true,
+        silent: true,
+    });
+}
 
                 console.log(this.connections)
             } catch (e) {
@@ -114,7 +117,10 @@ export default {
             this.ensureOutputBucket(clientId);
             this.commandHistoryItems = [];
             this.commandExecutionItems = [];
-            this.loadCommandCandidates(clientId);
+            this.reloadCommandCandidatesFromRuntime?.({
+    reset: true,
+    silent: true,
+});
             this.scrollToBottom();
 
             // if (this.backgroundJobsDialogVisible) {
