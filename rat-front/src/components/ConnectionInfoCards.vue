@@ -54,25 +54,115 @@ export default {
       required: true,
     },
 
-    formatAddress: {
-      type: Function,
-      required: true,
+    statusNowTick: {
+      type: Number,
+      default: () => Date.now(),
+    },
+  },
+
+  methods: {
+    // 信息卡片内部只保留展示格式化逻辑
+    getConnectionDisplayState(conn) {
+      const state = String((conn && conn.connection_state) || '').trim()
+      if (state === 'offline') return 'offline'
+
+      if (conn && conn.is_transfer_active) {
+        return 'online'
+      }
+
+      const disconnectedAt = String((conn && conn.disconnected_at) || '').trim()
+      if (disconnectedAt) return 'offline'
+
+      const lastSeenAt = String((conn && conn.last_seen_at) || '').trim()
+      if (!lastSeenAt) return state || 'online'
+
+      const staleAfterSeconds = Number((conn && conn.stale_after_seconds) || 45)
+      const seenMs = Date.parse(lastSeenAt)
+      if (!Number.isFinite(seenMs)) return state || 'online'
+
+      const ageMs = Math.max(this.statusNowTick - seenMs, 0)
+      if (ageMs > staleAfterSeconds * 1000) return 'stale'
+
+      return 'online'
     },
 
-    formatOsLabel: {
-      type: Function,
-      required: true,
+    getConnectionStatusText(conn) {
+      const state = this.getConnectionDisplayState(conn)
+      if (state === 'online') return 'online'
+      if (state === 'stale') return 'stale'
+      return 'offline'
     },
 
-    getConnectionStatusText: {
-      type: Function,
-      required: true,
+    formatConnectionRtt(conn) {
+      const value = conn && conn.last_rtt_ms
+      if (value === null || value === undefined || value === '') return '-'
+      return `${value} ms`
     },
 
-    formatConnectionRtt: {
-      type: Function,
-      required: true,
+    formatOsLabel(osType, osVer) {
+      const type = osType || 'Unknown'
+      return osVer ? `${type}` : type
+    },
+
+    formatAddress(addr) {
+      if (!addr) return '-'
+      const raw = String(addr)
+      const parts = raw.split(':')
+      if (parts.length >= 2) return parts.slice(0, -1).join(':') || raw
+      return raw
     },
   },
 }
 </script>
+
+<style scoped>
+/* ========== 连接信息卡片 ========== */
+.info-grid {
+  padding: 18px 20px 14px;
+  border-bottom: 1px solid var(--line);
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 12px;
+  flex-shrink: 0;
+}
+
+.info-card {
+  padding: 14px 16px;
+  border-radius: var(--radius-md);
+  background: var(--bg-card);
+  border: 1px solid rgba(15, 23, 42, 0.05);
+  min-width: 0;
+}
+
+.info-card-wide-2 {
+  grid-column: span 2;
+}
+
+.info-label {
+  font-size: 11px;
+  color: var(--muted-2);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.info-value {
+  margin-top: 7px;
+  font-size: 14px;
+  font-weight: 650;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.info-value.mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 12px;
+}
+
+@media (max-width: 1200px) {
+  .info-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+</style>

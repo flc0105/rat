@@ -1,5 +1,5 @@
 <template>
-  <aside class="sidebar">
+  <aside class="sidebar panel">
     <div class="panel-header">
       <div class="panel-title">Devices</div>
       <el-button size="small" @click="$emit('refresh')">Refresh</el-button>
@@ -66,33 +66,96 @@ export default {
       default: '',
     },
 
-    formatOsLabel: {
-      type: Function,
-      required: true,
-    },
-
-    formatAddress: {
-      type: Function,
-      required: true,
-    },
-
-    getConnectionStatusDotClass: {
-      type: Function,
-      required: true,
-    },
-
-    getConnectionStatusText: {
-      type: Function,
-      required: true,
-    },
-
-    formatConnectionLastSeenRelative: {
-      type: Function,
-      required: true,
+    statusNowTick: {
+      type: Number,
+      default: () => Date.now(),
     },
   },
 
   emits: ['refresh', 'select'],
+
+  methods: {
+    // 根据连接状态统一计算设备展示态
+    getConnectionDisplayState(conn) {
+      const state = String((conn && conn.connection_state) || '').trim()
+      if (state === 'offline') return 'offline'
+
+      if (conn && conn.is_transfer_active) {
+        return 'online'
+      }
+
+      const disconnectedAt = String((conn && conn.disconnected_at) || '').trim()
+      if (disconnectedAt) return 'offline'
+
+      const lastSeenAt = String((conn && conn.last_seen_at) || '').trim()
+      if (!lastSeenAt) return state || 'online'
+
+      const staleAfterSeconds = Number((conn && conn.stale_after_seconds) || 45)
+      const seenMs = Date.parse(lastSeenAt)
+      if (!Number.isFinite(seenMs)) return state || 'online'
+
+      const ageMs = Math.max(this.statusNowTick - seenMs, 0)
+      if (ageMs > staleAfterSeconds * 1000) return 'stale'
+
+      return 'online'
+    },
+
+    getConnectionStatusDotClass(conn) {
+      const state = this.getConnectionDisplayState(conn)
+      if (state === 'online') return 'device-dot-online'
+      if (state === 'stale') return 'device-dot-stale'
+      return 'device-dot-offline'
+    },
+
+    getConnectionStatusText(conn) {
+      const state = this.getConnectionDisplayState(conn)
+      if (state === 'online') return 'online'
+      if (state === 'stale') return 'stale'
+      return 'offline'
+    },
+
+    formatConnectionLastSeenRelative(conn) {
+      if (!conn) return '-'
+
+      const state = this.getConnectionDisplayState(conn)
+      const baseText = state === 'offline'
+        ? String(conn.disconnected_at || '').trim()
+        : String(conn.last_seen_at || '').trim()
+
+      if (!baseText) return '-'
+
+      const ts = Date.parse(baseText)
+      if (!Number.isFinite(ts)) return '-'
+
+      const diffMs = Math.max(this.statusNowTick - ts, 0)
+      const diffSec = Math.floor(diffMs / 1000)
+
+      if (diffSec < 5) return 'just now'
+      if (diffSec < 60) return `${diffSec}s ago`
+
+      const diffMin = Math.floor(diffSec / 60)
+      if (diffMin < 60) return `${diffMin}m ago`
+
+      const diffHour = Math.floor(diffMin / 60)
+      if (diffHour < 24) return `${diffHour}h ago`
+
+      const diffDay = Math.floor(diffHour / 24)
+      return `${diffDay}d ago`
+    },
+
+    formatOsLabel(osType, osVer) {
+      const type = osType || 'Unknown'
+      return osVer ? `${type}` : type
+    },
+
+    formatAddress(addr) {
+      if (!addr) return '-'
+      const raw = String(addr)
+      const parts = raw.split(':')
+      if (parts.length >= 2) return parts.slice(0, -1).join(':') || raw
+      return raw
+    },
+  },
 }
 </script>
 
@@ -102,12 +165,6 @@ export default {
   display: flex;
   flex-direction: column;
   min-height: 0;
-  overflow: hidden;
-  background: var(--bg-panel);
-  border: 1px solid rgba(255, 255, 255, 0.7);
-  border-radius: var(--radius-lg);
-  box-shadow: var(--shadow);
-  backdrop-filter: blur(14px);
 }
 
 .panel-header {

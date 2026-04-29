@@ -137,6 +137,59 @@ body {
   min-height: 0;
 }
 
+/*!* ========== 主面板信息区 ========== *!*/
+/*.main-body {*/
+/*  flex: 1;*/
+/*  min-height: 0;*/
+/*  display: grid;*/
+/*  grid-template-rows: auto minmax(0, 1fr);*/
+/*}*/
+
+/*.info-grid {*/
+/*  padding: 18px 20px 14px;*/
+/*  border-bottom: 1px solid var(--line);*/
+/*  display: grid;*/
+/*  grid-template-columns: repeat(5, minmax(0, 1fr));*/
+/*  gap: 12px;*/
+/*  flex-shrink: 0;*/
+/*}*/
+
+/*.info-card {*/
+/*  padding: 14px 16px;*/
+/*  border-radius: var(--radius-md);*/
+/*  background: var(--bg-card);*/
+/*  border: 1px solid rgba(15, 23, 42, 0.05);*/
+/*  min-width: 0;*/
+/*}*/
+
+/*.info-card-wide-2 {*/
+/*  grid-column: span 2;*/
+/*}*/
+
+/*.info-label {*/
+/*  font-size: 11px;*/
+/*  color: var(--muted-2);*/
+/*  text-transform: uppercase;*/
+/*  letter-spacing: 0.06em;*/
+/*}*/
+
+/*.info-value {*/
+/*  margin-top: 7px;*/
+/*  font-size: 14px;*/
+/*  font-weight: 650;*/
+/*  color: var(--text);*/
+/*  overflow: hidden;*/
+/*  text-overflow: ellipsis;*/
+/*  white-space: nowrap;*/
+/*}*/
+
+/*.mono {*/
+/*  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;*/
+/*  font-size: 12px;*/
+/*}*/
+
+
+
 /* ========== 主面板信息区 ========== */
 .main-body {
   flex: 1;
@@ -145,48 +198,11 @@ body {
   grid-template-rows: auto minmax(0, 1fr);
 }
 
-.info-grid {
-  padding: 18px 20px 14px;
-  border-bottom: 1px solid var(--line);
-  display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
-  gap: 12px;
-  flex-shrink: 0;
-}
-
-.info-card {
-  padding: 14px 16px;
-  border-radius: var(--radius-md);
-  background: var(--bg-card);
-  border: 1px solid rgba(15, 23, 42, 0.05);
-  min-width: 0;
-}
-
-.info-card-wide-2 {
-  grid-column: span 2;
-}
-
-.info-label {
-  font-size: 11px;
-  color: var(--muted-2);
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-}
-
-.info-value {
-  margin-top: 7px;
-  font-size: 14px;
-  font-weight: 650;
-  color: var(--text);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
 .mono {
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
   font-size: 12px;
 }
+
 
 /* ========== 终端面板 ========== */
 .terminal-panel {
@@ -1912,12 +1928,29 @@ body {
   white-space: nowrap;
 }
 
-/* ========== 响应式 ========== */
-@media (max-width: 1200px) {
-  .info-grid {
-    grid-template-columns: 1fr 1fr;
-  }
+/*!* ========== 响应式 ========== *!*/
+/*@media (max-width: 1200px) {*/
+/*  .info-grid {*/
+/*    grid-template-columns: 1fr 1fr;*/
+/*  }*/
 
+/*  .terminal-topbar {*/
+/*    align-items: flex-start;*/
+/*    flex-direction: column;*/
+/*  }*/
+
+/*  .terminal-topbar-left,*/
+/*  .terminal-tools {*/
+/*    width: 100%;*/
+/*  }*/
+
+/*  .terminal-tools {*/
+/*    justify-content: flex-start;*/
+/*  }*/
+/*}*/
+
+
+@media (max-width: 1200px) {
   .terminal-topbar {
     align-items: flex-start;
     flex-direction: column;
@@ -1932,7 +1965,6 @@ body {
     justify-content: flex-start;
   }
 }
-
 @media (max-width: 960px) {
   html,
   body {

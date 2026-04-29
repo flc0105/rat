@@ -32,28 +32,21 @@
     </header>
 
     <div class="content">
-      <DeviceSidebar
-          :connections="connections"
-          :selected-id="selectedId"
-          :format-os-label="formatOsLabel"
-          :format-address="formatAddress"
-          :get-connection-status-dot-class="getConnectionStatusDotClass"
-          :get-connection-status-text="getConnectionStatusText"
-          :format-connection-last-seen-relative="formatConnectionLastSeenRelative"
-          @refresh="loadConnections"
-          @select="selectConnection"
-      />
+<DeviceSidebar
+    :connections="connections"
+    :selected-id="selectedId"
+    :status-now-tick="statusNowTick"
+    @refresh="loadConnections"
+    @select="selectConnection"
+/>
 
       <main class="main panel">
         <template v-if="currentConnection">
           <div class="main-body">
-            <ConnectionInfoCards
-                :connection="currentConnection"
-                :format-address="formatAddress"
-                :format-os-label="formatOsLabel"
-                :get-connection-status-text="getConnectionStatusText"
-                :format-connection-rtt="formatConnectionRtt"
-            />
+<ConnectionInfoCards
+    :connection="currentConnection"
+    :status-now-tick="statusNowTick"
+/>
 
             <section class="terminal-panel">
               <div class="terminal-frame">

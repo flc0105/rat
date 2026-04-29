@@ -234,12 +234,12 @@ export default {
             return 'online';
         },
 
-        getConnectionStatusDotClass(conn) {
-            const state = this.getConnectionDisplayState(conn);
-            if (state === 'online') return 'device-dot-online';
-            if (state === 'stale') return 'device-dot-stale';
-            return 'device-dot-offline';
-        },
+        // getConnectionStatusDotClass(conn) {
+        //     const state = this.getConnectionDisplayState(conn);
+        //     if (state === 'online') return 'device-dot-online';
+        //     if (state === 'stale') return 'device-dot-stale';
+        //     return 'device-dot-offline';
+        // },
 
         getConnectionStatusText(conn) {
             const state = this.getConnectionDisplayState(conn);
@@ -258,54 +258,54 @@ export default {
 
             return this.formatDateTimeStandard(conn.last_seen_at) || '-';
         },
-
-        formatConnectionLastSeenRelative(conn) {
-            if (!conn) return '-';
-
-            const state = this.getConnectionDisplayState(conn);
-            const baseText = state === 'offline'
-                ? String(conn.disconnected_at || '').trim()
-                : String(conn.last_seen_at || '').trim();
-
-            if (!baseText) return '-';
-
-            const ts = Date.parse(baseText);
-            if (!Number.isFinite(ts)) return '-';
-
-            const diffMs = Math.max(this.statusNowTick - ts, 0);
-            const diffSec = Math.floor(diffMs / 1000);
-
-            if (diffSec < 5) return 'just now';
-            if (diffSec < 60) return `${diffSec}s ago`;
-
-            const diffMin = Math.floor(diffSec / 60);
-            if (diffMin < 60) return `${diffMin}m ago`;
-
-            const diffHour = Math.floor(diffMin / 60);
-            if (diffHour < 24) return `${diffHour}h ago`;
-
-            const diffDay = Math.floor(diffHour / 24);
-            return `${diffDay}d ago`;
-        },
+        //
+        // formatConnectionLastSeenRelative(conn) {
+        //     if (!conn) return '-';
+        //
+        //     const state = this.getConnectionDisplayState(conn);
+        //     const baseText = state === 'offline'
+        //         ? String(conn.disconnected_at || '').trim()
+        //         : String(conn.last_seen_at || '').trim();
+        //
+        //     if (!baseText) return '-';
+        //
+        //     const ts = Date.parse(baseText);
+        //     if (!Number.isFinite(ts)) return '-';
+        //
+        //     const diffMs = Math.max(this.statusNowTick - ts, 0);
+        //     const diffSec = Math.floor(diffMs / 1000);
+        //
+        //     if (diffSec < 5) return 'just now';
+        //     if (diffSec < 60) return `${diffSec}s ago`;
+        //
+        //     const diffMin = Math.floor(diffSec / 60);
+        //     if (diffMin < 60) return `${diffMin}m ago`;
+        //
+        //     const diffHour = Math.floor(diffMin / 60);
+        //     if (diffHour < 24) return `${diffHour}h ago`;
+        //
+        //     const diffDay = Math.floor(diffHour / 24);
+        //     return `${diffDay}d ago`;
+        // },
 
         formatConnectionRtt(conn) {
             const value = conn && conn.last_rtt_ms;
             if (value === null || value === undefined || value === '') return '-';
             return `${value} ms`;
         },
-
-        formatOsLabel(osType, osVer) {
-            const type = osType || 'Unknown';
-            return osVer ? `${type}` : type;
-        },
-
-        formatAddress(addr) {
-            if (!addr) return '-';
-            const raw = String(addr);
-            const parts = raw.split(':');
-            if (parts.length >= 2) return parts.slice(0, -1).join(':') || raw;
-            return raw;
-        },
+        //
+        // formatOsLabel(osType, osVer) {
+        //     const type = osType || 'Unknown';
+        //     return osVer ? `${type}` : type;
+        // },
+        //
+        // formatAddress(addr) {
+        //     if (!addr) return '-';
+        //     const raw = String(addr);
+        //     const parts = raw.split(':');
+        //     if (parts.length >= 2) return parts.slice(0, -1).join(':') || raw;
+        //     return raw;
+        // },
     },
     computed: {
         currentConnection() {
