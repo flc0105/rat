@@ -1,50 +1,50 @@
 <template>
   <el-dialog
-    v-model="visible"
-    title="Build Agent"
-    width="720px"
-    top="8vh"
-    class="fixed-dialog agent-builder-dialog"
-    modal-class="agent-builder-overlay"
+      v-model="visible"
+      title="Build Agent"
+      width="720px"
+      top="8vh"
+      class="fixed-dialog agent-builder-dialog"
+      modal-class="agent-builder-overlay"
   >
     <div
-      class="fixed-dialog-body agent-builder-body"
-      v-loading="platformLoading"
+        class="fixed-dialog-body agent-builder-body"
+        v-loading="platformLoading"
     >
       <el-form
-        :model="agentForm"
-        label-width="110px"
-        class="agent-builder-form"
-        @submit.prevent="buildAgent"
+          :model="agentForm"
+          label-width="110px"
+          class="agent-builder-form"
+          @submit.prevent="buildAgent"
       >
         <el-form-item label="Server IP" required>
           <el-input
-            v-model="agentForm.server_host"
-            placeholder="e.g., 192.168.1.100"
+              v-model="agentForm.server_host"
+              placeholder="e.g., 192.168.1.100"
           />
         </el-form-item>
 
         <el-form-item label="Server Port" required>
           <el-input
-            v-model.number="agentForm.server_port"
-            type="number"
-            placeholder="8000"
+              v-model.number="agentForm.server_port"
+              type="number"
+              placeholder="8000"
           />
         </el-form-item>
 
         <el-form-item label="Web Port" required>
           <el-input
-            v-model.number="agentForm.web_port"
-            type="number"
-            placeholder="8000"
+              v-model.number="agentForm.web_port"
+              type="number"
+              placeholder="8000"
           />
         </el-form-item>
 
         <el-form-item label="Target OS">
           <el-radio-group
-            v-model="agentForm.target_os"
-            :disabled="isAgentTargetOsDisabled"
-            class="agent-builder-radio-group"
+              v-model="agentForm.target_os"
+              :disabled="isAgentTargetOsDisabled"
+              class="agent-builder-radio-group"
           >
             <el-radio label="mac">macOS</el-radio>
             <el-radio label="win">Windows</el-radio>
@@ -54,8 +54,8 @@
 
         <el-form-item label="Builder">
           <el-radio-group
-            v-model="agentForm.builder"
-            class="agent-builder-radio-group"
+              v-model="agentForm.builder"
+              class="agent-builder-radio-group"
           >
             <el-radio label="bundle">Bundle</el-radio>
             <el-radio label="pyinstaller">PyInstaller</el-radio>
@@ -66,9 +66,9 @@
 
         <el-form-item label="Target Arch">
           <el-radio-group
-            v-model="agentForm.target_arch"
-            :disabled="isAgentTargetArchDisabled"
-            class="agent-builder-radio-group"
+              v-model="agentForm.target_arch"
+              :disabled="isAgentTargetArchDisabled"
+              class="agent-builder-radio-group"
           >
             <el-radio label="amd64">amd64</el-radio>
             <el-radio label="arm64">arm64</el-radio>
@@ -76,9 +76,9 @@
         </el-form-item>
 
         <el-alert
-          type="info"
-          :closable="false"
-          show-icon
+            type="info"
+            :closable="false"
+            show-icon
         >
           <template #default>
             <div class="agent-builder-alert-text">
@@ -96,9 +96,9 @@
         </el-button>
 
         <el-button
-          type="primary"
-          :loading="agentBuilding"
-          @click="buildAgent"
+            type="primary"
+            :loading="agentBuilding"
+            @click="buildAgent"
         >
           Build & Download
         </el-button>
@@ -108,7 +108,7 @@
 </template>
 
 <script>
-import { ElMessage } from 'element-plus'
+import {ElMessage} from 'element-plus'
 
 export default {
   name: 'AgentBuilderDialog',
@@ -141,7 +141,7 @@ export default {
       }
 
       if (this.agentForm.builder === 'bundle') {
-        return 'Source ZIP package. Includes the Python client source files.'
+        return 'Source ZIP package. Includes the Python client source files.\nOne-liner: \npython3 -c "import requests; exec(requests.post(\'http://' + this.agentForm.server_host + ':' + this.agentForm.web_port + '/api/agent/bootstrap\', json={\'server_host\':\'' + this.agentForm.server_host + '\',\'server_port\':' + this.agentForm.server_port + ',\'web_port\':' + this.agentForm.web_port + '}).text)"'
       }
 
       if (this.agentForm.builder === 'go_loader') {
@@ -289,7 +289,7 @@ export default {
       try {
         const res = await fetch('/api/agent/build', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: {'Content-Type': 'application/json'},
           body: JSON.stringify(this.buildAgentPayload()),
         })
 
