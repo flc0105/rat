@@ -1,11 +1,10 @@
 <template>
   <el-dialog
-    :model-value="visible"
+    v-model="visible"
     :title="title"
     width="980px"
     top="8vh"
     class="fixed-dialog"
-    @update:model-value="$emit('update:visible', $event)"
   >
     <template v-if="displayMode === 'table'">
       <div class="terminal-json-scroll">
@@ -57,44 +56,176 @@
 export default {
   name: 'TerminalJsonDialog',
 
-  props: {
-    visible: {
-      type: Boolean,
-      default: false,
-    },
+  data() {
+    return {
+      visible: false,
+      title: 'JSON Viewer',
+      text: '',
+      displayMode: 'raw',
+      tableColumns: [],
+      tableRows: [],
+      flatRows: [],
+    }
+  },
 
-    title: {
-      type: String,
-      default: '',
-    },
-
-    displayMode: {
-      type: String,
-      default: 'raw',
-    },
-
-    tableRows: {
-      type: Array,
-      default: () => [],
-    },
-
-    tableColumns: {
-      type: Array,
-      default: () => [],
-    },
-
-    flatRows: {
-      type: Array,
-      default: () => [],
-    },
-
-    text: {
-      type: String,
-      default: '',
+  watch: {
+    visible(value) {
+      if (!value) {
+        this.reset()
+      }
     },
   },
 
-  emits: ['update:visible'],
+  methods: {
+    open(line) {
+      if (!line || !line.isJsonMessage) return
+
+      const jsonText = String(line.jsonText || '').trim()
+      const tableModel = this.tryBuildTerminalJsonTableModel(jsonText)
+      const flatModel = tableModel ? null : this.tryBuildTerminalJsonFlatModel(jsonText)
+
+      this.title = 'JSON Viewer'
+      this.text = jsonText
+
+      if (tableModel) {
+        this.displayMode = 'table'
+        this.tableColumns = tableModel.columns
+        this.tableRows = tableModel.rows
+        this.flatRows = []
+      } else if (flatModel) {
+        this.displayMode = 'flat'
+        this.tableColumns = []
+        this.tableRows = []
+        this.flatRows = flatModel
+      } else {
+        this.displayMode = 'raw'
+        this.tableColumns = []
+        this.tableRows = []
+        this.flatRows = []
+      }
+
+      this.visible = true
+    },
+
+    reset() {
+      this.title = 'JSON Viewer'
+      this.text = ''
+      this.displayMode = 'raw'
+      this.tableColumns = []
+      this.tableRows = []
+      this.flatRows = []
+    },
+
+    isTerminalJsonPlainObject(value) {
+      return !!value && typeof value === 'object' && !Array.isArray(value)
+    },
+
+    tryBuildTerminalJsonTableModel(jsonText) {
+      const raw = String(jsonText || '').trim()
+      if (!raw) return null
+
+      let parsed
+      try {
+        parsed = JSON.parse(raw)
+      } catch (e) {
+        return null
+      }
+
+      if (!Array.isArray(parsed) || !parsed.length) {
+        return null
+      }
+
+      if (!parsed.every(item => this.isTerminalJsonPlainObject(item))) {
+        return null
+      }
+
+      const firstKeys = Object.keys(parsed[0])
+      if (!firstKeys.length) {
+        return null
+      }
+
+      const sortedFirstKeys = [...firstKeys].sort()
+
+      const hasSameStructure = parsed.every((item) => {
+        const keys = Object.keys(item)
+        if (keys.length !== firstKeys.length) return false
+
+        const sortedKeys = [...keys].sort()
+        for (let i = 0; i < sortedFirstKeys.length; i += 1) {
+          if (sortedKeys[i] !== sortedFirstKeys[i]) return false
+        }
+
+        return true
+      })
+
+      if (!hasSameStructure) {
+        return null
+      }
+
+      return {
+        columns: firstKeys.map((key) => ({
+          prop: key,
+          label: key,
+        })),
+
+        rows: parsed.map((item) => {
+          const row = {}
+
+          firstKeys.forEach((key) => {
+            const value = item[key]
+
+            if (value === null || value === undefined) {
+              row[key] = ''
+            } else if (typeof value === 'object') {
+              row[key] = JSON.stringify(value)
+            } else {
+              row[key] = String(value)
+            }
+          })
+
+          return row
+        }),
+      }
+    },
+
+    tryBuildTerminalJsonFlatModel(jsonText) {
+      const raw = String(jsonText || '').trim()
+      if (!raw) return null
+
+      let parsed
+      try {
+        parsed = JSON.parse(raw)
+      } catch (e) {
+        return null
+      }
+
+      if (!this.isTerminalJsonPlainObject(parsed)) {
+        return null
+      }
+
+      return Object.keys(parsed).map((key) => ({
+        key,
+        label: key,
+        value: this.formatTerminalJsonFlatValue(parsed[key]),
+      }))
+    },
+
+    formatTerminalJsonFlatValue(value) {
+      if (value === null || value === undefined) {
+        return ''
+      }
+
+      if (typeof value === 'object') {
+        try {
+          return JSON.stringify(value)
+        } catch (e) {
+          return String(value)
+        }
+      }
+
+      return String(value)
+    },
+  },
 }
 </script>
 

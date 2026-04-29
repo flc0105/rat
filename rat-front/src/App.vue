@@ -87,11 +87,12 @@
   @set-active-task="setActiveTask"
 />
 
-                <TerminalOutput
-                    ref="terminalOutputRef"
-                    :lines="currentOutputLines"
-                    @action-click="handleTerminalActionClick"
-                />
+<TerminalOutput
+    ref="terminalOutputRef"
+    :lines="currentOutputLines"
+    @preview-artifact="previewArtifact"
+    @open-json="$refs.terminalJsonDialogRef?.open($event)"
+/>
               </div>
             </section>
           </div>
@@ -218,15 +219,7 @@
       @built="refreshAgentOutputsIfOpen"
   />
 
-  <TerminalJsonDialog
-      v-model:visible="terminalJsonDialogVisible"
-      :title="terminalJsonDialogTitle"
-      :display-mode="terminalJsonDisplayMode"
-      :table-rows="terminalJsonTableRows"
-      :table-columns="terminalJsonTableColumns"
-      :flat-rows="terminalJsonFlatRows"
-      :text="terminalJsonText"
-  />
+<TerminalJsonDialog ref="terminalJsonDialogRef" />
 
 <PreviewImageInfoDialog
     v-model:visible="previewImageInfoDialogVisible"

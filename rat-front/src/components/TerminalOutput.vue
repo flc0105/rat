@@ -21,7 +21,7 @@
               href="#"
               class="table-action-link-aux terminal-text"
               :class="{ 'terminal-action-link-spaced': actionIndex > 0 }"
-              @click.prevent.stop="$emit('action-click', actionItem)"
+              @click.prevent.stop="handleTerminalActionClick(actionItem)"
             >
               [ {{ actionItem.type === 'preview' ? 'Preview' : 'View JSON' }} ]
             </a>
@@ -35,50 +35,39 @@
           </div>
         </template>
 
-        <div
-          v-else
-          class="terminal-line"
-          :class="[
-            `line-${line.kind || 'default'}`,
-            {
-              'terminal-line-with-inline-action':
-                getTerminalInlineActionItems(lines, index).length > 0,
-            },
-          ]"
-        >
-          <div class="terminal-line-content">
-            <span
-              v-if="line.kind === 'command'"
-              class="terminal-prefix"
-            >
-              $
-            </span>
+       <div
+  v-else
+  class="terminal-line"
+  :class="`line-${line.kind || 'default'}`"
+>
+  <span
+    v-if="line.kind === 'command'"
+    class="terminal-prefix"
+  >
+    $
+  </span>
 
-            <span class="terminal-text">{{ line.text }}</span>
-          </div>
+  <span class="terminal-text">{{ line.text }}</span>
 
-          <div
-            v-if="getTerminalInlineActionItems(lines, index).length > 0"
-            class="terminal-line-inline-actions"
-          >
-            <a
-              v-for="(actionItem, actionIndex) in getTerminalInlineActionItems(lines, index)"
-              :key="actionItem.key"
-              href="#"
-              class="table-action-link-aux terminal-text"
-              :class="{ 'terminal-action-link-spaced': actionIndex > 0 }"
-              @click.prevent.stop="$emit('action-click', actionItem)"
-            >
-              [ {{ actionItem.type === 'preview' ? 'Preview' : 'JSON' }} ]
-            </a>
-          </div>
-        </div>
+  <a
+    v-for="(actionItem, actionIndex) in getTerminalInlineActionItems(lines, index)"
+    :key="actionItem.key"
+    href="#"
+    class="table-action-link-aux terminal-text"
+    :class="{ 'terminal-action-link-spaced': actionIndex > 0 }"
+    @click.prevent.stop="handleTerminalActionClick(actionItem)"
+  >
+    [ {{ actionItem.type === 'preview' ? 'Preview' : 'JSON' }} ]
+  </a>
+</div>
       </template>
     </template>
   </div>
 </template>
 
 <script>
+import { ElMessage } from 'element-plus'
+
 export default {
   name: 'TerminalOutput',
 
@@ -89,7 +78,7 @@ export default {
     },
   },
 
-  emits: ['action-click'],
+  emits: ['preview-artifact', 'open-json'],
 
   methods: {
     isFileReadyLine(line) {
@@ -222,32 +211,54 @@ export default {
       return result
     },
 
-    scrollToBottom() {
-  this.$nextTick(() => {
-    const el = this.$refs.terminalOutputRef
-    const isMobileLayout =
-      typeof window !== 'undefined' &&
-      window.matchMedia &&
-      window.matchMedia('(max-width: 960px)').matches
+    handleTerminalActionClick(actionItem) {
+      if (!actionItem || !actionItem.line) return
 
-    if (isMobileLayout) {
-      const appScrollRoot = document.getElementById('app')
-      const scrollRoot = appScrollRoot || document.scrollingElement || document.documentElement
-
-      if (scrollRoot) {
-        scrollRoot.scrollTop = scrollRoot.scrollHeight
-      } else if (typeof window !== 'undefined') {
-        window.scrollTo(0, document.documentElement.scrollHeight)
+      if (actionItem.type === 'preview') {
+        this.previewTerminalArtifact(actionItem.line)
+        return
       }
 
-      return
-    }
+      if (actionItem.type === 'json') {
+        this.$emit('open-json', actionItem.line)
+      }
+    },
 
-    if (el) {
-      el.scrollTop = el.scrollHeight
-    }
-  })
-},
+    previewTerminalArtifact(line) {
+      if (!line || !line.artifactInfo || !line.artifactInfo.artifact_id) {
+        ElMessage.warning('No preview available')
+        return
+      }
+
+      this.$emit('preview-artifact', line.artifactInfo)
+    },
+
+    scrollToBottom() {
+      this.$nextTick(() => {
+        const el = this.$refs.terminalOutputRef
+        const isMobileLayout =
+          typeof window !== 'undefined' &&
+          window.matchMedia &&
+          window.matchMedia('(max-width: 960px)').matches
+
+        if (isMobileLayout) {
+          const appScrollRoot = document.getElementById('app')
+          const scrollRoot = appScrollRoot || document.scrollingElement || document.documentElement
+
+          if (scrollRoot) {
+            scrollRoot.scrollTop = scrollRoot.scrollHeight
+          } else if (typeof window !== 'undefined') {
+            window.scrollTo(0, document.documentElement.scrollHeight)
+          }
+
+          return
+        }
+
+        if (el) {
+          el.scrollTop = el.scrollHeight
+        }
+      })
+    },
 
     // scrollToBottom() {
     //   this.$nextTick(() => {
@@ -262,7 +273,7 @@ export default {
 </script>
 
 <style scoped>
-/* 终端输出滚动容器 */
+/* ========== 终端输出区 ========== */
 .terminal-output {
   flex: 1;
   min-height: 0;
@@ -326,8 +337,9 @@ export default {
   padding: 1px 0;
 }
 
+
 .terminal-action-link-spaced {
-  margin-left: 12px;
+  margin-left: 10px;
 }
 
 .terminal-prefix {
@@ -358,19 +370,5 @@ export default {
 
 .line-default .terminal-text {
   color: var(--terminal-text);
-}
-
-@media (max-width: 960px) {
-  .terminal-output {
-    flex: 0 0 auto;
-    min-height: 340px;
-    //min-height: max(340px, calc(100dvh - 260px));
-    overflow: visible;
-    //padding-bottom: calc(28px + env(safe-area-inset-bottom, 0px) + 88px);
-  }
-
-  .terminal-empty {
-    min-height: 340px;
-  }
 }
 </style>

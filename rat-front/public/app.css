@@ -458,98 +458,98 @@ body {
   background: #1d4ed8;
 }
 
-.terminal-output {
-  flex: 1;
-  min-height: 0;
-  overflow: auto;
-  padding: 18px 18px 22px;
-  color: var(--terminal-text);
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-  font-size: 13px;
-  line-height: 1.7;
-  scrollbar-width: thin;
-  scrollbar-color: rgba(148, 163, 184, 0.35) rgba(15, 23, 42, 0.4);
-}
+/*.terminal-output {*/
+/*  flex: 1;*/
+/*  min-height: 0;*/
+/*  overflow: auto;*/
+/*  padding: 18px 18px 22px;*/
+/*  color: var(--terminal-text);*/
+/*  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;*/
+/*  font-size: 13px;*/
+/*  line-height: 1.7;*/
+/*  scrollbar-width: thin;*/
+/*  scrollbar-color: rgba(148, 163, 184, 0.35) rgba(15, 23, 42, 0.4);*/
+/*}*/
 
-.terminal-output::-webkit-scrollbar {
-  width: 10px;
-  height: 10px;
-}
+/*.terminal-output::-webkit-scrollbar {*/
+/*  width: 10px;*/
+/*  height: 10px;*/
+/*}*/
 
-.terminal-output::-webkit-scrollbar-track {
-  background: rgba(15, 23, 42, 0.45);
-}
+/*.terminal-output::-webkit-scrollbar-track {*/
+/*  background: rgba(15, 23, 42, 0.45);*/
+/*}*/
 
-.terminal-output::-webkit-scrollbar-thumb {
-  background: rgba(148, 163, 184, 0.32);
-  border-radius: 999px;
-  border: 2px solid rgba(15, 23, 42, 0.45);
-}
+/*.terminal-output::-webkit-scrollbar-thumb {*/
+/*  background: rgba(148, 163, 184, 0.32);*/
+/*  border-radius: 999px;*/
+/*  border: 2px solid rgba(15, 23, 42, 0.45);*/
+/*}*/
 
-.terminal-output::-webkit-scrollbar-thumb:hover {
-  background: rgba(148, 163, 184, 0.48);
-}
+/*.terminal-output::-webkit-scrollbar-thumb:hover {*/
+/*  background: rgba(148, 163, 184, 0.48);*/
+/*}*/
 
-.terminal-empty {
-  min-height: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-direction: column;
-  color: #8ea2c0;
-  text-align: center;
-}
+/*.terminal-empty {*/
+/*  min-height: 100%;*/
+/*  display: flex;*/
+/*  align-items: center;*/
+/*  justify-content: center;*/
+/*  flex-direction: column;*/
+/*  color: #8ea2c0;*/
+/*  text-align: center;*/
+/*}*/
 
-.terminal-empty-title {
-  font-size: 15px;
-  font-weight: 700;
-  color: #d7e2f2;
-}
+/*.terminal-empty-title {*/
+/*  font-size: 15px;*/
+/*  font-weight: 700;*/
+/*  color: #d7e2f2;*/
+/*}*/
 
-.terminal-empty-text {
-  margin-top: 8px;
-  max-width: 420px;
-  line-height: 1.7;
-}
+/*.terminal-empty-text {*/
+/*  margin-top: 8px;*/
+/*  max-width: 420px;*/
+/*  line-height: 1.7;*/
+/*}*/
 
-.terminal-line {
-  display: flex;
-  align-items: flex-start;
-  gap: 8px;
-  white-space: pre-wrap;
-  word-break: break-word;
-  padding: 1px 0;
-}
+/*.terminal-line {*/
+/*  display: flex;*/
+/*  align-items: flex-start;*/
+/*  gap: 8px;*/
+/*  white-space: pre-wrap;*/
+/*  word-break: break-word;*/
+/*  padding: 1px 0;*/
+/*}*/
 
-.terminal-prefix {
-  color: #60a5fa;
-  font-weight: 700;
-  flex-shrink: 0;
-}
+/*.terminal-prefix {*/
+/*  color: #60a5fa;*/
+/*  font-weight: 700;*/
+/*  flex-shrink: 0;*/
+/*}*/
 
-.terminal-text {
-  min-width: 0;
-}
+/*.terminal-text {*/
+/*  min-width: 0;*/
+/*}*/
 
-.line-command .terminal-text {
-  color: #bfdbfe;
-}
+/*.line-command .terminal-text {*/
+/*  color: #bfdbfe;*/
+/*}*/
 
-.line-success .terminal-text {
-  color: #86efac;
-}
+/*.line-success .terminal-text {*/
+/*  color: #86efac;*/
+/*}*/
 
-.line-error .terminal-text {
-  color: #fda4af;
-}
+/*.line-error .terminal-text {*/
+/*  color: #fda4af;*/
+/*}*/
 
-.line-info .terminal-text {
-  color: #fcd34d;
-}
+/*.line-info .terminal-text {*/
+/*  color: #fcd34d;*/
+/*}*/
 
-.line-default .terminal-text {
-  color: var(--terminal-text);
-}
+/*.line-default .terminal-text {*/
+/*  color: var(--terminal-text);*/
+/*}*/
 
 /* ========== 通用空状态与基础工具类 ========== */
 .main-empty {
