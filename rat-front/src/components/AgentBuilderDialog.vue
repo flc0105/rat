@@ -141,7 +141,7 @@ export default {
       }
 
       if (this.agentForm.builder === 'bundle') {
-        return 'Source ZIP package. Includes the Python client source files.\nOne-liner: \npython3 -c "import requests; exec(requests.post(\'http://' + this.agentForm.server_host + ':' + this.agentForm.web_port + '/api/agent/bootstrap\', json={\'server_host\':\'' + this.agentForm.server_host + '\',\'server_port\':' + this.agentForm.server_port + ',\'web_port\':' + this.agentForm.web_port + '}).text)"'
+        return 'Source ZIP package. Includes the Python client source files.\nOne-liner: python3 -c "import requests; exec(requests.post(\'http://' + this.agentForm.server_host + ':' + this.agentForm.web_port + '/api/agent/bootstrap\', json={\'server_host\':\'' + this.agentForm.server_host + '\',\'server_port\':' + this.agentForm.server_port + ',\'web_port\':' + this.agentForm.web_port + '}).text)"'
       }
 
       if (this.agentForm.builder === 'go_loader') {

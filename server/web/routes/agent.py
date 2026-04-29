@@ -117,9 +117,6 @@ def create_agent_blueprint(server_instance):
 
         return responder.json_endpoint(_execute)
 
-
-
-
     # temp
     @blueprint.post('/api/agent/bootstrap')
     @allow_anonymous
@@ -209,7 +206,7 @@ def build_bundle():
         "target_os": "bundle",
         "builder": "bundle",
         "target_arch": "",
-        "source": "loader",
+        "source": "bootstrap",
     }}
     log(f"build request: {{url}}")
     r = requests.post(url, json=payload, timeout=300)
