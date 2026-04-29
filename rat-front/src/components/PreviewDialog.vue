@@ -182,6 +182,21 @@ import 'monaco-editor/esm/vs/language/json/monaco.contribution'
 import 'monaco-editor/esm/vs/language/css/monaco.contribution'
 import 'monaco-editor/esm/vs/language/html/monaco.contribution'
 import 'monaco-editor/esm/vs/language/typescript/monaco.contribution'
+
+// Monaco CDN 版 editor.main 默认包含这些 editor contribution。
+// npm ESM 拆包后要显式引入，否则右键菜单等编辑器功能可能缺失。
+import 'monaco-editor/esm/vs/editor/contrib/contextmenu/browser/contextmenu'
+import 'monaco-editor/esm/vs/editor/contrib/clipboard/browser/clipboard'
+import 'monaco-editor/esm/vs/editor/contrib/find/browser/findController'
+import 'monaco-editor/esm/vs/editor/contrib/folding/browser/folding'
+import 'monaco-editor/esm/vs/editor/contrib/wordHighlighter/browser/wordHighlighter'
+import 'monaco-editor/esm/vs/editor/contrib/bracketMatching/browser/bracketMatching'
+import 'monaco-editor/esm/vs/editor/contrib/comment/browser/comment'
+import 'monaco-editor/esm/vs/editor/contrib/format/browser/formatActions'
+import 'monaco-editor/esm/vs/editor/contrib/hover/browser/hover'
+import 'monaco-editor/esm/vs/editor/contrib/links/browser/links'
+import 'monaco-editor/esm/vs/editor/contrib/suggest/browser/suggestController'
+
 import 'monaco-editor/min/vs/editor/editor.main.css'
 import { formatBytes } from '../utils/formatters.js'
 import PreviewImageInfoDialog from './PreviewImageInfoDialog.vue'
@@ -384,7 +399,10 @@ export default {
               editor.setValue(content)
             }
 
-            editor.updateOptions({ readOnly })
+            editor.updateOptions({
+              readOnly,
+              contextmenu: true,
+            })
           } else {
             // 不调用 dispose：避免 Monaco 在当前环境下销毁卡死。
             setPreviewMonacoEditor(this, null)
@@ -394,6 +412,7 @@ export default {
               language: lang,
               theme: 'vs',
               readOnly,
+              contextmenu: true,
               automaticLayout: true,
               fontSize: 13,
               fontFamily: 'Monaco, Menlo, "Ubuntu Mono", Consolas, monospace',
@@ -1255,8 +1274,8 @@ print(value)
 
 .monaco-editor-container {
   width: 100%;
-  height: 65vh;
-  min-height: 400px;
+  height: 74vh;
+  min-height: 520px;
   border: 1px solid var(--line);
   border-radius: 12px;
   overflow: hidden;
@@ -1274,6 +1293,9 @@ print(value)
   .preview-toolbar {
     flex-direction: column;
     align-items: flex-start;
+    flex: 0 0 auto;
+    margin-bottom: 10px;
+    padding-bottom: 10px;
   }
 
   .preview-toolbar-left,
@@ -1283,6 +1305,56 @@ print(value)
 
   .preview-info-tags {
     justify-content: flex-start;
+  }
+
+  .preview-wrap {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    height: 100%;
+    overflow: hidden;
+  }
+
+  .image-preview-box {
+    flex: 1 1 auto;
+    min-height: 0;
+    max-height: none;
+  }
+
+  .monaco-editor-container {
+    flex: 1 1 auto;
+    height: auto;
+    min-height: 0;
+  }
+}
+</style>
+
+<style>
+@media (max-width: 768px), (max-height: 720px) {
+  .preview-dialog.el-dialog {
+    width: 100vw !important;
+    max-width: 100vw !important;
+    height: 100dvh !important;
+    max-height: 100dvh !important;
+    margin: 0 !important;
+    top: 0 !important;
+    border-radius: 0 !important;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .preview-dialog .el-dialog__header {
+    flex: 0 0 auto;
+    padding: 12px 14px 8px;
+  }
+
+  .preview-dialog .el-dialog__body {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: hidden;
+    padding: 10px 12px 12px;
+    display: flex;
+    flex-direction: column;
   }
 }
 </style>
