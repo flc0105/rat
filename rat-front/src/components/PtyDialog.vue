@@ -762,7 +762,7 @@ export default {
 .pty-terminal-host :deep(.xterm-viewport) {
   overflow-y: auto !important;
   background: #000000 !important;
-  scrollbar-gutter: auto;
+  scrollbar-gutter: stable;
 }
 
 .pty-terminal-host :deep(.xterm-viewport::-webkit-scrollbar) {
