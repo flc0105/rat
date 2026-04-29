@@ -51,21 +51,19 @@
             <section class="terminal-panel">
               <div class="terminal-frame">
                 <TerminalToolbar
-                    :selected-id="selectedId"
-                    @open-remote-files="openRemoteFilesDialog"
-                    @open-artifacts="openArtifactDialog"
-                    @open-info="openConnectionInfoDialog"
-                    @open-jobs="openBackgroundJobsDialog"
-                    @open-scripts="openScriptLibraryDialog"
-                    @open-agents="openAgentOutputsDialog"
-                    @open-history="openCommandHistoryDialog"
-                    @open-pty="openPtyDialog"
-                    @open-processes="openProcessDialog"
-                    @control-action="handleControlActionCommand"
-                    @disconnect="killConnection"
-                    @clear="clearOutput"
-                    @bottom="scrollToBottom"
-                />
+    :selected-id="selectedId"
+    @open-remote-files="openRemoteFilesDialog"
+    @open-artifacts="openArtifactDialog"
+    @open-info="openConnectionInfoDialog"
+    @open-jobs="openBackgroundJobsDialog"
+    @open-scripts="openScriptLibraryDialog"
+    @open-agents="openAgentOutputsDialog"
+    @open-history="openCommandHistoryDialog"
+    @open-pty="openPtyDialog"
+    @open-processes="openProcessDialog"
+    @clear="clearOutput"
+    @bottom="scrollToBottom"
+/>
 
 <CommandInputBar
   ref="commandInputBarRef"

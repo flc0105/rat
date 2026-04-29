@@ -975,7 +975,7 @@ Below is a reorganized roadmap based on current priorities and project direction
 - [ ] Fix background jobs currently depending on HTTP so they can also work correctly in CLI mode
 - [ ] Fix stream cancellation for `exec script` mode so the stream actually closes when cancelled
 - [ ] Fix alias resolution to match by name instead of argument count, and support reusing the same variable multiple times
-- [ ] Fix occasional `client is busy` errors during process listing and process kill operations
+- [x] Fix occasional `client is busy` errors during process listing and process kill operations
 
 ### Shell, execution, and terminal improvements
 
@@ -985,20 +985,18 @@ Below is a reorganized roadmap based on current priorities and project direction
 - [ ] Add reverse shell support
 - [ ] Add multi-device batch execution
 - [ ] Support writing command output to files, similar to shell-style redirection
-- [ ] Improve terminal JSON detection so `[JSON]` is only added when the full payload is JSON, not when a partial fragment appears
 - [ ] Add a normal JSON / UI toggle inside the terminal JSON dialog
 - [ ] Make `read` support built-in commands
 
 ### Jobs and background execution
 
 - [ ] Add detached / process-based jobs
-- [ ] Add `job execution mode=subprocess`
 - [ ] Persist jobs instead of keeping job runtime state purely in memory
 
 ### Device and connection model
 
-- [ ] Distinguish **session ID** and **client/machine ID** more clearly
-- [ ] Introduce a `machine_id` derived from stable host traits (for example hostname + MAC-related traits) to better correlate repeat connections from the same machine
+- [x] Distinguish **session ID** and **client/machine ID** more clearly
+- [x] Introduce a `machine_id` derived from stable host traits (for example hostname + MAC-related traits) to better correlate repeat connections from the same machine
 - [ ] Add hide/remove connection support in the UI
 
 ### Process, files, and visibility improvements

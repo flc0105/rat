@@ -222,59 +222,59 @@ body {
   box-shadow: 0 18px 34px rgba(15, 23, 42, 0.18);
 }
 
-.terminal-topbar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 12px 15px;
-  border-bottom: 1px solid var(--terminal-line);
-  background: rgba(255, 255, 255, 0.03);
-  flex-shrink: 0;
-}
+/*.terminal-topbar {*/
+/*  display: flex;*/
+/*  align-items: center;*/
+/*  justify-content: space-between;*/
+/*  gap: 12px;*/
+/*  padding: 12px 15px;*/
+/*  border-bottom: 1px solid var(--terminal-line);*/
+/*  background: rgba(255, 255, 255, 0.03);*/
+/*  flex-shrink: 0;*/
+/*}*/
 
-.terminal-topbar-left {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  min-width: 0;
-  flex-shrink: 0;
-}
+/*.terminal-topbar-left {*/
+/*  display: flex;*/
+/*  align-items: center;*/
+/*  gap: 10px;*/
+/*  min-width: 0;*/
+/*  flex-shrink: 0;*/
+/*}*/
 
-.dot {
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-}
+/*.dot {*/
+/*  width: 10px;*/
+/*  height: 10px;*/
+/*  border-radius: 50%;*/
+/*}*/
 
-.dot-red {
-  background: #fb7185;
-}
+/*.dot-red {*/
+/*  background: #fb7185;*/
+/*}*/
 
-.dot-yellow {
-  background: #fbbf24;
-}
+/*.dot-yellow {*/
+/*  background: #fbbf24;*/
+/*}*/
 
-.dot-green {
-  background: #34d399;
-}
+/*.dot-green {*/
+/*  background: #34d399;*/
+/*}*/
 
-.terminal-title {
-  margin-left: 4px;
-  color: #e2e8f0;
-  font-size: 13px;
-  font-weight: 650;
-  white-space: nowrap;
-}
+/*.terminal-title {*/
+/*  margin-left: 4px;*/
+/*  color: #e2e8f0;*/
+/*  font-size: 13px;*/
+/*  font-weight: 650;*/
+/*  white-space: nowrap;*/
+/*}*/
 
-.terminal-tools {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 8px;
-  flex-wrap: wrap;
-  min-width: 0;
-}
+/*.terminal-tools {*/
+/*  display: flex;*/
+/*  align-items: center;*/
+/*  justify-content: flex-end;*/
+/*  gap: 8px;*/
+/*  flex-wrap: wrap;*/
+/*  min-width: 0;*/
+/*}*/
 
 .tool-separator {
   width: 1px;
@@ -283,30 +283,30 @@ body {
   flex: 0 0 auto;
 }
 
-.tool-btn.el-button {
-  flex: 0 0 auto;
-  min-height: 30px;
-  height: 30px;
-  padding-inline: 10px;
-  font-size: 12px;
-  border-radius: 10px;
-  background: rgba(255, 255, 255, 0.04);
-  border-color: rgba(255, 255, 255, 0.08);
-  color: #dbe4f3;
-  margin: 0;
-}
+/*.tool-btn.el-button {*/
+/*  flex: 0 0 auto;*/
+/*  min-height: 30px;*/
+/*  height: 30px;*/
+/*  padding-inline: 10px;*/
+/*  font-size: 12px;*/
+/*  border-radius: 10px;*/
+/*  background: rgba(255, 255, 255, 0.04);*/
+/*  border-color: rgba(255, 255, 255, 0.08);*/
+/*  color: #dbe4f3;*/
+/*  margin: 0;*/
+/*}*/
 
-.tool-btn.tool-btn-accent.el-button {
-  background: rgba(59, 130, 246, 0.16);
-  border-color: rgba(96, 165, 250, 0.22);
-  color: #dbeafe;
-}
+/*.tool-btn.tool-btn-accent.el-button {*/
+/*  background: rgba(59, 130, 246, 0.16);*/
+/*  border-color: rgba(96, 165, 250, 0.22);*/
+/*  color: #dbeafe;*/
+/*}*/
 
-.tool-btn.tool-btn-danger.el-button {
-  background: rgba(220, 38, 38, 0.12);
-  border-color: rgba(248, 113, 113, 0.18);
-  color: #fecaca;
-}
+/*.tool-btn.tool-btn-danger.el-button {*/
+/*  background: rgba(220, 38, 38, 0.12);*/
+/*  border-color: rgba(248, 113, 113, 0.18);*/
+/*  color: #fecaca;*/
+/*}*/
 
 .command-row {
   display: block;
@@ -1950,21 +1950,21 @@ body {
 /*}*/
 
 
-@media (max-width: 1200px) {
-  .terminal-topbar {
-    align-items: flex-start;
-    flex-direction: column;
-  }
+/*@media (max-width: 1200px) {*/
+/*  .terminal-topbar {*/
+/*    align-items: flex-start;*/
+/*    flex-direction: column;*/
+/*  }*/
 
-  .terminal-topbar-left,
-  .terminal-tools {
-    width: 100%;
-  }
+/*  .terminal-topbar-left,*/
+/*  .terminal-tools {*/
+/*    width: 100%;*/
+/*  }*/
 
-  .terminal-tools {
-    justify-content: flex-start;
-  }
-}
+/*  .terminal-tools {*/
+/*    justify-content: flex-start;*/
+/*  }*/
+/*}*/
 @media (max-width: 960px) {
   html,
   body {
@@ -2349,20 +2349,20 @@ body {
     font-size: 20px;
   }
 
-  .terminal-tools {
-    gap: 6px;
-  }
+  /*.terminal-tools {*/
+  /*  gap: 6px;*/
+  /*}*/
 
   .tool-separator {
     display: none;
   }
 
-  .tool-btn.el-button {
-    height: 30px;
-    min-height: 30px;
-    padding-inline: 10px;
-    font-size: 12px;
-  }
+  /*.tool-btn.el-button {*/
+  /*  height: 30px;*/
+  /*  min-height: 30px;*/
+  /*  padding-inline: 10px;*/
+  /*  font-size: 12px;*/
+  /*}*/
 
   /*.terminal-output {*/
   /*  min-height: 340px;*/

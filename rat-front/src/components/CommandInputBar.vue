@@ -593,7 +593,8 @@ export default {
 
   .run-button {
     width: 100%;
-    height: 44px;
+    height: 38px;
+    /*height: 44px;*/
   }
 
   .run-button:not(.cancel-button) {
