@@ -1,83 +1,12 @@
 export default {
     data() {
-    return {
-        outputs: {},
-    }
+        return {
+            outputs: {},
+        }
     },
 
-
     methods: {
-        // isFileReadyLine(line) {
-        //     const text = (line?.text || '')
-        //     return text.startsWith('[File Ready]')
-        // },
-        //
-        // isCommandFinishedLine(line) {
-        //     const text = (line?.text || '')
-        //     return text.startsWith('[Command finished]') || text.startsWith('[命令结束]')
-        // },
-        //
-        // getTerminalInlineActionItems(lines, index) {
-        //     const line = lines[index]
-        //     if (!line) return []
-        //
-        //     if (!this.isFileReadyLine(line)) return []
-        //
-        //     const groupItems = this.getTerminalCommandGroupActionItems(lines, index) || []
-        //     const usedKeysBefore = this.getUsedInlineActionKeysBeforeLine(lines, index)
-        //
-        //     const previewItem = groupItems.find(item => {
-        //         return item.type === 'preview' && !usedKeysBefore.has(item.key)
-        //     })
-        //
-        //     return previewItem ? [previewItem] : []
-        // },
-        //
-        // getTerminalTailActionItems(lines, index) {
-        //     const line = lines[index]
-        //     if (!line || !this.isCommandFinishedLine(line)) return []
-        //
-        //     const groupItems = this.getTerminalCommandGroupActionItems(lines, index) || []
-        //     const usedKeysUpToCurrent = this.getUsedInlineActionKeysUpToLine(lines, index)
-        //
-        //     return groupItems.filter(item => !usedKeysUpToCurrent.has(item.key))
-        // },
 
-        // getUsedInlineActionKeysBeforeLine(lines, endIndexExclusive) {
-        //     const used = new Set()
-        //
-        //     for (let i = 0; i < endIndexExclusive; i += 1) {
-        //         const line = lines[i]
-        //         if (!this.isFileReadyLine(line)) continue
-        //
-        //         const groupItems = this.getTerminalCommandGroupActionItems(lines, i) || []
-        //         const previewItem = groupItems.find(item => item.type === 'preview' && !used.has(item.key))
-        //
-        //         if (previewItem) {
-        //             used.add(previewItem.key)
-        //         }
-        //     }
-        //
-        //     return used
-        // },
-        //
-        // getUsedInlineActionKeysUpToLine(lines, endIndexInclusive) {
-        //     const used = new Set()
-        //
-        //     for (let i = 0; i <= endIndexInclusive; i += 1) {
-        //         const line = lines[i]
-        //         if (!this.isFileReadyLine(line)) continue
-        //
-        //         const groupItems = this.getTerminalCommandGroupActionItems(lines, i) || []
-        //         const previewItem = groupItems.find(item => item.type === 'preview' && !used.has(item.key))
-        //
-        //         if (previewItem) {
-        //             used.add(previewItem.key)
-        //         }
-        //     }
-        //
-        //     return used
-        // },
 
         isTerminalJsonText(text) {
             const raw = String(text ?? '').trim();
@@ -203,158 +132,6 @@ export default {
             return line;
         },
 
-        // isTerminalJsonPlainObject(value) {
-        //     return !!value && typeof value === 'object' && !Array.isArray(value);
-        // },
-        //
-        // tryBuildTerminalJsonTableModel(jsonText) {
-        //     const raw = String(jsonText || '').trim();
-        //     if (!raw) return null;
-        //
-        //     let parsed;
-        //     try {
-        //         parsed = JSON.parse(raw);
-        //     } catch (e) {
-        //         return null;
-        //     }
-        //
-        //     if (!Array.isArray(parsed) || !parsed.length) {
-        //         return null;
-        //     }
-        //
-        //     if (!parsed.every(item => this.isTerminalJsonPlainObject(item))) {
-        //         return null;
-        //     }
-        //
-        //     const firstKeys = Object.keys(parsed[0]);
-        //     if (!firstKeys.length) {
-        //         return null;
-        //     }
-        //
-        //     const sortedFirstKeys = [...firstKeys].sort();
-        //
-        //     const hasSameStructure = parsed.every((item) => {
-        //         const keys = Object.keys(item);
-        //         if (keys.length !== firstKeys.length) return false;
-        //
-        //         const sortedKeys = [...keys].sort();
-        //         for (let i = 0; i < sortedFirstKeys.length; i++) {
-        //             if (sortedKeys[i] !== sortedFirstKeys[i]) return false;
-        //         }
-        //         return true;
-        //     });
-        //
-        //     if (!hasSameStructure) {
-        //         return null;
-        //     }
-        //
-        //     return {
-        //         columns: firstKeys.map((key) => ({
-        //             prop: key,
-        //             label: key
-        //         })),
-        //         rows: parsed.map((item) => {
-        //             const row = {};
-        //             firstKeys.forEach((key) => {
-        //                 const value = item[key];
-        //                 if (value === null || value === undefined) {
-        //                     row[key] = '';
-        //                 } else if (typeof value === 'object') {
-        //                     row[key] = JSON.stringify(value);
-        //                 } else {
-        //                     row[key] = String(value);
-        //                 }
-        //             });
-        //             return row;
-        //         })
-        //     };
-        // },
-        //
-        // tryBuildTerminalJsonFlatModel(jsonText) {
-        //     const raw = String(jsonText || '').trim();
-        //     if (!raw) return null;
-        //
-        //     let parsed;
-        //     try {
-        //         parsed = JSON.parse(raw);
-        //     } catch (e) {
-        //         return null;
-        //     }
-        //
-        //     if (!this.isTerminalJsonPlainObject(parsed)) {
-        //         return null;
-        //     }
-        //
-        //     const formatValue = (value) => {
-        //         if (value === null || value === undefined) {
-        //             return '';
-        //         }
-        //         if (typeof value === 'object') {
-        //             try {
-        //                 return JSON.stringify(value);
-        //             } catch (e) {
-        //                 return String(value);
-        //             }
-        //         }
-        //         return String(value);
-        //     };
-        //
-        //     return Object.keys(parsed).map((key) => ({
-        //         key,
-        //         label: key,
-        //         value: formatValue(parsed[key]),
-        //     }));
-        // },
-
-        // openTerminalJsonDialog(line) {
-        //     if (!line || !line.isJsonMessage) return;
-        //
-        //     const jsonText = String(line.jsonText || '').trim();
-        //     const tableModel = this.tryBuildTerminalJsonTableModel(jsonText);
-        //     const flatModel = tableModel ? null : this.tryBuildTerminalJsonFlatModel(jsonText);
-        //
-        //     this.terminalJsonDialogTitle = 'JSON Viewer';
-        //     this.terminalJsonText = jsonText;
-        //
-        //     if (tableModel) {
-        //         this.terminalJsonDisplayMode = 'table';
-        //         this.terminalJsonTableColumns = tableModel.columns;
-        //         this.terminalJsonTableRows = tableModel.rows;
-        //         this.terminalJsonFlatRows = [];
-        //     } else if (flatModel) {
-        //         this.terminalJsonDisplayMode = 'flat';
-        //         this.terminalJsonTableColumns = [];
-        //         this.terminalJsonTableRows = [];
-        //         this.terminalJsonFlatRows = flatModel;
-        //     } else {
-        //         this.terminalJsonDisplayMode = 'raw';
-        //         this.terminalJsonTableColumns = [];
-        //         this.terminalJsonTableRows = [];
-        //         this.terminalJsonFlatRows = [];
-        //     }
-        //
-        //     this.terminalJsonDialogVisible = true;
-        // },
-        //
-        // previewTerminalArtifact(line) {
-        //     if (!line || !line.artifactInfo || !line.artifactInfo.artifact_id) {
-        //         ElementPlus.ElMessage.warning('No preview available');
-        //         return;
-        //     }
-        //
-        //     this.previewArtifact(line.artifactInfo);
-        // },
-
-        // getTerminalCommandGroupStartIndex(lines, endIndex) {
-        //     const safeLines = Array.isArray(lines) ? lines : [];
-        //     for (let i = endIndex; i >= 0; i--) {
-        //         if (safeLines[i] && safeLines[i].kind === 'command') {
-        //             return i;
-        //         }
-        //     }
-        //     return 0;
-        // },
-
         getTerminalCommandGroupStartIndex(lines, endIndex) {
             const safeLines = Array.isArray(lines) ? lines : [];
             for (let i = endIndex; i >= 0; i--) {
@@ -371,54 +148,6 @@ export default {
             }
             return 0;
         },
-
-        // getTerminalCommandGroupLines(lines, endIndex) {
-        //     const safeLines = Array.isArray(lines) ? lines : [];
-        //     if (!safeLines.length || endIndex < 0) return [];
-        //
-        //     const startIndex = this.getTerminalCommandGroupStartIndex(safeLines, endIndex);
-        //     return safeLines.slice(startIndex, endIndex + 1);
-        // },
-
-        // getTerminalCommandGroupActionItems(lines, endIndex) {
-        //     const groupLines = this.getTerminalCommandGroupLines(lines, endIndex);
-        //     const result = [];
-        //
-        //     groupLines.forEach((item, itemIndex) => {
-        //         if (!item) return;
-        //
-        //         if (item.isArtifactMessage && item.artifactInfo && item.artifactInfo.artifact_id) {
-        //             result.push({
-        //                 type: 'preview',
-        //                 key: `preview:${item.artifactInfo.artifact_id}:${itemIndex}`,
-        //                 line: item
-        //             });
-        //         }
-        //
-        //         if (item.isJsonMessage) {
-        //             result.push({
-        //                 type: 'json',
-        //                 key: `json:${endIndex}:${itemIndex}`,
-        //                 line: item
-        //             });
-        //         }
-        //     });
-        //
-        //     return result;
-        // },
-
-        // handleTerminalActionClick(actionItem) {
-        //     if (!actionItem || !actionItem.line) return;
-        //
-        //     if (actionItem.type === 'preview') {
-        //         this.previewTerminalArtifact(actionItem.line);
-        //         return;
-        //     }
-        //
-        //     if (actionItem.type === 'json') {
-        //         this.openTerminalJsonDialog(actionItem.line);
-        //     }
-        // },
 
         ensureOutputBucket(clientId) {
             if (!clientId) return;
@@ -541,17 +270,4 @@ export default {
             return this.outputs[this.selectedId] || [];
         },
     },
-
-    // watch: {
-    //     terminalJsonDialogVisible(val) {
-    //         if (!val) {
-    //             this.terminalJsonDialogTitle = 'JSON Viewer';
-    //             this.terminalJsonText = '';
-    //             this.terminalJsonDisplayMode = 'raw';
-    //             this.terminalJsonTableColumns = [];
-    //             this.terminalJsonTableRows = [];
-    //             this.terminalJsonFlatRows = [];
-    //         }
-    //     },
-    // },
 }

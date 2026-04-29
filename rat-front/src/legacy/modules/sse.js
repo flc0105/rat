@@ -60,8 +60,6 @@ export default {
                 });
             });
 
-            //TODO 这里会让dataList重新渲染
-
             es.addEventListener('connection_heartbeat', (event) => {
                 const payload = JSON.parse(event.data);
                 const conn = payload.connection;
@@ -123,10 +121,10 @@ export default {
                     }
                 }
 
-               this.reloadCommandCandidatesFromRuntime?.({
-    reset: true,
-    silent: true,
-});
+                this.reloadCommandCandidatesFromRuntime?.({
+                    reset: true,
+                    silent: true,
+                });
                 await this.loadConnections();
             });
 

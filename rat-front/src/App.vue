@@ -65,34 +65,22 @@
                     @bottom="scrollToBottom"
                 />
 
-<!--                <CommandInputBar-->
-<!--                    ref="commandInputBarRef"-->
-<!--                    v-model="commandText"-->
-<!--                    :sending="sending"-->
-<!--                    :has-running-web-task="hasRunningWebTask"-->
-<!--                    :current-task-is-cancelling="currentTaskIsCancelling"-->
-<!--                    :command-candidates="commandCandidates"-->
-<!--                    :current-connection="currentConnection"-->
-<!--                    @run="sendCommand"-->
-<!--                    @cancel="cancelCurrentTask"-->
-<!--                />-->
-
                 <CommandInputBar
-  ref="commandInputBarRef"
-  :selected-id="selectedId"
-  :current-connection="currentConnection"
-  :current-active-task-id="currentActiveTaskId"
-  :tab-id="tabId"
-  @append-output="appendOutput"
-  @set-active-task="setActiveTask"
-/>
+                    ref="commandInputBarRef"
+                    :selected-id="selectedId"
+                    :current-connection="currentConnection"
+                    :current-active-task-id="currentActiveTaskId"
+                    :tab-id="tabId"
+                    @append-output="appendOutput"
+                    @set-active-task="setActiveTask"
+                />
 
-<TerminalOutput
-    ref="terminalOutputRef"
-    :lines="currentOutputLines"
-    @preview-artifact="previewArtifact"
-    @open-json="$refs.terminalJsonDialogRef?.open($event)"
-/>
+                <TerminalOutput
+                    ref="terminalOutputRef"
+                    :lines="currentOutputLines"
+                    @preview-artifact="previewArtifact"
+                    @open-json="$refs.terminalJsonDialogRef?.open($event)"
+                />
               </div>
             </section>
           </div>
@@ -116,25 +104,25 @@
       class="hidden-file-input"
       @change="handleRemoteUploadChange"
   />
-<RemoteFilesDialog
-    ref="remoteFilesDialogRef"
-    :selected-id="selectedId"
-    :get-tab-scoped-headers="getTabScopedHeaders"
-    @append-output="appendOutput"
-    @set-active-task="setActiveTask"
-    @preview="previewRemoteEntry"
-    @request-upload="triggerRemoteUploadInput"
-    @upload-started="pendingRemoteUploadRefresh = $event"
-    @visible-change="remoteFilesDialogVisible = $event"
-    @artifacts-maybe-changed="refreshArtifactsIfOpen"
-/>
+  <RemoteFilesDialog
+      ref="remoteFilesDialogRef"
+      :selected-id="selectedId"
+      :get-tab-scoped-headers="getTabScopedHeaders"
+      @append-output="appendOutput"
+      @set-active-task="setActiveTask"
+      @preview="previewRemoteEntry"
+      @request-upload="triggerRemoteUploadInput"
+      @upload-started="pendingRemoteUploadRefresh = $event"
+      @visible-change="remoteFilesDialogVisible = $event"
+      @artifacts-maybe-changed="refreshArtifactsIfOpen"
+  />
 
 
-<ArtifactDialog
-    ref="artifactDialogRef"
-    :current-connection="currentConnection"
-    @preview="previewArtifact"
-/>
+  <ArtifactDialog
+      ref="artifactDialogRef"
+      :current-connection="currentConnection"
+      @preview="previewArtifact"
+  />
 
 
   <ScriptLibraryDialog
@@ -217,17 +205,17 @@
       @built="refreshAgentOutputsIfOpen"
   />
 
-<TerminalJsonDialog ref="terminalJsonDialogRef" />
+  <TerminalJsonDialog ref="terminalJsonDialogRef"/>
 
-<PreviewImageInfoDialog
-    v-model:visible="previewImageInfoDialogVisible"
-    :info="previewImageInfo"
-/>
+  <PreviewImageInfoDialog
+      v-model:visible="previewImageInfoDialogVisible"
+      :info="previewImageInfo"
+  />
 
-<AgentOutputsDialog
-    ref="agentOutputsDialogRef"
-    @open-builder="openAgentBuilderDialog"
-/>
+  <AgentOutputsDialog
+      ref="agentOutputsDialogRef"
+      @open-builder="openAgentBuilderDialog"
+  />
 
   <PtyDialog
       ref="ptyDialogRef"
@@ -238,16 +226,12 @@
 </template>
 
 <script>
-import AppStateModule from './legacy/core/state.js'
+
 import AppUtilsModule from './legacy/modules/utils.js'
-// import AppCommandsModule from './legacy/modules/commands.js'
-// import AppJobsModule from './legacy/modules/jobs.js'
 import AppSseModule from './legacy/modules/sse.js'
 import AppConnectionModule from './legacy/modules/connection.js'
 import AppTaskModule from './legacy/modules/task.js'
 import AppTerminalModule from './legacy/modules/terminal.js'
-// import AppCandidatesModule from './legacy/modules/candidates.js'
-// import AppHistoryModule from './legacy/modules/history.js'
 import AppPreviewModule from './legacy/modules/preview.js'
 import DeviceSidebar from "./components/DeviceSidebar.vue";
 import ConnectionInfoCards from "./components/ConnectionInfoCards.vue";
@@ -258,14 +242,10 @@ import ConnectionInfoDialogs from "./components/ConnectionInfoDialogs.vue";
 import ProcessDialogs from "./components/ProcessDialogs.vue";
 import AgentBuilderDialog from "./components/AgentBuilderDialog.vue";
 import AgentOutputsDialog from "./components/AgentOutputsDialog.vue";
-// import CommandExecutionDetailDialog from "./components/CommandExecutionDetailDialog.vue";
 import CommandHistoryDialog from "./components/CommandHistoryDialog.vue";
 import RemoteFilesDialog from "./components/RemoteFilesDialog.vue";
 import ArtifactDialog from "./components/ArtifactDialog.vue";
 import ScriptLibraryDialog from "./components/ScriptLibraryDialog.vue";
-// import BackgroundJobMessageDialog from "./components/BackgroundJobMessageDialog.vue";
-// import BackgroundJobDetailDialog from "./components/BackgroundJobDetailDialog.vue";
-// import BackgroundJobStartDialog from "./components/BackgroundJobStartDialog.vue";
 import BackgroundJobsDialog from "./components/BackgroundJobsDialog.vue";
 import PreviewDialog from "./components/PreviewDialog.vue";
 import PreviewImageInfoDialog from "./components/PreviewImageInfoDialog.vue";
@@ -279,14 +259,10 @@ export default {
     PreviewImageInfoDialog,
     PreviewDialog,
     BackgroundJobsDialog,
-    // BackgroundJobStartDialog,
-    // BackgroundJobDetailDialog,
-    // BackgroundJobMessageDialog,
     ScriptLibraryDialog,
     ArtifactDialog,
     RemoteFilesDialog,
     CommandHistoryDialog,
-    // CommandExecutionDetailDialog,
     AgentOutputsDialog,
     AgentBuilderDialog,
     ProcessDialogs,
@@ -295,63 +271,39 @@ export default {
   },
   data() {
     return {
-      ...AppStateModule.data(),
+
       ...AppPreviewModule.data(),
-      // ...AppJobsModule.data(),
-      // ...AppCandidatesModule.data(),
-      // ...AppHistoryModule.data(),
       ...AppTerminalModule.data(),
       ...AppConnectionModule.data(),
-      // ...AppCommandsModule.data(),
       ...AppTaskModule.data(),
       ...AppSseModule.data(),
 
-
+      statusNowTick: Date.now(),
+      statusTickTimer: null,
       remoteFilesDialogVisible: false,
       pendingRemoteUploadRefresh: null,
-
     }
   },
 
   computed: {
-    ...AppStateModule.computed,
     ...AppPreviewModule.computed,
     ...AppConnectionModule.computed,
     ...AppTerminalModule.computed,
     ...AppTaskModule.computed,
-    // ...AppHistoryModule.computed,
-    // ...AppJobsModule.computed,
   },
 
   watch: {
-    ...AppStateModule.watch,
     ...AppTerminalModule.watch,
     ...AppPreviewModule.watch,
-    // ...AppJobsModule.watch,
-    // ...AppHistoryModule.watch,
   },
 
   methods: {
     ...AppUtilsModule.methods,
-    // ...AppCommandsModule.methods,
-    // ...AppJobsModule.methods,
     ...AppSseModule.methods,
     ...AppConnectionModule.methods,
     ...AppTaskModule.methods,
     ...AppTerminalModule.methods,
-    // ...AppCandidatesModule.methods,
-    // ...AppHistoryModule.methods,
     ...AppPreviewModule.methods,
-
-//     updateBackgroundJobParam(name, value) {
-//   if (!name) return
-//
-//   this.backgroundJobParamForm = {
-//     ...this.backgroundJobParamForm,
-//     [name]: value,
-//   }
-// },
-
 
     openArtifactDialog() {
       return this.$refs.artifactDialogRef?.open()
@@ -457,19 +409,19 @@ export default {
       return this.$refs.commandHistoryDialogRef?.open()
     },
 
-applyHistoryCommand(row) {
-  if (!row || !row.command) return
+    applyHistoryCommand(row) {
+      if (!row || !row.command) return
 
-  this.$refs.commandInputBarRef?.setCommandText(row.command)
-},
+      this.$refs.commandInputBarRef?.setCommandText(row.command)
+    },
 
-async reloadCommandCandidatesFromHistory(options = {}) {
-  await this.$refs.commandInputBarRef?.reloadCommandCandidates(options)
-},
+    async reloadCommandCandidatesFromHistory(options = {}) {
+      await this.$refs.commandInputBarRef?.reloadCommandCandidates(options)
+    },
 
-async reloadCommandCandidatesFromRuntime(options = {}) {
-  await this.$refs.commandInputBarRef?.reloadCommandCandidates(options)
-},
+    async reloadCommandCandidatesFromRuntime(options = {}) {
+      await this.$refs.commandInputBarRef?.reloadCommandCandidates(options)
+    },
 
   },
 
@@ -485,11 +437,6 @@ async reloadCommandCandidatesFromRuntime(options = {}) {
 
   beforeUnmount() {
     if (this.eventSource) this.eventSource.close()
-
-    // if (this.backgroundJobsRefreshTimer) {
-    //   clearTimeout(this.backgroundJobsRefreshTimer)
-    //   this.backgroundJobsRefreshTimer = null
-    // }
 
     if (this.statusTickTimer) {
       clearInterval(this.statusTickTimer)
