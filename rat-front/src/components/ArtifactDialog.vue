@@ -274,15 +274,16 @@
 
 <script>
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { formatBytes as formatBytesValue } from '../utils/formatters.js'
 
 export default {
   name: 'ArtifactDialog',
 
 props: {
-  formatBytes: {
-    type: Function,
-    required: true,
-  },
+  // formatBytes: {
+  //   type: Function,
+  //   required: true,
+  // },
 
   currentConnection: {
     type: Object,
@@ -339,6 +340,10 @@ props: {
     //   this.visible = true
     //   await this.loadArtifacts()
     // },
+
+    formatBytes(value) {
+  return formatBytesValue(value)
+},
 
     async open() {
   this.artifactMachineIdFilter = this.getCurrentMachineId()

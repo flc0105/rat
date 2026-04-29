@@ -2203,10 +2203,9 @@ body {
   /*  display: none;*/
   /*}*/
 
-  .artifact-dialog .dialog-table-shell,
-.command-history-dialog .quick-history-table-shell {
-  display: none;
-}
+/*.command-history-dialog .quick-history-table-shell {*/
+/*  display: none;*/
+/*}*/
 
   /*.remote-files-dialog .mobile-file-list-shell,*/
   /*.artifact-dialog .mobile-file-list-shell,*/
@@ -2217,13 +2216,12 @@ body {
   /*  overflow: hidden;*/
   /*}*/
 
-  .artifact-dialog .mobile-file-list-shell,
-.command-history-dialog .quick-history-mobile-shell {
-  display: flex;
-  flex: 1 1 auto;
-  min-height: 0;
-  overflow: hidden;
-}
+/*.command-history-dialog .quick-history-mobile-shell {*/
+/*  display: flex;*/
+/*  flex: 1 1 auto;*/
+/*  min-height: 0;*/
+/*  overflow: hidden;*/
+/*}*/
 
   /*.remote-files-dialog .mobile-file-list,*/
   /*.artifact-dialog .mobile-file-list,*/
@@ -2234,13 +2232,13 @@ body {
   /*  overflow: hidden;*/
   /*}*/
 
-  .artifact-dialog .mobile-file-list,
-.command-history-dialog .quick-history-mobile-shell .mobile-file-list {
-  display: block;
-  flex: 1 1 auto;
-  min-height: 0;
-  overflow: hidden;
-}
+/*  .artifact-dialog .mobile-file-list,*/
+/*.command-history-dialog .quick-history-mobile-shell .mobile-file-list {*/
+/*  display: block;*/
+/*  flex: 1 1 auto;*/
+/*  min-height: 0;*/
+/*  overflow: hidden;*/
+/*}*/
 
   .dialog-head-left {
     flex-wrap: wrap;

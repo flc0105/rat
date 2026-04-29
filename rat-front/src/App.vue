@@ -131,12 +131,11 @@
   />
 
 
-  <ArtifactDialog
-      ref="artifactDialogRef"
-      :format-bytes="formatBytes"
-      :current-connection="currentConnection"
-      @preview="previewArtifact"
-  />
+<ArtifactDialog
+    ref="artifactDialogRef"
+    :current-connection="currentConnection"
+    @preview="previewArtifact"
+/>
 
 
   <ScriptLibraryDialog
