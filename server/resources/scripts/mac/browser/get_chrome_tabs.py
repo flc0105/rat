@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-
 SCRIPT_METADATA = {
     "name": "macos/browser/get_chrome_tabs",
     "display_name": "Get Chrome Tabs",

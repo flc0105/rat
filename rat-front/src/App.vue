@@ -152,26 +152,13 @@
   />
 
   <PreviewDialog
-      v-model:visible="previewDialogVisible"
-      :loading="previewLoading"
-      :type="previewType"
-      :title="previewTitle"
-      :url="previewUrl"
-      :edit-mode="previewEditMode"
-      :saving="previewSaving"
-      :truncated="previewTruncated"
-      :source-label="previewSourceLabel"
-      :file-size="previewFileSize"
-      :file-encoding="previewFileEncoding"
-      :detected-language="previewDetectedLanguage"
-      :image-info="previewImageInfo"
-      @copy-text="copyPreviewText"
-      @enter-edit="enterEditMode"
-      @save="saveEditedContent"
-      @cancel-edit="cancelEditMode"
-      @clear-content="clearPreviewContent"
-      @open-image-info="openPreviewImageInfoDialog"
-      @open-original="openPreviewOriginal"
+      ref="previewDialogRef"
+      :selected-id="selectedId"
+      :remote-files-dialog-visible="remoteFilesDialogVisible"
+      @remote-directory-maybe-changed="refreshRemoteDirectory"
+      @artifacts-maybe-changed="refreshArtifactsIfOpen"
+      @scripts-maybe-changed="refreshScriptsIfOpen"
+      @background-job-modules-maybe-changed="refreshBackgroundJobModulesIfOpen"
   />
 
 
@@ -207,11 +194,6 @@
 
   <TerminalJsonDialog ref="terminalJsonDialogRef"/>
 
-  <PreviewImageInfoDialog
-      v-model:visible="previewImageInfoDialogVisible"
-      :info="previewImageInfo"
-  />
-
   <AgentOutputsDialog
       ref="agentOutputsDialogRef"
       @open-builder="openAgentBuilderDialog"
@@ -232,7 +214,6 @@ import AppSseModule from './legacy/modules/sse.js'
 import AppConnectionModule from './legacy/modules/connection.js'
 import AppTaskModule from './legacy/modules/task.js'
 import AppTerminalModule from './legacy/modules/terminal.js'
-import AppPreviewModule from './legacy/modules/preview.js'
 import DeviceSidebar from "./components/DeviceSidebar.vue";
 import ConnectionInfoCards from "./components/ConnectionInfoCards.vue";
 import TerminalToolbar from "./components/TerminalToolbar.vue";
@@ -248,7 +229,6 @@ import ArtifactDialog from "./components/ArtifactDialog.vue";
 import ScriptLibraryDialog from "./components/ScriptLibraryDialog.vue";
 import BackgroundJobsDialog from "./components/BackgroundJobsDialog.vue";
 import PreviewDialog from "./components/PreviewDialog.vue";
-import PreviewImageInfoDialog from "./components/PreviewImageInfoDialog.vue";
 import TerminalJsonDialog from "./components/TerminalJsonDialog.vue";
 import PtyDialog from "./components/PtyDialog.vue";
 
@@ -256,7 +236,6 @@ export default {
   components: {
     PtyDialog,
     TerminalJsonDialog,
-    PreviewImageInfoDialog,
     PreviewDialog,
     BackgroundJobsDialog,
     ScriptLibraryDialog,
@@ -272,7 +251,6 @@ export default {
   data() {
     return {
 
-      ...AppPreviewModule.data(),
       ...AppTerminalModule.data(),
       ...AppConnectionModule.data(),
       ...AppTaskModule.data(),
@@ -286,7 +264,6 @@ export default {
   },
 
   computed: {
-    ...AppPreviewModule.computed,
     ...AppConnectionModule.computed,
     ...AppTerminalModule.computed,
     ...AppTaskModule.computed,
@@ -294,7 +271,6 @@ export default {
 
   watch: {
     ...AppTerminalModule.watch,
-    ...AppPreviewModule.watch,
   },
 
   methods: {
@@ -303,7 +279,6 @@ export default {
     ...AppConnectionModule.methods,
     ...AppTaskModule.methods,
     ...AppTerminalModule.methods,
-    ...AppPreviewModule.methods,
 
     openArtifactDialog() {
       return this.$refs.artifactDialogRef?.open()
@@ -388,20 +363,35 @@ export default {
     },
 
     handleBackgroundJobDeleted(normalizedName) {
-      if (
-          this.previewDialogVisible &&
-          (this.previewSource === 'server_job' || this.previewSource === 'background_job')
-      ) {
-        const currentPreviewName = this.normalizeServerJobFilename(this.previewFilePath || this.previewTitle || '')
+      this.$refs.previewDialogRef?.handleBackgroundJobDeleted(normalizedName)
+    },
 
-        if (currentPreviewName === normalizedName) {
-          this.previewDialogVisible = false
+    previewRemoteEntry(row) {
+      return this.$refs.previewDialogRef?.previewRemoteEntry(row)
+    },
 
-          if (typeof this.destroyMonacoEditor === 'function') {
-            this.destroyMonacoEditor()
-          }
-        }
-      }
+    previewArtifact(row) {
+      return this.$refs.previewDialogRef?.previewArtifact(row)
+    },
+
+    previewBackgroundJobFile(file) {
+      return this.$refs.previewDialogRef?.previewBackgroundJobFile(file)
+    },
+
+    openNewRemoteScriptEditor(scriptName = 'new_script.py') {
+      return this.$refs.previewDialogRef?.openNewRemoteScriptEditor(scriptName)
+    },
+
+    openRemoteScriptEditorInternal(scriptName) {
+      return this.$refs.previewDialogRef?.openRemoteScriptEditorInternal(scriptName)
+    },
+
+    openNewRemoteJobEditor(scriptName = 'new_job.py') {
+      return this.$refs.previewDialogRef?.openNewRemoteJobEditor(scriptName)
+    },
+
+    openRemoteJobEditor(scriptName) {
+      return this.$refs.previewDialogRef?.openRemoteJobEditor(scriptName)
     },
 
 

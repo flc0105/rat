@@ -1,9 +1,9 @@
 SCRIPT_METADATA = {
-    "name": "mac/gather/get_command_stats",
+    "name": "mac/recon/get_command_stats",
     "display_name": "Get Command Stats",
     "description": "Get the most frequently used shell commands from zsh history",
     "platforms": ["darwin"],
-    "category": "Gather",
+    "category": "Recon",
     "params": [
         {
             "name": "limit",

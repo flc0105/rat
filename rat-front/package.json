@@ -10,7 +10,9 @@
   },
   "dependencies": {
     "element-plus": "^2.13.7",
-    "vue": "^3.5.32"
+    "vue": "^3.5.32",
+    "monaco-editor": "^0.45.0"
+
   },
   "devDependencies": {
     "@vitejs/plugin-vue": "^6.0.6",
