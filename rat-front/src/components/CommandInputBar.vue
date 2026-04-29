@@ -2,19 +2,20 @@
   <div class="command-row">
     <div class="command-box command-box-full">
       <div class="command-autocomplete-shell">
-        <el-autocomplete
-          ref="commandInputRef"
-          :model-value="commandText"
-          :fetch-suggestions="queryCommandCandidates"
-          popper-class="command-autocomplete-popper"
-          class="command-autocomplete"
-          value-key="value"
-          placeholder="Enter a command."
-          autocomplete="off"
-          @update:model-value="commandText = $event"
-          @select="handleCandidateSelect"
-          @keyup.enter="sendCommand"
-        >
+<el-autocomplete
+  ref="commandInputRef"
+  :model-value="commandText"
+  :fetch-suggestions="queryCommandCandidates"
+  :fit-input-width="true"
+  popper-class="command-autocomplete-popper"
+  class="command-autocomplete"
+  value-key="value"
+  placeholder="Enter a command."
+  autocomplete="off"
+  @update:model-value="commandText = $event"
+  @select="handleCandidateSelect"
+  @keyup.enter="sendCommand"
+>
           <template #default="{ item }">
             <div class="command-autocomplete-item">
               <div class="command-autocomplete-item-main">
@@ -966,6 +967,32 @@ const pinnedHistoryItems = historyItems.filter(item => item && item.is_pinned)
   border: 1px solid rgba(96, 165, 250, 0.18);
 }
 
+/*
+//@media (max-width: 960px) {
+//  .command-autocomplete,
+//  .command-autocomplete .el-input,
+//  .command-autocomplete .el-input__wrapper,
+//  .command-autocomplete .el-textarea,
+//  .command-autocomplete .el-textarea__inner {
+//    width: 100%;
+//    min-width: 0;
+//  }
+//
+//  .command-autocomplete .el-input__wrapper {
+//    height: 44px;
+//  }
+//
+//  .command-autocomplete .el-textarea__inner,
+//  .command-autocomplete-shell textarea {
+//    min-height: 44px !important;
+//    height: auto !important;
+//    max-height: none !important;
+//    overflow-y: hidden !important;
+//    resize: none !important;
+//  }
+//}
+*/
+
 @media (max-width: 960px) {
   .command-autocomplete,
   .command-autocomplete .el-input,
@@ -987,6 +1014,29 @@ const pinnedHistoryItems = historyItems.filter(item => item && item.is_pinned)
     max-height: none !important;
     overflow-y: hidden !important;
     resize: none !important;
+  }
+
+  .command-autocomplete-popper {
+    width: calc(100vw - 24px) !important;
+    max-width: calc(100vw - 24px) !important;
+    min-width: 0 !important;
+    box-sizing: border-box;
+  }
+
+  .command-autocomplete-popper .el-autocomplete-suggestion,
+  .command-autocomplete-popper .el-autocomplete-suggestion__wrap,
+  .command-autocomplete-popper .el-scrollbar,
+  .command-autocomplete-popper .el-scrollbar__wrap,
+  .command-autocomplete-popper .el-scrollbar__view {
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+    box-sizing: border-box;
+  }
+
+  .command-autocomplete-popper .command-autocomplete-item-name,
+  .command-autocomplete-popper .command-autocomplete-item-desc {
+    max-width: calc(100vw - 120px);
   }
 }
 </style>
