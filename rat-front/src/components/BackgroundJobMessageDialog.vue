@@ -52,3 +52,37 @@ export default {
   },
 }
 </script>
+
+
+<style scoped>
+.background-job-full-message-time {
+  font-size: 12px;
+  color: var(--muted);
+  margin-bottom: 10px;
+}
+
+.background-job-full-message-text {
+  margin: 0;
+  padding: 14px;
+  min-height: 280px;
+  max-height: 62vh;
+  overflow: auto;
+  border-radius: 14px;
+  background: #f8fafc;
+  border: 1px solid rgba(15, 23, 42, 0.06);
+  color: var(--text);
+  white-space: pre-wrap;
+  word-break: break-word;
+  line-height: 1.65;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 13px;
+}
+
+.background-job-full-message-text.is-error {
+  color: var(--danger);
+}
+
+.background-job-full-message-text.is-success {
+  color: #166534;
+}
+</style>

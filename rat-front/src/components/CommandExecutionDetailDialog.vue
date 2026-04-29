@@ -238,3 +238,160 @@ export default {
   ],
 }
 </script>
+
+<style scoped>
+.background-job-stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.background-job-stat {
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: #f8fafc;
+  border: 1px solid rgba(15, 23, 42, 0.05);
+}
+
+.background-job-stat-label,
+.command-execution-detail-label {
+  font-size: 11px;
+  color: var(--muted-2);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.background-job-stat-value {
+  margin-top: 4px;
+  font-size: 13px;
+  color: var(--text);
+  word-break: break-word;
+}
+
+.command-execution-detail-section {
+  margin-top: 14px;
+}
+
+.command-execution-detail-label {
+  display: block;
+  margin-bottom: 6px;
+}
+
+.command-execution-detail-summary {
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.command-execution-detail-panels {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-top: 14px;
+}
+
+.background-job-panel {
+  border: 1px solid rgba(15, 23, 42, 0.06);
+  border-radius: 12px;
+  background: #fafcff;
+  overflow: hidden;
+}
+
+.background-job-panel-title {
+  padding: 10px 12px;
+  font-size: 13px;
+  font-weight: 700;
+  border-bottom: 1px solid rgba(15, 23, 42, 0.06);
+  background: #f8fafc;
+}
+
+.command-output-panel-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.background-job-message-list,
+.background-job-file-list {
+  max-height: 320px;
+  overflow-y: auto;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.background-job-message-item,
+.background-job-file-item {
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: #fff;
+  border: 1px solid rgba(15, 23, 42, 0.05);
+}
+
+.background-job-message-time {
+  font-size: 11px;
+  color: var(--muted-2);
+  margin-bottom: 6px;
+}
+
+.background-job-message-text {
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--text);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.background-job-message-text.is-error {
+  color: var(--danger);
+}
+
+.background-job-message-text.is-success {
+  color: #166534;
+}
+
+.background-job-file-main {
+  min-width: 0;
+}
+
+.background-job-file-name {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text);
+  word-break: break-word;
+}
+
+.background-job-file-meta {
+  margin-top: 6px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.background-job-file-actions {
+  margin-top: 6px;
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+@media (max-width: 768px), (max-height: 720px) {
+  .background-job-stats,
+  .command-execution-detail-panels {
+    grid-template-columns: 1fr;
+  }
+
+  .command-output-panel-title {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}
+</style>
+
