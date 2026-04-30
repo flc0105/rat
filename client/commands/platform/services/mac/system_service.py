@@ -3,7 +3,7 @@ import platform
 import sys
 import time
 
-from client.commands.command_context import CommandCancelledError, CommandTimeoutError
+from client.commands.runtime.context import CommandCancelledError, CommandTimeoutError
 from core.utils.command_output import StructuredCommandResult
 
 

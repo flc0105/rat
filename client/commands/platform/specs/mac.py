@@ -1,4 +1,4 @@
-from client.commands.argument_command_registry import ArgumentCommandSpec, ArgumentOptionSpec
+from client.commands.arguments.acmd_registry import ArgumentCommandSpec, ArgumentOptionSpec
 
 MSGBOX_ARGUMENT_SPEC = ArgumentCommandSpec(
     name='msgbox',

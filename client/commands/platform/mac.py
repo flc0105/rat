@@ -1,14 +1,14 @@
-from client.commands.argument_command_registry import (
+from client.commands.arguments.acmd_registry import (
     argument_command,
 )
-from client.commands.common import CommonCommands
-from client.commands.interrupts import interruptible
+from client.commands.common.commands import CommonCommands
+from client.commands.runtime.interrupts import interruptible
 from client.commands.platform.services.mac.automation_service import MacAutomationService
 from client.commands.platform.services.mac.file_inspection_service import MacFileInspectionService
 from client.commands.platform.services.mac.media_service import MacMediaService
 from client.commands.platform.services.mac.system_service import MacSystemService
 from client.commands.platform.specs.mac import *
-from client.commands.specs.network import NETSTAT_ARGUMENT_SPEC
+from client.commands.platform.specs.common import NETSTAT_ARGUMENT_SPEC
 from core.utils.decorator import desc
 from core.utils.logger import logger
 

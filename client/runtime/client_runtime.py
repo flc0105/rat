@@ -1,4 +1,4 @@
-from client.commands.executor import CommandExecutor
+from client.commands.runtime.executor import CommandExecutor
 from client.jobs.core.manager import JobManager
 from client.pty.manager import PtyManager
 

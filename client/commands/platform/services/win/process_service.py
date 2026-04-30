@@ -1,6 +1,6 @@
 import subprocess
 
-from client.commands.command_context import CommandCancelledError, CommandTimeoutError
+from client.commands.runtime.context import CommandCancelledError, CommandTimeoutError
 
 
 class WinProcessService:

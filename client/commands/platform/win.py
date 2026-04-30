@@ -1,11 +1,11 @@
-from client.commands.argument_command_registry import argument_command
-from client.commands.common import CommonCommands
-from client.commands.interrupts import timeout, cancel_policy, interruptible
+from client.commands.arguments.acmd_registry import argument_command
+from client.commands.common.commands import CommonCommands
+from client.commands.runtime.interrupts import timeout, cancel_policy, interruptible
 from client.commands.platform.services.win.media_service import WinMediaService
 from client.commands.platform.services.win.privilege_service import WinPrivilegeService
 from client.commands.platform.services.win.process_service import WinProcessService
 from client.commands.platform.services.win.system_service import WinSystemService
-from client.commands.specs.network import NETSTAT_ARGUMENT_SPEC
+from client.commands.platform.specs.common import NETSTAT_ARGUMENT_SPEC
 from core.utils.decorator import desc
 
 

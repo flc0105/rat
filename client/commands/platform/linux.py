@@ -1,7 +1,7 @@
-from client.commands.argument_command_registry import argument_command
-from client.commands.common import CommonCommands
-from client.commands.interrupts import interruptible
-from client.commands.specs.network import NETSTAT_ARGUMENT_SPEC
+from client.commands.arguments.acmd_registry import argument_command
+from client.commands.common.commands import CommonCommands
+from client.commands.runtime.interrupts import interruptible
+from client.commands.platform.specs.common import NETSTAT_ARGUMENT_SPEC
 
 
 class LinuxCommands(CommonCommands):

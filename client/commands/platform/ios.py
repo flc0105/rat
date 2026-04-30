@@ -1,6 +1,6 @@
-from client.commands.argument_command_registry import argument_command
-from client.commands.common import CommonCommands
-from client.commands.interrupts import timeout, interruptible
+from client.commands.arguments.acmd_registry import argument_command
+from client.commands.common.commands import CommonCommands
+from client.commands.runtime.interrupts import timeout, interruptible
 from client.commands.platform.services.ios.console_service import iOSConsoleService
 from client.commands.platform.services.ios.file_system_service import iOSFileSystemService
 from client.commands.platform.services.ios.network_service import iOSNetworkService
