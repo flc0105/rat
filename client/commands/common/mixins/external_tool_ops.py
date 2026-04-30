@@ -119,10 +119,26 @@ class CommandExternalToolMixin:
         argv = self._external_tool_render_path_list(runtime.get('argv') or [])
         if not argv:
             raise ValueError('runtime.argv is required')
+
+        # IMPORTANT:
+        # Do not path-expand every argv item. argv can contain URLs such as
+        # rtsp://127.0.0.1:8554/stream, filter expressions, or device names.
+        # Only argv[0] is the executable path in our current meta model.
         argv = [
-            self._external_tool_expand_path(item) if index == 0 or '/' in item or '\\' in item else item
+            self._external_tool_expand_path(item)
+            if self._external_tool_should_expand_argv_item(item, index)
+            else item
             for index, item in enumerate(argv)
         ]
+    # def _external_tool_build_runtime(self, payload: dict) -> dict:
+    #     runtime = payload.get('runtime') or {}
+    #     argv = self._external_tool_render_path_list(runtime.get('argv') or [])
+    #     if not argv:
+    #         raise ValueError('runtime.argv is required')
+    #     argv = [
+    #         self._external_tool_expand_path(item) if index == 0 or '/' in item or '\\' in item else item
+    #         for index, item in enumerate(argv)
+    #     ]
         cwd = self._external_tool_expand_path(runtime.get('cwd') or os.getcwd())
         stdout = self._external_tool_expand_path(runtime.get('stdout') or '~/.ops/external_tools/runtime/stdout.log')
         stderr = runtime.get('stderr') or 'stdout'
@@ -377,16 +393,54 @@ finally:
             return {'type': 'signal', 'signal': signal.Signals(sig).name, 'sent': True, 'terminated': not self._external_tool_is_pid_alive(pid), 'killed': True}
         return {'type': 'signal', 'signal': signal.Signals(sig).name, 'sent': True, 'terminated': not self._external_tool_is_pid_alive(pid), 'killed': False}
 
+    def _external_tool_is_url_like(self, value: str) -> bool:
+        text = str(value or '').strip().lower()
+        if '://' not in text:
+            return False
+        scheme = text.split('://', 1)[0]
+        return bool(scheme) and all(ch.isalnum() or ch in '+-.' for ch in scheme)
 
+    def _external_tool_should_expand_argv_item(self, value: str, index: int) -> bool:
+        text = str(value or '').strip()
+        if not text:
+            return False
+        if self._external_tool_is_url_like(text):
+            return False
+        if index == 0:
+            return True
+        return (
+            text.startswith('~')
+            or text.startswith('/')
+            or text.startswith('./')
+            or text.startswith('../')
+            or text.startswith('.\\')
+            or text.startswith('..\\')
+            or ('\\' in text)
+        )
+
+    # def _external_tool_run_stop_command(self, stop_spec: dict) -> dict:
+    #     argv = stop_spec.get('argv') or stop_spec.get('command') or []
+    #     rendered = self._external_tool_render_path_list(argv)
+    #     if not rendered:
+    #         raise ValueError('lifecycle.stop.argv is required for command stop')
+    #     rendered = [
+    #         self._external_tool_expand_path(item) if index == 0 or '/' in item or '\\' in item else item
+    #         for index, item in enumerate(rendered)
+    #     ]
     def _external_tool_run_stop_command(self, stop_spec: dict) -> dict:
         argv = stop_spec.get('argv') or stop_spec.get('command') or []
         rendered = self._external_tool_render_path_list(argv)
         if not rendered:
             raise ValueError('lifecycle.stop.argv is required for command stop')
+
+        # Only the executable path should be path-expanded.
         rendered = [
-            self._external_tool_expand_path(item) if index == 0 or '/' in item or '\\' in item else item
+            self._external_tool_expand_path(item)
+            if self._external_tool_should_expand_argv_item(item, index)
+            else item
             for index, item in enumerate(rendered)
         ]
+
         timeout = int(stop_spec.get('timeout_sec') or self.DEFAULT_STOP_TIMEOUT_SEC)
         cwd = self._external_tool_expand_path(stop_spec.get('cwd') or os.getcwd())
         completed = subprocess.run(

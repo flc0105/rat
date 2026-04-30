@@ -73,6 +73,34 @@ class ExternalToolRuntimeService:
     def _expand_path(self, path: str) -> str:
         return os.path.abspath(os.path.expandvars(os.path.expanduser(str(path or '').strip())))
 
+
+
+    def _is_url_like(self, value: str) -> bool:
+        text = str(value or '').strip().lower()
+        if '://' not in text:
+            return False
+        scheme = text.split('://', 1)[0]
+        return bool(scheme) and all(ch.isalnum() or ch in '+-.' for ch in scheme)
+
+    def _should_expand_argv_item(self, value: str, index: int) -> bool:
+        text = str(value or '').strip()
+        if not text:
+            return False
+        if self._is_url_like(text):
+            return False
+        if index == 0:
+            return True
+        return (
+            text.startswith('~')
+            or text.startswith('/')
+            or text.startswith('./')
+            or text.startswith('../')
+            or text.startswith('.\\')
+            or text.startswith('..\\')
+            or ('\\' in text)
+        )
+
+
     def _safe_join_runtime(self, *parts: str) -> str:
         path = os.path.abspath(os.path.join(self.runtime_root_dir, *[str(part or '') for part in parts]))
         if os.path.commonpath([self.runtime_root_dir, path]) != self.runtime_root_dir:
@@ -275,6 +303,17 @@ class ExternalToolRuntimeService:
             file_obj.write(content)
         return {'target': target, 'size': os.path.getsize(target)}
 
+    # def _build_runtime_spec(self, meta: dict, context: dict) -> dict:
+    #     runtime = self._render_value(meta.get('runtime') or {}, context)
+    #     argv = runtime.get('argv') or []
+    #     if isinstance(argv, str):
+    #         argv = shlex.split(argv)
+    #     if not isinstance(argv, list) or not argv:
+    #         raise ValueError('runtime.argv is required')
+    #     argv = [
+    #         self._expand_path(str(item)) if index == 0 or '/' in str(item) or '\\' in str(item) else str(item)
+    #         for index, item in enumerate(argv)
+    #     ]
     def _build_runtime_spec(self, meta: dict, context: dict) -> dict:
         runtime = self._render_value(meta.get('runtime') or {}, context)
         argv = runtime.get('argv') or []
@@ -282,8 +321,15 @@ class ExternalToolRuntimeService:
             argv = shlex.split(argv)
         if not isinstance(argv, list) or not argv:
             raise ValueError('runtime.argv is required')
+
+        # IMPORTANT:
+        # Do not path-expand every argv item. argv can contain URLs such as
+        # rtsp://..., rtmp://..., http://..., filter expressions, or device names.
+        # Only argv[0] is the executable path in our current meta model.
         argv = [
-            self._expand_path(str(item)) if index == 0 or '/' in str(item) or '\\' in str(item) else str(item)
+            self._expand_path(str(item))
+            if self._should_expand_argv_item(str(item), index)
+            else str(item)
             for index, item in enumerate(argv)
         ]
 
@@ -541,6 +587,18 @@ finally:
             text = 'SIG' + text
         return int(getattr(signal, text, signal.SIGTERM))
 
+    # def _run_lifecycle_command(self, stop_spec: dict, context: dict) -> dict:
+    #     argv = stop_spec.get('argv') or stop_spec.get('command') or []
+    #     rendered = self._render_value(argv, context)
+    #     if isinstance(rendered, str):
+    #         rendered = shlex.split(rendered)
+    #     if not isinstance(rendered, list) or not rendered:
+    #         raise ValueError('lifecycle.stop.argv is required for command stop')
+    #     rendered = [
+    #         self._expand_path(str(item)) if index == 0 or '/' in str(item) or '\\' in str(item) else str(item)
+    #         for index, item in enumerate(rendered)
+    #     ]
+
     def _run_lifecycle_command(self, stop_spec: dict, context: dict) -> dict:
         argv = stop_spec.get('argv') or stop_spec.get('command') or []
         rendered = self._render_value(argv, context)
@@ -548,10 +606,15 @@ finally:
             rendered = shlex.split(rendered)
         if not isinstance(rendered, list) or not rendered:
             raise ValueError('lifecycle.stop.argv is required for command stop')
+
+        # Only the executable path should be path-expanded.
         rendered = [
-            self._expand_path(str(item)) if index == 0 or '/' in str(item) or '\\' in str(item) else str(item)
+            self._expand_path(str(item))
+            if self._should_expand_argv_item(str(item), index)
+            else str(item)
             for index, item in enumerate(rendered)
         ]
+
         timeout = int(stop_spec.get('timeout_sec') or self.DEFAULT_STOP_TIMEOUT_SEC)
         completed = subprocess.run(
             rendered,
