@@ -3,6 +3,7 @@
 import json
 
 from client.commands.common.services.process.process_service import ProcessService
+from client.commands.common.services.process.ps_service import PsService
 from core.platform.platform_identity import detect_platform_alias
 from core.utils.decorator import desc
 
@@ -76,3 +77,23 @@ class CommandProcessMixin:
             return 1, f'Process {pid} terminated'
         except Exception as e:
             return 0, str(e)
+
+    def _get_ps_service(self):
+        service = getattr(self, '_ps_service', None)
+
+        if service is None:
+            service = PsService(self)
+            self._ps_service = service
+
+        return service
+
+    def _acmd_ps_common(self, args_dict, payload=None):
+        """
+        acmd ps 公共实现。
+
+        注意：
+        - 不在这里加 @argument_command
+        - 平台类负责注册 acmd ps
+        - 这里只做 facade
+        """
+        return self._get_ps_service().build_acmd_ps_result(args_dict)

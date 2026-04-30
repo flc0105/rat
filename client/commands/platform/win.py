@@ -5,7 +5,7 @@ from client.commands.platform.services.win.media_service import WinMediaService
 from client.commands.platform.services.win.privilege_service import WinPrivilegeService
 from client.commands.platform.services.win.process_service import WinProcessService
 from client.commands.platform.services.win.system_service import WinSystemService
-from client.commands.platform.specs.common import NETSTAT_ARGUMENT_SPEC
+from client.commands.platform.specs.common import NETSTAT_ARGUMENT_SPEC, PS_ARGUMENT_SPEC
 from core.utils.decorator import desc
 
 
@@ -72,3 +72,8 @@ class WindowsCommands(CommonCommands):
     @interruptible()
     def _acmd_netstat(self, args_dict, payload=None):
         return self._acmd_netstat_common(args_dict, payload)
+
+    @argument_command('ps', spec=PS_ARGUMENT_SPEC)
+    @interruptible()
+    def _acmd_ps(self, args_dict, payload=None):
+        return self._acmd_ps_common(args_dict, payload)

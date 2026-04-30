@@ -8,7 +8,7 @@ from client.commands.platform.services.mac.file_inspection_service import MacFil
 from client.commands.platform.services.mac.media_service import MacMediaService
 from client.commands.platform.services.mac.system_service import MacSystemService
 from client.commands.platform.specs.mac import *
-from client.commands.platform.specs.common import NETSTAT_ARGUMENT_SPEC
+from client.commands.platform.specs.common import NETSTAT_ARGUMENT_SPEC, PS_ARGUMENT_SPEC
 from core.utils.decorator import desc
 from core.utils.logger import logger
 
@@ -98,3 +98,8 @@ class MacCommands(CommonCommands):
     @interruptible()
     def _acmd_netstat(self, args_dict, payload=None):
         return self._acmd_netstat_common(args_dict, payload)
+
+    @argument_command('ps', spec=PS_ARGUMENT_SPEC)
+    @interruptible()
+    def _acmd_ps(self, args_dict, payload=None):
+        return self._acmd_ps_common(args_dict, payload)
