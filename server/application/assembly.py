@@ -6,6 +6,8 @@ from server.application.command.command_executor_factory import CommandExecutorF
 from server.application.connection.connection_service import WebConnectionService
 from server.application.connection.recent_device_store import RecentDeviceStore
 from server.application.execution.remote_execution_service import RemoteExecutionService
+from server.application.external_tools.external_tool_catalog_service import ExternalToolCatalogService
+from server.application.external_tools.external_tool_runtime_service import ExternalToolRuntimeService
 from server.application.jobs.background_job_service import BackgroundJobService
 from server.application.jobs.background_job_store import BackgroundJobStore
 from server.application.jobs.job_catalog_service import JobCatalogService
@@ -20,6 +22,7 @@ from server.application.web.artifact_api import WebArtifactApi
 from server.application.web.command_catalog_api import WebCommandCatalogApi
 from server.application.web.command_execution_api import WebCommandExecutionApi
 from server.application.web.command_history_api import WebCommandHistoryApi
+from server.application.web.external_tool_api import WebExternalToolApi
 from server.application.web.connection_api import WebConnectionApi
 from server.application.web.job_api import WebJobApi
 from server.application.web.pinned_path_api import PinnedPathApi
@@ -28,7 +31,15 @@ from server.application.web.remote_file_api import WebRemoteFileApi
 from server.application.web.script_api import WebScriptApi
 from server.application.web.system_api import WebSystemInspectionApi
 from server.application.web.terminal_api import WebTerminalApi
-from server.config.config import RECENT_DEVICES_JSON_PATH, SCRIPT_JOBS_PATH, SCRIPT_PATH
+from server.config.config import (
+    EXTERNAL_TOOL_INSTALL_ROOT_DIR,
+    EXTERNAL_TOOL_META_PATH,
+    EXTERNAL_TOOL_PACKAGE_PATH,
+    EXTERNAL_TOOL_RUNTIME_ROOT_DIR,
+    RECENT_DEVICES_JSON_PATH,
+    SCRIPT_JOBS_PATH,
+    SCRIPT_PATH,
+)
 from server.web.event_bus import WebEventBus
 
 
@@ -96,6 +107,10 @@ class ServerApplicationAssembly:
         self.background_job_store = BackgroundJobStore()
         self.job_catalog_service = JobCatalogService(SCRIPT_JOBS_PATH)
         self.script_catalog_service = ScriptCatalogService(SCRIPT_PATH)
+        self.external_tool_catalog_service = ExternalToolCatalogService(
+            EXTERNAL_TOOL_META_PATH,
+            EXTERNAL_TOOL_PACKAGE_PATH,
+        )
 
         self.background_job_service = BackgroundJobService(
             event_bus=self.event_bus,
@@ -121,6 +136,18 @@ class ServerApplicationAssembly:
 
         self.command_execution_api = WebCommandExecutionApi(
             task_service=self.task_service,
+        )
+
+        self.external_tool_runtime_service = ExternalToolRuntimeService(
+            catalog_service=self.external_tool_catalog_service,
+            command_execution_api=self.command_execution_api,
+            install_root_dir=EXTERNAL_TOOL_INSTALL_ROOT_DIR,
+            runtime_root_dir=EXTERNAL_TOOL_RUNTIME_ROOT_DIR,
+        )
+
+        self.external_tool_api = WebExternalToolApi(
+            catalog_service=self.external_tool_catalog_service,
+            runtime_service=self.external_tool_runtime_service,
         )
 
         self.command_history_api = WebCommandHistoryApi(

@@ -1,4 +1,5 @@
 from client.commands.common.mixins.execution_ops import CommandExecutionMixin
+from client.commands.common.mixins.external_tool_ops import CommandExternalToolMixin
 from client.commands.common.mixins.file_cli_ops import CommandFileCliMixin
 from client.commands.common.mixins.file_web_ops import CommandFileWebMixin
 from client.commands.common.mixins.introspection_ops import CommandIntrospectionMixin
@@ -33,6 +34,7 @@ class CommonFileCommands(
 
 
 class CommonRuntimeCommands(
+    CommandExternalToolMixin,
     CommandIntrospectionMixin,
     CommandJobMixin,
     CommandProcessMixin,

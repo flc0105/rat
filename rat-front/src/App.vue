@@ -54,6 +54,7 @@
                     :selected-id="selectedId"
                     @open-remote-files="openRemoteFilesDialog"
                     @open-artifacts="openArtifactDialog"
+                    @open-external-tools="openExternalToolManagerDialog"
                     @open-info="openConnectionInfoDialog"
                     @open-jobs="openBackgroundJobsDialog"
                     @open-scripts="openScriptLibraryDialog"
@@ -122,6 +123,15 @@
       ref="artifactDialogRef"
       :current-connection="currentConnection"
       @preview="previewArtifact"
+  />
+
+  <ExternalToolManagerDialog
+      ref="externalToolManagerDialogRef"
+      :selected-id="selectedId"
+      :current-connection="currentConnection"
+      :get-tab-scoped-headers="getTabScopedHeaders"
+      @append-output="appendOutput"
+      @set-active-task="setActiveTask"
   />
 
 
@@ -226,6 +236,7 @@ import AgentOutputsDialog from "./components/AgentOutputsDialog.vue";
 import CommandHistoryDialog from "./components/CommandHistoryDialog.vue";
 import RemoteFilesDialog from "./components/RemoteFilesDialog.vue";
 import ArtifactDialog from "./components/ArtifactDialog.vue";
+import ExternalToolManagerDialog from "./components/ExternalToolManagerDialog.vue";
 import ScriptLibraryDialog from "./components/ScriptLibraryDialog.vue";
 import BackgroundJobsDialog from "./components/BackgroundJobsDialog.vue";
 import PreviewDialog from "./components/PreviewDialog.vue";
@@ -239,6 +250,7 @@ export default {
     PreviewDialog,
     BackgroundJobsDialog,
     ScriptLibraryDialog,
+    ExternalToolManagerDialog,
     ArtifactDialog,
     RemoteFilesDialog,
     CommandHistoryDialog,
@@ -290,6 +302,10 @@ export default {
 
     openRemoteFilesDialog() {
       this.$refs.remoteFilesDialogRef?.open()
+    },
+
+    openExternalToolManagerDialog() {
+      return this.$refs.externalToolManagerDialogRef?.open()
     },
 
     triggerRemoteUploadInput() {

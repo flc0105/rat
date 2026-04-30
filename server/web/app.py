@@ -16,6 +16,7 @@ from server.web.routes.auth import create_auth_blueprint
 from server.web.routes.background_jobs import create_background_job_blueprint
 from server.web.routes.command_execution import create_command_execution_blueprint
 from server.web.routes.command_history import create_command_history_blueprint
+from server.web.routes.external_tools import create_external_tool_blueprint
 from server.web.routes.connections import create_connections_blueprint
 from server.web.routes.pinned_paths import create_pinned_path_blueprint
 from server.web.routes.remote_files import create_remote_files_blueprint
@@ -46,6 +47,7 @@ def create_app(server_instance):
     app.register_blueprint(create_pinned_path_blueprint(server_instance))
     app.register_blueprint(create_system_inspection_blueprint(server_instance))
     app.register_blueprint(create_command_history_blueprint(server_instance))
+    app.register_blueprint(create_external_tool_blueprint(server_instance))
     app.register_blueprint(create_artifacts_blueprint(server_instance))
     app.register_blueprint(create_agent_blueprint(server_instance))
     app.register_blueprint(create_script_blueprint(server_instance))

@@ -26,6 +26,13 @@ SCRIPT_PATH = os.path.join(SERVER_DIR, 'resources/scripts')
 # 脚本目录
 SCRIPT_JOBS_PATH = os.path.join(SERVER_DIR, 'resources/jobs')
 
+# ------------------ external tools ------------------ #
+EXTERNAL_TOOLS_ROOT = os.path.join(SERVER_DIR, 'resources/external_tools')
+EXTERNAL_TOOL_META_PATH = os.path.join(EXTERNAL_TOOLS_ROOT, 'metas')
+EXTERNAL_TOOL_PACKAGE_PATH = os.path.join(EXTERNAL_TOOLS_ROOT, 'packages')
+EXTERNAL_TOOL_INSTALL_ROOT_DIR = os.path.abspath(os.path.join('runtime', 'external_tools', 'installed'))
+EXTERNAL_TOOL_RUNTIME_ROOT_DIR = os.path.abspath(os.path.join('runtime', 'external_tools', 'runtime'))
+
 # ------------------ logging ------------------ #
 BACKGROUND_MESSAGE_OUTPUT_TO_FILE = True
 os.makedirs('runtime', exist_ok=True)

@@ -42,6 +42,7 @@ class ServerWebService:
         self.command_catalog_api = self.assembly.command_catalog_api
         self.command_execution_api = self.assembly.command_execution_api
         self.command_history_api = self.assembly.command_history_api
+        self.external_tool_api = self.assembly.external_tool_api
         self.job_api = self.assembly.job_api
         self.script_api = self.assembly.script_api
         self.artifact_api = self.assembly.artifact_api
