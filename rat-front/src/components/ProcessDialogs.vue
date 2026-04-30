@@ -629,6 +629,15 @@ export default {
 </script>
 
 <style scoped>
+
+
+.process-dialog-filter-input :deep(.el-input__wrapper) {
+  min-height: 32px;
+  height: 32px;
+  border-radius: 10px;
+}
+
+
 .process-dialog-body {
   display: flex;
   flex: 1 1 auto;
