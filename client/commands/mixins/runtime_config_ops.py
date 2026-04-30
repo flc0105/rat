@@ -1,7 +1,7 @@
 import shlex
 
 from client.commands.interrupts import interruptible
-from client.commands.services.runtime_config_service import RuntimeConfigService
+from client.commands.services.runtime.runtime_config_service import RuntimeConfigService
 from core.utils.decorator import desc
 from core.utils.logger import logger
 

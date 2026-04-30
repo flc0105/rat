@@ -3,7 +3,7 @@ import shutil
 import stat as stat_module
 import time
 
-from client.commands.services.path_resolver import PathResolver
+from client.commands.services.filesystem.path_resolver import PathResolver
 
 
 class FileSystemService:

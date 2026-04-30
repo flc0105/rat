@@ -2,7 +2,7 @@
 
 import json
 
-from client.commands.services.process_service import ProcessService
+from client.commands.services.process.process_service import ProcessService
 from core.platform.platform_identity import detect_platform_alias
 from core.utils.decorator import desc
 

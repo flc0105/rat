@@ -8,7 +8,7 @@ from client.commands.python_execution.factory import (
     build_python_execution_strategy,
     get_python_execution_mode
 )
-from client.commands.services.process_execution_service import ProcessExecutionService
+from client.commands.services.process.process_execution_service import ProcessExecutionService
 from client.config.runtime_config import (
     COMMAND_DEFAULT_SHELL_TIMEOUT,
     COMMAND_DEFAULT_STREAM_TIMEOUT,

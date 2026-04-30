@@ -2,8 +2,8 @@ import inspect
 from dataclasses import dataclass
 from typing import Any, Callable
 
-from client.commands.services.command_catalog import CommandCatalog
-from client.commands.services.command_context_store import CommandExecutionContextStore
+from client.commands.services.command.command_catalog import CommandCatalog
+from client.commands.services.command.command_context_store import CommandExecutionContextStore
 from core.utils.command_output import render_structured_result
 from core.utils.parsing import parse
 

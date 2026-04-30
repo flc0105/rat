@@ -5,7 +5,7 @@ import time
 import zipfile
 
 from client.config.runtime_config import ZIP_CANCEL_CHECK_INTERVAL
-from client.commands.services.path_resolver import PathResolver
+from client.commands.services.filesystem.path_resolver import PathResolver
 
 
 class ArchiveService:

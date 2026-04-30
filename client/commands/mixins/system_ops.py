@@ -2,6 +2,7 @@ import os
 import subprocess
 
 from client.commands.interrupts import interruptible
+from client.commands.services.network.network_interface_service import NetworkInterfaceService
 from core.utils.decorator import desc
 
 
@@ -9,6 +10,15 @@ class CommandSystemMixin:
     """
     通用系统信息/系统操作命令。
     """
+
+    def _get_network_interface_service(self):
+        service = getattr(self, '_network_interface_service', None)
+
+        if service is None:
+            service = NetworkInterfaceService(self)
+            self._network_interface_service = service
+
+        return service
 
     @desc('Get current user ID/name', group='system')
     @interruptible()
@@ -160,3 +170,19 @@ class CommandSystemMixin:
         minutes = int((uptime_seconds % 3600) // 60)
 
         return 1, f"Boot time: {boot_dt.strftime('%Y-%m-%d %H:%M:%S')}\nUptime: {days}d {hours}h {minutes}m"
+
+    @desc('Show network interfaces', group='network')
+    @interruptible()
+    def ifconfig(self, arg=''):
+        """
+        显示当前机器可用网卡，输出 name / ip / mac。
+
+        输出格式由命令执行器统一处理：
+        - ifconfig        -> table
+        - ifconfig json   -> JSON
+        - ifconfig --json -> JSON
+        """
+        try:
+            return self._get_network_interface_service().build_ifconfig_result()
+        except Exception as e:
+            return 0, f'Failed to get network interfaces: {e}'

@@ -4,8 +4,8 @@ import requests
 
 from client.commands.command_context import CommandCancelledError, CommandTimeoutError
 from client.commands.interrupts import interruptible
-from client.commands.services.http_file_transfer_service import CommandHttpFileTransferService
-from client.commands.services.preview_image_service import PreviewImageService
+from client.commands.services.transfer.http_file_transfer_service import CommandHttpFileTransferService
+from client.commands.services.filesystem.preview_image_service import PreviewImageService
 from client.config.runtime_config import (
     HTTP_DOWNLOAD_CHUNK_SIZE,
     HTTP_DOWNLOAD_CONNECT_TIMEOUT_CANCELABLE,

@@ -1,6 +1,6 @@
 import os
 
-from client.commands.services.structured_arg_codec import StructuredArgCodec
+from client.commands.services.command.structured_arg_codec import StructuredArgCodec
 
 
 class PathResolver:
@@ -32,7 +32,7 @@ class PathResolver:
     def resolve_target_path(self, path: str) -> str:
         raw_path = (path or '').strip()
         if not raw_path:
-            raw_path = '.'
+            raw_path = '..'
 
         if os.path.isabs(raw_path):
             return os.path.abspath(raw_path)
