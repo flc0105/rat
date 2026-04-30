@@ -37,9 +37,10 @@ class ExternalToolRuntimeService:
     DEFAULT_STOP_TIMEOUT_SEC = 5
     DEFAULT_LOG_TAIL_BYTES = 65536
 
-    def __init__(self, catalog_service, command_execution_api, install_root_dir: str, runtime_root_dir: str):
+    def __init__(self, catalog_service, command_execution_api, install_root_dir: str, runtime_root_dir: str, remote_execution_service=None):
         self.catalog_service = catalog_service
         self.command_execution_api = command_execution_api
+        self.remote_execution_service = remote_execution_service
         self.install_root_dir = os.path.abspath(install_root_dir)
         self.runtime_root_dir = os.path.abspath(runtime_root_dir)
         os.makedirs(self.install_root_dir, exist_ok=True)
@@ -794,26 +795,37 @@ finally:
             'max_bytes': int(max_bytes or self.DEFAULT_LOG_TAIL_BYTES),
         }
 
+    def _run_client_lifecycle_command(self, client_id: str, command: str, tab_id: str = '') -> dict:
+        if self.remote_execution_service is None:
+            return self.command_execution_api.submit_web_command(client_id, command, tab_id=tab_id)
+        del tab_id
+        return self.remote_execution_service.run_foreground_json_command(
+            client_id,
+            command,
+            task_type='external_tool',
+            source='web_external_tool',
+        )
+
     def start_client_instance(self, client_id: str, tool_id: str, params: dict | None = None, tab_id: str = '', instance_id: str = '') -> dict:
         meta = self.catalog_service.get_tool(tool_id)
         self._assert_tool_usable(meta, 'client', platform_alias='*')
         payload = self.build_client_start_payload(meta, params=params, instance_id=instance_id)
         command = f'external_tool_start {self._encode_payload_arg(payload)}'
-        return self.command_execution_api.submit_web_command(client_id, command, tab_id=tab_id)
+        return self._run_client_lifecycle_command(client_id, command, tab_id=tab_id)
 
     def stop_client_instance(self, client_id: str, tool_id: str, instance_id: str, params: dict | None = None, tab_id: str = '') -> dict:
         meta = self.catalog_service.get_tool(tool_id)
         self._assert_tool_usable(meta, 'client', platform_alias='*')
         payload = self.build_client_action_payload(meta, 'stop', instance_id=instance_id, params=params)
         command = f'external_tool_stop {self._encode_payload_arg(payload)}'
-        return self.command_execution_api.submit_web_command(client_id, command, tab_id=tab_id)
+        return self._run_client_lifecycle_command(client_id, command, tab_id=tab_id)
 
     def status_client_instance(self, client_id: str, tool_id: str, instance_id: str, tab_id: str = '') -> dict:
         meta = self.catalog_service.get_tool(tool_id)
         self._assert_tool_usable(meta, 'client', platform_alias='*')
         payload = self.build_client_action_payload(meta, 'status', instance_id=instance_id)
         command = f'external_tool_status {self._encode_payload_arg(payload)}'
-        return self.command_execution_api.submit_web_command(client_id, command, tab_id=tab_id)
+        return self._run_client_lifecycle_command(client_id, command, tab_id=tab_id)
 
     def list_client_instances(self, client_id: str, tool_id: str, tab_id: str = '') -> dict:
         meta = self.catalog_service.get_tool(tool_id)
@@ -825,14 +837,14 @@ finally:
             'side': 'client',
         }
         command = f'external_tool_list_instances {self._encode_payload_arg(payload)}'
-        return self.command_execution_api.submit_web_command(client_id, command, tab_id=tab_id)
+        return self._run_client_lifecycle_command(client_id, command, tab_id=tab_id)
 
     def read_client_logs(self, client_id: str, tool_id: str, instance_id: str, max_bytes: int | None = None, tab_id: str = '') -> dict:
         meta = self.catalog_service.get_tool(tool_id)
         self._assert_tool_usable(meta, 'client', platform_alias='*')
         payload = self.build_client_action_payload(meta, 'logs', instance_id=instance_id, max_bytes=max_bytes)
         command = f'external_tool_logs {self._encode_payload_arg(payload)}'
-        return self.command_execution_api.submit_web_command(client_id, command, tab_id=tab_id)
+        return self._run_client_lifecycle_command(client_id, command, tab_id=tab_id)
 
     # Backward-compatible alias used by first MVP routes.
     def install_and_run_client(self, client_id: str, tool_id: str, params: dict | None = None, tab_id: str = '') -> dict:

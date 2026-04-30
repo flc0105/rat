@@ -1,0 +1,119 @@
+{
+  "id": "frpc-darwin-arm64",
+  "name": "frpc",
+  "display_name": "FRP Client (darwin/arm64)",
+  "description": "FRP client executable. It connects to frps and exposes a local client port through a remote server port.",
+  "version": "0.68.1",
+  "side": "client",
+  "platforms": ["mac"],
+  "arch": "arm64",
+  "category": "network",
+  "tags": ["frp", "frpc", "proxy", "tunnel"],
+  "package": {
+    "filename": "frpc_0.68.1_darwin_arm64.zip",
+    "download_url": "/api/external-tools/packages/frpc_0.68.1_darwin_arm64.zip",
+    "executable_rel_path": "frpc_0.68.1_darwin_arm64/frpc"
+  },
+  "install": {
+    "install_dir": "{{external_tools_root}}/{{id}}/{{version}}",
+    "skip_if_exists": "{{install_dir}}/frpc_0.68.1_darwin_arm64/frpc"
+  },
+  "params": [
+    {
+      "name": "instance_name",
+      "label": "Instance Name",
+      "type": "string",
+      "required": true,
+      "default": "vite-8087",
+      "description": "Unique name for this frpc instance. Examples: vite-8087, ssh-6000. It controls config/log/pid isolation."
+    },
+    {
+      "name": "server_addr",
+      "label": "FRP Server Address",
+      "type": "string",
+      "required": true,
+      "description": "frps server IP or domain, for example 1.2.3.4 or frp.example.com"
+    },
+    {
+      "name": "server_port",
+      "label": "FRPS Control Port",
+      "type": "integer",
+      "required": true,
+      "default": 7000,
+      "min": 1,
+      "max": 65535,
+      "description": "frps bindPort. This is the control connection port used by frpc to connect to frps, not the exposed business port."
+    },
+    {
+      "name": "proxy_name",
+      "label": "Proxy Name",
+      "type": "string",
+      "required": true,
+      "default": "vite",
+      "description": "Name of this proxy rule. It should be unique on the same frps server."
+    },
+    {
+      "name": "proxy_type",
+      "label": "Proxy Type",
+      "type": "string",
+      "required": true,
+      "default": "tcp",
+      "description": "FRP proxy type. For local port forwarding, usually use tcp."
+    },
+    {
+      "name": "local_ip",
+      "label": "Client Local IP",
+      "type": "string",
+      "required": true,
+      "default": "127.0.0.1",
+      "description": "The local IP address on the client machine that frpc should forward to."
+    },
+    {
+      "name": "local_port",
+      "label": "Client Local Port",
+      "type": "integer",
+      "required": true,
+      "default": 5173,
+      "min": 1,
+      "max": 65535,
+      "description": "The local port on the client machine. For example, Vite dev server usually uses 5173."
+    },
+    {
+      "name": "remote_port",
+      "label": "Server Exposed Port",
+      "type": "integer",
+      "required": true,
+      "default": 8087,
+      "min": 1,
+      "max": 65535,
+      "description": "The port exposed on the frps server. External users connect to server_addr:remote_port."
+    }
+  ],
+  "config": {
+    "target": "{{instance_runtime_dir}}/frpc.toml",
+    "template": "serverAddr = \"{{server_addr}}\"\nserverPort = {{server_port}}\n\n[[proxies]]\nname = \"{{proxy_name}}\"\ntype = \"{{proxy_type}}\"\nlocalIP = \"{{local_ip}}\"\nlocalPort = {{local_port}}\nremotePort = {{remote_port}}\n"
+  },
+  "runtime": {
+    "cwd": "{{install_dir}}/frpc_0.68.1_darwin_arm64",
+    "argv": [
+      "{{install_dir}}/frpc_0.68.1_darwin_arm64/frpc",
+      "-c",
+      "{{instance_runtime_dir}}/frpc.toml"
+    ],
+    "stdout": "{{instance_runtime_dir}}/stdout.log",
+    "stderr": "stdout",
+    "pid_file": "{{instance_runtime_dir}}/tool.pid",
+    "state_file": "{{instance_runtime_dir}}/state.json"
+  },
+  "lifecycle": {
+    "stop": {
+      "type": "signal",
+      "signal": "TERM",
+      "timeout_sec": 5,
+      "kill_after_timeout": true
+    },
+    "status": {
+      "type": "pid_file"
+    }
+  }
+}

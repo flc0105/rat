@@ -141,6 +141,7 @@ class ServerApplicationAssembly:
         self.external_tool_runtime_service = ExternalToolRuntimeService(
             catalog_service=self.external_tool_catalog_service,
             command_execution_api=self.command_execution_api,
+            remote_execution_service=self.remote_execution_service,
             install_root_dir=EXTERNAL_TOOL_INSTALL_ROOT_DIR,
             runtime_root_dir=EXTERNAL_TOOL_RUNTIME_ROOT_DIR,
         )
