@@ -2,6 +2,7 @@ import os
 import subprocess
 
 from client.commands.interrupts import interruptible
+from client.commands.services.network.netstat_service import NetstatService
 from client.commands.services.network.network_interface_service import NetworkInterfaceService
 from core.utils.decorator import desc
 
@@ -11,14 +12,6 @@ class CommandSystemMixin:
     通用系统信息/系统操作命令。
     """
 
-    def _get_network_interface_service(self):
-        service = getattr(self, '_network_interface_service', None)
-
-        if service is None:
-            service = NetworkInterfaceService(self)
-            self._network_interface_service = service
-
-        return service
 
     @desc('Get current user ID/name', group='system')
     @interruptible()
@@ -171,18 +164,48 @@ class CommandSystemMixin:
 
         return 1, f"Boot time: {boot_dt.strftime('%Y-%m-%d %H:%M:%S')}\nUptime: {days}d {hours}h {minutes}m"
 
+    def _get_network_interface_service(self):
+        service = getattr(self, '_network_interface_service', None)
+
+        if service is None:
+            service = NetworkInterfaceService(self)
+            self._network_interface_service = service
+
+        return service
+
+    def _get_netstat_service(self):
+        service = getattr(self, '_netstat_service', None)
+
+        if service is None:
+            service = NetstatService(self)
+            self._netstat_service = service
+
+        return service
+
     @desc('Show network interfaces', group='network')
     @interruptible()
     def ifconfig(self, arg=''):
         """
-        显示当前机器可用网卡，输出 name / ip / mac。
+        shell-like ifconfig.
 
-        输出格式由命令执行器统一处理：
-        - ifconfig        -> table
-        - ifconfig json   -> JSON
-        - ifconfig --json -> JSON
+        用法：
+        - ifconfig
+        - ifconfig json
+
+        参数保持简单，不做端口、过滤等复杂解析。
         """
         try:
             return self._get_network_interface_service().build_ifconfig_result()
         except Exception as e:
-            return 0, f'Failed to get network interfaces: {e}'
+            return 0, 'Failed to get network interfaces: {}'.format(e)
+
+    def _acmd_netstat_common(self, args_dict, payload=None):
+        """
+        acmd netstat 公共实现。
+
+        注意：
+        - 不在这里加 @argument_command
+        - iOS 不注册 netstat
+        - mac / linux / win 平台类自己注册
+        """
+        return self._get_netstat_service().build_acmd_netstat_result(args_dict)

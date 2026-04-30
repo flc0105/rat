@@ -8,6 +8,7 @@ from client.commands.platform.services.mac.file_inspection_service import MacFil
 from client.commands.platform.services.mac.media_service import MacMediaService
 from client.commands.platform.services.mac.system_service import MacSystemService
 from client.commands.platform.specs.mac import *
+from client.commands.specs.network import NETSTAT_ARGUMENT_SPEC
 from core.utils.decorator import desc
 from core.utils.logger import logger
 
@@ -92,3 +93,8 @@ class MacCommands(CommonCommands):
     def _acmd_archive_peek(self, args_dict, payload=None):
         """查看压缩包内容"""
         return self.mac_file_inspection.acmd_archive_peek(args_dict, payload)
+
+    @argument_command('netstat', spec=NETSTAT_ARGUMENT_SPEC)
+    @interruptible()
+    def _acmd_netstat(self, args_dict, payload=None):
+        return self._acmd_netstat_common(args_dict, payload)
