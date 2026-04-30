@@ -1,31 +1,44 @@
+import errno
 import json
 import os
+import re
 import shlex
+import signal
 import subprocess
+import sys
+import tempfile
+import time
+from types import SimpleNamespace
 
 from client.commands.runtime.interrupts import interruptible
 from core.utils.client_util import safe_extract_zip_file
 from core.utils.decorator import desc
 
-import sys
-import tempfile
-from types import SimpleNamespace
+
+_INSTANCE_PATTERN = re.compile(r'[^A-Za-z0-9_.-]+')
 
 
 class CommandExternalToolMixin:
     """
-    External tool runtime command.
+    External tool lifecycle commands.
 
-    Payload is prepared by the server from external tool meta.
-    The client only performs deterministic operations:
-    download zip, extract if needed, write rendered config, chmod executable, run detached.
+    The server renders meta/templates into payloads. The client performs the
+    deterministic local lifecycle operations: install package, write instance
+    config, start detached, stop gracefully, report status, list instances, logs.
     """
 
     DOWNLOAD_TIMEOUT = (15, 600)
     DOWNLOAD_CHUNK_SIZE = 64 * 1024
+    DEFAULT_STOP_TIMEOUT_SEC = 5
+    DEFAULT_LOG_TAIL_BYTES = 65536
 
     def _external_tool_expand_path(self, path: str) -> str:
         return os.path.abspath(os.path.expandvars(os.path.expanduser(str(path or '').strip())))
+
+    def _external_tool_sanitize_instance_id(self, value) -> str:
+        text = str(value or '').strip()
+        text = _INSTANCE_PATTERN.sub('-', text).strip('.-_')
+        return (text or 'default')[:96]
 
     def _external_tool_render_path_list(self, values):
         if isinstance(values, str):
@@ -116,25 +129,24 @@ class CommandExternalToolMixin:
         if stderr != 'stdout':
             stderr = self._external_tool_expand_path(stderr)
         pid_file = self._external_tool_expand_path(runtime.get('pid_file') or '~/.ops/external_tools/runtime/tool.pid')
+        state_file = self._external_tool_expand_path(runtime.get('state_file') or os.path.join(os.path.dirname(pid_file), 'state.json'))
         return {
             'argv': argv,
             'cwd': cwd,
             'stdout': stdout,
             'stderr': stderr,
             'pid_file': pid_file,
+            'state_file': state_file,
         }
 
     def _external_tool_start_detached(self, runtime: dict) -> SimpleNamespace:
         """
-        Start the external executable through a short-lived launcher process.
-
-        This prevents the real frpc process from remaining a direct child of the
-        client agent process.
+        Two-stage launcher. The real external tool is not a direct child of the
+        client process, and the PID file records the real tool PID.
         """
         os.makedirs(runtime['cwd'], exist_ok=True)
         os.makedirs(os.path.dirname(runtime['stdout']), exist_ok=True)
         os.makedirs(os.path.dirname(runtime['pid_file']), exist_ok=True)
-
         if runtime.get('stderr') not in ('', None, 'stdout'):
             os.makedirs(os.path.dirname(runtime['stderr']), exist_ok=True)
 
@@ -145,13 +157,11 @@ class CommandExternalToolMixin:
             'stderr': runtime.get('stderr') or 'stdout',
             'pid_file': runtime['pid_file'],
         }
-
         spec_fd, spec_path = tempfile.mkstemp(
             prefix='external-tool-launch-',
             suffix='.json',
             dir=os.path.dirname(runtime['pid_file']),
         )
-
         try:
             with os.fdopen(spec_fd, 'w', encoding='utf-8') as file_obj:
                 json.dump(launch_spec, file_obj, ensure_ascii=False)
@@ -163,13 +173,11 @@ import subprocess
 import sys
 
 spec_path = sys.argv[1]
-
 with open(spec_path, 'r', encoding='utf-8') as file_obj:
     spec = json.load(file_obj)
 
 stdout_file = open(spec['stdout'], 'ab')
 stderr_file = None
-
 try:
     stderr_value = spec.get('stderr') or 'stdout'
     if stderr_value == 'stdout':
@@ -186,7 +194,6 @@ try:
         'close_fds': True,
         'shell': False,
     }
-
     if os.name == 'nt':
         flags = 0
         flags |= getattr(subprocess, 'CREATE_NEW_PROCESS_GROUP', 0)
@@ -197,15 +204,12 @@ try:
 
     with open(spec['pid_file'], 'w', encoding='utf-8') as pid_obj:
         pid_obj.write(str(process.pid))
-
     print(process.pid)
-
 finally:
     stdout_file.close()
     if stderr_file is not None:
         stderr_file.close()
 '''
-
             completed = subprocess.run(
                 [sys.executable, '-c', launcher_code, spec_path],
                 stdin=subprocess.DEVNULL,
@@ -215,105 +219,354 @@ finally:
                 timeout=10,
                 close_fds=True,
             )
-
             if completed.returncode != 0:
-                raise RuntimeError(
-                    (completed.stderr or completed.stdout or 'external tool client launcher failed').strip()
-                )
-
+                raise RuntimeError((completed.stderr or completed.stdout or 'external tool client launcher failed').strip())
             pid_text = (completed.stdout or '').strip().splitlines()[-1]
             return SimpleNamespace(pid=int(pid_text))
-
         finally:
             try:
                 os.unlink(spec_path)
             except OSError:
                 pass
 
-    # def _external_tool_start_detached(self, runtime: dict) -> subprocess.Popen:
-    #     os.makedirs(runtime['cwd'], exist_ok=True)
-    #     os.makedirs(os.path.dirname(runtime['stdout']), exist_ok=True)
-    #     os.makedirs(os.path.dirname(runtime['pid_file']), exist_ok=True)
-    #
-    #     stdout_file = open(runtime['stdout'], 'ab')
-    #     stderr_file = None
-    #     stderr_target = subprocess.STDOUT
-    #     if runtime.get('stderr') != 'stdout':
-    #         os.makedirs(os.path.dirname(runtime['stderr']), exist_ok=True)
-    #         stderr_file = open(runtime['stderr'], 'ab')
-    #         stderr_target = stderr_file
-    #
-    #     popen_kwargs = {
-    #         'cwd': runtime['cwd'],
-    #         'stdin': subprocess.DEVNULL,
-    #         'stdout': stdout_file,
-    #         'stderr': stderr_target,
-    #         'close_fds': True,
-    #         'shell': False,
-    #     }
-    #     try:
-    #         if os.name == 'nt':
-    #             flags = 0
-    #             flags |= getattr(subprocess, 'CREATE_NEW_PROCESS_GROUP', 0)
-    #             flags |= getattr(subprocess, 'DETACHED_PROCESS', 0)
-    #             process = subprocess.Popen(runtime['argv'], creationflags=flags, **popen_kwargs)
-    #         else:
-    #             process = subprocess.Popen(runtime['argv'], start_new_session=True, **popen_kwargs)
-    #     finally:
-    #         stdout_file.close()
-    #         if stderr_file is not None:
-    #             stderr_file.close()
-    #
-    #     with open(runtime['pid_file'], 'w', encoding='utf-8') as file_obj:
-    #         file_obj.write(str(process.pid))
-    #     return process
+    def _external_tool_read_pid(self, pid_file: str) -> int | None:
+        try:
+            with open(pid_file, 'r', encoding='utf-8') as file_obj:
+                text = file_obj.read().strip()
+            pid = int(text)
+            return pid if pid > 0 else None
+        except Exception:
+            return None
 
-    # def _external_tool_write_state(self, payload: dict, install_info: dict, runtime: dict, process: subprocess.Popen) -> str:
-    def _external_tool_write_state(self, payload: dict, install_info: dict, runtime: dict, process: SimpleNamespace) -> str:
-        state_file = os.path.join(os.path.dirname(runtime['pid_file']), 'state.json')
+    def _external_tool_is_pid_alive(self, pid: int | None) -> bool:
+        if not pid or pid <= 0:
+            return False
+        try:
+            os.kill(pid, 0)
+            return True
+        except OSError as e:
+            return e.errno == errno.EPERM
+        except Exception:
+            return False
+
+    def _external_tool_signal_process_group_or_pid(self, pid: int, sig: int):
+        if os.name != 'nt':
+            try:
+                os.killpg(pid, sig)
+                return
+            except ProcessLookupError:
+                return
+            except Exception:
+                pass
+        try:
+            os.kill(pid, sig)
+        except ProcessLookupError:
+            return
+
+    def _external_tool_read_json(self, path: str) -> dict:
+        try:
+            with open(path, 'r', encoding='utf-8') as file_obj:
+                data = json.load(file_obj)
+            return data if isinstance(data, dict) else {}
+        except Exception:
+            return {}
+
+    def _external_tool_write_json(self, path: str, data: dict):
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, 'w', encoding='utf-8') as file_obj:
+            json.dump(data, file_obj, ensure_ascii=False, indent=2)
+
+    def _external_tool_state_file_from_payload(self, payload: dict) -> str:
+        runtime = payload.get('runtime') or {}
+        state_file = runtime.get('state_file')
+        if state_file:
+            return self._external_tool_expand_path(state_file)
+        pid_file = self._external_tool_expand_path(runtime.get('pid_file') or '~/.ops/external_tools/runtime/tool.pid')
+        return os.path.join(os.path.dirname(pid_file), 'state.json')
+
+    def _external_tool_pid_file_from_payload(self, payload: dict) -> str:
+        runtime = payload.get('runtime') or {}
+        return self._external_tool_expand_path(runtime.get('pid_file') or os.path.join(os.path.dirname(self._external_tool_state_file_from_payload(payload)), 'tool.pid'))
+
+    def _external_tool_stdout_from_payload(self, payload: dict) -> str:
+        runtime = payload.get('runtime') or {}
+        return self._external_tool_expand_path(runtime.get('stdout') or os.path.join(os.path.dirname(self._external_tool_state_file_from_payload(payload)), 'stdout.log'))
+
+    def _external_tool_status_from_payload(self, payload: dict) -> dict:
+        state_file = self._external_tool_state_file_from_payload(payload)
+        pid_file = self._external_tool_pid_file_from_payload(payload)
+        stdout = self._external_tool_stdout_from_payload(payload)
+        state = self._external_tool_read_json(state_file)
+        pid = self._external_tool_read_pid(pid_file)
+        alive = self._external_tool_is_pid_alive(pid)
+        if alive:
+            status = 'running'
+        elif os.path.exists(pid_file):
+            status = 'stale'
+        elif state:
+            status = state.get('last_status') or 'stopped'
+        else:
+            status = 'not_started'
+        return {
+            'tool_id': payload.get('tool_id') or state.get('tool_id') or '',
+            'display_name': payload.get('display_name') or state.get('display_name') or '',
+            'side': payload.get('side') or state.get('side') or 'client',
+            'instance_id': payload.get('instance_id') or state.get('instance_id') or 'default',
+            'status': status,
+            'running': alive,
+            'pid': pid,
+            'pid_file': pid_file,
+            'state_file': state_file,
+            'stdout': stdout,
+            'config': state.get('config') or {},
+            'params': state.get('params') or {},
+            'started_at': state.get('started_at') or '',
+            'stopped_at': state.get('stopped_at') or '',
+        }
+
+    def _external_tool_write_state(self, payload: dict, install_info: dict, config_info: dict, runtime: dict, process: SimpleNamespace) -> str:
+        state_file = runtime.get('state_file') or os.path.join(os.path.dirname(runtime['pid_file']), 'state.json')
         state = {
             'tool_id': payload.get('tool_id') or '',
             'display_name': payload.get('display_name') or payload.get('tool_id') or '',
             'version': payload.get('version') or '',
             'side': payload.get('side') or 'client',
+            'instance_id': payload.get('instance_id') or 'default',
+            'instance_name': payload.get('instance_name') or payload.get('instance_id') or 'default',
             'pid': process.pid,
-            'install_dir': install_info.get('install_dir') or '',
+            'params': payload.get('params') or {},
+            'install': install_info or {},
+            'config': config_info or {},
+            'runtime': runtime or {},
             'argv': runtime.get('argv') or [],
             'cwd': runtime.get('cwd') or '',
             'stdout': runtime.get('stdout') or '',
             'stderr': runtime.get('stderr') or '',
             'pid_file': runtime.get('pid_file') or '',
+            'state_file': state_file,
+            'install_dir': install_info.get('install_dir') or '',
+            'started_at': time.strftime('%Y-%m-%dT%H:%M:%S'),
+            'last_status': 'running',
         }
-        with open(state_file, 'w', encoding='utf-8') as file_obj:
-            json.dump(state, file_obj, ensure_ascii=False, indent=2)
+        self._external_tool_write_json(state_file, state)
         return state_file
 
-    @desc('Install and run an external tool package', group='runtime', suggest=False)
+    def _external_tool_signal_name_to_value(self, value) -> int:
+        text = str(value or 'TERM').strip().upper()
+        if not text.startswith('SIG'):
+            text = 'SIG' + text
+        return int(getattr(signal, text, signal.SIGTERM))
+
+    def _external_tool_stop_by_signal(self, pid: int | None, stop_spec: dict) -> dict:
+        if not pid:
+            return {'type': 'signal', 'sent': False, 'message': 'no pid'}
+        if not self._external_tool_is_pid_alive(pid):
+            return {'type': 'signal', 'sent': False, 'message': 'process not running'}
+        sig = self._external_tool_signal_name_to_value(stop_spec.get('signal') or 'TERM')
+        timeout = int(stop_spec.get('timeout_sec') or self.DEFAULT_STOP_TIMEOUT_SEC)
+        kill_after = bool(stop_spec.get('kill_after_timeout', True))
+        self._external_tool_signal_process_group_or_pid(pid, sig)
+        deadline = time.time() + max(0, timeout)
+        while time.time() < deadline:
+            if not self._external_tool_is_pid_alive(pid):
+                return {'type': 'signal', 'signal': signal.Signals(sig).name, 'sent': True, 'terminated': True, 'killed': False}
+            time.sleep(0.2)
+        if self._external_tool_is_pid_alive(pid) and kill_after:
+            self._external_tool_signal_process_group_or_pid(pid, signal.SIGKILL)
+            time.sleep(0.2)
+            return {'type': 'signal', 'signal': signal.Signals(sig).name, 'sent': True, 'terminated': not self._external_tool_is_pid_alive(pid), 'killed': True}
+        return {'type': 'signal', 'signal': signal.Signals(sig).name, 'sent': True, 'terminated': not self._external_tool_is_pid_alive(pid), 'killed': False}
+
+
+    def _external_tool_run_stop_command(self, stop_spec: dict) -> dict:
+        argv = stop_spec.get('argv') or stop_spec.get('command') or []
+        rendered = self._external_tool_render_path_list(argv)
+        if not rendered:
+            raise ValueError('lifecycle.stop.argv is required for command stop')
+        rendered = [
+            self._external_tool_expand_path(item) if index == 0 or '/' in item or '\\' in item else item
+            for index, item in enumerate(rendered)
+        ]
+        timeout = int(stop_spec.get('timeout_sec') or self.DEFAULT_STOP_TIMEOUT_SEC)
+        cwd = self._external_tool_expand_path(stop_spec.get('cwd') or os.getcwd())
+        completed = subprocess.run(
+            rendered,
+            cwd=cwd,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            timeout=max(1, timeout),
+            close_fds=True,
+        )
+        return {
+            'type': 'command',
+            'argv': rendered,
+            'returncode': completed.returncode,
+            'stdout': completed.stdout,
+            'stderr': completed.stderr,
+        }
+
+    def _external_tool_stop_command(self, payload: dict) -> dict:
+        lifecycle = payload.get('lifecycle') if isinstance(payload.get('lifecycle'), dict) else {}
+        stop_spec = lifecycle.get('stop') if isinstance(lifecycle.get('stop'), dict) else {}
+        if not stop_spec:
+            stop_spec = {'type': 'signal', 'signal': 'TERM', 'timeout_sec': self.DEFAULT_STOP_TIMEOUT_SEC, 'kill_after_timeout': True}
+        pid_file = self._external_tool_pid_file_from_payload(payload)
+        pid = self._external_tool_read_pid(pid_file)
+        if str(stop_spec.get('type') or 'signal').strip().lower() == 'command':
+            result = self._external_tool_run_stop_command(stop_spec)
+            fallback = stop_spec.get('fallback') if isinstance(stop_spec.get('fallback'), dict) else None
+            if fallback and self._external_tool_is_pid_alive(pid):
+                result['fallback'] = self._external_tool_stop_by_signal(pid, fallback)
+        else:
+            result = self._external_tool_stop_by_signal(pid, stop_spec)
+        if not self._external_tool_is_pid_alive(pid):
+            try:
+                if os.path.exists(pid_file):
+                    os.unlink(pid_file)
+            except OSError:
+                pass
+            state_file = self._external_tool_state_file_from_payload(payload)
+            state = self._external_tool_read_json(state_file)
+            state['last_status'] = 'stopped'
+            state['stopped_at'] = time.strftime('%Y-%m-%dT%H:%M:%S')
+            state['stop_result'] = result
+            self._external_tool_write_json(state_file, state)
+        return result
+
+    def _external_tool_list_instances_payload(self, payload: dict) -> dict:
+        tool_id = str(payload.get('tool_id') or '').strip()
+        if not tool_id:
+            raise ValueError('tool_id is required')
+        root = self._external_tool_expand_path(os.path.join('~/.ops/external_tools/runtime', tool_id, 'instances'))
+        items = []
+        if os.path.isdir(root):
+            for name in sorted(os.listdir(root)):
+                path = os.path.join(root, name)
+                if not os.path.isdir(path):
+                    continue
+                instance_payload = {
+                    'tool_id': tool_id,
+                    'display_name': payload.get('display_name') or tool_id,
+                    'side': 'client',
+                    'instance_id': name,
+                    'runtime': {
+                        'pid_file': os.path.join(path, 'tool.pid'),
+                        'stdout': os.path.join(path, 'stdout.log'),
+                        'state_file': os.path.join(path, 'state.json'),
+                    },
+                }
+                items.append(self._external_tool_status_from_payload(instance_payload))
+        return {'tool_id': tool_id, 'side': 'client', 'items': items}
+
+    def _external_tool_read_logs_payload(self, payload: dict) -> dict:
+        stdout = self._external_tool_stdout_from_payload(payload)
+        max_bytes = int(payload.get('max_bytes') or self.DEFAULT_LOG_TAIL_BYTES)
+        content = ''
+        if os.path.isfile(stdout):
+            with open(stdout, 'rb') as file_obj:
+                if max_bytes > 0:
+                    file_obj.seek(0, os.SEEK_END)
+                    size = file_obj.tell()
+                    file_obj.seek(max(0, size - max_bytes), os.SEEK_SET)
+                raw = file_obj.read()
+            content = raw.decode('utf-8', errors='replace')
+        return {
+            'tool_id': payload.get('tool_id') or '',
+            'instance_id': payload.get('instance_id') or 'default',
+            'log_file': stdout,
+            'content': content,
+            'max_bytes': max_bytes,
+        }
+
+    @desc('Start an external tool instance', group='runtime', suggest=False)
     @interruptible()
-    def external_tool_run(self, arg=''):
+    def external_tool_start(self, arg=''):
         try:
             payload = self.structured_arg_codec.decode(arg)
             if not isinstance(payload, dict):
                 return 0, 'Invalid external tool payload'
 
+            runtime = self._external_tool_build_runtime(payload)
+            existing_pid = self._external_tool_read_pid(runtime['pid_file'])
+            if self._external_tool_is_pid_alive(existing_pid):
+                status = self._external_tool_status_from_payload(payload)
+                status['message'] = f'{payload.get("display_name") or payload.get("tool_id") or "external tool"} instance {payload.get("instance_id") or "default"} is already running'
+                return 1, json.dumps(status, ensure_ascii=False, indent=2)
+
             archive_path = self._external_tool_download_package(payload)
             install_info = self._external_tool_install_if_needed(payload, archive_path)
             config_info = self._external_tool_write_config(payload)
-            runtime = self._external_tool_build_runtime(payload)
             process = self._external_tool_start_detached(runtime)
-            state_file = self._external_tool_write_state(payload, install_info, runtime, process)
+            state_file = self._external_tool_write_state(payload, install_info, config_info, runtime, process)
 
             result = {
                 'tool_id': payload.get('tool_id') or '',
                 'side': payload.get('side') or 'client',
+                'instance_id': payload.get('instance_id') or 'default',
+                'status': 'running',
                 'pid': process.pid,
                 'package': archive_path,
                 'install': install_info,
                 'config': config_info,
                 'runtime': runtime,
                 'state_file': state_file,
-                'message': f'{payload.get("display_name") or payload.get("tool_id") or "external tool"} started on client',
+                'message': f'{payload.get("display_name") or payload.get("tool_id") or "external tool"} instance {payload.get("instance_id") or "default"} started on client',
             }
             return 1, json.dumps(result, ensure_ascii=False, indent=2)
         except Exception as e:
-            return 0, f'Failed to run external tool: {e}'
+            return 0, f'Failed to start external tool: {e}'
+
+    @desc('Install and run an external tool package', group='runtime', suggest=False)
+    @interruptible()
+    def external_tool_run(self, arg=''):
+        return self.external_tool_start(arg)
+
+    @desc('Stop an external tool instance', group='runtime', suggest=False)
+    @interruptible()
+    def external_tool_stop(self, arg=''):
+        try:
+            payload = self.structured_arg_codec.decode(arg)
+            if not isinstance(payload, dict):
+                return 0, 'Invalid external tool payload'
+            stop_result = self._external_tool_stop_command(payload)
+            status = self._external_tool_status_from_payload(payload)
+            status['stop_result'] = stop_result
+            status['message'] = f'{payload.get("display_name") or payload.get("tool_id") or "external tool"} instance {payload.get("instance_id") or "default"} stop requested on client'
+            return 1, json.dumps(status, ensure_ascii=False, indent=2)
+        except Exception as e:
+            return 0, f'Failed to stop external tool: {e}'
+
+    @desc('Show external tool instance status', group='runtime', suggest=False)
+    @interruptible()
+    def external_tool_status(self, arg=''):
+        try:
+            payload = self.structured_arg_codec.decode(arg)
+            if not isinstance(payload, dict):
+                return 0, 'Invalid external tool payload'
+            return 1, json.dumps(self._external_tool_status_from_payload(payload), ensure_ascii=False, indent=2)
+        except Exception as e:
+            return 0, f'Failed to get external tool status: {e}'
+
+    @desc('List external tool instances', group='runtime', suggest=False)
+    @interruptible()
+    def external_tool_list_instances(self, arg=''):
+        try:
+            payload = self.structured_arg_codec.decode(arg)
+            if not isinstance(payload, dict):
+                return 0, 'Invalid external tool payload'
+            return 1, json.dumps(self._external_tool_list_instances_payload(payload), ensure_ascii=False, indent=2)
+        except Exception as e:
+            return 0, f'Failed to list external tool instances: {e}'
+
+    @desc('Read external tool instance logs', group='runtime', suggest=False)
+    @interruptible()
+    def external_tool_logs(self, arg=''):
+        try:
+            payload = self.structured_arg_codec.decode(arg)
+            if not isinstance(payload, dict):
+                return 0, 'Invalid external tool payload'
+            return 1, json.dumps(self._external_tool_read_logs_payload(payload), ensure_ascii=False, indent=2)
+        except Exception as e:
+            return 0, f'Failed to read external tool logs: {e}'

@@ -1,12 +1,16 @@
 import base64
+import errno
 import json
 import os
 import platform
 import re
 import shlex
+import shutil
+import signal
 import subprocess
 import sys
 import tempfile
+import time
 import zipfile
 from datetime import datetime
 from types import SimpleNamespace
@@ -14,13 +18,24 @@ from typing import Any
 
 from core.platform.platform_identity import detect_platform_alias
 
+
 _VAR_PATTERN = re.compile(r'{{\s*([A-Za-z_][A-Za-z0-9_]*)\s*}}')
+_INSTANCE_PATTERN = re.compile(r'[^A-Za-z0-9_.-]+')
 
 
 class ExternalToolRuntimeService:
     """
-    Install and run external tools on server side, and build client-side run payloads.
+    External tool lifecycle runtime.
+
+    Concepts:
+    - tool meta describes an executable resource and shared install package
+    - instance describes one running configuration of that tool
+    - install_dir is shared per tool/version
+    - instance_runtime_dir is unique per tool/instance and owns config/log/pid/state
     """
+
+    DEFAULT_STOP_TIMEOUT_SEC = 5
+    DEFAULT_LOG_TAIL_BYTES = 65536
 
     def __init__(self, catalog_service, command_execution_api, install_root_dir: str, runtime_root_dir: str):
         self.catalog_service = catalog_service
@@ -47,7 +62,6 @@ class ExternalToolRuntimeService:
             def replace(match):
                 key = match.group(1)
                 return str(context.get(key, match.group(0)))
-
             return _VAR_PATTERN.sub(replace, value)
         if isinstance(value, list):
             return [self._render_value(item, context) for item in value]
@@ -57,6 +71,34 @@ class ExternalToolRuntimeService:
 
     def _expand_path(self, path: str) -> str:
         return os.path.abspath(os.path.expandvars(os.path.expanduser(str(path or '').strip())))
+
+    def _safe_join_runtime(self, *parts: str) -> str:
+        path = os.path.abspath(os.path.join(self.runtime_root_dir, *[str(part or '') for part in parts]))
+        if os.path.commonpath([self.runtime_root_dir, path]) != self.runtime_root_dir:
+            raise ValueError('invalid runtime path')
+        return path
+
+    def _sanitize_instance_id(self, value: Any) -> str:
+        text = str(value or '').strip()
+        text = _INSTANCE_PATTERN.sub('-', text).strip('.-_')
+        if not text:
+            text = 'default'
+        return text[:96]
+
+    def _derive_instance_id(self, meta: dict, params: dict | None, explicit: str = '') -> str:
+        params = params if isinstance(params, dict) else {}
+        raw = explicit or params.get('instance_id') or params.get('instance_name')
+        if not raw:
+            proxy_name = str(params.get('proxy_name') or '').strip()
+            remote_port = str(params.get('remote_port') or '').strip()
+            bind_port = str(params.get('bind_port') or '').strip()
+            if proxy_name and remote_port:
+                raw = f'{proxy_name}-{remote_port}'
+            elif bind_port:
+                raw = f'{meta.get("name") or meta.get("id")}-{bind_port}'
+            else:
+                raw = 'default'
+        return self._sanitize_instance_id(raw)
 
     def _coerce_param_value(self, spec: dict, value: Any) -> Any:
         param_type = str(spec.get('type') or 'string').strip().lower()
@@ -91,10 +133,15 @@ class ExternalToolRuntimeService:
                 resolved[key] = value
         return resolved
 
-    def _base_context(self, meta: dict, params: dict, *, install_root: str, runtime_root: str) -> dict:
+    def _base_context(self, meta: dict, params: dict, *, install_root: str, runtime_root: str, instance_id: str = '') -> dict:
+        params = params if isinstance(params, dict) else {}
         version = str(meta.get('version') or 'default').strip() or 'default'
+        resolved_instance_id = self._derive_instance_id(meta, params, explicit=instance_id)
+        tool_id = str(meta.get('id') or '').strip()
+        tool_runtime_dir = os.path.join(runtime_root, tool_id)
+        instance_runtime_dir = os.path.join(tool_runtime_dir, 'instances', resolved_instance_id)
         context = {
-            'id': str(meta.get('id') or '').strip(),
+            'id': tool_id,
             'name': str(meta.get('name') or meta.get('id') or '').strip(),
             'display_name': str(meta.get('display_name') or meta.get('id') or '').strip(),
             'version': version,
@@ -104,33 +151,49 @@ class ExternalToolRuntimeService:
             'external_tools_root': install_root,
             'external_tools_runtime': runtime_root,
             'runtime_dir': runtime_root,
+            'tool_runtime_dir': tool_runtime_dir,
+            'instance_id': resolved_instance_id,
+            'instance_name': params.get('instance_name') or resolved_instance_id,
+            'instance_runtime_dir': instance_runtime_dir,
+            'state_file': os.path.join(instance_runtime_dir, 'state.json'),
         }
         context.update(params or {})
-        install_template = str(
-            (meta.get('install') or {}).get('install_dir') or '{{external_tools_root}}/{{id}}/{{version}}')
+        context['instance_id'] = resolved_instance_id
+        context['instance_runtime_dir'] = instance_runtime_dir
+        context['state_file'] = os.path.join(instance_runtime_dir, 'state.json')
+        install_template = str((meta.get('install') or {}).get('install_dir') or '{{external_tools_root}}/{{id}}/{{version}}')
         install_dir = self._render_value(install_template, context)
         context['install_dir'] = install_dir
         return context
 
-    def build_server_context(self, meta: dict, params: dict) -> dict:
+    def build_server_context(self, meta: dict, params: dict, instance_id: str = '') -> dict:
         context = self._base_context(
             meta,
             params,
             install_root=self.install_root_dir,
             runtime_root=self.runtime_root_dir,
+            instance_id=instance_id,
         )
-        for key in ('external_tools_root', 'external_tools_runtime', 'runtime_dir', 'install_dir'):
+        for key in (
+            'external_tools_root',
+            'external_tools_runtime',
+            'runtime_dir',
+            'tool_runtime_dir',
+            'instance_runtime_dir',
+            'state_file',
+            'install_dir',
+        ):
             context[key] = self._expand_path(context[key])
         return context
 
-    def build_client_context(self, meta: dict, params: dict) -> dict:
-        context = self._base_context(
+    def build_client_context(self, meta: dict, params: dict, instance_id: str = '') -> dict:
+        return self._base_context(
             meta,
             params,
             install_root='~/.ops/external_tools/installed',
             runtime_root='~/.ops/external_tools/runtime',
+            instance_id=instance_id,
         )
-        return context
 
     def _assert_tool_usable(self, meta: dict, side: str, platform_alias: str = ''):
         expected_side = str(meta.get('side') or '').strip().lower()
@@ -165,10 +228,7 @@ class ExternalToolRuntimeService:
         skip_template = str(install.get('skip_if_exists') or '').strip()
         if not skip_template:
             executable_rel_path = str((meta.get('package') or {}).get('executable_rel_path') or '').strip()
-            if executable_rel_path:
-                skip_template = '{{install_dir}}/' + executable_rel_path
-            else:
-                skip_template = '{{install_dir}}'
+            skip_template = '{{install_dir}}/' + executable_rel_path if executable_rel_path else '{{install_dir}}'
         return self._expand_path(self._render_value(skip_template, context))
 
     def _install_package_if_needed(self, meta: dict, context: dict) -> dict:
@@ -189,8 +249,7 @@ class ExternalToolRuntimeService:
             extracted = True
 
         executable_rel_path = str((meta.get('package') or {}).get('executable_rel_path') or '').strip()
-        executable_path = self._expand_path(
-            os.path.join(install_dir, executable_rel_path)) if executable_rel_path else skip_path
+        executable_path = self._expand_path(os.path.join(install_dir, executable_rel_path)) if executable_rel_path else skip_path
         self._chmod_executable(executable_path)
 
         return {
@@ -222,37 +281,36 @@ class ExternalToolRuntimeService:
             argv = shlex.split(argv)
         if not isinstance(argv, list) or not argv:
             raise ValueError('runtime.argv is required')
-        argv = [self._expand_path(str(item)) if index == 0 or '/' in str(item) or '\\' in str(item) else str(item) for
-                index, item in enumerate(argv)]
+        argv = [
+            self._expand_path(str(item)) if index == 0 or '/' in str(item) or '\\' in str(item) else str(item)
+            for index, item in enumerate(argv)
+        ]
 
         cwd = self._expand_path(runtime.get('cwd') or context.get('install_dir') or '.')
-        stdout = self._expand_path(
-            runtime.get('stdout') or os.path.join(self.runtime_root_dir, meta.get('id') or 'tool', 'stdout.log'))
+        stdout = self._expand_path(runtime.get('stdout') or os.path.join(context['instance_runtime_dir'], 'stdout.log'))
         stderr = runtime.get('stderr') or 'stdout'
         if stderr != 'stdout':
             stderr = self._expand_path(stderr)
-        pid_file = self._expand_path(
-            runtime.get('pid_file') or os.path.join(self.runtime_root_dir, meta.get('id') or 'tool', 'tool.pid'))
+        pid_file = self._expand_path(runtime.get('pid_file') or os.path.join(context['instance_runtime_dir'], 'tool.pid'))
+        state_file = self._expand_path(runtime.get('state_file') or context.get('state_file') or os.path.join(os.path.dirname(pid_file), 'state.json'))
         return {
             'argv': argv,
             'cwd': cwd,
             'stdout': stdout,
             'stderr': stderr,
             'pid_file': pid_file,
+            'state_file': state_file,
         }
 
     def _start_detached_process(self, runtime_spec: dict) -> SimpleNamespace:
         """
-        Start the external executable through a short-lived launcher process.
-
-        start_new_session=True only separates session/process group; it does not
-        re-parent the child. The launcher makes the real tool a grandchild and exits,
-        so frps/frpc is no longer a direct child of the web server.
+        Two-stage launch: the real tool becomes a grandchild and the short-lived
+        launcher exits. This prevents frps/frpc from remaining a direct child of
+        the web server process, while still recording the real tool PID.
         """
         os.makedirs(runtime_spec['cwd'], exist_ok=True)
         os.makedirs(os.path.dirname(runtime_spec['stdout']), exist_ok=True)
         os.makedirs(os.path.dirname(runtime_spec['pid_file']), exist_ok=True)
-
         if runtime_spec.get('stderr') not in ('', None, 'stdout'):
             os.makedirs(os.path.dirname(runtime_spec['stderr']), exist_ok=True)
 
@@ -269,7 +327,6 @@ class ExternalToolRuntimeService:
             suffix='.json',
             dir=os.path.dirname(runtime_spec['pid_file']),
         )
-
         try:
             with os.fdopen(spec_fd, 'w', encoding='utf-8') as file_obj:
                 json.dump(launch_spec, file_obj, ensure_ascii=False)
@@ -281,13 +338,11 @@ import subprocess
 import sys
 
 spec_path = sys.argv[1]
-
 with open(spec_path, 'r', encoding='utf-8') as file_obj:
     spec = json.load(file_obj)
 
 stdout_file = open(spec['stdout'], 'ab')
 stderr_file = None
-
 try:
     stderr_value = spec.get('stderr') or 'stdout'
     if stderr_value == 'stdout':
@@ -304,7 +359,6 @@ try:
         'close_fds': True,
         'shell': False,
     }
-
     if os.name == 'nt':
         flags = 0
         flags |= getattr(subprocess, 'CREATE_NEW_PROCESS_GROUP', 0)
@@ -315,15 +369,12 @@ try:
 
     with open(spec['pid_file'], 'w', encoding='utf-8') as pid_obj:
         pid_obj.write(str(process.pid))
-
     print(process.pid)
-
 finally:
     stdout_file.close()
     if stderr_file is not None:
         stderr_file.close()
 '''
-
             completed = subprocess.run(
                 [sys.executable, '-c', launcher_code, spec_path],
                 stdin=subprocess.DEVNULL,
@@ -333,110 +384,338 @@ finally:
                 timeout=10,
                 close_fds=True,
             )
-
             if completed.returncode != 0:
-                raise RuntimeError(
-                    (completed.stderr or completed.stdout or 'external tool launcher failed').strip()
-                )
-
+                raise RuntimeError((completed.stderr or completed.stdout or 'external tool launcher failed').strip())
             pid_text = (completed.stdout or '').strip().splitlines()[-1]
             return SimpleNamespace(pid=int(pid_text))
-
         finally:
             try:
                 os.unlink(spec_path)
             except OSError:
                 pass
 
-    # def _start_detached_process(self, runtime_spec: dict) -> subprocess.Popen:
-    #     os.makedirs(runtime_spec['cwd'], exist_ok=True)
-    #     os.makedirs(os.path.dirname(runtime_spec['stdout']), exist_ok=True)
-    #     os.makedirs(os.path.dirname(runtime_spec['pid_file']), exist_ok=True)
-    #     stdout_file = open(runtime_spec['stdout'], 'ab')
-    #     if runtime_spec.get('stderr') == 'stdout':
-    #         stderr_target = subprocess.STDOUT
-    #         stderr_file = None
-    #     else:
-    #         os.makedirs(os.path.dirname(runtime_spec['stderr']), exist_ok=True)
-    #         stderr_file = open(runtime_spec['stderr'], 'ab')
-    #         stderr_target = stderr_file
-    #
-    #     popen_kwargs = {
-    #         'cwd': runtime_spec['cwd'],
-    #         'stdin': subprocess.DEVNULL,
-    #         'stdout': stdout_file,
-    #         'stderr': stderr_target,
-    #         'close_fds': True,
-    #         'shell': False,
-    #     }
-    #     try:
-    #         if os.name == 'nt':
-    #             flags = 0
-    #             flags |= getattr(subprocess, 'CREATE_NEW_PROCESS_GROUP', 0)
-    #             flags |= getattr(subprocess, 'DETACHED_PROCESS', 0)
-    #             process = subprocess.Popen(runtime_spec['argv'], creationflags=flags, **popen_kwargs)
-    #         else:
-    #             process = subprocess.Popen(runtime_spec['argv'], start_new_session=True, **popen_kwargs)
-    #     finally:
-    #         stdout_file.close()
-    #         if stderr_file is not None:
-    #             stderr_file.close()
-    #     with open(runtime_spec['pid_file'], 'w', encoding='utf-8') as file_obj:
-    #         file_obj.write(str(process.pid))
-    #     return process
+    def _read_pid_file(self, pid_file: str) -> int | None:
+        try:
+            with open(pid_file, 'r', encoding='utf-8') as file_obj:
+                text = file_obj.read().strip()
+            pid = int(text)
+            return pid if pid > 0 else None
+        except Exception:
+            return None
 
-    def _write_state_file(self, meta: dict, runtime_spec: dict, process: SimpleNamespace, install_info: dict) -> str:
-        # def _write_state_file(self, meta: dict, runtime_spec: dict, process: subprocess.Popen, install_info: dict) -> str:
-        state_dir = os.path.dirname(runtime_spec['pid_file'])
-        os.makedirs(state_dir, exist_ok=True)
-        state_file = os.path.join(state_dir, 'state.json')
+    def _is_pid_alive(self, pid: int | None) -> bool:
+        if not pid or pid <= 0:
+            return False
+        try:
+            os.kill(pid, 0)
+            return True
+        except OSError as e:
+            return e.errno == errno.EPERM
+        except Exception:
+            return False
+
+    def _signal_process_group_or_pid(self, pid: int, sig: int):
+        if os.name != 'nt':
+            try:
+                os.killpg(pid, sig)
+                return
+            except ProcessLookupError:
+                return
+            except Exception:
+                pass
+        try:
+            os.kill(pid, sig)
+        except ProcessLookupError:
+            return
+
+    def _read_json_file(self, path: str) -> dict:
+        with open(path, 'r', encoding='utf-8') as file_obj:
+            data = json.load(file_obj)
+        return data if isinstance(data, dict) else {}
+
+    def _write_json_file(self, path: str, data: dict):
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, 'w', encoding='utf-8') as file_obj:
+            json.dump(data, file_obj, ensure_ascii=False, indent=2)
+
+    def _default_instance_runtime_dir(self, tool_id: str, instance_id: str) -> str:
+        return self._safe_join_runtime(tool_id, 'instances', self._sanitize_instance_id(instance_id))
+
+    def _state_path_for(self, tool_id: str, instance_id: str) -> str:
+        return os.path.join(self._default_instance_runtime_dir(tool_id, instance_id), 'state.json')
+
+    def _state_or_default_runtime(self, meta: dict, instance_id: str) -> dict:
+        tool_id = str(meta.get('id') or '').strip()
+        state_file = self._state_path_for(tool_id, instance_id)
+        state = self._read_json_file(state_file) if os.path.isfile(state_file) else {}
+        runtime = state.get('runtime') if isinstance(state.get('runtime'), dict) else {}
+        instance_runtime_dir = self._default_instance_runtime_dir(tool_id, instance_id)
+        pid_file = runtime.get('pid_file') or state.get('pid_file') or os.path.join(instance_runtime_dir, 'tool.pid')
+        stdout = runtime.get('stdout') or state.get('stdout') or os.path.join(instance_runtime_dir, 'stdout.log')
+        stderr = runtime.get('stderr') or state.get('stderr') or 'stdout'
+        return {
+            'state': state,
+            'state_file': state_file,
+            'runtime': {
+                'pid_file': self._expand_path(pid_file),
+                'stdout': self._expand_path(stdout),
+                'stderr': self._expand_path(stderr) if stderr != 'stdout' else 'stdout',
+                'state_file': state_file,
+                'cwd': runtime.get('cwd') or state.get('cwd') or '',
+                'argv': runtime.get('argv') or state.get('argv') or [],
+            },
+            'instance_runtime_dir': instance_runtime_dir,
+        }
+
+    def _status_from_state(self, meta: dict, instance_id: str) -> dict:
+        info = self._state_or_default_runtime(meta, instance_id)
+        runtime = info['runtime']
+        state = info['state']
+        pid = self._read_pid_file(runtime['pid_file'])
+        alive = self._is_pid_alive(pid)
+        if alive:
+            status = 'running'
+        elif os.path.exists(runtime['pid_file']):
+            status = 'stale'
+        elif state:
+            status = state.get('last_status') or 'stopped'
+        else:
+            status = 'not_started'
+        return {
+            'tool_id': meta.get('id') or '',
+            'display_name': meta.get('display_name') or meta.get('id') or '',
+            'side': meta.get('side') or '',
+            'instance_id': self._sanitize_instance_id(instance_id),
+            'status': status,
+            'running': alive,
+            'pid': pid,
+            'pid_file': runtime['pid_file'],
+            'state_file': info['state_file'],
+            'stdout': runtime.get('stdout') or '',
+            'stderr': runtime.get('stderr') or '',
+            'config': state.get('config') or {},
+            'params': state.get('params') or {},
+            'started_at': state.get('started_at') or '',
+            'stopped_at': state.get('stopped_at') or '',
+            'message': state.get('message') or '',
+        }
+
+    def _write_state_file(self, meta: dict, context: dict, runtime_spec: dict, process: SimpleNamespace, install_info: dict, config_info: dict, params: dict) -> str:
+        state_file = runtime_spec.get('state_file') or context.get('state_file') or os.path.join(os.path.dirname(runtime_spec['pid_file']), 'state.json')
         payload = {
             'tool_id': meta.get('id') or '',
             'display_name': meta.get('display_name') or '',
             'version': meta.get('version') or '',
             'side': meta.get('side') or '',
+            'instance_id': context.get('instance_id') or 'default',
+            'instance_name': context.get('instance_name') or context.get('instance_id') or 'default',
             'pid': process.pid,
+            'params': params or {},
+            'install': install_info or {},
+            'config': config_info or {},
+            'runtime': runtime_spec or {},
             'argv': runtime_spec.get('argv') or [],
             'cwd': runtime_spec.get('cwd') or '',
             'stdout': runtime_spec.get('stdout') or '',
             'stderr': runtime_spec.get('stderr') or '',
             'pid_file': runtime_spec.get('pid_file') or '',
+            'state_file': state_file,
             'install_dir': install_info.get('install_dir') or '',
             'started_at': datetime.now().isoformat(timespec='seconds'),
+            'last_status': 'running',
         }
-        with open(state_file, 'w', encoding='utf-8') as file_obj:
-            json.dump(payload, file_obj, ensure_ascii=False, indent=2)
+        self._write_json_file(state_file, payload)
         return state_file
 
-    def install_and_run_server(self, tool_id: str, params: dict | None = None) -> dict:
+    def _resolve_stop_lifecycle(self, meta: dict) -> dict:
+        lifecycle = meta.get('lifecycle') if isinstance(meta.get('lifecycle'), dict) else {}
+        stop = lifecycle.get('stop') if isinstance(lifecycle.get('stop'), dict) else {}
+        if not stop:
+            stop = {'type': 'signal', 'signal': 'TERM', 'timeout_sec': self.DEFAULT_STOP_TIMEOUT_SEC, 'kill_after_timeout': True}
+        return stop
+
+    def _signal_name_to_value(self, value: Any) -> int:
+        text = str(value or 'TERM').strip().upper()
+        if not text.startswith('SIG'):
+            text = 'SIG' + text
+        return int(getattr(signal, text, signal.SIGTERM))
+
+    def _run_lifecycle_command(self, stop_spec: dict, context: dict) -> dict:
+        argv = stop_spec.get('argv') or stop_spec.get('command') or []
+        rendered = self._render_value(argv, context)
+        if isinstance(rendered, str):
+            rendered = shlex.split(rendered)
+        if not isinstance(rendered, list) or not rendered:
+            raise ValueError('lifecycle.stop.argv is required for command stop')
+        rendered = [
+            self._expand_path(str(item)) if index == 0 or '/' in str(item) or '\\' in str(item) else str(item)
+            for index, item in enumerate(rendered)
+        ]
+        timeout = int(stop_spec.get('timeout_sec') or self.DEFAULT_STOP_TIMEOUT_SEC)
+        completed = subprocess.run(
+            rendered,
+            cwd=self._expand_path(self._render_value(stop_spec.get('cwd') or context.get('instance_runtime_dir') or '.', context)),
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            timeout=max(1, timeout),
+            close_fds=True,
+        )
+        return {
+            'type': 'command',
+            'argv': rendered,
+            'returncode': completed.returncode,
+            'stdout': completed.stdout,
+            'stderr': completed.stderr,
+        }
+
+    def _stop_by_signal(self, pid: int | None, stop_spec: dict) -> dict:
+        if not pid:
+            return {'type': 'signal', 'signal': '', 'sent': False, 'message': 'no pid'}
+        if not self._is_pid_alive(pid):
+            return {'type': 'signal', 'signal': '', 'sent': False, 'message': 'process not running'}
+        sig = self._signal_name_to_value(stop_spec.get('signal') or 'TERM')
+        timeout = int(stop_spec.get('timeout_sec') or self.DEFAULT_STOP_TIMEOUT_SEC)
+        kill_after = bool(stop_spec.get('kill_after_timeout', True))
+        self._signal_process_group_or_pid(pid, sig)
+        deadline = time.time() + max(0, timeout)
+        while time.time() < deadline:
+            if not self._is_pid_alive(pid):
+                return {'type': 'signal', 'signal': signal.Signals(sig).name, 'sent': True, 'terminated': True, 'killed': False}
+            time.sleep(0.2)
+        if self._is_pid_alive(pid) and kill_after:
+            self._signal_process_group_or_pid(pid, signal.SIGKILL)
+            time.sleep(0.2)
+            return {'type': 'signal', 'signal': signal.Signals(sig).name, 'sent': True, 'terminated': not self._is_pid_alive(pid), 'killed': True}
+        return {'type': 'signal', 'signal': signal.Signals(sig).name, 'sent': True, 'terminated': not self._is_pid_alive(pid), 'killed': False}
+
+    def _mark_stopped(self, state_file: str, stop_result: dict):
+        state = self._read_json_file(state_file) if os.path.isfile(state_file) else {}
+        state['last_status'] = 'stopped'
+        state['stopped_at'] = datetime.now().isoformat(timespec='seconds')
+        state['stop_result'] = stop_result
+        self._write_json_file(state_file, state)
+
+    def start_server_instance(self, tool_id: str, params: dict | None = None, instance_id: str = '') -> dict:
         meta = self.catalog_service.get_tool(tool_id)
         self._assert_tool_usable(meta, 'server')
         resolved_params = self.resolve_params(meta, params)
-        context = self.build_server_context(meta, resolved_params)
+        context = self.build_server_context(meta, resolved_params, instance_id=instance_id)
+        instance_id = context['instance_id']
+        os.makedirs(context['instance_runtime_dir'], exist_ok=True)
         install_info = self._install_package_if_needed(meta, context)
         config_info = self._write_config(meta, context)
         runtime_spec = self._build_runtime_spec(meta, context)
+        existing_pid = self._read_pid_file(runtime_spec['pid_file'])
+        if self._is_pid_alive(existing_pid):
+            status = self._status_from_state(meta, instance_id)
+            status['message'] = f'{meta.get("display_name") or meta.get("id")} instance {instance_id} is already running'
+            return status
         process = self._start_detached_process(runtime_spec)
-        state_file = self._write_state_file(meta, runtime_spec, process, install_info)
+        state_file = self._write_state_file(meta, context, runtime_spec, process, install_info, config_info, resolved_params)
         return {
             'tool_id': meta.get('id') or '',
             'side': 'server',
+            'instance_id': instance_id,
+            'status': 'running',
+            'running': True,
             'pid': process.pid,
             'install': install_info,
             'config': config_info,
             'runtime': runtime_spec,
             'state_file': state_file,
-            'message': f'{meta.get("display_name") or meta.get("id")} started on server',
+            'message': f'{meta.get("display_name") or meta.get("id")} instance {instance_id} started on server',
         }
+
+    def stop_server_instance(self, tool_id: str, instance_id: str, params: dict | None = None) -> dict:
+        meta = self.catalog_service.get_tool(tool_id)
+        self._assert_tool_usable(meta, 'server')
+        instance_id = self._sanitize_instance_id(instance_id)
+        status_before = self._status_from_state(meta, instance_id)
+        pid = status_before.get('pid')
+        info = self._state_or_default_runtime(meta, instance_id)
+        stop_spec = self._resolve_stop_lifecycle(meta)
+        context = self.build_server_context(meta, params or {}, instance_id=instance_id)
+        context.update({
+            'pid': pid or '',
+            'pid_file': info['runtime']['pid_file'],
+            'stdout': info['runtime'].get('stdout') or '',
+            'state_file': info['state_file'],
+        })
+        result = {}
+        if str(stop_spec.get('type') or 'signal').strip().lower() == 'command':
+            result = self._run_lifecycle_command(stop_spec, context)
+            fallback = stop_spec.get('fallback') if isinstance(stop_spec.get('fallback'), dict) else None
+            if fallback and self._is_pid_alive(pid):
+                result['fallback'] = self._stop_by_signal(pid, fallback)
+        else:
+            result = self._stop_by_signal(pid, stop_spec)
+        if not self._is_pid_alive(pid):
+            try:
+                if os.path.exists(info['runtime']['pid_file']):
+                    os.unlink(info['runtime']['pid_file'])
+            except OSError:
+                pass
+            self._mark_stopped(info['state_file'], result)
+        status_after = self._status_from_state(meta, instance_id)
+        status_after['stop_result'] = result
+        status_after['message'] = f'{meta.get("display_name") or meta.get("id")} instance {instance_id} stop requested'
+        return status_after
+
+    def status_server_instance(self, tool_id: str, instance_id: str) -> dict:
+        meta = self.catalog_service.get_tool(tool_id)
+        self._assert_tool_usable(meta, 'server')
+        return self._status_from_state(meta, self._sanitize_instance_id(instance_id))
+
+    def list_server_instances(self, tool_id: str) -> dict:
+        meta = self.catalog_service.get_tool(tool_id)
+        self._assert_tool_usable(meta, 'server')
+        tool_runtime = self._safe_join_runtime(meta.get('id') or '', 'instances')
+        items = []
+        if os.path.isdir(tool_runtime):
+            for name in sorted(os.listdir(tool_runtime)):
+                path = os.path.join(tool_runtime, name)
+                if os.path.isdir(path):
+                    items.append(self._status_from_state(meta, name))
+        return {'tool_id': meta.get('id') or '', 'side': 'server', 'items': items}
+
+    def read_server_logs(self, tool_id: str, instance_id: str, max_bytes: int | None = None) -> dict:
+        meta = self.catalog_service.get_tool(tool_id)
+        self._assert_tool_usable(meta, 'server')
+        instance_id = self._sanitize_instance_id(instance_id)
+        info = self._state_or_default_runtime(meta, instance_id)
+        log_file = info['runtime'].get('stdout') or os.path.join(info['instance_runtime_dir'], 'stdout.log')
+        max_bytes = int(max_bytes or self.DEFAULT_LOG_TAIL_BYTES)
+        content = ''
+        if os.path.isfile(log_file):
+            with open(log_file, 'rb') as file_obj:
+                if max_bytes > 0:
+                    file_obj.seek(0, os.SEEK_END)
+                    size = file_obj.tell()
+                    file_obj.seek(max(0, size - max_bytes), os.SEEK_SET)
+                raw = file_obj.read()
+            content = raw.decode('utf-8', errors='replace')
+        return {
+            'tool_id': meta.get('id') or '',
+            'instance_id': instance_id,
+            'log_file': log_file,
+            'content': content,
+            'max_bytes': max_bytes,
+        }
+
+    # Backward-compatible alias used by the first MVP routes.
+    def install_and_run_server(self, tool_id: str, params: dict | None = None) -> dict:
+        return self.start_server_instance(tool_id, params=params)
 
     def _encode_payload_arg(self, payload: dict) -> str:
         raw = json.dumps(payload, ensure_ascii=False).encode('utf-8')
         encoded = base64.urlsafe_b64encode(raw).decode('utf-8')
         return f'__json__:{encoded}'
 
-    def build_client_payload(self, meta: dict, params: dict | None = None) -> dict:
+    def build_client_start_payload(self, meta: dict, params: dict | None = None, instance_id: str = '') -> dict:
         resolved_params = self.resolve_params(meta, params)
-        context = self.build_client_context(meta, resolved_params)
+        context = self.build_client_context(meta, resolved_params, instance_id=instance_id)
         rendered_meta = self._render_value(meta, context)
         package = rendered_meta.get('package') or {}
         filename = str(package.get('filename') or '').strip()
@@ -449,6 +728,7 @@ finally:
         install = rendered_meta.get('install') or {}
         config = rendered_meta.get('config') or {}
         runtime = rendered_meta.get('runtime') or {}
+        runtime.setdefault('state_file', context.get('state_file') or '')
         skip_if_exists = str(install.get('skip_if_exists') or '').strip()
         if not skip_if_exists:
             executable_rel_path = str(package.get('executable_rel_path') or '').strip()
@@ -463,10 +743,14 @@ finally:
             }
 
         return {
+            'action': 'start',
             'tool_id': meta.get('id') or '',
             'display_name': meta.get('display_name') or meta.get('id') or '',
             'version': meta.get('version') or '',
             'side': 'client',
+            'instance_id': context.get('instance_id') or 'default',
+            'instance_name': context.get('instance_name') or context.get('instance_id') or 'default',
+            'params': resolved_params,
             'package': {
                 'filename': filename,
                 'download_url': download_url,
@@ -478,12 +762,78 @@ finally:
             },
             'config': config_payload,
             'runtime': runtime,
+            'lifecycle': rendered_meta.get('lifecycle') or {},
         }
 
-    def install_and_run_client(self, client_id: str, tool_id: str, params: dict | None = None,
-                               tab_id: str = '') -> dict:
+    # Backward-compatible name kept for old callers.
+    def build_client_payload(self, meta: dict, params: dict | None = None) -> dict:
+        return self.build_client_start_payload(meta, params=params)
+
+    def build_client_action_payload(self, meta: dict, action: str, instance_id: str = '', params: dict | None = None, max_bytes: int | None = None) -> dict:
+        resolved_params = self.resolve_params(meta, params or {}) if params else {}
+        context = self.build_client_context(meta, resolved_params, instance_id=instance_id)
+        runtime_dir = context.get('instance_runtime_dir')
+        runtime = {
+            'pid_file': os.path.join(runtime_dir, 'tool.pid'),
+            'stdout': os.path.join(runtime_dir, 'stdout.log'),
+            'stderr': 'stdout',
+            'state_file': os.path.join(runtime_dir, 'state.json'),
+        }
+        rendered_meta = self._render_value(meta, context)
+        return {
+            'action': action,
+            'tool_id': meta.get('id') or '',
+            'display_name': meta.get('display_name') or meta.get('id') or '',
+            'version': meta.get('version') or '',
+            'side': 'client',
+            'instance_id': context.get('instance_id') or 'default',
+            'instance_name': context.get('instance_name') or context.get('instance_id') or 'default',
+            'params': resolved_params,
+            'runtime': runtime,
+            'lifecycle': rendered_meta.get('lifecycle') or {},
+            'max_bytes': int(max_bytes or self.DEFAULT_LOG_TAIL_BYTES),
+        }
+
+    def start_client_instance(self, client_id: str, tool_id: str, params: dict | None = None, tab_id: str = '', instance_id: str = '') -> dict:
         meta = self.catalog_service.get_tool(tool_id)
         self._assert_tool_usable(meta, 'client', platform_alias='*')
-        payload = self.build_client_payload(meta, params)
-        command = f'external_tool_run {self._encode_payload_arg(payload)}'
+        payload = self.build_client_start_payload(meta, params=params, instance_id=instance_id)
+        command = f'external_tool_start {self._encode_payload_arg(payload)}'
         return self.command_execution_api.submit_web_command(client_id, command, tab_id=tab_id)
+
+    def stop_client_instance(self, client_id: str, tool_id: str, instance_id: str, params: dict | None = None, tab_id: str = '') -> dict:
+        meta = self.catalog_service.get_tool(tool_id)
+        self._assert_tool_usable(meta, 'client', platform_alias='*')
+        payload = self.build_client_action_payload(meta, 'stop', instance_id=instance_id, params=params)
+        command = f'external_tool_stop {self._encode_payload_arg(payload)}'
+        return self.command_execution_api.submit_web_command(client_id, command, tab_id=tab_id)
+
+    def status_client_instance(self, client_id: str, tool_id: str, instance_id: str, tab_id: str = '') -> dict:
+        meta = self.catalog_service.get_tool(tool_id)
+        self._assert_tool_usable(meta, 'client', platform_alias='*')
+        payload = self.build_client_action_payload(meta, 'status', instance_id=instance_id)
+        command = f'external_tool_status {self._encode_payload_arg(payload)}'
+        return self.command_execution_api.submit_web_command(client_id, command, tab_id=tab_id)
+
+    def list_client_instances(self, client_id: str, tool_id: str, tab_id: str = '') -> dict:
+        meta = self.catalog_service.get_tool(tool_id)
+        self._assert_tool_usable(meta, 'client', platform_alias='*')
+        payload = {
+            'action': 'list',
+            'tool_id': meta.get('id') or '',
+            'display_name': meta.get('display_name') or meta.get('id') or '',
+            'side': 'client',
+        }
+        command = f'external_tool_list_instances {self._encode_payload_arg(payload)}'
+        return self.command_execution_api.submit_web_command(client_id, command, tab_id=tab_id)
+
+    def read_client_logs(self, client_id: str, tool_id: str, instance_id: str, max_bytes: int | None = None, tab_id: str = '') -> dict:
+        meta = self.catalog_service.get_tool(tool_id)
+        self._assert_tool_usable(meta, 'client', platform_alias='*')
+        payload = self.build_client_action_payload(meta, 'logs', instance_id=instance_id, max_bytes=max_bytes)
+        command = f'external_tool_logs {self._encode_payload_arg(payload)}'
+        return self.command_execution_api.submit_web_command(client_id, command, tab_id=tab_id)
+
+    # Backward-compatible alias used by first MVP routes.
+    def install_and_run_client(self, client_id: str, tool_id: str, params: dict | None = None, tab_id: str = '') -> dict:
+        return self.start_client_instance(client_id, tool_id, params=params, tab_id=tab_id)

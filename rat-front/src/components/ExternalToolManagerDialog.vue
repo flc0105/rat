@@ -2,8 +2,8 @@
   <el-dialog
     v-model="visible"
     title="External Tool Manager"
-    width="1120px"
-    top="6vh"
+    width="1180px"
+    top="5vh"
     class="fixed-dialog external-tool-dialog"
     @closed="handleClosed"
   >
@@ -11,7 +11,7 @@
       <div class="external-tool-toolbar">
         <div class="external-tool-toolbar-left">
           <el-button size="small" type="primary" plain :loading="loading" @click="loadCatalog">
-            Refresh
+            Refresh Catalog
           </el-button>
           <el-select v-model="sideFilter" size="small" class="external-tool-filter" placeholder="Side">
             <el-option label="All sides" value="" />
@@ -45,62 +45,144 @@
           :key="item.id"
           class="external-tool-card"
         >
-          <div class="external-tool-card-main">
-            <div class="external-tool-title-row">
-              <div class="external-tool-title" :title="item.display_name || item.id">
-                {{ item.display_name || item.id }}
+          <div class="external-tool-card-header">
+            <div class="external-tool-card-main">
+              <div class="external-tool-title-row">
+                <div class="external-tool-title" :title="item.display_name || item.id">
+                  {{ item.display_name || item.id }}
+                </div>
+                <el-tag size="small" :type="item.side === 'server' ? 'success' : 'warning'">
+                  {{ item.side || '-' }}
+                </el-tag>
+                <el-tag size="small" type="info">
+                  {{ formatPlatforms(item.platforms) }}
+                </el-tag>
+                <el-tag v-if="item.version" size="small" type="info">
+                  v{{ item.version }}
+                </el-tag>
+                <el-tag v-if="item.arch" size="small" type="info">
+                  {{ item.arch }}
+                </el-tag>
               </div>
-              <el-tag size="small" :type="item.side === 'server' ? 'success' : 'warning'">
-                {{ item.side || '-' }}
-              </el-tag>
-              <el-tag size="small" type="info">
-                {{ formatPlatforms(item.platforms) }}
-              </el-tag>
-              <el-tag v-if="item.version" size="small" type="info">
-                v{{ item.version }}
-              </el-tag>
-              <el-tag v-if="item.arch" size="small" type="info">
-                {{ item.arch }}
-              </el-tag>
+
+              <div class="external-tool-desc" :title="item.description || ''">
+                {{ item.description || 'No description' }}
+              </div>
+
+              <div class="external-tool-meta mono">
+                <span>ID: {{ item.id }}</span>
+                <span v-if="item.package?.filename">Package: {{ item.package.filename }}</span>
+                <span v-if="item.package?.executable_rel_path">Exec: {{ item.package.executable_rel_path }}</span>
+              </div>
             </div>
 
-            <div class="external-tool-desc" :title="item.description || ''">
-              {{ item.description || 'No description' }}
-            </div>
+            <div class="external-tool-actions">
+              <el-button size="small" plain @click="downloadTool(item)">
+                Download Zip
+              </el-button>
 
-            <div class="external-tool-meta mono">
-              <span>ID: {{ item.id }}</span>
-              <span v-if="item.package?.filename">Package: {{ item.package.filename }}</span>
-              <span v-if="item.package?.executable_rel_path">Exec: {{ item.package.executable_rel_path }}</span>
+              <el-button
+                v-if="item.side === 'server'"
+                size="small"
+                type="primary"
+                plain
+                :disabled="!isServerPlatformSupported(item)"
+                @click="openStartDialog(item, 'server')"
+              >
+                Start Instance
+              </el-button>
+
+              <el-button
+                v-if="item.side === 'server'"
+                size="small"
+                plain
+                @click="loadServerInstances(item.id)"
+              >
+                Refresh Instances
+              </el-button>
+
+              <el-button
+                v-if="item.side === 'client'"
+                size="small"
+                type="primary"
+                plain
+                :disabled="!selectedId || !isClientPlatformSupported(item)"
+                @click="openStartDialog(item, 'client')"
+              >
+                Start Client Instance
+              </el-button>
+
+              <el-button
+                v-if="item.side === 'client'"
+                size="small"
+                plain
+                :disabled="!selectedId"
+                @click="submitClientListInstances(item)"
+              >
+                List Client Instances
+              </el-button>
+
+              <el-dropdown
+                v-if="item.side === 'client'"
+                trigger="click"
+                @command="command => openClientInstanceAction(item, command)"
+              >
+                <el-button size="small" plain :disabled="!selectedId">
+                  Client Instance Action
+                </el-button>
+                <template #dropdown>
+                  <el-dropdown-menu>
+                    <el-dropdown-item command="status">Status</el-dropdown-item>
+                    <el-dropdown-item command="logs">Logs</el-dropdown-item>
+                    <el-dropdown-item divided command="stop">Stop</el-dropdown-item>
+                  </el-dropdown-menu>
+                </template>
+              </el-dropdown>
             </div>
           </div>
 
-          <div class="external-tool-actions">
-            <el-button size="small" plain @click="downloadTool(item)">
-              Download Zip
-            </el-button>
-
-            <el-button
-              v-if="item.side === 'server'"
-              size="small"
-              type="primary"
-              plain
-              :disabled="!isServerPlatformSupported(item)"
-              @click="openRunDialog(item, 'server')"
-            >
-              Install & Run on Server
-            </el-button>
-
-            <el-button
-              v-if="item.side === 'client'"
-              size="small"
-              type="primary"
-              plain
-              :disabled="!selectedId || !isClientPlatformSupported(item)"
-              @click="openRunDialog(item, 'client')"
-            >
-              Install & Run on Client
-            </el-button>
+          <div v-if="item.side === 'server'" class="external-tool-instances">
+            <div class="external-tool-section-title">
+              Server instances
+            </div>
+            <div v-if="serverInstances[item.id]?.length" class="external-tool-instance-list">
+              <div
+                v-for="instance in serverInstances[item.id]"
+                :key="instance.instance_id"
+                class="external-tool-instance-row"
+              >
+                <div class="external-tool-instance-main">
+                  <el-tag size="small" :type="instance.running ? 'success' : (instance.status === 'stale' ? 'danger' : 'info')">
+                    {{ instance.status || '-' }}
+                  </el-tag>
+                  <span class="mono instance-id">{{ instance.instance_id }}</span>
+                  <span class="mono">pid={{ instance.pid || '-' }}</span>
+                  <span v-if="instance.params?.bind_port" class="mono">bind={{ instance.params.bind_port }}</span>
+                  <span v-if="instance.params?.remote_port" class="mono">remote={{ instance.params.remote_port }}</span>
+                  <span class="mono muted">{{ instance.stdout || '' }}</span>
+                </div>
+                <div class="external-tool-instance-actions">
+                  <el-button size="small" plain @click="loadServerInstanceStatus(item.id, instance.instance_id)">
+                    Status
+                  </el-button>
+                  <el-button size="small" plain @click="openServerLogs(item.id, instance.instance_id)">
+                    Logs
+                  </el-button>
+                  <el-button
+                    size="small"
+                    type="danger"
+                    plain
+                    :disabled="!instance.running && instance.status !== 'stale'"
+                    @click="stopServerInstance(item.id, instance.instance_id)"
+                  >
+                    Stop
+                  </el-button>
+                </div>
+              </div>
+            </div>
+            <div v-else class="external-tool-empty-inline">
+              No server instances. Click Start Instance to create one.
+            </div>
           </div>
         </div>
       </div>
@@ -112,16 +194,19 @@
   </el-dialog>
 
   <el-dialog
-    v-model="runDialogVisible"
-    :title="runDialogTitle"
-    width="620px"
+    v-model="startDialogVisible"
+    :title="startDialogTitle"
+    width="650px"
     append-to-body
-    @closed="resetRunDialog"
+    @closed="resetStartDialog"
   >
     <div v-if="pendingItem" class="external-tool-run-body">
       <div class="external-tool-run-summary">
         <div><strong>{{ pendingItem.display_name || pendingItem.id }}</strong></div>
         <div class="mono">{{ pendingItem.id }} / {{ pendingTargetSide }}</div>
+        <div class="external-tool-param-help">
+          The instance name isolates config, pid, state and logs. Multiple frpc instances should use different names.
+        </div>
       </div>
 
       <el-form label-position="top" class="external-tool-param-form">
@@ -163,16 +248,57 @@
     </div>
 
     <template #footer>
-      <el-button size="small" @click="runDialogVisible = false">Cancel</el-button>
-      <el-button size="small" type="primary" :loading="submitting" @click="confirmRun">
-        Install & Run
+      <el-button size="small" @click="startDialogVisible = false">Cancel</el-button>
+      <el-button size="small" type="primary" :loading="submitting" @click="confirmStart">
+        Start Instance
       </el-button>
+    </template>
+  </el-dialog>
+
+  <el-dialog
+    v-model="clientActionDialogVisible"
+    :title="clientActionDialogTitle"
+    width="520px"
+    append-to-body
+    @closed="resetClientActionDialog"
+  >
+    <div v-if="pendingClientActionItem" class="external-tool-run-body">
+      <div class="external-tool-run-summary">
+        <div><strong>{{ pendingClientActionItem.display_name || pendingClientActionItem.id }}</strong></div>
+        <div class="mono">action={{ pendingClientAction }}</div>
+      </div>
+      <el-form label-position="top">
+        <el-form-item label="Instance ID">
+          <el-input v-model="clientActionInstanceId" placeholder="vite-8087" clearable />
+          <div class="external-tool-param-help">
+            Use the same value as Instance Name when you started this frpc/frps instance.
+          </div>
+        </el-form-item>
+      </el-form>
+    </div>
+    <template #footer>
+      <el-button size="small" @click="clientActionDialogVisible = false">Cancel</el-button>
+      <el-button size="small" type="primary" :loading="submitting" @click="confirmClientInstanceAction">
+        Submit
+      </el-button>
+    </template>
+  </el-dialog>
+
+  <el-dialog
+    v-model="logDialogVisible"
+    :title="logDialogTitle"
+    width="900px"
+    append-to-body
+  >
+    <pre class="external-tool-log-content">{{ logContent || 'No log content.' }}</pre>
+    <template #footer>
+      <el-button size="small" @click="logDialogVisible = false">Close</el-button>
     </template>
   </el-dialog>
 </template>
 
 <script>
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 
 export default {
   name: 'ExternalToolManagerDialog',
@@ -203,13 +329,21 @@ export default {
       loading: false,
       submitting: false,
       items: [],
+      serverInstances: {},
       searchText: '',
       sideFilter: '',
       platformFilter: '',
-      runDialogVisible: false,
+      startDialogVisible: false,
       pendingToolId: '',
       pendingTargetSide: '',
       paramForm: {},
+      clientActionDialogVisible: false,
+      pendingClientActionToolId: '',
+      pendingClientAction: '',
+      clientActionInstanceId: '',
+      logDialogVisible: false,
+      logDialogTitle: 'External Tool Logs',
+      logContent: '',
     }
   },
 
@@ -257,11 +391,22 @@ export default {
       return Array.isArray(this.pendingItem?.params) ? this.pendingItem.params : []
     },
 
-    runDialogTitle() {
+    startDialogTitle() {
       const item = this.pendingItem
       const name = item ? (item.display_name || item.id) : 'External Tool'
       const side = this.pendingTargetSide === 'server' ? 'Server' : 'Client'
-      return `Install & Run ${name} on ${side}`
+      return `Start ${name} on ${side}`
+    },
+
+    pendingClientActionItem() {
+      const target = String(this.pendingClientActionToolId || '').trim()
+      return (this.items || []).find(item => String(item.id || '').trim() === target) || null
+    },
+
+    clientActionDialogTitle() {
+      const item = this.pendingClientActionItem
+      const name = item ? (item.display_name || item.id) : 'External Tool'
+      return `${this.pendingClientAction || 'Action'} ${name} client instance`
     },
   },
 
@@ -281,7 +426,8 @@ export default {
     },
 
     handleClosed() {
-      this.resetRunDialog()
+      this.resetStartDialog()
+      this.resetClientActionDialog()
     },
 
     buildJsonHeaders(extra = {}) {
@@ -299,11 +445,17 @@ export default {
         if (!res.ok || json.code !== 0) throw new Error(json.message || 'Failed to load external tools')
         const catalog = json.data || {}
         this.items = Array.isArray(catalog.items) ? catalog.items : []
+        await this.refreshVisibleServerInstances()
       } catch (e) {
         ElMessage.error(e.message || 'Failed to load external tools')
       } finally {
         this.loading = false
       }
+    },
+
+    async refreshVisibleServerInstances() {
+      const serverItems = (this.items || []).filter(item => item.side === 'server')
+      await Promise.all(serverItems.map(item => this.loadServerInstances(item.id, false)))
     },
 
     normalizePlatform(value) {
@@ -346,8 +498,6 @@ export default {
     },
 
     isServerPlatformSupported(item) {
-      // Browser platform is not necessarily the server platform.
-      // Keep server-side actions enabled and let the backend validate the real server OS.
       return !!item
     },
 
@@ -375,8 +525,9 @@ export default {
     },
 
     formatParamLabel(param) {
+      const label = param.label || param.name
       const required = param.required ? ' *' : ''
-      return `${param.name}${required}`
+      return `${label}${required}`
     },
 
     buildParamDefaults(item) {
@@ -395,7 +546,7 @@ export default {
       return form
     },
 
-    buildRunParams() {
+    buildStartParams() {
       const params = {}
       for (const param of this.pendingParams || []) {
         const name = String(param?.name || '').trim()
@@ -409,15 +560,22 @@ export default {
       return params
     },
 
-    openRunDialog(item, side) {
+    deriveInstanceId(params) {
+      const raw = params.instance_name || params.instance_id || (
+        params.proxy_name && params.remote_port ? `${params.proxy_name}-${params.remote_port}` : ''
+      ) || (params.bind_port ? `instance-${params.bind_port}` : 'default')
+      return String(raw || 'default').trim().replace(/[^A-Za-z0-9_.-]+/g, '-').replace(/^[._-]+|[._-]+$/g, '') || 'default'
+    },
+
+    openStartDialog(item, side) {
       this.pendingToolId = String(item?.id || '').trim()
       this.pendingTargetSide = side
       this.paramForm = this.buildParamDefaults(item)
-      this.runDialogVisible = true
+      this.startDialogVisible = true
     },
 
-    resetRunDialog() {
-      this.runDialogVisible = false
+    resetStartDialog() {
+      this.startDialogVisible = false
       this.submitting = false
       this.pendingToolId = ''
       this.pendingTargetSide = ''
@@ -430,58 +588,200 @@ export default {
       window.open(`/api/external-tools/${encodeURIComponent(id)}/download`, '_blank')
     },
 
-    async confirmRun() {
+    async confirmStart() {
       const item = this.pendingItem
       if (!item) {
-        this.resetRunDialog()
+        this.resetStartDialog()
         return
       }
 
       try {
         this.submitting = true
-        const params = this.buildRunParams()
+        const params = this.buildStartParams()
+        const instanceId = this.deriveInstanceId(params)
         if (this.pendingTargetSide === 'server') {
-          await this.runOnServer(item, params)
+          await this.startServerInstance(item, params, instanceId)
         } else {
-          await this.runOnClient(item, params)
+          await this.startClientInstance(item, params, instanceId)
         }
-        this.resetRunDialog()
+        this.resetStartDialog()
       } catch (e) {
-        ElMessage.error(e.message || 'Failed to run external tool')
+        ElMessage.error(e.message || 'Failed to start external tool')
       } finally {
         this.submitting = false
       }
     },
 
-    async runOnServer(item, params) {
-      this.$emit('append-output', this.selectedId, `> [External Tool: Server] ${item.display_name || item.id}`, 'command')
-      const res = await fetch(`/api/external-tools/${encodeURIComponent(item.id)}/server/run`, {
+    async startServerInstance(item, params, instanceId) {
+      this.$emit('append-output', this.selectedId, `> [External Tool: Server Start] ${item.display_name || item.id} instance=${instanceId}`, 'command')
+      const res = await fetch(`/api/external-tools/${encodeURIComponent(item.id)}/server/instances/start`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ params }),
+        body: JSON.stringify({ params, instance_id: instanceId }),
       })
       const json = await res.json()
-      if (!res.ok || json.code !== 0) throw new Error(json.message || 'Failed to run server tool')
+      if (!res.ok || json.code !== 0) throw new Error(json.message || 'Failed to start server tool')
       const data = json.data || {}
-      this.$emit('append-output', this.selectedId, `[External Tool Started] pid=${data.pid || '-'} log=${data.runtime?.stdout || '-'}`, 'info')
-      ElMessage.success(data.message || 'External tool started on server')
+      this.$emit('append-output', this.selectedId, `[External Tool Started] instance=${data.instance_id || instanceId} pid=${data.pid || '-'} log=${data.runtime?.stdout || data.stdout || '-'}`, 'info')
+      ElMessage.success(data.message || 'External tool instance started on server')
+      await this.loadServerInstances(item.id, false)
     },
 
-    async runOnClient(item, params) {
-      if (!this.selectedId) {
-        throw new Error('Please select a device')
-      }
-      this.$emit('append-output', this.selectedId, `> [External Tool: Client] ${item.display_name || item.id}`, 'command')
-      const res = await fetch(`/api/connections/${encodeURIComponent(this.selectedId)}/external-tools/${encodeURIComponent(item.id)}/run`, {
+    async startClientInstance(item, params, instanceId) {
+      if (!this.selectedId) throw new Error('Please select a device')
+      this.$emit('append-output', this.selectedId, `> [External Tool: Client Start] ${item.display_name || item.id} instance=${instanceId}`, 'command')
+      const res = await fetch(`/api/connections/${encodeURIComponent(this.selectedId)}/external-tools/${encodeURIComponent(item.id)}/instances/start`, {
         method: 'POST',
         headers: this.buildJsonHeaders({ 'Content-Type': 'application/json' }),
-        body: JSON.stringify({ params }),
+        body: JSON.stringify({ params, instance_id: instanceId }),
       })
       const json = await res.json()
-      if (!res.ok || json.code !== 0) throw new Error(json.message || 'Failed to run client tool')
+      if (!res.ok || json.code !== 0) throw new Error(json.message || 'Failed to start client tool')
       const taskId = json.data && json.data.task_id
       this.$emit('set-active-task', this.selectedId, taskId || '')
-      ElMessage.success(`Run request submitted: ${item.display_name || item.id}`)
+      ElMessage.success(`Client start submitted: ${item.display_name || item.id} / ${instanceId}`)
+    },
+
+    async loadServerInstances(toolId, showToast = true) {
+      if (!toolId) return
+      try {
+        const res = await fetch(`/api/external-tools/${encodeURIComponent(toolId)}/server/instances`)
+        const json = await res.json()
+        if (!res.ok || json.code !== 0) throw new Error(json.message || 'Failed to load server instances')
+        const data = json.data || {}
+        this.serverInstances = {
+          ...this.serverInstances,
+          [toolId]: Array.isArray(data.items) ? data.items : [],
+        }
+        if (showToast) ElMessage.success('Server instances refreshed')
+      } catch (e) {
+        if (showToast) ElMessage.error(e.message || 'Failed to load server instances')
+      }
+    },
+
+    async loadServerInstanceStatus(toolId, instanceId) {
+      try {
+        const res = await fetch(`/api/external-tools/${encodeURIComponent(toolId)}/server/instances/${encodeURIComponent(instanceId)}/status`)
+        const json = await res.json()
+        if (!res.ok || json.code !== 0) throw new Error(json.message || 'Failed to load status')
+        const data = json.data || {}
+        this.$emit('append-output', this.selectedId, `[External Tool Status] ${toolId}/${instanceId}: ${data.status} pid=${data.pid || '-'}`, 'info')
+        await this.loadServerInstances(toolId, false)
+        ElMessage.success(`Status: ${data.status || '-'}`)
+      } catch (e) {
+        ElMessage.error(e.message || 'Failed to load status')
+      }
+    },
+
+    async stopServerInstance(toolId, instanceId) {
+      try {
+        await ElMessageBox.confirm(
+          `Stop external tool instance ${toolId}/${instanceId}?`,
+          'Stop External Tool',
+          { type: 'warning' },
+        )
+      } catch (_) {
+        return
+      }
+      try {
+        const res = await fetch(`/api/external-tools/${encodeURIComponent(toolId)}/server/instances/${encodeURIComponent(instanceId)}/stop`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ params: {} }),
+        })
+        const json = await res.json()
+        if (!res.ok || json.code !== 0) throw new Error(json.message || 'Failed to stop server instance')
+        const data = json.data || {}
+        this.$emit('append-output', this.selectedId, `[External Tool Stop] ${toolId}/${instanceId}: ${data.status} pid=${data.pid || '-'}`, 'info')
+        ElMessage.success(data.message || 'Stop requested')
+        await this.loadServerInstances(toolId, false)
+      } catch (e) {
+        ElMessage.error(e.message || 'Failed to stop server instance')
+      }
+    },
+
+    async openServerLogs(toolId, instanceId) {
+      try {
+        const res = await fetch(`/api/external-tools/${encodeURIComponent(toolId)}/server/instances/${encodeURIComponent(instanceId)}/logs?bytes=65536`)
+        const json = await res.json()
+        if (!res.ok || json.code !== 0) throw new Error(json.message || 'Failed to read logs')
+        const data = json.data || {}
+        this.logDialogTitle = `${toolId}/${instanceId} logs`
+        this.logContent = data.content || ''
+        this.logDialogVisible = true
+      } catch (e) {
+        ElMessage.error(e.message || 'Failed to read logs')
+      }
+    },
+
+    async submitClientListInstances(item) {
+      if (!this.selectedId) {
+        ElMessage.error('Please select a device')
+        return
+      }
+      try {
+        const res = await fetch(`/api/connections/${encodeURIComponent(this.selectedId)}/external-tools/${encodeURIComponent(item.id)}/instances`, {
+          method: 'POST',
+          headers: this.buildJsonHeaders({ 'Content-Type': 'application/json' }),
+          body: JSON.stringify({}),
+        })
+        const json = await res.json()
+        if (!res.ok || json.code !== 0) throw new Error(json.message || 'Failed to list client instances')
+        const taskId = json.data && json.data.task_id
+        this.$emit('set-active-task', this.selectedId, taskId || '')
+        ElMessage.success(`Client list request submitted: ${item.display_name || item.id}`)
+      } catch (e) {
+        ElMessage.error(e.message || 'Failed to list client instances')
+      }
+    },
+
+    openClientInstanceAction(item, action) {
+      this.pendingClientActionToolId = String(item?.id || '').trim()
+      this.pendingClientAction = String(action || '').trim()
+      this.clientActionInstanceId = ''
+      this.clientActionDialogVisible = true
+    },
+
+    resetClientActionDialog() {
+      this.clientActionDialogVisible = false
+      this.pendingClientActionToolId = ''
+      this.pendingClientAction = ''
+      this.clientActionInstanceId = ''
+      this.submitting = false
+    },
+
+    async confirmClientInstanceAction() {
+      const item = this.pendingClientActionItem
+      const action = this.pendingClientAction
+      const instanceId = this.deriveInstanceId({ instance_name: this.clientActionInstanceId })
+      if (!item || !action) return
+      if (!this.selectedId) {
+        ElMessage.error('Please select a device')
+        return
+      }
+      if (!instanceId) {
+        ElMessage.error('Instance ID is required')
+        return
+      }
+      try {
+        this.submitting = true
+        let url = `/api/connections/${encodeURIComponent(this.selectedId)}/external-tools/${encodeURIComponent(item.id)}/instances/${encodeURIComponent(instanceId)}/${action}`
+        const res = await fetch(url, {
+          method: 'POST',
+          headers: this.buildJsonHeaders({ 'Content-Type': 'application/json' }),
+          body: JSON.stringify({ max_bytes: 65536 }),
+        })
+        const json = await res.json()
+        if (!res.ok || json.code !== 0) throw new Error(json.message || `Failed to submit client ${action}`)
+        const taskId = json.data && json.data.task_id
+        this.$emit('set-active-task', this.selectedId, taskId || '')
+        ElMessage.success(`Client ${action} submitted: ${item.id}/${instanceId}`)
+        this.resetClientActionDialog()
+      } catch (e) {
+        ElMessage.error(e.message || `Failed to submit client ${action}`)
+      } finally {
+        this.submitting = false
+      }
     },
   },
 }
@@ -521,19 +821,25 @@ export default {
   display: flex;
   flex-direction: column;
   gap: 10px;
-  max-height: 540px;
+  max-height: 600px;
   overflow: auto;
   padding-right: 4px;
 }
 
 .external-tool-card {
   display: flex;
-  justify-content: space-between;
-  gap: 16px;
+  flex-direction: column;
+  gap: 12px;
   padding: 14px;
   border: 1px solid var(--terminal-line, rgba(255,255,255,.12));
   border-radius: 12px;
   background: rgba(255,255,255,.035);
+}
+
+.external-tool-card-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
 }
 
 .external-tool-card-main {
@@ -578,7 +884,62 @@ export default {
   justify-content: flex-end;
   flex-wrap: wrap;
   gap: 8px;
-  min-width: 280px;
+  min-width: 340px;
+}
+
+.external-tool-instances {
+  border-top: 1px solid var(--terminal-line, rgba(255,255,255,.10));
+  padding-top: 10px;
+}
+
+.external-tool-section-title {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--terminal-muted, #8f9bb3);
+  margin-bottom: 8px;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+}
+
+.external-tool-instance-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.external-tool-instance-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: rgba(255,255,255,.035);
+}
+
+.external-tool-instance-main {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-width: 0;
+  flex: 1;
+}
+
+.external-tool-instance-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.instance-id {
+  font-weight: 700;
+}
+
+.muted {
+  color: var(--terminal-muted, #8f9bb3);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .external-tool-empty {
@@ -589,6 +950,12 @@ export default {
 
 .external-tool-empty.small {
   padding: 20px 8px;
+}
+
+.external-tool-empty-inline {
+  padding: 12px;
+  color: var(--terminal-muted, #8f9bb3);
+  font-size: 12px;
 }
 
 .external-tool-run-body {
@@ -605,7 +972,7 @@ export default {
 }
 
 .external-tool-param-form {
-  max-height: 420px;
+  max-height: 460px;
   overflow: auto;
   padding-right: 4px;
 }
@@ -618,10 +985,21 @@ export default {
   margin-top: 4px;
   color: var(--terminal-muted, #8f9bb3);
   font-size: 12px;
-  line-height: 1.4;
+  line-height: 1.45;
+}
+
+.external-tool-log-content {
+  max-height: 560px;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  padding: 12px;
+  border-radius: 10px;
+  background: rgba(0,0,0,.24);
+  color: var(--terminal-fg, #d9e2ff);
 }
 
 .mono {
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
 }
 </style>
