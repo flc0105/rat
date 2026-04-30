@@ -3,8 +3,8 @@
 import json
 
 from client.commands.common.services.process.process_service import ProcessService
-from client.commands.common.services.process.ps_service import PsService
 from core.platform.platform_identity import detect_platform_alias
+from core.utils.command_output import StructuredCommandResult, render_structured_result
 from core.utils.decorator import desc
 
 
@@ -78,22 +78,90 @@ class CommandProcessMixin:
         except Exception as e:
             return 0, str(e)
 
-    def _get_ps_service(self):
-        service = getattr(self, '_ps_service', None)
-
-        if service is None:
-            service = PsService(self)
-            self._ps_service = service
-
-        return service
 
     def _acmd_ps_common(self, args_dict, payload=None):
         """
         acmd ps 公共实现。
 
-        注意：
-        - 不在这里加 @argument_command
-        - 平台类负责注册 acmd ps
-        - 这里只做 facade
+        只做：
+        - 调用 ProcessService.list_processes()
+        - 根据 pid / name 筛选
+        - 返回 StructuredCommandResult 渲染结果
+
+        不在这里写任何 psutil 枚举逻辑。
         """
-        return self._get_ps_service().build_acmd_ps_result(args_dict)
+        pid = args_dict.get('pid')
+        name = str(args_dict.get('name') or '').strip()
+        output_json = bool(args_dict.get('json', False))
+
+        if pid is not None:
+            pid = int(pid)
+            if pid < 0:
+                raise ValueError('PID must not be negative: {}'.format(pid))
+
+        rows = self._get_process_service().list_processes()
+        rows = self._filter_acmd_ps_rows(rows, pid=pid, name=name)
+
+        if not rows:
+            if pid is not None and name:
+                raise RuntimeError(
+                    'No process found for pid {} and name {}'.format(pid, name)
+                )
+
+            if pid is not None:
+                raise RuntimeError(
+                    'No process found for pid {}'.format(pid)
+                )
+
+            if name:
+                raise RuntimeError(
+                    'No process found for name {}'.format(name)
+                )
+
+            raise RuntimeError('No processes found')
+
+        result = StructuredCommandResult(
+            status=1,
+            data=rows,
+            shape='table',
+        )
+
+        return render_structured_result(
+            result,
+            output_format='json' if output_json else 'text',
+        )
+
+    def _filter_acmd_ps_rows(self, rows, pid=None, name=''):
+        name = str(name or '').strip().lower()
+        result = []
+
+        for row in rows or []:
+            row_pid = self._normalize_process_int(row.get('pid'))
+
+            if pid is not None and row_pid != pid:
+                continue
+
+            row_name = str(row.get('name') or '')
+
+            if name and name not in row_name.lower():
+                continue
+
+            result.append({
+                'pid': row_pid,
+                'ppid': self._normalize_process_int(row.get('ppid')),
+                'name': row_name,
+                'username': row.get('username') or '',
+                'status': row.get('status') or '',
+            })
+
+        result.sort(key=lambda item: self._normalize_process_int(item.get('pid')))
+        return result
+
+    def _normalize_process_int(self, value):
+        if value in (None, ''):
+            return 0
+
+        try:
+            return int(value)
+        except Exception:
+            return 0

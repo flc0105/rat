@@ -1,4 +1,4 @@
-from client.commands.common.providers.network.ifconfig_provider import (
+from client.commands.common.providers.ifconfig_provider import (
     GetifaddrsIfconfigProvider,
     WindowsPsutilIfconfigProvider,
 )

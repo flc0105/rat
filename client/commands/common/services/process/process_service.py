@@ -12,12 +12,14 @@ class ProcessService:
     def list_processes(self):
         import psutil
         processes = []
-        for proc in psutil.process_iter(['pid', 'name', 'status']):
+        for proc in psutil.process_iter(['pid', 'ppid', 'username', 'name', 'status']):
             try:
                 pinfo = proc.info
                 processes.append({
                     'pid': pinfo['pid'],
+                    'ppid': pinfo['ppid'],
                     'name': pinfo['name'] or '',
+                    'username': pinfo['username'] or '',
                     'status': pinfo['status'] or '',
                 })
             except (psutil.NoSuchProcess, psutil.AccessDenied):

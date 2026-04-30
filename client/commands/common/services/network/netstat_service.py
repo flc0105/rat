@@ -1,4 +1,4 @@
-from client.commands.common.providers.network.netstat_provider import (
+from client.commands.common.providers.netstat_provider import (
     PsutilNetstatProvider,
 )
 from core.platform.platform_identity import detect_platform_alias
