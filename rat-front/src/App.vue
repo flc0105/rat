@@ -129,6 +129,7 @@
       ref="externalToolManagerDialogRef"
       :selected-id="selectedId"
       :current-connection="currentConnection"
+      :connections="connections"
       :get-tab-scoped-headers="getTabScopedHeaders"
       @append-output="appendOutput"
       @set-active-task="setActiveTask"

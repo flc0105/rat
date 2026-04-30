@@ -21,6 +21,23 @@
           </el-select>
 
           <el-select
+            v-if="activeTab === 'instances'"
+            v-model="deviceFilter"
+            size="small"
+            filterable
+            class="external-tool-device-filter"
+            placeholder="Filter by device"
+            @change="handleDeviceFilterChange"
+          >
+            <el-option
+              v-for="item in deviceFilterOptions"
+              :key="item.value"
+              :label="item.label"
+              :value="item.value"
+            />
+          </el-select>
+
+          <el-select
             v-if="activeTab === 'modules'"
             v-model="platformFilter"
             size="small"
@@ -123,12 +140,7 @@
         <el-tab-pane label="Instances" name="instances">
           <div class="external-tool-instance-toolbar">
             <div class="external-tool-hint">
-              <span v-if="!selectedId">
-                Client instances need a selected device. Server instances are still shown.
-              </span>
-              <span v-else>
-                Showing server instances and instances on selected client {{ selectedId }}.
-              </span>
+              Showing {{ activeDeviceFilterLabel }}. Use the device filter to switch between current device, server host, or all loaded devices.
             </div>
           </div>
 
@@ -145,6 +157,13 @@
                 <el-tag size="small" :type="row.side === 'server' ? 'success' : 'warning'">
                   {{ row.side }}
                 </el-tag>
+              </template>
+            </el-table-column>
+
+            <el-table-column label="Device" min-width="170">
+              <template #default="{ row }">
+                <div class="mono strong" :title="row.device_id">{{ row.device_label || '-' }}</div>
+                <div class="muted mono" :title="row.device_id">{{ shortenDeviceId(row.device_id) }}</div>
               </template>
             </el-table-column>
 
@@ -213,7 +232,7 @@
           </el-table>
 
           <div v-else class="external-tool-empty">
-            {{ searchText || sideFilter ? 'No matching instances' : 'No instances yet. Start one from Package / Module.' }}
+            {{ searchText || sideFilter || deviceFilter ? 'No matching instances' : 'No instances yet. Start one from Package / Module.' }}
           </div>
         </el-tab-pane>
       </el-tabs>
@@ -311,6 +330,10 @@ export default {
       type: Object,
       default: null,
     },
+    connections: {
+      type: Array,
+      default: () => [],
+    },
     getTabScopedHeaders: {
       type: Function,
       default: null,
@@ -334,6 +357,7 @@ export default {
       clientInstances: {},
       searchText: '',
       sideFilter: '',
+      deviceFilter: '',
       platformFilter: '',
       startDialogVisible: false,
       pendingToolId: '',
@@ -355,6 +379,36 @@ export default {
         this.currentConnection?.system ||
         '',
       )
+    },
+
+    currentDeviceId() {
+      return this.normalizeDeviceId(this.selectedId || this.currentConnection?.client_id || '')
+    },
+
+    deviceFilterOptions() {
+      const options = [
+        { value: '__all__', label: 'All loaded devices' },
+        { value: '__server__', label: 'Server host' },
+      ]
+      const seen = new Set(options.map(item => item.value))
+      for (const conn of this.connections || []) {
+        const id = this.normalizeDeviceId(conn?.client_id)
+        if (!id || seen.has(id)) continue
+        seen.add(id)
+        options.push({ value: id, label: this.formatDeviceOptionLabel(conn) })
+      }
+      if (this.currentDeviceId && !seen.has(this.currentDeviceId)) {
+        options.push({ value: this.currentDeviceId, label: this.formatCurrentDeviceLabel() })
+      }
+      return options
+    },
+
+    activeDeviceFilterLabel() {
+      const value = this.normalizeDeviceId(this.deviceFilter)
+      const option = this.deviceFilterOptions.find(item => item.value === value)
+      if (option) return option.label
+      if (!value) return 'current device'
+      return this.shortenDeviceId(value)
     },
 
     serverModules() {
@@ -385,11 +439,14 @@ export default {
       const rows = []
       for (const item of this.serverModules) {
         const list = this.serverInstances[item.id] || []
-        for (const instance of list) rows.push(this.normalizeInstanceRow(item, instance, 'server'))
+        for (const instance of list) rows.push(this.normalizeInstanceRow(item, instance, 'server', '__server__'))
       }
       for (const item of this.clientModules) {
-        const list = this.clientInstances[item.id] || []
-        for (const instance of list) rows.push(this.normalizeInstanceRow(item, instance, 'client'))
+        const byDevice = this.clientInstances || {}
+        for (const [deviceId, toolMap] of Object.entries(byDevice)) {
+          const list = toolMap?.[item.id] || []
+          for (const instance of list) rows.push(this.normalizeInstanceRow(item, instance, 'client', deviceId))
+        }
       }
       return rows.sort((a, b) => {
         if (a.running !== b.running) return a.running ? -1 : 1
@@ -400,12 +457,22 @@ export default {
     filteredInstances() {
       const keyword = String(this.searchText || '').trim().toLowerCase()
       const side = String(this.sideFilter || '').trim().toLowerCase()
+      const device = this.normalizeDeviceId(this.deviceFilter || this.currentDeviceId || '__all__')
       return this.allInstances.filter((row) => {
         if (side && row.side !== side) return false
+        if (device && device !== '__all__') {
+          if (device === '__server__') {
+            if (row.side !== 'server') return false
+          } else if (row.device_id !== device) {
+            return false
+          }
+        }
         if (!keyword) return true
         const values = [
           row.side,
           row.status,
+          row.device_id,
+          row.device_label,
           row.tool_id,
           row.display_name,
           row.instance_id,
@@ -440,12 +507,14 @@ export default {
   watch: {
     selectedId() {
       if (!this.visible) return
+      this.deviceFilter = this.currentDeviceId || '__server__'
       this.refreshInstances(false)
     },
   },
 
   methods: {
     async open() {
+      this.deviceFilter = this.currentDeviceId || '__server__'
       this.visible = true
       await this.refreshAll()
     },
@@ -498,12 +567,23 @@ export default {
 
     async refreshInstances(showToast = true) {
       const jobs = []
-      for (const item of this.serverModules) jobs.push(this.loadServerInstances(item.id, false))
-      if (this.selectedId) {
-        for (const item of this.clientModules) jobs.push(this.loadClientInstances(item.id, false))
-      } else {
-        this.clientInstances = {}
+      const device = this.normalizeDeviceId(this.deviceFilter || this.currentDeviceId || '__all__')
+
+      if (device === '__all__' || device === '__server__') {
+        for (const item of this.serverModules) jobs.push(this.loadServerInstances(item.id, false))
+      } else if (!device) {
+        for (const item of this.serverModules) jobs.push(this.loadServerInstances(item.id, false))
       }
+
+      const clientDeviceIds = this.getClientDeviceIdsForFilter(device)
+      for (const deviceId of clientDeviceIds) {
+        for (const item of this.clientModules) jobs.push(this.loadClientInstances(item.id, deviceId, false))
+      }
+
+      if (!clientDeviceIds.length && device !== '__all__') {
+        // Keep already loaded client instance caches, but do not add new requests.
+      }
+
       await Promise.allSettled(jobs)
       if (showToast) ElMessage.success('Instances refreshed')
     },
@@ -525,10 +605,11 @@ export default {
       }
     },
 
-    async loadClientInstances(toolId, showToast = true) {
-      if (!toolId || !this.selectedId) return
+    async loadClientInstances(toolId, deviceId = this.currentDeviceId, showToast = true) {
+      const targetDeviceId = this.normalizeDeviceId(deviceId)
+      if (!toolId || !targetDeviceId || targetDeviceId === '__server__' || targetDeviceId === '__all__') return
       try {
-        const res = await fetch(`/api/connections/${encodeURIComponent(this.selectedId)}/external-tools/${encodeURIComponent(toolId)}/instances`, {
+        const res = await fetch(`/api/connections/${encodeURIComponent(targetDeviceId)}/external-tools/${encodeURIComponent(toolId)}/instances`, {
           method: 'POST',
           headers: this.buildJsonHeaders({ 'Content-Type': 'application/json' }),
           body: JSON.stringify({}),
@@ -538,12 +619,75 @@ export default {
         const data = json.data || {}
         this.clientInstances = {
           ...this.clientInstances,
-          [toolId]: Array.isArray(data.items) ? data.items : [],
+          [targetDeviceId]: {
+            ...(this.clientInstances[targetDeviceId] || {}),
+            [toolId]: Array.isArray(data.items) ? data.items : [],
+          },
         }
         if (showToast) ElMessage.success('Client instances refreshed')
       } catch (e) {
         if (showToast) ElMessage.error(e.message || 'Failed to load client instances')
       }
+    },
+
+    normalizeDeviceId(value) {
+      return String(value || '').trim()
+    },
+
+    shortenDeviceId(deviceId) {
+      const value = this.normalizeDeviceId(deviceId)
+      if (!value) return '-'
+      if (value === '__server__') return 'server'
+      if (value === '__all__') return 'all'
+      return value.length > 12 ? value.slice(0, 12) : value
+    },
+
+    findConnectionById(deviceId) {
+      const id = this.normalizeDeviceId(deviceId)
+      return (this.connections || []).find(conn => this.normalizeDeviceId(conn?.client_id) === id) || null
+    },
+
+    formatDeviceOptionLabel(conn) {
+      const id = this.normalizeDeviceId(conn?.client_id)
+      const shortId = this.shortenDeviceId(id)
+      const hostname = String(conn?.hostname || '').trim()
+      return hostname ? `${shortId} (${hostname})` : shortId
+    },
+
+    formatCurrentDeviceLabel() {
+      const conn = this.findConnectionById(this.currentDeviceId) || this.currentConnection
+      return conn ? this.formatDeviceOptionLabel(conn) : this.shortenDeviceId(this.currentDeviceId)
+    },
+
+    getDeviceLabel(deviceId, side = '') {
+      const id = this.normalizeDeviceId(deviceId)
+      if (side === 'server' || id === '__server__') return 'Server host'
+      const conn = this.findConnectionById(id)
+      if (conn) return this.formatDeviceOptionLabel(conn)
+      if (id === this.currentDeviceId && this.currentConnection) return this.formatDeviceOptionLabel(this.currentConnection)
+      return this.shortenDeviceId(id)
+    },
+
+    getClientDeviceIdsForFilter(filterValue) {
+      const value = this.normalizeDeviceId(filterValue || this.currentDeviceId)
+      if (!value || value === '__server__') return []
+      if (value === '__all__') {
+        const ids = []
+        const seen = new Set()
+        for (const conn of this.connections || []) {
+          const id = this.normalizeDeviceId(conn?.client_id)
+          if (!id || seen.has(id)) continue
+          seen.add(id)
+          ids.push(id)
+        }
+        if (this.currentDeviceId && !seen.has(this.currentDeviceId)) ids.push(this.currentDeviceId)
+        return ids
+      }
+      return [value]
+    },
+
+    async handleDeviceFilterChange() {
+      await this.refreshInstances(false)
     },
 
     normalizePlatform(value) {
@@ -743,17 +887,20 @@ export default {
       const json = await res.json()
       if (!res.ok || json.code !== 0) throw new Error(json.message || 'Failed to start client tool')
       ElMessage.success(json.data?.message || 'Client instance started')
-      await this.loadClientInstances(item.id, false)
+      await this.loadClientInstances(item.id, this.selectedId, false)
     },
 
-    normalizeInstanceRow(item, instance, side) {
+    normalizeInstanceRow(item, instance, side, deviceId = '') {
       const runtime = instance.runtime || {}
       const config = instance.config || {}
       const params = instance.params || {}
       const configPath = config.target || instance.config_file || ''
+      const normalizedDeviceId = side === 'server' ? '__server__' : this.normalizeDeviceId(deviceId || this.currentDeviceId)
       return {
-        row_key: `${side}:${item.id}:${instance.instance_id}`,
+        row_key: `${side}:${normalizedDeviceId}:${item.id}:${instance.instance_id}`,
         side,
+        device_id: normalizedDeviceId,
+        device_label: this.getDeviceLabel(normalizedDeviceId, side),
         tool_id: item.id,
         display_name: item.display_name || item.id,
         instance_id: instance.instance_id || 'default',
@@ -839,15 +986,16 @@ export default {
     },
 
     async stopClientInstance(row) {
-      if (!this.selectedId) throw new Error('Please select a device')
-      const res = await fetch(`/api/connections/${encodeURIComponent(this.selectedId)}/external-tools/${encodeURIComponent(row.tool_id)}/instances/${encodeURIComponent(row.instance_id)}/stop`, {
+      const deviceId = this.normalizeDeviceId(row.device_id || this.selectedId)
+      if (!deviceId) throw new Error('Please select a device')
+      const res = await fetch(`/api/connections/${encodeURIComponent(deviceId)}/external-tools/${encodeURIComponent(row.tool_id)}/instances/${encodeURIComponent(row.instance_id)}/stop`, {
         method: 'POST',
         headers: this.buildJsonHeaders({ 'Content-Type': 'application/json' }),
         body: JSON.stringify({}),
       })
       const json = await res.json()
       if (!res.ok || json.code !== 0) throw new Error(json.message || 'Failed to stop client instance')
-      await this.loadClientInstances(row.tool_id, false)
+      await this.loadClientInstances(row.tool_id, deviceId, false)
     },
 
     async openInstanceLogs(row) {
@@ -887,8 +1035,9 @@ export default {
     },
 
     async readClientLogs(row) {
-      if (!this.selectedId) throw new Error('Please select a device')
-      const res = await fetch(`/api/connections/${encodeURIComponent(this.selectedId)}/external-tools/${encodeURIComponent(row.tool_id)}/instances/${encodeURIComponent(row.instance_id)}/logs`, {
+      const deviceId = this.normalizeDeviceId(row.device_id || this.selectedId)
+      if (!deviceId) throw new Error('Please select a device')
+      const res = await fetch(`/api/connections/${encodeURIComponent(deviceId)}/external-tools/${encodeURIComponent(row.tool_id)}/instances/${encodeURIComponent(row.instance_id)}/logs`, {
         method: 'POST',
         headers: this.buildJsonHeaders({ 'Content-Type': 'application/json' }),
         body: JSON.stringify({ max_bytes: 65536 }),
@@ -925,6 +1074,10 @@ export default {
 
 .external-tool-filter {
   width: 150px;
+}
+
+.external-tool-device-filter {
+  width: 230px;
 }
 
 .external-tool-search {
@@ -1072,8 +1225,9 @@ export default {
   word-break: break-word;
   padding: 12px;
   border-radius: 10px;
-  background: rgba(0,0,0,.24);
-  color: var(--terminal-fg, #d9e2ff);
+  background: #050505;
+  color: #d9e2ff;
+  border: 1px solid rgba(255,255,255,.12);
 }
 
 .mono {
