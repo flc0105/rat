@@ -4,15 +4,15 @@ import os
 import platform
 import re
 import shlex
-import shutil
 import subprocess
+import sys
+import tempfile
 import zipfile
 from datetime import datetime
-from string import Template
+from types import SimpleNamespace
 from typing import Any
 
 from core.platform.platform_identity import detect_platform_alias
-
 
 _VAR_PATTERN = re.compile(r'{{\s*([A-Za-z_][A-Za-z0-9_]*)\s*}}')
 
@@ -47,6 +47,7 @@ class ExternalToolRuntimeService:
             def replace(match):
                 key = match.group(1)
                 return str(context.get(key, match.group(0)))
+
             return _VAR_PATTERN.sub(replace, value)
         if isinstance(value, list):
             return [self._render_value(item, context) for item in value]
@@ -105,7 +106,8 @@ class ExternalToolRuntimeService:
             'runtime_dir': runtime_root,
         }
         context.update(params or {})
-        install_template = str((meta.get('install') or {}).get('install_dir') or '{{external_tools_root}}/{{id}}/{{version}}')
+        install_template = str(
+            (meta.get('install') or {}).get('install_dir') or '{{external_tools_root}}/{{id}}/{{version}}')
         install_dir = self._render_value(install_template, context)
         context['install_dir'] = install_dir
         return context
@@ -187,7 +189,8 @@ class ExternalToolRuntimeService:
             extracted = True
 
         executable_rel_path = str((meta.get('package') or {}).get('executable_rel_path') or '').strip()
-        executable_path = self._expand_path(os.path.join(install_dir, executable_rel_path)) if executable_rel_path else skip_path
+        executable_path = self._expand_path(
+            os.path.join(install_dir, executable_rel_path)) if executable_rel_path else skip_path
         self._chmod_executable(executable_path)
 
         return {
@@ -219,14 +222,17 @@ class ExternalToolRuntimeService:
             argv = shlex.split(argv)
         if not isinstance(argv, list) or not argv:
             raise ValueError('runtime.argv is required')
-        argv = [self._expand_path(str(item)) if index == 0 or '/' in str(item) or '\\' in str(item) else str(item) for index, item in enumerate(argv)]
+        argv = [self._expand_path(str(item)) if index == 0 or '/' in str(item) or '\\' in str(item) else str(item) for
+                index, item in enumerate(argv)]
 
         cwd = self._expand_path(runtime.get('cwd') or context.get('install_dir') or '.')
-        stdout = self._expand_path(runtime.get('stdout') or os.path.join(self.runtime_root_dir, meta.get('id') or 'tool', 'stdout.log'))
+        stdout = self._expand_path(
+            runtime.get('stdout') or os.path.join(self.runtime_root_dir, meta.get('id') or 'tool', 'stdout.log'))
         stderr = runtime.get('stderr') or 'stdout'
         if stderr != 'stdout':
             stderr = self._expand_path(stderr)
-        pid_file = self._expand_path(runtime.get('pid_file') or os.path.join(self.runtime_root_dir, meta.get('id') or 'tool', 'tool.pid'))
+        pid_file = self._expand_path(
+            runtime.get('pid_file') or os.path.join(self.runtime_root_dir, meta.get('id') or 'tool', 'tool.pid'))
         return {
             'argv': argv,
             'cwd': cwd,
@@ -235,44 +241,152 @@ class ExternalToolRuntimeService:
             'pid_file': pid_file,
         }
 
-    def _start_detached_process(self, runtime_spec: dict) -> subprocess.Popen:
+    def _start_detached_process(self, runtime_spec: dict) -> SimpleNamespace:
+        """
+        Start the external executable through a short-lived launcher process.
+
+        start_new_session=True only separates session/process group; it does not
+        re-parent the child. The launcher makes the real tool a grandchild and exits,
+        so frps/frpc is no longer a direct child of the web server.
+        """
         os.makedirs(runtime_spec['cwd'], exist_ok=True)
         os.makedirs(os.path.dirname(runtime_spec['stdout']), exist_ok=True)
         os.makedirs(os.path.dirname(runtime_spec['pid_file']), exist_ok=True)
-        stdout_file = open(runtime_spec['stdout'], 'ab')
-        if runtime_spec.get('stderr') == 'stdout':
-            stderr_target = subprocess.STDOUT
-            stderr_file = None
-        else:
+
+        if runtime_spec.get('stderr') not in ('', None, 'stdout'):
             os.makedirs(os.path.dirname(runtime_spec['stderr']), exist_ok=True)
-            stderr_file = open(runtime_spec['stderr'], 'ab')
-            stderr_target = stderr_file
 
-        popen_kwargs = {
+        launch_spec = {
+            'argv': runtime_spec['argv'],
             'cwd': runtime_spec['cwd'],
-            'stdin': subprocess.DEVNULL,
-            'stdout': stdout_file,
-            'stderr': stderr_target,
-            'close_fds': True,
-            'shell': False,
+            'stdout': runtime_spec['stdout'],
+            'stderr': runtime_spec.get('stderr') or 'stdout',
+            'pid_file': runtime_spec['pid_file'],
         }
-        try:
-            if os.name == 'nt':
-                flags = 0
-                flags |= getattr(subprocess, 'CREATE_NEW_PROCESS_GROUP', 0)
-                flags |= getattr(subprocess, 'DETACHED_PROCESS', 0)
-                process = subprocess.Popen(runtime_spec['argv'], creationflags=flags, **popen_kwargs)
-            else:
-                process = subprocess.Popen(runtime_spec['argv'], start_new_session=True, **popen_kwargs)
-        finally:
-            stdout_file.close()
-            if stderr_file is not None:
-                stderr_file.close()
-        with open(runtime_spec['pid_file'], 'w', encoding='utf-8') as file_obj:
-            file_obj.write(str(process.pid))
-        return process
 
-    def _write_state_file(self, meta: dict, runtime_spec: dict, process: subprocess.Popen, install_info: dict) -> str:
+        spec_fd, spec_path = tempfile.mkstemp(
+            prefix='external-tool-launch-',
+            suffix='.json',
+            dir=os.path.dirname(runtime_spec['pid_file']),
+        )
+
+        try:
+            with os.fdopen(spec_fd, 'w', encoding='utf-8') as file_obj:
+                json.dump(launch_spec, file_obj, ensure_ascii=False)
+
+            launcher_code = r'''
+import json
+import os
+import subprocess
+import sys
+
+spec_path = sys.argv[1]
+
+with open(spec_path, 'r', encoding='utf-8') as file_obj:
+    spec = json.load(file_obj)
+
+stdout_file = open(spec['stdout'], 'ab')
+stderr_file = None
+
+try:
+    stderr_value = spec.get('stderr') or 'stdout'
+    if stderr_value == 'stdout':
+        stderr_target = subprocess.STDOUT
+    else:
+        stderr_file = open(stderr_value, 'ab')
+        stderr_target = stderr_file
+
+    kwargs = {
+        'cwd': spec['cwd'],
+        'stdin': subprocess.DEVNULL,
+        'stdout': stdout_file,
+        'stderr': stderr_target,
+        'close_fds': True,
+        'shell': False,
+    }
+
+    if os.name == 'nt':
+        flags = 0
+        flags |= getattr(subprocess, 'CREATE_NEW_PROCESS_GROUP', 0)
+        flags |= getattr(subprocess, 'DETACHED_PROCESS', 0)
+        process = subprocess.Popen(spec['argv'], creationflags=flags, **kwargs)
+    else:
+        process = subprocess.Popen(spec['argv'], start_new_session=True, **kwargs)
+
+    with open(spec['pid_file'], 'w', encoding='utf-8') as pid_obj:
+        pid_obj.write(str(process.pid))
+
+    print(process.pid)
+
+finally:
+    stdout_file.close()
+    if stderr_file is not None:
+        stderr_file.close()
+'''
+
+            completed = subprocess.run(
+                [sys.executable, '-c', launcher_code, spec_path],
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                timeout=10,
+                close_fds=True,
+            )
+
+            if completed.returncode != 0:
+                raise RuntimeError(
+                    (completed.stderr or completed.stdout or 'external tool launcher failed').strip()
+                )
+
+            pid_text = (completed.stdout or '').strip().splitlines()[-1]
+            return SimpleNamespace(pid=int(pid_text))
+
+        finally:
+            try:
+                os.unlink(spec_path)
+            except OSError:
+                pass
+
+    # def _start_detached_process(self, runtime_spec: dict) -> subprocess.Popen:
+    #     os.makedirs(runtime_spec['cwd'], exist_ok=True)
+    #     os.makedirs(os.path.dirname(runtime_spec['stdout']), exist_ok=True)
+    #     os.makedirs(os.path.dirname(runtime_spec['pid_file']), exist_ok=True)
+    #     stdout_file = open(runtime_spec['stdout'], 'ab')
+    #     if runtime_spec.get('stderr') == 'stdout':
+    #         stderr_target = subprocess.STDOUT
+    #         stderr_file = None
+    #     else:
+    #         os.makedirs(os.path.dirname(runtime_spec['stderr']), exist_ok=True)
+    #         stderr_file = open(runtime_spec['stderr'], 'ab')
+    #         stderr_target = stderr_file
+    #
+    #     popen_kwargs = {
+    #         'cwd': runtime_spec['cwd'],
+    #         'stdin': subprocess.DEVNULL,
+    #         'stdout': stdout_file,
+    #         'stderr': stderr_target,
+    #         'close_fds': True,
+    #         'shell': False,
+    #     }
+    #     try:
+    #         if os.name == 'nt':
+    #             flags = 0
+    #             flags |= getattr(subprocess, 'CREATE_NEW_PROCESS_GROUP', 0)
+    #             flags |= getattr(subprocess, 'DETACHED_PROCESS', 0)
+    #             process = subprocess.Popen(runtime_spec['argv'], creationflags=flags, **popen_kwargs)
+    #         else:
+    #             process = subprocess.Popen(runtime_spec['argv'], start_new_session=True, **popen_kwargs)
+    #     finally:
+    #         stdout_file.close()
+    #         if stderr_file is not None:
+    #             stderr_file.close()
+    #     with open(runtime_spec['pid_file'], 'w', encoding='utf-8') as file_obj:
+    #         file_obj.write(str(process.pid))
+    #     return process
+
+    def _write_state_file(self, meta: dict, runtime_spec: dict, process: SimpleNamespace, install_info: dict) -> str:
+        # def _write_state_file(self, meta: dict, runtime_spec: dict, process: subprocess.Popen, install_info: dict) -> str:
         state_dir = os.path.dirname(runtime_spec['pid_file'])
         os.makedirs(state_dir, exist_ok=True)
         state_file = os.path.join(state_dir, 'state.json')
@@ -366,7 +480,8 @@ class ExternalToolRuntimeService:
             'runtime': runtime,
         }
 
-    def install_and_run_client(self, client_id: str, tool_id: str, params: dict | None = None, tab_id: str = '') -> dict:
+    def install_and_run_client(self, client_id: str, tool_id: str, params: dict | None = None,
+                               tab_id: str = '') -> dict:
         meta = self.catalog_service.get_tool(tool_id)
         self._assert_tool_usable(meta, 'client', platform_alias='*')
         payload = self.build_client_payload(meta, params)

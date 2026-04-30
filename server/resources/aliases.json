@@ -42,7 +42,9 @@
     "pause": "kill -STOP <pid>",
     "resume": "kill -CONT <pid>",
     "wifipass": "security find-generic-password -wa <ssid>",
-    "public_ip": "curl -s ifconfig.me;echo"
+    "public_ip": "curl -s ifconfig.me;echo",
+    "ps_frps": "ps -o pid,ppid,pgid,comm -p $(cat /Users/flc/PycharmProjects/rat/runtime/external_tools/runtime/frps-darwin-arm64/tool.pid)",
+    "ps_frpc": "ps -o pid,ppid,pgid,comm -p $(cat /Users/flc/.ops/external_tools/runtime/frpc-darwin-arm64/tool.pid)"
   },
   "linux": {},
   "ios": {}

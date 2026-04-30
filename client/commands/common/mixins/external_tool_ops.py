@@ -7,6 +7,10 @@ from client.commands.runtime.interrupts import interruptible
 from core.utils.client_util import safe_extract_zip_file
 from core.utils.decorator import desc
 
+import sys
+import tempfile
+from types import SimpleNamespace
+
 
 class CommandExternalToolMixin:
     """
@@ -120,45 +124,152 @@ class CommandExternalToolMixin:
             'pid_file': pid_file,
         }
 
-    def _external_tool_start_detached(self, runtime: dict) -> subprocess.Popen:
+    def _external_tool_start_detached(self, runtime: dict) -> SimpleNamespace:
+        """
+        Start the external executable through a short-lived launcher process.
+
+        This prevents the real frpc process from remaining a direct child of the
+        client agent process.
+        """
         os.makedirs(runtime['cwd'], exist_ok=True)
         os.makedirs(os.path.dirname(runtime['stdout']), exist_ok=True)
         os.makedirs(os.path.dirname(runtime['pid_file']), exist_ok=True)
 
-        stdout_file = open(runtime['stdout'], 'ab')
-        stderr_file = None
-        stderr_target = subprocess.STDOUT
-        if runtime.get('stderr') != 'stdout':
+        if runtime.get('stderr') not in ('', None, 'stdout'):
             os.makedirs(os.path.dirname(runtime['stderr']), exist_ok=True)
-            stderr_file = open(runtime['stderr'], 'ab')
-            stderr_target = stderr_file
 
-        popen_kwargs = {
+        launch_spec = {
+            'argv': runtime['argv'],
             'cwd': runtime['cwd'],
-            'stdin': subprocess.DEVNULL,
-            'stdout': stdout_file,
-            'stderr': stderr_target,
-            'close_fds': True,
-            'shell': False,
+            'stdout': runtime['stdout'],
+            'stderr': runtime.get('stderr') or 'stdout',
+            'pid_file': runtime['pid_file'],
         }
+
+        spec_fd, spec_path = tempfile.mkstemp(
+            prefix='external-tool-launch-',
+            suffix='.json',
+            dir=os.path.dirname(runtime['pid_file']),
+        )
+
         try:
-            if os.name == 'nt':
-                flags = 0
-                flags |= getattr(subprocess, 'CREATE_NEW_PROCESS_GROUP', 0)
-                flags |= getattr(subprocess, 'DETACHED_PROCESS', 0)
-                process = subprocess.Popen(runtime['argv'], creationflags=flags, **popen_kwargs)
-            else:
-                process = subprocess.Popen(runtime['argv'], start_new_session=True, **popen_kwargs)
+            with os.fdopen(spec_fd, 'w', encoding='utf-8') as file_obj:
+                json.dump(launch_spec, file_obj, ensure_ascii=False)
+
+            launcher_code = r'''
+import json
+import os
+import subprocess
+import sys
+
+spec_path = sys.argv[1]
+
+with open(spec_path, 'r', encoding='utf-8') as file_obj:
+    spec = json.load(file_obj)
+
+stdout_file = open(spec['stdout'], 'ab')
+stderr_file = None
+
+try:
+    stderr_value = spec.get('stderr') or 'stdout'
+    if stderr_value == 'stdout':
+        stderr_target = subprocess.STDOUT
+    else:
+        stderr_file = open(stderr_value, 'ab')
+        stderr_target = stderr_file
+
+    kwargs = {
+        'cwd': spec['cwd'],
+        'stdin': subprocess.DEVNULL,
+        'stdout': stdout_file,
+        'stderr': stderr_target,
+        'close_fds': True,
+        'shell': False,
+    }
+
+    if os.name == 'nt':
+        flags = 0
+        flags |= getattr(subprocess, 'CREATE_NEW_PROCESS_GROUP', 0)
+        flags |= getattr(subprocess, 'DETACHED_PROCESS', 0)
+        process = subprocess.Popen(spec['argv'], creationflags=flags, **kwargs)
+    else:
+        process = subprocess.Popen(spec['argv'], start_new_session=True, **kwargs)
+
+    with open(spec['pid_file'], 'w', encoding='utf-8') as pid_obj:
+        pid_obj.write(str(process.pid))
+
+    print(process.pid)
+
+finally:
+    stdout_file.close()
+    if stderr_file is not None:
+        stderr_file.close()
+'''
+
+            completed = subprocess.run(
+                [sys.executable, '-c', launcher_code, spec_path],
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                timeout=10,
+                close_fds=True,
+            )
+
+            if completed.returncode != 0:
+                raise RuntimeError(
+                    (completed.stderr or completed.stdout or 'external tool client launcher failed').strip()
+                )
+
+            pid_text = (completed.stdout or '').strip().splitlines()[-1]
+            return SimpleNamespace(pid=int(pid_text))
+
         finally:
-            stdout_file.close()
-            if stderr_file is not None:
-                stderr_file.close()
+            try:
+                os.unlink(spec_path)
+            except OSError:
+                pass
 
-        with open(runtime['pid_file'], 'w', encoding='utf-8') as file_obj:
-            file_obj.write(str(process.pid))
-        return process
+    # def _external_tool_start_detached(self, runtime: dict) -> subprocess.Popen:
+    #     os.makedirs(runtime['cwd'], exist_ok=True)
+    #     os.makedirs(os.path.dirname(runtime['stdout']), exist_ok=True)
+    #     os.makedirs(os.path.dirname(runtime['pid_file']), exist_ok=True)
+    #
+    #     stdout_file = open(runtime['stdout'], 'ab')
+    #     stderr_file = None
+    #     stderr_target = subprocess.STDOUT
+    #     if runtime.get('stderr') != 'stdout':
+    #         os.makedirs(os.path.dirname(runtime['stderr']), exist_ok=True)
+    #         stderr_file = open(runtime['stderr'], 'ab')
+    #         stderr_target = stderr_file
+    #
+    #     popen_kwargs = {
+    #         'cwd': runtime['cwd'],
+    #         'stdin': subprocess.DEVNULL,
+    #         'stdout': stdout_file,
+    #         'stderr': stderr_target,
+    #         'close_fds': True,
+    #         'shell': False,
+    #     }
+    #     try:
+    #         if os.name == 'nt':
+    #             flags = 0
+    #             flags |= getattr(subprocess, 'CREATE_NEW_PROCESS_GROUP', 0)
+    #             flags |= getattr(subprocess, 'DETACHED_PROCESS', 0)
+    #             process = subprocess.Popen(runtime['argv'], creationflags=flags, **popen_kwargs)
+    #         else:
+    #             process = subprocess.Popen(runtime['argv'], start_new_session=True, **popen_kwargs)
+    #     finally:
+    #         stdout_file.close()
+    #         if stderr_file is not None:
+    #             stderr_file.close()
+    #
+    #     with open(runtime['pid_file'], 'w', encoding='utf-8') as file_obj:
+    #         file_obj.write(str(process.pid))
+    #     return process
 
-    def _external_tool_write_state(self, payload: dict, install_info: dict, runtime: dict, process: subprocess.Popen) -> str:
+    # def _external_tool_write_state(self, payload: dict, install_info: dict, runtime: dict, process: subprocess.Popen) -> str:
+    def _external_tool_write_state(self, payload: dict, install_info: dict, runtime: dict, process: SimpleNamespace) -> str:
         state_file = os.path.join(os.path.dirname(runtime['pid_file']), 'state.json')
         state = {
             'tool_id': payload.get('tool_id') or '',
