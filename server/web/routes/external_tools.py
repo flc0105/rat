@@ -27,12 +27,36 @@ def create_external_tool_blueprint(server_instance):
             default_error_status=500,
         )
 
+    @blueprint.post('/api/connections/<client_id>/external-tools/catalog')
+    def list_client_external_tools(client_id):
+        return responder.json_endpoint(
+            lambda: external_tool_api.list_client_catalog(
+                client_id,
+                tab_id=get_optional_tab_id(),
+            ),
+            default_error_status=500,
+        )
+
     @blueprint.get('/api/external-tools/<tool_id>')
     def get_external_tool(tool_id):
         return responder.json_endpoint(
             lambda: external_tool_api.get_tool(tool_id),
             default_error_status=500,
         )
+
+    @blueprint.get('/api/external-tools/<tool_id>/meta/content')
+    def read_external_tool_meta(tool_id):
+        return responder.json_endpoint(
+            lambda: external_tool_api.read_meta_content(tool_id),
+            default_error_status=500,
+        )
+
+    @blueprint.post('/api/external-tools/<tool_id>/meta/content')
+    def save_external_tool_meta(tool_id):
+        def _execute():
+            payload = get_json_payload()
+            return external_tool_api.save_meta_content(tool_id, str(payload.get('content') or ''))
+        return responder.json_endpoint(_execute, default_error_status=500)
 
     @blueprint.get('/api/external-tools/<tool_id>/download')
     def download_external_tool_by_id(tool_id):
@@ -68,6 +92,29 @@ def create_external_tool_blueprint(server_instance):
         def _execute():
             payload, params = _params_from_payload()
             return external_tool_api.start_server_instance(
+                tool_id,
+                params=params,
+                instance_id=str(payload.get('instance_id') or '').strip(),
+                install_if_needed=bool(payload.get('install_if_needed', True)),
+            )
+        return responder.json_endpoint(_execute, default_error_status=500)
+
+    @blueprint.post('/api/external-tools/<tool_id>/server/install')
+    def install_server_tool(tool_id):
+        def _execute():
+            payload, params = _params_from_payload()
+            return external_tool_api.install_server_tool(
+                tool_id,
+                params=params,
+                instance_id=str(payload.get('instance_id') or '').strip(),
+            )
+        return responder.json_endpoint(_execute, default_error_status=500)
+
+    @blueprint.post('/api/external-tools/<tool_id>/server/install-status')
+    def server_install_status(tool_id):
+        def _execute():
+            payload, params = _params_from_payload()
+            return external_tool_api.server_install_status(
                 tool_id,
                 params=params,
                 instance_id=str(payload.get('instance_id') or '').strip(),
@@ -124,6 +171,33 @@ def create_external_tool_blueprint(server_instance):
         def _execute():
             payload, params = _params_from_payload()
             return external_tool_api.start_client_instance(
+                client_id,
+                tool_id,
+                params=params,
+                instance_id=str(payload.get('instance_id') or '').strip(),
+                install_if_needed=bool(payload.get('install_if_needed', True)),
+                tab_id=get_optional_tab_id(),
+            )
+        return responder.json_endpoint(_execute, default_error_status=500)
+
+    @blueprint.post('/api/connections/<client_id>/external-tools/<tool_id>/install')
+    def install_client_tool(client_id, tool_id):
+        def _execute():
+            payload, params = _params_from_payload()
+            return external_tool_api.install_client_tool(
+                client_id,
+                tool_id,
+                params=params,
+                instance_id=str(payload.get('instance_id') or '').strip(),
+                tab_id=get_optional_tab_id(),
+            )
+        return responder.json_endpoint(_execute, default_error_status=500)
+
+    @blueprint.post('/api/connections/<client_id>/external-tools/<tool_id>/install-status')
+    def client_install_status(client_id, tool_id):
+        def _execute():
+            payload, params = _params_from_payload()
+            return external_tool_api.client_install_status(
                 client_id,
                 tool_id,
                 params=params,

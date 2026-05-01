@@ -24,14 +24,15 @@
       "label": "Instance Name",
       "type": "string",
       "required": true,
-      "default": "vite-8087",
-      "description": "Unique name for this frpc instance. Examples: vite-8087, ssh-6000. It controls config/log/pid isolation."
+      "default": "vite-15173",
+      "description": "Unique name for this frpc instance. It controls config/log/pid isolation."
     },
     {
       "name": "server_addr",
       "label": "FRP Server Address",
       "type": "string",
       "required": true,
+      "default": "127.0.0.1",
       "description": "frps server IP or domain, for example 1.2.3.4 or frp.example.com"
     },
     {
@@ -39,7 +40,7 @@
       "label": "FRPS Control Port",
       "type": "integer",
       "required": true,
-      "default": 7000,
+      "default": 7001,
       "min": 1,
       "max": 65535,
       "description": "frps bindPort. This is the control connection port used by frpc to connect to frps, not the exposed business port."
@@ -83,7 +84,7 @@
       "label": "Server Exposed Port",
       "type": "integer",
       "required": true,
-      "default": 8087,
+      "default": 15173,
       "min": 1,
       "max": 65535,
       "description": "The port exposed on the frps server. External users connect to server_addr:remote_port."

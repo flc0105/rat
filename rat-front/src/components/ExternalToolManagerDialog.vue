@@ -89,6 +89,14 @@
                   <el-tag v-if="item.arch" size="small" type="info">
                     {{ item.arch }}
                   </el-tag>
+                  <el-tag
+                    v-if="getModuleInstallStatus(item).label"
+                    size="small"
+                    :type="getModuleInstallStatus(item).type"
+                    effect="plain"
+                  >
+                    {{ getModuleInstallStatus(item).label }}
+                  </el-tag>
                 </div>
 
                 <div class="external-tool-desc" :title="item.description || ''">
@@ -103,31 +111,64 @@
               </div>
 
               <div class="external-tool-actions">
-                <el-button size="small" plain @click="downloadTool(item)">
-                  Download
-                </el-button>
+                <div class="external-tool-action-row">
+                  <el-button size="small" plain @click="downloadTool(item)">
+                    Download
+                  </el-button>
+                  <el-button size="small" plain @click="$emit('open-tool-meta-editor', item.id)">
+                    Edit
+                  </el-button>
+                </div>
 
-                <el-button
-                  v-if="item.side === 'server'"
-                  size="small"
-                  type="primary"
-                  plain
-                  :disabled="!isServerPlatformSupported(item)"
-                  @click="openStartDialog(item, 'server')"
-                >
-                  Run on Server
-                </el-button>
+                <div class="external-tool-action-row">
+                  <el-button
+                    v-if="item.side === 'server'"
+                    size="small"
+                    type="primary"
+                    plain
+                    :disabled="!isServerPlatformSupported(item)"
+                    @click="openStartDialog(item, 'server', 'start')"
+                  >
+                    Run on Server
+                  </el-button>
 
-                <el-button
-                  v-if="item.side === 'client'"
-                  size="small"
-                  type="primary"
-                  plain
-                  :disabled="!selectedId || !isClientPlatformSupported(item)"
-                  @click="openStartDialog(item, 'client')"
-                >
-                  Run on Client
-                </el-button>
+                  <el-button
+                    v-if="item.side === 'client'"
+                    size="small"
+                    type="primary"
+                    plain
+                    :disabled="!selectedId || !isClientPlatformSupported(item)"
+                    @click="openStartDialog(item, 'client', 'start')"
+                  >
+                    Run on Client
+                  </el-button>
+
+                  <el-dropdown
+                    trigger="click"
+                    size="small"
+                    @command="handlePackageMoreCommand($event, item)"
+                  >
+                    <el-button size="small" plain>
+                      More
+                    </el-button>
+                    <template #dropdown>
+                      <el-dropdown-menu>
+                        <el-dropdown-item command="install" :disabled="!canUsePackageAction(item)">
+                          Install (Only)
+                        </el-dropdown-item>
+                        <el-dropdown-item command="run_only" :disabled="!canUsePackageAction(item)">
+                          Run (Only)
+                        </el-dropdown-item>
+                        <el-dropdown-item command="status" :disabled="!canUsePackageAction(item)">
+                          Install Status / Path
+                        </el-dropdown-item>
+                        <el-dropdown-item command="copy" :disabled="!canUsePackageAction(item)">
+                          Copy Command
+                        </el-dropdown-item>
+                      </el-dropdown-menu>
+                    </template>
+                  </el-dropdown>
+                </div>
               </div>
             </div>
           </div>
@@ -213,20 +254,22 @@
               </template>
             </el-table-column>
 
-            <el-table-column label="Actions" width="150" fixed="right">
+            <el-table-column label="Actions" width="168" fixed="right">
               <template #default="{ row }">
-                <el-button size="small" plain @click="openInstanceLogs(row)">
-                  Logs
-                </el-button>
-                <el-button
-                  size="small"
-                  type="danger"
-                  plain
-                  :disabled="!row.running && row.status !== 'stale'"
-                  @click="stopInstance(row)"
-                >
-                  Stop
-                </el-button>
+                <div class="external-tool-table-actions">
+                  <el-button size="small" plain @click="openInstanceLogs(row)">
+                    Logs
+                  </el-button>
+                  <el-button
+                    size="small"
+                    type="danger"
+                    plain
+                    :disabled="!row.running && row.status !== 'stale'"
+                    @click="stopInstance(row)"
+                  >
+                    Stop
+                  </el-button>
+                </div>
               </template>
             </el-table-column>
           </el-table>
@@ -296,7 +339,7 @@
     <template #footer>
       <el-button size="small" @click="startDialogVisible = false">Cancel</el-button>
       <el-button size="small" type="primary" :loading="submitting" @click="confirmStart">
-        Start Instance
+        {{ pendingStartMode === 'run_only' ? 'Run Only' : 'Start Instance' }}
       </el-button>
     </template>
   </el-dialog>
@@ -307,6 +350,9 @@
     width="940px"
     append-to-body
   >
+    <div v-if="logFilePath" class="external-tool-log-path mono" :title="logFilePath">
+      Log file: {{ logFilePath }}
+    </div>
     <pre class="external-tool-log-content">{{ logContent || 'No log content.' }}</pre>
     <template #footer>
       <el-button size="small" :loading="logLoading" @click="refreshCurrentLogs">Refresh Logs</el-button>
@@ -343,6 +389,7 @@ export default {
   emits: [
     'append-output',
     'set-active-task',
+    'open-tool-meta-editor',
   ],
 
   data() {
@@ -351,10 +398,12 @@ export default {
       loading: false,
       submitting: false,
       logLoading: false,
+      installLoading: false,
       activeTab: 'modules',
       items: [],
       serverInstances: {},
       clientInstances: {},
+      installStatuses: {},
       searchText: '',
       sideFilter: '',
       deviceFilter: '',
@@ -362,9 +411,11 @@ export default {
       startDialogVisible: false,
       pendingToolId: '',
       pendingTargetSide: '',
+      pendingStartMode: 'start',
       paramForm: {},
       logDialogVisible: false,
       logDialogTitle: 'External Tool Logs',
+      logFilePath: '',
       logContent: '',
       currentLogRow: null,
     }
@@ -500,15 +551,17 @@ export default {
       const item = this.pendingItem
       const name = item ? (item.display_name || item.id) : 'External Tool'
       const side = this.pendingTargetSide === 'server' ? 'Server' : 'Client'
-      return `Start ${name} on ${side}`
+      const action = this.pendingStartMode === 'run_only' ? 'Run Only' : 'Start'
+      return `${action} ${name} on ${side}`
     },
   },
 
   watch: {
-    selectedId() {
+    async selectedId() {
       if (!this.visible) return
       this.deviceFilter = this.currentDeviceId || '__server__'
-      this.refreshInstances(false)
+      await this.refreshInstallStatuses(false)
+      await this.refreshInstances(false)
     },
   },
 
@@ -531,6 +584,7 @@ export default {
     handleClosed() {
       this.resetStartDialog()
       this.currentLogRow = null
+      this.logFilePath = ''
     },
 
     buildJsonHeaders(extra = {}) {
@@ -544,6 +598,7 @@ export default {
       this.loading = true
       try {
         await this.loadCatalog(false)
+        await this.refreshInstallStatuses(false)
         await this.refreshInstances(false)
       } catch (e) {
         ElMessage.error(e.message || 'Failed to refresh external tools')
@@ -559,32 +614,142 @@ export default {
         if (!res.ok || json.code !== 0) throw new Error(json.message || 'Failed to load external tools')
         const catalog = json.data || {}
         this.items = Array.isArray(catalog.items) ? catalog.items : []
+        this.applyCatalogInstallStatuses(this.items, '__server__')
       } catch (e) {
         if (showError) ElMessage.error(e.message || 'Failed to load external tools')
         throw e
       }
     },
 
+    applyCatalogInstallStatuses(items, clientDeviceId = '') {
+      for (const item of items || []) {
+        const status = item?.install_status
+        if (!status) continue
+        const side = item.side || status.side || ''
+        const deviceId = side === 'server' ? '__server__' : this.normalizeDeviceId(clientDeviceId || this.currentDeviceId)
+        if (side === 'client' && !deviceId) continue
+        this.setInstallStatus(item, side, deviceId, { ...status, loading: false, error: status.error || '' })
+      }
+    },
+
+    async loadClientCatalogStatuses(deviceId = this.currentDeviceId, showError = true) {
+      const targetDeviceId = this.normalizeDeviceId(deviceId)
+      if (!targetDeviceId || targetDeviceId === '__server__' || targetDeviceId === '__all__') return []
+      try {
+        const res = await fetch(`/api/connections/${encodeURIComponent(targetDeviceId)}/external-tools/catalog`, {
+          method: 'POST',
+          headers: this.buildJsonHeaders({ 'Content-Type': 'application/json' }),
+          body: JSON.stringify({}),
+        })
+        const json = await res.json()
+        if (!res.ok || json.code !== 0) throw new Error(json.message || 'Failed to load client install statuses')
+        const catalog = json.data || {}
+        const items = Array.isArray(catalog.items) ? catalog.items : []
+        this.applyCatalogInstallStatuses(items, targetDeviceId)
+        return Array.isArray(catalog.client_install_statuses) ? catalog.client_install_statuses : []
+      } catch (e) {
+        if (showError) ElMessage.error(e.message || 'Failed to load client install statuses')
+        return []
+      }
+    },
+
+    installStatusKey(itemOrToolId, side = '', deviceId = '') {
+      const toolId = typeof itemOrToolId === 'object' ? itemOrToolId?.id : itemOrToolId
+      const normalizedSide = side || (typeof itemOrToolId === 'object' ? itemOrToolId?.side : '')
+      const normalizedDeviceId = normalizedSide === 'server' ? '__server__' : this.normalizeDeviceId(deviceId || this.currentDeviceId)
+      return `${normalizedSide}:${normalizedDeviceId}:${toolId || ''}`
+    },
+
+    getModuleInstallStatus(item) {
+      const side = item?.side || ''
+      const deviceId = side === 'server' ? '__server__' : this.currentDeviceId
+      if (side === 'client' && !deviceId) return { label: 'Install: no client', type: 'info' }
+      const status = this.installStatuses[this.installStatusKey(item, side, deviceId)]
+      if (!status) return { label: 'Install: unknown', type: 'info' }
+      if (status.loading) return { label: 'Checking...', type: 'info' }
+      if (status.error) return { label: 'Install: unknown', type: 'info' }
+      return status.installed
+        ? { label: 'Installed', type: 'success' }
+        : { label: 'Not installed', type: 'warning' }
+    },
+
+    setInstallStatus(itemOrToolId, side, deviceId, status) {
+      const key = this.installStatusKey(itemOrToolId, side, deviceId)
+      this.installStatuses = {
+        ...this.installStatuses,
+        [key]: { ...(status || {}) },
+      }
+    },
+
+    async refreshInstallStatuses(showToast = false) {
+      this.applyCatalogInstallStatuses(this.items, '__server__')
+      if (this.currentDeviceId) {
+        await this.loadClientCatalogStatuses(this.currentDeviceId, showToast)
+      }
+      if (showToast) ElMessage.success('Install statuses refreshed')
+    },
+
+    canUsePackageAction(item) {
+      if (!item) return false
+      if (item.side === 'server') return this.isServerPlatformSupported(item)
+      if (item.side === 'client') return !!this.selectedId && this.isClientPlatformSupported(item)
+      return false
+    },
+
+    async fetchInstallStatus(item, side = item?.side, deviceId = this.currentDeviceId, options = {}) {
+      if (!item?.id) return null
+      const targetSide = side || item.side
+      const targetDeviceId = targetSide === 'server' ? '__server__' : this.normalizeDeviceId(deviceId || this.selectedId)
+      if (targetSide === 'client' && !targetDeviceId) return null
+      const statusKey = this.installStatusKey(item, targetSide, targetDeviceId)
+      const cachedStatus = this.installStatuses[statusKey]
+      if (cachedStatus && !cachedStatus.loading && !cachedStatus.error && !options.force) return cachedStatus
+
+      if (targetSide === 'client') {
+        await this.loadClientCatalogStatuses(targetDeviceId, !options.silent)
+        const refreshed = this.installStatuses[statusKey]
+        if (refreshed) return refreshed
+        return null
+      }
+
+      const previousStatus = this.installStatuses[statusKey] || {}
+      this.setInstallStatus(item, targetSide, targetDeviceId, { ...previousStatus, loading: true, error: '' })
+      try {
+        const res = await fetch(`/api/external-tools/${encodeURIComponent(item.id)}/server/install-status`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ params: {} }),
+        })
+        const json = await res.json()
+        if (!res.ok || json.code !== 0) throw new Error(json.message || 'Failed to read install status')
+        const data = json.data || {}
+        this.setInstallStatus(item, targetSide, targetDeviceId, { ...data, loading: false, error: data.error || '' })
+        return data
+      } catch (e) {
+        this.setInstallStatus(item, targetSide, targetDeviceId, {
+          ...previousStatus,
+          loading: false,
+          error: e.message || 'Failed to read install status',
+        })
+        if (!options.silent) ElMessage.error(e.message || 'Failed to read install status')
+        return null
+      }
+    },
+
     async refreshInstances(showToast = true) {
-      const jobs = []
       const device = this.normalizeDeviceId(this.deviceFilter || this.currentDeviceId || '__all__')
 
-      if (device === '__all__' || device === '__server__') {
-        for (const item of this.serverModules) jobs.push(this.loadServerInstances(item.id, false))
-      } else if (!device) {
-        for (const item of this.serverModules) jobs.push(this.loadServerInstances(item.id, false))
+      if (device === '__all__' || device === '__server__' || !device) {
+        await Promise.allSettled(this.serverModules.map(item => this.loadServerInstances(item.id, false)))
       }
 
       const clientDeviceIds = this.getClientDeviceIdsForFilter(device)
       for (const deviceId of clientDeviceIds) {
-        for (const item of this.clientModules) jobs.push(this.loadClientInstances(item.id, deviceId, false))
+        for (const item of this.clientModules) {
+          await this.loadClientInstances(item.id, deviceId, false)
+        }
       }
 
-      if (!clientDeviceIds.length && device !== '__all__') {
-        // Keep already loaded client instance caches, but do not add new requests.
-      }
-
-      await Promise.allSettled(jobs)
       if (showToast) ElMessage.success('Instances refreshed')
     },
 
@@ -819,9 +984,10 @@ export default {
       return String(raw || 'default').trim().replace(/[^A-Za-z0-9_.-]+/g, '-').replace(/^[._-]+|[._-]+$/g, '') || 'default'
     },
 
-    openStartDialog(item, side) {
+    openStartDialog(item, side, mode = 'start') {
       this.pendingToolId = String(item?.id || '').trim()
       this.pendingTargetSide = side
+      this.pendingStartMode = mode === 'run_only' ? 'run_only' : 'start'
       this.paramForm = this.buildParamDefaults(item)
       this.startDialogVisible = true
     },
@@ -831,6 +997,7 @@ export default {
       this.submitting = false
       this.pendingToolId = ''
       this.pendingTargetSide = ''
+      this.pendingStartMode = 'start'
       this.paramForm = {}
     },
 
@@ -838,6 +1005,121 @@ export default {
       const id = String(item?.id || '').trim()
       if (!id) return
       window.open(`/api/external-tools/${encodeURIComponent(id)}/download`, '_blank')
+    },
+
+    handlePackageMoreCommand(command, item) {
+      if (command === 'install') return this.installOnly(item)
+      if (command === 'run_only') return this.openStartDialog(item, item.side, 'run_only')
+      if (command === 'status') return this.showInstallStatus(item)
+      if (command === 'copy') return this.copyInstallCommand(item)
+      return null
+    },
+
+    async installOnly(item) {
+      if (!this.canUsePackageAction(item)) {
+        ElMessage.warning(item?.side === 'client' ? 'Please select a supported client first' : 'This package is not supported')
+        return
+      }
+      try {
+        this.installLoading = true
+        let res
+        const side = item.side
+        const deviceId = side === 'server' ? '__server__' : this.normalizeDeviceId(this.selectedId)
+        if (side === 'server') {
+          res = await fetch(`/api/external-tools/${encodeURIComponent(item.id)}/server/install`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ params: {} }),
+          })
+        } else {
+          res = await fetch(`/api/connections/${encodeURIComponent(deviceId)}/external-tools/${encodeURIComponent(item.id)}/install`, {
+            method: 'POST',
+            headers: this.buildJsonHeaders({ 'Content-Type': 'application/json' }),
+            body: JSON.stringify({ params: {} }),
+          })
+        }
+        const json = await res.json()
+        if (!res.ok || json.code !== 0) throw new Error(json.message || 'Failed to install package')
+        const data = json.data || {}
+        this.setInstallStatus(item, side, deviceId, data)
+        const message = data.already_installed
+          ? `Already installed: ${data.executable_path || data.install_dir || item.id}`
+          : `Installed successfully: ${data.executable_path || data.install_dir || item.id}`
+        ElMessage.success(message)
+      } catch (e) {
+        ElMessage.error(e.message || 'Failed to install package')
+      } finally {
+        this.installLoading = false
+      }
+    },
+
+    formatInstallStatusDetails(data) {
+      if (!data) return 'No install status available'
+      return [
+        `Status: ${data.installed ? 'installed' : 'not installed'}`,
+        `Install dir: ${data.install_dir || '-'}`,
+        `Executable: ${data.executable_path || '-'}`,
+        `Skip path: ${data.skip_path || '-'}`,
+        `Command: ${data.command || data.executable_path || '-'}`,
+        data.message ? `Message: ${data.message}` : '',
+      ].filter(Boolean).join('\n')
+    },
+
+    async getInstallStatusForAction(item) {
+      const deviceId = item?.side === 'server' ? '__server__' : this.selectedId
+      return this.fetchInstallStatus(item, item?.side, deviceId, { silent: false, force: true })
+    },
+
+    async showInstallStatus(item) {
+      const data = await this.getInstallStatusForAction(item)
+      if (!data) return
+      await ElMessageBox.alert(
+        this.formatInstallStatusDetails(data),
+        `${item.display_name || item.id} install status`,
+        { confirmButtonText: 'OK' },
+      )
+    },
+
+    async copyInstallCommand(item) {
+      const data = await this.getInstallStatusForAction(item)
+      if (!data) return
+      const command = data.command || data.executable_path || ''
+      if (!command) {
+        ElMessage.warning('No command available to copy')
+        return
+      }
+      try {
+        if (window.isSecureContext && navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+          await navigator.clipboard.writeText(command)
+        } else {
+          this.copyTextFallback(command)
+        }
+        ElMessage.success(data.installed ? 'Command copied' : 'Command copied; package is not installed yet')
+      } catch (e) {
+        try {
+          this.copyTextFallback(command)
+          ElMessage.success(data.installed ? 'Command copied' : 'Command copied; package is not installed yet')
+        } catch (_) {
+          ElMessage.error('Failed to copy command')
+        }
+      }
+    },
+
+    copyTextFallback(text) {
+      const textarea = document.createElement('textarea')
+      textarea.value = String(text || '')
+      textarea.setAttribute('readonly', '')
+      textarea.style.position = 'fixed'
+      textarea.style.left = '-9999px'
+      textarea.style.top = '0'
+      textarea.style.opacity = '0'
+      document.body.appendChild(textarea)
+      textarea.focus()
+      textarea.select()
+      textarea.setSelectionRange(0, textarea.value.length)
+      const ok = document.execCommand('copy')
+      document.body.removeChild(textarea)
+      if (!ok) throw new Error('Fallback copy failed')
     },
 
     async confirmStart() {
@@ -851,10 +1133,11 @@ export default {
         this.submitting = true
         const params = this.buildStartParams()
         const instanceId = this.deriveInstanceId(params)
+        const installIfNeeded = this.pendingStartMode !== 'run_only'
         if (this.pendingTargetSide === 'server') {
-          await this.startServerInstance(item, params, instanceId)
+          await this.startServerInstance(item, params, instanceId, installIfNeeded)
         } else {
-          await this.startClientInstance(item, params, instanceId)
+          await this.startClientInstance(item, params, instanceId, installIfNeeded)
         }
         this.activeTab = 'instances'
         this.resetStartDialog()
@@ -865,28 +1148,30 @@ export default {
       }
     },
 
-    async startServerInstance(item, params, instanceId) {
+    async startServerInstance(item, params, instanceId, installIfNeeded = true) {
       const res = await fetch(`/api/external-tools/${encodeURIComponent(item.id)}/server/instances/start`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ params, instance_id: instanceId }),
+        body: JSON.stringify({ params, instance_id: instanceId, install_if_needed: installIfNeeded }),
       })
       const json = await res.json()
       if (!res.ok || json.code !== 0) throw new Error(json.message || 'Failed to start server tool')
       ElMessage.success(json.data?.message || 'Server instance started')
+      if (json.data?.install) this.setInstallStatus(item, 'server', '__server__', json.data.install)
       await this.loadServerInstances(item.id, false)
     },
 
-    async startClientInstance(item, params, instanceId) {
+    async startClientInstance(item, params, instanceId, installIfNeeded = true) {
       if (!this.selectedId) throw new Error('Please select a device')
       const res = await fetch(`/api/connections/${encodeURIComponent(this.selectedId)}/external-tools/${encodeURIComponent(item.id)}/instances/start`, {
         method: 'POST',
         headers: this.buildJsonHeaders({ 'Content-Type': 'application/json' }),
-        body: JSON.stringify({ params, instance_id: instanceId }),
+        body: JSON.stringify({ params, instance_id: instanceId, install_if_needed: installIfNeeded }),
       })
       const json = await res.json()
       if (!res.ok || json.code !== 0) throw new Error(json.message || 'Failed to start client tool')
       ElMessage.success(json.data?.message || 'Client instance started')
+      if (json.data?.install) this.setInstallStatus(item, 'client', this.selectedId, json.data.install)
       await this.loadClientInstances(item.id, this.selectedId, false)
     },
 
@@ -1018,6 +1303,7 @@ export default {
           data = await this.readClientLogs(row)
         }
         this.logDialogTitle = `${row.side} ${row.tool_id}/${row.instance_id} logs`
+        this.logFilePath = data.log_file || row.stdout || ''
         this.logContent = data.content || ''
         if (openDialog) this.logDialogVisible = true
       } catch (e) {
@@ -1165,11 +1451,36 @@ formatVersionLabel(version) {
 
 .external-tool-actions {
   display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: flex-start;
+  gap: 8px;
+  min-width: 240px;
+}
+
+.external-tool-action-row {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  justify-content: stretch;
+}
+
+.external-tool-action-row :deep(.el-button),
+.external-tool-action-row :deep(.el-dropdown),
+.external-tool-action-row :deep(.el-dropdown .el-button) {
+  width: 100%;
+  margin-left: 0;
+}
+
+.external-tool-table-actions {
+  display: flex;
   align-items: center;
   justify-content: flex-end;
-  flex-wrap: wrap;
   gap: 8px;
-  min-width: 250px;
+}
+
+.external-tool-table-actions :deep(.el-button + .el-button) {
+  margin-left: 0;
 }
 
 .external-tool-instance-toolbar {
@@ -1237,6 +1548,18 @@ formatVersionLabel(version) {
   line-height: 1.45;
 }
 
+.external-tool-log-path {
+  margin-bottom: 8px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: rgba(255,255,255,.045);
+  color: var(--terminal-muted, #8f9bb3);
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .external-tool-log-content {
   max-height: 560px;
   overflow: auto;
@@ -1247,6 +1570,28 @@ formatVersionLabel(version) {
   background: #050505;
   color: #d9e2ff;
   border: 1px solid rgba(255,255,255,.12);
+  scrollbar-color: #303544 #050505;
+  scrollbar-width: thin;
+}
+
+.external-tool-log-content::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+.external-tool-log-content::-webkit-scrollbar-track {
+  background: #050505;
+  border-radius: 999px;
+}
+
+.external-tool-log-content::-webkit-scrollbar-thumb {
+  background: #303544;
+  border-radius: 999px;
+  border: 2px solid #050505;
+}
+
+.external-tool-log-content::-webkit-scrollbar-thumb:hover {
+  background: #495064;
 }
 
 .mono {

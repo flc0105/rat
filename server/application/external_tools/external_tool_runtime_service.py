@@ -129,12 +129,12 @@ class ExternalToolRuntimeService:
                 raw = 'default'
         return self._sanitize_instance_id(raw)
 
-    def _coerce_param_value(self, spec: dict, value: Any) -> Any:
+    def _coerce_param_value(self, spec: dict, value: Any, require_required: bool = True) -> Any:
         param_type = str(spec.get('type') or 'string').strip().lower()
         if value is None or value == '':
             if spec.get('default') is not None:
                 value = spec.get('default')
-            elif spec.get('required'):
+            elif spec.get('required') and require_required:
                 raise ValueError(f'param {spec.get("name")} is required')
             else:
                 return ''
@@ -149,14 +149,14 @@ class ExternalToolRuntimeService:
             return str(value).strip().lower() in ('1', 'true', 'yes', 'on')
         return str(value)
 
-    def resolve_params(self, meta: dict, params: dict | None) -> dict:
+    def resolve_params(self, meta: dict, params: dict | None, require_required: bool = True) -> dict:
         source = params if isinstance(params, dict) else {}
         resolved = {}
         for spec in meta.get('params') or []:
             name = str(spec.get('name') or '').strip()
             if not name:
                 continue
-            resolved[name] = self._coerce_param_value(spec, source.get(name))
+            resolved[name] = self._coerce_param_value(spec, source.get(name), require_required=require_required)
         for key, value in source.items():
             if key not in resolved:
                 resolved[key] = value
@@ -260,11 +260,29 @@ class ExternalToolRuntimeService:
             skip_template = '{{install_dir}}/' + executable_rel_path if executable_rel_path else '{{install_dir}}'
         return self._expand_path(self._render_value(skip_template, context))
 
-    def _install_package_if_needed(self, meta: dict, context: dict) -> dict:
+    def _build_install_status(self, meta: dict, context: dict) -> dict:
         install_dir = self._expand_path(self._render_value('{{install_dir}}', context))
         context['install_dir'] = install_dir
         skip_path = self._resolve_skip_path(meta, context)
+        executable_rel_path = str((meta.get('package') or {}).get('executable_rel_path') or '').strip()
+        executable_path = self._expand_path(os.path.join(install_dir, executable_rel_path)) if executable_rel_path else skip_path
         installed = os.path.exists(skip_path)
+        return {
+            'tool_id': meta.get('id') or '',
+            'display_name': meta.get('display_name') or meta.get('id') or '',
+            'side': meta.get('side') or '',
+            'installed': installed,
+            'install_dir': install_dir,
+            'skip_path': skip_path,
+            'executable_path': executable_path,
+            'command': shlex.quote(executable_path),
+        }
+
+    def _install_package_if_needed(self, meta: dict, context: dict) -> dict:
+        status = self._build_install_status(meta, context)
+        install_dir = status['install_dir']
+        skip_path = status['skip_path']
+        installed = bool(status['installed'])
         extracted = False
 
         if not installed:
@@ -277,17 +295,16 @@ class ExternalToolRuntimeService:
             self._safe_extract_zip(package_path, install_dir)
             extracted = True
 
-        executable_rel_path = str((meta.get('package') or {}).get('executable_rel_path') or '').strip()
-        executable_path = self._expand_path(os.path.join(install_dir, executable_rel_path)) if executable_rel_path else skip_path
+        executable_path = status['executable_path']
         self._chmod_executable(executable_path)
 
-        return {
-            'install_dir': install_dir,
-            'skip_path': skip_path,
+        status.update({
+            'installed': True,
             'already_installed': installed,
             'extracted': extracted,
-            'executable_path': executable_path,
-        }
+            'message': 'already installed' if installed else 'installed successfully',
+        })
+        return status
 
     def _write_config(self, meta: dict, context: dict) -> dict:
         config = meta.get('config') or {}
@@ -661,14 +678,21 @@ finally:
         state['stop_result'] = stop_result
         self._write_json_file(state_file, state)
 
-    def start_server_instance(self, tool_id: str, params: dict | None = None, instance_id: str = '') -> dict:
+    def start_server_instance(self, tool_id: str, params: dict | None = None, instance_id: str = '', install_if_needed: bool = True) -> dict:
         meta = self.catalog_service.get_tool(tool_id)
         self._assert_tool_usable(meta, 'server')
         resolved_params = self.resolve_params(meta, params)
         context = self.build_server_context(meta, resolved_params, instance_id=instance_id)
         instance_id = context['instance_id']
         os.makedirs(context['instance_runtime_dir'], exist_ok=True)
-        install_info = self._install_package_if_needed(meta, context)
+        if install_if_needed:
+            install_info = self._install_package_if_needed(meta, context)
+        else:
+            install_info = self._build_install_status(meta, context)
+            if not install_info.get('installed'):
+                raise ValueError('Package is not installed. Please install it first.')
+            install_info.update({'already_installed': True, 'extracted': False, 'message': 'using existing installation'})
+            self._chmod_executable(install_info.get('executable_path') or '')
         config_info = self._write_config(meta, context)
         runtime_spec = self._build_runtime_spec(meta, context)
         existing_pid = self._read_pid_file(runtime_spec['pid_file'])
@@ -691,6 +715,32 @@ finally:
             'state_file': state_file,
             'message': f'{meta.get("display_name") or meta.get("id")} instance {instance_id} started on server',
         }
+
+    def install_server_tool(self, tool_id: str, params: dict | None = None, instance_id: str = '') -> dict:
+        meta = self.catalog_service.get_tool(tool_id)
+        self._assert_tool_usable(meta, 'server')
+        resolved_params = self.resolve_params(meta, params or {}, require_required=False)
+        context = self.build_server_context(meta, resolved_params, instance_id=instance_id)
+        install_info = self._install_package_if_needed(meta, context)
+        install_info['message'] = (
+            f'{meta.get("display_name") or meta.get("id")} already installed at {install_info.get("install_dir")}'
+            if install_info.get('already_installed')
+            else f'{meta.get("display_name") or meta.get("id")} installed at {install_info.get("install_dir")}'
+        )
+        return install_info
+
+    def server_install_status(self, tool_id: str, params: dict | None = None, instance_id: str = '') -> dict:
+        meta = self.catalog_service.get_tool(tool_id)
+        self._assert_tool_usable(meta, 'server')
+        resolved_params = self.resolve_params(meta, params or {}, require_required=False)
+        context = self.build_server_context(meta, resolved_params, instance_id=instance_id)
+        status = self._build_install_status(meta, context)
+        status['message'] = (
+            f'{meta.get("display_name") or meta.get("id")} is installed at {status.get("install_dir")}'
+            if status.get('installed')
+            else f'{meta.get("display_name") or meta.get("id")} is not installed. Please install it first.'
+        )
+        return status
 
     def stop_server_instance(self, tool_id: str, instance_id: str, params: dict | None = None) -> dict:
         meta = self.catalog_service.get_tool(tool_id)
@@ -777,8 +827,8 @@ finally:
         encoded = base64.urlsafe_b64encode(raw).decode('utf-8')
         return f'__json__:{encoded}'
 
-    def build_client_start_payload(self, meta: dict, params: dict | None = None, instance_id: str = '') -> dict:
-        resolved_params = self.resolve_params(meta, params)
+    def build_client_start_payload(self, meta: dict, params: dict | None = None, instance_id: str = '', install_if_needed: bool = True, require_required_params: bool = True) -> dict:
+        resolved_params = self.resolve_params(meta, params, require_required=require_required_params)
         context = self.build_client_context(meta, resolved_params, instance_id=instance_id)
         rendered_meta = self._render_value(meta, context)
         package = rendered_meta.get('package') or {}
@@ -808,6 +858,7 @@ finally:
 
         return {
             'action': 'start',
+            'install_if_needed': bool(install_if_needed),
             'tool_id': meta.get('id') or '',
             'display_name': meta.get('display_name') or meta.get('id') or '',
             'version': meta.get('version') or '',
@@ -869,11 +920,61 @@ finally:
             source='web_external_tool',
         )
 
-    def start_client_instance(self, client_id: str, tool_id: str, params: dict | None = None, tab_id: str = '', instance_id: str = '') -> dict:
+    def start_client_instance(self, client_id: str, tool_id: str, params: dict | None = None, tab_id: str = '', instance_id: str = '', install_if_needed: bool = True) -> dict:
         meta = self.catalog_service.get_tool(tool_id)
         self._assert_tool_usable(meta, 'client', platform_alias='*')
-        payload = self.build_client_start_payload(meta, params=params, instance_id=instance_id)
+        payload = self.build_client_start_payload(meta, params=params, instance_id=instance_id, install_if_needed=install_if_needed)
         command = f'external_tool_start {self._encode_payload_arg(payload)}'
+        return self._run_client_lifecycle_command(client_id, command, tab_id=tab_id)
+
+    def install_client_tool(self, client_id: str, tool_id: str, params: dict | None = None, tab_id: str = '', instance_id: str = '') -> dict:
+        meta = self.catalog_service.get_tool(tool_id)
+        self._assert_tool_usable(meta, 'client', platform_alias='*')
+        payload = self.build_client_start_payload(meta, params=params, instance_id=instance_id, install_if_needed=True, require_required_params=False)
+        payload['action'] = 'install'
+        command = f'external_tool_install {self._encode_payload_arg(payload)}'
+        return self._run_client_lifecycle_command(client_id, command, tab_id=tab_id)
+
+    def client_install_status(self, client_id: str, tool_id: str, params: dict | None = None, tab_id: str = '', instance_id: str = '') -> dict:
+        meta = self.catalog_service.get_tool(tool_id)
+        self._assert_tool_usable(meta, 'client', platform_alias='*')
+        payload = self.build_client_start_payload(meta, params=params, instance_id=instance_id, install_if_needed=True, require_required_params=False)
+        payload['action'] = 'install_status'
+        command = f'external_tool_install_status {self._encode_payload_arg(payload)}'
+        return self._run_client_lifecycle_command(client_id, command, tab_id=tab_id)
+
+    def build_client_install_status_payloads(self, metas: list[dict]) -> list[dict]:
+        payloads = []
+        for meta in metas or []:
+            try:
+                if str(meta.get('side') or '').strip().lower() != 'client':
+                    continue
+                self._assert_tool_usable(meta, 'client', platform_alias='*')
+                payload = self.build_client_start_payload(
+                    meta,
+                    params={},
+                    instance_id='',
+                    install_if_needed=True,
+                    require_required_params=False,
+                )
+                payload['action'] = 'install_status'
+                payloads.append(payload)
+            except Exception as e:
+                payloads.append({
+                    'action': 'install_status',
+                    'tool_id': meta.get('id') or '',
+                    'display_name': meta.get('display_name') or meta.get('id') or '',
+                    'side': 'client',
+                    'error': str(e),
+                })
+        return payloads
+
+    def client_install_statuses(self, client_id: str, metas: list[dict], tab_id: str = '') -> dict:
+        payload = {
+            'action': 'install_statuses',
+            'tools': self.build_client_install_status_payloads(metas),
+        }
+        command = f'external_tool_install_statuses {self._encode_payload_arg(payload)}'
         return self._run_client_lifecycle_command(client_id, command, tab_id=tab_id)
 
     def stop_client_instance(self, client_id: str, tool_id: str, instance_id: str, params: dict | None = None, tab_id: str = '') -> dict:

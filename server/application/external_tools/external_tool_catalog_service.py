@@ -159,6 +159,53 @@ class ExternalToolCatalogService:
                 return item
         raise FileNotFoundError(f'External tool not found: {tool_id}')
 
+    def get_meta_path(self, tool_id: str) -> str:
+        meta = self.get_tool(tool_id)
+        path = os.path.abspath(str(meta.get('_meta_path') or '').strip())
+        if not path:
+            raise FileNotFoundError(f'External tool meta not found: {tool_id}')
+        if os.path.commonpath([self.metas_root_dir, path]) != self.metas_root_dir:
+            raise ValueError('invalid external tool meta path')
+        if not os.path.isfile(path):
+            raise FileNotFoundError(f'External tool meta not found: {tool_id}')
+        return path
+
+    def read_meta_content(self, tool_id: str) -> dict:
+        path = self.get_meta_path(tool_id)
+        with open(path, 'r', encoding='utf-8') as file_obj:
+            content = file_obj.read()
+        return {
+            'tool_id': tool_id,
+            'path': path,
+            'name': os.path.basename(path),
+            'content': content,
+            'size': len(content.encode('utf-8')),
+        }
+
+    def save_meta_content(self, tool_id: str, content: str) -> dict:
+        path = self.get_meta_path(tool_id)
+        text = str(content or '')
+        try:
+            parsed = json.loads(text)
+        except Exception as e:
+            raise ValueError(f'Invalid JSON meta: {e}')
+        if not isinstance(parsed, dict):
+            raise ValueError('Invalid JSON meta: expected object')
+
+        normalized = self.normalize_meta(parsed, path=path)
+        new_tool_id = str(normalized.get('id') or '').strip()
+        if new_tool_id and new_tool_id != str(tool_id or '').strip():
+            raise ValueError('Changing external tool id is not supported from this editor')
+
+        with open(path, 'w', encoding='utf-8') as file_obj:
+            file_obj.write(text)
+        return {
+            'tool_id': tool_id,
+            'path': path,
+            'name': os.path.basename(path),
+            'size': len(text.encode('utf-8')),
+        }
+
     def get_package_path(self, filename: str) -> str:
         safe_name = os.path.basename(str(filename or '').strip())
         if not safe_name:

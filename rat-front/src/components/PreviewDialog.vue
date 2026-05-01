@@ -293,6 +293,7 @@ export default {
     'artifacts-maybe-changed',
     'scripts-maybe-changed',
     'background-job-modules-maybe-changed',
+    'external-tools-maybe-changed',
   ],
 
   data() {
@@ -333,6 +334,9 @@ export default {
       }
       if (this.previewSource === 'server_script') {
         return 'Server Script'
+      }
+      if (this.previewSource === 'external_tool_meta') {
+        return 'External Tool Meta'
       }
       return 'Unknown'
     },
@@ -714,8 +718,49 @@ fontSize: 13,
         await this.saveToBackgroundJob(currentContent)
       } else if (this.previewSource === 'server_script') {
         await this.saveToServerScript(currentContent)
+      } else if (this.previewSource === 'external_tool_meta') {
+        await this.saveToExternalToolMeta(currentContent)
       } else {
         ElMessage.warning('Unknown preview source')
+      }
+    },
+
+    async saveToExternalToolMeta(content) {
+      if (!this.previewFilePath) {
+        ElMessage.warning('Invalid external tool id')
+        return
+      }
+
+      this.previewSaving = true
+
+      try {
+        const res = await fetch(`/api/external-tools/${encodeURIComponent(this.previewFilePath)}/meta/content`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ content }),
+        })
+
+        const json = await res.json()
+        if (!res.ok || json.code !== 0) {
+          throw new Error(json.message || 'Failed to save external tool meta')
+        }
+
+        ElMessage.success('External tool meta saved successfully')
+
+        this.previewOriginalContent = content
+        this.previewText = content
+        this.previewEditMode = false
+        this.setMonacoEditorReadOnly(true)
+
+        if (json.data && json.data.size) {
+          this.previewFileSize = formatBytes(json.data.size)
+        }
+
+        this.$emit('external-tools-maybe-changed')
+      } catch (e) {
+        ElMessage.error(e.message || 'Failed to save external tool meta')
+      } finally {
+        this.previewSaving = false
       }
     },
 
@@ -1099,6 +1144,44 @@ print(value)
         .join('') || 'NewBackgroundJob'
 
       return `JOB_METADATA = {\n    "name": "${normalizedScriptName.replace(/\.py$/i, '')}",\n    "display_name": "${classBaseName}",\n    "description": "Describe what this job does",\n    "platforms": ["mac"],\n    "params": [\n        {\n            "name": "interval_seconds",\n            "type": "integer",\n            "required": False,\n            "default": 10,\n            "min": 1,\n            "description": "Loop interval in seconds"\n        }\n    ]\n}\n\nimport time\n\nfrom client.jobs.core.job import Job\n\n\nclass ${classBaseName}(Job):\n    def __init__(self):\n        super().__init__()\n        self.interval = 10\n\n    def on_context_bound(self):\n        self.interval = int(self.get_job_param("interval_seconds", 10) or 10)\n\n    def run(self):\n        self.mark_running()\n        self.send_to_server(1, "${normalizedScriptName} started")\n\n        try:\n            while not self.stop_event.is_set():\n                self.send_to_server(1, f"heartbeat: {time.strftime('%Y-%m-%d %H:%M:%S')}")\n                time.sleep(self.interval)\n        finally:\n            self.send_to_server(1, "${normalizedScriptName} stopped")\n            self.mark_stopped()\n\n    def stop(self, notify=True):\n        self.request_stop(notify=notify)\n`
+    },
+
+    async openExternalToolMetaEditor(toolId) {
+      const normalizedToolId = String(toolId || '').trim()
+      if (!normalizedToolId) {
+        ElMessage.warning('Invalid external tool id')
+        return
+      }
+
+      try {
+        const res = await fetch(`/api/external-tools/${encodeURIComponent(normalizedToolId)}/meta/content`)
+        const json = await res.json()
+        if (!res.ok || json.code !== 0) {
+          throw new Error(json.message || 'Failed to load external tool meta')
+        }
+        const data = json.data || {}
+        const content = data.content || ''
+
+        this.previewSource = 'external_tool_meta'
+        this.previewFilePath = normalizedToolId
+        this.previewTitle = data.name || `${normalizedToolId}.json`
+        this.previewText = content
+        this.previewOriginalContent = content
+        this.previewType = 'text'
+        this.previewTruncated = false
+        this.previewFileSize = formatBytes(data.size || content.length)
+        this.previewFileEncoding = 'UTF-8'
+        this.previewDetectedLanguage = 'JSON'
+
+        this.previewEditMode = true
+        this.previewDialogVisible = true
+
+        this.$nextTick(() => {
+          this.initMonacoEditor(content, false)
+        })
+      } catch (e) {
+        ElMessage.error(e.message || 'Failed to load external tool meta')
+      }
     },
 
     openNewRemoteScriptEditor(scriptName = 'new_script.py') {

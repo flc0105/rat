@@ -77,11 +77,35 @@ class CommandExternalToolMixin:
         )
         return archive_path
 
-    def _external_tool_install_if_needed(self, payload: dict, archive_path: str) -> dict:
+    def _external_tool_install_status_payload(self, payload: dict) -> dict:
         install = payload.get('install') or {}
         install_dir = self._external_tool_expand_path(install.get('install_dir') or '~/.ops/external_tools/installed/unknown')
         skip_if_exists = self._external_tool_expand_path(install.get('skip_if_exists') or install_dir)
-        already_installed = os.path.exists(skip_if_exists)
+        package = payload.get('package') or {}
+        executable_rel_path = str(package.get('executable_rel_path') or '').strip()
+        executable_path = self._external_tool_expand_path(os.path.join(install_dir, executable_rel_path)) if executable_rel_path else skip_if_exists
+        installed = os.path.exists(skip_if_exists)
+        return {
+            'tool_id': payload.get('tool_id') or '',
+            'display_name': payload.get('display_name') or payload.get('tool_id') or '',
+            'side': payload.get('side') or 'client',
+            'installed': installed,
+            'install_dir': install_dir,
+            'skip_path': skip_if_exists,
+            'executable_path': executable_path,
+            'command': shlex.quote(executable_path),
+            'message': (
+                f'{payload.get("display_name") or payload.get("tool_id") or "external tool"} is installed at {install_dir}'
+                if installed
+                else f'{payload.get("display_name") or payload.get("tool_id") or "external tool"} is not installed. Please install it first.'
+            ),
+        }
+
+    def _external_tool_install_if_needed(self, payload: dict, archive_path: str) -> dict:
+        status = self._external_tool_install_status_payload(payload)
+        install_dir = status['install_dir']
+        skip_if_exists = status['skip_path']
+        already_installed = bool(status['installed'])
         extracted = False
 
         if not already_installed:
@@ -89,18 +113,16 @@ class CommandExternalToolMixin:
             safe_extract_zip_file(archive_path, install_dir)
             extracted = True
 
-        package = payload.get('package') or {}
-        executable_rel_path = str(package.get('executable_rel_path') or '').strip()
-        executable_path = self._external_tool_expand_path(os.path.join(install_dir, executable_rel_path)) if executable_rel_path else skip_if_exists
+        executable_path = status['executable_path']
         self._external_tool_chmod(executable_path)
 
-        return {
-            'install_dir': install_dir,
-            'skip_path': skip_if_exists,
+        status.update({
+            'installed': True,
             'already_installed': already_installed,
             'extracted': extracted,
-            'executable_path': executable_path,
-        }
+            'message': 'already installed' if already_installed else 'installed successfully',
+        })
+        return status
 
     def _external_tool_write_config(self, payload: dict) -> dict:
         config = payload.get('config') or {}
@@ -549,8 +571,16 @@ finally:
                 status['message'] = f'{payload.get("display_name") or payload.get("tool_id") or "external tool"} instance {payload.get("instance_id") or "default"} is already running'
                 return 1, json.dumps(status, ensure_ascii=False, indent=2)
 
-            archive_path = self._external_tool_download_package(payload)
-            install_info = self._external_tool_install_if_needed(payload, archive_path)
+            if payload.get('install_if_needed', True):
+                archive_path = self._external_tool_download_package(payload)
+                install_info = self._external_tool_install_if_needed(payload, archive_path)
+            else:
+                archive_path = ''
+                install_info = self._external_tool_install_status_payload(payload)
+                if not install_info.get('installed'):
+                    raise ValueError('Package is not installed. Please install it first.')
+                install_info.update({'already_installed': True, 'extracted': False, 'message': 'using existing installation'})
+                self._external_tool_chmod(install_info.get('executable_path') or '')
             config_info = self._external_tool_write_config(payload)
             process = self._external_tool_start_detached(runtime)
             state_file = self._external_tool_write_state(payload, install_info, config_info, runtime, process)
@@ -576,6 +606,75 @@ finally:
     @interruptible()
     def external_tool_run(self, arg=''):
         return self.external_tool_start(arg)
+
+    @desc('Install an external tool package without starting it', group='runtime', suggest=False)
+    @interruptible()
+    def external_tool_install(self, arg=''):
+        try:
+            payload = self.structured_arg_codec.decode(arg)
+            if not isinstance(payload, dict):
+                return 0, 'Invalid external tool payload'
+            archive_path = self._external_tool_download_package(payload)
+            install_info = self._external_tool_install_if_needed(payload, archive_path)
+            install_info['package'] = archive_path
+            install_info['message'] = (
+                f'{payload.get("display_name") or payload.get("tool_id") or "external tool"} already installed at {install_info.get("install_dir")}'
+                if install_info.get('already_installed')
+                else f'{payload.get("display_name") or payload.get("tool_id") or "external tool"} installed at {install_info.get("install_dir")}'
+            )
+            return 1, json.dumps(install_info, ensure_ascii=False, indent=2)
+        except Exception as e:
+            return 0, f'Failed to install external tool: {e}'
+
+    @desc('Show external tool install status', group='runtime', suggest=False)
+    @interruptible()
+    def external_tool_install_status(self, arg=''):
+        try:
+            payload = self.structured_arg_codec.decode(arg)
+            if not isinstance(payload, dict):
+                return 0, 'Invalid external tool payload'
+            return 1, json.dumps(self._external_tool_install_status_payload(payload), ensure_ascii=False, indent=2)
+        except Exception as e:
+            return 0, f'Failed to get external tool install status: {e}'
+
+    @desc('Show external tool install statuses in one client command', group='runtime', suggest=False)
+    @interruptible()
+    def external_tool_install_statuses(self, arg=''):
+        try:
+            payload = self.structured_arg_codec.decode(arg)
+            if isinstance(payload, list):
+                tools = payload
+            elif isinstance(payload, dict):
+                tools = payload.get('tools') or []
+            else:
+                return 0, 'Invalid external tool payload'
+            if not isinstance(tools, list):
+                return 0, 'Invalid external tool tools payload'
+
+            items = []
+            for tool_payload in tools:
+                if not isinstance(tool_payload, dict):
+                    continue
+                try:
+                    if tool_payload.get('error'):
+                        raise ValueError(str(tool_payload.get('error')))
+                    items.append(self._external_tool_install_status_payload(tool_payload))
+                except Exception as e:
+                    items.append({
+                        'tool_id': tool_payload.get('tool_id') or '',
+                        'display_name': tool_payload.get('display_name') or tool_payload.get('tool_id') or '',
+                        'side': tool_payload.get('side') or 'client',
+                        'installed': None,
+                        'install_dir': '',
+                        'skip_path': '',
+                        'executable_path': '',
+                        'command': '',
+                        'error': str(e),
+                        'message': str(e),
+                    })
+            return 1, json.dumps({'items': items}, ensure_ascii=False, indent=2)
+        except Exception as e:
+            return 0, f'Failed to get external tool install statuses: {e}'
 
     @desc('Stop an external tool instance', group='runtime', suggest=False)
     @interruptible()

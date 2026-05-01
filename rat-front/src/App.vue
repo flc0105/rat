@@ -133,6 +133,7 @@
       :get-tab-scoped-headers="getTabScopedHeaders"
       @append-output="appendOutput"
       @set-active-task="setActiveTask"
+      @open-tool-meta-editor="openExternalToolMetaEditor"
   />
 
 
@@ -170,6 +171,7 @@
       @artifacts-maybe-changed="refreshArtifactsIfOpen"
       @scripts-maybe-changed="refreshScriptsIfOpen"
       @background-job-modules-maybe-changed="refreshBackgroundJobModulesIfOpen"
+      @external-tools-maybe-changed="refreshExternalToolsIfOpen"
   />
 
 
@@ -307,6 +309,14 @@ export default {
 
     openExternalToolManagerDialog() {
       return this.$refs.externalToolManagerDialogRef?.open()
+    },
+
+    refreshExternalToolsIfOpen() {
+      return this.$refs.externalToolManagerDialogRef?.refreshIfOpen()
+    },
+
+    openExternalToolMetaEditor(toolId) {
+      return this.$refs.previewDialogRef?.openExternalToolMetaEditor(toolId)
     },
 
     triggerRemoteUploadInput() {
