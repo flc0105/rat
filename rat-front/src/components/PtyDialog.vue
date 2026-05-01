@@ -755,7 +755,7 @@ export default {
 }
 
 .pty-terminal-host :deep(.xterm) {
-  height: 100%;
+  //height: 100%;
   padding-right: 8px;
 }
 
