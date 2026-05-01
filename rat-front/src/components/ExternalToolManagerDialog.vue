@@ -65,7 +65,7 @@
       </div>
 
       <el-tabs v-model="activeTab" class="external-tool-tabs">
-        <el-tab-pane label="Package / Module" name="modules">
+        <el-tab-pane label="Packages" name="modules">
           <div v-if="filteredModules.length" class="external-tool-module-list">
             <div
               v-for="item in filteredModules"
@@ -83,9 +83,9 @@
                   <el-tag size="small" type="info">
                     {{ formatPlatforms(item.platforms) }}
                   </el-tag>
-                  <el-tag v-if="item.version" size="small" type="info">
-                    v{{ item.version }}
-                  </el-tag>
+<el-tag v-if="item.version" size="small" type="info">
+  {{ formatVersionLabel(item.version) }}
+</el-tag>
                   <el-tag v-if="item.arch" size="small" type="info">
                     {{ item.arch }}
                   </el-tag>
@@ -104,7 +104,7 @@
 
               <div class="external-tool-actions">
                 <el-button size="small" plain @click="downloadTool(item)">
-                  Download Zip
+                  Download
                 </el-button>
 
                 <el-button
@@ -115,7 +115,7 @@
                   :disabled="!isServerPlatformSupported(item)"
                   @click="openStartDialog(item, 'server')"
                 >
-                  Start Instance
+                  Run on Server
                 </el-button>
 
                 <el-button
@@ -126,7 +126,7 @@
                   :disabled="!selectedId || !isClientPlatformSupported(item)"
                   @click="openStartDialog(item, 'client')"
                 >
-                  Start Client Instance
+                  Run on Client
                 </el-button>
               </div>
             </div>
@@ -1046,6 +1046,25 @@ export default {
       if (!res.ok || json.code !== 0) throw new Error(json.message || 'Failed to read client logs')
       return json.data || {}
     },
+
+formatVersionLabel(version) {
+  const value = String(version || '').trim()
+  if (!value) return ''
+
+  // 已经带 v 的标准数字版本，直接返回，避免 vv1.2.3
+  if (/^v\d+\.\d+(?:\.\d+)?$/i.test(value)) {
+    return value
+  }
+
+  // 只有 x.x 或 x.x.x 这种纯数字版本才自动加 v
+  if (/^\d+\.\d+(?:\.\d+)?$/.test(value)) {
+    return `v${value}`
+  }
+
+  // snapshot、commit、custom tag 等原样显示
+  return value
+}
+
   },
 }
 </script>
