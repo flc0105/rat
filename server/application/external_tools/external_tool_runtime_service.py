@@ -69,6 +69,34 @@ class ExternalToolRuntimeService:
         }
         return aliases.get(text, text)
 
+    def _meta_sides(self, meta: dict) -> list[str]:
+        raw = meta.get('sides')
+        if raw is None:
+            raw = meta.get('side')
+
+        if isinstance(raw, list):
+            source = raw
+        elif isinstance(raw, tuple):
+            source = list(raw)
+        else:
+            source = [raw]
+
+        sides = []
+        seen = set()
+        for item in source:
+            side = str(item or '').strip().lower()
+            if side not in ('server', 'client') or side in seen:
+                continue
+            seen.add(side)
+            sides.append(side)
+        return sides or ['client']
+
+    def _meta_primary_side(self, meta: dict) -> str:
+        return self._meta_sides(meta)[0]
+
+    def _meta_supports_side(self, meta: dict, side: str) -> bool:
+        return str(side or '').strip().lower() in self._meta_sides(meta)
+
     def _render_value(self, value: Any, context: dict) -> Any:
         if isinstance(value, str):
             def replace(match):
@@ -196,11 +224,13 @@ class ExternalToolRuntimeService:
         install_root: str,
         runtime_root: str,
         instance_id: str = '',
+        side: str = '',
     ) -> dict:
         params = params if isinstance(params, dict) else {}
 
         version = str(meta.get('version') or 'default').strip() or 'default'
         resolved_instance_id = self._derive_instance_id(meta, params, explicit=instance_id)
+        resolved_side = str(side or self._meta_primary_side(meta)).strip().lower()
         tool_id = str(meta.get('id') or '').strip()
         tool_runtime_dir = os.path.join(runtime_root, tool_id)
         instance_runtime_dir = os.path.join(tool_runtime_dir, 'instances', resolved_instance_id)
@@ -210,7 +240,7 @@ class ExternalToolRuntimeService:
             'name': str(meta.get('name') or meta.get('id') or '').strip(),
             'display_name': str(meta.get('display_name') or meta.get('id') or '').strip(),
             'version': version,
-            'side': str(meta.get('side') or '').strip(),
+            'side': resolved_side,
             'platform': detect_platform_alias(),
             'arch': self._normalize_arch(),
             'external_tools_root': install_root,
@@ -241,6 +271,7 @@ class ExternalToolRuntimeService:
             install_root=self.install_root_dir,
             runtime_root=self.runtime_root_dir,
             instance_id=instance_id,
+            side='server',
         )
 
         for key in (
@@ -263,12 +294,14 @@ class ExternalToolRuntimeService:
             install_root='~/.ops/external_tools/installed',
             runtime_root='~/.ops/external_tools/runtime',
             instance_id=instance_id,
+            side='client',
         )
 
     def _assert_tool_usable(self, meta: dict, side: str, platform_alias: str = ''):
-        expected_side = str(meta.get('side') or '').strip().lower()
-        if expected_side and expected_side != side:
-            raise ValueError(f'{meta.get("id")} is a {expected_side} tool, not {side}')
+        side = str(side or '').strip().lower()
+        supported_sides = self._meta_sides(meta)
+        if side not in supported_sides:
+            raise ValueError(f'{meta.get("id")} supports {"/".join(supported_sides)}, not {side}')
 
         target_platform = platform_alias or detect_platform_alias()
         if target_platform == '*':
@@ -320,7 +353,7 @@ class ExternalToolRuntimeService:
         return {
             'tool_id': meta.get('id') or '',
             'display_name': meta.get('display_name') or meta.get('id') or '',
-            'side': meta.get('side') or '',
+            'side': context.get('side') or self._meta_primary_side(meta),
             'installed': installed,
             'install_dir': install_dir,
             'skip_path': skip_path,
@@ -603,7 +636,7 @@ finally:
         return {
             'tool_id': meta.get('id') or '',
             'display_name': meta.get('display_name') or meta.get('id') or '',
-            'side': meta.get('side') or '',
+            'side': state.get('side') or self._meta_primary_side(meta),
             'instance_id': self._sanitize_instance_id(instance_id),
             'status': status,
             'running': alive,
@@ -639,7 +672,7 @@ finally:
             'tool_id': meta.get('id') or '',
             'display_name': meta.get('display_name') or '',
             'version': meta.get('version') or '',
-            'side': meta.get('side') or '',
+            'side': context.get('side') or self._meta_primary_side(meta),
             'instance_id': context.get('instance_id') or 'default',
             'instance_name': context.get('instance_name') or context.get('instance_id') or 'default',
             'pid': process.pid,
@@ -1144,7 +1177,7 @@ finally:
 
         for meta in metas or []:
             try:
-                if str(meta.get('side') or '').strip().lower() != 'client':
+                if not self._meta_supports_side(meta, 'client'):
                     continue
 
                 self._assert_tool_usable(meta, 'client', platform_alias='*')

@@ -3,10 +3,25 @@ class WebExternalToolApi:
         self.catalog_service = catalog_service
         self.runtime_service = runtime_service
 
+    def _supports_side(self, item: dict, side: str) -> bool:
+        raw = item.get('sides')
+        if raw is None:
+            raw = item.get('side')
+
+        if isinstance(raw, list):
+            source = raw
+        elif isinstance(raw, tuple):
+            source = list(raw)
+        else:
+            source = [raw]
+
+        target = str(side or '').strip().lower()
+        return target in {str(value or '').strip().lower() for value in source}
+
     def list_catalog(self):
         catalog = self.catalog_service.get_catalog()
         for item in catalog.get('items') or []:
-            if item.get('error') or item.get('side') != 'server':
+            if item.get('error') or not self._supports_side(item, 'server'):
                 continue
             try:
                 item['install_status'] = self.runtime_service.server_install_status(item.get('id') or '', params={}, instance_id='')
@@ -22,7 +37,7 @@ class WebExternalToolApi:
 
     def list_client_catalog(self, client_id: str, tab_id: str = ''):
         catalog = self.list_catalog()
-        client_items = [item for item in (catalog.get('items') or []) if item.get('side') == 'client' and not item.get('error')]
+        client_items = [item for item in (catalog.get('items') or []) if self._supports_side(item, 'client') and not item.get('error')]
         if not client_items:
             catalog['client_install_statuses'] = []
             return catalog
@@ -91,7 +106,7 @@ class WebExternalToolApi:
         return self.runtime_service.client_install_status(client_id, tool_id, params=params, tab_id=tab_id, instance_id=instance_id)
 
     def client_install_statuses(self, client_id: str, tab_id: str = ''):
-        client_items = [item for item in (self.catalog_service.get_catalog().get('items') or []) if item.get('side') == 'client' and not item.get('error')]
+        client_items = [item for item in (self.catalog_service.get_catalog().get('items') or []) if self._supports_side(item, 'client') and not item.get('error')]
         return self.runtime_service.client_install_statuses(client_id, client_items, tab_id=tab_id)
 
     def stop_client_instance(self, client_id: str, tool_id: str, instance_id: str, params=None, tab_id: str = ''):

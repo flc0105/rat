@@ -1,0 +1,97 @@
+{
+  "id": "filebrowser-darwin-arm64",
+  "name": "filebrowser",
+  "display_name": "File Browser (darwin/arm64)",
+  "description": "File Browser web UI executable. It can run on the server host or on a client machine and serves a selected filesystem root over HTTP.",
+  "version": "2.63.2",
+  "side": [
+    "server",
+    "client"
+  ],
+  "platforms": [
+    "mac"
+  ],
+  "arch": "arm64",
+  "category": "files",
+  "tags": [
+    "filebrowser",
+    "files",
+    "web",
+    "http"
+  ],
+  "package": {
+    "filename": "darwin-arm64-filebrowser.zip",
+    "download_url": "/api/external-tools/packages/darwin-arm64-filebrowser.zip",
+    "executable_rel_path": "darwin-arm64-filebrowser/filebrowser"
+  },
+  "install": {
+    "install_dir": "{{external_tools_root}}/{{id}}/{{version}}",
+    "skip_if_exists": "{{install_dir}}/darwin-arm64-filebrowser/filebrowser"
+  },
+  "params": [
+    {
+      "name": "instance_name",
+      "label": "Instance Name",
+      "type": "string",
+      "required": true,
+      "default": "filebrowser-8080",
+      "description": "Unique name for this File Browser instance. It controls database/log/pid isolation."
+    },
+    {
+      "name": "address",
+      "label": "Listen Address",
+      "type": "string",
+      "required": true,
+      "default": "127.0.0.1",
+      "description": "Address to listen on. Use 0.0.0.0 only when you intentionally expose it on the network."
+    },
+    {
+      "name": "port",
+      "label": "Listen Port",
+      "type": "integer",
+      "required": true,
+      "default": 8080,
+      "min": 1,
+      "max": 65535,
+      "description": "HTTP port for File Browser."
+    },
+    {
+      "name": "root",
+      "label": "Root Directory",
+      "type": "string",
+      "required": true,
+      "default": "~",
+      "description": "Filesystem root served by File Browser."
+    }
+  ],
+  "config": {},
+  "runtime": {
+    "cwd": "{{install_dir}}/darwin-arm64-filebrowser",
+    "argv": [
+      "{{install_dir}}/darwin-arm64-filebrowser/filebrowser",
+      "-a",
+      "{{address}}",
+      "-p",
+      "{{port}}",
+      "-r",
+      "{{root}}",
+      "-d",
+      "{{instance_runtime_dir}}/filebrowser.db"
+    ],
+    "stdout": "{{instance_runtime_dir}}/stdout.log",
+    "stderr": "stdout",
+    "pid_file": "{{instance_runtime_dir}}/tool.pid",
+    "state_file": "{{instance_runtime_dir}}/state.json"
+  },
+  "lifecycle": {
+    "stop": {
+      "type": "signal",
+      "signal": "TERM",
+      "timeout_sec": 5,
+      "kill_after_timeout": true
+    },
+    "status": {
+      "type": "pid_file"
+    }
+  }
+}

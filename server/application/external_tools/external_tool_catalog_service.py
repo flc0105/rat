@@ -64,11 +64,30 @@ class ExternalToolCatalogService:
             normalized.append(value)
         return normalized or ['*']
 
-    def _normalize_side(self, value: Any) -> str:
+    def _normalize_side_value(self, value: Any) -> str:
         text = str(value or '').strip().lower()
         if text in ('server', 'client'):
             return text
-        return text or 'client'
+        return ''
+
+    def _normalize_sides(self, value: Any) -> list[str]:
+        if isinstance(value, list):
+            source = value
+        elif isinstance(value, tuple):
+            source = list(value)
+        else:
+            source = [value]
+
+        sides = []
+        seen = set()
+        for item in source:
+            side = self._normalize_side_value(item)
+            if not side or side in seen:
+                continue
+            seen.add(side)
+            sides.append(side)
+
+        return sides or ['client']
 
     def _normalize_param(self, item: Any) -> dict:
         if not isinstance(item, dict):
@@ -96,7 +115,9 @@ class ExternalToolCatalogService:
         item['display_name'] = str(item.get('display_name') or item.get('name') or tool_id).strip() or tool_id
         item['description'] = str(item.get('description') or '').strip()
         item['version'] = str(item.get('version') or '').strip()
-        item['side'] = self._normalize_side(item.get('side'))
+        sides = self._normalize_sides(item.get('side'))
+        item['sides'] = sides
+        item['side'] = sides[0] if len(sides) == 1 else sides
         item['platforms'] = self._normalize_platforms(item)
         item['arch'] = str(item.get('arch') or item.get('architecture') or '').strip().lower()
         item['category'] = str(item.get('category') or '').strip()
@@ -138,6 +159,7 @@ class ExternalToolCatalogService:
                     'display_name': os.path.basename(path),
                     'description': f'Invalid meta: {e}',
                     'side': '',
+                    'sides': [],
                     'platforms': [],
                     'params': [],
                     'error': str(e),

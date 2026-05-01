@@ -516,11 +516,11 @@ export default {
     },
 
     serverModules() {
-      return (this.items || []).filter(item => item.side === 'server')
+      return (this.items || []).filter(item => this.supportsSide(item, 'server'))
     },
 
     clientModules() {
-      return (this.items || []).filter(item => item.side === 'client')
+      return (this.items || []).filter(item => this.supportsSide(item, 'client'))
     },
 
     isServerTargetSelected() {
@@ -693,7 +693,7 @@ export default {
       for (const item of items || []) {
         const status = item?.install_status
         if (!status) continue
-        const side = item.side || status.side || ''
+        const side = status.side || this.getItemSides(item)[0] || ''
         const deviceId = side === 'server' ? '__server__' : this.normalizeDeviceId(clientDeviceId || this.currentDeviceId)
         if (side === 'client' && !deviceId) continue
         this.setInstallStatus(item, side, deviceId, { ...status, loading: false, error: status.error || '' })
@@ -721,37 +721,62 @@ export default {
       }
     },
 
+    getItemSides(item) {
+      const raw = item?.sides !== undefined ? item.sides : item?.side
+      const source = Array.isArray(raw) ? raw : [raw]
+      const sides = []
+      const seen = new Set()
+      for (const value of source) {
+        const side = String(value || '').trim().toLowerCase()
+        if (!['server', 'client'].includes(side) || seen.has(side)) continue
+        seen.add(side)
+        sides.push(side)
+      }
+      return sides.length ? sides : ['client']
+    },
+
+    supportsSide(item, side) {
+      return this.getItemSides(item).includes(String(side || '').trim().toLowerCase())
+    },
+
+    getActionSideForItem(item) {
+      const side = this.getSelectedTargetSideForAction()
+      return this.supportsSide(item, side) ? side : this.getItemSides(item)[0]
+    },
+
     installStatusKey(itemOrToolId, side = '', deviceId = '') {
       const toolId = typeof itemOrToolId === 'object' ? itemOrToolId?.id : itemOrToolId
-      const normalizedSide = side || (typeof itemOrToolId === 'object' ? itemOrToolId?.side : '')
+      const normalizedSide = side || (typeof itemOrToolId === 'object' ? this.getItemSides(itemOrToolId)[0] : '')
       const normalizedDeviceId = normalizedSide === 'server' ? '__server__' : this.normalizeDeviceId(deviceId || this.currentDeviceId)
       return `${normalizedSide}:${normalizedDeviceId}:${toolId || ''}`
     },
 
     getModuleTargetTagLabel(item) {
-return item?.side === 'server' ? 'Server' : 'Client'
+      const sides = this.getItemSides(item)
+      if (sides.includes('server') && sides.includes('client')) return 'Server / Client'
+      return sides.includes('server') ? 'Server' : 'Client'
     },
 
     getModuleTargetTagType(item) {
-      if (item?.side === 'server') return 'success'
+      const sides = this.getItemSides(item)
+      if (sides.includes('server') && sides.includes('client')) return 'info'
+      if (sides.includes('server')) return 'success'
       return 'warning'
     },
 
-    getInstallStatusTargetLabel(item) {
-      if (item?.side === 'server') return 'Server'
-      return 'This Client'
+    getInstallStatusTargetLabel() {
+      return this.getSelectedTargetSideForAction() === 'server' ? 'Server' : 'This Client'
     },
 
     getModuleInstallDeviceId(item) {
-      if (item?.side === 'server') return '__server__'
-      return this.getActionDeviceId(item)
+      return this.getSelectedTargetSideForAction() === 'server' ? '__server__' : this.getActionDeviceId(item)
     },
 
     getModuleInstallStatus(item) {
       if (!this.isPackageAvailableForTarget(item)) {
         return { label: 'Unavailable for target', type: 'info' }
       }
-      const side = item?.side || ''
+      const side = this.getSelectedTargetSideForAction()
       const targetLabel = this.getInstallStatusTargetLabel(item)
       const deviceId = this.getModuleInstallDeviceId(item)
       if (side === 'client' && !deviceId) return { label: 'Install: no client', type: 'info' }
@@ -783,13 +808,12 @@ return item?.side === 'server' ? 'Server' : 'Client'
 
     isPackageAvailableForTarget(item) {
       if (!item) return false
-      if (item.side === 'server') return this.isServerTargetSelected && this.isServerPlatformSupported(item)
-      if (item.side === 'client') {
-        const deviceId = this.getActionDeviceId(item)
-        const platform = this.selectedTargetPlatform || this.currentClientPlatform
-        return !!deviceId && this.selectedTargetSide === 'client' && this.doesPlatformMatch(item, platform)
-      }
-      return false
+      const side = this.getSelectedTargetSideForAction()
+      if (!this.supportsSide(item, side)) return false
+      if (side === 'server') return this.isServerPlatformSupported(item)
+      const deviceId = this.getActionDeviceId(item)
+      const platform = this.selectedTargetPlatform || this.currentClientPlatform
+      return !!deviceId && this.selectedTargetSide === 'client' && this.doesPlatformMatch(item, platform)
     },
 
     canUsePackageAction(item) {
@@ -920,7 +944,7 @@ return item?.side === 'server' ? 'Server' : 'Client'
     },
 
     getActionDeviceId(item) {
-      if (!item || item.side !== 'client') return ''
+      if (!item || !this.supportsSide(item, 'client')) return ''
       return this.selectedTargetClientId || this.currentDeviceId
     },
 
@@ -1219,12 +1243,12 @@ handlePackageMoreCommand(command, item) {
 
     getPackageTargetMachineId(item) {
   if (!item) return ''
-  if (item.side === 'server') return '__server__'
+  if (this.getSelectedTargetSideForAction() === 'server') return '__server__'
   return this.selectedTargetMachineId
 },
 
 getPackageTargetConnectionIds(item) {
-  if (!item || item.side !== 'client') return []
+  if (!item || this.getSelectedTargetSideForAction() !== 'client' || !this.supportsSide(item, 'client')) return []
   const machineId = this.getPackageTargetMachineId(item)
   const ids = this.getClientDeviceIdsForFilter(machineId)
   if (ids.length) return ids
@@ -1235,7 +1259,7 @@ getPackageTargetConnectionIds(item) {
 getPackageTargetInstanceRows(item) {
   if (!item?.id) return []
 
-  if (item.side === 'server') {
+  if (this.getSelectedTargetSideForAction() === 'server') {
     return this.allInstances.filter(row => row.side === 'server' && row.tool_id === item.id)
   }
 
@@ -1256,7 +1280,7 @@ canUninstallPackageAction(item) {
 
   const status = this.installStatuses[this.installStatusKey(
     item,
-    item.side,
+    this.getSelectedTargetSideForAction(),
     this.getModuleInstallDeviceId(item),
   )]
 
@@ -1267,7 +1291,7 @@ canUninstallPackageAction(item) {
 async uninstallPackage(item) {
   if (!item?.id) return
   if (!this.canUsePackageAction(item)) {
-    ElMessage.warning(item?.side === 'client' ? 'Please select a supported client first' : 'This package is not supported')
+    ElMessage.warning(this.getSelectedTargetSideForAction() === 'client' ? 'Please select a supported client first' : 'This package is not supported')
     return
   }
 
@@ -1285,7 +1309,7 @@ async uninstallPackage(item) {
 
   try {
     await ElMessageBox.confirm(
-      `Uninstall ${item.display_name || item.id} from ${item.side === 'server' ? 'server' : 'this machine'}?`,
+      `Uninstall ${item.display_name || item.id} from ${this.getSelectedTargetSideForAction() === 'server' ? 'server' : 'this machine'}?`,
       'Uninstall External Tool',
       {
         type: 'warning',
@@ -1300,7 +1324,7 @@ async uninstallPackage(item) {
   try {
     this.installLoading = true
     let data
-    if (item.side === 'server') {
+    if (this.getSelectedTargetSideForAction() === 'server') {
       data = await this.uninstallServerTool(item)
       this.setInstallStatus(item, 'server', '__server__', {
         ...(data || {}),
@@ -1358,13 +1382,13 @@ async uninstallClientTool(item, deviceId) {
 
     async installOnly(item) {
       if (!this.canUsePackageAction(item)) {
-        ElMessage.warning(item?.side === 'client' ? 'Please select a supported client first' : 'This package is not supported')
+        ElMessage.warning(this.getSelectedTargetSideForAction() === 'client' ? 'Please select a supported client first' : 'This package is not supported')
         return
       }
       try {
         this.installLoading = true
         let res
-        const side = item.side
+        const side = this.getSelectedTargetSideForAction()
         const deviceId = side === 'server' ? '__server__' : this.getActionDeviceId(item)
         if (side === 'server') {
           res = await fetch(`/api/external-tools/${encodeURIComponent(item.id)}/server/install`, {
@@ -1407,8 +1431,9 @@ async uninstallClientTool(item, deviceId) {
     },
 
     async getInstallStatusForAction(item) {
-      const deviceId = item?.side === 'server' ? '__server__' : this.getActionDeviceId(item)
-      return this.fetchInstallStatus(item, item?.side, deviceId, { silent: false, force: true })
+      const side = this.getSelectedTargetSideForAction()
+      const deviceId = side === 'server' ? '__server__' : this.getActionDeviceId(item)
+      return this.fetchInstallStatus(item, side, deviceId, { silent: false, force: true })
     },
 
     async showInstallStatus(item) {
@@ -1416,7 +1441,7 @@ async uninstallClientTool(item, deviceId) {
       if (!data) return
       this.showDetailDialog({
         title: `${item.display_name || item.id} install status`,
-        subtitle: `${item.id} / ${item.side}`,
+        subtitle: `${item.id} / ${this.getSelectedTargetSideForAction()}`,
         copyText: data.command || data.executable_path || '',
         sections: [
           {
