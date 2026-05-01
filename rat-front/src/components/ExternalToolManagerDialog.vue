@@ -213,21 +213,21 @@
               </template>
             </el-table-column>
 
-            <el-table-column label="Started" width="160">
+            <el-table-column label="Started" width="180">
               <template #default="{ row }">
                 <span class="mono muted">{{ shortTime(row.started_at) }}</span>
               </template>
             </el-table-column>
 
-            <el-table-column label="Actions" width="260" fixed="right">
+            <el-table-column label="Actions" width="240" >
               <template #default="{ row }">
                 <div class="external-tool-table-actions">
                   <el-button size="small" plain @click="openInstanceLogs(row)">
                     Logs
                   </el-button>
-                  <el-button size="small" plain @click="openInstanceInfo(row)">
-                    Info
-                  </el-button>
+<!--                  <el-button size="small" plain @click="openInstanceInfo(row)">-->
+<!--                    Info-->
+<!--                  </el-button>-->
                   <el-button
                     size="small"
                     type="danger"
@@ -247,6 +247,9 @@
                     </el-button>
                     <template #dropdown>
                       <el-dropdown-menu>
+                       <el-dropdown-item command="info">
+                          Info
+                        </el-dropdown-item>
                         <el-dropdown-item command="restart" :disabled="!canRestartInstance(row)">
                           Restart
                         </el-dropdown-item>
@@ -1837,6 +1840,7 @@ async uninstallClientTool(item, deviceId) {
     },
 
     handleInstanceMoreCommand(command, row) {
+      if (command === 'info') return this.openInstanceInfo(row)
       if (command === 'restart') return this.restartInstance(row)
       if (command === 'clear_logs') return this.clearInstanceLogs(row)
       if (command === 'remove') return this.removeInstance(row)
@@ -2147,7 +2151,7 @@ formatVersionLabel(version) {
 .external-tool-table-actions {
   display: flex;
   align-items: center;
-  justify-content: flex-end;
+  //justify-content: flex-end;
   gap: 8px;
   flex-wrap: wrap;
 }
