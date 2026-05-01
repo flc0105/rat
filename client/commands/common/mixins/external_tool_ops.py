@@ -664,6 +664,79 @@ finally:
             'message': f'{payload.get("display_name") or payload.get("tool_id") or "external tool"} instance {payload.get("instance_id") or "default"} logs cleared on client',
         }
 
+    def _external_tool_has_running_instances_for_tool(self, tool_id: str) -> bool:
+        runtime_root = self._external_tool_expand_path('~/.ops/external_tools/runtime')
+        instances_dir = os.path.join(runtime_root, tool_id, 'instances')
+
+        if not os.path.isdir(instances_dir):
+            return False
+
+        for name in os.listdir(instances_dir):
+            path = os.path.join(instances_dir, name)
+            if not os.path.isdir(path):
+                continue
+
+            instance_payload = {
+                'tool_id': tool_id,
+                'display_name': tool_id,
+                'side': 'client',
+                'instance_id': name,
+                'runtime': {
+                    'pid_file': os.path.join(path, 'tool.pid'),
+                    'stdout': os.path.join(path, 'stdout.log'),
+                    'stderr': 'stdout',
+                    'state_file': os.path.join(path, 'state.json'),
+                },
+            }
+
+            status = self._external_tool_status_from_payload(instance_payload)
+            if status.get('running'):
+                return True
+
+        return False
+
+    @desc('Uninstall an external tool package when no instances are running', group='runtime', suggest=False)
+    @interruptible()
+    def external_tool_uninstall(self, arg=''):
+        try:
+            payload = self.structured_arg_codec.decode(arg)
+            if not isinstance(payload, dict):
+                return 0, 'Invalid external tool payload'
+
+            return 1, json.dumps(self._external_tool_uninstall_payload(payload), ensure_ascii=False, indent=2)
+
+        except Exception as e:
+            return 0, f'Failed to uninstall external tool: {e}'
+
+    def _external_tool_uninstall_payload(self, payload: dict) -> dict:
+        tool_id = payload.get('tool_id') or ''
+        if not tool_id:
+            raise ValueError('tool_id is required')
+
+        if self._external_tool_has_running_instances_for_tool(tool_id):
+            raise ValueError('This package has running instances on this machine. Stop them before uninstalling.')
+
+        status = self._external_tool_install_status_payload(payload)
+        install_dir = status.get('install_dir') or ''
+
+        removed = False
+        if install_dir and os.path.isdir(install_dir):
+            shutil.rmtree(install_dir)
+            removed = True
+
+        status.update({
+            'installed': False,
+            'removed': removed,
+            'message': (
+                f'{payload.get("display_name") or tool_id} uninstalled from {install_dir}'
+                if removed
+                else f'{payload.get("display_name") or tool_id} was not installed at {install_dir}'
+            ),
+        })
+
+        return status
+
+
     @desc('Start an external tool instance', group='runtime', suggest=False)
     @interruptible()
     def external_tool_start(self, arg=''):

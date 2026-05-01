@@ -115,3 +115,10 @@ class WebExternalToolApi:
     # Backward-compatible old method name.
     def install_and_run_client(self, client_id: str, tool_id: str, params=None, tab_id: str = ''):
         return self.runtime_service.install_and_run_client(client_id, tool_id, params=params, tab_id=tab_id)
+
+    def uninstall_server_tool(self, tool_id: str, params=None, instance_id: str = ''):
+        return self.runtime_service.uninstall_server_tool(tool_id, params=params, instance_id=instance_id)
+
+    def uninstall_client_tool(self, client_id: str, tool_id: str, params=None, tab_id: str = '', instance_id: str = ''):
+        return self.runtime_service.uninstall_client_tool(client_id, tool_id, params=params, tab_id=tab_id,
+                                                          instance_id=instance_id)

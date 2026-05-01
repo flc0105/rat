@@ -121,6 +121,18 @@ def create_external_tool_blueprint(server_instance):
             )
         return responder.json_endpoint(_execute, default_error_status=500)
 
+    @blueprint.post('/api/external-tools/<tool_id>/server/uninstall')
+    def uninstall_server_tool(tool_id):
+        def _execute():
+            payload, params = _params_from_payload()
+            return external_tool_api.uninstall_server_tool(
+                tool_id,
+                params=params,
+                instance_id=str(payload.get('instance_id') or '').strip(),
+            )
+
+        return responder.json_endpoint(_execute, default_error_status=500)
+
     @blueprint.post('/api/external-tools/<tool_id>/server/instances/<instance_id>/stop')
     def stop_server_instance(tool_id, instance_id):
         def _execute():
@@ -218,6 +230,20 @@ def create_external_tool_blueprint(server_instance):
                 instance_id=str(payload.get('instance_id') or '').strip(),
                 tab_id=get_optional_tab_id(),
             )
+        return responder.json_endpoint(_execute, default_error_status=500)
+
+    @blueprint.post('/api/connections/<client_id>/external-tools/<tool_id>/uninstall')
+    def uninstall_client_tool(client_id, tool_id):
+        def _execute():
+            payload, params = _params_from_payload()
+            return external_tool_api.uninstall_client_tool(
+                client_id,
+                tool_id,
+                params=params,
+                instance_id=str(payload.get('instance_id') or '').strip(),
+                tab_id=get_optional_tab_id(),
+            )
+
         return responder.json_endpoint(_execute, default_error_status=500)
 
     @blueprint.post('/api/connections/<client_id>/external-tools/<tool_id>/instances/<instance_id>/stop')

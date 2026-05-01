@@ -853,6 +853,50 @@ finally:
 
         return status
 
+    def _has_running_server_instances(self, meta: dict) -> bool:
+        tool_runtime = self._safe_join_runtime(meta.get('id') or '', 'instances')
+        if not os.path.isdir(tool_runtime):
+            return False
+
+        for name in os.listdir(tool_runtime):
+            path = os.path.join(tool_runtime, name)
+            if not os.path.isdir(path):
+                continue
+            status = self._status_from_state(meta, name)
+            if status.get('running'):
+                return True
+
+        return False
+
+    def uninstall_server_tool(self, tool_id: str, params: dict | None = None, instance_id: str = '') -> dict:
+        meta = self.catalog_service.get_tool(tool_id)
+        self._assert_tool_usable(meta, 'server')
+
+        if self._has_running_server_instances(meta):
+            raise ValueError('This package has running instances on server. Stop them before uninstalling.')
+
+        resolved_params = self.resolve_params(meta, params or {}, require_required=False)
+        context = self.build_server_context(meta, resolved_params, instance_id=instance_id)
+        status = self._build_install_status(meta, context)
+        install_dir = status.get('install_dir') or ''
+
+        removed = False
+        if install_dir and os.path.isdir(install_dir):
+            shutil.rmtree(install_dir)
+            removed = True
+
+        status.update({
+            'installed': False,
+            'removed': removed,
+            'message': (
+                f'{meta.get("display_name") or meta.get("id")} uninstalled from {install_dir}'
+                if removed
+                else f'{meta.get("display_name") or meta.get("id")} was not installed at {install_dir}'
+            ),
+        })
+
+        return status
+
     def stop_server_instance(self, tool_id: str, instance_id: str, params: dict | None = None) -> dict:
         meta = self.catalog_service.get_tool(tool_id)
         self._assert_tool_usable(meta, 'server')
@@ -1204,6 +1248,31 @@ finally:
 
         command = f'external_tool_install_status {self._encode_payload_arg(payload)}'
         return self._run_client_lifecycle_command(client_id, command, tab_id=tab_id)
+
+    def uninstall_client_tool(
+            self,
+            client_id: str,
+            tool_id: str,
+            params: dict | None = None,
+            tab_id: str = '',
+            instance_id: str = '',
+    ) -> dict:
+        meta = self.catalog_service.get_tool(tool_id)
+        self._assert_tool_usable(meta, 'client', platform_alias='*')
+
+        payload = self.build_client_start_payload(
+            meta,
+            params=params,
+            instance_id=instance_id,
+            install_if_needed=True,
+            require_required_params=False,
+        )
+        payload['action'] = 'uninstall'
+
+        command = f'external_tool_uninstall {self._encode_payload_arg(payload)}'
+        return self._run_client_lifecycle_command(client_id, command, tab_id=tab_id)
+
+
 
     def client_install_statuses(self, client_id: str, metas: list[dict], tab_id: str = '') -> dict:
         payload = {

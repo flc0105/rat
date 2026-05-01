@@ -152,20 +152,27 @@
                       More
                     </el-button>
                     <template #dropdown>
-                      <el-dropdown-menu>
-                        <el-dropdown-item command="install" :disabled="!canUsePackageAction(item)">
-                          Install (Only)
-                        </el-dropdown-item>
-                        <el-dropdown-item command="run_only" :disabled="!canUsePackageAction(item)">
-                          Run (Only)
-                        </el-dropdown-item>
-                        <el-dropdown-item command="status" :disabled="!canUsePackageAction(item)">
-                          Install Status / Path
-                        </el-dropdown-item>
-                        <el-dropdown-item command="copy" :disabled="!canUsePackageAction(item)">
-                          Copy Command
-                        </el-dropdown-item>
-                      </el-dropdown-menu>
+<el-dropdown-menu>
+  <el-dropdown-item command="install" :disabled="!canUsePackageAction(item)">
+    Install (Only)
+  </el-dropdown-item>
+  <el-dropdown-item command="run_only" :disabled="!canUsePackageAction(item)">
+    Run (Only)
+  </el-dropdown-item>
+  <el-dropdown-item command="status" :disabled="!canUsePackageAction(item)">
+    Install Status / Path
+  </el-dropdown-item>
+  <el-dropdown-item command="copy" :disabled="!canUsePackageAction(item)">
+    Copy Command
+  </el-dropdown-item>
+  <el-dropdown-item
+    command="uninstall"
+    divided
+    :disabled="!canUninstallPackageAction(item)"
+  >
+    Uninstall
+  </el-dropdown-item>
+</el-dropdown-menu>
                     </template>
                   </el-dropdown>
                 </div>
@@ -1132,13 +1139,150 @@ export default {
       window.open(`/api/external-tools/${encodeURIComponent(id)}/download`, '_blank')
     },
 
-    handlePackageMoreCommand(command, item) {
-      if (command === 'install') return this.installOnly(item)
-      if (command === 'run_only') return this.openStartDialog(item, item.side, 'run_only')
-      if (command === 'status') return this.showInstallStatus(item)
-      if (command === 'copy') return this.copyInstallCommand(item)
-      return null
-    },
+handlePackageMoreCommand(command, item) {
+  if (command === 'install') return this.installOnly(item)
+  if (command === 'run_only') return this.openStartDialog(item, item.side, 'run_only')
+  if (command === 'status') return this.showInstallStatus(item)
+  if (command === 'copy') return this.copyInstallCommand(item)
+  if (command === 'uninstall') return this.uninstallPackage(item)
+  return null
+},
+
+    getPackageTargetMachineId(item) {
+  if (!item) return ''
+  if (item.side === 'server') return '__server__'
+  return this.currentMachineId || this.getMachineIdForConnectionId(this.selectedId)
+},
+
+getPackageTargetConnectionIds(item) {
+  if (!item || item.side !== 'client') return []
+  const machineId = this.getPackageTargetMachineId(item)
+  const ids = this.getClientDeviceIdsForFilter(machineId)
+  if (ids.length) return ids
+  return this.selectedId ? [this.normalizeDeviceId(this.selectedId)] : []
+},
+
+getPackageTargetInstanceRows(item) {
+  if (!item?.id) return []
+
+  if (item.side === 'server') {
+    return this.allInstances.filter(row => row.side === 'server' && row.tool_id === item.id)
+  }
+
+  const machineId = this.getPackageTargetMachineId(item)
+  return this.allInstances.filter(row => (
+    row.side === 'client' &&
+    row.tool_id === item.id &&
+    row.machine_id === machineId
+  ))
+},
+
+hasRunningInstancesForPackage(item) {
+  return this.getPackageTargetInstanceRows(item).some(row => row.running || String(row.status || '').toLowerCase() === 'running')
+},
+
+canUninstallPackageAction(item) {
+  if (!this.canUsePackageAction(item)) return false
+  const status = this.installStatuses[this.installStatusKey(
+    item,
+    item.side,
+    item.side === 'server' ? '__server__' : this.currentDeviceId,
+  )]
+  if (status && status.installed === false) return false
+  return !this.hasRunningInstancesForPackage(item)
+},
+
+async uninstallPackage(item) {
+  if (!item?.id) return
+  if (!this.canUsePackageAction(item)) {
+    ElMessage.warning(item?.side === 'client' ? 'Please select a supported client first' : 'This package is not supported')
+    return
+  }
+
+  // 卸载前刷新一次实例状态，避免 UI 旧数据导致误删。
+  try {
+    await this.refreshInstances(false)
+  } catch (_) {
+    // refresh 失败不直接中断，后端/client 仍会再做一次 running 校验。
+  }
+
+  if (this.hasRunningInstancesForPackage(item)) {
+    ElMessage.warning('This package still has running instances on this machine. Stop them before uninstalling.')
+    return
+  }
+
+  try {
+    await ElMessageBox.confirm(
+      `Uninstall ${item.display_name || item.id} from ${item.side === 'server' ? 'server' : 'this machine'}?`,
+      'Uninstall External Tool',
+      {
+        type: 'warning',
+        confirmButtonText: 'Uninstall',
+        cancelButtonText: 'Cancel',
+      },
+    )
+  } catch (_) {
+    return
+  }
+
+  try {
+    this.installLoading = true
+    let data
+    if (item.side === 'server') {
+      data = await this.uninstallServerTool(item)
+      this.setInstallStatus(item, 'server', '__server__', {
+        ...(data || {}),
+        installed: false,
+        loading: false,
+        error: '',
+      })
+    } else {
+      const deviceIds = this.getPackageTargetConnectionIds(item)
+      if (!deviceIds.length) throw new Error('Please select a device')
+      // 实际卸载只对当前选中的连接发命令；同 machine 多连接时，后端命令仍落在该机器本地路径。
+      const deviceId = this.normalizeDeviceId(this.selectedId || deviceIds[0])
+      data = await this.uninstallClientTool(item, deviceId)
+      this.setInstallStatus(item, 'client', deviceId, {
+        ...(data || {}),
+        installed: false,
+        loading: false,
+        error: '',
+      })
+      await this.loadClientCatalogStatuses(deviceId, false)
+    }
+
+    ElMessage.success(data?.message || `Uninstalled: ${item.display_name || item.id}`)
+  } catch (e) {
+    ElMessage.error(e.message || 'Failed to uninstall package')
+  } finally {
+    this.installLoading = false
+  }
+},
+
+async uninstallServerTool(item) {
+  const res = await fetch(`/api/external-tools/${encodeURIComponent(item.id)}/server/uninstall`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ params: {} }),
+  })
+  const json = await res.json()
+  if (!res.ok || json.code !== 0) throw new Error(json.message || 'Failed to uninstall server package')
+  return json.data || {}
+},
+
+async uninstallClientTool(item, deviceId) {
+  const targetDeviceId = this.normalizeDeviceId(deviceId || this.selectedId)
+  if (!targetDeviceId) throw new Error('Please select a device')
+
+  const res = await fetch(`/api/connections/${encodeURIComponent(targetDeviceId)}/external-tools/${encodeURIComponent(item.id)}/uninstall`, {
+    method: 'POST',
+    headers: this.buildJsonHeaders({ 'Content-Type': 'application/json' }),
+    body: JSON.stringify({ params: {} }),
+  })
+  const json = await res.json()
+  if (!res.ok || json.code !== 0) throw new Error(json.message || 'Failed to uninstall client package')
+  return json.data || {}
+},
 
     async installOnly(item) {
       if (!this.canUsePackageAction(item)) {
@@ -2048,9 +2192,6 @@ formatVersionLabel(version) {
 .external-tool-detail-value {
   min-width: 0;
   overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  color: var(--terminal-text, #d9e2ff);
 }
 
 .external-tool-detail-value.multiline {
