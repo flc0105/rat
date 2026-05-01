@@ -1,6 +1,3 @@
-完整代码一次贴完：
-
-```vue
 <template>
   <el-dialog
     v-model="visible"
@@ -11,53 +8,53 @@
     @closed="handleClosed"
   >
     <div class="external-tool-body" v-loading="loading">
-      <el-tabs v-model="activeTab" class="external-tool-tabs">
-        <el-tab-pane label="Packages" name="modules">
-          <div class="external-tool-tab-toolbar">
-            <div class="external-tool-toolbar-left">
-              <el-button size="small" type="primary" plain :loading="loading" @click="refreshPackagesTab(true)">
-                Refresh Packages
-              </el-button>
+      <div class="external-tool-toolbar">
+        <div class="external-tool-toolbar-left">
+          <el-button size="small" type="primary" plain :loading="loading" @click="refreshAll">
+            Refresh
+          </el-button>
 
-              <div class="external-tool-target-control">
-                <span class="external-tool-target-label">Target</span>
-                <el-select
-                  v-model="packageTarget"
-                  size="small"
-                  filterable
-                  class="external-tool-target-select"
-                  placeholder="Select target"
-                  @change="handlePackageTargetChange"
-                >
-                  <el-option
-                    v-for="item in packageTargetOptions"
-                    :key="item.value"
-                    :label="item.label"
-                    :value="item.value"
-                  />
-                </el-select>
-              </div>
-
-              <el-checkbox
-                v-model="packageOnlyCompatible"
-                size="small"
-                @change="handlePackageOnlyCompatibleChange"
-              >
-                Only compatible
-              </el-checkbox>
-            </div>
-
-            <div class="external-tool-toolbar-right">
-              <el-input
-                v-model="searchText"
-                size="small"
-                clearable
-                class="external-tool-search"
-                placeholder="Search modules/packages"
+          <div class="external-tool-target-control">
+            <el-select
+              v-model="deviceFilter"
+              size="small"
+              filterable
+              class="external-tool-target-select"
+              placeholder="Select target"
+              @change="handleTargetFilterChange"
+            >
+              <el-option
+                v-for="item in deviceFilterOptions"
+                :key="item.value"
+                :label="item.label"
+                :value="item.value"
               />
-            </div>
+            </el-select>
           </div>
 
+          <el-checkbox
+            v-if="activeTab === 'modules'"
+            v-model="packageOnlyCompatible"
+            size="small"
+            @change="handlePackageOnlyCompatibleChange"
+          >
+            Only compatible
+          </el-checkbox>
+        </div>
+
+        <div class="external-tool-toolbar-right">
+          <el-input
+            v-model="searchText"
+            size="small"
+            clearable
+            class="external-tool-search"
+            :placeholder="activeTab === 'modules' ? 'Search modules/packages' : 'Search instances'"
+          />
+        </div>
+      </div>
+
+      <el-tabs v-model="activeTab" class="external-tool-tabs">
+        <el-tab-pane label="Packages" name="modules">
           <div v-if="filteredModules.length" class="external-tool-module-list">
             <div
               v-for="item in filteredModules"
@@ -75,9 +72,9 @@
                   <el-tag size="small" type="info">
                     {{ formatPlatforms(item.platforms) }}
                   </el-tag>
-                  <el-tag v-if="item.version" size="small" type="info">
-                    {{ formatVersionLabel(item.version) }}
-                  </el-tag>
+<el-tag v-if="item.version" size="small" type="info">
+  {{ formatVersionLabel(item.version) }}
+</el-tag>
                   <el-tag v-if="item.arch" size="small" type="info">
                     {{ item.arch }}
                   </el-tag>
@@ -105,12 +102,11 @@
               <div class="external-tool-actions">
                 <div class="external-tool-action-row single">
                   <el-button
-                    v-if="isPackageAvailableForTarget(item)"
                     size="small"
                     type="primary"
                     plain
                     :disabled="!canUsePackageAction(item)"
-                    @click="openStartDialog(item, item.side, 'start')"
+                    @click="openStartDialog(item, getSelectedTargetSideForAction(), 'start')"
                   >
                     {{ getRunButtonLabel(item) }}
                   </el-button>
@@ -131,27 +127,25 @@
                         <el-dropdown-item command="edit">
                           Edit Metadata
                         </el-dropdown-item>
-                        <template v-if="isPackageAvailableForTarget(item)">
-                          <el-dropdown-item divided command="install" :disabled="!canUsePackageAction(item)">
-                            {{ getInstallMenuLabel(item) }}
-                          </el-dropdown-item>
-                          <el-dropdown-item command="run_only" :disabled="!canUsePackageAction(item)">
-                            {{ getRunOnlyMenuLabel(item) }}
-                          </el-dropdown-item>
-                          <el-dropdown-item command="status" :disabled="!canUsePackageAction(item)">
-                            Install Status
-                          </el-dropdown-item>
-                          <el-dropdown-item command="copy" :disabled="!canUsePackageAction(item)">
-                            Copy Command
-                          </el-dropdown-item>
-                          <el-dropdown-item
-                            command="uninstall"
-                            divided
-                            :disabled="!canUninstallPackageAction(item)"
-                          >
-                            {{ getUninstallMenuLabel(item) }}
-                          </el-dropdown-item>
-                        </template>
+                        <el-dropdown-item divided command="install" :disabled="!canUsePackageAction(item)">
+                          {{ getInstallMenuLabel(item) }}
+                        </el-dropdown-item>
+                        <el-dropdown-item command="run_only" :disabled="!canUsePackageAction(item)">
+                          {{ getRunOnlyMenuLabel(item) }}
+                        </el-dropdown-item>
+                        <el-dropdown-item command="status" :disabled="!canUsePackageAction(item)">
+                          Install Status
+                        </el-dropdown-item>
+                        <el-dropdown-item command="copy" :disabled="!canUsePackageAction(item)">
+                          Copy Command
+                        </el-dropdown-item>
+                        <el-dropdown-item
+                          command="uninstall"
+                          divided
+                          :disabled="!canUninstallPackageAction(item)"
+                        >
+                          {{ getUninstallMenuLabel(item) }}
+                        </el-dropdown-item>
                       </el-dropdown-menu>
                     </template>
                   </el-dropdown>
@@ -166,40 +160,9 @@
         </el-tab-pane>
 
         <el-tab-pane label="Instances" name="instances">
-          <div class="external-tool-tab-toolbar">
-            <div class="external-tool-toolbar-left">
-              <el-button size="small" type="primary" plain :loading="loading" @click="refreshInstancesTab(true)">
-                Refresh Instances
-              </el-button>
-
-              <div class="external-tool-target-control">
-                <span class="external-tool-target-label">Scope</span>
-                <el-select
-                  v-model="instanceScope"
-                  size="small"
-                  filterable
-                  class="external-tool-target-select"
-                  placeholder="Select scope"
-                  @change="handleInstanceScopeChange"
-                >
-                  <el-option
-                    v-for="item in instanceScopeOptions"
-                    :key="item.value"
-                    :label="item.label"
-                    :value="item.value"
-                  />
-                </el-select>
-              </div>
-            </div>
-
-            <div class="external-tool-toolbar-right">
-              <el-input
-                v-model="searchText"
-                size="small"
-                clearable
-                class="external-tool-search"
-                placeholder="Search instances"
-              />
+          <div class="external-tool-instance-toolbar">
+            <div class="external-tool-hint">
+              Target: {{ activeDeviceFilterLabel }}.
             </div>
           </div>
 
@@ -214,9 +177,9 @@
             <el-table-column label="Target" min-width="190">
               <template #default="{ row }">
                 <div class="mono strong" :title="row.machine_id || row.device_id">{{ row.machine_label || '-' }}</div>
-                <div class="muted mono" :title="row.connection_id || row.device_id">
-                  {{ row.connection_id ? `conn: ${shortenDeviceId(row.connection_id)}` : '-' }}
-                </div>
+<!--                <div class="muted mono" :title="row.connection_id || row.device_id">-->
+<!--                  {{ row.connection_id ? `conn: ${shortenDeviceId(row.connection_id)}` : '-' }}-->
+<!--                </div>-->
               </template>
             </el-table-column>
 
@@ -299,7 +262,7 @@
           </el-table>
 
           <div v-else class="external-tool-empty">
-            {{ searchText || instanceScope ? 'No matching instances' : 'No instances yet. Start one from Packages.' }}
+            {{ searchText || deviceFilter ? 'No matching instances' : 'No instances yet. Start one from Packages.' }}
           </div>
         </el-tab-pane>
       </el-tabs>
@@ -316,7 +279,7 @@
     <div v-if="pendingItem" class="external-tool-run-body">
       <div class="external-tool-run-summary">
         <div><strong>{{ pendingItem.display_name || pendingItem.id }}</strong></div>
-        <div class="mono">{{ pendingItem.id }} / {{ activePackageTargetLabel }}</div>
+        <div class="mono">{{ pendingItem.id }} / {{ activeDeviceFilterLabel }}</div>
         <div class="external-tool-param-help">
           Instance Name isolates config, pid, state and logs. Example: vite-8087 or ssh-6000.
         </div>
@@ -484,9 +447,8 @@ export default {
       clientInstances: {},
       installStatuses: {},
       searchText: '',
-      packageTarget: '',
+      deviceFilter: '',
       packageOnlyCompatible: true,
-      instanceScope: '',
       startDialogVisible: false,
       pendingToolId: '',
       pendingTargetSide: '',
@@ -524,7 +486,7 @@ export default {
       return this.normalizeMachineId(this.currentConnection?.machine_id || '')
     },
 
-    packageTargetOptions() {
+    deviceFilterOptions() {
       const options = [
         { value: '__server__', label: 'Server host' },
       ]
@@ -542,32 +504,11 @@ export default {
       return options
     },
 
-    activePackageTargetLabel() {
-      const value = this.normalizeDeviceId(this.packageTarget)
-      const option = this.packageTargetOptions.find(item => item.value === value)
+    activeDeviceFilterLabel() {
+      const value = this.normalizeDeviceId(this.deviceFilter)
+      const option = this.deviceFilterOptions.find(item => item.value === value)
       if (option) return option.label
       if (!value) return 'current target'
-      return this.shortenMachineId(value)
-    },
-
-    instanceScopeOptions() {
-      const options = [
-        { value: this.defaultTargetValue(), label: 'Current target' },
-        { value: '__all__', label: 'All loaded machines' },
-      ]
-      const seen = new Set(options.map(item => item.value))
-      for (const item of this.packageTargetOptions) {
-        if (!item.value || seen.has(item.value)) continue
-        seen.add(item.value)
-        options.push(item)
-      }
-      return options
-    },
-
-    activeInstanceScopeLabel() {
-      const value = this.normalizeDeviceId(this.instanceScope || this.defaultTargetValue())
-      const option = this.instanceScopeOptions.find(item => item.value === value)
-      if (option) return option.label
       return this.shortenMachineId(value)
     },
 
@@ -580,11 +521,11 @@ export default {
     },
 
     isServerTargetSelected() {
-      return this.normalizeDeviceId(this.packageTarget || this.defaultTargetValue()) === '__server__'
+      return this.normalizeDeviceId(this.deviceFilter || this.defaultTargetValue()) === '__server__'
     },
 
     selectedTargetMachineId() {
-      return this.normalizeMachineId(this.packageTarget || this.defaultTargetValue())
+      return this.normalizeMachineId(this.deviceFilter || this.defaultTargetValue())
     },
 
     selectedTargetSide() {
@@ -633,14 +574,12 @@ export default {
 
     filteredInstances() {
       const keyword = String(this.searchText || '').trim().toLowerCase()
-      const machine = this.normalizeMachineId(this.instanceScope || this.defaultTargetValue())
+      const machine = this.normalizeMachineId(this.deviceFilter || this.defaultTargetValue())
       return this.allInstances.filter((row) => {
-        if (machine && machine !== '__all__') {
-          if (machine === '__server__') {
-            if (row.side !== 'server') return false
-          } else if (row.machine_id !== machine) {
-            return false
-          }
+        if (machine === '__server__') {
+          if (row.side !== 'server') return false
+        } else if (machine && row.machine_id !== machine) {
+          return false
         }
         if (!keyword) return true
         const values = [
@@ -684,24 +623,18 @@ export default {
 
   watch: {
     async selectedId() {
-      this.packageTarget = this.defaultTargetValue()
-      this.instanceScope = this.defaultTargetValue()
       if (!this.visible) return
-      await this.refreshActiveTab(false)
-    },
-
-    async activeTab() {
-      if (!this.visible) return
-      await this.refreshActiveTab(false)
+      this.deviceFilter = this.defaultTargetValue()
+      await this.refreshInstallStatuses(false)
+      await this.refreshInstances(false)
     },
   },
 
   methods: {
     async open() {
-      this.packageTarget = this.defaultTargetValue()
-      this.instanceScope = this.defaultTargetValue()
+      this.deviceFilter = this.defaultTargetValue()
       this.visible = true
-      await this.refreshActiveTab(false)
+      await this.refreshAll()
     },
 
     isOpen() {
@@ -710,7 +643,7 @@ export default {
 
     async refreshIfOpen() {
       if (!this.visible) return
-      await this.refreshActiveTab(false)
+      await this.refreshAll()
     },
 
     handleClosed() {
@@ -726,42 +659,17 @@ export default {
       return extra
     },
 
-    async refreshActiveTab(showToast = false) {
-      if (this.activeTab === 'instances') {
-        await this.refreshInstancesTab(showToast)
-      } else {
-        await this.refreshPackagesTab(showToast)
-      }
-    },
-
-    async refreshPackagesTab(showToast = false) {
+    async refreshAll() {
       this.loading = true
       try {
         await this.loadCatalog(false)
         await this.refreshInstallStatuses(false)
-        if (showToast) ElMessage.success('Packages refreshed')
-      } catch (e) {
-        ElMessage.error(e.message || 'Failed to refresh packages')
-      } finally {
-        this.loading = false
-      }
-    },
-
-    async refreshInstancesTab(showToast = false) {
-      this.loading = true
-      try {
-        if (!this.items.length) await this.loadCatalog(false)
         await this.refreshInstances(false)
-        if (showToast) ElMessage.success('Instances refreshed')
       } catch (e) {
-        ElMessage.error(e.message || 'Failed to refresh instances')
+        ElMessage.error(e.message || 'Failed to refresh external tools')
       } finally {
         this.loading = false
       }
-    },
-
-    async refreshAll() {
-      await this.refreshActiveTab(false)
     },
 
     async loadCatalog(showError = true) {
@@ -818,9 +726,7 @@ export default {
     },
 
     getModuleTargetTagLabel(item) {
-      if (!this.isPackageAvailableForTarget(item)) return item?.side === 'server' ? 'Server package' : 'Client package'
-      if (this.isServerTargetSelected) return 'Server'
-      return 'This client'
+return item?.side === 'server' ? 'Server' : 'Client'
     },
 
     getModuleTargetTagType(item) {
@@ -830,7 +736,7 @@ export default {
 
     getInstallStatusTargetLabel(item) {
       if (item?.side === 'server') return 'Server'
-      return 'This client'
+      return 'This Client'
     },
 
     getModuleInstallDeviceId(item) {
@@ -928,16 +834,16 @@ export default {
     },
 
     async refreshInstances(showToast = true) {
-      const device = this.normalizeMachineId(this.instanceScope || this.defaultTargetValue())
+      const device = this.normalizeMachineId(this.deviceFilter || this.defaultTargetValue())
 
-      if (device === '__all__' || device === '__server__' || !device) {
+      if (device === '__server__' || !device) {
         await Promise.allSettled(this.serverModules.map(item => this.loadServerInstances(item.id, false)))
-      }
-
-      const clientDeviceIds = this.getClientDeviceIdsForFilter(device)
-      for (const deviceId of clientDeviceIds) {
-        for (const item of this.clientModules) {
-          await this.loadClientInstances(item.id, deviceId, false)
+      } else {
+        const clientDeviceIds = this.getClientDeviceIdsForFilter(device)
+        for (const deviceId of clientDeviceIds) {
+          for (const item of this.clientModules) {
+            await this.loadClientInstances(item.id, deviceId, false)
+          }
         }
       }
 
@@ -1115,16 +1021,13 @@ export default {
       return ids
     },
 
-    async handlePackageTargetChange() {
-      await this.refreshPackagesTab(false)
+    async handleTargetFilterChange() {
+      await this.refreshInstallStatuses(false)
+      await this.refreshInstances(false)
     },
 
     async handlePackageOnlyCompatibleChange() {
       await this.refreshInstallStatuses(false)
-    },
-
-    async handleInstanceScopeChange() {
-      await this.refreshInstancesTab(false)
     },
 
     normalizePlatform(value) {
@@ -1279,168 +1182,176 @@ export default {
       window.open(`/api/external-tools/${encodeURIComponent(id)}/download`, '_blank')
     },
 
-    getRunButtonLabel(item) {
-      return item?.side === 'server' ? 'Run on Server' : 'Run on This Client'
+    getSelectedTargetSideForAction() {
+      return this.isServerTargetSelected ? 'server' : 'client'
     },
 
-    getInstallMenuLabel(item) {
-      return item?.side === 'server' ? 'Install on Server' : 'Install on This Client'
+    getRunButtonLabel() {
+      return this.isServerTargetSelected ? 'Run on Server' : 'Run on This Client'
     },
 
-    getRunOnlyMenuLabel(item) {
-      return item?.side === 'server' ? 'Run Only on Server' : 'Run Only on This Client'
+    getInstallMenuLabel() {
+      return this.isServerTargetSelected ? 'Install on Server' : 'Install on This Client'
     },
 
-    getUninstallMenuLabel(item) {
-      return item?.side === 'server' ? 'Uninstall from Server' : 'Uninstall from This Client'
+    getRunOnlyMenuLabel() {
+      return this.isServerTargetSelected ? 'Run Only on Server' : 'Run Only on This Client'
     },
 
-    handlePackageMoreCommand(command, item) {
-      if (command === 'download') return this.downloadTool(item)
-      if (command === 'edit') return this.$emit('open-tool-meta-editor', item.id)
-      if (!this.isPackageAvailableForTarget(item)) return null
-      if (command === 'install') return this.installOnly(item)
-      if (command === 'run_only') return this.openStartDialog(item, item.side, 'run_only')
-      if (command === 'status') return this.showInstallStatus(item)
-      if (command === 'copy') return this.copyInstallCommand(item)
-      if (command === 'uninstall') return this.uninstallPackage(item)
-      return null
+    getUninstallMenuLabel() {
+      return this.isServerTargetSelected ? 'Uninstall from Server' : 'Uninstall from This Client'
     },
+
+handlePackageMoreCommand(command, item) {
+  if (command === 'download') return this.downloadTool(item)
+  if (command === 'edit') return this.$emit('open-tool-meta-editor', item.id)
+  if (!this.canUsePackageAction(item)) return null
+  if (command === 'install') return this.installOnly(item)
+  if (command === 'run_only') return this.openStartDialog(item, this.getSelectedTargetSideForAction(), 'run_only')
+  if (command === 'status') return this.showInstallStatus(item)
+  if (command === 'copy') return this.copyInstallCommand(item)
+  if (command === 'uninstall') return this.uninstallPackage(item)
+  return null
+},
 
     getPackageTargetMachineId(item) {
-      if (!item) return ''
-      if (item.side === 'server') return '__server__'
-      return this.selectedTargetMachineId
-    },
+  if (!item) return ''
+  if (item.side === 'server') return '__server__'
+  return this.selectedTargetMachineId
+},
 
-    getPackageTargetConnectionIds(item) {
-      if (!item || item.side !== 'client') return []
-      const machineId = this.getPackageTargetMachineId(item)
-      const ids = this.getClientDeviceIdsForFilter(machineId)
-      if (ids.length) return ids
-      const actionDeviceId = this.getActionDeviceId(item)
-      return actionDeviceId ? [actionDeviceId] : []
-    },
+getPackageTargetConnectionIds(item) {
+  if (!item || item.side !== 'client') return []
+  const machineId = this.getPackageTargetMachineId(item)
+  const ids = this.getClientDeviceIdsForFilter(machineId)
+  if (ids.length) return ids
+  const actionDeviceId = this.getActionDeviceId(item)
+  return actionDeviceId ? [actionDeviceId] : []
+},
 
-    getPackageTargetInstanceRows(item) {
-      if (!item?.id) return []
+getPackageTargetInstanceRows(item) {
+  if (!item?.id) return []
 
-      if (item.side === 'server') {
-        return this.allInstances.filter(row => row.side === 'server' && row.tool_id === item.id)
-      }
+  if (item.side === 'server') {
+    return this.allInstances.filter(row => row.side === 'server' && row.tool_id === item.id)
+  }
 
-      const machineId = this.getPackageTargetMachineId(item)
-      return this.allInstances.filter(row => (
-        row.side === 'client' &&
-        row.tool_id === item.id &&
-        row.machine_id === machineId
-      ))
-    },
+  const machineId = this.getPackageTargetMachineId(item)
+  return this.allInstances.filter(row => (
+    row.side === 'client' &&
+    row.tool_id === item.id &&
+    row.machine_id === machineId
+  ))
+},
 
-    hasRunningInstancesForPackage(item) {
-      return this.getPackageTargetInstanceRows(item).some(row => row.running || String(row.status || '').toLowerCase() === 'running')
-    },
+hasRunningInstancesForPackage(item) {
+  return this.getPackageTargetInstanceRows(item).some(row => row.running || String(row.status || '').toLowerCase() === 'running')
+},
 
-    canUninstallPackageAction(item) {
-      if (!this.canUsePackageAction(item)) return false
-      const status = this.installStatuses[this.installStatusKey(
-        item,
-        item.side,
-        this.getModuleInstallDeviceId(item),
-      )]
-      if (status && status.installed === false) return false
-      return !this.hasRunningInstancesForPackage(item)
-    },
+canUninstallPackageAction(item) {
+  if (!this.canUsePackageAction(item)) return false
 
-    async uninstallPackage(item) {
-      if (!item?.id) return
-      if (!this.canUsePackageAction(item)) {
-        ElMessage.warning(item?.side === 'client' ? 'Please select a supported client first' : 'This package is not supported')
-        return
-      }
+  const status = this.installStatuses[this.installStatusKey(
+    item,
+    item.side,
+    this.getModuleInstallDeviceId(item),
+  )]
 
-      try {
-        await this.refreshInstances(false)
-      } catch (_) {
-        // Backend/client still validates running instances before uninstall.
-      }
+  if (status && status.installed === false) return false
+  return !this.hasRunningInstancesForPackage(item)
+},
 
-      if (this.hasRunningInstancesForPackage(item)) {
-        ElMessage.warning('This package still has running instances on this machine. Stop them before uninstalling.')
-        return
-      }
+async uninstallPackage(item) {
+  if (!item?.id) return
+  if (!this.canUsePackageAction(item)) {
+    ElMessage.warning(item?.side === 'client' ? 'Please select a supported client first' : 'This package is not supported')
+    return
+  }
 
-      try {
-        await ElMessageBox.confirm(
-          `Uninstall ${item.display_name || item.id} from ${item.side === 'server' ? 'server' : 'this machine'}?`,
-          'Uninstall External Tool',
-          {
-            type: 'warning',
-            confirmButtonText: 'Uninstall',
-            cancelButtonText: 'Cancel',
-          },
-        )
-      } catch (_) {
-        return
-      }
+  // 卸载前刷新一次实例状态，避免 UI 旧数据导致误删。
+  try {
+    await this.refreshInstances(false)
+  } catch (_) {
+    // refresh 失败不直接中断，后端/client 仍会再做一次 running 校验。
+  }
 
-      try {
-        this.installLoading = true
-        let data
-        if (item.side === 'server') {
-          data = await this.uninstallServerTool(item)
-          this.setInstallStatus(item, 'server', '__server__', {
-            ...(data || {}),
-            installed: false,
-            loading: false,
-            error: '',
-          })
-        } else {
-          const deviceIds = this.getPackageTargetConnectionIds(item)
-          if (!deviceIds.length) throw new Error('Please select a device')
-          const deviceId = this.normalizeDeviceId(this.getActionDeviceId(item) || deviceIds[0])
-          data = await this.uninstallClientTool(item, deviceId)
-          this.setInstallStatus(item, 'client', deviceId, {
-            ...(data || {}),
-            installed: false,
-            loading: false,
-            error: '',
-          })
-          await this.loadClientCatalogStatuses(deviceId, false)
-        }
+  if (this.hasRunningInstancesForPackage(item)) {
+    ElMessage.warning('This package still has running instances on this machine. Stop them before uninstalling.')
+    return
+  }
 
-        ElMessage.success(data?.message || `Uninstalled: ${item.display_name || item.id}`)
-      } catch (e) {
-        ElMessage.error(e.message || 'Failed to uninstall package')
-      } finally {
-        this.installLoading = false
-      }
-    },
+  try {
+    await ElMessageBox.confirm(
+      `Uninstall ${item.display_name || item.id} from ${item.side === 'server' ? 'server' : 'this machine'}?`,
+      'Uninstall External Tool',
+      {
+        type: 'warning',
+        confirmButtonText: 'Uninstall',
+        cancelButtonText: 'Cancel',
+      },
+    )
+  } catch (_) {
+    return
+  }
 
-    async uninstallServerTool(item) {
-      const res = await fetch(`/api/external-tools/${encodeURIComponent(item.id)}/server/uninstall`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ params: {} }),
+  try {
+    this.installLoading = true
+    let data
+    if (item.side === 'server') {
+      data = await this.uninstallServerTool(item)
+      this.setInstallStatus(item, 'server', '__server__', {
+        ...(data || {}),
+        installed: false,
+        loading: false,
+        error: '',
       })
-      const json = await res.json()
-      if (!res.ok || json.code !== 0) throw new Error(json.message || 'Failed to uninstall server package')
-      return json.data || {}
-    },
-
-    async uninstallClientTool(item, deviceId) {
-      const targetDeviceId = this.normalizeDeviceId(deviceId || this.getActionDeviceId(item))
-      if (!targetDeviceId) throw new Error('Please select a target machine')
-
-      const res = await fetch(`/api/connections/${encodeURIComponent(targetDeviceId)}/external-tools/${encodeURIComponent(item.id)}/uninstall`, {
-        method: 'POST',
-        headers: this.buildJsonHeaders({ 'Content-Type': 'application/json' }),
-        body: JSON.stringify({ params: {} }),
+    } else {
+      const deviceIds = this.getPackageTargetConnectionIds(item)
+      if (!deviceIds.length) throw new Error('Please select a device')
+      // 实际卸载只对当前选中的连接发命令；同 machine 多连接时，后端命令仍落在该机器本地路径。
+      const deviceId = this.normalizeDeviceId(this.selectedId || deviceIds[0])
+      data = await this.uninstallClientTool(item, deviceId)
+      this.setInstallStatus(item, 'client', deviceId, {
+        ...(data || {}),
+        installed: false,
+        loading: false,
+        error: '',
       })
-      const json = await res.json()
-      if (!res.ok || json.code !== 0) throw new Error(json.message || 'Failed to uninstall client package')
-      return json.data || {}
-    },
+      await this.loadClientCatalogStatuses(deviceId, false)
+    }
+
+    ElMessage.success(data?.message || `Uninstalled: ${item.display_name || item.id}`)
+  } catch (e) {
+    ElMessage.error(e.message || 'Failed to uninstall package')
+  } finally {
+    this.installLoading = false
+  }
+},
+
+async uninstallServerTool(item) {
+  const res = await fetch(`/api/external-tools/${encodeURIComponent(item.id)}/server/uninstall`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ params: {} }),
+  })
+  const json = await res.json()
+  if (!res.ok || json.code !== 0) throw new Error(json.message || 'Failed to uninstall server package')
+  return json.data || {}
+},
+
+async uninstallClientTool(item, deviceId) {
+  const targetDeviceId = this.normalizeDeviceId(deviceId || this.selectedId)
+  if (!targetDeviceId) throw new Error('Please select a device')
+
+  const res = await fetch(`/api/connections/${encodeURIComponent(targetDeviceId)}/external-tools/${encodeURIComponent(item.id)}/uninstall`, {
+    method: 'POST',
+    headers: this.buildJsonHeaders({ 'Content-Type': 'application/json' }),
+    body: JSON.stringify({ params: {} }),
+  })
+  const json = await res.json()
+  if (!res.ok || json.code !== 0) throw new Error(json.message || 'Failed to uninstall client package')
+  return json.data || {}
+},
 
     async installOnly(item) {
       if (!this.canUsePackageAction(item)) {
@@ -2035,20 +1946,24 @@ export default {
       if (!res.ok || json.code !== 0) throw new Error(json.message || 'Failed to clear client logs')
     },
 
-    formatVersionLabel(version) {
-      const value = String(version || '').trim()
-      if (!value) return ''
+formatVersionLabel(version) {
+  const value = String(version || '').trim()
+  if (!value) return ''
 
-      if (/^v\d+\.\d+(?:\.\d+)?$/i.test(value)) {
-        return value
-      }
+  // 已经带 v 的标准数字版本，直接返回，避免 vv1.2.3
+  if (/^v\d+\.\d+(?:\.\d+)?$/i.test(value)) {
+    return value
+  }
 
-      if (/^\d+\.\d+(?:\.\d+)?$/.test(value)) {
-        return `v${value}`
-      }
+  // 只有 x.x 或 x.x.x 这种纯数字版本才自动加 v
+  if (/^\d+\.\d+(?:\.\d+)?$/.test(value)) {
+    return `v${value}`
+  }
 
-      return value
-    },
+  // snapshot、commit、custom tag 等原样显示
+  return value
+}
+
   },
 }
 </script>
@@ -2061,12 +1976,11 @@ export default {
   gap: 12px;
 }
 
-.external-tool-tab-toolbar {
+.external-tool-toolbar {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  margin-bottom: 12px;
 }
 
 .external-tool-toolbar-left,
@@ -2074,6 +1988,10 @@ export default {
   display: flex;
   align-items: center;
   gap: 8px;
+}
+
+.external-tool-filter {
+  width: 150px;
 }
 
 .external-tool-target-control {
@@ -2096,6 +2014,10 @@ export default {
 
 .external-tool-target-select {
   width: 320px;
+}
+
+.external-tool-device-filter {
+  width: 230px;
 }
 
 .external-tool-search {
@@ -2206,10 +2128,29 @@ export default {
   margin-left: 0;
 }
 
+.external-tool-instance-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.external-tool-hint {
+  color: var(--terminal-muted, #8f9bb3);
+  font-size: 12px;
+}
+
 .external-tool-instance-table {
   width: 100%;
   border-radius: 12px;
   overflow: hidden;
+}
+
+.path-line {
+  max-width: 320px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .external-tool-empty {
@@ -2441,4 +2382,3 @@ export default {
   color: var(--terminal-muted, #8f9bb3);
 }
 </style>
-```
