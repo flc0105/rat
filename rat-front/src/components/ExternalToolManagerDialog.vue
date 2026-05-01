@@ -174,12 +174,20 @@
             height="560"
             row-key="row_key"
           >
-            <el-table-column label="Target" min-width="190">
+<!--            <el-table-column label="Target" min-width="190">-->
+<!--              <template #default="{ row }">-->
+<!--                <div class="mono strong" :title="row.machine_id || row.device_id">{{ row.machine_label || '-' }}</div>-->
+<!--&lt;!&ndash;                <div class="muted mono" :title="row.connection_id || row.device_id">&ndash;&gt;-->
+<!--&lt;!&ndash;                  {{ row.connection_id ? `conn: ${shortenDeviceId(row.connection_id)}` : '-' }}&ndash;&gt;-->
+<!--&lt;!&ndash;                </div>&ndash;&gt;-->
+<!--              </template>-->
+<!--            </el-table-column>-->
+
+
+             <el-table-column label="Instance" min-width="170">
               <template #default="{ row }">
-                <div class="mono strong" :title="row.machine_id || row.device_id">{{ row.machine_label || '-' }}</div>
-<!--                <div class="muted mono" :title="row.connection_id || row.device_id">-->
-<!--                  {{ row.connection_id ? `conn: ${shortenDeviceId(row.connection_id)}` : '-' }}-->
-<!--                </div>-->
+                <div class="mono strong" :title="row.instance_id">{{ row.instance_id }}</div>
+                <div class="muted mono" :title="row.tool_id">{{ row.tool_id }}</div>
               </template>
             </el-table-column>
 
@@ -191,12 +199,7 @@
               </template>
             </el-table-column>
 
-            <el-table-column label="Instance" min-width="170">
-              <template #default="{ row }">
-                <div class="mono strong" :title="row.instance_id">{{ row.instance_id }}</div>
-                <div class="muted mono" :title="row.tool_id">{{ row.tool_id }}</div>
-              </template>
-            </el-table-column>
+
 
             <el-table-column label="PID" width="95">
               <template #default="{ row }">
