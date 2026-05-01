@@ -70,6 +70,12 @@ class WebExternalToolApi:
     def read_server_logs(self, tool_id: str, instance_id: str, max_bytes=None):
         return self.runtime_service.read_server_logs(tool_id, instance_id=instance_id, max_bytes=max_bytes)
 
+    def remove_server_instance(self, tool_id: str, instance_id: str):
+        return self.runtime_service.remove_server_instance(tool_id, instance_id=instance_id)
+
+    def clear_server_logs(self, tool_id: str, instance_id: str):
+        return self.runtime_service.clear_server_logs(tool_id, instance_id=instance_id)
+
     # Backward-compatible old method name.
     def install_and_run_server(self, tool_id: str, params=None):
         return self.runtime_service.install_and_run_server(tool_id, params=params)
@@ -99,6 +105,12 @@ class WebExternalToolApi:
 
     def read_client_logs(self, client_id: str, tool_id: str, instance_id: str, max_bytes=None, tab_id: str = ''):
         return self.runtime_service.read_client_logs(client_id, tool_id, instance_id=instance_id, max_bytes=max_bytes, tab_id=tab_id)
+
+    def remove_client_instance(self, client_id: str, tool_id: str, instance_id: str, tab_id: str = ''):
+        return self.runtime_service.remove_client_instance(client_id, tool_id, instance_id=instance_id, tab_id=tab_id)
+
+    def clear_client_logs(self, client_id: str, tool_id: str, instance_id: str, tab_id: str = ''):
+        return self.runtime_service.clear_client_logs(client_id, tool_id, instance_id=instance_id, tab_id=tab_id)
 
     # Backward-compatible old method name.
     def install_and_run_client(self, client_id: str, tool_id: str, params=None, tab_id: str = ''):

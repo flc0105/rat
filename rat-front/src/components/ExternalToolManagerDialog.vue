@@ -26,7 +26,7 @@
             size="small"
             filterable
             class="external-tool-device-filter"
-            placeholder="Filter by device"
+            placeholder="Filter by machine"
             @change="handleDeviceFilterChange"
           >
             <el-option
@@ -181,7 +181,7 @@
         <el-tab-pane label="Instances" name="instances">
           <div class="external-tool-instance-toolbar">
             <div class="external-tool-hint">
-              Showing {{ activeDeviceFilterLabel }}. Use the device filter to switch between current device, server host, or all loaded devices.
+              Showing {{ activeDeviceFilterLabel }}. Use the machine filter to switch between current machine, server host, or all loaded machines.
             </div>
           </div>
 
@@ -201,10 +201,12 @@
               </template>
             </el-table-column>
 
-            <el-table-column label="Device" min-width="170">
+            <el-table-column label="Machine" min-width="180">
               <template #default="{ row }">
-                <div class="mono strong" :title="row.device_id">{{ row.device_label || '-' }}</div>
-                <div class="muted mono" :title="row.device_id">{{ shortenDeviceId(row.device_id) }}</div>
+                <div class="mono strong" :title="row.machine_id || row.device_id">{{ row.machine_label || '-' }}</div>
+                <div class="muted mono" :title="row.connection_id || row.device_id">
+                  {{ row.connection_id ? `conn: ${shortenDeviceId(row.connection_id)}` : '-' }}
+                </div>
               </template>
             </el-table-column>
 
@@ -235,30 +237,20 @@
               </template>
             </el-table-column>
 
-            <el-table-column label="Exec" min-width="210">
-              <template #default="{ row }">
-                <span class="mono muted" :title="row.exec_path">{{ row.exec_path || '-' }}</span>
-              </template>
-            </el-table-column>
-
-            <el-table-column label="Path" min-width="300">
-              <template #default="{ row }">
-                <div class="mono path-line" :title="row.config_path">cfg: {{ row.config_path || '-' }}</div>
-                <div class="mono path-line" :title="row.stdout">log: {{ row.stdout || '-' }}</div>
-              </template>
-            </el-table-column>
-
             <el-table-column label="Started" width="160">
               <template #default="{ row }">
                 <span class="mono muted">{{ shortTime(row.started_at) }}</span>
               </template>
             </el-table-column>
 
-            <el-table-column label="Actions" width="168" fixed="right">
+            <el-table-column label="Actions" width="260" fixed="right">
               <template #default="{ row }">
                 <div class="external-tool-table-actions">
                   <el-button size="small" plain @click="openInstanceLogs(row)">
                     Logs
+                  </el-button>
+                  <el-button size="small" plain @click="openInstanceInfo(row)">
+                    Info
                   </el-button>
                   <el-button
                     size="small"
@@ -269,6 +261,28 @@
                   >
                     Stop
                   </el-button>
+                  <el-dropdown
+                    trigger="click"
+                    size="small"
+                    @command="handleInstanceMoreCommand($event, row)"
+                  >
+                    <el-button size="small" plain>
+                      More
+                    </el-button>
+                    <template #dropdown>
+                      <el-dropdown-menu>
+                        <el-dropdown-item command="restart" :disabled="!canRestartInstance(row)">
+                          Restart
+                        </el-dropdown-item>
+                        <el-dropdown-item command="clear_logs" :disabled="!canModifyStoppedInstanceFiles(row)">
+                          Clear Logs
+                        </el-dropdown-item>
+                        <el-dropdown-item command="remove" :disabled="!canModifyStoppedInstanceFiles(row)">
+                          Remove
+                        </el-dropdown-item>
+                      </el-dropdown-menu>
+                    </template>
+                  </el-dropdown>
                 </div>
               </template>
             </el-table-column>
@@ -312,8 +326,7 @@
           <el-input-number
             v-else-if="normalizeParamType(param.type) === 'integer'"
             v-model="paramForm[param.name]"
-            :min="param.min"
-            :max="param.max"
+            :placeholder="param.description || param.name"
             controls-position="right"
             class="external-tool-number"
           />
@@ -353,10 +366,66 @@
     <div v-if="logFilePath" class="external-tool-log-path mono" :title="logFilePath">
       Log file: {{ logFilePath }}
     </div>
-    <pre class="external-tool-log-content">{{ logContent || 'No log content.' }}</pre>
+    <pre ref="logContentRef" class="external-tool-log-content">{{ logContent || 'No log content.' }}</pre>
     <template #footer>
       <el-button size="small" :loading="logLoading" @click="refreshCurrentLogs">Refresh Logs</el-button>
       <el-button size="small" @click="logDialogVisible = false">Close</el-button>
+    </template>
+  </el-dialog>
+
+  <el-dialog
+    v-model="detailDialogVisible"
+    :title="detailDialogTitle"
+    width="780px"
+    append-to-body
+    class="external-tool-detail-dialog"
+  >
+    <div class="external-tool-detail-body">
+      <div v-if="detailSubtitle" class="external-tool-detail-subtitle">
+        {{ detailSubtitle }}
+      </div>
+
+      <div
+        v-for="section in detailSections"
+        :key="section.title"
+        class="external-tool-detail-section"
+      >
+        <div class="external-tool-detail-section-title">
+          {{ section.title }}
+        </div>
+
+        <div class="external-tool-detail-grid">
+          <div
+            v-for="row in section.rows"
+            :key="`${section.title}:${row.label}`"
+            class="external-tool-detail-row"
+          >
+            <div class="external-tool-detail-label">
+              {{ row.label }}
+            </div>
+            <div
+              class="external-tool-detail-value"
+              :class="{ mono: row.mono, multiline: row.multiline }"
+              :title="row.multiline ? '' : stringifyDetailValue(row.value)"
+            >
+              <pre v-if="row.multiline" class="external-tool-detail-pre">{{ formatDetailValue(row.value) }}</pre>
+              <span v-else>{{ formatDetailValue(row.value) }}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <template #footer>
+      <el-button
+        v-if="detailCopyText"
+        size="small"
+        plain
+        @click="copyDetailText"
+      >
+        Copy Command
+      </el-button>
+      <el-button size="small" @click="detailDialogVisible = false">Close</el-button>
     </template>
   </el-dialog>
 </template>
@@ -418,6 +487,11 @@ export default {
       logFilePath: '',
       logContent: '',
       currentLogRow: null,
+      detailDialogVisible: false,
+      detailDialogTitle: '',
+      detailSubtitle: '',
+      detailSections: [],
+      detailCopyText: '',
     }
   },
 
@@ -436,20 +510,25 @@ export default {
       return this.normalizeDeviceId(this.selectedId || this.currentConnection?.client_id || '')
     },
 
+    currentMachineId() {
+      return this.normalizeMachineId(this.currentConnection?.machine_id || '')
+    },
+
     deviceFilterOptions() {
       const options = [
-        { value: '__all__', label: 'All loaded devices' },
+        { value: '__all__', label: 'All loaded machines' },
         { value: '__server__', label: 'Server host' },
       ]
       const seen = new Set(options.map(item => item.value))
       for (const conn of this.connections || []) {
-        const id = this.normalizeDeviceId(conn?.client_id)
-        if (!id || seen.has(id)) continue
-        seen.add(id)
-        options.push({ value: id, label: this.formatDeviceOptionLabel(conn) })
+        const machineId = this.normalizeMachineId(conn?.machine_id)
+        if (!machineId || seen.has(machineId)) continue
+        seen.add(machineId)
+        options.push({ value: machineId, label: this.formatMachineOptionLabel(conn) })
       }
-      if (this.currentDeviceId && !seen.has(this.currentDeviceId)) {
-        options.push({ value: this.currentDeviceId, label: this.formatCurrentDeviceLabel() })
+      if (this.currentMachineId && !seen.has(this.currentMachineId)) {
+        seen.add(this.currentMachineId)
+        options.push({ value: this.currentMachineId, label: this.formatCurrentMachineLabel() })
       }
       return options
     },
@@ -458,8 +537,8 @@ export default {
       const value = this.normalizeDeviceId(this.deviceFilter)
       const option = this.deviceFilterOptions.find(item => item.value === value)
       if (option) return option.label
-      if (!value) return 'current device'
-      return this.shortenDeviceId(value)
+      if (!value) return 'current machine'
+      return this.shortenMachineId(value)
     },
 
     serverModules() {
@@ -508,13 +587,13 @@ export default {
     filteredInstances() {
       const keyword = String(this.searchText || '').trim().toLowerCase()
       const side = String(this.sideFilter || '').trim().toLowerCase()
-      const device = this.normalizeDeviceId(this.deviceFilter || this.currentDeviceId || '__all__')
+      const machine = this.normalizeMachineId(this.deviceFilter || this.currentMachineId || '__all__')
       return this.allInstances.filter((row) => {
         if (side && row.side !== side) return false
-        if (device && device !== '__all__') {
-          if (device === '__server__') {
+        if (machine && machine !== '__all__') {
+          if (machine === '__server__') {
             if (row.side !== 'server') return false
-          } else if (row.device_id !== device) {
+          } else if (row.machine_id !== machine) {
             return false
           }
         }
@@ -522,8 +601,10 @@ export default {
         const values = [
           row.side,
           row.status,
-          row.device_id,
-          row.device_label,
+          row.machine_id,
+          row.machine_label,
+          row.hostname,
+          row.connection_id,
           row.tool_id,
           row.display_name,
           row.instance_id,
@@ -559,7 +640,7 @@ export default {
   watch: {
     async selectedId() {
       if (!this.visible) return
-      this.deviceFilter = this.currentDeviceId || '__server__'
+      this.deviceFilter = this.currentMachineId || '__server__'
       await this.refreshInstallStatuses(false)
       await this.refreshInstances(false)
     },
@@ -567,7 +648,7 @@ export default {
 
   methods: {
     async open() {
-      this.deviceFilter = this.currentDeviceId || '__server__'
+      this.deviceFilter = this.currentMachineId || '__server__'
       this.visible = true
       await this.refreshAll()
     },
@@ -737,7 +818,7 @@ export default {
     },
 
     async refreshInstances(showToast = true) {
-      const device = this.normalizeDeviceId(this.deviceFilter || this.currentDeviceId || '__all__')
+      const device = this.normalizeMachineId(this.deviceFilter || this.currentMachineId || '__all__')
 
       if (device === '__all__' || device === '__server__' || !device) {
         await Promise.allSettled(this.serverModules.map(item => this.loadServerInstances(item.id, false)))
@@ -799,8 +880,20 @@ export default {
       return String(value || '').trim()
     },
 
+    normalizeMachineId(value) {
+      return String(value || '').trim()
+    },
+
     shortenDeviceId(deviceId) {
       const value = this.normalizeDeviceId(deviceId)
+      if (!value) return '-'
+      if (value === '__server__') return 'server'
+      if (value === '__all__') return 'all'
+      return value.length > 12 ? value.slice(0, 12) : value
+    },
+
+    shortenMachineId(machineId) {
+      const value = this.normalizeMachineId(machineId)
       if (!value) return '-'
       if (value === '__server__') return 'server'
       if (value === '__all__') return 'all'
@@ -812,29 +905,46 @@ export default {
       return (this.connections || []).find(conn => this.normalizeDeviceId(conn?.client_id) === id) || null
     },
 
-    formatDeviceOptionLabel(conn) {
-      const id = this.normalizeDeviceId(conn?.client_id)
-      const shortId = this.shortenDeviceId(id)
+    findConnectionByMachineId(machineId) {
+      const id = this.normalizeMachineId(machineId)
+      return (this.connections || []).find(conn => this.normalizeMachineId(conn?.machine_id) === id) || null
+    },
+
+    getMachineIdForConnectionId(deviceId) {
+      if (deviceId === '__server__') return '__server__'
+      const conn = this.findConnectionById(deviceId)
+      return this.normalizeMachineId(conn?.machine_id || (deviceId === this.currentDeviceId ? this.currentConnection?.machine_id : '') || deviceId)
+    },
+
+    getHostnameForConnectionId(deviceId) {
+      const conn = this.findConnectionById(deviceId) || (deviceId === this.currentDeviceId ? this.currentConnection : null)
+      return String(conn?.hostname || '').trim()
+    },
+
+    formatMachineOptionLabel(conn) {
+      const machineId = this.normalizeMachineId(conn?.machine_id)
+      const shortId = this.shortenMachineId(machineId)
       const hostname = String(conn?.hostname || '').trim()
       return hostname ? `${shortId} (${hostname})` : shortId
     },
 
-    formatCurrentDeviceLabel() {
-      const conn = this.findConnectionById(this.currentDeviceId) || this.currentConnection
-      return conn ? this.formatDeviceOptionLabel(conn) : this.shortenDeviceId(this.currentDeviceId)
+    formatCurrentMachineLabel() {
+      const conn = this.currentConnection || this.findConnectionById(this.currentDeviceId)
+      if (conn?.machine_id) return this.formatMachineOptionLabel(conn)
+      return this.shortenMachineId(this.currentMachineId)
     },
 
-    getDeviceLabel(deviceId, side = '') {
-      const id = this.normalizeDeviceId(deviceId)
+    getMachineLabel(machineId, side = '', connectionId = '') {
+      const id = this.normalizeMachineId(machineId)
       if (side === 'server' || id === '__server__') return 'Server host'
-      const conn = this.findConnectionById(id)
-      if (conn) return this.formatDeviceOptionLabel(conn)
-      if (id === this.currentDeviceId && this.currentConnection) return this.formatDeviceOptionLabel(this.currentConnection)
-      return this.shortenDeviceId(id)
+      const conn = this.findConnectionByMachineId(id) || this.findConnectionById(connectionId)
+      if (conn?.machine_id) return this.formatMachineOptionLabel(conn)
+      if (id === this.currentMachineId && this.currentConnection) return this.formatMachineOptionLabel(this.currentConnection)
+      return this.shortenMachineId(id)
     },
 
     getClientDeviceIdsForFilter(filterValue) {
-      const value = this.normalizeDeviceId(filterValue || this.currentDeviceId)
+      const value = this.normalizeMachineId(filterValue || this.currentMachineId)
       if (!value || value === '__server__') return []
       if (value === '__all__') {
         const ids = []
@@ -848,7 +958,22 @@ export default {
         if (this.currentDeviceId && !seen.has(this.currentDeviceId)) ids.push(this.currentDeviceId)
         return ids
       }
-      return [value]
+
+      const ids = []
+      const seen = new Set()
+      for (const conn of this.connections || []) {
+        const machineId = this.normalizeMachineId(conn?.machine_id)
+        const clientId = this.normalizeDeviceId(conn?.client_id)
+        if (!clientId || seen.has(clientId)) continue
+        if (machineId === value || clientId === value) {
+          seen.add(clientId)
+          ids.push(clientId)
+        }
+      }
+      if (!ids.length && value === this.currentMachineId && this.currentDeviceId) {
+        ids.push(this.currentDeviceId)
+      }
+      return ids
     },
 
     async handleDeviceFilterChange() {
@@ -1073,11 +1198,24 @@ export default {
     async showInstallStatus(item) {
       const data = await this.getInstallStatusForAction(item)
       if (!data) return
-      await ElMessageBox.alert(
-        this.formatInstallStatusDetails(data),
-        `${item.display_name || item.id} install status`,
-        { confirmButtonText: 'OK' },
-      )
+      this.showDetailDialog({
+        title: `${item.display_name || item.id} install status`,
+        subtitle: `${item.id} / ${item.side}`,
+        copyText: data.command || data.executable_path || '',
+        sections: [
+          {
+            title: 'Package install',
+            rows: [
+              { label: 'Status', value: data.installed ? 'Installed' : (data.installed === false ? 'Not installed' : 'Unknown') },
+              { label: 'Install dir', value: data.install_dir || '-', mono: true },
+              { label: 'Executable', value: data.executable_path || '-', mono: true },
+              { label: 'Skip path', value: data.skip_path || '-', mono: true },
+              { label: 'Command', value: data.command || data.executable_path || '-', mono: true },
+              { label: 'Message', value: data.message || data.error || '-' },
+            ],
+          },
+        ],
+      })
     },
 
     async copyInstallCommand(item) {
@@ -1122,6 +1260,50 @@ export default {
       if (!ok) throw new Error('Fallback copy failed')
     },
 
+    showDetailDialog({ title = '', subtitle = '', sections = [], copyText = '' } = {}) {
+      this.detailDialogTitle = title || 'Details'
+      this.detailSubtitle = subtitle || ''
+      this.detailSections = (sections || []).map(section => ({
+        title: section.title || 'Details',
+        rows: (section.rows || []).filter(row => row && row.label),
+      })).filter(section => section.rows.length)
+      this.detailCopyText = copyText || ''
+      this.detailDialogVisible = true
+    },
+
+    stringifyDetailValue(value) {
+      if (value === undefined || value === null || value === '') return '-'
+      if (typeof value === 'string') return value
+      try {
+        return JSON.stringify(value, null, 2)
+      } catch (_) {
+        return String(value)
+      }
+    },
+
+    formatDetailValue(value) {
+      return this.stringifyDetailValue(value)
+    },
+
+    async copyDetailText() {
+      if (!this.detailCopyText) return
+      try {
+        if (window.isSecureContext && navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+          await navigator.clipboard.writeText(this.detailCopyText)
+        } else {
+          this.copyTextFallback(this.detailCopyText)
+        }
+        ElMessage.success('Copied')
+      } catch (e) {
+        try {
+          this.copyTextFallback(this.detailCopyText)
+          ElMessage.success('Copied')
+        } catch (_) {
+          ElMessage.error('Failed to copy')
+        }
+      }
+    },
+
     async confirmStart() {
       const item = this.pendingItem
       if (!item) {
@@ -1161,9 +1343,10 @@ export default {
       await this.loadServerInstances(item.id, false)
     },
 
-    async startClientInstance(item, params, instanceId, installIfNeeded = true) {
-      if (!this.selectedId) throw new Error('Please select a device')
-      const res = await fetch(`/api/connections/${encodeURIComponent(this.selectedId)}/external-tools/${encodeURIComponent(item.id)}/instances/start`, {
+    async startClientInstance(item, params, instanceId, installIfNeeded = true, deviceId = '') {
+      const targetDeviceId = this.normalizeDeviceId(deviceId || this.selectedId)
+      if (!targetDeviceId) throw new Error('Please select a device')
+      const res = await fetch(`/api/connections/${encodeURIComponent(targetDeviceId)}/external-tools/${encodeURIComponent(item.id)}/instances/start`, {
         method: 'POST',
         headers: this.buildJsonHeaders({ 'Content-Type': 'application/json' }),
         body: JSON.stringify({ params, instance_id: instanceId, install_if_needed: installIfNeeded }),
@@ -1171,8 +1354,8 @@ export default {
       const json = await res.json()
       if (!res.ok || json.code !== 0) throw new Error(json.message || 'Failed to start client tool')
       ElMessage.success(json.data?.message || 'Client instance started')
-      if (json.data?.install) this.setInstallStatus(item, 'client', this.selectedId, json.data.install)
-      await this.loadClientInstances(item.id, this.selectedId, false)
+      if (json.data?.install) this.setInstallStatus(item, 'client', targetDeviceId, json.data.install)
+      await this.loadClientInstances(item.id, targetDeviceId, false)
     },
 
     normalizeInstanceRow(item, instance, side, deviceId = '') {
@@ -1181,11 +1364,16 @@ export default {
       const params = instance.params || {}
       const configPath = config.target || instance.config_file || ''
       const normalizedDeviceId = side === 'server' ? '__server__' : this.normalizeDeviceId(deviceId || this.currentDeviceId)
+      const machineId = side === 'server' ? '__server__' : this.getMachineIdForConnectionId(normalizedDeviceId)
+      const hostname = side === 'server' ? '' : this.getHostnameForConnectionId(normalizedDeviceId)
       return {
         row_key: `${side}:${normalizedDeviceId}:${item.id}:${instance.instance_id}`,
         side,
         device_id: normalizedDeviceId,
-        device_label: this.getDeviceLabel(normalizedDeviceId, side),
+        connection_id: normalizedDeviceId,
+        machine_id: machineId,
+        hostname,
+        machine_label: this.getMachineLabel(machineId, side, normalizedDeviceId),
         tool_id: item.id,
         display_name: item.display_name || item.id,
         instance_id: instance.instance_id || 'default',
@@ -1194,12 +1382,15 @@ export default {
         pid: instance.pid || '',
         pid_file: instance.pid_file || runtime.pid_file || '',
         stdout: instance.stdout || runtime.stdout || '',
+        stderr: instance.stderr || runtime.stderr || '',
         state_file: instance.state_file || runtime.state_file || '',
         config_path: configPath,
         params,
         started_at: instance.started_at || '',
         stopped_at: instance.stopped_at || '',
-        exec_path: item.package?.executable_rel_path || '',
+        exec_path: runtime.argv?.[0] || item.package?.executable_rel_path || '',
+        cwd: runtime.cwd || instance.cwd || '',
+        argv: runtime.argv || instance.argv || [],
         raw: instance,
         module: item,
       }
@@ -1306,6 +1497,7 @@ export default {
         this.logFilePath = data.log_file || row.stdout || ''
         this.logContent = data.content || ''
         if (openDialog) this.logDialogVisible = true
+        this.scrollLogsToBottom()
       } catch (e) {
         ElMessage.error(e.message || 'Failed to read logs')
       } finally {
@@ -1331,6 +1523,214 @@ export default {
       const json = await res.json()
       if (!res.ok || json.code !== 0) throw new Error(json.message || 'Failed to read client logs')
       return json.data || {}
+    },
+
+    scrollLogsToBottom() {
+      this.$nextTick(() => {
+        const el = this.$refs.logContentRef
+        if (el && typeof el.scrollTop === 'number') {
+          el.scrollTop = el.scrollHeight || 0
+        }
+      })
+    },
+
+    openInstanceInfo(row) {
+      const runtime = row.raw?.runtime || {}
+      const params = row.params || {}
+      this.showDetailDialog({
+        title: `${row.side} ${row.tool_id}/${row.instance_id} info`,
+        subtitle: row.machine_label || row.side,
+        copyText: row.exec_path || '',
+        sections: [
+          {
+            title: 'Overview',
+            rows: [
+              { label: 'Side', value: row.side },
+              { label: 'Machine', value: row.machine_label || row.machine_id },
+              { label: 'Machine ID', value: row.machine_id, mono: true },
+              { label: 'Connection ID', value: row.connection_id || '-', mono: true },
+              { label: 'Hostname', value: row.hostname || '-' },
+              { label: 'Tool', value: row.tool_id, mono: true },
+              { label: 'Instance', value: row.instance_id, mono: true },
+              { label: 'Status', value: row.status },
+              { label: 'PID', value: row.pid || '-' },
+              { label: 'Port', value: this.formatPortInfo(row), mono: true },
+              { label: 'Started', value: this.shortTime(row.started_at) },
+              { label: 'Stopped', value: this.shortTime(row.stopped_at) },
+              { label: 'Message', value: row.raw?.message || '-' },
+            ],
+          },
+          {
+            title: 'Runtime paths',
+            rows: [
+              { label: 'Executable', value: row.exec_path || runtime.argv?.[0] || '-', mono: true },
+              { label: 'CWD', value: row.cwd || runtime.cwd || '-', mono: true },
+              { label: 'Config', value: row.config_path || '-', mono: true },
+              { label: 'Log', value: row.stdout || '-', mono: true },
+              { label: 'Stderr', value: row.stderr || '-', mono: true },
+              { label: 'PID file', value: row.pid_file || '-', mono: true },
+              { label: 'State file', value: row.state_file || '-', mono: true },
+              { label: 'Argv', value: row.argv?.length ? row.argv : (runtime.argv || []), mono: true, multiline: true },
+            ],
+          },
+          {
+            title: 'Params',
+            rows: [
+              { label: 'Runtime params', value: params, mono: true, multiline: true },
+            ],
+          },
+        ],
+      })
+    },
+
+    canModifyStoppedInstanceFiles(row) {
+      if (!row || row.running) return false
+      const status = String(row.status || '').toLowerCase()
+      return status === 'stopped' || status === 'not_started' || status === 'error'
+    },
+
+    canRestartInstance(row) {
+      if (!row || row.running) return false
+      const status = String(row.status || '').toLowerCase()
+      return status === 'stopped' || status === 'not_started' || status === 'error'
+    },
+
+    handleInstanceMoreCommand(command, row) {
+      if (command === 'restart') return this.restartInstance(row)
+      if (command === 'clear_logs') return this.clearInstanceLogs(row)
+      if (command === 'remove') return this.removeInstance(row)
+      return null
+    },
+
+    async restartInstance(row) {
+      if (!this.canRestartInstance(row)) {
+        ElMessage.warning('Please stop this instance before restarting it')
+        return
+      }
+      try {
+        await ElMessageBox.confirm(
+          `Restart ${row.side} instance ${row.tool_id}/${row.instance_id} with the same params?`,
+          'Restart External Tool Instance',
+          { type: 'warning', confirmButtonText: 'Restart', cancelButtonText: 'Cancel' },
+        )
+      } catch (_) {
+        return
+      }
+
+      try {
+        if (row.side === 'server') {
+          await this.startServerInstance(row.module, row.params || {}, row.instance_id, true)
+        } else {
+          await this.startClientInstance(row.module, row.params || {}, row.instance_id, true, row.connection_id || row.device_id)
+        }
+        ElMessage.success(`Restarted: ${row.instance_id}`)
+      } catch (e) {
+        ElMessage.error(e.message || 'Failed to restart instance')
+      }
+    },
+
+    async removeInstance(row) {
+      if (!this.canModifyStoppedInstanceFiles(row)) {
+        ElMessage.warning('Stop this instance first')
+        return
+      }
+      try {
+        await ElMessageBox.confirm(
+          `Remove runtime files for ${row.side} instance ${row.tool_id}/${row.instance_id}?`,
+          'Remove External Tool Instance',
+          { type: 'warning', confirmButtonText: 'Remove', cancelButtonText: 'Cancel' },
+        )
+      } catch (_) {
+        return
+      }
+
+      try {
+        if (row.side === 'server') {
+          await this.removeServerInstance(row)
+        } else {
+          await this.removeClientInstance(row)
+        }
+        ElMessage.success(`Removed: ${row.instance_id}`)
+      } catch (e) {
+        ElMessage.error(e.message || 'Failed to remove instance')
+      }
+    },
+
+    async removeServerInstance(row) {
+      const res = await fetch(`/api/external-tools/${encodeURIComponent(row.tool_id)}/server/instances/${encodeURIComponent(row.instance_id)}/remove`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({}),
+      })
+      const json = await res.json()
+      if (!res.ok || json.code !== 0) throw new Error(json.message || 'Failed to remove server instance')
+      await this.loadServerInstances(row.tool_id, false)
+    },
+
+    async removeClientInstance(row) {
+      const deviceId = this.normalizeDeviceId(row.connection_id || row.device_id || this.selectedId)
+      if (!deviceId) throw new Error('Please select a device')
+      const res = await fetch(`/api/connections/${encodeURIComponent(deviceId)}/external-tools/${encodeURIComponent(row.tool_id)}/instances/${encodeURIComponent(row.instance_id)}/remove`, {
+        method: 'POST',
+        headers: this.buildJsonHeaders({ 'Content-Type': 'application/json' }),
+        body: JSON.stringify({}),
+      })
+      const json = await res.json()
+      if (!res.ok || json.code !== 0) throw new Error(json.message || 'Failed to remove client instance')
+      await this.loadClientInstances(row.tool_id, deviceId, false)
+    },
+
+    async clearInstanceLogs(row) {
+      if (!this.canModifyStoppedInstanceFiles(row)) {
+        ElMessage.warning('Stop this instance first')
+        return
+      }
+      try {
+        await ElMessageBox.confirm(
+          `Clear log file for ${row.side} instance ${row.tool_id}/${row.instance_id}?`,
+          'Clear External Tool Logs',
+          { type: 'warning', confirmButtonText: 'Clear Logs', cancelButtonText: 'Cancel' },
+        )
+      } catch (_) {
+        return
+      }
+
+      try {
+        if (row.side === 'server') {
+          await this.clearServerInstanceLogs(row)
+        } else {
+          await this.clearClientInstanceLogs(row)
+        }
+        if (this.currentLogRow?.row_key === row.row_key) {
+          this.logContent = ''
+          this.scrollLogsToBottom()
+        }
+        ElMessage.success(`Logs cleared: ${row.instance_id}`)
+      } catch (e) {
+        ElMessage.error(e.message || 'Failed to clear logs')
+      }
+    },
+
+    async clearServerInstanceLogs(row) {
+      const res = await fetch(`/api/external-tools/${encodeURIComponent(row.tool_id)}/server/instances/${encodeURIComponent(row.instance_id)}/clear-logs`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({}),
+      })
+      const json = await res.json()
+      if (!res.ok || json.code !== 0) throw new Error(json.message || 'Failed to clear server logs')
+    },
+
+    async clearClientInstanceLogs(row) {
+      const deviceId = this.normalizeDeviceId(row.connection_id || row.device_id || this.selectedId)
+      if (!deviceId) throw new Error('Please select a device')
+      const res = await fetch(`/api/connections/${encodeURIComponent(deviceId)}/external-tools/${encodeURIComponent(row.tool_id)}/instances/${encodeURIComponent(row.instance_id)}/clear-logs`, {
+        method: 'POST',
+        headers: this.buildJsonHeaders({ 'Content-Type': 'application/json' }),
+        body: JSON.stringify({}),
+      })
+      const json = await res.json()
+      if (!res.ok || json.code !== 0) throw new Error(json.message || 'Failed to clear client logs')
     },
 
 formatVersionLabel(version) {
@@ -1477,6 +1877,7 @@ formatVersionLabel(version) {
   align-items: center;
   justify-content: flex-end;
   gap: 8px;
+  flex-wrap: wrap;
 }
 
 .external-tool-table-actions :deep(.el-button + .el-button) {
@@ -1592,6 +1993,100 @@ formatVersionLabel(version) {
 
 .external-tool-log-content::-webkit-scrollbar-thumb:hover {
   background: #495064;
+}
+
+.external-tool-detail-body {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.external-tool-detail-subtitle {
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: rgba(255,255,255,.045);
+  color: var(--terminal-muted, #8f9bb3);
+  font-size: 12px;
+}
+
+.external-tool-detail-section {
+  border: 1px solid rgba(255,255,255,.10);
+  border-radius: 12px;
+  overflow: hidden;
+  background: rgba(255,255,255,.025);
+}
+
+.external-tool-detail-section-title {
+  padding: 9px 12px;
+  font-weight: 700;
+  border-bottom: 1px solid rgba(255,255,255,.08);
+  background: rgba(255,255,255,.035);
+}
+
+.external-tool-detail-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+}
+
+.external-tool-detail-row {
+  display: grid;
+  grid-template-columns: 150px minmax(0, 1fr);
+  gap: 12px;
+  padding: 9px 12px;
+  border-bottom: 1px solid rgba(255,255,255,.06);
+}
+
+.external-tool-detail-row:last-child {
+  border-bottom: 0;
+}
+
+.external-tool-detail-label {
+  color: var(--terminal-muted, #8f9bb3);
+  font-size: 12px;
+}
+
+.external-tool-detail-value {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--terminal-text, #d9e2ff);
+}
+
+.external-tool-detail-value.multiline {
+  white-space: normal;
+  overflow: visible;
+}
+
+.external-tool-detail-pre {
+  margin: 0;
+  max-height: 260px;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  padding: 10px;
+  border-radius: 8px;
+  background: #050505;
+  border: 1px solid rgba(255,255,255,.10);
+  color: #d9e2ff;
+  scrollbar-color: #303544 #050505;
+  scrollbar-width: thin;
+}
+
+.external-tool-detail-pre::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+.external-tool-detail-pre::-webkit-scrollbar-track {
+  background: #050505;
+  border-radius: 999px;
+}
+
+.external-tool-detail-pre::-webkit-scrollbar-thumb {
+  background: #303544;
+  border-radius: 999px;
+  border: 2px solid #050505;
 }
 
 .mono {

@@ -142,6 +142,20 @@ def create_external_tool_blueprint(server_instance):
             return external_tool_api.read_server_logs(tool_id, instance_id=instance_id, max_bytes=max_bytes)
         return responder.json_endpoint(_execute, default_error_status=500)
 
+    @blueprint.post('/api/external-tools/<tool_id>/server/instances/<instance_id>/remove')
+    def remove_server_instance(tool_id, instance_id):
+        return responder.json_endpoint(
+            lambda: external_tool_api.remove_server_instance(tool_id, instance_id=instance_id),
+            default_error_status=500,
+        )
+
+    @blueprint.post('/api/external-tools/<tool_id>/server/instances/<instance_id>/clear-logs')
+    def clear_server_instance_logs(tool_id, instance_id):
+        return responder.json_endpoint(
+            lambda: external_tool_api.clear_server_logs(tool_id, instance_id=instance_id),
+            default_error_status=500,
+        )
+
     # Backward-compatible MVP route.
     @blueprint.post('/api/external-tools/<tool_id>/server/run')
     def install_and_run_server_tool(tool_id):
@@ -244,6 +258,30 @@ def create_external_tool_blueprint(server_instance):
                 tab_id=get_optional_tab_id(),
             )
         return responder.json_endpoint(_execute, default_error_status=500)
+
+    @blueprint.post('/api/connections/<client_id>/external-tools/<tool_id>/instances/<instance_id>/remove')
+    def remove_client_instance(client_id, tool_id, instance_id):
+        return responder.json_endpoint(
+            lambda: external_tool_api.remove_client_instance(
+                client_id,
+                tool_id,
+                instance_id=instance_id,
+                tab_id=get_optional_tab_id(),
+            ),
+            default_error_status=500,
+        )
+
+    @blueprint.post('/api/connections/<client_id>/external-tools/<tool_id>/instances/<instance_id>/clear-logs')
+    def clear_client_instance_logs(client_id, tool_id, instance_id):
+        return responder.json_endpoint(
+            lambda: external_tool_api.clear_client_logs(
+                client_id,
+                tool_id,
+                instance_id=instance_id,
+                tab_id=get_optional_tab_id(),
+            ),
+            default_error_status=500,
+        )
 
     # Backward-compatible MVP route.
     @blueprint.post('/api/connections/<client_id>/external-tools/<tool_id>/run')
