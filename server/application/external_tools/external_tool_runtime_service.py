@@ -990,6 +990,86 @@ finally:
 
         return {'tool_id': meta.get('id') or '', 'side': 'server', 'items': items}
 
+    def list_all_server_instances(self, metas: list[dict]) -> dict:
+        items = []
+        by_tool = {}
+        errors = []
+
+        for meta in metas or []:
+            tool_id = str(meta.get('id') or '').strip()
+            if not tool_id:
+                continue
+
+            tool_items = []
+            by_tool[tool_id] = tool_items
+
+            try:
+                self._assert_tool_usable(meta, 'server')
+
+                tool_runtime = self._safe_join_runtime(tool_id, 'instances')
+
+                if os.path.isdir(tool_runtime):
+                    for name in sorted(os.listdir(tool_runtime)):
+                        path = os.path.join(tool_runtime, name)
+                        if not os.path.isdir(path):
+                            continue
+
+                        row = self._status_from_state(meta, name)
+                        tool_items.append(row)
+                        items.append(row)
+
+            except Exception as e:
+                errors.append({
+                    'tool_id': tool_id,
+                    'message': str(e),
+                })
+
+        return {
+            'side': 'server',
+            'items': items,
+            'by_tool': by_tool,
+            'errors': errors,
+        }
+
+    def list_all_client_instances(self, client_id: str, metas: list[dict], tab_id: str = '') -> dict:
+        tools = []
+        errors = []
+
+        for meta in metas or []:
+            tool_id = str(meta.get('id') or '').strip()
+            if not tool_id:
+                continue
+
+            try:
+                self._assert_tool_usable(meta, 'client', platform_alias='*')
+                tools.append({
+                    'tool_id': tool_id,
+                    'display_name': meta.get('display_name') or meta.get('id') or tool_id,
+                })
+            except Exception as e:
+                errors.append({
+                    'tool_id': tool_id,
+                    'message': str(e),
+                })
+
+        payload = {
+            'action': 'list_all',
+            'tools': tools,
+            'errors': errors,
+        }
+
+        command = f'external_tool_list_instances_all {self._encode_payload_arg(payload)}'
+        result = self._run_client_lifecycle_command(client_id, command, tab_id=tab_id)
+
+        if isinstance(result, dict):
+            result.setdefault('side', 'client')
+            result.setdefault('errors', errors)
+            return result
+
+        return result
+
+
+
     def read_server_logs(self, tool_id: str, instance_id: str, max_bytes: int | None = None) -> dict:
         meta = self.catalog_service.get_tool(tool_id)
         self._assert_tool_usable(meta, 'server')

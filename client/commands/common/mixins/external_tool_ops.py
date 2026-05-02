@@ -919,6 +919,85 @@ finally:
         except Exception as e:
             return 0, f'Failed to list external tool instances: {e}'
 
+    def _external_tool_list_instances_all_payload(self, payload: dict) -> dict:
+        runtime_root = self._external_tool_expand_path('~/.ops/external_tools/runtime')
+        tools = payload.get('tools') or []
+
+        tool_specs = []
+        if isinstance(tools, list) and tools:
+            for item in tools:
+                if not isinstance(item, dict):
+                    continue
+                tool_id = str(item.get('tool_id') or item.get('id') or '').strip()
+                if not tool_id:
+                    continue
+                tool_specs.append({
+                    'tool_id': tool_id,
+                    'display_name': item.get('display_name') or tool_id,
+                })
+        elif os.path.isdir(runtime_root):
+            for name in sorted(os.listdir(runtime_root)):
+                path = os.path.join(runtime_root, name)
+                if os.path.isdir(path):
+                    tool_specs.append({
+                        'tool_id': name,
+                        'display_name': name,
+                    })
+
+        items = []
+        by_tool = {}
+
+        for spec in tool_specs:
+            tool_id = spec['tool_id']
+            display_name = spec.get('display_name') or tool_id
+            instances_dir = os.path.join(runtime_root, tool_id, 'instances')
+            tool_items = []
+            by_tool[tool_id] = tool_items
+
+            if not os.path.isdir(instances_dir):
+                continue
+
+            for name in sorted(os.listdir(instances_dir)):
+                path = os.path.join(instances_dir, name)
+                if not os.path.isdir(path):
+                    continue
+
+                instance_payload = {
+                    'tool_id': tool_id,
+                    'display_name': display_name,
+                    'side': 'client',
+                    'instance_id': name,
+                    'runtime': {
+                        'pid_file': os.path.join(path, 'tool.pid'),
+                        'stdout': os.path.join(path, 'stdout.log'),
+                        'stderr': 'stdout',
+                        'state_file': os.path.join(path, 'state.json'),
+                    },
+                }
+
+                row = self._external_tool_status_from_payload(instance_payload)
+                tool_items.append(row)
+                items.append(row)
+
+        return {
+            'side': 'client',
+            'items': items,
+            'by_tool': by_tool,
+        }
+
+    @desc('List all external tool instances in one command', group='runtime', suggest=False)
+    @interruptible()
+    def external_tool_list_instances_all(self, arg=''):
+        try:
+            payload = self.structured_arg_codec.decode(arg)
+            if not isinstance(payload, dict):
+                return 0, 'Invalid external tool payload'
+
+            return 1, json.dumps(self._external_tool_list_instances_all_payload(payload), ensure_ascii=False, indent=2)
+
+        except Exception as e:
+            return 0, f'Failed to list all external tool instances: {e}'
+
     @desc('Read external tool instance logs', group='runtime', suggest=False)
     @interruptible()
     def external_tool_logs(self, arg=''):

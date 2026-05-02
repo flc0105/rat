@@ -87,6 +87,24 @@ def create_external_tool_blueprint(server_instance):
             default_error_status=500,
         )
 
+    @blueprint.get('/api/external-tools/server/instances')
+    def list_all_server_instances():
+        return responder.json_endpoint(
+            lambda: external_tool_api.list_all_server_instances(),
+            default_error_status=500,
+        )
+
+    @blueprint.post('/api/connections/<client_id>/external-tools/instances')
+    def list_all_client_instances(client_id):
+        return responder.json_endpoint(
+            lambda: external_tool_api.list_all_client_instances(
+                client_id,
+                tab_id=get_optional_tab_id(),
+            ),
+            default_error_status=500,
+        )
+
+
     @blueprint.post('/api/external-tools/<tool_id>/server/instances/start')
     def start_server_instance(tool_id):
         def _execute():

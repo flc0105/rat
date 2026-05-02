@@ -82,6 +82,22 @@ class WebExternalToolApi:
     def list_server_instances(self, tool_id: str):
         return self.runtime_service.list_server_instances(tool_id)
 
+    def list_all_server_instances(self):
+        server_items = [
+            item
+            for item in (self.catalog_service.get_catalog().get('items') or [])
+            if self._supports_side(item, 'server') and not item.get('error')
+        ]
+        return self.runtime_service.list_all_server_instances(server_items)
+
+    def list_all_client_instances(self, client_id: str, tab_id: str = ''):
+        client_items = [
+            item
+            for item in (self.catalog_service.get_catalog().get('items') or [])
+            if self._supports_side(item, 'client') and not item.get('error')
+        ]
+        return self.runtime_service.list_all_client_instances(client_id, client_items, tab_id=tab_id)
+
     def read_server_logs(self, tool_id: str, instance_id: str, max_bytes=None):
         return self.runtime_service.read_server_logs(tool_id, instance_id=instance_id, max_bytes=max_bytes)
 

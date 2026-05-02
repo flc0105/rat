@@ -865,22 +865,118 @@ export default {
       }
     },
 
+
     async refreshInstances(showToast = true) {
-      const device = this.normalizeMachineId(this.deviceFilter || this.defaultTargetValue())
+  const device = this.normalizeMachineId(this.deviceFilter || this.defaultTargetValue())
 
-      if (device === '__server__' || !device) {
-        await Promise.allSettled(this.serverModules.map(item => this.loadServerInstances(item.id, false)))
-      } else {
-        const clientDeviceIds = this.getClientDeviceIdsForFilter(device)
-        for (const deviceId of clientDeviceIds) {
-          for (const item of this.clientModules) {
-            await this.loadClientInstances(item.id, deviceId, false)
-          }
-        }
-      }
+  if (device === '__server__' || !device) {
+    await this.loadAllServerInstances(false)
+  } else {
+    const deviceId = this.getClientDeviceIdForMachine(device) || this.currentDeviceId
+    if (deviceId) {
+      await this.loadAllClientInstances(deviceId, false)
+    }
+  }
 
-      if (showToast) ElMessage.success('Instances refreshed')
-    },
+  if (showToast) ElMessage.success('Instances refreshed')
+},
+
+
+    groupInstancesByTool(items = []) {
+  const grouped = {}
+  for (const row of items || []) {
+    const toolId = String(row?.tool_id || '').trim()
+    if (!toolId) continue
+    if (!grouped[toolId]) grouped[toolId] = []
+    grouped[toolId].push(row)
+  }
+  return grouped
+},
+
+normalizeInstanceByToolPayload(data = {}, modules = []) {
+  if (data.by_tool && typeof data.by_tool === 'object') {
+    const normalized = {}
+    for (const item of modules || []) {
+      if (item?.id) normalized[item.id] = []
+    }
+    for (const [toolId, rows] of Object.entries(data.by_tool || {})) {
+      normalized[toolId] = Array.isArray(rows) ? rows : []
+    }
+    return normalized
+  }
+
+  const grouped = this.groupInstancesByTool(Array.isArray(data.items) ? data.items : [])
+  for (const item of modules || []) {
+    if (item?.id && !grouped[item.id]) grouped[item.id] = []
+  }
+  return grouped
+},
+
+async loadAllServerInstances(showToast = true) {
+  try {
+    const res = await fetch('/api/external-tools/server/instances')
+    const json = await res.json()
+    if (!res.ok || json.code !== 0) throw new Error(json.message || 'Failed to load server instances')
+
+    const data = json.data || {}
+    const nextServerInstances = this.normalizeInstanceByToolPayload(data, this.serverModules)
+
+    this.serverInstances = {
+      ...this.serverInstances,
+      ...nextServerInstances,
+    }
+
+    if (showToast) ElMessage.success('Server instances refreshed')
+  } catch (e) {
+    if (showToast) ElMessage.error(e.message || 'Failed to load server instances')
+    throw e
+  }
+},
+
+async loadAllClientInstances(deviceId = this.currentDeviceId, showToast = true) {
+  const targetDeviceId = this.normalizeDeviceId(deviceId)
+  if (!targetDeviceId || targetDeviceId === '__server__' || targetDeviceId === '__all__') return
+
+  try {
+    const res = await fetch(`/api/connections/${encodeURIComponent(targetDeviceId)}/external-tools/instances`, {
+      method: 'POST',
+      headers: this.buildJsonHeaders({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify({}),
+    })
+    const json = await res.json()
+    if (!res.ok || json.code !== 0) throw new Error(json.message || 'Failed to load client instances')
+
+    const data = json.data || {}
+    const nextToolMap = this.normalizeInstanceByToolPayload(data, this.clientModules)
+
+    this.clientInstances = {
+      ...this.clientInstances,
+      [targetDeviceId]: nextToolMap,
+    }
+
+    if (showToast) ElMessage.success('Client instances refreshed')
+  } catch (e) {
+    if (showToast) ElMessage.error(e.message || 'Failed to load client instances')
+    throw e
+  }
+},
+
+    // async refreshInstances(showToast = true) {
+    //   const device = this.normalizeMachineId(this.deviceFilter || this.defaultTargetValue())
+    //
+    //   if (device === '__server__' || !device) {
+    //     await Promise.allSettled(this.serverModules.map(item => this.loadServerInstances(item.id, false)))
+    //   } else {
+    //     const clientDeviceIds = this.getClientDeviceIdsForFilter(device)
+    //     for (const deviceId of clientDeviceIds) {
+    //       for (const item of this.clientModules) {
+    //         await this.loadClientInstances(item.id, deviceId, false)
+    //       }
+    //     }
+    //   }
+    //
+    //   if (showToast) ElMessage.success('Instances refreshed')
+    // },
 
     async loadServerInstances(toolId, showToast = true) {
       if (!toolId) return
