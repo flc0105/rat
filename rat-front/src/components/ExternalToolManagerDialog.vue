@@ -5,12 +5,13 @@
     width="1240px"
     top="5vh"
     class="fixed-dialog external-tool-dialog"
+    modal-class="external-tool-overlay"
     @closed="handleClosed"
   >
-    <div class="external-tool-body" v-loading="loading">
+    <div class="fixed-dialog-body external-tool-body" v-loading="loading">
       <div class="external-tool-toolbar">
         <div class="external-tool-toolbar-left">
-          <el-button size="small" type="primary" plain :loading="loading" @click="refreshAll">
+          <el-button size="small" :loading="loading" @click="refreshAll">
             Refresh
           </el-button>
 
@@ -166,14 +167,14 @@
             </div>
           </div>
 
-          <el-table
-            v-if="filteredInstances.length"
-            :data="filteredInstances"
-            size="small"
-            class="external-tool-instance-table"
-            height="560"
-            row-key="row_key"
-          >
+          <div v-if="filteredInstances.length" class="external-tool-instance-table-shell">
+            <el-table
+              :data="filteredInstances"
+              size="small"
+              class="external-tool-instance-table"
+              height="560"
+              row-key="row_key"
+            >
 <!--            <el-table-column label="Target" min-width="190">-->
 <!--              <template #default="{ row }">-->
 <!--                <div class="mono strong" :title="row.machine_id || row.device_id">{{ row.machine_label || '-' }}</div>-->
@@ -184,96 +185,207 @@
 <!--            </el-table-column>-->
 
 
-             <el-table-column label="Instance" min-width="170">
-              <template #default="{ row }">
-                <div class="mono strong" :title="row.instance_id">{{ row.instance_id }}</div>
-                <div class="muted mono" :title="row.tool_id">{{ row.tool_id }}</div>
-              </template>
-            </el-table-column>
+              <el-table-column label="Instance" min-width="170">
+                <template #default="{ row }">
+                  <div class="mono strong" :title="row.instance_id">{{ row.instance_id }}</div>
+                  <div class="muted mono" :title="row.tool_id">{{ row.tool_id }}</div>
+                </template>
+              </el-table-column>
 
-            <el-table-column label="Status" width="110">
-              <template #default="{ row }">
-                <el-tag size="small" :type="statusTagType(row.status)">
-                  {{ row.status || '-' }}
-                </el-tag>
-              </template>
-            </el-table-column>
+              <el-table-column label="Status" width="110">
+                <template #default="{ row }">
+                  <el-tag size="small" :type="statusTagType(row.status)">
+                    {{ row.status || '-' }}
+                  </el-tag>
+                </template>
+              </el-table-column>
 
 
 
-            <el-table-column label="PID" width="95">
-              <template #default="{ row }">
-                <span class="mono">{{ row.pid || '-' }}</span>
-              </template>
-            </el-table-column>
+              <el-table-column label="PID" width="95">
+                <template #default="{ row }">
+                  <span class="mono">{{ row.pid || '-' }}</span>
+                </template>
+              </el-table-column>
 
-            <el-table-column label="Port" min-width="210">
-              <template #default="{ row }">
-                <span class="mono" :title="formatPortInfo(row)">{{ formatPortInfo(row) }}</span>
-              </template>
-            </el-table-column>
+              <el-table-column label="Port" min-width="210">
+                <template #default="{ row }">
+                  <span class="mono" :title="formatPortInfo(row)">{{ formatPortInfo(row) }}</span>
+                </template>
+              </el-table-column>
 
-            <el-table-column label="Started" width="180">
-              <template #default="{ row }">
-                <span class="mono muted">{{ shortTime(row.started_at) }}</span>
-              </template>
-            </el-table-column>
+              <el-table-column label="Started" width="180">
+                <template #default="{ row }">
+                  <span class="mono muted">{{ shortTime(row.started_at) }}</span>
+                </template>
+              </el-table-column>
 
-            <el-table-column label="Actions" width="240" >
-              <template #default="{ row }">
-                <div class="external-tool-table-actions">
-                  <el-button size="small" plain @click="openInstanceLogs(row)">
-                    Logs
-                  </el-button>
+              <el-table-column label="Actions" width="240">
+                <template #default="{ row }">
+                  <div class="external-tool-table-actions">
+                    <el-button size="small" plain @click="openInstanceLogs(row)">
+                      Logs
+                    </el-button>
 <!--                  <el-button size="small" plain @click="openInstanceInfo(row)">-->
 <!--                    Info-->
 <!--                  </el-button>-->
-                  <el-button
-                    size="small"
-                    type="danger"
-                    plain
-                    :disabled="!row.running && row.status !== 'stale'"
-                    @click="stopInstance(row)"
-                  >
-                    Stop
-                  </el-button>
-                  <el-dropdown
-                    trigger="click"
-                    size="small"
-                    @command="handleInstanceMoreCommand($event, row)"
-                  >
-                    <el-button size="small" plain>
-                      More
+                    <el-button
+                      size="small"
+                      type="danger"
+                      plain
+                      :disabled="!row.running && row.status !== 'stale'"
+                      @click="stopInstance(row)"
+                    >
+                      Stop
                     </el-button>
-                    <template #dropdown>
-                      <el-dropdown-menu>
-                       <el-dropdown-item command="info">
-                          Info
-                        </el-dropdown-item>
+                    <el-dropdown
+                      trigger="click"
+                      size="small"
+                      @command="handleInstanceMoreCommand($event, row)"
+                    >
+                      <el-button size="small" plain>
+                        More
+                      </el-button>
+                      <template #dropdown>
+                        <el-dropdown-menu>
+                          <el-dropdown-item command="info">
+                            Info
+                          </el-dropdown-item>
 
                           <el-dropdown-item
-    v-if="canOpenWebInstance(row)"
-    command="open_web"
-  >
-    Open Web
-  </el-dropdown-item>
+                            v-if="canOpenWebInstance(row)"
+                            command="open_web"
+                          >
+                            Open Web
+                          </el-dropdown-item>
 
-                        <el-dropdown-item command="restart" :disabled="!canRestartInstance(row)">
-                          Restart
-                        </el-dropdown-item>
-                        <el-dropdown-item command="clear_logs" :disabled="!canModifyStoppedInstanceFiles(row)">
-                          Clear Logs
-                        </el-dropdown-item>
-                        <el-dropdown-item command="remove" :disabled="!canModifyStoppedInstanceFiles(row)">
-                          Remove
-                        </el-dropdown-item>
-                      </el-dropdown-menu>
-                    </template>
-                  </el-dropdown>
+                          <el-dropdown-item command="restart" :disabled="!canRestartInstance(row)">
+                            Restart
+                          </el-dropdown-item>
+                          <el-dropdown-item command="clear_logs" :disabled="!canModifyStoppedInstanceFiles(row)">
+                            Clear Logs
+                          </el-dropdown-item>
+                          <el-dropdown-item command="remove" :disabled="!canModifyStoppedInstanceFiles(row)">
+                            Remove
+                          </el-dropdown-item>
+                        </el-dropdown-menu>
+                      </template>
+                    </el-dropdown>
+                  </div>
+                </template>
+              </el-table-column>
+            </el-table>
+          </div>
+
+          <div v-if="filteredInstances.length" class="external-tool-instance-card-shell">
+            <div class="external-tool-instance-card-list">
+              <div
+                v-for="row in filteredInstances"
+                :key="row.row_key"
+                class="external-tool-instance-card"
+              >
+                <div class="external-tool-instance-card-top">
+                  <div class="external-tool-instance-icon">
+                    <span :class="{ running: row.running, stale: row.status === 'stale' }"></span>
+                  </div>
+
+                  <div class="external-tool-instance-card-main">
+                    <div class="external-tool-instance-name" :title="row.instance_id">
+                      {{ row.instance_id }}
+                    </div>
+
+                    <div class="external-tool-instance-tags">
+                      <el-tag size="small" :type="statusTagType(row.status)">
+                        {{ row.status || '-' }}
+                      </el-tag>
+                      <el-tag size="small" type="info">
+                        {{ row.side || '-' }}
+                      </el-tag>
+                      <el-tag size="small" type="info">
+                        {{ row.display_name || row.tool_id }}
+                      </el-tag>
+                    </div>
+
+                    <div class="external-tool-instance-meta">
+                      <div class="external-tool-instance-meta-item">
+                        <div class="external-tool-instance-meta-label">Tool</div>
+                        <div class="external-tool-instance-meta-value mono" :title="row.tool_id">
+                          {{ row.tool_id || '-' }}
+                        </div>
+                      </div>
+
+                      <div class="external-tool-instance-meta-item">
+                        <div class="external-tool-instance-meta-label">PID</div>
+                        <div class="external-tool-instance-meta-value mono">
+                          {{ row.pid || '-' }}
+                        </div>
+                      </div>
+
+                      <div class="external-tool-instance-meta-item">
+                        <div class="external-tool-instance-meta-label">Port</div>
+                        <div class="external-tool-instance-meta-value mono" :title="formatPortInfo(row)">
+                          {{ formatPortInfo(row) }}
+                        </div>
+                      </div>
+
+                      <div class="external-tool-instance-meta-item">
+                        <div class="external-tool-instance-meta-label">Started</div>
+                        <div class="external-tool-instance-meta-value mono">
+                          {{ shortTime(row.started_at) }}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div class="external-tool-instance-card-actions">
+                      <el-button size="small" type="primary" plain @click="openInstanceLogs(row)">
+                        Logs
+                      </el-button>
+                      <el-button
+                        size="small"
+                        type="danger"
+                        plain
+                        :disabled="!row.running && row.status !== 'stale'"
+                        @click="stopInstance(row)"
+                      >
+                        Stop
+                      </el-button>
+                      <el-dropdown
+                        trigger="click"
+                        size="small"
+                        @command="handleInstanceMoreCommand($event, row)"
+                      >
+                        <el-button size="small" plain>
+                          More
+                        </el-button>
+                        <template #dropdown>
+                          <el-dropdown-menu>
+                            <el-dropdown-item command="info">
+                              Info
+                            </el-dropdown-item>
+                            <el-dropdown-item
+                              v-if="canOpenWebInstance(row)"
+                              command="open_web"
+                            >
+                              Open Web
+                            </el-dropdown-item>
+                            <el-dropdown-item command="restart" :disabled="!canRestartInstance(row)">
+                              Restart
+                            </el-dropdown-item>
+                            <el-dropdown-item command="clear_logs" :disabled="!canModifyStoppedInstanceFiles(row)">
+                              Clear Logs
+                            </el-dropdown-item>
+                            <el-dropdown-item command="remove" :disabled="!canModifyStoppedInstanceFiles(row)">
+                              Remove
+                            </el-dropdown-item>
+                          </el-dropdown-menu>
+                        </template>
+                      </el-dropdown>
+                    </div>
+                  </div>
                 </div>
-              </template>
-            </el-table-column>
-          </el-table>
+              </div>
+            </div>
+          </div>
 
           <div v-else class="external-tool-empty">
             {{ searchText || deviceFilter ? 'No matching instances' : 'No instances yet. Start one from Packages.' }}
@@ -364,8 +476,10 @@
     v-model="detailDialogVisible"
     :title="detailDialogTitle"
     width="780px"
+    top="6vh"
     append-to-body
-    class="external-tool-detail-dialog"
+    modal-class="external-tool-info-overlay"
+    class="external-tool-detail-dialog external-tool-info-dialog"
   >
     <div class="external-tool-detail-body">
       <div v-if="detailSubtitle" class="external-tool-detail-subtitle">
@@ -2374,24 +2488,56 @@ formatVersionLabel(version) {
 
 <style scoped>
 .external-tool-body {
-  min-height: 620px;
+  height: 100%;
+  min-height: 0;
   display: flex;
   flex-direction: column;
   gap: 12px;
+  overflow: hidden;
 }
 
 .external-tool-toolbar {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
   align-items: center;
-  justify-content: space-between;
-  gap: 12px;
+  flex: 0 0 auto;
 }
 
 .external-tool-toolbar-left,
 .external-tool-toolbar-right {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
+  min-width: 0;
+}
+
+.external-tool-toolbar-left {
+  flex-wrap: wrap;
+}
+
+.external-tool-toolbar-right {
+  justify-content: flex-end;
+}
+
+.external-tool-toolbar :deep(.el-button) {
+  height: 32px;
+  min-height: 32px;
+  padding-inline: 12px;
+  border-radius: 10px;
+  margin: 0;
+}
+
+.external-tool-toolbar :deep(.el-button + .el-button) {
+  margin-left: 0;
+}
+
+.external-tool-toolbar :deep(.el-input__wrapper),
+.external-tool-toolbar :deep(.el-select__wrapper) {
+  min-height: 32px;
+  height: 32px;
+  border-radius: 10px;
+  font-size: 12px;
 }
 
 .external-tool-filter {
@@ -2402,17 +2548,17 @@ formatVersionLabel(version) {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 6px 10px;
-  border: 1px solid rgba(255,255,255,.12);
-  border-radius: 12px;
-  background: rgba(255,255,255,.045);
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
 }
 
 .external-tool-target-label {
   font-size: 12px;
   font-weight: 800;
   letter-spacing: .02em;
-  color: var(--terminal-text, #d9e2ff);
+  color: var(--muted-2, #94a3b8);
   text-transform: uppercase;
 }
 
@@ -2429,14 +2575,38 @@ formatVersionLabel(version) {
 }
 
 .external-tool-tabs {
-  min-height: 560px;
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.external-tool-tabs :deep(.el-tabs__header) {
+  flex: 0 0 auto;
+  margin-bottom: 12px;
+}
+
+.external-tool-tabs :deep(.el-tabs__content) {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.external-tool-tabs :deep(.el-tab-pane) {
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
 }
 
 .external-tool-module-list {
+  flex: 1 1 auto;
+  min-height: 0;
   display: flex;
   flex-direction: column;
   gap: 10px;
-  max-height: 560px;
+  max-height: none;
   overflow: auto;
   padding-right: 4px;
 }
@@ -2447,9 +2617,10 @@ formatVersionLabel(version) {
   justify-content: space-between;
   gap: 16px;
   padding: 14px;
-  border: 1px solid var(--terminal-line, rgba(255,255,255,.12));
-  border-radius: 12px;
-  background: rgba(255,255,255,.035);
+  border: 1px solid rgba(15, 23, 42, 0.06);
+  border-radius: 14px;
+  background: #fff;
+  box-shadow: 0 4px 14px rgba(15, 23, 42, 0.04);
 }
 
 .external-tool-card-main {
@@ -2467,6 +2638,7 @@ formatVersionLabel(version) {
 .external-tool-title {
   font-size: 15px;
   font-weight: 700;
+  color: var(--text, #0f172a);
   max-width: 420px;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -2475,7 +2647,7 @@ formatVersionLabel(version) {
 
 .external-tool-desc {
   margin-top: 8px;
-  color: var(--terminal-muted, #8f9bb3);
+  color: var(--muted, #64748b);
   line-height: 1.45;
 }
 
@@ -2484,7 +2656,7 @@ formatVersionLabel(version) {
   flex-wrap: wrap;
   gap: 12px;
   margin-top: 9px;
-  color: var(--terminal-muted, #8f9bb3);
+  color: var(--muted, #64748b);
   font-size: 12px;
 }
 
@@ -2520,6 +2692,12 @@ formatVersionLabel(version) {
   margin-left: 0;
 }
 
+.external-tool-action-row :deep(.el-button) {
+  height: 32px;
+  min-height: 32px;
+  border-radius: 10px;
+}
+
 .external-tool-table-actions {
   display: flex;
   align-items: center;
@@ -2535,18 +2713,187 @@ formatVersionLabel(version) {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  flex: 0 0 auto;
   margin-bottom: 8px;
 }
 
 .external-tool-hint {
-  color: var(--terminal-muted, #8f9bb3);
+  color: var(--muted, #64748b);
   font-size: 12px;
+}
+
+.external-tool-instance-table-shell {
+  flex: 0 0 auto;
+  min-height: 0;
+  height: 560px;
+  overflow: hidden;
 }
 
 .external-tool-instance-table {
   width: 100%;
+  height: 100% !important;
   border-radius: 12px;
   overflow: hidden;
+}
+
+.external-tool-instance-table :deep(.el-table__inner-wrapper),
+.external-tool-instance-table :deep(.el-scrollbar),
+.external-tool-instance-table :deep(.el-scrollbar__wrap) {
+  height: 100% !important;
+}
+
+.external-tool-instance-table :deep(.el-scrollbar__wrap) {
+  overflow-y: auto !important;
+  overflow-x: auto !important;
+}
+
+.external-tool-instance-table :deep(.el-table__body-wrapper) {
+  overflow-y: auto !important;
+}
+
+.external-tool-instance-table :deep(th.el-table__cell) {
+  background: #f8fafc !important;
+  color: #475569;
+  font-weight: 700;
+}
+
+.external-tool-instance-table :deep(tr) {
+  background: #fff;
+}
+
+.external-tool-instance-table :deep(.cell) {
+  line-height: 1.5;
+}
+
+.external-tool-instance-card-shell,
+.external-tool-instance-card-list {
+  display: none;
+}
+
+.external-tool-instance-card-list {
+  grid-template-columns: 1fr;
+  gap: 12px;
+  height: 100%;
+  min-height: 0;
+  overflow-y: auto;
+  padding-right: 2px;
+}
+
+.external-tool-instance-card {
+  background: #fff;
+  border: 1px solid rgba(15, 23, 42, 0.06);
+  border-radius: 14px;
+  padding: 12px;
+  box-shadow: 0 4px 14px rgba(15, 23, 42, 0.04);
+}
+
+.external-tool-instance-card-top {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  min-width: 0;
+}
+
+.external-tool-instance-icon {
+  flex: 0 0 auto;
+  width: 22px;
+  height: 22px;
+  margin-top: 2px;
+  border-radius: 999px;
+  background: #f8fafc;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.external-tool-instance-icon span {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--muted-2, #94a3b8);
+}
+
+.external-tool-instance-icon span.running {
+  background: var(--el-color-success);
+}
+
+.external-tool-instance-icon span.stale {
+  background: var(--el-color-danger);
+}
+
+.external-tool-instance-card-main {
+  min-width: 0;
+  flex: 1;
+}
+
+.external-tool-instance-name {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text, #0f172a);
+  line-height: 1.4;
+  word-break: break-word;
+}
+
+.external-tool-instance-tags {
+  margin-top: 10px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.external-tool-instance-meta {
+  margin-top: 8px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px 10px;
+}
+
+.external-tool-instance-meta-item {
+  min-width: 0;
+}
+
+.external-tool-instance-meta-label {
+  font-size: 11px;
+  color: var(--muted-2, #94a3b8);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.external-tool-instance-meta-value {
+  margin-top: 2px;
+  font-size: 12px;
+  color: var(--text, #0f172a);
+  word-break: break-word;
+  line-height: 1.4;
+}
+
+.external-tool-instance-card-actions {
+  margin-top: 12px;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  align-items: stretch;
+}
+
+.external-tool-instance-card-actions :deep(.el-button),
+.external-tool-instance-card-actions :deep(.el-dropdown),
+.external-tool-instance-card-actions :deep(.el-dropdown .el-button) {
+  width: 100%;
+  min-width: 0;
+  margin: 0;
+}
+
+.external-tool-instance-card-actions :deep(.el-button) {
+  min-height: 32px;
+  height: 32px;
+  border-radius: 10px;
+  padding-inline: 12px;
+  justify-content: center;
+}
+
+.external-tool-instance-card-actions :deep(.el-dropdown) {
+  display: block;
 }
 
 .path-line {
@@ -2557,9 +2904,11 @@ formatVersionLabel(version) {
 }
 
 .external-tool-empty {
+  flex: 1 1 auto;
+  min-height: 0;
   padding: 64px 16px;
   text-align: center;
-  color: var(--terminal-muted, #8f9bb3);
+  color: var(--muted, #64748b);
 }
 
 .external-tool-empty.small {
@@ -2575,7 +2924,7 @@ formatVersionLabel(version) {
 .external-tool-run-summary {
   padding: 12px;
   border-radius: 10px;
-  background: rgba(255,255,255,.045);
+  background: #f8fafc;
   line-height: 1.6;
 }
 
@@ -2591,7 +2940,7 @@ formatVersionLabel(version) {
 
 .external-tool-param-help {
   margin-top: 4px;
-  color: var(--terminal-muted, #8f9bb3);
+  color: var(--muted, #64748b);
   font-size: 12px;
   line-height: 1.45;
 }
@@ -2600,8 +2949,8 @@ formatVersionLabel(version) {
   margin-bottom: 8px;
   padding: 8px 10px;
   border-radius: 8px;
-  background: rgba(255,255,255,.045);
-  color: var(--terminal-muted, #8f9bb3);
+  background: #f8fafc;
+  color: var(--muted, #64748b);
   font-size: 12px;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -2641,6 +2990,7 @@ formatVersionLabel(version) {
 .external-tool-log-content::-webkit-scrollbar-thumb:hover {
   background: #495064;
 }
+
 .external-tool-detail-body {
   display: flex;
   flex-direction: column;
@@ -2648,25 +2998,25 @@ formatVersionLabel(version) {
 }
 
 .external-tool-detail-subtitle {
-  padding: 8px 10px;
-  border-radius: 8px;
-  background: rgba(255,255,255,.045);
-  color: var(--terminal-muted, #8f9bb3);
+  padding: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--muted, #64748b);
   font-size: 12px;
 }
 
 .external-tool-detail-section {
-  border: 1px solid rgba(255,255,255,.10);
-  border-radius: 12px;
-  overflow: hidden;
-  background: rgba(255,255,255,.025);
+  border: 0;
+  border-radius: 0;
+  overflow: visible;
+  background: transparent;
 }
 
 .external-tool-detail-section-title {
-  padding: 9px 12px;
+  padding: 0 0 8px;
   font-weight: 700;
-  border-bottom: 1px solid rgba(255,255,255,.08);
-  background: rgba(255,255,255,.035);
+  border-bottom: 0;
+  background: transparent;
 }
 
 .external-tool-detail-grid {
@@ -2678,8 +3028,8 @@ formatVersionLabel(version) {
   display: grid;
   grid-template-columns: 150px minmax(0, 1fr);
   gap: 12px;
-  padding: 9px 12px;
-  border-bottom: 1px solid rgba(255,255,255,.06);
+  padding: 7px 0;
+  border-bottom: 0;
 }
 
 .external-tool-detail-row:last-child {
@@ -2687,7 +3037,7 @@ formatVersionLabel(version) {
 }
 
 .external-tool-detail-label {
-  color: var(--terminal-muted, #8f9bb3);
+  color: var(--muted, #64748b);
   font-size: 12px;
 }
 
@@ -2741,6 +3091,226 @@ formatVersionLabel(version) {
 }
 
 .muted {
-  color: var(--terminal-muted, #8f9bb3);
+  color: var(--muted, #64748b);
+}
+
+@media (max-width: 960px) {
+  .external-tool-toolbar {
+    grid-template-columns: 1fr;
+  }
+
+  .external-tool-toolbar-left,
+  .external-tool-toolbar-right {
+    width: 100%;
+  }
+
+  .external-tool-toolbar-right {
+    justify-content: flex-start;
+  }
+
+  .external-tool-search {
+    width: 100%;
+  }
+}
+
+@media (max-width: 768px), (max-height: 720px) {
+  .external-tool-instance-table-shell {
+    display: none !important;
+  }
+
+  .external-tool-instance-card-shell {
+    display: flex !important;
+    flex: 1 1 auto !important;
+    min-height: 0 !important;
+    overflow: hidden !important;
+  }
+
+  .external-tool-instance-card-list {
+    display: grid !important;
+    flex: 1 1 auto !important;
+    min-height: 0 !important;
+    overflow-y: auto !important;
+  }
+}
+
+@media (max-width: 640px) {
+  .external-tool-toolbar-left {
+    align-items: stretch;
+  }
+
+  .external-tool-toolbar-left > .el-button,
+  .external-tool-target-control,
+  .external-tool-target-select,
+  .external-tool-toolbar-left :deep(.el-checkbox),
+  .external-tool-toolbar-right,
+  .external-tool-search {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .external-tool-card {
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .external-tool-title {
+    max-width: 100%;
+  }
+
+  .external-tool-actions {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .external-tool-instance-meta {
+    grid-template-columns: 1fr;
+  }
+
+  .external-tool-instance-card-actions {
+    grid-template-columns: 1fr;
+    gap: 6px;
+  }
+
+  .external-tool-detail-row {
+    grid-template-columns: 1fr;
+    gap: 4px;
+  }
+}
+</style>
+
+<style>
+/* ExternalToolManagerDialog: 固定桌面高度，移动端全屏，只让表格/卡片区域滚动。 */
+.external-tool-overlay .el-overlay-dialog {
+  overflow: hidden !important;
+}
+
+.external-tool-overlay .el-dialog {
+  height: 78vh !important;
+  max-height: 78vh !important;
+  margin-top: 5vh !important;
+  display: flex !important;
+  flex-direction: column !important;
+  overflow: hidden !important;
+}
+
+.external-tool-overlay .el-dialog__header {
+  flex: 0 0 auto !important;
+}
+
+.external-tool-overlay .el-dialog__body {
+  flex: 1 1 auto !important;
+  min-height: 0 !important;
+  overflow: hidden !important;
+  padding-top: 12px !important;
+  padding-bottom: 12px !important;
+}
+
+.external-tool-overlay .fixed-dialog-body {
+  height: 100% !important;
+  min-height: 0 !important;
+  overflow: hidden !important;
+  display: flex !important;
+  flex-direction: column !important;
+}
+
+.external-tool-overlay .external-tool-instance-table-shell {
+  flex: 0 0 auto !important;
+  min-height: 0 !important;
+  height: 560px !important;
+  max-height: 560px !important;
+  overflow: hidden !important;
+}
+
+.external-tool-overlay .external-tool-instance-table,
+.external-tool-overlay .external-tool-instance-table .el-table__inner-wrapper,
+.external-tool-overlay .external-tool-instance-table .el-scrollbar,
+.external-tool-overlay .external-tool-instance-table .el-scrollbar__wrap {
+  height: 100% !important;
+}
+
+.external-tool-overlay .external-tool-instance-table .el-scrollbar__wrap {
+  overflow-y: auto !important;
+  overflow-x: auto !important;
+}
+
+.external-tool-info-overlay .el-overlay-dialog {
+  overflow: auto !important;
+}
+
+.external-tool-info-overlay .external-tool-info-dialog {
+  margin-top: 6vh !important;
+  max-height: 86vh !important;
+  display: flex !important;
+  flex-direction: column !important;
+}
+
+.external-tool-info-overlay .external-tool-info-dialog .el-dialog__header,
+.external-tool-info-overlay .external-tool-info-dialog .el-dialog__footer {
+  flex: 0 0 auto !important;
+}
+
+.external-tool-info-overlay .external-tool-info-dialog .el-dialog__body {
+  flex: 1 1 auto !important;
+  min-height: 0 !important;
+  overflow: auto !important;
+  padding-top: 12px !important;
+}
+
+@media (max-width: 768px), (max-height: 720px) {
+  .external-tool-overlay .el-dialog {
+    width: 100vw !important;
+    max-width: 100vw !important;
+    height: 100dvh !important;
+    max-height: 100dvh !important;
+    margin: 0 !important;
+    border-radius: 0 !important;
+  }
+
+  .external-tool-overlay .el-dialog__header {
+    padding: 14px 16px 10px !important;
+  }
+
+  .external-tool-overlay .el-dialog__body {
+    padding: 10px 12px 12px !important;
+  }
+
+  .external-tool-overlay .external-tool-instance-table-shell {
+    display: none !important;
+  }
+
+  .external-tool-overlay .external-tool-instance-card-shell {
+    display: flex !important;
+    flex: 1 1 auto !important;
+    min-height: 0 !important;
+    overflow: hidden !important;
+  }
+
+  .external-tool-overlay .external-tool-instance-card-list {
+    display: grid !important;
+    height: 100% !important;
+    min-height: 0 !important;
+    overflow-y: auto !important;
+  }
+
+  .external-tool-info-overlay .external-tool-info-dialog {
+    width: 100vw !important;
+    max-width: 100vw !important;
+    height: 100dvh !important;
+    max-height: 100dvh !important;
+    margin: 0 !important;
+    border-radius: 0 !important;
+  }
+
+  .external-tool-info-overlay .external-tool-info-dialog .el-dialog__header {
+    padding: 14px 16px 10px !important;
+  }
+
+  .external-tool-info-overlay .external-tool-info-dialog .el-dialog__body {
+    padding: 10px 16px 12px !important;
+  }
+
+  .external-tool-info-overlay .external-tool-info-dialog .el-dialog__footer {
+    padding: 10px 16px 14px !important;
+  }
 }
 </style>
