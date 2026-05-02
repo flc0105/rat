@@ -73,8 +73,16 @@
   "required": false,
   "default": "",
   "description": "Browser access host or public IP. Empty means current browser hostname."
-}
+},
 
+{
+  "name": "extra_args",
+  "label": "Extra Args",
+  "type": "string",
+  "required": false,
+  "default": "",
+  "description": "Additional command-line args appended to filebrowser argv. Example: --disable-exec=false"
+}
   ],
   "config": {},
   "runtime": {
@@ -93,7 +101,8 @@
     "stdout": "{{instance_runtime_dir}}/stdout.log",
     "stderr": "stdout",
     "pid_file": "{{instance_runtime_dir}}/tool.pid",
-    "state_file": "{{instance_runtime_dir}}/state.json"
+    "state_file": "{{instance_runtime_dir}}/state.json",
+    "extra_args_param": "extra_args"
   },
   "lifecycle": {
     "stop": {

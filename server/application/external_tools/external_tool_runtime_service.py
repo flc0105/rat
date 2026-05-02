@@ -113,6 +113,40 @@ class ExternalToolRuntimeService:
 
         return value
 
+
+
+    # extra args支持
+    def _split_extra_argv(self, value: Any) -> list[str]:
+        if value is None or value == '':
+            return []
+        if isinstance(value, list):
+            return [str(item) for item in value if str(item or '').strip()]
+        if isinstance(value, tuple):
+            return [str(item) for item in value if str(item or '').strip()]
+
+        text = str(value or '').strip()
+        if not text:
+            return []
+        try:
+            return shlex.split(text)
+        except ValueError as e:
+            raise ValueError(f'invalid extra argv: {e}')
+
+    def _append_runtime_extra_args(self, argv: list[str], runtime: dict, context: dict) -> list[str]:
+        result = list(argv or [])
+
+        extra_args = runtime.get('extra_args')
+        extra_args_param = str(runtime.get('extra_args_param') or '').strip()
+        if extra_args_param:
+            extra_args = context.get(extra_args_param, extra_args)
+
+        rendered_extra_args = self._render_value(extra_args, context)
+        result.extend(self._split_extra_argv(rendered_extra_args))
+        return result
+
+
+
+
     def _expand_path(self, path: str) -> str:
         return os.path.abspath(os.path.expandvars(os.path.expanduser(str(path or '').strip())))
 
@@ -417,6 +451,11 @@ class ExternalToolRuntimeService:
 
         if not isinstance(argv, list) or not argv:
             raise ValueError('runtime.argv is required')
+
+        # Optional meta runtime extension:
+        # runtime.extra_args_param points to a params field whose string is shlex-split
+        # and appended to argv, e.g. --disable-exec=false.
+        argv = self._append_runtime_extra_args(argv, runtime, context)
 
         argv = [
             self._expand_path(str(item))
@@ -1176,6 +1215,13 @@ finally:
         config = rendered_meta.get('config') or {}
         runtime = rendered_meta.get('runtime') or {}
         runtime.setdefault('state_file', context.get('state_file') or '')
+
+        #extra args
+        runtime_argv = runtime.get('argv') or []
+        if isinstance(runtime_argv, str):
+            runtime_argv = shlex.split(runtime_argv)
+        if isinstance(runtime_argv, list):
+            runtime['argv'] = self._append_runtime_extra_args(runtime_argv, runtime, context)
 
         skip_if_exists = str(install.get('skip_if_exists') or '').strip()
         if not skip_if_exists:
