@@ -11,6 +11,7 @@ from server.application.external_tools.external_tool_runtime_service import Exte
 from server.application.jobs.background_job_service import BackgroundJobService
 from server.application.jobs.background_job_store import BackgroundJobStore
 from server.application.jobs.job_catalog_service import JobCatalogService
+from server.application.keychains.keychain_store import KeychainStore
 from server.application.pinned_paths.pinned_path_store import PinnedPathStore
 from server.application.scripts.script_catalog_service import ScriptCatalogService
 from server.application.tasks.task_runner import WebTaskRunner
@@ -25,6 +26,7 @@ from server.application.web.command_history_api import WebCommandHistoryApi
 from server.application.web.external_tool_api import WebExternalToolApi
 from server.application.web.connection_api import WebConnectionApi
 from server.application.web.job_api import WebJobApi
+from server.application.web.keychain_api import WebKeychainApi
 from server.application.web.pinned_path_api import PinnedPathApi
 from server.application.web.process_snapshot_cache import ProcessSnapshotCache
 from server.application.web.remote_file_api import WebRemoteFileApi
@@ -120,6 +122,7 @@ class ServerApplicationAssembly:
         )
 
         self.pinned_path_store = PinnedPathStore()
+        self.keychain_store = KeychainStore()
         self.agent_builder = AgentBuilder()
         self.agent_output_registry = AgentOutputRegistry(self.agent_builder.output_dir)
         self.pty_session_service = PtySessionService(self.server, event_bus=self.event_bus)
@@ -178,6 +181,12 @@ class ServerApplicationAssembly:
         self.pinned_path_api = PinnedPathApi(
             server=self.server,
             pinned_path_store=self.pinned_path_store,
+        )
+
+        self.keychain_api = WebKeychainApi(
+            server=self.server,
+            keychain_store=self.keychain_store,
+            connection_service=self.connection_service,
         )
 
         self.agent_api = WebAgentApi(

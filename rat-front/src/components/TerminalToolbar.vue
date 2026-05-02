@@ -34,6 +34,14 @@
 
       <el-button
         size="small"
+        class="tool-btn tool-btn-accent ml-0"
+        @click="$emit('open-keychains')"
+      >
+        Keychains
+      </el-button>
+
+      <el-button
+        size="small"
         class="tool-btn ml-0"
         @click="$emit('open-info')"
       >
@@ -152,6 +160,7 @@ export default {
     'open-remote-files',
     'open-artifacts',
     'open-external-tools',
+    'open-keychains',
     'open-info',
     'open-jobs',
     'open-scripts',

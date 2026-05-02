@@ -2663,32 +2663,29 @@ formatVersionLabel(version) {
 .external-tool-actions {
   display: flex;
   flex-direction: column;
-  align-items: stretch;
+  align-items: flex-end;
   justify-content: flex-start;
   gap: 8px;
-  min-width: 240px;
+  min-width: 0;
+  flex: 0 0 auto;
 }
 
 .external-tool-action-row {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
   gap: 8px;
-  justify-content: stretch;
 }
 
 .external-tool-action-row.single {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-}
-
-.external-tool-action-row.single > .el-button:first-child:last-child,
-.external-tool-action-row.single > .el-dropdown:first-child:last-child {
-  grid-column: 1 / -1;
+  display: flex;
 }
 
 .external-tool-action-row :deep(.el-button),
 .external-tool-action-row :deep(.el-dropdown),
 .external-tool-action-row :deep(.el-dropdown .el-button) {
-  width: 100%;
+  width: auto;
+  min-width: 0;
   margin-left: 0;
 }
 
@@ -2696,6 +2693,7 @@ formatVersionLabel(version) {
   height: 32px;
   min-height: 32px;
   border-radius: 10px;
+  padding-inline: 14px;
 }
 
 .external-tool-table-actions {
@@ -2757,12 +2755,16 @@ formatVersionLabel(version) {
   font-weight: 700;
 }
 
+.external-tool-instance-table :deep(.el-table__body td.el-table__cell) {
+  padding: 10px 0;
+}
+
 .external-tool-instance-table :deep(tr) {
   background: #fff;
 }
 
 .external-tool-instance-table :deep(.cell) {
-  line-height: 1.5;
+  line-height: 1.55;
 }
 
 .external-tool-instance-card-shell,
@@ -3154,12 +3156,28 @@ formatVersionLabel(version) {
   }
 
   .external-tool-title {
+    flex: 0 0 100%;
     max-width: 100%;
   }
 
   .external-tool-actions {
     width: 100%;
+    align-items: stretch;
     min-width: 0;
+  }
+
+  .external-tool-action-row,
+  .external-tool-action-row.single {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    justify-content: stretch;
+    width: 100%;
+  }
+
+  .external-tool-action-row :deep(.el-button),
+  .external-tool-action-row :deep(.el-dropdown),
+  .external-tool-action-row :deep(.el-dropdown .el-button) {
+    width: 100%;
   }
 
   .external-tool-instance-meta {
@@ -3313,4 +3331,7 @@ formatVersionLabel(version) {
     padding: 10px 16px 14px !important;
   }
 }
+
+
+
 </style>

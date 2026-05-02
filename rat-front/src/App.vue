@@ -55,6 +55,7 @@
                     @open-remote-files="openRemoteFilesDialog"
                     @open-artifacts="openArtifactDialog"
                     @open-external-tools="openExternalToolManagerDialog"
+                    @open-keychains="openKeychainManagerDialog"
                     @open-info="openConnectionInfoDialog"
                     @open-jobs="openBackgroundJobsDialog"
                     @open-scripts="openScriptLibraryDialog"
@@ -134,6 +135,12 @@
       @append-output="appendOutput"
       @set-active-task="setActiveTask"
       @open-tool-meta-editor="openExternalToolMetaEditor"
+  />
+
+
+  <KeychainManagerDialog
+      ref="keychainManagerDialogRef"
+      :current-connection="currentConnection"
   />
 
 
@@ -240,6 +247,7 @@ import CommandHistoryDialog from "./components/CommandHistoryDialog.vue";
 import RemoteFilesDialog from "./components/RemoteFilesDialog.vue";
 import ArtifactDialog from "./components/ArtifactDialog.vue";
 import ExternalToolManagerDialog from "./components/ExternalToolManagerDialog.vue";
+import KeychainManagerDialog from "./components/KeychainManagerDialog.vue";
 import ScriptLibraryDialog from "./components/ScriptLibraryDialog.vue";
 import BackgroundJobsDialog from "./components/BackgroundJobsDialog.vue";
 import PreviewDialog from "./components/PreviewDialog.vue";
@@ -253,6 +261,7 @@ export default {
     PreviewDialog,
     BackgroundJobsDialog,
     ScriptLibraryDialog,
+    KeychainManagerDialog,
     ExternalToolManagerDialog,
     ArtifactDialog,
     RemoteFilesDialog,
@@ -309,6 +318,10 @@ export default {
 
     openExternalToolManagerDialog() {
       return this.$refs.externalToolManagerDialogRef?.open()
+    },
+
+    openKeychainManagerDialog() {
+      return this.$refs.keychainManagerDialogRef?.open()
     },
 
     refreshExternalToolsIfOpen() {
