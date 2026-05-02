@@ -24,21 +24,26 @@
         Artifacts
       </el-button>
 
-      <el-button
-        size="small"
-        class="tool-btn tool-btn-accent ml-0"
-        @click="$emit('open-external-tools')"
+      <el-dropdown
+        trigger="click"
+        @command="handleResourceCommand"
       >
-        External Tools
-      </el-button>
+        <el-button
+          size="small"
+          class="tool-btn tool-btn-accent"
+        >
+          Resources
+        </el-button>
 
-      <el-button
-        size="small"
-        class="tool-btn tool-btn-accent ml-0"
-        @click="$emit('open-keychains')"
-      >
-        Keychains
-      </el-button>
+        <template #dropdown>
+          <el-dropdown-menu>
+            <el-dropdown-item command="external-tools">External Tools</el-dropdown-item>
+            <el-dropdown-item command="keychains">Keychains</el-dropdown-item>
+            <el-dropdown-item command="jobs">Jobs</el-dropdown-item>
+            <el-dropdown-item command="agents">Agents</el-dropdown-item>
+          </el-dropdown-menu>
+        </template>
+      </el-dropdown>
 
       <el-button
         size="small"
@@ -51,25 +56,9 @@
       <el-button
         size="small"
         class="tool-btn ml-0"
-        @click="$emit('open-jobs')"
-      >
-        Jobs
-      </el-button>
-
-      <el-button
-        size="small"
-        class="tool-btn ml-0"
         @click="$emit('open-scripts')"
       >
         Scripts
-      </el-button>
-
-      <el-button
-        size="small"
-        class="tool-btn ml-0"
-        @click="$emit('open-agents')"
-      >
-        Agents
       </el-button>
 
       <el-button
@@ -89,27 +78,24 @@
         PTY
       </el-button>
 
-      <el-button
-        size="small"
-        class="tool-btn tool-btn-accent ml-0"
-        @click="$emit('open-processes')"
-      >
-        Processes
-      </el-button>
-
       <el-dropdown
         trigger="click"
-        @command="handleControlCommand"
+        @command="handleOpsCommand"
       >
-        <el-button size="small" class="tool-btn tool-btn-accent">
-          Control
+        <el-button
+          size="small"
+          class="tool-btn tool-btn-accent"
+        >
+          Ops
         </el-button>
 
         <template #dropdown>
           <el-dropdown-menu>
-            <el-dropdown-item command="kill">Force Kill</el-dropdown-item>
-            <el-dropdown-item command="reset">Force Reset</el-dropdown-item>
-            <el-dropdown-item command="spawn">Force Spawn</el-dropdown-item>
+            <el-dropdown-item command="processes">Processes</el-dropdown-item>
+<!--            <el-dropdown-item divided disabled>HTTP Cmd</el-dropdown-item>-->
+            <el-dropdown-item divided command="http-kill">Force Kill</el-dropdown-item>
+            <el-dropdown-item command="http-reset">Force Reset</el-dropdown-item>
+            <el-dropdown-item command="http-spawn">Force Spawn</el-dropdown-item>
           </el-dropdown-menu>
         </template>
       </el-dropdown>
@@ -195,20 +181,46 @@ export default {
       }
     },
 
-    // Toolbar control actions are owned by this component.
-    async handleControlCommand(command) {
+    // Resources 下拉只负责打开资源类弹窗，不承载执行控制逻辑。
+    handleResourceCommand(command) {
       const normalizedCommand = String(command || '').trim().toLowerCase()
+      const eventMap = {
+        'external-tools': 'open-external-tools',
+        keychains: 'open-keychains',
+        jobs: 'open-jobs',
+        agents: 'open-agents',
+      }
+      const eventName = eventMap[normalizedCommand]
 
-      if (
-        normalizedCommand === 'kill' ||
-        normalizedCommand === 'reset' ||
-        normalizedCommand === 'spawn'
-      ) {
-        await this.sendHttpControlCommand(normalizedCommand)
+      if (!eventName) {
+        ElMessage.warning('Unknown resource action')
         return
       }
 
-      ElMessage.warning('Unknown control action')
+      this.$emit(eventName)
+    },
+
+    // Ops 下拉包含本地管理入口和通过 HTTP 独立通道下发的控制命令。
+    async handleOpsCommand(command) {
+      const normalizedCommand = String(command || '').trim().toLowerCase()
+
+      if (normalizedCommand === 'processes') {
+        this.$emit('open-processes')
+        return
+      }
+
+      const httpCommandMap = {
+        'http-kill': 'kill',
+        'http-reset': 'reset',
+        'http-spawn': 'spawn',
+      }
+      const httpCommand = httpCommandMap[normalizedCommand]
+      if (httpCommand) {
+        await this.sendHttpControlCommand(httpCommand)
+        return
+      }
+
+      ElMessage.warning('Unknown ops action')
     },
 
     // add http control toolbar actions 2026-04-10 00:00
