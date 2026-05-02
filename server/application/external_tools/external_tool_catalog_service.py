@@ -4,6 +4,8 @@ import os
 from copy import deepcopy
 from typing import Any
 
+from core.platform.platform_identity import detect_platform_alias
+
 
 class ExternalToolCatalogService:
     """
@@ -167,8 +169,14 @@ class ExternalToolCatalogService:
                 })
         return items
 
+    # def get_catalog(self) -> dict:
+    #     return {'items': self.list_tools()}
+
     def get_catalog(self) -> dict:
-        return {'items': self.list_tools()}
+        return {
+            'items': self.list_tools(),
+            'server_platform': detect_platform_alias(),
+        }
 
     def get_tool(self, tool_id: str) -> dict:
         target = str(tool_id or '').strip()

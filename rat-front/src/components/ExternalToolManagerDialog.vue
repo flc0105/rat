@@ -122,7 +122,7 @@
                     <template #dropdown>
                       <el-dropdown-menu>
                         <el-dropdown-item command="download">
-                          Browser Download
+                          Download Zip
                         </el-dropdown-item>
                         <el-dropdown-item command="edit">
                           Edit Metadata
@@ -470,6 +470,7 @@ export default {
       detailSubtitle: '',
       detailSections: [],
       detailCopyText: '',
+      serverPlatform: '',
     }
   },
 
@@ -684,6 +685,7 @@ export default {
         const json = await res.json()
         if (!res.ok || json.code !== 0) throw new Error(json.message || 'Failed to load external tools')
         const catalog = json.data || {}
+        this.serverPlatform = this.normalizePlatform(catalog.server_platform || '')
         this.items = Array.isArray(catalog.items) ? catalog.items : []
         this.applyCatalogInstallStatuses(this.items, '__server__')
       } catch (e) {
@@ -1099,9 +1101,15 @@ export default {
       return platforms.includes(target)
     },
 
+    // isServerPlatformSupported(item) {
+    //   return !!item
+    // },
+
     isServerPlatformSupported(item) {
-      return !!item
-    },
+  if (!item) return false
+  if (!this.serverPlatform) return true
+  return this.doesPlatformMatch(item, this.serverPlatform)
+},
 
     isClientPlatformSupported(item) {
       return this.doesPlatformMatch(item, this.currentClientPlatform)
@@ -2151,7 +2159,6 @@ formatVersionLabel(version) {
 .external-tool-table-actions {
   display: flex;
   align-items: center;
-  //justify-content: flex-end;
   gap: 8px;
   flex-wrap: wrap;
 }
