@@ -19,6 +19,9 @@
     "web",
     "http"
   ],
+  "web": {
+    "url": "http://{{access_host}}:{{port}}"
+  },
   "package": {
     "filename": "darwin-arm64-filebrowser.zip",
     "download_url": "/api/external-tools/packages/darwin-arm64-filebrowser.zip",
@@ -62,7 +65,16 @@
       "required": true,
       "default": "~",
       "description": "Filesystem root served by File Browser."
-    }
+    },
+    {
+  "name": "access_host",
+  "label": "Access Host",
+  "type": "string",
+  "required": false,
+  "default": "",
+  "description": "Browser access host or public IP. Empty means current browser hostname."
+}
+
   ],
   "config": {},
   "runtime": {

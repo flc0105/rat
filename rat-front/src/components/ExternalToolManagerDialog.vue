@@ -250,6 +250,14 @@
                        <el-dropdown-item command="info">
                           Info
                         </el-dropdown-item>
+
+                          <el-dropdown-item
+    v-if="canOpenWebInstance(row)"
+    command="open_web"
+  >
+    Open Web
+  </el-dropdown-item>
+
                         <el-dropdown-item command="restart" :disabled="!canRestartInstance(row)">
                           Restart
                         </el-dropdown-item>
@@ -1248,23 +1256,46 @@ async loadAllClientInstances(deviceId = this.currentDeviceId, showToast = true) 
       return `${label}${required}`
     },
 
+    // buildParamDefaults(item) {
+    //   const form = {}
+    //   for (const param of item?.params || []) {
+    //     const name = String(param?.name || '').trim()
+    //     if (!name) continue
+    //     if (name === 'instance_name' && (param.default === undefined || param.default === null || String(param.default).trim() === '')) {
+    //       form[name] = this.defaultInstanceName(item)
+    //     } else if (param.default !== undefined && param.default !== null) {
+    //       form[name] = param.default
+    //     } else if (this.normalizeParamType(param.type) === 'boolean') {
+    //       form[name] = false
+    //     } else {
+    //       form[name] = ''
+    //     }
+    //   }
+    //   return form
+    // },
+
     buildParamDefaults(item) {
-      const form = {}
-      for (const param of item?.params || []) {
-        const name = String(param?.name || '').trim()
-        if (!name) continue
-        if (name === 'instance_name' && (param.default === undefined || param.default === null || String(param.default).trim() === '')) {
-          form[name] = this.defaultInstanceName(item)
-        } else if (param.default !== undefined && param.default !== null) {
-          form[name] = param.default
-        } else if (this.normalizeParamType(param.type) === 'boolean') {
-          form[name] = false
-        } else {
-          form[name] = ''
-        }
-      }
-      return form
-    },
+  const form = {}
+  for (const param of item?.params || []) {
+    const name = String(param?.name || '').trim()
+    if (!name) continue
+
+    if (name === 'instance_name' && (param.default === undefined || param.default === null || String(param.default).trim() === '')) {
+      form[name] = this.defaultInstanceName(item)
+    } else if (name === 'access_host' && (param.default === undefined || param.default === null || String(param.default).trim() === '')) {
+      // 打开 config/start 弹框时直接把浏览器当前 hostname 填进 input。
+      form[name] = this.getBrowserAccessHost()
+    } else if (param.default !== undefined && param.default !== null) {
+      form[name] = param.default
+    } else if (this.normalizeParamType(param.type) === 'boolean') {
+      form[name] = false
+    } else {
+      form[name] = ''
+    }
+  }
+  return form
+},
+
 
     defaultInstanceName(item) {
       if (item?.name === 'frps') return 'frps-7000'
@@ -1272,19 +1303,50 @@ async loadAllClientInstances(deviceId = this.currentDeviceId, showToast = true) 
       return 'default'
     },
 
+    // buildStartParams() {
+    //   const params = {}
+    //   for (const param of this.pendingParams || []) {
+    //     const name = String(param?.name || '').trim()
+    //     if (!name) continue
+    //     const value = this.paramForm[name]
+    //     if (param.required && (value === '' || value === undefined || value === null)) {
+    //       throw new Error(`Param ${name} is required`)
+    //     }
+    //     params[name] = value
+    //   }
+    //   return params
+    // },
+
     buildStartParams() {
-      const params = {}
-      for (const param of this.pendingParams || []) {
-        const name = String(param?.name || '').trim()
-        if (!name) continue
-        const value = this.paramForm[name]
-        if (param.required && (value === '' || value === undefined || value === null)) {
-          throw new Error(`Param ${name} is required`)
-        }
-        params[name] = value
-      }
-      return params
-    },
+  const params = {}
+  const hasAccessHostParam = (this.pendingParams || []).some(param => String(param?.name || '').trim() === 'access_host')
+
+  for (const param of this.pendingParams || []) {
+    const name = String(param?.name || '').trim()
+    if (!name) continue
+
+    let value = this.paramForm[name]
+
+    // 如果用户刻意把 access_host 清空，提交前再补一次当前浏览器 hostname。
+    if (name === 'access_host' && (value === '' || value === undefined || value === null)) {
+      value = this.getBrowserAccessHost()
+    }
+
+    if (param.required && (value === '' || value === undefined || value === null)) {
+      throw new Error(`Param ${name} is required`)
+    }
+
+    params[name] = value
+  }
+
+  // 兼容：meta 里 web.url 用了 {{access_host}}，但 params 没显式声明 access_host 时，
+  // 仍然给 runtime state 里补一个，方便后续 Open Web。
+  if (!hasAccessHostParam && this.pendingItem && this.getModuleWebUrlTemplate(this.pendingItem)) {
+    params.access_host = this.getBrowserAccessHost()
+  }
+
+  return params
+},
 
     deriveInstanceId(params) {
       const raw = params.instance_name || params.instance_id || (
@@ -1947,6 +2009,146 @@ async uninstallClientTool(item, deviceId) {
       })
     },
 
+
+
+
+    // url parse
+    getBrowserAccessHost() {
+  if (typeof window === 'undefined' || !window.location) return '127.0.0.1'
+  return window.location.hostname || '127.0.0.1'
+},
+
+getBrowserOrigin() {
+  if (typeof window === 'undefined' || !window.location) return ''
+  return window.location.origin || ''
+},
+
+getBrowserProtocol() {
+  if (typeof window === 'undefined' || !window.location) return 'http:'
+  return window.location.protocol || 'http:'
+},
+
+getModuleWebUrlTemplate(module) {
+  if (!module) return ''
+
+  if (module.web && typeof module.web === 'object' && module.web.url) {
+    return String(module.web.url || '').trim()
+  }
+
+  if (module.web_url) {
+    return String(module.web_url || '').trim()
+  }
+
+  return ''
+},
+
+getInstanceWebUrlTemplate(row) {
+  return this.getModuleWebUrlTemplate(row?.module)
+},
+
+canOpenWebInstance(row) {
+  if (!row || row.side !== 'server') return false
+  return !!this.getInstanceWebUrlTemplate(row)
+},
+
+buildInstanceUrlContext(row) {
+  const params = row?.params || {}
+  const browserHost = this.getBrowserAccessHost()
+  const browserOrigin = this.getBrowserOrigin()
+  const protocol = this.getBrowserProtocol()
+
+  const accessHost = params.access_host || params.public_host || params.external_host || browserHost
+
+  return {
+    ...params,
+
+    // 推荐给 meta 使用的访问变量。
+    access_host: accessHost,
+    public_host: params.public_host || accessHost,
+    external_host: params.external_host || accessHost,
+
+    // 浏览器上下文。
+    browser_host: browserHost,
+    browser_origin: browserOrigin,
+    browser_protocol: protocol,
+
+    // 监听地址相关变量。注意：这些不一定适合浏览器访问。
+    ip: params.ip || params.address || params.host || params.listen_addr || params.bind_addr || browserHost,
+    host: params.host || params.address || params.ip || params.listen_addr || params.bind_addr || browserHost,
+    address: params.address || params.ip || params.host || params.listen_addr || params.bind_addr || browserHost,
+    listen_host: params.listen_host || params.listen_addr || params.address || params.host || '0.0.0.0',
+
+    // 常见端口别名。
+    port: params.port || params.listen_port || params.http_port || params.web_port || params.ui_port || params.dashboard_port || '',
+    listen_port: params.listen_port || params.port || params.http_port || params.web_port || '',
+
+    // instance 上下文。
+    side: row?.side || '',
+    tool_id: row?.tool_id || '',
+    instance_id: row?.instance_id || '',
+    machine_id: row?.machine_id || '',
+    hostname: row?.hostname || '',
+    status: row?.status || '',
+    pid: row?.pid || '',
+  }
+},
+
+renderInstanceUrlTemplate(template, row) {
+  const context = this.buildInstanceUrlContext(row)
+  const missing = []
+
+  const url = String(template || '').replace(/{{\s*([A-Za-z_][A-Za-z0-9_]*)\s*}}/g, (match, key) => {
+    const value = context[key]
+
+    if (value === undefined || value === null || value === '') {
+      missing.push(key)
+      return ''
+    }
+
+    return String(value)
+  })
+
+  return {
+    url: this.normalizeOpenWebUrl(url, context),
+    missing,
+  }
+},
+
+normalizeOpenWebUrl(url, context = {}) {
+  const raw = String(url || '').trim()
+  if (!raw) return ''
+
+  try {
+    const parsed = new URL(raw, this.getBrowserOrigin() || undefined)
+
+    // 防呆：如果模板仍然用了 127.0.0.1 / 0.0.0.0 / localhost，
+    // server side 打开时自动换成 access_host。
+    const localHosts = new Set(['127.0.0.1', 'localhost', '0.0.0.0', '::1', '[::1]'])
+    if (localHosts.has(String(parsed.hostname || '').toLowerCase())) {
+      parsed.hostname = context.access_host || this.getBrowserAccessHost()
+    }
+
+    return parsed.toString()
+  } catch (_) {
+    return raw
+  }
+},
+
+openWebInstance(row) {
+  if (!this.canOpenWebInstance(row)) return
+
+  const template = this.getInstanceWebUrlTemplate(row)
+  const { url, missing } = this.renderInstanceUrlTemplate(template, row)
+
+  if (!url || missing.length) {
+    ElMessage.warning(`Web URL is incomplete. Missing: ${missing.join(', ')}`)
+    return
+  }
+
+  window.open(url, '_blank', 'noopener,noreferrer')
+},
+
+
     openInstanceInfo(row) {
       const runtime = row.raw?.runtime || {}
       const params = row.params || {}
@@ -2010,6 +2212,7 @@ async uninstallClientTool(item, deviceId) {
 
     handleInstanceMoreCommand(command, row) {
       if (command === 'info') return this.openInstanceInfo(row)
+        if (command === 'open_web') return this.openWebInstance(row)
       if (command === 'restart') return this.restartInstance(row)
       if (command === 'clear_logs') return this.clearInstanceLogs(row)
       if (command === 'remove') return this.removeInstance(row)

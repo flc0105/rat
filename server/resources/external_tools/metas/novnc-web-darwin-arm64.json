@@ -2,17 +2,28 @@
   "id": "novnc-web-darwin-arm64",
   "name": "novnc-web",
   "display_name": "noVNC Web Gateway (darwin/arm64)",
-  "description": "Browser-based VNC gateway using noVNC and websockify. It exposes a web port and proxies WebSocket traffic to a target VNC TCP endpoint. http://127.0.0.1:6080/vnc.html?view_only=1&resize=scale",
+  "description": "Browser-based VNC gateway using noVNC and websockify. It exposes a web port and proxies WebSocket traffic to a target VNC TCP endpoint.",
   "version": "1.7.0",
   "side": "server",
-  "platforms": ["mac"],
+  "platforms": [
+    "mac"
+  ],
   "arch": "arm64",
   "category": "remote-desktop",
-  "tags": ["vnc", "novnc", "websockify", "remote-desktop", "browser"],
+  "tags": [
+    "vnc",
+    "novnc",
+    "websockify",
+    "remote-desktop",
+    "browser"
+  ],
   "package": {
     "filename": "noVNC-1.7.0.zip",
     "download_url": "/api/external-tools/packages/noVNC-1.7.0.zip",
     "executable_rel_path": "noVNC-1.7.0/utils/novnc_proxy"
+  },
+  "web": {
+    "url": "http://{{access_host}}:{{listen_port}}/vnc.html?view_only=1&resize=scale"
   },
   "install": {
     "install_dir": "{{external_tools_root}}/{{id}}/{{version}}",
@@ -62,6 +73,14 @@
       "min": 1,
       "max": 65535,
       "description": "Target VNC TCP port, usually 5900."
+    },
+    {
+      "name": "access_host",
+      "label": "Access Host",
+      "type": "string",
+      "required": false,
+      "default": "",
+      "description": "Browser access host or public IP. Empty means current browser hostname."
     }
   ],
   "config": {

@@ -2,13 +2,16 @@
   "id": "mediamtx-server-darwin-arm64",
   "name": "mediamtx",
   "display_name": "MediaMTX Server (darwin/arm64)",
-  "description": "Realtime media gateway for receiving FFmpeg streams and exposing WebRTC/HLS pages in browser. http://127.0.0.1:8889/screen-macbook/",
+  "description": "Realtime media gateway for receiving FFmpeg streams and exposing WebRTC/HLS pages in browser.",
   "version": "1.18.0",
   "side": "server",
   "platforms": ["mac"],
   "arch": "arm64",
   "category": "media",
   "tags": ["mediamtx", "rtsp", "rtmp", "webrtc", "hls", "screen-live"],
+  "web": {
+    "url": "http://{{access_host}}:{{webrtc_port}}/screen-macbook/"
+  },
   "package": {
     "filename": "mediamtx_v1.18.0_darwin_arm64.zip",
     "download_url": "/api/external-tools/packages/mediamtx_v1.18.0_darwin_arm64.zip",
