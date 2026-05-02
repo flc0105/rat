@@ -1744,18 +1744,83 @@ async uninstallClientTool(item, deviceId) {
       }
     },
 
+    // formatPortInfo(row) {
+    //   const params = row.params || {}
+    //   if (params.local_port || params.remote_port) {
+    //     const localIp = params.local_ip || '127.0.0.1'
+    //     const localPort = params.local_port || '-'
+    //     const remotePort = params.remote_port || '-'
+    //     return `${localIp}:${localPort} -> server:${remotePort}`
+    //   }
+    //   if (params.bind_port) return `bind:${params.bind_port}`
+    //   if (params.server_port) return `control:${params.server_port}`
+    //   return '-'
+    // },
+
+
+
     formatPortInfo(row) {
-      const params = row.params || {}
-      if (params.local_port || params.remote_port) {
-        const localIp = params.local_ip || '127.0.0.1'
-        const localPort = params.local_port || '-'
-        const remotePort = params.remote_port || '-'
-        return `${localIp}:${localPort} -> server:${remotePort}`
-      }
-      if (params.bind_port) return `bind:${params.bind_port}`
-      if (params.server_port) return `control:${params.server_port}`
-      return '-'
-    },
+  const params = row.params || {}
+
+  // 1. 端口映射类，优先展示完整映射关系，比如 frpc。
+  if (params.local_port || params.remote_port) {
+    const localIp = params.local_ip || params.local_addr || params.local_host || '127.0.0.1'
+    const localPort = params.local_port || '-'
+    const remoteHost = params.remote_host || params.server_addr || 'server'
+    const remotePort = params.remote_port || '-'
+    return `${localIp}:${localPort} -> ${remoteHost}:${remotePort}`
+  }
+
+  // 2. 服务监听类，比如 filebrowser、http server、web ui。
+  const listenPort =
+    params.port ||
+    params.listen_port ||
+    params.http_port ||
+    params.web_port ||
+    params.ui_port ||
+    params.dashboard_port ||
+    params.rtsp_port ||
+    params.hls_port ||
+    params.webrtc_port
+
+  if (listenPort) {
+    const listenHost =
+      params.address ||
+      params.listen_addr ||
+      params.listen_address ||
+      params.host ||
+      params.bind_addr ||
+      params.bind_address ||
+      params.ip ||
+      '127.0.0.1'
+
+    return `${listenHost}:${listenPort}`
+  }
+
+  // 3. 服务端 bind 类，比如 frps。
+  if (params.bind_port) {
+    const bindHost = params.bind_addr || params.bind_address || params.address || '0.0.0.0'
+    return `${bindHost}:${params.bind_port}`
+  }
+
+  // 4. 控制端口类，比如 frpc 连接 frps 的 server_port。
+  if (params.server_port) {
+    const serverHost = params.server_addr || params.server_host || 'server'
+    return `${serverHost}:${params.server_port}`
+  }
+
+  // 5. 如果 meta 里直接给了 URL，也可以显示。
+  const url =
+    params.url ||
+    params.http_url ||
+    params.web_url ||
+    params.publish_url ||
+    params.public_url
+
+  if (url) return String(url)
+
+  return '-'
+},
 
     statusTagType(status) {
       const value = String(status || '').toLowerCase()
