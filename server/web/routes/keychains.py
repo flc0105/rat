@@ -1,6 +1,7 @@
 from flask import Blueprint, request
 
 from server.web.api_response import WebApiResponder
+from server.web.auth_guard import allow_anonymous
 from server.web.request_parsers import get_json_payload
 
 
@@ -14,6 +15,14 @@ def create_keychain_blueprint(server_instance):
         machine_id = (request.args.get('machine_id') or '').strip()
         return responder.json_endpoint(
             lambda: keychain_api.list_keychains(machine_id=machine_id),
+            default_error_status=500,
+        )
+
+    @blueprint.post('/api/keychains/resolve')
+    @allow_anonymous
+    def resolve_keychain_item():
+        return responder.json_endpoint(
+            lambda: keychain_api.resolve_keychain_item(get_json_payload()),
             default_error_status=500,
         )
 

@@ -9,14 +9,14 @@
     @closed="handleClosed"
   >
     <div class="fixed-dialog-body keychain-body" v-loading="loading">
-      <div class="keychain-notice">
-        <el-alert
-          type="info"
-          show-icon
-          :closable="false"
-          title="Personal operations only: this manager is for manually saving credentials you own, similar to a local password manager integrated into this ops platform."
-        />
-      </div>
+<!--      <div class="keychain-notice">-->
+<!--        <el-alert-->
+<!--          type="info"-->
+<!--          show-icon-->
+<!--          :closable="false"-->
+<!--          title="Personal operations only: this manager is for manually saving credentials you own, similar to a local password manager integrated into this ops platform."-->
+<!--        />-->
+<!--      </div>-->
 
       <div class="keychain-toolbar">
         <div class="keychain-toolbar-left">

@@ -118,6 +118,32 @@ class WebKeychainApi:
             'machines': self.list_machines(),
         }
 
+    def resolve_keychain_item(self, payload: dict) -> dict:
+        if not isinstance(payload, dict):
+            raise ValueError('payload is required')
+
+        name = self._safe_text(payload.get('name'))
+        kind = self._safe_text(payload.get('kind')).lower()
+        scope = self._safe_text(payload.get('scope')).lower()
+        machine_id = self._safe_text(payload.get('machine_id'))
+
+        if not name:
+            raise ValueError('name is required')
+        if kind and kind not in {KeychainStore.KIND_LOGIN, KeychainStore.KIND_SECRET}:
+            raise ValueError('kind must be login or secret')
+
+        if scope in ('server', KeychainStore.SERVER_MACHINE_ID):
+            machine_id = KeychainStore.SERVER_MACHINE_ID
+        else:
+            machine_id = self._normalize_machine_id(machine_id)
+
+        item = self.keychain_store.get_item_by_name(machine_id, name, kind=kind, reveal=True)
+        return {
+            'item': item,
+            'server_machine_id': KeychainStore.SERVER_MACHINE_ID,
+            'server_hostname': KeychainStore.SERVER_HOSTNAME,
+        }
+
     def create_keychain_item(self, payload: dict) -> dict:
         item = self.keychain_store.create_item(self._normalize_payload(payload))
         return {

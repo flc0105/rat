@@ -281,6 +281,30 @@ class KeychainStore:
             key=lambda item: (item.get('machine_id') != self.SERVER_MACHINE_ID, item.get('hostname') or ''),
         )
 
+    def get_item_by_name(self, machine_id: str, name: str, kind: str = '', reveal: bool = True) -> dict:
+        normalized_machine_id = self._normalize_machine_id(machine_id)
+        normalized_name = self._safe_text(name).lower()
+        normalized_kind = self._safe_text(kind).lower()
+
+        if not normalized_name:
+            raise ValueError('credential name is required')
+        if normalized_kind and normalized_kind not in {self.KIND_LOGIN, self.KIND_SECRET}:
+            raise ValueError('kind must be login or secret')
+
+        with self._lock:
+            items = self._read_payload(normalized_machine_id)
+
+        for item in items:
+            item_name = self._safe_text(item.get('name')).lower()
+            item_kind = self._safe_text(item.get('kind')).lower()
+            if item_name != normalized_name:
+                continue
+            if normalized_kind and item_kind != normalized_kind:
+                continue
+            return dict(item) if reveal else self._to_public_item(item)
+
+        raise FileNotFoundError(f'Credential not found: {name}')
+
     def get_item(self, cred_id: str, reveal: bool = True) -> dict:
         with self._lock:
             _, item, _ = self._find_item_unlocked(cred_id)
