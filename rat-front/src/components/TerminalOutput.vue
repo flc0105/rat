@@ -385,6 +385,17 @@ export default {
       return value === ' ' ? '' : value
     },
 
+    isTerminalScriptRunBlock(block) {
+  const commandText = this.getTerminalBlockCommandText(block)
+  return /^\[Run Script\]/i.test(commandText)
+},
+
+getTerminalBlockArtifactCategory(block) {
+  return this.isTerminalScriptRunBlock(block)
+    ? 'script_output'
+    : 'command_output'
+},
+
     getTerminalBlockOutputLineEntries(block) {
       const entries = Array.isArray(block?.bodyLines) ? block.bodyLines : []
 
@@ -483,44 +494,53 @@ export default {
       }
     },
 
-    buildTerminalOutputFilename(commandText) {
-      const now = new Date()
-      const pad = value => String(value).padStart(2, '0')
-      const timestamp = [
-        now.getFullYear(),
-        pad(now.getMonth() + 1),
-        pad(now.getDate()),
-      ].join('') + '_' + [
-        pad(now.getHours()),
-        pad(now.getMinutes()),
-        pad(now.getSeconds()),
-      ].join('')
+   buildTerminalOutputFilename(block) {
+  const commandText = this.getTerminalBlockCommandText(block)
+  const now = new Date()
+  const pad = value => String(value).padStart(2, '0')
+  const timestamp = [
+    now.getFullYear(),
+    pad(now.getMonth() + 1),
+    pad(now.getDate()),
+  ].join('') + '_' + [
+    pad(now.getHours()),
+    pad(now.getMinutes()),
+    pad(now.getSeconds()),
+  ].join('')
 
-      const slug = String(commandText || 'output')
-        .trim()
-        .toLowerCase()
-        .replace(/\s+/g, '_')
-        .replace(/[^a-z0-9_.-]+/g, '_')
-        .replace(/^[_\-.]+|[_\-.]+$/g, '')
-        .slice(0, 48) || 'output'
+  const rawName = this.isTerminalScriptRunBlock(block)
+    ? commandText.replace(/^\[Run Script\]\s*/i, '')
+    : commandText
 
-      return `cmd_${timestamp}_${slug}.txt`
-    },
+  const slug = String(rawName || 'output')
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, '_')
+    .replace(/[^a-z0-9_.-]+/g, '_')
+    .replace(/^[_\-.]+|[_\-.]+$/g, '')
+    .slice(0, 48) || 'output'
+
+  const prefix = this.isTerminalScriptRunBlock(block) ? 'script' : 'cmd'
+  return `${prefix}_${timestamp}_${slug}.txt`
+},
 
     buildTerminalOutputArtifactExtra(block) {
       const sourceCommand = this.getTerminalBlockCommandText(block)
       const outputEntries = this.getTerminalBlockOutputLineEntries(block)
 
-      return {
-        source: 'terminal_inline_action',
-        source_command: sourceCommand,
-        wrapper_command: '',
-        source_history_entry_id: '',
-        source_task_id: '',
-        saved_from: 'terminal_output',
-        line_count: outputEntries.length,
-        saved_at: new Date().toISOString(),
-      }
+return {
+  source: this.isTerminalScriptRunBlock(block)
+    ? 'script_terminal_inline_action'
+    : 'terminal_inline_action',
+  source_command: sourceCommand,
+  wrapper_command: '',
+  source_history_entry_id: '',
+  source_task_id: '',
+  saved_from: 'terminal_output',
+  category: this.getTerminalBlockArtifactCategory(block),
+  line_count: outputEntries.length,
+  saved_at: new Date().toISOString(),
+}
     },
 
     async saveTerminalBlockOutput(block) {
@@ -533,13 +553,14 @@ export default {
       }
 
       const commandText = this.getTerminalBlockCommandText(block)
-      const filename = this.buildTerminalOutputFilename(commandText)
+      const filename = this.buildTerminalOutputFilename(block)
+const artifactCategory = this.getTerminalBlockArtifactCategory(block)
       const formData = new FormData()
       const blob = new Blob([outputText], { type: 'text/plain;charset=utf-8' })
 
       formData.append('file', blob, filename)
       formData.append('artifact_type', 'command_output')
-      formData.append('category', 'command_output')
+      formData.append('category', artifactCategory)
       formData.append('client_id', String(this.selectedId || ''))
       formData.append('hostname', String(this.currentConnection?.hostname || ''))
       formData.append('machine_id', String(this.currentConnection?.machine_id || ''))
