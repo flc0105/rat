@@ -106,12 +106,22 @@
                     @set-active-task="setActiveTask"
                 />
 
+<!--                <TerminalOutput-->
+<!--                    ref="terminalOutputRef"-->
+<!--                    :lines="currentOutputLines"-->
+<!--                    @preview-artifact="previewArtifact"-->
+<!--                    @open-json="$refs.terminalJsonDialogRef?.open($event)"-->
+<!--                />-->
+
                 <TerminalOutput
-                    ref="terminalOutputRef"
-                    :lines="currentOutputLines"
-                    @preview-artifact="previewArtifact"
-                    @open-json="$refs.terminalJsonDialogRef?.open($event)"
-                />
+    ref="terminalOutputRef"
+    :lines="currentOutputLines"
+    :selected-id="selectedId"
+    :current-connection="currentConnection"
+    @preview-artifact="previewArtifact"
+    @open-json="$refs.terminalJsonDialogRef?.open($event)"
+    @artifact-saved="refreshArtifactsIfOpen"
+/>
               </div>
             </section>
           </div>

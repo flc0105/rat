@@ -222,6 +222,12 @@ export default {
 
                 if (!payload.artifact_id) return;
 
+                    // Command Output 是用户主动保存的命令输出，不按“远程文件已准备好”处理。
+    if (payload.artifact_type === 'command_output') {
+        await this.refreshArtifactsIfOpen?.();
+        return;
+    }
+
                 if (payload.client_id) {
                     this.appendOutput(
                         payload.client_id,
