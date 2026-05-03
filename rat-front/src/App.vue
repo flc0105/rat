@@ -43,50 +43,55 @@
       <main class="main panel">
         <template v-if="currentConnection">
           <div class="main-body">
-<!--            <ConnectionInfoCards-->
-<!--                :connection="currentConnection"-->
-<!--                :status-now-tick="statusNowTick"-->
-<!--            />-->
+            <!--            <ConnectionInfoCards-->
+            <!--                :connection="currentConnection"-->
+            <!--                :status-now-tick="statusNowTick"-->
+            <!--            />-->
 
 
             <div
-    class="connection-info-shell"
-    :class="{ 'connection-info-shell-collapsed': connectionInfoCollapsed }"
->
-  <button
-      class="connection-info-toggle"
-      type="button"
-      :title="connectionInfoCollapsed ? 'Show connection info' : 'Hide connection info'"
-      @click="toggleConnectionInfo"
-  >
-    <span>{{ connectionInfoCollapsed ? '⌄' : '⌃' }}</span>
-  </button>
+                class="connection-info-shell"
+                :class="{ 'connection-info-shell-collapsed': connectionInfoCollapsed }"
+            >
+              <button
+                  class="connection-info-toggle"
+                  type="button"
+                  :title="connectionInfoCollapsed ? 'Show connection info' : 'Hide connection info'"
+                  @click="toggleConnectionInfo"
+              >
+                <el-icon class="connection-info-toggle-icon">
+                  <ArrowDown v-if="connectionInfoCollapsed"/>
+                  <ArrowUp v-else/>
+                </el-icon>
+              </button>
 
-  <ConnectionInfoCards
-      v-show="!connectionInfoCollapsed"
-      :connection="currentConnection"
-      :status-now-tick="statusNowTick"
-  />
-</div>
+              <ConnectionInfoCards
+                  v-show="!connectionInfoCollapsed"
+                  :connection="currentConnection"
+                  :status-now-tick="statusNowTick"
+              />
+            </div>
 
             <section class="terminal-panel">
               <div class="terminal-frame">
-                <TerminalToolbar
-                    :selected-id="selectedId"
-                    @open-remote-files="openRemoteFilesDialog"
-                    @open-artifacts="openArtifactDialog"
-                    @open-external-tools="openExternalToolManagerDialog"
-                    @open-keychains="openKeychainManagerDialog"
-                    @open-info="openConnectionInfoDialog"
-                    @open-jobs="openBackgroundJobsDialog"
-                    @open-scripts="openScriptLibraryDialog"
-                    @open-agents="openAgentOutputsDialog"
-                    @open-history="openCommandHistoryDialog"
-                    @open-pty="openPtyDialog"
-                    @open-processes="openProcessDialog"
-                    @clear="clearOutput"
-                    @bottom="scrollToBottom"
-                />
+  <TerminalToolbar
+    :selected-id="selectedId"
+    :current-connection-offline="isCurrentConnectionOffline"
+    @toggle-connection-info="toggleConnectionInfo"
+    @open-remote-files="openRemoteFilesDialog"
+    @open-artifacts="openArtifactDialog"
+    @open-external-tools="openExternalToolManagerDialog"
+    @open-keychains="openKeychainManagerDialog"
+    @open-info="openConnectionInfoDialog"
+    @open-jobs="openBackgroundJobsDialog"
+    @open-scripts="openScriptLibraryDialog"
+    @open-agents="openAgentOutputsDialog"
+    @open-history="openCommandHistoryDialog"
+    @open-pty="openPtyDialog"
+    @open-processes="openProcessDialog"
+    @clear="clearOutput"
+    @bottom="scrollToBottom"
+/>
 
                 <CommandInputBar
                     ref="commandInputBarRef"
@@ -279,8 +284,12 @@ import PreviewDialog from "./components/PreviewDialog.vue";
 import TerminalJsonDialog from "./components/TerminalJsonDialog.vue";
 import PtyDialog from "./components/PtyDialog.vue";
 
+import {ArrowDown, ArrowUp} from '@element-plus/icons-vue'
+
 export default {
   components: {
+    ArrowDown,
+    ArrowUp,
     PtyDialog,
     TerminalJsonDialog,
     PreviewDialog,
@@ -318,6 +327,11 @@ export default {
     ...AppConnectionModule.computed,
     ...AppTerminalModule.computed,
     ...AppTaskModule.computed,
+
+      isCurrentConnectionOffline() {
+    if (!this.currentConnection) return false
+    return this.getConnectionDisplayState(this.currentConnection) === 'offline'
+  },
   },
 
   watch: {
@@ -336,8 +350,8 @@ export default {
     },
 
     toggleConnectionInfo() {
-  this.connectionInfoCollapsed = !this.connectionInfoCollapsed
-},
+      this.connectionInfoCollapsed = !this.connectionInfoCollapsed
+    },
 
     refreshArtifactsIfOpen() {
       return this.$refs.artifactDialogRef?.refreshIfOpen()
@@ -508,55 +522,54 @@ export default {
 </script>
 
 
-
 <style scoped>
 /*connection info card*/
-.connection-info-shell {
-  position: relative;
-  min-width: 0;
-}
-
-.connection-info-shell-collapsed {
-  height: 0;
-  min-height: 0;
-}
-
 .connection-info-toggle {
   position: absolute;
-  top: 6px;
-  right: 8px;
+  top: 7px;
+  right: 10px;
   z-index: 8;
   width: 22px;
-  height: 18px;
+  height: 22px;
   padding: 0;
-  border: 1px solid rgba(148, 163, 184, 0.18);
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.42);
-  color: rgba(100, 116, 139, 0.52);
-  font-size: 12px;
-  line-height: 16px;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.44);
+  color: rgba(100, 116, 139, 0.56);
   cursor: pointer;
-  opacity: 0.42;
-  transition: opacity 0.16s ease, background 0.16s ease, color 0.16s ease, border-color 0.16s ease;
+  opacity: 0.38;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: opacity 0.16s ease,
+  background 0.16s ease,
+  color 0.16s ease,
+  border-color 0.16s ease,
+  box-shadow 0.16s ease,
+  transform 0.16s ease;
 }
 
 .connection-info-toggle:hover {
   opacity: 1;
-  background: rgba(255, 255, 255, 0.88);
+  background: rgba(255, 255, 255, 0.92);
   color: rgba(15, 23, 42, 0.72);
-  border-color: rgba(148, 163, 184, 0.32);
-}
-
-.connection-info-toggle span {
-  display: block;
+  border-color: rgba(148, 163, 184, 0.34);
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.08);
   transform: translateY(-1px);
 }
 
+.connection-info-toggle-icon {
+  width: 13px;
+  height: 13px;
+  font-size: 13px;
+  line-height: 1;
+}
+
 .connection-info-shell-collapsed .connection-info-toggle {
-  top: 7px;
+  top: 8px;
   right: 14px;
-  background: rgba(15, 23, 42, 0.18);
-  color: rgba(226, 232, 240, 0.72);
-  border-color: rgba(255, 255, 255, 0.12);
+  background: rgba(15, 23, 42, 0.2);
+  color: rgba(226, 232, 240, 0.78);
+  border-color: rgba(255, 255, 255, 0.14);
 }
 </style>

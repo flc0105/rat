@@ -1,9 +1,19 @@
 <template>
   <div class="terminal-topbar">
     <div class="terminal-topbar-left">
+<!--      <span class="dot dot-red"></span>-->
+<!--      <span class="dot dot-yellow"></span>-->
+<!--      <span class="dot dot-green"></span>-->
+
       <span class="dot dot-red"></span>
-      <span class="dot dot-yellow"></span>
-      <span class="dot dot-green"></span>
+<span class="dot dot-yellow"></span>
+<button
+  class="dot dot-green dot-action"
+  type="button"
+  title="Toggle connection info"
+  aria-label="Toggle connection info"
+  @click="$emit('toggle-connection-info')"
+/>
       <span class="terminal-title">Interactive Shell</span>
     </div>
 
@@ -12,6 +22,7 @@
         size="small"
         class="tool-btn tool-btn-accent"
         @click="$emit('open-remote-files')"
+        :disabled="deviceActionDisabled"
       >
         Remote Files
       </el-button>
@@ -53,7 +64,7 @@
       <el-button
         size="small"
         class="tool-btn ml-0"
-        :disabled="!selectedId"
+        :disabled="deviceActionDisabled"
         @click="$emit('open-pty')"
       >
         PTY
@@ -76,7 +87,7 @@
             <el-dropdown-item command="external-tools">External Tools</el-dropdown-item>
             <el-dropdown-item command="jobs">Jobs</el-dropdown-item>
             <el-dropdown-item command="agents">Agents</el-dropdown-item>
-            <el-dropdown-item command="processes">Processes</el-dropdown-item>
+            <el-dropdown-item command="processes" :disabled="deviceActionDisabled">Processes</el-dropdown-item>
             <el-dropdown-item command="keychains">Keychains</el-dropdown-item>
 
           </el-dropdown-menu>
@@ -109,6 +120,7 @@
         size="small"
         class="tool-btn tool-btn-danger"
         @click="killConnection"
+        :disabled="deviceActionDisabled"
       >
         Disconnect
       </el-button>
@@ -145,9 +157,14 @@ export default {
       type: [String, Number],
       default: '',
     },
+    currentConnectionOffline: {
+  type: Boolean,
+  default: false,
+},
   },
 
   emits: [
+      'toggle-connection-info',
     'open-remote-files',
     'open-artifacts',
     'open-external-tools',
@@ -162,6 +179,12 @@ export default {
     'clear',
     'bottom',
   ],
+
+  computed: {
+  deviceActionDisabled() {
+    return !this.selectedId || this.currentConnectionOffline
+  },
+},
 
   methods: {
 
@@ -442,5 +465,28 @@ export default {
     padding-inline: 10px;
     font-size: 12px;
   }
+}
+
+/*dot actions*/
+.dot-action {
+  padding: 0;
+  border: none;
+  appearance: none;
+  cursor: pointer;
+  flex: 0 0 auto;
+  transition:
+      transform 0.14s ease,
+      filter 0.14s ease,
+      box-shadow 0.14s ease;
+}
+
+.dot-action:hover {
+  transform: scale(1.14);
+  filter: brightness(1.08);
+  box-shadow: 0 0 0 3px rgba(52, 211, 153, 0.14);
+}
+
+.dot-action:active {
+  transform: scale(0.96);
 }
 </style>
