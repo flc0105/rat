@@ -43,10 +43,31 @@
       <main class="main panel">
         <template v-if="currentConnection">
           <div class="main-body">
-            <ConnectionInfoCards
-                :connection="currentConnection"
-                :status-now-tick="statusNowTick"
-            />
+<!--            <ConnectionInfoCards-->
+<!--                :connection="currentConnection"-->
+<!--                :status-now-tick="statusNowTick"-->
+<!--            />-->
+
+
+            <div
+    class="connection-info-shell"
+    :class="{ 'connection-info-shell-collapsed': connectionInfoCollapsed }"
+>
+  <button
+      class="connection-info-toggle"
+      type="button"
+      :title="connectionInfoCollapsed ? 'Show connection info' : 'Hide connection info'"
+      @click="toggleConnectionInfo"
+  >
+    <span>{{ connectionInfoCollapsed ? '⌄' : '⌃' }}</span>
+  </button>
+
+  <ConnectionInfoCards
+      v-show="!connectionInfoCollapsed"
+      :connection="currentConnection"
+      :status-now-tick="statusNowTick"
+  />
+</div>
 
             <section class="terminal-panel">
               <div class="terminal-frame">
@@ -288,6 +309,8 @@ export default {
       statusTickTimer: null,
       remoteFilesDialogVisible: false,
       pendingRemoteUploadRefresh: null,
+
+      connectionInfoCollapsed: false,
     }
   },
 
@@ -311,6 +334,10 @@ export default {
     openArtifactDialog() {
       return this.$refs.artifactDialogRef?.open()
     },
+
+    toggleConnectionInfo() {
+  this.connectionInfoCollapsed = !this.connectionInfoCollapsed
+},
 
     refreshArtifactsIfOpen() {
       return this.$refs.artifactDialogRef?.refreshIfOpen()
@@ -479,3 +506,57 @@ export default {
   },
 }
 </script>
+
+
+
+<style scoped>
+/*connection info card*/
+.connection-info-shell {
+  position: relative;
+  min-width: 0;
+}
+
+.connection-info-shell-collapsed {
+  height: 0;
+  min-height: 0;
+}
+
+.connection-info-toggle {
+  position: absolute;
+  top: 6px;
+  right: 8px;
+  z-index: 8;
+  width: 22px;
+  height: 18px;
+  padding: 0;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.42);
+  color: rgba(100, 116, 139, 0.52);
+  font-size: 12px;
+  line-height: 16px;
+  cursor: pointer;
+  opacity: 0.42;
+  transition: opacity 0.16s ease, background 0.16s ease, color 0.16s ease, border-color 0.16s ease;
+}
+
+.connection-info-toggle:hover {
+  opacity: 1;
+  background: rgba(255, 255, 255, 0.88);
+  color: rgba(15, 23, 42, 0.72);
+  border-color: rgba(148, 163, 184, 0.32);
+}
+
+.connection-info-toggle span {
+  display: block;
+  transform: translateY(-1px);
+}
+
+.connection-info-shell-collapsed .connection-info-toggle {
+  top: 7px;
+  right: 14px;
+  background: rgba(15, 23, 42, 0.18);
+  color: rgba(226, 232, 240, 0.72);
+  border-color: rgba(255, 255, 255, 0.12);
+}
+</style>
