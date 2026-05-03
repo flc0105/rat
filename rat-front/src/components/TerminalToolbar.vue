@@ -24,26 +24,7 @@
         Artifacts
       </el-button>
 
-      <el-dropdown
-        trigger="click"
-        @command="handleResourceCommand"
-      >
-        <el-button
-          size="small"
-          class="tool-btn tool-btn-accent"
-        >
-          Resources
-        </el-button>
 
-        <template #dropdown>
-          <el-dropdown-menu>
-            <el-dropdown-item command="external-tools">External Tools</el-dropdown-item>
-            <el-dropdown-item command="keychains">Keychains</el-dropdown-item>
-            <el-dropdown-item command="jobs">Jobs</el-dropdown-item>
-            <el-dropdown-item command="agents">Agents</el-dropdown-item>
-          </el-dropdown-menu>
-        </template>
-      </el-dropdown>
 
       <el-button
         size="small"
@@ -78,27 +59,51 @@
         PTY
       </el-button>
 
-      <el-dropdown
+            <el-dropdown
         trigger="click"
-        @command="handleOpsCommand"
+        @command="handleResourceCommand"
       >
         <el-button
           size="small"
           class="tool-btn tool-btn-accent"
         >
-          Ops
+          More
         </el-button>
 
         <template #dropdown>
           <el-dropdown-menu>
+
+            <el-dropdown-item command="external-tools">External Tools</el-dropdown-item>
+            <el-dropdown-item command="jobs">Jobs</el-dropdown-item>
+            <el-dropdown-item command="agents">Agents</el-dropdown-item>
             <el-dropdown-item command="processes">Processes</el-dropdown-item>
-<!--            <el-dropdown-item divided disabled>HTTP Cmd</el-dropdown-item>-->
-            <el-dropdown-item divided command="http-kill">Force Kill</el-dropdown-item>
-            <el-dropdown-item command="http-reset">Force Reset</el-dropdown-item>
-            <el-dropdown-item command="http-spawn">Force Spawn</el-dropdown-item>
+            <el-dropdown-item command="keychains">Keychains</el-dropdown-item>
+
           </el-dropdown-menu>
         </template>
       </el-dropdown>
+
+<!--      <el-dropdown-->
+<!--        trigger="click"-->
+<!--        @command="handleOpsCommand"-->
+<!--      >-->
+<!--        <el-button-->
+<!--          size="small"-->
+<!--          class="tool-btn tool-btn-accent"-->
+<!--        >-->
+<!--          Ops-->
+<!--        </el-button>-->
+
+<!--        <template #dropdown>-->
+<!--          <el-dropdown-menu>-->
+<!--            <el-dropdown-item command="processes">Processes</el-dropdown-item>-->
+<!--&lt;!&ndash;            <el-dropdown-item divided disabled>HTTP Cmd</el-dropdown-item>&ndash;&gt;-->
+<!--            <el-dropdown-item divided command="http-kill">Force Kill</el-dropdown-item>-->
+<!--            <el-dropdown-item command="http-reset">Force Reset</el-dropdown-item>-->
+<!--            <el-dropdown-item command="http-spawn">Force Spawn</el-dropdown-item>-->
+<!--          </el-dropdown-menu>-->
+<!--        </template>-->
+<!--      </el-dropdown>-->
 
       <el-button
         size="small"
@@ -189,6 +194,7 @@ export default {
         keychains: 'open-keychains',
         jobs: 'open-jobs',
         agents: 'open-agents',
+        processes: 'open-processes',
       }
       const eventName = eventMap[normalizedCommand]
 
@@ -204,10 +210,10 @@ export default {
     async handleOpsCommand(command) {
       const normalizedCommand = String(command || '').trim().toLowerCase()
 
-      if (normalizedCommand === 'processes') {
-        this.$emit('open-processes')
-        return
-      }
+      // if (normalizedCommand === 'processes') {
+      //   this.$emit('open-processes')
+      //   return
+      // }
 
       const httpCommandMap = {
         'http-kill': 'kill',
