@@ -9,6 +9,9 @@ from server.application.history.history_view_service import HistoryViewService
 from server.application.history.history_write_service import HistoryWriteService
 from server.config.config import (
     COMMAND_HISTORY_MAX_ENTRIES_PER_HOST,
+    COMMAND_HISTORY_MAX_OUTPUT_RECORD_CHARS,
+    COMMAND_HISTORY_MAX_OUTPUT_RECORDS,
+    COMMAND_HISTORY_MAX_OUTPUT_SUMMARY_CHARS,
     COMMAND_HISTORY_ROOT_DIR,
 )
 
@@ -23,9 +26,9 @@ class CommandHistoryStore:
     - 将写入 / 展示逻辑委托给 write_service / view_service
     """
 
-    MAX_OUTPUT_RECORD_CHARS = 64 * 1024
-    MAX_OUTPUT_SUMMARY_CHARS = 240
-    MAX_OUTPUT_RECORDS = 200
+    MAX_OUTPUT_RECORD_CHARS = COMMAND_HISTORY_MAX_OUTPUT_RECORD_CHARS
+    MAX_OUTPUT_SUMMARY_CHARS = COMMAND_HISTORY_MAX_OUTPUT_SUMMARY_CHARS
+    MAX_OUTPUT_RECORDS = COMMAND_HISTORY_MAX_OUTPUT_RECORDS
     TIME_FORMAT = '%Y-%m-%d %H:%M:%S'
 
     def __init__(self):

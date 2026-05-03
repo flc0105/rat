@@ -41,6 +41,9 @@ BACKGROUND_MESSAGE_LOG_FILE = os.path.abspath(os.path.join('runtime', 'session_m
 # ------------------ history ------------------ #
 COMMAND_HISTORY_ROOT_DIR = os.path.abspath(os.path.join('runtime', 'command_history'))
 COMMAND_HISTORY_MAX_ENTRIES_PER_HOST = 300
+COMMAND_HISTORY_MAX_OUTPUT_RECORD_CHARS = 64 * 1024
+COMMAND_HISTORY_MAX_OUTPUT_SUMMARY_CHARS = 240
+COMMAND_HISTORY_MAX_OUTPUT_RECORDS = 200
 PINNED_PATHS_ROOT_DIR = os.path.abspath(os.path.join('runtime', 'pinned_paths'))
 KEYCHAINS_ROOT_DIR = os.path.abspath(os.path.join('runtime', 'keychains'))
 
