@@ -5,15 +5,59 @@
 <!--      <span class="dot dot-yellow"></span>-->
 <!--      <span class="dot dot-green"></span>-->
 
+<!--      <span class="dot dot-red"></span>-->
+<!--<span class="dot dot-yellow"></span>-->
+<!--<button-->
+<!--  class="dot dot-green dot-action"-->
+<!--  type="button"-->
+<!--  title="Toggle connection info"-->
+<!--  aria-label="Toggle connection info"-->
+<!--  @click="$emit('toggle-connection-info')"-->
+<!--/>-->
+
+
       <span class="dot dot-red"></span>
 <span class="dot dot-yellow"></span>
-<button
-  class="dot dot-green dot-action"
-  type="button"
-  title="Toggle connection info"
-  aria-label="Toggle connection info"
-  @click="$emit('toggle-connection-info')"
-/>
+
+<el-dropdown
+  trigger="click"
+  placement="bottom-start"
+  popper-class="terminal-layout-dropdown"
+  @command="handleLayoutCommand"
+>
+  <button
+    class="dot dot-green dot-action"
+    type="button"
+    title="Layout quick actions"
+    aria-label="Layout quick actions"
+  />
+
+  <template #dropdown>
+    <el-dropdown-menu>
+      <el-dropdown-item command="toggle-device-sidebar">
+        {{ deviceSidebarCollapsed ? 'Show device sidebar' : 'Hide device sidebar' }}
+      </el-dropdown-item>
+
+      <el-dropdown-item command="toggle-connection-info">
+        {{ connectionInfoCollapsed ? 'Show connection info card' : 'Hide connection info card' }}
+      </el-dropdown-item>
+
+      <el-dropdown-item
+        command="hide-both"
+        divided
+        :disabled="deviceSidebarCollapsed && connectionInfoCollapsed"
+      >
+        Hide both
+      </el-dropdown-item>
+    </el-dropdown-menu>
+  </template>
+</el-dropdown>
+
+
+
+
+
+
       <span class="terminal-title">Interactive Shell</span>
     </div>
 
@@ -161,10 +205,20 @@ export default {
   type: Boolean,
   default: false,
 },
+
+deviceSidebarCollapsed: {
+  type: Boolean,
+  default: false,
+},
+
+connectionInfoCollapsed: {
+  type: Boolean,
+  default: false,
+},
   },
 
   emits: [
-      'toggle-connection-info',
+      'layout-command',
     'open-remote-files',
     'open-artifacts',
     'open-external-tools',
@@ -223,6 +277,10 @@ export default {
 
     ElMessage.error(e.message || 'Disconnect failed')
   }
+},
+
+    handleLayoutCommand(command) {
+  this.$emit('layout-command', command)
 },
 
 
@@ -488,5 +546,36 @@ export default {
 
 .dot-action:active {
   transform: scale(0.96);
+}
+
+
+
+/*disabled toolbar button*/
+.tool-btn.el-button.is-disabled,
+.tool-btn.el-button.is-disabled:hover,
+.tool-btn.el-button.is-disabled:focus {
+  background: rgba(148, 163, 184, 0.055) !important;
+  border-color: rgba(148, 163, 184, 0.09) !important;
+  color: rgba(203, 213, 225, 0.34) !important;
+  opacity: 0.58;
+  cursor: not-allowed;
+  filter: grayscale(0.45);
+  box-shadow: none;
+}
+
+.tool-btn.tool-btn-accent.el-button.is-disabled,
+.tool-btn.tool-btn-accent.el-button.is-disabled:hover,
+.tool-btn.tool-btn-accent.el-button.is-disabled:focus {
+  background: rgba(59, 130, 246, 0.045) !important;
+  border-color: rgba(96, 165, 250, 0.08) !important;
+  color: rgba(191, 219, 254, 0.32) !important;
+}
+
+.tool-btn.tool-btn-danger.el-button.is-disabled,
+.tool-btn.tool-btn-danger.el-button.is-disabled:hover,
+.tool-btn.tool-btn-danger.el-button.is-disabled:focus {
+  background: rgba(220, 38, 38, 0.045) !important;
+  border-color: rgba(248, 113, 113, 0.08) !important;
+  color: rgba(254, 202, 202, 0.32) !important;
 }
 </style>

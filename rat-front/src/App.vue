@@ -31,14 +31,15 @@
       </div>
     </header>
 
-    <div class="content">
-      <DeviceSidebar
-          :connections="connections"
-          :selected-id="selectedId"
-          :status-now-tick="statusNowTick"
-          @refresh="loadConnections"
-          @select="selectConnection"
-      />
+    <div class="content" :class="{ 'content-sidebar-collapsed': deviceSidebarCollapsed }">
+<DeviceSidebar
+    v-show="!deviceSidebarCollapsed"
+    :connections="connections"
+    :selected-id="selectedId"
+    :status-now-tick="statusNowTick"
+    @refresh="loadConnections"
+    @select="selectConnection"
+/>
 
       <main class="main panel">
         <template v-if="currentConnection">
@@ -77,7 +78,9 @@
   <TerminalToolbar
     :selected-id="selectedId"
     :current-connection-offline="isCurrentConnectionOffline"
-    @toggle-connection-info="toggleConnectionInfo"
+    :device-sidebar-collapsed="deviceSidebarCollapsed"
+    :connection-info-collapsed="connectionInfoCollapsed"
+    @layout-command="handleToolbarLayoutCommand"
     @open-remote-files="openRemoteFilesDialog"
     @open-artifacts="openArtifactDialog"
     @open-external-tools="openExternalToolManagerDialog"
@@ -320,6 +323,7 @@ export default {
       pendingRemoteUploadRefresh: null,
 
       connectionInfoCollapsed: false,
+deviceSidebarCollapsed: false,
     }
   },
 
@@ -352,6 +356,29 @@ export default {
     toggleConnectionInfo() {
       this.connectionInfoCollapsed = !this.connectionInfoCollapsed
     },
+
+    toggleDeviceSidebar() {
+  this.deviceSidebarCollapsed = !this.deviceSidebarCollapsed
+},
+
+handleToolbarLayoutCommand(command) {
+  const normalizedCommand = String(command || '').trim()
+
+  if (normalizedCommand === 'toggle-device-sidebar') {
+    this.toggleDeviceSidebar()
+    return
+  }
+
+  if (normalizedCommand === 'toggle-connection-info') {
+    this.toggleConnectionInfo()
+    return
+  }
+
+  if (normalizedCommand === 'hide-both') {
+    this.deviceSidebarCollapsed = true
+    this.connectionInfoCollapsed = true
+  }
+},
 
     refreshArtifactsIfOpen() {
       return this.$refs.artifactDialogRef?.refreshIfOpen()
@@ -571,5 +598,23 @@ export default {
   background: rgba(15, 23, 42, 0.2);
   color: rgba(226, 232, 240, 0.78);
   border-color: rgba(255, 255, 255, 0.14);
+}
+
+.content-sidebar-collapsed {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.content-sidebar-collapsed .main {
+  grid-column: 1 / -1;
+}
+
+
+@media (max-width: 640px) {
+  .terminal-panel {
+    padding-top: 8px;
+    padding-left: 8px;
+    padding-right: 8px;
+  }
+
 }
 </style>
