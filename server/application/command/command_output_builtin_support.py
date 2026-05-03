@@ -39,15 +39,12 @@ class CommandOutputBuiltinSupport:
         except Exception:
             return {}
 
-    def _slug_command(self, command: str, max_length: int = 48) -> str:
-        text = re.sub(r'\s+', '_', str(command or '').strip().lower())
-        text = re.sub(r'[^a-z0-9_.-]+', '_', text).strip('._-')
-        return (text[:max_length].strip('._-') or 'output')
+
 
     def _build_output_name(self, command: str) -> str:
         timestamp = self._now().strftime(self.OUTPUT_TIME_FORMAT)
-        return f'cmd_{timestamp}_{self._slug_command(command)}.txt'
-
+        return f'cmd_{timestamp}.txt'
+    
     def _build_extra(self, *, command: str, wrapper_command: str, started_at: str, finished_at: str,
                      duration_ms: int, final_status: str, inner_status: int) -> dict:
         runtime_task = self._get_runtime_task()

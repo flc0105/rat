@@ -493,9 +493,7 @@ getTerminalBlockArtifactCategory(block) {
         throw new Error('Copy failed')
       }
     },
-
-   buildTerminalOutputFilename(block) {
-  const commandText = this.getTerminalBlockCommandText(block)
+buildTerminalOutputFilename(block) {
   const now = new Date()
   const pad = value => String(value).padStart(2, '0')
   const timestamp = [
@@ -508,20 +506,8 @@ getTerminalBlockArtifactCategory(block) {
     pad(now.getSeconds()),
   ].join('')
 
-  const rawName = this.isTerminalScriptRunBlock(block)
-    ? commandText.replace(/^\[Run Script\]\s*/i, '')
-    : commandText
-
-  const slug = String(rawName || 'output')
-    .trim()
-    .toLowerCase()
-    .replace(/\s+/g, '_')
-    .replace(/[^a-z0-9_.-]+/g, '_')
-    .replace(/^[_\-.]+|[_\-.]+$/g, '')
-    .slice(0, 48) || 'output'
-
   const prefix = this.isTerminalScriptRunBlock(block) ? 'script' : 'cmd'
-  return `${prefix}_${timestamp}_${slug}.txt`
+  return `${prefix}_${timestamp}.txt`
 },
 
     buildTerminalOutputArtifactExtra(block) {
