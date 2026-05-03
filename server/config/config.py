@@ -41,9 +41,12 @@ BACKGROUND_MESSAGE_LOG_FILE = os.path.abspath(os.path.join('runtime', 'session_m
 # ------------------ history ------------------ #
 COMMAND_HISTORY_ROOT_DIR = os.path.abspath(os.path.join('runtime', 'command_history'))
 COMMAND_HISTORY_MAX_ENTRIES_PER_HOST = 300
-COMMAND_HISTORY_MAX_OUTPUT_RECORD_CHARS = 64 * 1024
+COMMAND_HISTORY_MAX_OUTPUT_RECORD_CHARS = 8 * 1024
 COMMAND_HISTORY_MAX_OUTPUT_SUMMARY_CHARS = 240
-COMMAND_HISTORY_MAX_OUTPUT_RECORDS = 200
+COMMAND_HISTORY_MAX_OUTPUT_RECORDS = 20
+# 一台机器最多 300 条命令历史；
+# 每条命令历史里，最多 20 段输出；
+# 每条命令历史总输出文本最多 8KB。
 PINNED_PATHS_ROOT_DIR = os.path.abspath(os.path.join('runtime', 'pinned_paths'))
 KEYCHAINS_ROOT_DIR = os.path.abspath(os.path.join('runtime', 'keychains'))
 

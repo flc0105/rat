@@ -16,6 +16,7 @@ class ArtifactRegistryService:
     - files
     - previews
     - server_files
+    - command_output
     """
 
     ARTIFACT_TIME_FORMAT = '%Y-%m-%d %H:%M:%S'
@@ -23,11 +24,13 @@ class ArtifactRegistryService:
     CATEGORY_FILES = 'files'
     CATEGORY_PREVIEWS = 'previews'
     CATEGORY_SERVER_FILES = 'server_files'
+    CATEGORY_COMMAND_OUTPUT = 'command_output'
 
     FORMAL_CATEGORIES = {
         CATEGORY_FILES,
         CATEGORY_PREVIEWS,
         CATEGORY_SERVER_FILES,
+        CATEGORY_COMMAND_OUTPUT,
     }
 
     def __init__(self, artifact_service):
@@ -97,6 +100,19 @@ class ArtifactRegistryService:
             )
         )
 
+    def _get_command_output_machine_dir(self, category: str, machine_id: str) -> str:
+        return self._ensure_directory(
+            os.path.join(
+                self.artifact_service.command_output_dir,
+                self._normalize_category(category),
+                self._normalize_machine_id(machine_id),
+            )
+        )
+
+    def _get_command_output_meta_dir(self, category: str, machine_id: str) -> str:
+        return self._ensure_directory(os.path.join(self._get_command_output_machine_dir(category, machine_id), 'meta'))
+
+
     def _get_server_files_meta_dir(self, category: str = '') -> str:
         return self._ensure_directory(os.path.join(self._get_server_files_dir(category), 'meta'))
 
@@ -118,6 +134,9 @@ class ArtifactRegistryService:
             return self._get_preview_machine_dir(machine_id), self._get_preview_meta_dir(machine_id)
         if normalized_type == self.CATEGORY_SERVER_FILES:
             return self._get_server_files_dir(category), self._get_server_files_meta_dir(category)
+        if normalized_type == self.CATEGORY_COMMAND_OUTPUT:
+            return self._get_command_output_machine_dir(category, machine_id), self._get_command_output_meta_dir(
+                category, machine_id)
         raise ValueError(f'Unsupported artifact type: {artifact_type}')
 
     def allocate_artifact_path(self, artifact_type: str, machine_id: str, original_name: str, category: str = '') -> dict:
@@ -305,11 +324,62 @@ class ArtifactRegistryService:
             extra=extra,
         )
 
+    def save_text_artifact(self, *, artifact_type: str, category: str, hostname: str, machine_id: str,
+                           original_name: str, content: str, client_id: str = '', addr: str = '',
+                           source_command_id=None, job_id: str = '', job_name: str = '', job_key: str = '',
+                           extra: dict | None = None) -> dict:
+        normalized_type = self._normalize_artifact_type(artifact_type)
+        normalized_category = (category or '').strip() or 'default'
+
+        if normalized_type == self.CATEGORY_SERVER_FILES:
+            normalized_hostname = ''
+            normalized_machine_id = ''
+            client_id = ''
+            addr = ''
+            source_command_id = None
+            job_id = ''
+            job_name = ''
+            job_key = ''
+        else:
+            normalized_hostname = (hostname or '').strip() or 'unknown_host'
+            normalized_machine_id = (machine_id or '').strip() or 'unknown_machine'
+
+        allocated = self.allocate_artifact_path(
+            artifact_type=normalized_type,
+            machine_id=normalized_machine_id,
+            original_name=original_name,
+            category=normalized_category,
+        )
+
+        file_path = allocated['file_path']
+        with open(file_path, 'w', encoding='utf-8', errors='replace') as file_obj:
+            file_obj.write('' if content is None else str(content))
+
+        return self.register_existing_artifact(
+            artifact_type=normalized_type,
+            category=normalized_category,
+            hostname=normalized_hostname,
+            machine_id=allocated['machine_id'],
+            original_name=original_name,
+            file_path=file_path,
+            meta_path=allocated['meta_path'],
+            stored_name=allocated['stored_name'],
+            source_command_id=source_command_id,
+            client_id=client_id,
+            addr=addr,
+            job_id=job_id,
+            job_name=job_name,
+            job_key=job_key,
+            extra=extra,
+        )
+
+
     def _iter_formal_meta_paths(self):
         search_roots = [
             self.artifact_service.files_dir,
             self.artifact_service.previews_dir,
             self.artifact_service.server_files_dir,
+            self.artifact_service.command_output_dir,
         ]
         for root_dir in search_roots:
             if not os.path.isdir(root_dir):

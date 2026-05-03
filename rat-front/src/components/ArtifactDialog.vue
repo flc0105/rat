@@ -85,17 +85,27 @@
           </template>
         </el-tab-pane>
 
+
+
+                <el-tab-pane name="command_output">
+          <template #label>
+            Command Output ({{ artifactCountMap.command_output || 0 }})
+          </template>
+        </el-tab-pane>
+
         <el-tab-pane name="previews">
           <template #label>
             Previews ({{ artifactCountMap.previews || 0 }})
           </template>
         </el-tab-pane>
 
-        <el-tab-pane name="server_files">
+                        <el-tab-pane name="server_files">
           <template #label>
             Server Files ({{ artifactCountMap.server_files || 0 }})
           </template>
         </el-tab-pane>
+
+
       </el-tabs>
 
       <div class="dialog-table-shell">
@@ -408,8 +418,16 @@ export default {
       return String(this.artifactActiveTab || '').trim() === 'server_files'
     },
 
+    isCommandOutputTab() {
+      return String(this.artifactActiveTab || '').trim() === 'command_output'
+    },
+
     showArtifactMachineFilter() {
       return !this.isServerFilesTab
+    },
+
+    showArtifactCategoryColumn() {
+      return !this.isServerFilesTab && !this.isCommandOutputTab
     },
 
     artifactMachineOptions() {
@@ -459,7 +477,7 @@ export default {
 
     artifactCountMap() {
       const machineId = String(this.artifactMachineIdFilter || '').trim()
-      const counts = { files: 0, previews: 0, server_files: 0 }
+      const counts = { files: 0, previews: 0, server_files: 0, command_output: 0 }
 
       ;(this.artifactItems || []).forEach(item => {
         if (!item) return

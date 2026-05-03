@@ -13,6 +13,7 @@ class WebArtifactService:
     CATEGORY_FILES = 'files'
     CATEGORY_PREVIEWS = 'previews'
     CATEGORY_SERVER_FILES = 'server_files'
+    CATEGORY_COMMAND_OUTPUT = 'command_output'
     CATEGORY_UPLOAD_TMP = 'upload_tmp'
 
     def __init__(self):
@@ -21,6 +22,7 @@ class WebArtifactService:
         self.files_dir = os.path.join(self.artifacts_root_dir, self.CATEGORY_FILES)
         self.previews_dir = os.path.join(self.artifacts_root_dir, self.CATEGORY_PREVIEWS)
         self.server_files_dir = os.path.join(self.artifacts_root_dir, self.CATEGORY_SERVER_FILES)
+        self.command_output_dir = os.path.join(self.artifacts_root_dir, self.CATEGORY_COMMAND_OUTPUT)
         self.upload_tmp_dir = os.path.join(self.artifacts_root_dir, self.CATEGORY_UPLOAD_TMP)
 
         self._prepare_dirs()
@@ -36,6 +38,7 @@ class WebArtifactService:
         os.makedirs(self.files_dir, exist_ok=True)
         os.makedirs(self.previews_dir, exist_ok=True)
         os.makedirs(self.server_files_dir, exist_ok=True)
+        os.makedirs(self.command_output_dir, exist_ok=True)
         os.makedirs(self.upload_tmp_dir, exist_ok=True)
 
     def _clear_preview_cache_on_startup(self):
@@ -100,6 +103,27 @@ class WebArtifactService:
             source_command_id=source_command_id,
             addr=addr,
             # related_path=related_path,
+            extra=extra,
+        )
+
+
+    def save_text_artifact(self, *, artifact_type: str, category: str, hostname: str, machine_id: str,
+                           original_name: str, content: str, client_id: str = '', addr: str = '',
+                           source_command_id=None, job_id: str = '', job_name: str = '', job_key: str = '',
+                           extra: dict | None = None) -> dict:
+        return self.registry_service.save_text_artifact(
+            artifact_type=artifact_type,
+            category=category,
+            hostname=hostname,
+            machine_id=machine_id,
+            original_name=original_name,
+            content=content,
+            client_id=client_id,
+            addr=addr,
+            source_command_id=source_command_id,
+            job_id=job_id,
+            job_name=job_name,
+            job_key=job_key,
             extra=extra,
         )
 

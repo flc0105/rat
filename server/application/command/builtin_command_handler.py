@@ -6,6 +6,7 @@ from server.application.command.builtin_command_support import (
     ScriptBuiltinSupport,
     UploadBuiltinSupport,
 )
+from server.application.command.command_output_builtin_support import CommandOutputBuiltinSupport
 from server.application.command.control_builtin_support import ControlBuiltinSupport
 
 
@@ -92,6 +93,12 @@ class BuiltinCommandHandler:
             'help': 'Send HTTP control spawn command to the current client',
             'source': 'server'
         },
+        {
+            'name': 'saveout',
+            'template': 'saveout ',
+            'help': 'saveout <client-command> | Save full client command output as artifact',
+            'source': 'server'
+        },
     ]
 
     def __init__(
@@ -121,6 +128,14 @@ class BuiltinCommandHandler:
             plan_builder=self.plan_builder,
             plan_executor_factory=self.plan_executor_factory,
         )
+        self.command_output_support = CommandOutputBuiltinSupport(
+            server=self.server,
+            conn=self.conn,
+            plan_builder=self.plan_builder,
+            plan_executor_factory=self.plan_executor_factory,
+            history_entry_id_provider=self.history_entry_id_provider,
+        )
+
         self.alias_support = AliasBuiltinSupport(
             alias_manager=self.server.alias_manager,
             conn=self.conn,
@@ -198,6 +213,11 @@ class BuiltinCommandHandler:
     def upload(self, filename):
         for item in self.upload_support.upload(filename):
             yield item
+
+    def saveout(self, command):
+        for item in self.command_output_support.saveout(command):
+            yield item
+
 
     def exec(self, filename):
         if not filename:
