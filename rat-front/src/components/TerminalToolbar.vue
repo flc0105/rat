@@ -164,27 +164,66 @@ export default {
   ],
 
   methods: {
+
     async killConnection() {
-      if (!this.selectedId) {
-        ElMessage.warning('Please select a device')
-        return
-      }
+  if (!this.selectedId) {
+    ElMessage.warning('Please select a device')
+    return
+  }
 
-      try {
-        const res = await fetch(`/api/connections/${encodeURIComponent(this.selectedId)}/kill`, {
-          method: 'POST',
-        })
+  try {
+    await ElMessageBox.confirm(
+      'Disconnect current device?',
+      'Confirm Disconnect',
+      {
+        type: 'warning',
+        confirmButtonText: 'Disconnect',
+        cancelButtonText: 'Cancel',
+        confirmButtonClass: 'el-button--danger',
+      },
+    )
 
-        const json = await res.json()
-        if (!res.ok || json.code !== 0) {
-          throw new Error(json.message || 'Disconnect failed')
-        }
+    const res = await fetch(`/api/connections/${encodeURIComponent(this.selectedId)}/kill`, {
+      method: 'POST',
+    })
 
-        ElMessage.success('Disconnect command sent')
-      } catch (e) {
-        ElMessage.error(e.message || 'Disconnect failed')
-      }
-    },
+    const json = await res.json()
+    if (!res.ok || json.code !== 0) {
+      throw new Error(json.message || 'Disconnect failed')
+    }
+
+    ElMessage.success('Disconnect command sent')
+  } catch (e) {
+    if (e === 'cancel' || e === 'close' || e?.message === 'cancel') {
+      return
+    }
+
+    ElMessage.error(e.message || 'Disconnect failed')
+  }
+},
+
+
+    // async killConnection() {
+    //   if (!this.selectedId) {
+    //     ElMessage.warning('Please select a device')
+    //     return
+    //   }
+    //
+    //   try {
+    //     const res = await fetch(`/api/connections/${encodeURIComponent(this.selectedId)}/kill`, {
+    //       method: 'POST',
+    //     })
+    //
+    //     const json = await res.json()
+    //     if (!res.ok || json.code !== 0) {
+    //       throw new Error(json.message || 'Disconnect failed')
+    //     }
+    //
+    //     ElMessage.success('Disconnect command sent')
+    //   } catch (e) {
+    //     ElMessage.error(e.message || 'Disconnect failed')
+    //   }
+    // },
 
     // Resources 下拉只负责打开资源类弹窗，不承载执行控制逻辑。
     handleResourceCommand(command) {

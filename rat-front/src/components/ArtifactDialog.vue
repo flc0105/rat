@@ -50,12 +50,18 @@
               placeholder="Filter by device"
               @change="handleMachineFilterChange"
             >
+<!--              <el-option-->
+<!--                v-for="item in artifactMachines"-->
+<!--                :key="item.machine_id"-->
+<!--                :label="formatArtifactMachineOptionLabel(item)"-->
+<!--                :value="item.machine_id"-->
+<!--              />-->
               <el-option
-                v-for="item in artifactMachines"
-                :key="item.machine_id"
-                :label="formatArtifactMachineOptionLabel(item)"
-                :value="item.machine_id"
-              />
+  v-for="item in artifactMachineOptions"
+  :key="item.machine_id"
+  :label="formatArtifactMachineOptionLabel(item)"
+  :value="item.machine_id"
+/>
             </el-select>
           </div>
         </div>
@@ -75,7 +81,7 @@
       >
         <el-tab-pane name="files">
           <template #label>
-            Files ({{ artifactCountMap.files || 0 }})
+            Downloads ({{ artifactCountMap.files || 0 }})
           </template>
         </el-tab-pane>
 
@@ -405,6 +411,40 @@ export default {
     showArtifactMachineFilter() {
       return !this.isServerFilesTab
     },
+
+    artifactMachineOptions() {
+  const map = {}
+
+  ;(this.artifactMachines || []).forEach(item => {
+    const machineId = this.normalizeMachineId(item?.machine_id)
+    if (!machineId) return
+
+    map[machineId] = {
+      ...item,
+      machine_id: machineId,
+      hostname: String(item?.hostname || '').trim(),
+    }
+  })
+
+  const currentMachineId = this.getCurrentMachineId()
+  if (currentMachineId) {
+    const existing = map[currentMachineId] || {}
+    const currentHostname = String(this.currentConnection?.hostname || '').trim()
+
+    // 当前选中设备即使还没有 artifact，也要出现在筛选框里。
+    map[currentMachineId] = {
+      ...existing,
+      machine_id: currentMachineId,
+      hostname: currentHostname || String(existing.hostname || '').trim(),
+    }
+  }
+
+  return Object.values(map).sort((a, b) =>
+    this.formatArtifactMachineOptionLabel(a).localeCompare(
+      this.formatArtifactMachineOptionLabel(b)
+    )
+  )
+},
 
     filteredArtifactItems() {
       const activeType = String(this.artifactActiveTab || '').trim()
