@@ -120,6 +120,32 @@ class WebArtifactApi:
         return artifact
 
 
+    def save_command_output_artifact(self, *, content: str, category: str = 'command_output',
+                                     client_id: str = '', hostname: str = '', machine_id: str = '',
+                                     source: str = '', source_command: str = '', source_command_id=None,
+                                     job_id: str = '', job_name: str = '', job_key: str = '',
+                                     extra=None):
+        resolved_hostname, resolved_machine_id, addr = self.resolve_client_context(client_id)
+        hostname = hostname or resolved_hostname
+        machine_id = machine_id or resolved_machine_id
+
+        return self.artifact_service.save_command_output_artifact(
+            content=content,
+            category=category,
+            client_id=client_id,
+            hostname=hostname,
+            machine_id=machine_id,
+            source=source,
+            source_command=source_command,
+            source_command_id=source_command_id,
+            addr=addr,
+            job_id=job_id,
+            job_name=job_name,
+            job_key=job_key,
+            extra=extra if isinstance(extra, dict) else {},
+        )
+
+
     def send_artifact_to_client(self, artifact_id: str, client_id: str, target_path: str = '', tab_id: str = ''):
         if self.command_execution_api is None:
             raise RuntimeError('command_execution_api is not available')

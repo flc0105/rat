@@ -41,10 +41,8 @@ class CommandOutputBuiltinSupport:
 
 
 
-    def _build_output_name(self, command: str) -> str:
-        timestamp = self._now().strftime(self.OUTPUT_TIME_FORMAT)
-        return f'cmd_{timestamp}.txt'
-    
+
+
     def _build_extra(self, *, command: str, wrapper_command: str, started_at: str, finished_at: str,
                      duration_ms: int, final_status: str, inner_status: int) -> dict:
         runtime_task = self._get_runtime_task()
@@ -61,30 +59,25 @@ class CommandOutputBuiltinSupport:
             'inner_status': inner_status,
         }
 
-    def _resolve_output_artifact_path(self, output_name: str) -> dict:
+    def _allocate_output_artifact(self, *, command: str, category: str) -> dict:
         session_info = self._get_session_info()
-        machine_id = getattr(session_info, 'machine_id', '') or 'unknown_machine'
-        return self.server.web_service.artifact_service.allocate_artifact_path(
-            artifact_type=self.ARTIFACT_TYPE,
-            machine_id=machine_id,
-            original_name=output_name,
-            category=self.DEFAULT_CATEGORY,
+        return self.server.web_service.artifact_service.allocate_command_output_artifact_path(
+            category=category,
+            machine_id=getattr(session_info, 'machine_id', '') or 'unknown_machine',
+            source_command=command,
         )
 
-    def _register_output_artifact(self, *, allocation: dict, output_name: str, extra: dict) -> dict:
+    def _register_output_artifact(self, *, allocation: dict, command: str, category: str, extra: dict) -> dict:
         session_info = self._get_session_info()
-        artifact_service = self.server.web_service.artifact_service
-        return artifact_service.register_existing_artifact(
-            artifact_type=self.ARTIFACT_TYPE,
-            category=self.DEFAULT_CATEGORY,
+        return self.server.web_service.artifact_service.register_command_output_artifact(
+            allocation=allocation,
+            category=category,
             hostname=getattr(session_info, 'hostname', '') or 'unknown_host',
             machine_id=allocation.get('machine_id') or getattr(session_info, 'machine_id', '') or 'unknown_machine',
-            original_name=output_name,
-            file_path=allocation['file_path'],
-            meta_path=allocation['meta_path'],
-            stored_name=allocation['stored_name'],
             client_id=getattr(session_info, 'client_id', '') or '',
             addr=getattr(session_info, 'addr', '') or '',
+            source='builtin_saveout',
+            source_command=command,
             source_command_id=None,
             extra=extra,
         )
@@ -132,8 +125,11 @@ class CommandOutputBuiltinSupport:
             return
 
         wrapper_command = f'saveout {inner_command}'
-        output_name = self._build_output_name(inner_command)
-        allocation = self._resolve_output_artifact_path(output_name)
+        category = self.DEFAULT_CATEGORY
+        allocation = self._allocate_output_artifact(
+            command=inner_command,
+            category=category,
+        )
         file_path = allocation['file_path']
 
         started = self._now()
@@ -172,13 +168,14 @@ class CommandOutputBuiltinSupport:
 
         artifact = self._register_output_artifact(
             allocation=allocation,
-            output_name=output_name,
+            command=inner_command,
+            category=category,
             extra=extra,
         )
 
         size = int(artifact.get('size') or 0)
         yield 1, '\n'.join([
-            f'saved to command_output: {artifact.get("original_name") or output_name}',
+            f'saved to command_output: {artifact.get("original_name") or allocation.get("original_name") or "command_output.txt"}',
             f'artifact_id: {artifact.get("artifact_id", "")}',
             f'size: {size} bytes',
         ])

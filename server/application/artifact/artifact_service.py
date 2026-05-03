@@ -4,6 +4,7 @@ import shutil
 from server.application.artifact.artifact_preview_service import ArtifactPreviewService
 from server.application.artifact.artifact_registry_service import ArtifactRegistryService
 from server.application.artifact.artifact_temp_file_service import ArtifactTempFileService
+from server.application.artifact.command_output_artifact_service import CommandOutputArtifactService
 from server.config.config import WEB_CLEAR_PREVIEW_CACHE_ON_STARTUP, WEB_FILES_ROOT_DIR, WEB_PREVIEW_TEXT_MAX_BYTES
 
 
@@ -29,6 +30,7 @@ class WebArtifactService:
         self.registry_service = ArtifactRegistryService(self)
         self.preview_service = ArtifactPreviewService(self)
         self.temp_file_service = ArtifactTempFileService(self)
+        self.command_output_service = CommandOutputArtifactService(self)
 
         if WEB_CLEAR_PREVIEW_CACHE_ON_STARTUP:
             self._clear_preview_cache_on_startup()
@@ -103,6 +105,57 @@ class WebArtifactService:
             source_command_id=source_command_id,
             addr=addr,
             # related_path=related_path,
+            extra=extra,
+        )
+
+    def allocate_command_output_artifact_path(self, *, category: str, machine_id: str, source_command: str, now=None) -> dict:
+        return self.command_output_service.allocate_output_path(
+            category=category,
+            machine_id=machine_id,
+            source_command=source_command,
+            now=now,
+        )
+
+    def register_command_output_artifact(self, *, allocation: dict, category: str, hostname: str, machine_id: str,
+                                         client_id: str = '', addr: str = '', source: str = '',
+                                         source_command: str = '', source_command_id=None,
+                                         job_id: str = '', job_name: str = '', job_key: str = '',
+                                         extra: dict | None = None, saved_at=None) -> dict:
+        return self.command_output_service.register_output_artifact(
+            allocation=allocation,
+            category=category,
+            hostname=hostname,
+            machine_id=machine_id,
+            client_id=client_id,
+            addr=addr,
+            source=source,
+            source_command=source_command,
+            source_command_id=source_command_id,
+            job_id=job_id,
+            job_name=job_name,
+            job_key=job_key,
+            extra=extra,
+            saved_at=saved_at,
+        )
+
+    def save_command_output_artifact(self, *, content: str, category: str, hostname: str, machine_id: str,
+                                     client_id: str = '', addr: str = '', source: str = '',
+                                     source_command: str = '', source_command_id=None,
+                                     job_id: str = '', job_name: str = '', job_key: str = '',
+                                     extra: dict | None = None) -> dict:
+        return self.command_output_service.save_text_output(
+            content=content,
+            category=category,
+            hostname=hostname,
+            machine_id=machine_id,
+            client_id=client_id,
+            addr=addr,
+            source=source,
+            source_command=source_command,
+            source_command_id=source_command_id,
+            job_id=job_id,
+            job_name=job_name,
+            job_key=job_key,
             extra=extra,
         )
 

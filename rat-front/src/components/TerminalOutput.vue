@@ -529,50 +529,55 @@ return {
 }
     },
 
-    async saveTerminalBlockOutput(block) {
-      if (this.isSavingTerminalBlock(block)) return
+   async saveTerminalBlockOutput(block) {
+  if (this.isSavingTerminalBlock(block)) return
 
-      const outputText = this.getTerminalBlockOutputText(block)
-      if (!outputText.trim()) {
-        ElMessage.warning('No output to save')
-        return
-      }
+  const outputText = this.getTerminalBlockOutputText(block)
+  if (!outputText.trim()) {
+    ElMessage.warning('No output to save')
+    return
+  }
 
-      const commandText = this.getTerminalBlockCommandText(block)
-      const filename = this.buildTerminalOutputFilename(block)
-const artifactCategory = this.getTerminalBlockArtifactCategory(block)
-      const formData = new FormData()
-      const blob = new Blob([outputText], { type: 'text/plain;charset=utf-8' })
+  const commandText = this.getTerminalBlockCommandText(block)
+  const artifactCategory = this.getTerminalBlockArtifactCategory(block)
+  const source = this.isTerminalScriptRunBlock(block)
+    ? 'script_terminal_inline_action'
+    : 'terminal_inline_action'
 
-      formData.append('file', blob, filename)
-      formData.append('artifact_type', 'command_output')
-      formData.append('category', artifactCategory)
-      formData.append('client_id', String(this.selectedId || ''))
-      formData.append('hostname', String(this.currentConnection?.hostname || ''))
-      formData.append('machine_id', String(this.currentConnection?.machine_id || ''))
-      formData.append('extra', JSON.stringify(this.buildTerminalOutputArtifactExtra(block)))
+  this.setTerminalBlockSaving(block, true)
 
-      this.setTerminalBlockSaving(block, true)
+  try {
+    const res = await fetch('/api/artifacts/command-output/save', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        content: outputText,
+        artifact_type: 'command_output',
+        category: artifactCategory,
+        client_id: String(this.selectedId || ''),
+        hostname: String(this.currentConnection?.hostname || ''),
+        machine_id: String(this.currentConnection?.machine_id || ''),
+        source,
+        source_command: commandText,
+        extra: this.buildTerminalOutputArtifactExtra(block),
+      }),
+    })
 
-      try {
-        const res = await fetch('/api/files/upload', {
-          method: 'POST',
-          body: formData,
-        })
-        const json = await res.json()
+    const json = await res.json()
+    if (!res.ok || json.code !== 0) {
+      throw new Error(json.message || 'Save failed')
+    }
 
-        if (!res.ok || json.code !== 0) {
-          throw new Error(json.message || 'Save failed')
-        }
-
-        ElMessage.success('Saved to Command Output')
-        this.$emit('artifact-saved', json.data || null)
-      } catch (e) {
-        ElMessage.error(e.message || 'Save failed')
-      } finally {
-        this.setTerminalBlockSaving(block, false)
-      }
-    },
+    ElMessage.success('Saved to Command Output')
+    this.$emit('artifact-saved', json.data || null)
+  } catch (e) {
+    ElMessage.error(e.message || 'Save failed')
+  } finally {
+    this.setTerminalBlockSaving(block, false)
+  }
+},
 
     // scrollToBottom() {
     //   this.$nextTick(() => {

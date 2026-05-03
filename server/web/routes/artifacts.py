@@ -66,6 +66,41 @@ def create_artifacts_blueprint(server_instance):
             return artifact_api.clear_artifacts(artifact_type, machine_id=machine_id)
         return responder.json_endpoint(_execute, default_error_status=500)
 
+    @blueprint.post('/api/artifacts/command-output/save')
+    def save_command_output_artifact():
+        def _execute():
+            payload = get_json_payload()
+
+            content = payload.get('content', '')
+            category = (payload.get('category') or 'command_output').strip()
+            client_id = (payload.get('client_id') or '').strip()
+            hostname = (payload.get('hostname') or '').strip()
+            machine_id = (payload.get('machine_id') or '').strip()
+            source = (payload.get('source') or '').strip()
+            source_command = (payload.get('source_command') or '').strip()
+            source_command_id = payload.get('source_command_id')
+            job_id = (payload.get('job_id') or '').strip()
+            job_name = (payload.get('job_name') or '').strip()
+            job_key = (payload.get('job_key') or '').strip()
+            extra = payload.get('extra') if isinstance(payload.get('extra'), dict) else {}
+
+            return artifact_api.save_command_output_artifact(
+                content=content,
+                category=category,
+                client_id=client_id,
+                hostname=hostname,
+                machine_id=machine_id,
+                source=source,
+                source_command=source_command,
+                source_command_id=source_command_id,
+                job_id=job_id,
+                job_name=job_name,
+                job_key=job_key,
+                extra=extra,
+            )
+
+        return responder.json_endpoint(_execute, default_error_status=500)
+
     @blueprint.post('/api/files/upload')
     @allow_anonymous
     def upload_file():
