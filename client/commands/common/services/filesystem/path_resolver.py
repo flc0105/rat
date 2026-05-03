@@ -31,8 +31,10 @@ class PathResolver:
 
     def resolve_target_path(self, path: str) -> str:
         raw_path = (path or '').strip()
+        # if not raw_path:
+        #     raw_path = '..' 这儿应该是被AI改坏了
         if not raw_path:
-            raw_path = '..'
+            raw_path = '.'  # TODO 后续再补一层命令级防御 现在很多地方传空会直接操作cwd
 
         if os.path.isabs(raw_path):
             return os.path.abspath(raw_path)

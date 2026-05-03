@@ -7,6 +7,7 @@ from server.web.auth_guard import allow_anonymous
 from server.web.request_parsers import (
     get_json_payload,
     get_optional_form_text,
+    get_optional_tab_id,
     get_required_upload,
     parse_optional_int_form,
     parse_optional_json_form,
@@ -96,6 +97,23 @@ def create_artifacts_blueprint(server_instance):
                 # related_path=related_path,
                 source_command_id=source_command_id,
                 extra=extra,
+            )
+        return responder.json_endpoint(_execute, default_error_status=500)
+
+
+    @blueprint.post('/api/artifacts/<artifact_id>/send-to-client')
+    def send_artifact_to_client(artifact_id):
+        def _execute():
+            payload = get_json_payload()
+            client_id = (payload.get('client_id') or '').strip()
+            target_path = (payload.get('target_path') or '').strip()
+            if not client_id:
+                raise ValueError('client_id is required')
+            return artifact_api.send_artifact_to_client(
+                artifact_id,
+                client_id,
+                target_path=target_path,
+                tab_id=get_optional_tab_id(),
             )
         return responder.json_endpoint(_execute, default_error_status=500)
 

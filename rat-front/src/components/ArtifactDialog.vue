@@ -19,6 +19,16 @@
           </el-button>
 
           <el-button
+            v-if="isServerFilesTab"
+            size="small"
+            type="primary"
+            :loading="serverFileUploading"
+            @click="triggerServerFileUpload"
+          >
+            Upload
+          </el-button>
+
+          <el-button
             size="small"
             type="danger"
             :loading="artifactClearing"
@@ -29,7 +39,10 @@
         </div>
 
         <div class="dialog-head-right">
-          <div class="dialog-path-box artifact-filter-box">
+          <div
+            v-if="showArtifactMachineFilter"
+            class="dialog-path-box artifact-filter-box"
+          >
             <el-select
               v-model="artifactMachineIdFilter"
               clearable
@@ -37,22 +50,23 @@
               placeholder="Filter by device"
               @change="handleMachineFilterChange"
             >
-<!--              <el-option-->
-<!--                v-for="item in artifactMachines"-->
-<!--                :key="item.machine_id"-->
-<!--                :label="item.hostname || item.machine_id"-->
-<!--                :value="item.machine_id"-->
-<!--              />-->
               <el-option
-  v-for="item in artifactMachines"
-  :key="item.machine_id"
-  :label="formatArtifactMachineOptionLabel(item)"
-  :value="item.machine_id"
-/>
+                v-for="item in artifactMachines"
+                :key="item.machine_id"
+                :label="formatArtifactMachineOptionLabel(item)"
+                :value="item.machine_id"
+              />
             </el-select>
           </div>
         </div>
       </div>
+
+      <input
+        ref="serverFileUploadInputRef"
+        type="file"
+        class="artifact-hidden-file-input"
+        @change="handleServerFileUploadChange"
+      />
 
       <el-tabs
         :model-value="artifactActiveTab"
@@ -68,6 +82,12 @@
         <el-tab-pane name="previews">
           <template #label>
             Previews ({{ artifactCountMap.previews || 0 }})
+          </template>
+        </el-tab-pane>
+
+        <el-tab-pane name="server_files">
+          <template #label>
+            Server Files ({{ artifactCountMap.server_files || 0 }})
           </template>
         </el-tab-pane>
       </el-tabs>
@@ -90,12 +110,13 @@
           >
             <template #default="{ row }">
               <div class="ellipsis">
-                {{ row.original_name || row.stored_name }}
+                {{ formatArtifactName(row) }}
               </div>
             </template>
           </el-table-column>
 
           <el-table-column
+            v-if="!isServerFilesTab"
             label="Hostname"
             min-width="180"
             show-overflow-tooltip
@@ -108,6 +129,7 @@
           </el-table-column>
 
           <el-table-column
+            v-if="!isServerFilesTab"
             label="Category"
             min-width="160"
             show-overflow-tooltip
@@ -143,7 +165,7 @@
 
           <el-table-column
             label="Actions"
-            width="200"
+            :width="isServerFilesTab ? 190 : 200"
             align="center"
             fixed="right"
           >
@@ -165,7 +187,33 @@
                   Download
                 </a>
 
+                <template v-if="isServerFileItem(row)">
+                  <el-dropdown
+                    trigger="click"
+                    @command="command => handleArtifactMoreCommand(row, command)"
+                  >
+                    <span class="table-action-link">More</span>
+                    <template #dropdown>
+                      <el-dropdown-menu>
+                        <el-dropdown-item
+                          command="send-current-device"
+                          :disabled="!selectedId"
+                        >
+                          Send to Current Device
+                        </el-dropdown-item>
+                        <el-dropdown-item
+                          command="delete"
+                          divided
+                        >
+                          Delete
+                        </el-dropdown-item>
+                      </el-dropdown-menu>
+                    </template>
+                  </el-dropdown>
+                </template>
+
                 <a
+                  v-else
                   href="#"
                   class="table-action-link danger"
                   @click.prevent="deleteArtifact(row)"
@@ -204,20 +252,23 @@
 
                 <div class="mobile-file-main">
                   <div class="mobile-file-name">
-                    {{ row.original_name || row.stored_name }}
+                    {{ formatArtifactName(row) }}
                   </div>
 
-                  <div class="mobile-file-tags">
-                    <el-tag
-                      v-if="row.hostname"
-                      size="small"
-                    >
+                  <div
+                    v-if="row.hostname && !isServerFileItem(row)"
+                    class="mobile-file-tags"
+                  >
+                    <el-tag size="small">
                       {{ row.hostname }}
                     </el-tag>
                   </div>
 
                   <div class="mobile-file-meta">
-                    <div class="mobile-file-meta-item">
+                    <div
+                      v-if="!isServerFileItem(row)"
+                      class="mobile-file-meta-item"
+                    >
                       <div class="mobile-file-meta-label">Category</div>
                       <div class="mobile-file-meta-value">
                         {{ row.category || '-' }}
@@ -248,12 +299,42 @@
                     >
                       Preview
                     </el-button>
-<a :href="row.download_url" target="_blank">
-  <el-button size="small" type="primary" plain>
-    Download
-  </el-button>
-</a>
+
+                    <a :href="row.download_url" target="_blank">
+                      <el-button size="small" type="primary" plain>
+                        Download
+                      </el-button>
+                    </a>
+
+                    <template v-if="isServerFileItem(row)">
+                      <el-dropdown
+                        trigger="click"
+                        @command="command => handleArtifactMoreCommand(row, command)"
+                      >
+                        <el-button size="small" type="primary" plain>
+                          More
+                        </el-button>
+                        <template #dropdown>
+                          <el-dropdown-menu>
+                            <el-dropdown-item
+                              command="send-current-device"
+                              :disabled="!selectedId"
+                            >
+                              Send
+                            </el-dropdown-item>
+                            <el-dropdown-item
+                              command="delete"
+                              divided
+                            >
+                              Delete
+                            </el-dropdown-item>
+                          </el-dropdown-menu>
+                        </template>
+                      </el-dropdown>
+                    </template>
+
                     <el-button
+                      v-else
                       size="small"
                       type="danger"
                       plain
@@ -279,19 +360,29 @@ import { formatBytes as formatBytesValue } from '../utils/formatters.js'
 export default {
   name: 'ArtifactDialog',
 
-props: {
-  // formatBytes: {
-  //   type: Function,
-  //   required: true,
-  // },
+  props: {
+    // formatBytes: {
+    //   type: Function,
+    //   required: true,
+    // },
 
-  currentConnection: {
-    type: Object,
-    default: null,
+    selectedId: {
+      type: [String, Number],
+      default: '',
+    },
+
+    currentConnection: {
+      type: Object,
+      default: null,
+    },
+
+    getTabScopedHeaders: {
+      type: Function,
+      default: () => ({}),
+    },
   },
-},
 
-  emits: ['preview'],
+  emits: ['preview', 'append-output', 'set-active-task'],
 
   data() {
     return {
@@ -302,33 +393,42 @@ props: {
       artifactActiveTab: 'files',
       artifactMachineIdFilter: '',
       artifactClearing: false,
+      serverFileUploading: false,
     }
   },
 
   computed: {
+    isServerFilesTab() {
+      return String(this.artifactActiveTab || '').trim() === 'server_files'
+    },
+
+    showArtifactMachineFilter() {
+      return !this.isServerFilesTab
+    },
+
     filteredArtifactItems() {
       const activeType = String(this.artifactActiveTab || '').trim()
       const machineId = String(this.artifactMachineIdFilter || '').trim()
 
       return (this.artifactItems || []).filter(item => {
         if (activeType && item.artifact_type !== activeType) return false
-        if (machineId && item.machine_id !== machineId) return false
+        if (!this.isServerFileItem(item) && machineId && item.machine_id !== machineId) return false
         return true
       })
     },
 
     artifactCountMap() {
       const machineId = String(this.artifactMachineIdFilter || '').trim()
-      const counts = { files: 0, previews: 0 }
+      const counts = { files: 0, previews: 0, server_files: 0 }
 
       ;(this.artifactItems || []).forEach(item => {
         if (!item) return
-        if (machineId && item.machine_id !== machineId) return
 
         const type = String(item.artifact_type || '').trim()
-        if (Object.prototype.hasOwnProperty.call(counts, type)) {
-          counts[type] += 1
-        }
+        if (!Object.prototype.hasOwnProperty.call(counts, type)) return
+
+        if (type !== 'server_files' && machineId && item.machine_id !== machineId) return
+        counts[type] += 1
       })
 
       return counts
@@ -342,39 +442,54 @@ props: {
     // },
 
     formatBytes(value) {
-  return formatBytesValue(value)
-},
+      return formatBytesValue(value)
+    },
 
     async open() {
-  this.artifactMachineIdFilter = this.getCurrentMachineId()
-  this.visible = true
-  await this.loadArtifacts()
-},
+      this.artifactMachineIdFilter = this.getCurrentMachineId()
+      this.visible = true
+      await this.loadArtifacts()
+    },
 
     normalizeMachineId(value) {
-  return String(value || '').trim()
-},
+      return String(value || '').trim()
+    },
 
-getCurrentMachineId() {
-  return this.normalizeMachineId(this.currentConnection?.machine_id)
-},
+    getCurrentMachineId() {
+      return this.normalizeMachineId(this.currentConnection?.machine_id)
+    },
 
-shortenMachineId(machineId) {
-  const value = this.normalizeMachineId(machineId)
-  if (!value) return '-'
+    shortenMachineId(machineId) {
+      const value = this.normalizeMachineId(machineId)
+      if (!value) return '-'
 
-  return value.length > 12 ? value.slice(0, 12) : value
-},
+      return value.length > 12 ? value.slice(0, 12) : value
+    },
 
-formatArtifactMachineOptionLabel(machine) {
-  const machineId = this.normalizeMachineId(machine?.machine_id)
-  if (!machineId) return '-'
+    formatArtifactMachineOptionLabel(machine) {
+      const machineId = this.normalizeMachineId(machine?.machine_id)
+      if (!machineId) return '-'
 
-  const shortId = this.shortenMachineId(machineId)
-  const hostname = String(machine?.hostname || '').trim()
+      const shortId = this.shortenMachineId(machineId)
+      const hostname = String(machine?.hostname || '').trim()
 
-  return hostname ? `${shortId} (${hostname})` : shortId
-},
+      return hostname ? `${shortId} (${hostname})` : shortId
+    },
+
+    formatArtifactName(row) {
+      return row?.original_name || row?.stored_name || 'artifact'
+    },
+
+    isServerFileItem(item) {
+      return String(item?.artifact_type || '').trim() === 'server_files'
+    },
+
+    buildJsonHeaders(extra = {}) {
+      if (typeof this.getTabScopedHeaders === 'function') {
+        return this.getTabScopedHeaders(extra)
+      }
+      return extra
+    },
 
     isOpen() {
       return this.visible
@@ -395,6 +510,9 @@ formatArtifactMachineOptionLabel(machine) {
 
     async handleActiveTabChange(tabName) {
       this.artifactActiveTab = tabName || 'files'
+      if (!this.isServerFilesTab && !this.artifactMachineIdFilter) {
+        this.artifactMachineIdFilter = this.getCurrentMachineId()
+      }
       await this.loadArtifacts()
     },
 
@@ -407,10 +525,8 @@ formatArtifactMachineOptionLabel(machine) {
 
       try {
         const url = new URL('/api/artifacts', window.location.origin)
-        const machineId = String(this.artifactMachineIdFilter || '').trim()
 
-        if (machineId) url.searchParams.set('machine_id', machineId)
-
+        // 保持前端统一持有三类 artifact，设备过滤只在视图层处理。
         const res = await fetch(url.pathname + url.search)
         const json = await res.json()
 
@@ -430,6 +546,106 @@ formatArtifactMachineOptionLabel(machine) {
       }
     },
 
+    triggerServerFileUpload() {
+      const input = this.$refs.serverFileUploadInputRef
+
+      if (input) {
+        input.value = ''
+        input.click()
+      }
+    },
+
+    async handleServerFileUploadChange(event) {
+      const file = event.target.files && event.target.files[0]
+      if (!file) return
+
+      const formData = new FormData()
+      formData.append('file', file)
+      formData.append('artifact_type', 'server_files')
+
+      this.serverFileUploading = true
+
+      try {
+        const res = await fetch('/api/files/upload', {
+          method: 'POST',
+          headers: this.buildJsonHeaders(),
+          body: formData,
+        })
+        const json = await res.json()
+
+        if (!res.ok || json.code !== 0) {
+          throw new Error(json.message || 'Upload failed')
+        }
+
+        ElMessage.success(`Uploaded: ${file.name}`)
+        await this.loadArtifacts()
+      } catch (e) {
+        ElMessage.error(e.message || 'Upload failed')
+      } finally {
+        this.serverFileUploading = false
+        if (event?.target) event.target.value = ''
+      }
+    },
+
+    async handleArtifactMoreCommand(row, command) {
+      if (command === 'send-current-device') {
+        await this.sendArtifactToCurrentDevice(row)
+        return
+      }
+      if (command === 'delete') {
+        await this.deleteArtifact(row)
+      }
+    },
+
+    async sendArtifactToCurrentDevice(row) {
+      if (!row || !row.artifact_id) {
+        ElMessage.warning('Invalid artifact')
+        return
+      }
+
+      const clientId = String(this.selectedId || this.currentConnection?.client_id || '').trim()
+      if (!clientId) {
+        ElMessage.warning('Please select a device')
+        return
+      }
+
+      const displayName = this.formatArtifactName(row)
+      this.$emit(
+        'append-output',
+        clientId,
+        `> [Artifact Send] ${displayName} -> current device`,
+        'command'
+      )
+
+      try {
+        const res = await fetch(`/api/artifacts/${encodeURIComponent(row.artifact_id)}/send-to-client`, {
+          method: 'POST',
+          headers: this.buildJsonHeaders({ 'Content-Type': 'application/json' }),
+          body: JSON.stringify({
+            client_id: clientId,
+            target_path: '',
+          }),
+        })
+        const json = await res.json()
+
+        if (!res.ok || json.code !== 0) {
+          throw new Error(json.message || 'Send failed')
+        }
+
+        const taskId = json.data && json.data.task_id
+        this.$emit('set-active-task', clientId, taskId || '')
+        ElMessage.success(`Send started: ${displayName}`)
+      } catch (e) {
+        this.$emit(
+          'append-output',
+          clientId,
+          `[Artifact send failed] ${e.message || 'unknown error'}`,
+          'error'
+        )
+        ElMessage.error(e.message || 'Send failed')
+      }
+    },
+
     async deleteArtifact(row) {
       if (!row || !row.artifact_id) {
         ElMessage.warning('Invalid artifact')
@@ -438,7 +654,7 @@ formatArtifactMachineOptionLabel(machine) {
 
       try {
         await ElMessageBox.confirm(
-          `Delete "${row.original_name || row.stored_name}"?`,
+          `Delete "${this.formatArtifactName(row)}"?`,
           'Delete Confirmation',
           { type: 'warning', confirmButtonText: 'Delete', cancelButtonText: 'Cancel' }
         )
@@ -469,7 +685,7 @@ formatArtifactMachineOptionLabel(machine) {
       }
 
       try {
-        const suffix = this.artifactMachineIdFilter ? ' for selected device' : ''
+        const suffix = this.showArtifactMachineFilter && this.artifactMachineIdFilter ? ' for selected device' : ''
 
         await ElMessageBox.confirm(
           `Clear all ${activeType}${suffix}?`,
@@ -484,7 +700,7 @@ formatArtifactMachineOptionLabel(machine) {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             type: activeType,
-            machine_id: this.artifactMachineIdFilter || '',
+            machine_id: this.showArtifactMachineFilter ? (this.artifactMachineIdFilter || '') : '',
           }),
         })
 
@@ -572,6 +788,10 @@ formatArtifactMachineOptionLabel(machine) {
   font-size: 12px;
 }
 
+.artifact-hidden-file-input {
+  display: none;
+}
+
 .artifact-tabs {
   flex: 0 0 auto;
   min-height: 0;
@@ -649,6 +869,7 @@ formatArtifactMachineOptionLabel(machine) {
   font-size: 12px;
   white-space: nowrap;
   vertical-align: middle;
+  cursor: pointer;
 }
 
 .table-action-link:hover {
@@ -751,6 +972,7 @@ formatArtifactMachineOptionLabel(machine) {
 }
 
 .mobile-file-actions :deep(.el-button),
+.mobile-file-actions :deep(.el-dropdown),
 .mobile-file-actions .table-action-link,
 .mobile-file-actions a{
   flex: 1 1 calc(33.333% - 8px);
@@ -758,6 +980,14 @@ formatArtifactMachineOptionLabel(machine) {
   margin: 0;
   border-radius: 10px;
   justify-content: center;
+}
+
+.mobile-file-actions :deep(.el-dropdown) {
+  display: inline-flex;
+}
+
+.mobile-file-actions :deep(.el-dropdown .el-button) {
+  width: 100%;
 }
 
 .mobile-file-actions a {
@@ -851,6 +1081,7 @@ formatArtifactMachineOptionLabel(machine) {
   }
 
   .mobile-file-actions :deep(.el-button),
+  .mobile-file-actions :deep(.el-dropdown),
   .mobile-file-actions .table-action-link {
     flex: 1 1 calc(50% - 6px);
   }

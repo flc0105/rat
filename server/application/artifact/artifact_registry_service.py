@@ -12,19 +12,22 @@ class ArtifactRegistryService:
     """
     Artifact 注册/查询服务。
 
-    当前正式 artifact 仅保留：
+    当前正式 artifact 保留：
     - files
     - previews
+    - server_files
     """
 
     ARTIFACT_TIME_FORMAT = '%Y-%m-%d %H:%M:%S'
 
     CATEGORY_FILES = 'files'
     CATEGORY_PREVIEWS = 'previews'
+    CATEGORY_SERVER_FILES = 'server_files'
 
     FORMAL_CATEGORIES = {
         CATEGORY_FILES,
         CATEGORY_PREVIEWS,
+        CATEGORY_SERVER_FILES,
     }
 
     def __init__(self, artifact_service):
@@ -85,6 +88,18 @@ class ArtifactRegistryService:
     def _get_preview_meta_dir(self, machine_id: str) -> str:
         return self._ensure_directory(os.path.join(self._get_preview_machine_dir(machine_id), 'meta'))
 
+    def _get_server_files_dir(self, category: str = '') -> str:
+        # server_files 暂时不展示 category，但目录层级先预留。
+        return self._ensure_directory(
+            os.path.join(
+                self.artifact_service.server_files_dir,
+                self._normalize_category(category),
+            )
+        )
+
+    def _get_server_files_meta_dir(self, category: str = '') -> str:
+        return self._ensure_directory(os.path.join(self._get_server_files_dir(category), 'meta'))
+
     def _build_unique_path(self, directory: str, filename: str) -> str:
         base_name = os.path.basename(filename) or 'file.bin'
         stem, ext = os.path.splitext(base_name)
@@ -101,6 +116,8 @@ class ArtifactRegistryService:
             return self._get_files_machine_dir(category, machine_id), self._get_files_meta_dir(category, machine_id)
         if normalized_type == self.CATEGORY_PREVIEWS:
             return self._get_preview_machine_dir(machine_id), self._get_preview_meta_dir(machine_id)
+        if normalized_type == self.CATEGORY_SERVER_FILES:
+            return self._get_server_files_dir(category), self._get_server_files_meta_dir(category)
         raise ValueError(f'Unsupported artifact type: {artifact_type}')
 
     def allocate_artifact_path(self, artifact_type: str, machine_id: str, original_name: str, category: str = '') -> dict:
@@ -112,7 +129,7 @@ class ArtifactRegistryService:
         return {
             'artifact_type': normalized_type,
             'category': category,
-            'machine_id': self._normalize_machine_id(machine_id),
+            'machine_id': '' if normalized_type == self.CATEGORY_SERVER_FILES else self._normalize_machine_id(machine_id),
             'original_name': original_name,
             'stored_name': final_stored_name,
             'file_path': target_path,
@@ -248,8 +265,18 @@ class ArtifactRegistryService:
                                 extra: dict | None = None) -> dict:
         normalized_type = self._normalize_artifact_type(artifact_type or self.CATEGORY_FILES)
         normalized_category = (category or '').strip() or 'default'
-        normalized_hostname = (hostname or '').strip() or 'unknown_host'
-        normalized_machine_id = (machine_id or '').strip() or 'unknown_machine'
+        if normalized_type == self.CATEGORY_SERVER_FILES:
+            normalized_hostname = ''
+            normalized_machine_id = ''
+            client_id = ''
+            addr = ''
+            source_command_id = None
+            job_id = ''
+            job_name = ''
+            job_key = ''
+        else:
+            normalized_hostname = (hostname or '').strip() or 'unknown_host'
+            normalized_machine_id = (machine_id or '').strip() or 'unknown_machine'
         allocated = self.allocate_artifact_path(
             artifact_type=normalized_type,
             machine_id=normalized_machine_id,
@@ -279,7 +306,11 @@ class ArtifactRegistryService:
         )
 
     def _iter_formal_meta_paths(self):
-        search_roots = [self.artifact_service.files_dir, self.artifact_service.previews_dir]
+        search_roots = [
+            self.artifact_service.files_dir,
+            self.artifact_service.previews_dir,
+            self.artifact_service.server_files_dir,
+        ]
         for root_dir in search_roots:
             if not os.path.isdir(root_dir):
                 continue
@@ -323,6 +354,8 @@ class ArtifactRegistryService:
                 try:
                     payload = self._read_meta_file(meta_path)
                 except Exception:
+                    continue
+                if payload.get('artifact_type') == self.CATEGORY_SERVER_FILES:
                     continue
                 machine_id = (payload.get('machine_id') or '').strip()
                 if not machine_id:

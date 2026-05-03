@@ -4,10 +4,11 @@ from datetime import datetime
 
 
 class WebArtifactApi:
-    def __init__(self, server, event_bus, artifact_service):
+    def __init__(self, server, event_bus, artifact_service, command_execution_api=None):
         self.server = server
         self.event_bus = event_bus
         self.artifact_service = artifact_service
+        self.command_execution_api = command_execution_api
 
     def list_artifacts(self, artifact_type: str = '', machine_id: str = ''):
         return {
@@ -117,6 +118,33 @@ class WebArtifactApi:
         except Exception:
             pass
         return artifact
+
+
+    def send_artifact_to_client(self, artifact_id: str, client_id: str, target_path: str = '', tab_id: str = ''):
+        if self.command_execution_api is None:
+            raise RuntimeError('command_execution_api is not available')
+
+        artifact = self.get_artifact_by_id(artifact_id)
+        if artifact.get('artifact_type') != 'server_files':
+            raise ValueError('Only server files can be sent to client')
+        file_path = self.get_artifact_file_path(artifact_id)
+        display_name = (artifact.get('original_name') or artifact.get('stored_name') or os.path.basename(file_path)).strip()
+        if not display_name:
+            raise ValueError('display_name is required')
+
+        task_info = self.command_execution_api.submit_web_upload(
+            client_id,
+            file_path,
+            display_name,
+            remote_path=target_path,
+            tab_id=tab_id,
+        )
+        return {
+            **task_info,
+            'artifact_id': artifact.get('artifact_id', artifact_id),
+            'original_name': artifact.get('original_name', ''),
+            'stored_name': artifact.get('stored_name', ''),
+        }
 
     def update_artifact_content(self, artifact_id: str, content: str, encoding: str = 'utf-8'):
         if content is None:

@@ -122,8 +122,12 @@
 
   <ArtifactDialog
       ref="artifactDialogRef"
+      :selected-id="selectedId"
       :current-connection="currentConnection"
+      :get-tab-scoped-headers="getTabScopedHeaders"
       @preview="previewArtifact"
+      @append-output="appendOutput"
+      @set-active-task="setActiveTask"
   />
 
   <ExternalToolManagerDialog
