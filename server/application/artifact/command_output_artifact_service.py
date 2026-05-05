@@ -96,6 +96,25 @@ class CommandOutputArtifactService:
 
         return f'{prefix}_{timestamp}_{label}.txt'
 
+    def _resolve_script_output_name_source(self, *, source_command: str, extra: dict | None = None) -> str:
+        resolved_source_command = str(source_command or '').strip()
+        if resolved_source_command:
+            return resolved_source_command
+
+        payload = extra if isinstance(extra, dict) else {}
+
+        # 文件名沿用原 terminal 展示名规则：优先用可见脚本名，不使用脚本路径。
+        script_display_name = str(payload.get('script_display_name') or '').strip()
+        if script_display_name:
+            return script_display_name
+
+        script_name = str(payload.get('script_name') or '').replace('\\', '/').strip()
+        if script_name:
+            leaf_name = script_name.rsplit('/', 1)[-1]
+            return leaf_name[:-3] if leaf_name.endswith('.py') else leaf_name
+
+        return ''
+
     def build_extra(self, *, source: str, source_command: str, extra: dict | None = None, saved_at=None) -> dict:
         payload = dict(extra or {})
         current_time = saved_at or self._now()
@@ -170,10 +189,18 @@ class CommandOutputArtifactService:
         now = self._now()
         normalized_category = self._normalize_category(category)
 
+        allocation_name_source = source_command
+        if normalized_category == self.SCRIPT_CATEGORY:
+            # script 类型的 meta 不再写展示命令，但文件名仍沿用 script_name。
+            allocation_name_source = self._resolve_script_output_name_source(
+                source_command=source_command,
+                extra=extra,
+            )
+
         allocation = self.allocate_output_path(
             category=normalized_category,
             machine_id=machine_id,
-            source_command=source_command,
+            source_command=allocation_name_source,
             now=now,
         )
 
