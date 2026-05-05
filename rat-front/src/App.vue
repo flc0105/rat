@@ -121,6 +121,7 @@
     @preview-artifact="previewArtifact"
     @open-json="$refs.terminalJsonDialogRef?.open($event)"
     @artifact-saved="refreshArtifactsIfOpen"
+    @rerun-terminal-block="rerunTerminalBlock"
 />
               </div>
             </section>
@@ -520,6 +521,16 @@ handleToolbarLayoutCommand(command) {
     openCommandHistoryDialog() {
       return this.$refs.commandHistoryDialogRef?.open()
     },
+
+    rerunTerminalBlock(payload = {}) {
+  const type = String(payload.type || '').trim()
+
+  if (type === 'script') {
+    return this.$refs.scriptLibraryDialogRef?.runScriptFromTerminalBlock(payload)
+  }
+
+  return this.$refs.commandInputBarRef?.runCommandText(payload.command || '')
+},
 
     applyHistoryCommand(row) {
       if (!row || !row.command) return

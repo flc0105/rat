@@ -1,3 +1,10 @@
+import {
+    TERMINAL_BACKGROUND_PREFIX,
+    isTerminalCancelRequestedText,
+    isTerminalCommandFailedText,
+    isTerminalCommandFinishedText,
+} from './terminalMarkers.js';
+
 export default {
     data() {
         return {
@@ -46,19 +53,23 @@ export default {
             }
         },
 
-        inferLineKind(text) {
-            const value = String(text ?? '');
-            if (value.startsWith('> ')) return 'command';
-            // if (value.startsWith('[发送失败]') || value.startsWith('[上传失败]')) return 'error';
-            if (value.startsWith('[异步消息]') || value.startsWith('[Background]')) return 'info';
-            if (value.startsWith('[命令结束]') || value.startsWith('[Command finished]')) {
-                return /成功|Success/i.test(value) ? 'success' : 'error';
-            }
-            if (/failed|error|not found|denied|unable/i.test(value)) return 'error';
-            if (/completed|success|saved|started|uploaded|downloaded|created|renamed|copied/i.test(value)) return 'success';
-            if (/preparing|loading|refresh|connected|disconnected|warning/i.test(value)) return 'info';
-            return 'default';
-        },
+   inferLineKind(text) {
+    const value = String(text ?? '');
+    if (value.startsWith('> ')) return 'command';
+    if (value.startsWith(TERMINAL_BACKGROUND_PREFIX) || isTerminalCancelRequestedText(value)) return 'info';
+    if (isTerminalCommandFinishedText(value)) {
+        if (/Success/i.test(value)) return 'success';
+        if (/Cancelled/i.test(value)) return 'info';
+        return 'error';
+    }
+    if (isTerminalCommandFailedText(value)) return 'error';
+    if (/failed|error|not found|denied|unable/i.test(value)) return 'error';
+    if (/completed|success|saved|started|uploaded|downloaded|created|renamed|copied/i.test(value)) return 'success';
+    if (/preparing|loading|refresh|connected|disconnected|warning/i.test(value)) return 'info';
+    return 'default';
+},
+
+
 
         calculateTerminalJsonDelta(text) {
             const raw = String(text ?? '');
@@ -100,10 +111,10 @@ export default {
             return delta;
         },
 
-        isTerminalCommandBoundaryLine(text) {
-            const raw = String(text ?? '');
-            return raw.startsWith('> ') || raw.startsWith('[Command finished]') || raw.startsWith('[命令结束]');
-        },
+  isTerminalCommandBoundaryLine(text) {
+    const raw = String(text ?? '');
+    return raw.startsWith('> ') || isTerminalCommandFinishedText(raw) || isTerminalCommandFailedText(raw);
+},
 
         buildTerminalOutputLine(segment, kind = '', meta = {}) {
             const lineText = segment === '' ? ' ' : segment;

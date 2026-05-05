@@ -70,9 +70,14 @@
 
 <script>
 import { ElMessage } from 'element-plus'
+import {
+  formatTerminalCancelRequestedLine,
+  formatTerminalCommandFailedLine,
+} from '../legacy/modules/terminalMarkers.js'
 
 export default {
   name: 'CommandInputBar',
+
 
   props: {
     selectedId: {
@@ -186,13 +191,24 @@ export default {
         this.commandCandidatesLoadedFor = ''
         await this.loadCommandCandidates(this.selectedId)
       } catch (e) {
-        this.$emit('append-output', this.selectedId, '[Command failed] ' + (e.message || 'unknown error'), 'error')
+        this.$emit('append-output', this.selectedId, formatTerminalCommandFailedLine(e.message || 'unknown error'), 'error')
         ElMessage.error(e.message || 'Command failed')
         this.commandText = ''
       } finally {
         this.sending = false
       }
     },
+
+    async runCommandText(command) {
+  const normalizedCommand = String(command || '').trim()
+  if (!normalizedCommand) {
+    ElMessage.warning('No command to run')
+    return
+  }
+
+  this.commandText = normalizedCommand
+  await this.sendCommand()
+},
 
     async cancelCurrentTask() {
       if (!this.selectedId) {
@@ -219,7 +235,7 @@ export default {
           throw new Error(json.message || 'Cancel failed')
         }
 
-        this.$emit('append-output', this.selectedId, `[Cancel requested] task=${taskId}`, 'info')
+        this.$emit('append-output', this.selectedId, formatTerminalCancelRequestedLine(taskId), 'info')
         ElMessage.success('Cancel request sent')
       } catch (e) {
         this.cancelSending = false

@@ -263,6 +263,7 @@
 <script>
 import { ElMessage, ElMessageBox } from 'element-plus'
 import ScriptRunDialog from './ScriptRunDialog.vue'
+import { TERMINAL_RUN_SCRIPT_PREFIX } from '../legacy/modules/terminalMarkers.js'
 
 export default {
   name: 'ScriptLibraryDialog',
@@ -1040,6 +1041,54 @@ getPreferredScriptDirectoryForCurrentConnection() {
       this.scriptParamForm = {}
     },
 
+
+    async runScriptFromTerminalBlock(payload = {}) {
+  const scriptName = String(payload.script_name || '').trim()
+  const params = payload.params && typeof payload.params === 'object' && !Array.isArray(payload.params)
+    ? { ...payload.params }
+    : {}
+  const displayName = String(payload.script_display_name || scriptName).trim()
+  const scriptPath = String(payload.script_path || `${scriptName}.py`).trim()
+
+  if (!this.selectedId) {
+    ElMessage.warning('Please select a device')
+    return
+  }
+
+  if (!scriptName) {
+    ElMessage.warning('Missing script name')
+    return
+  }
+
+  try {
+    const commandText = `> ${TERMINAL_RUN_SCRIPT_PREFIX} ${displayName || scriptName}`
+    this.$emit('append-output', this.selectedId, commandText, 'command', {
+      terminal_block_type: 'script',
+      script_name: scriptName,
+      script_path: scriptPath,
+      script_display_name: displayName || scriptName,
+      params: { ...params },
+    })
+
+    const res = await fetch(`/api/connections/${encodeURIComponent(this.selectedId)}/scripts/run`, {
+      method: 'POST',
+      headers: this.buildJsonHeaders({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify({ script_name: scriptName, params }),
+    })
+    const json = await res.json()
+    if (!res.ok || json.code !== 0) throw new Error(json.message || 'Failed to run script')
+
+    const taskId = json.data && json.data.task_id
+    this.$emit('set-active-task', this.selectedId, taskId || '')
+    ElMessage.success(`Run request submitted: ${displayName || scriptName}`)
+  } catch (e) {
+    ElMessage.error(e.message || 'Failed to run script')
+  }
+},
+
+
+
+
     async confirmRunScript() {
       const item = this.pendingRunScriptItem
       if (!item) {
@@ -1056,7 +1105,7 @@ getPreferredScriptDirectoryForCurrentConnection() {
         this.scriptRunSubmitting = true
         const params = this.buildScriptRunParams(item)
 
-        const commandText = `> [Run Script] ${item.display_name || item.script_name}`
+        const commandText = `> ${TERMINAL_RUN_SCRIPT_PREFIX} ${item.display_name || item.script_name}`
         this.$emit('append-output', this.selectedId, commandText, 'command', {
           terminal_block_type: 'script',
           script_name: item.script_name || '',

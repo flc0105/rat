@@ -1,8 +1,8 @@
 <template>
   <div
-    class="terminal-output"
-    :class="{ 'terminal-output-empty': !lines.length }"
-    ref="terminalOutputRef"
+      class="terminal-output"
+      :class="{ 'terminal-output-empty': !lines.length }"
+      ref="terminalOutputRef"
   >
     <div v-if="!lines.length" class="terminal-empty">
       <div class="terminal-empty-title">Console ready</div>
@@ -13,105 +13,120 @@
 
     <template v-else>
       <div
-        v-for="block in terminalBlocks"
-        :key="block.key"
-        class="terminal-command-block"
-        :class="{ 'terminal-command-block-actionable': canUseTerminalBlockActions(block) }"
+          v-for="block in terminalBlocks"
+          :key="block.key"
+          class="terminal-command-block"
+          :class="{ 'terminal-command-block-actionable': canUseTerminalBlockActions(block) }"
       >
         <div
-          v-if="block.commandLine"
-          class="terminal-block-command-row"
+            v-if="block.commandLine"
+            class="terminal-block-command-row"
         >
           <div
-            class="terminal-line terminal-line-command"
-            :class="`line-${block.commandLine.line.kind || 'default'}`"
+              class="terminal-line terminal-line-command"
+              :class="`line-${block.commandLine.line.kind || 'default'}`"
           >
             <span class="terminal-prefix">$</span>
             <span class="terminal-text">{{ block.commandLine.line.text }}</span>
           </div>
-
-          <el-dropdown
-            v-if="canUseTerminalBlockActions(block)"
-            trigger="click"
-            placement="bottom-end"
-            popper-class="terminal-output-action-dropdown"
-            @command="handleTerminalBlockCommand(block, $event)"
-          >
-            <button
-              class="terminal-block-more"
-              type="button"
-              title="Output actions"
-              aria-label="Output actions"
-              @click.stop
-            >
-              ⋯
-            </button>
-
-            <template #dropdown>
-              <el-dropdown-menu>
-                <el-dropdown-item command="copy-output">
-                  Copy output
-                </el-dropdown-item>
-                <el-dropdown-item
-                  command="save-output"
-                  :disabled="isSavingTerminalBlock(block)"
-                >
-                  Save output
-                </el-dropdown-item>
-              </el-dropdown-menu>
-            </template>
-          </el-dropdown>
         </div>
 
         <template
-          v-for="entry in block.bodyLines"
-          :key="entry.index"
+            v-for="entry in block.bodyLines"
+            :key="entry.index"
         >
           <template v-if="isCommandFinishedLine(entry.line)">
             <div
-              v-if="getTerminalTailActionItems(lines, entry.index).length > 0"
-              class="terminal-line"
-              :class="`line-${entry.line.kind || 'default'}`"
+                v-if="getTerminalTailActionItems(lines, entry.index).length > 0"
+                class="terminal-line"
+                :class="`line-${entry.line.kind || 'default'}`"
             >
               <a
-                v-for="(actionItem, actionIndex) in getTerminalTailActionItems(lines, entry.index)"
-                :key="actionItem.key"
-                href="#"
-                class="table-action-link-aux terminal-text"
-                :class="{ 'terminal-action-link-spaced': actionIndex > 0 }"
-                @click.prevent.stop="handleTerminalActionClick(actionItem)"
+                  v-for="(actionItem, actionIndex) in getTerminalTailActionItems(lines, entry.index)"
+                  :key="actionItem.key"
+                  href="#"
+                  class="table-action-link-aux terminal-text"
+                  :class="{ 'terminal-action-link-spaced': actionIndex > 0 }"
+                  @click.prevent.stop="handleTerminalActionClick(actionItem)"
               >
                 [ {{ actionItem.type === 'preview' ? 'Preview' : 'View JSON' }} ]
               </a>
             </div>
 
             <div
-              class="terminal-line"
-              :class="`line-${entry.line.kind || 'default'}`"
+                class="terminal-line terminal-command-finished-row"
+                :class="`line-${entry.line.kind || 'default'}`"
             >
               <span class="terminal-text">{{ entry.line.text }}</span>
+
+              <el-dropdown
+                  v-if="canUseTerminalBlockActions(block)"
+                  trigger="click"
+                  placement="bottom-start"
+                  popper-class="terminal-output-action-dropdown"
+                  @command="handleTerminalBlockCommand(block, $event)"
+              >
+                <button
+                    class="terminal-block-more"
+                    type="button"
+                    title="Output actions"
+                    aria-label="Output actions"
+                    @click.stop
+                >
+                  ⋯
+                </button>
+
+                <template #dropdown>
+                  <el-dropdown-menu>
+                    <el-dropdown-item
+                        command="copy-command"
+                        :disabled="isTerminalRemoteUploadBlock(block) || isTerminalScriptRunBlock(block)"
+                    >
+                      Copy command
+                    </el-dropdown-item>
+                    <el-dropdown-item
+                        command="rerun-command"
+                        :disabled="isTerminalRemoteUploadBlock(block)"
+                    >
+                      Run again
+                    </el-dropdown-item>
+                    <el-dropdown-item
+                        command="copy-output"
+                        :disabled="!hasTerminalBlockOutput(block)"
+                    >
+                      Copy output
+                    </el-dropdown-item>
+                    <el-dropdown-item
+                        command="save-output"
+                        :disabled="isTerminalRemoteUploadBlock(block) || isSavingTerminalBlock(block) || !hasTerminalBlockOutput(block)"
+                    >
+                      Save output
+                    </el-dropdown-item>
+                  </el-dropdown-menu>
+                </template>
+              </el-dropdown>
             </div>
           </template>
 
           <div
-            v-else
-            class="terminal-line"
-            :class="`line-${entry.line.kind || 'default'}`"
+              v-else
+              class="terminal-line"
+              :class="`line-${entry.line.kind || 'default'}`"
           >
             <span
-              v-if="entry.line.kind === 'command'"
-              class="terminal-prefix"
+                v-if="entry.line.kind === 'command'"
+                class="terminal-prefix"
             >$</span>
 
             <span class="terminal-text">{{ entry.line.text }}</span>
 
             <a
-              v-for="(actionItem, actionIndex) in getTerminalInlineActionItems(lines, entry.index)"
-              :key="actionItem.key"
-              href="#"
-              class="table-action-link-aux terminal-text"
-              :class="{ 'terminal-action-link-spaced': actionIndex > 0 }"
-              @click.prevent.stop="handleTerminalActionClick(actionItem)"
+                v-for="(actionItem, actionIndex) in getTerminalInlineActionItems(lines, entry.index)"
+                :key="actionItem.key"
+                href="#"
+                class="table-action-link-aux terminal-text"
+                :class="{ 'terminal-action-link-spaced': actionIndex > 0 }"
+                @click.prevent.stop="handleTerminalActionClick(actionItem)"
             >
               [ {{ actionItem.type === 'preview' ? 'Preview' : 'JSON' }} ]
             </a>
@@ -123,7 +138,13 @@
 </template>
 
 <script>
-import { ElMessage } from 'element-plus'
+import {ElMessage} from 'element-plus'
+import {
+  isTerminalCommandFinishedText,
+  isTerminalRemoteUploadText,
+  TERMINAL_FILE_READY_PREFIX,
+  TERMINAL_RUN_SCRIPT_PREFIX,
+} from '../legacy/modules/terminalMarkers.js'
 
 export default {
   name: 'TerminalOutput',
@@ -145,7 +166,7 @@ export default {
     },
   },
 
-  emits: ['preview-artifact', 'open-json', 'artifact-saved'],
+  emits: ['preview-artifact', 'open-json', 'artifact-saved', 'rerun-terminal-block'],
 
   data() {
     return {
@@ -160,11 +181,11 @@ export default {
       let currentBlock = null
 
       safeLines.forEach((line, index) => {
-        const entry = { line, index }
+        const entry = {line, index}
         const shouldStartNewBlock =
-          !currentBlock ||
-          line?.kind === 'command' ||
-          this.isCommandFinishedLine(currentBlock.lines[currentBlock.lines.length - 1]?.line)
+            !currentBlock ||
+            line?.kind === 'command' ||
+            this.isCommandFinishedLine(currentBlock.lines[currentBlock.lines.length - 1]?.line)
 
         if (shouldStartNewBlock) {
           currentBlock = {
@@ -204,18 +225,19 @@ export default {
   },
 
   methods: {
+
+    hasTerminalBlockOutput(block) {
+      return this.getTerminalBlockOutputText(block).trim().length > 0
+    },
+
+
     isFileReadyLine(line) {
       const text = line?.text || ''
-      return text.startsWith('[File Ready]')
+      return text.startsWith(TERMINAL_FILE_READY_PREFIX)
     },
 
     isCommandFinishedLine(line) {
-      const text = line?.text || ''
-
-      return (
-        text.startsWith('[Command finished]') ||
-        text.startsWith('[命令结束]')
-      )
+      return isTerminalCommandFinishedText(line?.text || '')
     },
 
     getTerminalInlineActionItems(lines, index) {
@@ -360,9 +382,9 @@ export default {
       this.$nextTick(() => {
         const el = this.$refs.terminalOutputRef
         const isMobileLayout =
-          typeof window !== 'undefined' &&
-          window.matchMedia &&
-          window.matchMedia('(max-width: 960px)').matches
+            typeof window !== 'undefined' &&
+            window.matchMedia &&
+            window.matchMedia('(max-width: 960px)').matches
 
         if (isMobileLayout) {
           const appScrollRoot = document.getElementById('app')
@@ -445,8 +467,8 @@ export default {
     buildTerminalBlockScriptMeta(block) {
       const paramsValue = this.findTerminalBlockMetaValue(block, ['params', 'script_params'])
       const params = paramsValue && typeof paramsValue === 'object' && !Array.isArray(paramsValue)
-        ? { ...paramsValue }
-        : {}
+          ? {...paramsValue}
+          : {}
 
       return {
         script_name: String(this.findTerminalBlockMetaValue(block, ['script_name']) || '').trim(),
@@ -460,10 +482,11 @@ export default {
       const commandText = this.getTerminalBlockCommandText(block)
       const terminalBlockType = String(this.findTerminalBlockMetaValue(block, ['terminal_block_type', 'terminalBlockType']) || '').trim()
       const scriptMeta = this.buildTerminalBlockScriptMeta(block)
-      const isScript = terminalBlockType === 'script' || !!scriptMeta.script_name || /^\[Run Script\]/i.test(commandText)
+      const isScript = terminalBlockType === 'script' || !!scriptMeta.script_name || commandText.toLowerCase().startsWith(TERMINAL_RUN_SCRIPT_PREFIX.toLowerCase())
+      const isRemoteUpload = isTerminalRemoteUploadText(commandText)
 
       return {
-        blockType: isScript ? 'script' : 'command',
+        blockType: isScript ? 'script' : (isRemoteUpload ? 'remote_upload' : 'command'),
         commandId: this.normalizeNullableInt(this.findTerminalBlockMetaValue(block, ['command_id', 'source_command_id'])),
         taskId: String(this.findTerminalBlockMetaValue(block, ['task_id']) || '').trim(),
         scriptMeta,
@@ -474,10 +497,18 @@ export default {
       return String(block?.blockType || '').trim() === 'script'
     },
 
+    isTerminalRemoteUploadBlock(block) {
+      if (String(block?.blockType || '').trim() === 'remote_upload') {
+        return true
+      }
+
+      return isTerminalRemoteUploadText(this.getTerminalBlockCommandText(block))
+    },
+
     getTerminalBlockArtifactCategory(block) {
       return this.isTerminalScriptRunBlock(block)
-        ? 'script_output'
-        : 'command_output'
+          ? 'script_output'
+          : 'command_output'
     },
 
     getTerminalBlockSourceCommandId(block) {
@@ -498,8 +529,8 @@ export default {
 
     getTerminalBlockOutputText(block) {
       return this.getTerminalBlockOutputLineEntries(block)
-        .map(entry => this.normalizeTerminalOutputLineText(entry.line?.text))
-        .join('\n')
+          .map(entry => this.normalizeTerminalOutputLineText(entry.line?.text))
+          .join('\n')
     },
 
     canUseTerminalBlockActions(block) {
@@ -529,6 +560,16 @@ export default {
     handleTerminalBlockCommand(block, command) {
       const normalizedCommand = String(command || '').trim()
 
+      if (normalizedCommand === 'copy-command') {
+        this.copyTerminalBlockCommand(block)
+        return
+      }
+
+      if (normalizedCommand === 'rerun-command') {
+        this.rerunTerminalBlock(block)
+        return
+      }
+
       if (normalizedCommand === 'copy-output') {
         this.copyTerminalBlockOutput(block)
         return
@@ -537,6 +578,63 @@ export default {
       if (normalizedCommand === 'save-output') {
         this.saveTerminalBlockOutput(block)
       }
+    },
+
+    copyTerminalBlockCommand(block) {
+      if (this.isTerminalRemoteUploadBlock(block)) {
+        ElMessage.warning('Remote upload is not a reusable command')
+        return
+      }
+
+      if (this.isTerminalScriptRunBlock(block)) {
+        ElMessage.warning('Script command copy is disabled')
+        return
+      }
+
+      const commandText = this.getTerminalBlockCommandText(block)
+
+      if (!commandText) {
+        ElMessage.warning('No command to copy')
+        return
+      }
+
+      this.copyTextToClipboard(commandText)
+          .then(() => {
+            ElMessage.success('Command copied')
+          })
+          .catch(e => {
+            ElMessage.error(e.message || 'Copy failed')
+          })
+    },
+
+    rerunTerminalBlock(block) {
+      if (this.isTerminalRemoteUploadBlock(block)) {
+        ElMessage.warning('Remote upload cannot be run again from terminal history')
+        return
+      }
+
+      const isScript = this.isTerminalScriptRunBlock(block)
+      const commandText = this.getTerminalBlockCommandText(block)
+      const scriptMeta = block?.scriptMeta || this.buildTerminalBlockScriptMeta(block)
+
+      if (!isScript && !commandText) {
+        ElMessage.warning('No command to run')
+        return
+      }
+
+      if (isScript && !String(scriptMeta.script_name || '').trim()) {
+        ElMessage.warning('Missing script name')
+        return
+      }
+
+      this.$emit('rerun-terminal-block', {
+        type: isScript ? 'script' : 'command',
+        command: isScript ? '' : commandText,
+        script_name: scriptMeta.script_name || '',
+        script_path: scriptMeta.script_path || '',
+        script_display_name: scriptMeta.script_display_name || '',
+        params: scriptMeta.params || {},
+      })
     },
 
     async copyTerminalBlockOutput(block) {
@@ -557,9 +655,9 @@ export default {
 
     async copyTextToClipboard(text) {
       if (
-        typeof navigator !== 'undefined' &&
-        navigator.clipboard &&
-        typeof navigator.clipboard.writeText === 'function'
+          typeof navigator !== 'undefined' &&
+          navigator.clipboard &&
+          typeof navigator.clipboard.writeText === 'function'
       ) {
         await navigator.clipboard.writeText(text)
         return
@@ -644,8 +742,8 @@ export default {
       const sourceCommandId = this.getTerminalBlockSourceCommandId(block)
       const isScript = this.isTerminalScriptRunBlock(block)
       const source = isScript
-        ? 'script_terminal_inline_action'
-        : 'terminal_inline_action'
+          ? 'script_terminal_inline_action'
+          : 'terminal_inline_action'
 
       this.setTerminalBlockSaving(block, true)
 
@@ -796,7 +894,6 @@ export default {
 }
 
 
-
 @media (max-width: 960px) {
   .terminal-output {
     min-height: 340px;
@@ -810,56 +907,76 @@ export default {
 /*terminal block*/
 .terminal-command-block {
   position: relative;
-  border-radius: 10px;
-  margin: 0 -8px 2px;
-  padding: 0 8px;
+  border-radius: 8px;
+  margin: 0 -6px 2px;
+  padding: 0 6px;
 }
 
 .terminal-command-block-actionable:hover {
-  background: rgba(15, 23, 42, 0.22);
+  background: rgba(15, 23, 42, 0.16);
 }
 
 .terminal-block-command-row {
-  position: relative;
   display: flex;
   align-items: flex-start;
   min-width: 0;
-  padding-right: 28px;
 }
 
 .terminal-block-command-row .terminal-line {
-  flex: 1;
   min-width: 0;
 }
 
-.terminal-line-command {
-  padding-right: 28px;
+.terminal-command-finished-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+
+.terminal-command-finished-row .terminal-text {
+  flex: 0 1 auto;
+  min-width: 0;
 }
 
 .terminal-block-more {
-  position: absolute;
-  top: 4px;
-  right: 0;
-  width: 22px;
-  height: 22px;
+  position: relative;
+  flex: 0 0 auto;
+  width: 18px;
+  height: 18px;
   padding: 0;
-  border: 1px solid rgba(148, 163, 184, 0.12);
+  margin: 0 0 0 2px;
+  border: 1px solid transparent;
   border-radius: 999px;
-  background: rgba(15, 23, 42, 0.32);
-  color: rgba(203, 213, 225, 0.54);
+  background: transparent;
+  color: rgba(203, 213, 225, 0.46);
   cursor: pointer;
   opacity: 0;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  line-height: 18px;
-  font-size: 15px;
-  transform: translateY(-1px);
-  transition:
-      opacity 0.14s ease,
-      background 0.14s ease,
-      color 0.14s ease,
-      border-color 0.14s ease;
+  line-height: 1;
+  font-size: 0;
+  font-family: inherit;
+  vertical-align: middle;
+  transform: translateY(1px);
+  transition: opacity 0.12s ease,
+  background 0.12s ease,
+  color 0.12s ease,
+  border-color 0.12s ease;
+}
+
+.terminal-block-more::before {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 2px;
+  height: 2px;
+  border-radius: 999px;
+  background: currentColor;
+  transform: translate(-50%, -50%);
+  box-shadow: -4px 0 0 currentColor,
+  4px 0 0 currentColor;
 }
 
 .terminal-command-block:hover .terminal-block-more,
@@ -869,10 +986,12 @@ export default {
 }
 
 .terminal-block-more:hover,
-.terminal-block-more:focus-visible {
-  background: rgba(30, 41, 59, 0.92);
-  color: rgba(248, 250, 252, 0.9);
-  border-color: rgba(148, 163, 184, 0.28);
+.terminal-block-more:focus-visible,
+.terminal-block-more[aria-expanded='true'] {
+  background: rgba(148, 163, 184, 0.10);
+  border-color: rgba(148, 163, 184, 0.18);
+  border-radius: 999px;
+  color: rgba(226, 232, 240, 0.78);
   outline: none;
 }
 

@@ -1,3 +1,9 @@
+import {
+    formatTerminalCommandFinishedLine,
+    TERMINAL_BACKGROUND_PREFIX,
+    TERMINAL_FILE_READY_PREFIX,
+} from './terminalMarkers.js';
+
 export default {
     data() {
         return {
@@ -96,16 +102,16 @@ export default {
                 }
 
                 this.appendOutput(
-                    payload.client_id,
-                    `[Command finished] ${payload.command} (${finishText})`,
-                    finishKind,
-                    {
-                        task_id: payload.task_id || '',
-                        command: payload.command || '',
-                        command_id: payload.command_id ?? null,
-                        metadata: payload.metadata && typeof payload.metadata === 'object' ? payload.metadata : {},
-                    }
-                );
+    payload.client_id,
+    formatTerminalCommandFinishedLine(payload.command, finishText),
+    finishKind,
+    {
+        task_id: payload.task_id || '',
+        command: payload.command || '',
+        command_id: payload.command_id ?? payload.source_command_id ?? null,
+        metadata: payload.metadata && typeof payload.metadata === 'object' ? { ...payload.metadata } : {},
+    }
+);
 
                 this.clearActiveTask(payload.client_id, payload.task_id);
 
@@ -141,8 +147,7 @@ export default {
 
             es.addEventListener('background_message', async (event) => {
                 const payload = JSON.parse(event.data);
-                this.appendOutput(payload.client_id, `[Background] ${payload.text || ''}`, 'info');
-                await this.loadConnections();
+this.appendOutput(payload.client_id, `${TERMINAL_BACKGROUND_PREFIX} ${payload.text || ''}`, 'info');                await this.loadConnections();
             });
 
             es.addEventListener('background_job_status', async (event) => {
@@ -233,31 +238,26 @@ export default {
 
                 if (!payload.artifact_id) return;
 
-                    // Command Output 是用户主动保存的命令输出，不按“远程文件已准备好”处理。
-    if (payload.artifact_type === 'command_output') {
-        await this.refreshArtifactsIfOpen?.();
-        return;
-    }
+    //                 // Command Output 是用户主动保存的命令输出，不按“远程文件已准备好”处理。
+    // if (payload.artifact_type === 'command_output') {
+    //     await this.refreshArtifactsIfOpen?.();
+    //     return;
+    // }
 
                 if (payload.client_id) {
                     this.appendOutput(
-                        payload.client_id,
-                        `[File Ready] ${fileName}`,
-                        'success',
-                        {
-                            artifactInfo: {
-                                artifact_id: payload.artifact_id,
-                                original_name: payload.original_name || '',
-                                stored_name: payload.stored_name || '',
-                                download_url: payload.download_url || '',
-                                raw_url: payload.raw_url || '',
-                                size: payload.size || 0,
-                                hostname: payload.hostname || '',
-                                category: payload.category || '',
-                                source_type: payload.source_type || ''
-                            }
-                        }
-                    );
+    payload.client_id,
+    `${TERMINAL_FILE_READY_PREFIX} ${fileName}`,
+    'success',
+    {
+        artifactInfo: {
+            artifact_id: payload.artifact_id || '',
+            artifact_type: payload.artifact_type || '',
+            category: payload.category || '',
+            original_name: payload.original_name || fileName,
+        },
+    }
+);
                 }
 
                 if (!this.selectedId || payload.client_id === this.selectedId || !payload.client_id) {
