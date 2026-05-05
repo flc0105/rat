@@ -72,7 +72,12 @@ export default {
 
             es.addEventListener('command_result', (event) => {
                 const payload = JSON.parse(event.data);
-                this.appendOutput(payload.client_id, payload.text || '');
+                this.appendOutput(payload.client_id, payload.text || '', '', {
+                    task_id: payload.task_id || '',
+                    command: payload.command || '',
+                    command_id: payload.command_id ?? null,
+                    metadata: payload.metadata && typeof payload.metadata === 'object' ? payload.metadata : {},
+                });
             });
 
             es.addEventListener('command_complete', async (event) => {
@@ -93,7 +98,13 @@ export default {
                 this.appendOutput(
                     payload.client_id,
                     `[Command finished] ${payload.command} (${finishText})`,
-                    finishKind
+                    finishKind,
+                    {
+                        task_id: payload.task_id || '',
+                        command: payload.command || '',
+                        command_id: payload.command_id ?? null,
+                        metadata: payload.metadata && typeof payload.metadata === 'object' ? payload.metadata : {},
+                    }
                 );
 
                 this.clearActiveTask(payload.client_id, payload.task_id);

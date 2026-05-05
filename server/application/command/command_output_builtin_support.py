@@ -39,6 +39,9 @@ class CommandOutputBuiltinSupport:
         except Exception:
             return {}
 
+    def _get_source_command_id(self):
+        runtime_task = self._get_runtime_task()
+        return runtime_task.get('command_id')
 
 
 
@@ -78,7 +81,7 @@ class CommandOutputBuiltinSupport:
             addr=getattr(session_info, 'addr', '') or '',
             source='builtin_saveout',
             source_command=command,
-            source_command_id=None,
+            source_command_id=self._get_source_command_id(),
             extra=extra,
         )
 

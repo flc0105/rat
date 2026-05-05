@@ -1057,7 +1057,13 @@ getPreferredScriptDirectoryForCurrentConnection() {
         const params = this.buildScriptRunParams(item)
 
         const commandText = `> [Run Script] ${item.display_name || item.script_name}`
-        this.$emit('append-output', this.selectedId, commandText, 'command')
+        this.$emit('append-output', this.selectedId, commandText, 'command', {
+          terminal_block_type: 'script',
+          script_name: item.script_name || '',
+          script_path: item.path || `${item.script_name || ''}.py`,
+          script_display_name: item.display_name || item.script_name || '',
+          params: { ...params },
+        })
 
         const res = await fetch(`/api/connections/${encodeURIComponent(this.selectedId)}/scripts/run`, {
           method: 'POST',

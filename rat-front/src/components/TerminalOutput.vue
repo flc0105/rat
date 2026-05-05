@@ -153,7 +153,7 @@ export default {
     }
   },
 
-    computed: {
+  computed: {
     terminalBlocks() {
       const safeLines = Array.isArray(this.lines) ? this.lines : []
       const blocks = []
@@ -184,9 +184,19 @@ export default {
       })
 
       return blocks.map(block => {
+        const bodyLines = block.lines.filter(entry => entry.index !== block.commandLine?.index)
+        const commandText = this.normalizeTerminalBlockCommandText(block.commandLine?.line?.text)
+        const blockModel = this.buildTerminalBlockModel({
+          ...block,
+          bodyLines,
+          commandText,
+        })
+
         return {
           ...block,
-          bodyLines: block.lines.filter(entry => entry.index !== block.commandLine?.index),
+          ...blockModel,
+          bodyLines,
+          commandText,
           endIndex: block.lines.length ? block.lines[block.lines.length - 1].index : block.startIndex,
         }
       })
@@ -375,9 +385,13 @@ export default {
 
     // terminal block
 
-        getTerminalBlockCommandText(block) {
-      const raw = String(block?.commandLine?.line?.text || '').trim()
+    normalizeTerminalBlockCommandText(text) {
+      const raw = String(text || '').trim()
       return raw.replace(/^>\s*/, '').trim()
+    },
+
+    getTerminalBlockCommandText(block) {
+      return String(block?.commandText || this.normalizeTerminalBlockCommandText(block?.commandLine?.line?.text)).trim()
     },
 
     normalizeTerminalOutputLineText(text) {
@@ -385,16 +399,90 @@ export default {
       return value === ' ' ? '' : value
     },
 
-    isTerminalScriptRunBlock(block) {
-  const commandText = this.getTerminalBlockCommandText(block)
-  return /^\[Run Script\]/i.test(commandText)
-},
+    getTerminalLineMeta(line) {
+      return line?.meta && typeof line.meta === 'object' ? line.meta : {}
+    },
 
-getTerminalBlockArtifactCategory(block) {
-  return this.isTerminalScriptRunBlock(block)
-    ? 'script_output'
-    : 'command_output'
-},
+    getTerminalEntryMeta(entry) {
+      return this.getTerminalLineMeta(entry?.line)
+    },
+
+    getTerminalBlockMetaList(block) {
+      const entries = []
+      if (block?.commandLine) entries.push(block.commandLine)
+      if (Array.isArray(block?.bodyLines)) entries.push(...block.bodyLines)
+      if (Array.isArray(block?.lines)) entries.push(...block.lines)
+
+      const result = []
+      entries.forEach(entry => {
+        const meta = this.getTerminalEntryMeta(entry)
+        if (Object.keys(meta).length > 0) result.push(meta)
+
+        const nested = meta.metadata && typeof meta.metadata === 'object' ? meta.metadata : null
+        if (nested && Object.keys(nested).length > 0) result.push(nested)
+      })
+      return result
+    },
+
+    findTerminalBlockMetaValue(block, keys) {
+      const metaList = this.getTerminalBlockMetaList(block)
+      for (const meta of metaList) {
+        for (const key of keys) {
+          if (meta[key] !== undefined && meta[key] !== null && String(meta[key]).trim() !== '') {
+            return meta[key]
+          }
+        }
+      }
+      return null
+    },
+
+    normalizeNullableInt(value) {
+      if (value === null || value === undefined || value === '') return null
+      const numberValue = Number(value)
+      return Number.isFinite(numberValue) ? numberValue : value
+    },
+
+    buildTerminalBlockScriptMeta(block) {
+      const paramsValue = this.findTerminalBlockMetaValue(block, ['params', 'script_params'])
+      const params = paramsValue && typeof paramsValue === 'object' && !Array.isArray(paramsValue)
+        ? { ...paramsValue }
+        : {}
+
+      return {
+        script_name: String(this.findTerminalBlockMetaValue(block, ['script_name']) || '').trim(),
+        script_path: String(this.findTerminalBlockMetaValue(block, ['script_path', 'path']) || '').trim(),
+        script_display_name: String(this.findTerminalBlockMetaValue(block, ['script_display_name', 'display_name']) || '').trim(),
+        params,
+      }
+    },
+
+    buildTerminalBlockModel(block) {
+      const commandText = this.getTerminalBlockCommandText(block)
+      const terminalBlockType = String(this.findTerminalBlockMetaValue(block, ['terminal_block_type', 'terminalBlockType']) || '').trim()
+      const scriptMeta = this.buildTerminalBlockScriptMeta(block)
+      const isScript = terminalBlockType === 'script' || !!scriptMeta.script_name || /^\[Run Script\]/i.test(commandText)
+
+      return {
+        blockType: isScript ? 'script' : 'command',
+        commandId: this.normalizeNullableInt(this.findTerminalBlockMetaValue(block, ['command_id', 'source_command_id'])),
+        taskId: String(this.findTerminalBlockMetaValue(block, ['task_id']) || '').trim(),
+        scriptMeta,
+      }
+    },
+
+    isTerminalScriptRunBlock(block) {
+      return String(block?.blockType || '').trim() === 'script'
+    },
+
+    getTerminalBlockArtifactCategory(block) {
+      return this.isTerminalScriptRunBlock(block)
+        ? 'script_output'
+        : 'command_output'
+    },
+
+    getTerminalBlockSourceCommandId(block) {
+      return block?.commandId ?? this.normalizeNullableInt(this.findTerminalBlockMetaValue(block, ['command_id', 'source_command_id']))
+    },
 
     getTerminalBlockOutputLineEntries(block) {
       const entries = Array.isArray(block?.bodyLines) ? block.bodyLines : []
@@ -493,91 +581,107 @@ getTerminalBlockArtifactCategory(block) {
         throw new Error('Copy failed')
       }
     },
-buildTerminalOutputFilename(block) {
-  const now = new Date()
-  const pad = value => String(value).padStart(2, '0')
-  const timestamp = [
-    now.getFullYear(),
-    pad(now.getMonth() + 1),
-    pad(now.getDate()),
-  ].join('') + '_' + [
-    pad(now.getHours()),
-    pad(now.getMinutes()),
-    pad(now.getSeconds()),
-  ].join('')
 
-  const prefix = this.isTerminalScriptRunBlock(block) ? 'script' : 'cmd'
-  return `${prefix}_${timestamp}.txt`
-},
+    buildTerminalOutputFilename(block) {
+      const now = new Date()
+      const pad = value => String(value).padStart(2, '0')
+      const timestamp = [
+        now.getFullYear(),
+        pad(now.getMonth() + 1),
+        pad(now.getDate()),
+      ].join('') + '_' + [
+        pad(now.getHours()),
+        pad(now.getMinutes()),
+        pad(now.getSeconds()),
+      ].join('')
 
-    buildTerminalOutputArtifactExtra(block) {
-      const sourceCommand = this.getTerminalBlockCommandText(block)
-      const outputEntries = this.getTerminalBlockOutputLineEntries(block)
-
-return {
-  source: this.isTerminalScriptRunBlock(block)
-    ? 'script_terminal_inline_action'
-    : 'terminal_inline_action',
-  source_command: sourceCommand,
-  wrapper_command: '',
-  source_history_entry_id: '',
-  source_task_id: '',
-  saved_from: 'terminal_output',
-  category: this.getTerminalBlockArtifactCategory(block),
-  line_count: outputEntries.length,
-  saved_at: new Date().toISOString(),
-}
+      const prefix = this.isTerminalScriptRunBlock(block) ? 'script' : 'cmd'
+      return `${prefix}_${timestamp}.txt`
     },
 
-   async saveTerminalBlockOutput(block) {
-  if (this.isSavingTerminalBlock(block)) return
+    buildTerminalOutputArtifactExtra(block) {
+      const outputEntries = this.getTerminalBlockOutputLineEntries(block)
+      const sourceCommandId = this.getTerminalBlockSourceCommandId(block)
+      const isScript = this.isTerminalScriptRunBlock(block)
+      const baseExtra = {
+        source: isScript ? 'script_terminal_inline_action' : 'terminal_inline_action',
+        wrapper_command: '',
+        source_history_entry_id: '',
+        source_task_id: block?.taskId || '',
+        source_command_id: sourceCommandId,
+        saved_from: 'terminal_output',
+        category: this.getTerminalBlockArtifactCategory(block),
+        line_count: outputEntries.length,
+        saved_at: new Date().toISOString(),
+      }
 
-  const outputText = this.getTerminalBlockOutputText(block)
-  if (!outputText.trim()) {
-    ElMessage.warning('No output to save')
-    return
-  }
+      if (!isScript) {
+        baseExtra.source_command = this.getTerminalBlockCommandText(block)
+        return baseExtra
+      }
 
-  const commandText = this.getTerminalBlockCommandText(block)
-  const artifactCategory = this.getTerminalBlockArtifactCategory(block)
-  const source = this.isTerminalScriptRunBlock(block)
-    ? 'script_terminal_inline_action'
-    : 'terminal_inline_action'
+      const scriptMeta = block?.scriptMeta || this.buildTerminalBlockScriptMeta(block)
+      return {
+        ...baseExtra,
+        script_name: scriptMeta.script_name || '',
+        script_path: scriptMeta.script_path || '',
+        script_display_name: scriptMeta.script_display_name || '',
+        params: scriptMeta.params || {},
+      }
+    },
 
-  this.setTerminalBlockSaving(block, true)
+    async saveTerminalBlockOutput(block) {
+      if (this.isSavingTerminalBlock(block)) return
 
-  try {
-    const res = await fetch('/api/artifacts/command-output/save', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        content: outputText,
-        artifact_type: 'command_output',
-        category: artifactCategory,
-        client_id: String(this.selectedId || ''),
-        hostname: String(this.currentConnection?.hostname || ''),
-        machine_id: String(this.currentConnection?.machine_id || ''),
-        source,
-        source_command: commandText,
-        extra: this.buildTerminalOutputArtifactExtra(block),
-      }),
-    })
+      const outputText = this.getTerminalBlockOutputText(block)
+      if (!outputText.trim()) {
+        ElMessage.warning('No output to save')
+        return
+      }
 
-    const json = await res.json()
-    if (!res.ok || json.code !== 0) {
-      throw new Error(json.message || 'Save failed')
-    }
+      const commandText = this.getTerminalBlockCommandText(block)
+      const artifactCategory = this.getTerminalBlockArtifactCategory(block)
+      const sourceCommandId = this.getTerminalBlockSourceCommandId(block)
+      const isScript = this.isTerminalScriptRunBlock(block)
+      const source = isScript
+        ? 'script_terminal_inline_action'
+        : 'terminal_inline_action'
 
-    ElMessage.success('Saved to Command Output')
-    this.$emit('artifact-saved', json.data || null)
-  } catch (e) {
-    ElMessage.error(e.message || 'Save failed')
-  } finally {
-    this.setTerminalBlockSaving(block, false)
-  }
-},
+      this.setTerminalBlockSaving(block, true)
+
+      try {
+        const res = await fetch('/api/artifacts/command-output/save', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            content: outputText,
+            artifact_type: 'command_output',
+            category: artifactCategory,
+            client_id: String(this.selectedId || ''),
+            hostname: String(this.currentConnection?.hostname || ''),
+            machine_id: String(this.currentConnection?.machine_id || ''),
+            source,
+            source_command: isScript ? '' : commandText,
+            source_command_id: sourceCommandId,
+            extra: this.buildTerminalOutputArtifactExtra(block),
+          }),
+        })
+
+        const json = await res.json()
+        if (!res.ok || json.code !== 0) {
+          throw new Error(json.message || 'Save failed')
+        }
+
+        ElMessage.success('Saved to Command Output')
+        this.$emit('artifact-saved', json.data || null)
+      } catch (e) {
+        ElMessage.error(e.message || 'Save failed')
+      } finally {
+        this.setTerminalBlockSaving(block, false)
+      }
+    },
 
     // scrollToBottom() {
     //   this.$nextTick(() => {

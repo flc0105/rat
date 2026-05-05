@@ -69,6 +69,14 @@ class WebTaskRunner:
         task = self._get_task(context.task_id)
         return (task.get('tab_id') or '').strip()
 
+    def _get_runtime_command_id(self, context: TaskExecutionContext):
+        runtime_task = self._get_runtime_task_context(context)
+        if runtime_task.get('command_id') is not None:
+            return runtime_task.get('command_id')
+        if context.command_id is not None:
+            return context.command_id
+        return None
+
     def _append_history_output(self, context: TaskExecutionContext, status: int, text: str):
         history_entry_id = self._get_history_entry_id(context)
         self.history_orchestrator.append_output(
@@ -98,8 +106,10 @@ class WebTaskRunner:
                 'task_id': context.task_id,
                 'client_id': context.client_id,
                 'command': context.command,
+                'command_id': self._get_runtime_command_id(context),
                 'status': status,
                 'text': text,
+                'metadata': dict(context.metadata or {}),
                 'time': datetime.now().isoformat(),
             },
             target_tab_id=target_tab_id,
@@ -116,8 +126,10 @@ class WebTaskRunner:
                 'task_id': context.task_id,
                 'client_id': context.client_id,
                 'command': context.command,
+                'command_id': self._get_runtime_command_id(context),
                 'success': task_status == WebTaskStatus.SUCCESS,
                 'status': task_status,
+                'metadata': dict(context.metadata or {}),
                 'cancel_requested': self._get_task_cancel_requested(context),
                 'cancelled': task_status == WebTaskStatus.CANCELLED,
                 'time': datetime.now().isoformat(),

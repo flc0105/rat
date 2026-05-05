@@ -102,9 +102,13 @@ class CommandOutputArtifactService:
 
         payload.update({
             'source': str(source or payload.get('source') or 'command_output_save').strip(),
-            'source_command': str(source_command or payload.get('source_command') or '').strip(),
             'saved_at': current_time.isoformat(timespec='seconds'),
         })
+
+        # script output 只保留 script_name/script_path/params，不把展示用命令写进 meta。
+        resolved_source_command = str(source_command or payload.get('source_command') or '').strip()
+        if resolved_source_command:
+            payload['source_command'] = resolved_source_command
 
         return payload
 

@@ -114,7 +114,8 @@ export default {
                 isArtifactMessage: false,
                 artifactInfo: null,
                 isJsonMessage: false,
-                jsonText: ''
+                jsonText: '',
+                meta: meta && typeof meta === 'object' ? { ...meta } : {}
             };
 
             if (meta && typeof meta === 'object') {
