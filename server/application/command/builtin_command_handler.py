@@ -4,7 +4,7 @@ from server.application.command.builtin_command_support import (
     PinnedPathBuiltinSupport,
     RttBuiltinSupport,
     ScriptBuiltinSupport,
-    UploadBuiltinSupport,
+    UploadBuiltinSupport, ExternalToolCliBuiltinSupport,
 )
 from server.application.command.command_output_builtin_support import CommandOutputBuiltinSupport
 from server.application.command.control_builtin_support import ControlBuiltinSupport
@@ -99,6 +99,12 @@ class BuiltinCommandHandler:
             'help': 'saveout <client-command> | Save full client command output as artifact',
             'source': 'server'
         },
+        {
+            'name': 'xt',
+            'template': 'xt ',
+            'help': 'xt list|info|which|<alias> [--] <raw args> | External tool CLI facade',
+            'source': 'server'
+        },
     ]
 
     def __init__(
@@ -160,6 +166,12 @@ class BuiltinCommandHandler:
             conn=self.conn,
         )
 
+        self.external_tool_cli_support = ExternalToolCliBuiltinSupport(
+            server=self.server,
+            conn=self.conn,
+            command_processor_factory=self.command_processor_factory,
+        )
+
     def get_command_candidates(self):
         candidates = [dict(item) for item in self.WEB_COMMAND_TEMPLATES]
 
@@ -216,6 +228,10 @@ class BuiltinCommandHandler:
 
     def saveout(self, command):
         for item in self.command_output_support.saveout(command):
+            yield item
+
+    def xt(self, arg=''):
+        for item in self.external_tool_cli_support.xt(arg):
             yield item
 
 

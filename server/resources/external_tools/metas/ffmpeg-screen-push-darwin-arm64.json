@@ -20,6 +20,11 @@
     "install_dir": "{{external_tools_root}}/{{id}}/{{version}}",
     "skip_if_exists": "{{install_dir}}/ffmpeg-124113-g4ea59d5665b/ffmpeg"
   },
+    "cli": {
+    "enabled": true,
+    "aliases": ["ffmpeg"],
+    "arg_mode": "raw_append"
+  },
   "params": [
     {
       "name": "instance_name",

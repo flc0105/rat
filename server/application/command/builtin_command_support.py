@@ -660,3 +660,218 @@ class RttBuiltinSupport:
             ),
             output_format=output_format,
         )
+
+
+class ExternalToolCliBuiltinSupport:
+    """
+    xt 轻量 CLI 门面。
+
+    约束：
+    - 只解析 meta.cli.aliases
+    - 不提供 install；安装仍属于 package/web external tool 管理
+    - 执行时只运行已安装 package.executable_rel_path，并把原始参数追加到 argv
+    """
+
+    RESERVED_SUBCOMMANDS = {'list', 'info', 'which', 'run', 'help'}
+
+    def __init__(self, server, conn, command_processor_factory):
+        self.server = server
+        self.conn = conn
+        self.command_processor_factory = command_processor_factory
+
+    def _catalog_service(self):
+        web_service = getattr(self.server, 'web_service', None)
+        assembly = getattr(web_service, 'assembly', None)
+        service = getattr(assembly, 'external_tool_catalog_service', None)
+        if service is None:
+            raise RuntimeError('external tool catalog service is not available')
+        return service
+
+    def _runtime_service(self):
+        web_service = getattr(self.server, 'web_service', None)
+        assembly = getattr(web_service, 'assembly', None)
+        service = getattr(assembly, 'external_tool_runtime_service', None)
+        if service is None:
+            raise RuntimeError('external tool runtime service is not available')
+        return service
+
+    def _client_platform(self) -> str:
+        info = getattr(self.conn, 'session_info', None)
+        value = getattr(info, 'os_alias', '') if info is not None else ''
+        return self._catalog_service()._normalize_platform(value or '')
+
+    def _client_arch(self) -> str:
+        info = getattr(self.conn, 'session_info', None)
+        return str(getattr(info, 'arch', '') if info is not None else '').strip().lower()
+
+    def _client_cwd(self) -> str:
+        info = getattr(self.conn, 'session_info', None)
+        return str(getattr(info, 'cwd', '') if info is not None else '').strip()
+
+    def _encode_payload_arg(self, payload: dict) -> str:
+        raw = json.dumps(payload, ensure_ascii=False).encode('utf-8')
+        encoded = base64.urlsafe_b64encode(raw).decode('utf-8')
+        return f'__json__:{encoded}'
+
+    def _split_first_token(self, text: str) -> tuple[str, str]:
+        raw = str(text or '').strip()
+        if not raw:
+            return '', ''
+        parts = raw.split(None, 1)
+        first = parts[0].strip()
+        rest = parts[1].strip() if len(parts) > 1 else ''
+        return first, rest
+
+    def _strip_raw_arg_separator(self, text: str) -> str:
+        raw = str(text or '').strip()
+        if raw == '--':
+            return ''
+        if raw.startswith('-- '):
+            return raw[3:].strip()
+        return raw
+
+    def _resolve_alias(self, alias: str) -> dict:
+        return self._catalog_service().resolve_cli_alias(
+            alias,
+            side='client',
+            platform_alias=self._client_platform(),
+            arch=self._client_arch(),
+        )
+
+    def _build_client_payload(self, target: dict, raw_args: str = '') -> dict:
+        meta = target.get('meta') or {}
+        runtime_service = self._runtime_service()
+        payload = runtime_service.build_client_start_payload(
+            meta,
+            params={},
+            instance_id='',
+            install_if_needed=False,
+            require_required_params=False,
+        )
+        payload['action'] = 'exec'
+        payload['install_if_needed'] = False
+        payload['cli'] = {
+            'alias': target.get('alias') or '',
+            'arg_mode': str((target.get('cli') or {}).get('arg_mode') or 'raw_append').strip() or 'raw_append',
+            'cwd': self._client_cwd(),
+        }
+        payload['raw_args'] = self._strip_raw_arg_separator(raw_args)
+        return payload
+
+    def _iter_nested_command(self, command_text: str):
+        command_processor = self.command_processor_factory()
+        executor = command_processor(command_text)
+        for item in executor():
+            yield item
+
+    def _format_cli_list(self) -> str:
+        catalog = self._catalog_service()
+        items = catalog.list_cli_aliases(
+            side='client',
+            platform_alias=self._client_platform(),
+            arch=self._client_arch(),
+        )
+
+        if not items:
+            return 'No external tool CLI aliases available. Add cli.enabled=true and cli.aliases to external tool meta.'
+
+        rows = []
+        for item in items:
+            rows.append({
+                'alias': item.get('alias') or '',
+                'tool_id': item.get('tool_id') or '',
+                'display_name': item.get('display_name') or '',
+                'executable': (item.get('package') or {}).get('executable_rel_path') or '',
+            })
+
+        return json.dumps({'items': rows}, ensure_ascii=False, indent=2)
+
+    def _format_info(self, alias: str) -> str:
+        target = self._resolve_alias(alias)
+        meta = target.get('meta') or {}
+        package = meta.get('package') or {}
+        cli = target.get('cli') or {}
+        payload = self._build_client_payload(target, raw_args='')
+        install = payload.get('install') or {}
+
+        return json.dumps({
+            'alias': target.get('alias') or alias,
+            'tool_id': meta.get('id') or '',
+            'display_name': meta.get('display_name') or '',
+            'description': meta.get('description') or '',
+            'side': 'client',
+            'platforms': meta.get('platforms') or [],
+            'arch': meta.get('arch') or '',
+            'cli': {
+                'enabled': bool(cli.get('enabled')),
+                'aliases': cli.get('aliases') or [],
+                'arg_mode': cli.get('arg_mode') or 'raw_append',
+            },
+            'package': {
+                'filename': package.get('filename') or '',
+                'executable_rel_path': package.get('executable_rel_path') or '',
+            },
+            'install': {
+                'install_dir': install.get('install_dir') or '',
+                'skip_if_exists': install.get('skip_if_exists') or '',
+            },
+            'usage': f'xt {target.get("alias") or alias} <raw args>',
+        }, ensure_ascii=False, indent=2)
+
+    def _which(self, alias: str):
+        target = self._resolve_alias(alias)
+        payload = self._build_client_payload(target, raw_args='')
+        command = f'external_tool_which {self._encode_payload_arg(payload)}'
+        for item in self._iter_nested_command(command):
+            yield item
+
+    def _run_alias(self, alias: str, raw_args: str):
+        target = self._resolve_alias(alias)
+        payload = self._build_client_payload(target, raw_args=raw_args)
+        command = f'external_tool_exec {self._encode_payload_arg(payload)}'
+        for item in self._iter_nested_command(command):
+            yield item
+
+    def xt(self, arg=''):
+        arg_text = str(arg or '').strip()
+
+        if not arg_text or arg_text == 'list':
+            yield 1, self._format_cli_list()
+            return
+
+        if arg_text in ('help', '-h', '--help'):
+            yield 1, 'Usage: xt list | xt info <alias> | xt which <alias> | xt <alias> [--] <raw args>'
+            return
+
+        subcommand, rest = self._split_first_token(arg_text)
+
+        if subcommand == 'info':
+            alias, _ = self._split_first_token(rest)
+            if not alias:
+                raise ValueError('Usage: xt info <alias>')
+            yield 1, self._format_info(alias)
+            return
+
+        if subcommand == 'which':
+            alias, _ = self._split_first_token(rest)
+            if not alias:
+                raise ValueError('Usage: xt which <alias>')
+            for item in self._which(alias):
+                yield item
+            return
+
+        if subcommand == 'install':
+            raise ValueError('xt install is intentionally not supported. Install external tool packages from External Tool Manager.')
+
+        if subcommand == 'run':
+            alias, raw_args = self._split_first_token(rest)
+            if not alias:
+                raise ValueError('Usage: xt run <alias> [--] <raw args>')
+            for item in self._run_alias(alias, raw_args):
+                yield item
+            return
+
+        alias = subcommand
+        raw_args = rest
+        for item in self._run_alias(alias, raw_args):
+            yield item
