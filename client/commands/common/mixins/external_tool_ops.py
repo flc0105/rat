@@ -82,22 +82,113 @@ class CommandExternalToolMixin:
         mode = os.stat(path).st_mode
         os.chmod(path, mode | 0o111)
 
-    def _external_tool_download_package(self, payload: dict) -> str:
+    def _external_tool_install_log_path(self, install_dir: str) -> str:
+        return os.path.join(self._external_tool_expand_path(install_dir), '.install.log')
+
+    def _external_tool_read_install_log(self, install_dir: str) -> str:
+        path = self._external_tool_install_log_path(install_dir)
+        if not os.path.isfile(path):
+            return ''
+        try:
+            with open(path, 'r', encoding='utf-8', errors='replace') as fh:
+                return fh.read()
+        except OSError:
+            return ''
+
+    def _external_tool_write_install_log(self, install_dir: str, lines) -> str:
+        content = '\n'.join(str(line) for line in (lines or []) if str(line or '').strip())
+        if not content:
+            return ''
+        try:
+            os.makedirs(self._external_tool_expand_path(install_dir), exist_ok=True)
+            with open(self._external_tool_install_log_path(install_dir), 'w', encoding='utf-8') as fh:
+                fh.write(content)
+                fh.write('\n')
+        except OSError:
+            pass
+        return content
+
+    def _external_tool_build_command_map(self, exec_paths: dict) -> dict:
+        commands = {}
+        for name, path in (exec_paths or {}).items():
+            text = str(path or '').strip()
+            if not text:
+                continue
+            commands[str(name)] = shlex.quote(self._external_tool_expand_path(text))
+        return commands
+
+    def _external_tool_path_has_content(self, path: str) -> bool:
+        if not os.path.exists(path):
+            return False
+        if os.path.isfile(path):
+            return True
+        if os.path.isdir(path):
+            try:
+                return any(os.scandir(path))
+            except OSError:
+                return False
+        return True
+
+    def _external_tool_package_cache_path(self, payload: dict) -> tuple[str, str]:
         package = payload.get('package') or {}
         filename = os.path.basename(str(package.get('filename') or '').strip())
-        download_url = str(package.get('download_url') or '').strip()
-
         if not filename:
             raise ValueError('package.filename is required')
+        cache_dir = self._external_tool_expand_path('~/.ops/external_tools/packages')
+        return cache_dir, os.path.join(cache_dir, filename)
+
+    def _external_tool_cache_info(self, payload: dict) -> dict:
+        try:
+            cache_dir, archive_path = self._external_tool_package_cache_path(payload)
+        except Exception as e:
+            return {
+                'cache_dir': self._external_tool_expand_path('~/.ops/external_tools/packages'),
+                'cache_path': '',
+                'cached': False,
+                'exists': False,
+                'size': 0,
+                'mtime': '',
+                'error': str(e),
+            }
+
+        exists = os.path.isfile(archive_path) and os.path.getsize(archive_path) > 0
+        info = {
+            'cache_dir': cache_dir,
+            'cache_path': archive_path,
+            'cached': bool(exists),
+            'exists': bool(exists),
+            'size': 0,
+            'mtime': '',
+        }
+        if exists:
+            try:
+                stat = os.stat(archive_path)
+                info['size'] = int(stat.st_size)
+                info['mtime'] = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(stat.st_mtime))
+            except OSError as e:
+                info['error'] = str(e)
+        return info
+
+    def _external_tool_download_package(self, payload: dict) -> dict:
+        package = payload.get('package') or {}
+        download_url = str(package.get('download_url') or '').strip()
+
         if not download_url:
             raise ValueError('package.download_url is required')
 
-        cache_dir = self._external_tool_expand_path('~/.ops/external_tools/packages')
+        cache_dir, archive_path = self._external_tool_package_cache_path(payload)
         os.makedirs(cache_dir, exist_ok=True)
 
-        archive_path = os.path.join(cache_dir, filename)
-        if os.path.isfile(archive_path) and os.path.getsize(archive_path) > 0:
-            return archive_path
+        before = self._external_tool_cache_info(payload)
+        if before.get('cached'):
+            before.update({
+                'archive_path': archive_path,
+                'source': 'cache',
+                'downloaded': False,
+                'used_cache': True,
+                'message': f'Using cached package: {archive_path}',
+            })
+            return before
 
         self.client_api.download_file(
             download_url,
@@ -107,7 +198,42 @@ class CommandExternalToolMixin:
             ensure_not_interrupted=self._ensure_not_interrupted,
         )
 
-        return archive_path
+        after = self._external_tool_cache_info(payload)
+        after.update({
+            'archive_path': archive_path,
+            'source': 'download',
+            'downloaded': True,
+            'used_cache': False,
+            'message': f'Downloaded package to cache: {archive_path}',
+        })
+        return after
+
+    def _external_tool_clear_cache_payload(self, payload: dict) -> dict:
+        cache = self._external_tool_cache_info(payload)
+        cache_path = cache.get('cache_path') or ''
+        removed = False
+        if cache_path and os.path.isfile(cache_path):
+            os.unlink(cache_path)
+            removed = True
+        after = self._external_tool_cache_info(payload)
+        return {
+            'tool_id': payload.get('tool_id') or '',
+            'package_id': payload.get('package_id') or payload.get('tool_id') or '',
+            'display_name': payload.get('display_name') or payload.get('tool_id') or '',
+            'side': payload.get('side') or 'client',
+            'platform': payload.get('platform') or '',
+            'arch': payload.get('arch') or '',
+            'package_key': payload.get('package_key') or '',
+            'cache': after,
+            'cache_before': cache,
+            'cache_removed': removed,
+            'removed': removed,
+            'message': (
+                f'Removed cached package: {cache_path}'
+                if removed
+                else f'No cached package found: {cache_path or "-"}'
+            ),
+        }
 
     def _external_tool_install_status_payload(self, payload: dict) -> dict:
         install = payload.get('install') or {}
@@ -123,17 +249,46 @@ class CommandExternalToolMixin:
             if executable_rel_path
             else skip_if_exists
         )
-        installed = os.path.exists(skip_if_exists)
+        exec_paths = {}
+        raw_exec_paths = package.get('exec_paths') if isinstance(package.get('exec_paths'), dict) else {}
+        for name, rel_path in raw_exec_paths.items():
+            rel_text = str(rel_path or '').strip().lstrip('/\\')
+            if not rel_text:
+                continue
+            exec_paths[str(name)] = self._external_tool_expand_path(os.path.join(install_dir, rel_text))
+
+        # Strict FS-driven package status. This intentionally ignores old state
+        # files and frontend cache: deleting install_dir must make installed False.
+        install_dir_exists = os.path.isdir(install_dir)
+        missing_execs = {name: path for name, path in exec_paths.items() if not os.path.isfile(path)} if install_dir_exists else dict(exec_paths)
+        installed = install_dir_exists and not missing_execs
+
+        cache = self._external_tool_cache_info(payload)
+        commands = self._external_tool_build_command_map(exec_paths)
 
         return {
             'tool_id': payload.get('tool_id') or '',
+            'package_id': payload.get('package_id') or payload.get('tool_id') or '',
+            'module_id': payload.get('module_id') or '',
             'display_name': payload.get('display_name') or payload.get('tool_id') or '',
             'side': payload.get('side') or 'client',
+            'platform': payload.get('platform') or '',
+            'arch': payload.get('arch') or '',
+            'package_key': payload.get('package_key') or '',
             'installed': installed,
             'install_dir': install_dir,
+            'install_dir_exists': install_dir_exists,
             'skip_path': skip_if_exists,
             'executable_path': executable_path,
+            'exec_paths': exec_paths,
+            'missing_execs': missing_execs,
+            'cache': cache,
+            'cached': bool(cache.get('cached')),
+            'cache_path': cache.get('cache_path') or '',
             'command': shlex.quote(executable_path),
+            'commands': commands,
+            'install_log': self._external_tool_read_install_log(install_dir),
+            'install_log_path': self._external_tool_install_log_path(install_dir),
             'message': (
                 f'{payload.get("display_name") or payload.get("tool_id") or "external tool"} is installed at {install_dir}'
                 if installed
@@ -141,24 +296,62 @@ class CommandExternalToolMixin:
             ),
         }
 
-    def _external_tool_install_if_needed(self, payload: dict, archive_path: str) -> dict:
+    def _external_tool_install_if_needed(self, payload: dict, package_info) -> dict:
         status = self._external_tool_install_status_payload(payload)
         install_dir = status['install_dir']
         already_installed = bool(status['installed'])
         extracted = False
+        package_info = package_info if isinstance(package_info, dict) else {'archive_path': str(package_info or ''), 'source': 'unknown'}
+        archive_path = package_info.get('archive_path') or package_info.get('cache_path') or ''
+        install_log = [
+            f'Package: {payload.get("display_name") or payload.get("package_id") or payload.get("tool_id") or "external tool"}',
+            f'Target: {payload.get("side") or "client"} {payload.get("platform") or ""} {payload.get("arch") or ""}'.rstrip(),
+            f'Platform package key: {payload.get("package_key") or "-"}',
+            f'Install dir: {install_dir}',
+            f'Package source: {package_info.get("source") or "unknown"}',
+            f'Package cache: {archive_path or "-"}',
+        ]
 
         if not already_installed:
+            if not archive_path:
+                raise ValueError('package archive path is required')
             os.makedirs(install_dir, exist_ok=True)
+            install_log.append(f'Extracting package to: {install_dir}')
             safe_extract_zip_file(archive_path, install_dir)
             extracted = True
+        else:
+            install_log.append('Existing installation is valid; extraction skipped.')
 
-        executable_path = status['executable_path']
+        # Re-read after extraction. Do not report success if the configured marker
+        # still does not exist; otherwise the UI will flip back to not installed on
+        # the next refresh.
+        status = self._external_tool_install_status_payload(payload)
+        if not status.get('installed'):
+            missing = status.get('missing_execs') or {}
+            install_log.append(f'Validation failed; missing execs: {missing or "-"}')
+            self._external_tool_write_install_log(install_dir, install_log)
+            if missing:
+                raise FileNotFoundError(f'Package was extracted but configured executable paths were not found: {missing}')
+            raise FileNotFoundError(f'Package was extracted but install directory was not found: {status.get("install_dir") or install_dir}')
+
+        executable_path = status.get('executable_path') or ''
         self._external_tool_chmod(executable_path)
+        for name, path in (status.get('exec_paths') or {}).items():
+            self._external_tool_chmod(path)
+            install_log.append(f'Validated exec {name}: {path}')
 
+        source = package_info.get('source') or 'unknown'
+        persisted_install_log = self._external_tool_write_install_log(install_dir, install_log)
         status.update({
             'installed': True,
             'already_installed': already_installed,
             'extracted': extracted,
+            'package_source': source,
+            'used_cache': source == 'cache',
+            'downloaded': source == 'download',
+            'package': archive_path,
+            'cache': self._external_tool_cache_info(payload),
+            'install_log': persisted_install_log,
             'message': 'already installed' if already_installed else 'installed successfully',
         })
 
@@ -403,6 +596,8 @@ finally:
 
         return {
             'tool_id': payload.get('tool_id') or state.get('tool_id') or '',
+            'package_id': payload.get('package_id') or state.get('package_id') or '',
+            'module_id': payload.get('module_id') or state.get('module_id') or '',
             'display_name': payload.get('display_name') or state.get('display_name') or '',
             'side': payload.get('side') or state.get('side') or 'client',
             'instance_id': payload.get('instance_id') or state.get('instance_id') or 'default',
@@ -436,8 +631,13 @@ finally:
 
         state = {
             'tool_id': payload.get('tool_id') or '',
+            'package_id': payload.get('package_id') or '',
+            'module_id': payload.get('module_id') or '',
             'display_name': payload.get('display_name') or payload.get('tool_id') or '',
             'version': payload.get('version') or '',
+            'platform': payload.get('platform') or '',
+            'arch': payload.get('arch') or '',
+            'package_key': payload.get('package_key') or '',
             'side': payload.get('side') or 'client',
             'instance_id': payload.get('instance_id') or 'default',
             'instance_name': payload.get('instance_name') or payload.get('instance_id') or 'default',
@@ -574,10 +774,20 @@ finally:
 
         return result
 
+    def _external_tool_runtime_parts_from_payload(self, payload: dict) -> tuple[str, str, str]:
+        tool_id = str(payload.get('tool_id') or '').strip()
+        package_id = str(payload.get('package_id') or '').strip()
+        module_id = str(payload.get('module_id') or '').strip()
+        if (not package_id or not module_id) and '.' in tool_id:
+            package_id, module_id = tool_id.split('.', 1)
+        if not package_id:
+            package_id = tool_id
+        return tool_id, package_id, module_id
+
     def _external_tool_list_instances_payload(self, payload: dict) -> dict:
-        tool_id = payload.get('tool_id') or ''
+        tool_id, package_id, module_id = self._external_tool_runtime_parts_from_payload(payload)
         runtime_root = self._external_tool_expand_path('~/.ops/external_tools/runtime')
-        instances_dir = os.path.join(runtime_root, tool_id, 'instances')
+        instances_dir = os.path.join(runtime_root, package_id, module_id, 'instances') if module_id else os.path.join(runtime_root, package_id, 'instances')
         items = []
 
         if os.path.isdir(instances_dir):
@@ -588,6 +798,8 @@ finally:
 
                 instance_payload = {
                     'tool_id': tool_id,
+                    'package_id': package_id,
+                    'module_id': module_id,
                     'display_name': payload.get('display_name') or tool_id,
                     'side': 'client',
                     'instance_id': name,
@@ -600,7 +812,7 @@ finally:
                 }
                 items.append(self._external_tool_status_from_payload(instance_payload))
 
-        return {'tool_id': tool_id, 'side': 'client', 'items': items}
+        return {'tool_id': tool_id, 'package_id': package_id, 'module_id': module_id, 'side': 'client', 'items': items}
 
     def _external_tool_read_logs_payload(self, payload: dict) -> dict:
         stdout = self._external_tool_stdout_from_payload(payload)
@@ -665,34 +877,39 @@ finally:
             'message': f'{payload.get("display_name") or payload.get("tool_id") or "external tool"} instance {payload.get("instance_id") or "default"} logs cleared on client',
         }
 
-    def _external_tool_has_running_instances_for_tool(self, tool_id: str) -> bool:
+    def _external_tool_has_running_instances_for_package(self, package_id: str) -> bool:
         runtime_root = self._external_tool_expand_path('~/.ops/external_tools/runtime')
-        instances_dir = os.path.join(runtime_root, tool_id, 'instances')
+        package_dir = os.path.join(runtime_root, str(package_id or '').strip())
 
-        if not os.path.isdir(instances_dir):
+        if not os.path.isdir(package_dir):
             return False
 
-        for name in os.listdir(instances_dir):
-            path = os.path.join(instances_dir, name)
-            if not os.path.isdir(path):
+        for module_id in os.listdir(package_dir):
+            instances_dir = os.path.join(package_dir, module_id, 'instances')
+            if not os.path.isdir(instances_dir):
                 continue
-
-            instance_payload = {
-                'tool_id': tool_id,
-                'display_name': tool_id,
-                'side': 'client',
-                'instance_id': name,
-                'runtime': {
-                    'pid_file': os.path.join(path, 'tool.pid'),
-                    'stdout': os.path.join(path, 'stdout.log'),
-                    'stderr': 'stdout',
-                    'state_file': os.path.join(path, 'state.json'),
-                },
-            }
-
-            status = self._external_tool_status_from_payload(instance_payload)
-            if status.get('running'):
-                return True
+            tool_id = f'{package_id}.{module_id}'
+            for name in os.listdir(instances_dir):
+                path = os.path.join(instances_dir, name)
+                if not os.path.isdir(path):
+                    continue
+                instance_payload = {
+                    'tool_id': tool_id,
+                    'package_id': package_id,
+                    'module_id': module_id,
+                    'display_name': tool_id,
+                    'side': 'client',
+                    'instance_id': name,
+                    'runtime': {
+                        'pid_file': os.path.join(path, 'tool.pid'),
+                        'stdout': os.path.join(path, 'stdout.log'),
+                        'stderr': 'stdout',
+                        'state_file': os.path.join(path, 'state.json'),
+                    },
+                }
+                status = self._external_tool_status_from_payload(instance_payload)
+                if status.get('running'):
+                    return True
 
         return False
 
@@ -711,10 +928,11 @@ finally:
 
     def _external_tool_uninstall_payload(self, payload: dict) -> dict:
         tool_id = payload.get('tool_id') or ''
-        if not tool_id:
-            raise ValueError('tool_id is required')
+        package_id = payload.get('package_id') or tool_id
+        if not package_id:
+            raise ValueError('package_id is required')
 
-        if self._external_tool_has_running_instances_for_tool(tool_id):
+        if self._external_tool_has_running_instances_for_package(package_id):
             raise ValueError('This package has running instances on this machine. Stop them before uninstalling.')
 
         status = self._external_tool_install_status_payload(payload)
@@ -755,8 +973,9 @@ finally:
                 return 1, json.dumps(status, ensure_ascii=False, indent=2)
 
             if payload.get('install_if_needed', True):
-                archive_path = self._external_tool_download_package(payload)
-                install_info = self._external_tool_install_if_needed(payload, archive_path)
+                package_info = self._external_tool_download_package(payload)
+                install_info = self._external_tool_install_if_needed(payload, package_info)
+                archive_path = install_info.get('package') or package_info.get('archive_path') or ''
             else:
                 archive_path = ''
                 install_info = self._external_tool_install_status_payload(payload)
@@ -805,13 +1024,13 @@ finally:
             if not isinstance(payload, dict):
                 return 0, 'Invalid external tool payload'
 
-            archive_path = self._external_tool_download_package(payload)
-            install_info = self._external_tool_install_if_needed(payload, archive_path)
-            install_info['package'] = archive_path
+            package_info = self._external_tool_download_package(payload)
+            install_info = self._external_tool_install_if_needed(payload, package_info)
+            source_label = 'cached package' if install_info.get('used_cache') else 'downloaded package' if install_info.get('downloaded') else 'existing installation'
             install_info['message'] = (
                 f'{payload.get("display_name") or payload.get("tool_id") or "external tool"} already installed at {install_info.get("install_dir")}'
                 if install_info.get('already_installed')
-                else f'{payload.get("display_name") or payload.get("tool_id") or "external tool"} installed at {install_info.get("install_dir")}'
+                else f'{payload.get("display_name") or payload.get("tool_id") or "external tool"} installed from {source_label} at {install_info.get("install_dir")}'
             )
 
             return 1, json.dumps(install_info, ensure_ascii=False, indent=2)
@@ -831,6 +1050,19 @@ finally:
 
         except Exception as e:
             return 0, f'Failed to get external tool install status: {e}'
+
+    @desc('Clear cached external tool package archive', group='runtime', suggest=False)
+    @interruptible()
+    def external_tool_clear_cache(self, arg=''):
+        try:
+            payload = self.structured_arg_codec.decode(arg)
+            if not isinstance(payload, dict):
+                return 0, 'Invalid external tool payload'
+
+            return 1, json.dumps(self._external_tool_clear_cache_payload(payload), ensure_ascii=False, indent=2)
+
+        except Exception as e:
+            return 0, f'Failed to clear external tool package cache: {e}'
 
     @desc('Show external tool install statuses in one client command', group='runtime', suggest=False)
     @interruptible()
@@ -934,6 +1166,8 @@ finally:
                     continue
                 tool_specs.append({
                     'tool_id': tool_id,
+                    'package_id': item.get('package_id') or (tool_id.split('.', 1)[0] if '.' in tool_id else tool_id),
+                    'module_id': item.get('module_id') or (tool_id.split('.', 1)[1] if '.' in tool_id else ''),
                     'display_name': item.get('display_name') or tool_id,
                 })
         elif os.path.isdir(runtime_root):
@@ -951,7 +1185,9 @@ finally:
         for spec in tool_specs:
             tool_id = spec['tool_id']
             display_name = spec.get('display_name') or tool_id
-            instances_dir = os.path.join(runtime_root, tool_id, 'instances')
+            package_id = spec.get('package_id') or (tool_id.split('.', 1)[0] if '.' in tool_id else tool_id)
+            module_id = spec.get('module_id') or (tool_id.split('.', 1)[1] if '.' in tool_id else '')
+            instances_dir = os.path.join(runtime_root, package_id, module_id, 'instances') if module_id else os.path.join(runtime_root, package_id, 'instances')
             tool_items = []
             by_tool[tool_id] = tool_items
 
@@ -965,6 +1201,8 @@ finally:
 
                 instance_payload = {
                     'tool_id': tool_id,
+                    'package_id': package_id,
+                    'module_id': module_id,
                     'display_name': display_name,
                     'side': 'client',
                     'instance_id': name,

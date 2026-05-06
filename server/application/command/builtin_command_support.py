@@ -667,9 +667,9 @@ class ExternalToolCliBuiltinSupport:
     xt 轻量 CLI 门面。
 
     约束：
-    - 只解析 meta.cli.aliases
+    - 只解析 package.execs 的原生 exec name
     - 不提供 install；安装仍属于 package/web external tool 管理
-    - 执行时只运行已安装 package.executable_rel_path，并把原始参数追加到 argv
+    - 执行时只运行已安装 package exec，并把原始参数追加到 argv
     """
 
     RESERVED_SUBCOMMANDS = {'list', 'info', 'which', 'run', 'help'}
@@ -739,23 +739,14 @@ class ExternalToolCliBuiltinSupport:
         )
 
     def _build_client_payload(self, target: dict, raw_args: str = '') -> dict:
-        meta = target.get('meta') or {}
         runtime_service = self._runtime_service()
-        payload = runtime_service.build_client_start_payload(
-            meta,
-            params={},
-            instance_id='',
-            install_if_needed=False,
-            require_required_params=False,
+        payload = runtime_service.build_client_exec_payload(
+            target,
+            raw_args=self._strip_raw_arg_separator(raw_args),
+            platform_alias=self._client_platform(),
+            arch=self._client_arch(),
+            cwd=self._client_cwd(),
         )
-        payload['action'] = 'exec'
-        payload['install_if_needed'] = False
-        payload['cli'] = {
-            'alias': target.get('alias') or '',
-            'arg_mode': str((target.get('cli') or {}).get('arg_mode') or 'raw_append').strip() or 'raw_append',
-            'cwd': self._client_cwd(),
-        }
-        payload['raw_args'] = self._strip_raw_arg_separator(raw_args)
         return payload
 
     def _iter_nested_command(self, command_text: str):
@@ -773,15 +764,17 @@ class ExternalToolCliBuiltinSupport:
         )
 
         if not items:
-            return 'No external tool CLI aliases available. Add cli.enabled=true and cli.aliases to external tool meta.'
+            return 'No external tool execs available. Add execs to external tool package meta.'
 
         rows = []
         for item in items:
             rows.append({
                 'alias': item.get('alias') or '',
-                'tool_id': item.get('tool_id') or '',
+                'exec': item.get('exec_name') or item.get('alias') or '',
+                'package_id': item.get('package_id') or item.get('tool_id') or '',
                 'display_name': item.get('display_name') or '',
-                'executable': (item.get('package') or {}).get('executable_rel_path') or '',
+                'package_key': item.get('package_key') or '',
+                'executable': item.get('executable_rel_path') or '',
             })
 
         return json.dumps({'items': rows}, ensure_ascii=False, indent=2)
@@ -789,33 +782,34 @@ class ExternalToolCliBuiltinSupport:
     def _format_info(self, alias: str) -> str:
         target = self._resolve_alias(alias)
         meta = target.get('meta') or {}
-        package = meta.get('package') or {}
         cli = target.get('cli') or {}
         payload = self._build_client_payload(target, raw_args='')
         install = payload.get('install') or {}
+        package_payload = payload.get('package') or {}
 
         return json.dumps({
-            'alias': target.get('alias') or alias,
-            'tool_id': meta.get('id') or '',
+            'exec': target.get('exec_name') or target.get('alias') or alias,
+            'package_id': meta.get('id') or '',
             'display_name': meta.get('display_name') or '',
-            'description': meta.get('description') or '',
+            'description': target.get('description') or meta.get('description') or '',
             'side': 'client',
             'platforms': meta.get('platforms') or [],
             'arch': meta.get('arch') or '',
+            'package_key': payload.get('package_key') or target.get('package_key') or '',
             'cli': {
-                'enabled': bool(cli.get('enabled')),
-                'aliases': cli.get('aliases') or [],
+                'enabled': bool(cli.get('enabled', True)),
+                'exec_name': target.get('exec_name') or target.get('alias') or alias,
                 'arg_mode': cli.get('arg_mode') or 'raw_append',
             },
             'package': {
-                'filename': package.get('filename') or '',
-                'executable_rel_path': package.get('executable_rel_path') or '',
+                'filename': package_payload.get('filename') or '',
+                'executable_rel_path': package_payload.get('executable_rel_path') or '',
             },
             'install': {
                 'install_dir': install.get('install_dir') or '',
                 'skip_if_exists': install.get('skip_if_exists') or '',
             },
-            'usage': f'xt {target.get("alias") or alias} <raw args>',
+            'usage': f'xt {target.get("exec_name") or alias} <raw args>',
         }, ensure_ascii=False, indent=2)
 
     def _which(self, alias: str):
@@ -840,7 +834,7 @@ class ExternalToolCliBuiltinSupport:
             return
 
         if arg_text in ('help', '-h', '--help'):
-            yield 1, 'Usage: xt list | xt info <alias> | xt which <alias> | xt <alias> [--] <raw args>'
+            yield 1, 'Usage: xt list | xt info <exec> | xt which <exec> | xt <exec> [--] <raw args>'
             return
 
         subcommand, rest = self._split_first_token(arg_text)
@@ -848,14 +842,14 @@ class ExternalToolCliBuiltinSupport:
         if subcommand == 'info':
             alias, _ = self._split_first_token(rest)
             if not alias:
-                raise ValueError('Usage: xt info <alias>')
+                raise ValueError('Usage: xt info <exec>')
             yield 1, self._format_info(alias)
             return
 
         if subcommand == 'which':
             alias, _ = self._split_first_token(rest)
             if not alias:
-                raise ValueError('Usage: xt which <alias>')
+                raise ValueError('Usage: xt which <exec>')
             for item in self._which(alias):
                 yield item
             return
@@ -866,7 +860,7 @@ class ExternalToolCliBuiltinSupport:
         if subcommand == 'run':
             alias, raw_args = self._split_first_token(rest)
             if not alias:
-                raise ValueError('Usage: xt run <alias> [--] <raw args>')
+                raise ValueError('Usage: xt run <exec> [--] <raw args>')
             for item in self._run_alias(alias, raw_args):
                 yield item
             return

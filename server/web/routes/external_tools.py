@@ -20,6 +20,11 @@ def create_external_tool_blueprint(server_instance):
             raise ValueError('params must be an object')
         return payload, params
 
+    def _target_from_payload(payload):
+        platform_alias = str(payload.get('platform') or payload.get('platform_alias') or '').strip()
+        arch = str(payload.get('arch') or payload.get('architecture') or '').strip()
+        return platform_alias, arch
+
     @blueprint.get('/api/external-tools/catalog')
     def list_external_tools():
         return responder.json_endpoint(
@@ -29,13 +34,16 @@ def create_external_tool_blueprint(server_instance):
 
     @blueprint.post('/api/connections/<client_id>/external-tools/catalog')
     def list_client_external_tools(client_id):
-        return responder.json_endpoint(
-            lambda: external_tool_api.list_client_catalog(
+        def _execute():
+            payload = get_json_payload()
+            platform_alias, arch = _target_from_payload(payload)
+            return external_tool_api.list_client_catalog(
                 client_id,
                 tab_id=get_optional_tab_id(),
-            ),
-            default_error_status=500,
-        )
+                platform_alias=platform_alias,
+                arch=arch,
+            )
+        return responder.json_endpoint(_execute, default_error_status=500)
 
     @blueprint.get('/api/external-tools/<tool_id>')
     def get_external_tool(tool_id):
@@ -61,10 +69,9 @@ def create_external_tool_blueprint(server_instance):
     @blueprint.get('/api/external-tools/<tool_id>/download')
     def download_external_tool_by_id(tool_id):
         try:
-            meta = external_tool_api.get_tool(tool_id)
-            filename = str((meta.get('package') or {}).get('filename') or '').strip()
-            if not filename:
-                raise ValueError('package.filename is required')
+            platform_alias = str(request.args.get('platform') or request.args.get('platform_alias') or '').strip()
+            arch = str(request.args.get('arch') or request.args.get('architecture') or '').strip()
+            filename = external_tool_api.get_package_download_filename(tool_id, platform_alias=platform_alias, arch=arch)
             file_path = external_tool_api.get_package_path(filename)
             return send_file(file_path, as_attachment=True, download_name=os.path.basename(file_path))
         except Exception as e:
@@ -113,7 +120,7 @@ def create_external_tool_blueprint(server_instance):
                 tool_id,
                 params=params,
                 instance_id=str(payload.get('instance_id') or '').strip(),
-                install_if_needed=bool(payload.get('install_if_needed', True)),
+                install_if_needed=False,
             )
         return responder.json_endpoint(_execute, default_error_status=500)
 
@@ -144,6 +151,18 @@ def create_external_tool_blueprint(server_instance):
         def _execute():
             payload, params = _params_from_payload()
             return external_tool_api.uninstall_server_tool(
+                tool_id,
+                params=params,
+                instance_id=str(payload.get('instance_id') or '').strip(),
+            )
+
+        return responder.json_endpoint(_execute, default_error_status=500)
+
+    @blueprint.post('/api/external-tools/<tool_id>/server/clear-cache')
+    def clear_server_package_cache(tool_id):
+        def _execute():
+            payload, params = _params_from_payload()
+            return external_tool_api.clear_server_package_cache(
                 tool_id,
                 params=params,
                 instance_id=str(payload.get('instance_id') or '').strip(),
@@ -186,17 +205,6 @@ def create_external_tool_blueprint(server_instance):
             default_error_status=500,
         )
 
-    # Backward-compatible MVP route.
-    @blueprint.post('/api/external-tools/<tool_id>/server/run')
-    def install_and_run_server_tool(tool_id):
-        def _execute():
-            payload, params = _params_from_payload()
-            return external_tool_api.start_server_instance(
-                tool_id,
-                params=params,
-                instance_id=str(payload.get('instance_id') or '').strip(),
-            )
-        return responder.json_endpoint(_execute, default_error_status=500)
 
     # Client lifecycle. These endpoints submit commands to the target client.
     @blueprint.post('/api/connections/<client_id>/external-tools/<tool_id>/instances')
@@ -214,13 +222,16 @@ def create_external_tool_blueprint(server_instance):
     def start_client_instance(client_id, tool_id):
         def _execute():
             payload, params = _params_from_payload()
+            platform_alias, arch = _target_from_payload(payload)
             return external_tool_api.start_client_instance(
                 client_id,
                 tool_id,
                 params=params,
                 instance_id=str(payload.get('instance_id') or '').strip(),
-                install_if_needed=bool(payload.get('install_if_needed', True)),
+                install_if_needed=False,
                 tab_id=get_optional_tab_id(),
+                platform_alias=platform_alias,
+                arch=arch,
             )
         return responder.json_endpoint(_execute, default_error_status=500)
 
@@ -228,12 +239,15 @@ def create_external_tool_blueprint(server_instance):
     def install_client_tool(client_id, tool_id):
         def _execute():
             payload, params = _params_from_payload()
+            platform_alias, arch = _target_from_payload(payload)
             return external_tool_api.install_client_tool(
                 client_id,
                 tool_id,
                 params=params,
                 instance_id=str(payload.get('instance_id') or '').strip(),
                 tab_id=get_optional_tab_id(),
+                platform_alias=platform_alias,
+                arch=arch,
             )
         return responder.json_endpoint(_execute, default_error_status=500)
 
@@ -241,12 +255,15 @@ def create_external_tool_blueprint(server_instance):
     def client_install_status(client_id, tool_id):
         def _execute():
             payload, params = _params_from_payload()
+            platform_alias, arch = _target_from_payload(payload)
             return external_tool_api.client_install_status(
                 client_id,
                 tool_id,
                 params=params,
                 instance_id=str(payload.get('instance_id') or '').strip(),
                 tab_id=get_optional_tab_id(),
+                platform_alias=platform_alias,
+                arch=arch,
             )
         return responder.json_endpoint(_execute, default_error_status=500)
 
@@ -254,12 +271,32 @@ def create_external_tool_blueprint(server_instance):
     def uninstall_client_tool(client_id, tool_id):
         def _execute():
             payload, params = _params_from_payload()
+            platform_alias, arch = _target_from_payload(payload)
             return external_tool_api.uninstall_client_tool(
                 client_id,
                 tool_id,
                 params=params,
                 instance_id=str(payload.get('instance_id') or '').strip(),
                 tab_id=get_optional_tab_id(),
+                platform_alias=platform_alias,
+                arch=arch,
+            )
+
+        return responder.json_endpoint(_execute, default_error_status=500)
+
+    @blueprint.post('/api/connections/<client_id>/external-tools/<tool_id>/clear-cache')
+    def clear_client_package_cache(client_id, tool_id):
+        def _execute():
+            payload, params = _params_from_payload()
+            platform_alias, arch = _target_from_payload(payload)
+            return external_tool_api.clear_client_package_cache(
+                client_id,
+                tool_id,
+                params=params,
+                instance_id=str(payload.get('instance_id') or '').strip(),
+                tab_id=get_optional_tab_id(),
+                platform_alias=platform_alias,
+                arch=arch,
             )
 
         return responder.json_endpoint(_execute, default_error_status=500)
@@ -327,18 +364,5 @@ def create_external_tool_blueprint(server_instance):
             default_error_status=500,
         )
 
-    # Backward-compatible MVP route.
-    @blueprint.post('/api/connections/<client_id>/external-tools/<tool_id>/run')
-    def install_and_run_client_tool(client_id, tool_id):
-        def _execute():
-            payload, params = _params_from_payload()
-            return external_tool_api.start_client_instance(
-                client_id,
-                tool_id,
-                params=params,
-                instance_id=str(payload.get('instance_id') or '').strip(),
-                tab_id=get_optional_tab_id(),
-            )
-        return responder.json_endpoint(_execute, default_error_status=500)
 
     return blueprint

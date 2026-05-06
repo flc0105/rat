@@ -56,107 +56,164 @@
 
       <el-tabs v-model="activeTab" class="external-tool-tabs">
         <el-tab-pane label="Packages" name="modules">
-          <div v-if="filteredModules.length" class="external-tool-module-list">
-            <div
-              v-for="item in filteredModules"
-              :key="item.id"
-              class="external-tool-card"
-            >
-              <div class="external-tool-card-main">
-                <div class="external-tool-title-row">
-                  <div class="external-tool-title" :title="item.display_name || item.id">
-                    {{ item.display_name || item.id }}
+          <div v-if="filteredModules.length" class="external-tool-package-split">
+            <div class="external-tool-package-list-panel">
+              <div class="external-tool-package-list">
+                <div
+                  v-for="item in filteredModules"
+                  :key="item.id"
+                  class="external-tool-card external-tool-package-list-card"
+                  :class="{ active: selectedPackage?.id === item.id }"
+                  @click="selectPackage(item)"
+                >
+                  <div class="external-tool-card-main">
+                    <div class="external-tool-title-row">
+                      <div class="external-tool-title" :title="item.display_name || item.id">
+                        {{ item.display_name || item.id }}
+                      </div>
+                      <el-tag size="small" type="info">
+                        {{ formatPlatforms(item.platforms) }}
+                      </el-tag>
+                      <el-tag v-if="item.version" size="small" type="info">
+                        {{ formatVersionLabel(item.version) }}
+                      </el-tag>
+                      <el-tag
+                        v-if="getModuleInstallStatus(item).label"
+                        size="small"
+                        :type="getModuleInstallStatus(item).type"
+                        effect="plain"
+                      >
+                        {{ getModuleInstallStatus(item).label }}
+                      </el-tag>
+                    </div>
+
+                    <div class="external-tool-desc" :title="item.description || ''">
+                      {{ item.description || 'No description' }}
+                    </div>
                   </div>
-                  <el-tag size="small" :type="getModuleTargetTagType(item)">
-                    {{ getModuleTargetTagLabel(item) }}
-                  </el-tag>
-                  <el-tag size="small" type="info">
-                    {{ formatPlatforms(item.platforms) }}
-                  </el-tag>
-<el-tag v-if="item.version" size="small" type="info">
-  {{ formatVersionLabel(item.version) }}
-</el-tag>
-                  <el-tag v-if="item.arch" size="small" type="info">
-                    {{ item.arch }}
-                  </el-tag>
-                  <el-tag
-                    v-if="getModuleInstallStatus(item).label"
-                    size="small"
-                    :type="getModuleInstallStatus(item).type"
-                    effect="plain"
-                  >
-                    {{ getModuleInstallStatus(item).label }}
-                  </el-tag>
-                </div>
-
-                <div class="external-tool-desc" :title="item.description || ''">
-                  {{ item.description || 'No description' }}
-                </div>
-
-                <div class="external-tool-meta mono">
-                  <span>ID: {{ item.id }}</span>
-                  <span v-if="item.package?.filename">Package: {{ item.package.filename }}</span>
-                  <span v-if="item.package?.executable_rel_path">Exec: {{ item.package.executable_rel_path }}</span>
                 </div>
               </div>
+            </div>
 
-              <div class="external-tool-actions">
-                <div class="external-tool-action-row single">
-                  <el-button
-                    size="small"
-                    type="primary"
-                    plain
-                    :disabled="!canUsePackageAction(item)"
-                    @click="openStartDialog(item, getSelectedTargetSideForAction(), 'start')"
-                  >
-                    {{ getRunButtonLabel(item) }}
-                  </el-button>
+            <div class="external-tool-package-detail-panel">
+              <div v-if="selectedPackage" class="external-tool-package-detail-card">
+                <div class="external-tool-package-detail-header">
+                  <div class="external-tool-package-detail-main">
+                    <div class="external-tool-title-row">
+                      <div class="external-tool-title large" :title="selectedPackage.display_name || selectedPackage.id">
+                        {{ selectedPackage.display_name || selectedPackage.id }}
+                      </div>
+                      <el-tag size="small" type="info">
+                        {{ formatPlatforms(selectedPackage.platforms) }}
+                      </el-tag>
+                      <el-tag v-if="selectedPackage.version" size="small" type="info">
+                        {{ formatVersionLabel(selectedPackage.version) }}
+                      </el-tag>
+                      <el-tag
+                        v-if="getModuleInstallStatus(selectedPackage).label"
+                        size="small"
+                        :type="getModuleInstallStatus(selectedPackage).type"
+                        effect="plain"
+                      >
+                        {{ getModuleInstallStatus(selectedPackage).label }}
+                      </el-tag>
+                    </div>
+                    <div class="external-tool-desc" :title="selectedPackage.description || ''">
+                      {{ selectedPackage.description || 'No description' }}
+                    </div>
+                  </div>
 
-                  <el-dropdown
-                    trigger="click"
-                    size="small"
-                    @command="handlePackageMoreCommand($event, item)"
-                  >
-                    <el-button size="small" plain>
-                      More
-                    </el-button>
-                    <template #dropdown>
-                      <el-dropdown-menu>
-                        <el-dropdown-item command="download">
-                          Download Zip
-                        </el-dropdown-item>
-                        <el-dropdown-item command="edit">
-                          Edit Metadata
-                        </el-dropdown-item>
-                        <el-dropdown-item divided command="install" :disabled="!canUsePackageAction(item)">
-                          {{ getInstallMenuLabel(item) }}
-                        </el-dropdown-item>
-                        <el-dropdown-item command="run_only" :disabled="!canUsePackageAction(item)">
-                          {{ getRunOnlyMenuLabel(item) }}
-                        </el-dropdown-item>
-                        <el-dropdown-item command="status" :disabled="!canUsePackageAction(item)">
-                          Install Status
-                        </el-dropdown-item>
-                        <el-dropdown-item command="copy" :disabled="!canUsePackageAction(item)">
-                          Copy Command
-                        </el-dropdown-item>
-                        <el-dropdown-item
-                          command="uninstall"
-                          divided
-                          :disabled="!canUninstallPackageAction(item)"
-                        >
-                          {{ getUninstallMenuLabel(item) }}
-                        </el-dropdown-item>
-                      </el-dropdown-menu>
-                    </template>
-                  </el-dropdown>
+                  <div class="external-tool-actions external-tool-package-detail-actions">
+                    <div class="external-tool-action-row single">
+                      <el-button
+                        size="small"
+                        type="primary"
+                        plain
+                        :disabled="!canInstallPackageAction(selectedPackage)"
+                        @click="installOnly(selectedPackage)"
+                      >
+                        {{ getInstallMenuLabel(selectedPackage) }}
+                      </el-button>
+
+                      <el-dropdown
+                        trigger="click"
+                        size="small"
+                        @command="handlePackageMoreCommand($event, selectedPackage)"
+                      >
+                        <el-button size="small" plain>
+                          More
+                        </el-button>
+                        <template #dropdown>
+                          <el-dropdown-menu>
+                            <el-dropdown-item command="download">
+                              Download Zip
+                            </el-dropdown-item>
+                            <el-dropdown-item command="edit">
+                              Edit Metadata
+                            </el-dropdown-item>
+                            <el-dropdown-item divided command="status" :disabled="!canUsePackageAction(selectedPackage)">
+                              Install Status
+                            </el-dropdown-item>
+                            <el-dropdown-item command="copy" :disabled="!canUsePackageAction(selectedPackage)">
+                              Copy Command
+                            </el-dropdown-item>
+                            <el-dropdown-item
+                              command="clear_cache"
+                              divided
+                              :disabled="!canUsePackageAction(selectedPackage)"
+                            >
+                              Clear Package Cache
+                            </el-dropdown-item>
+                            <el-dropdown-item
+                              command="uninstall"
+                              :disabled="!canUninstallPackageAction(selectedPackage)"
+                            >
+                              {{ getUninstallMenuLabel(selectedPackage) }}
+                            </el-dropdown-item>
+                          </el-dropdown-menu>
+                        </template>
+                      </el-dropdown>
+                    </div>
+                  </div>
                 </div>
+
+                <div class="external-tool-package-detail-section">
+                  <div class="external-tool-detail-section-title">Modules</div>
+                  <div v-if="getPackageModules(selectedPackage).length" class="external-tool-package-modules detail">
+                    <div
+                      v-for="module in getPackageModules(selectedPackage)"
+                      :key="module.id"
+                      class="external-tool-package-module-row"
+                    >
+                      <div class="external-tool-package-module-main">
+                        <span class="strong">{{ module.display_name || module.id }}</span>
+                        <span class="mono muted">{{ module.id }}</span>
+                        <el-tag size="small" type="info">daemon</el-tag>
+                      </div>
+                      <el-button
+                        size="small"
+                        type="primary"
+                        plain
+                        :disabled="!canRunModuleAction(module)"
+                        @click="openStartDialog(module, getSelectedTargetSideForAction(), 'run')"
+                      >
+                        {{ getRunButtonLabel(module) }}
+                      </el-button>
+                    </div>
+                  </div>
+                  <div v-else class="external-tool-empty small">
+                    No runnable modules.
+                  </div>
+                </div>
+              </div>
+              <div v-else class="external-tool-empty">
+                Select a package.
               </div>
             </div>
           </div>
 
           <div v-else class="external-tool-empty">
-            {{ searchText ? 'No matching external tool modules' : 'No external tool meta files found' }}
+            {{ searchText ? 'No matching external tool packages' : 'No external tool meta files found' }}
           </div>
         </el-tab-pane>
 
@@ -451,7 +508,7 @@
     <template #footer>
       <el-button size="small" @click="startDialogVisible = false">Cancel</el-button>
       <el-button size="small" type="primary" :loading="submitting" @click="confirmStart">
-        {{ pendingStartMode === 'run_only' ? 'Run Only' : 'Start Instance' }}
+        Run
       </el-button>
     </template>
   </el-dialog>
@@ -577,10 +634,11 @@ export default {
       searchText: '',
       deviceFilter: '',
       packageOnlyCompatible: true,
+      selectedPackageId: '',
       startDialogVisible: false,
       pendingToolId: '',
       pendingTargetSide: '',
-      pendingStartMode: 'start',
+      pendingStartMode: 'run',
       paramForm: {},
       logDialogVisible: false,
       logDialogTitle: 'External Tool Logs',
@@ -593,6 +651,7 @@ export default {
       detailSections: [],
       detailCopyText: '',
       serverPlatform: '',
+      serverArch: '',
     }
   },
 
@@ -605,6 +664,26 @@ export default {
         this.currentConnection?.system ||
         '',
       )
+    },
+
+    currentClientArch() {
+      return this.normalizeArch(
+        this.currentConnection?.arch ||
+        this.currentConnection?.cpu_arch ||
+        this.currentConnection?.architecture ||
+        this.currentConnection?.machine_arch ||
+        '',
+      )
+    },
+
+    allModules() {
+      const modules = []
+      for (const pkg of this.items || []) {
+        for (const module of this.getPackageModules(pkg)) {
+          modules.push(module)
+        }
+      }
+      return modules
     },
 
     currentDeviceId() {
@@ -642,11 +721,11 @@ export default {
     },
 
     serverModules() {
-      return (this.items || []).filter(item => this.supportsSide(item, 'server'))
+      return (this.allModules || []).filter(item => this.supportsSide(item, 'server'))
     },
 
     clientModules() {
-      return (this.items || []).filter(item => this.supportsSide(item, 'client'))
+      return (this.allModules || []).filter(item => this.supportsSide(item, 'client'))
     },
 
     isServerTargetSelected() {
@@ -668,8 +747,13 @@ export default {
     },
 
     selectedTargetPlatform() {
-      if (this.selectedTargetSide !== 'client') return ''
+      if (this.selectedTargetSide !== 'client') return this.serverPlatform
       return this.getPlatformForMachineId(this.selectedTargetMachineId)
+    },
+
+    selectedTargetArch() {
+      if (this.selectedTargetSide !== 'client') return this.serverArch
+      return this.getArchForMachineId(this.selectedTargetMachineId) || this.currentClientArch
     },
 
     filteredModules() {
@@ -680,6 +764,13 @@ export default {
         if (!keyword) return true
         return this.moduleSearchText(item).includes(keyword)
       })
+    },
+
+    selectedPackage() {
+      const list = this.filteredModules || []
+      if (!list.length) return null
+      const selectedId = String(this.selectedPackageId || '').trim()
+      return list.find(item => item.id === selectedId) || list[0]
     },
 
     allInstances() {
@@ -734,7 +825,7 @@ export default {
 
     pendingItem() {
       const target = String(this.pendingToolId || '').trim()
-      return (this.items || []).find(item => String(item.id || '').trim() === target) || null
+      return (this.allModules || []).find(item => String(item.id || '').trim() === target) || null
     },
 
     pendingParams() {
@@ -745,7 +836,7 @@ export default {
       const item = this.pendingItem
       const name = item ? (item.display_name || item.id) : 'External Tool'
       const side = this.pendingTargetSide === 'server' ? 'Server' : 'This Client'
-      const action = this.pendingStartMode === 'run_only' ? 'Run Only' : 'Start'
+      const action = 'Run'
       return `${action} ${name} on ${side}`
     },
   },
@@ -788,6 +879,12 @@ export default {
       return extra
     },
 
+
+    selectPackage(item) {
+      if (!item?.id) return
+      this.selectedPackageId = item.id
+    },
+
     async refreshAll() {
       this.loading = true
       try {
@@ -808,7 +905,9 @@ export default {
         if (!res.ok || json.code !== 0) throw new Error(json.message || 'Failed to load external tools')
         const catalog = json.data || {}
         this.serverPlatform = this.normalizePlatform(catalog.server_platform || '')
+        this.serverArch = this.normalizeArch(catalog.server_arch || '')
         this.items = Array.isArray(catalog.items) ? catalog.items : []
+        if (!this.selectedPackageId && this.items.length) this.selectedPackageId = this.items[0].id || ''
         this.applyCatalogInstallStatuses(this.items, '__server__')
       } catch (e) {
         if (showError) ElMessage.error(e.message || 'Failed to load external tools')
@@ -830,22 +929,131 @@ export default {
     async loadClientCatalogStatuses(deviceId = this.currentDeviceId, showError = true) {
       const targetDeviceId = this.normalizeDeviceId(deviceId)
       if (!targetDeviceId || targetDeviceId === '__server__' || targetDeviceId === '__all__') return []
+
+      const targetPlatform = this.getPlatformForConnectionId(targetDeviceId)
+      const targetArch = this.getArchForConnectionId(targetDeviceId)
+      const targetItems = (this.items || []).filter(item => this.doesPackageBuildMatch(item, targetPlatform, targetArch))
+      for (const item of targetItems) {
+        const previous = this.installStatuses[this.installStatusKey(item, 'client', targetDeviceId)] || {}
+        this.setInstallStatus(item, 'client', targetDeviceId, {
+          ...previous,
+          loading: true,
+          error: '',
+        })
+      }
+
       try {
         const res = await fetch(`/api/connections/${encodeURIComponent(targetDeviceId)}/external-tools/catalog`, {
           method: 'POST',
           headers: this.buildJsonHeaders({ 'Content-Type': 'application/json' }),
-          body: JSON.stringify({}),
+          body: JSON.stringify({
+            platform: targetPlatform,
+            arch: targetArch,
+          }),
         })
         const json = await res.json()
         if (!res.ok || json.code !== 0) throw new Error(json.message || 'Failed to load client install statuses')
         const catalog = json.data || {}
         const items = Array.isArray(catalog.items) ? catalog.items : []
-        this.applyCatalogInstallStatuses(items, targetDeviceId)
+        const seen = new Set()
+        for (const item of items) {
+          const status = item?.install_status
+          const packageId = String(item?.id || status?.package_id || status?.tool_id || '').trim()
+          if (!packageId) continue
+          seen.add(packageId)
+          if (status) {
+            this.setInstallStatus(item, 'client', targetDeviceId, {
+              ...status,
+              side: 'client',
+              loading: false,
+              error: status.error || '',
+            })
+          }
+        }
+        for (const item of targetItems) {
+          if (seen.has(String(item?.id || '').trim())) continue
+          this.setInstallStatus(item, 'client', targetDeviceId, {
+            tool_id: item.id,
+            package_id: item.id,
+            side: 'client',
+            installed: false,
+            loading: false,
+            error: 'client status not returned',
+            message: 'client status not returned',
+          })
+        }
         return Array.isArray(catalog.client_install_statuses) ? catalog.client_install_statuses : []
       } catch (e) {
+        for (const item of targetItems) {
+          this.setInstallStatus(item, 'client', targetDeviceId, {
+            tool_id: item.id,
+            package_id: item.id,
+            side: 'client',
+            installed: false,
+            loading: false,
+            error: e.message || 'Failed to load client install statuses',
+            message: e.message || 'Failed to load client install statuses',
+          })
+        }
         if (showError) ElMessage.error(e.message || 'Failed to load client install statuses')
         return []
       }
+    },
+
+    getPackageById(packageId) {
+      const id = String(packageId || '').trim()
+      if (!id) return null
+      return (this.items || []).find(item => String(item?.id || '').trim() === id) || null
+    },
+
+    normalizeModuleFromPackage(pkg, module) {
+      if (!pkg || !module) return null
+      const moduleId = String(module.id || module.module_id || '').trim()
+      const toolId = String(module.tool_id || (moduleId ? `${pkg.id}.${moduleId}` : '')).trim()
+      if (!toolId) return null
+      return {
+        ...module,
+        id: toolId,
+        tool_id: toolId,
+        module_id: moduleId || toolId,
+        package_id: pkg.id,
+        package_meta: pkg,
+        package: pkg.package || {},
+        package_install: pkg.install || {},
+        package_execs: pkg.execs || {},
+        package_platforms: pkg.platforms || [],
+        package_archs: pkg.archs || [],
+        version: module.version || pkg.version || '',
+        sides: ['server', 'client'],
+        platforms: pkg.platforms || module.platforms || [],
+        archs: pkg.archs || module.archs || [],
+      }
+    },
+
+    getPackageModules(pkg) {
+      const result = []
+      for (const module of pkg?.modules || []) {
+        const normalized = this.normalizeModuleFromPackage(pkg, module)
+        if (normalized) result.push(normalized)
+      }
+      return result
+    },
+
+    formatPackageModules(pkg) {
+      return this.getPackageModules(pkg).map(module => module.display_name || module.module_id || module.id).join(', ')
+    },
+
+    getPackageForModule(module) {
+      return module?.package_meta || this.getPackageById(module?.package_id || '') || module
+    },
+
+    canRunModuleAction(module) {
+      const pkg = this.getPackageForModule(module)
+      if (!this.isPackageAvailableForTarget(pkg)) return false
+      const side = this.getSelectedTargetSideForAction()
+      const deviceId = side === 'server' ? '__server__' : this.getActionDeviceId(pkg)
+      const status = this.installStatuses[this.installStatusKey(pkg, side, deviceId)]
+      return !!status?.installed
     },
 
     getItemSides(item) {
@@ -863,7 +1071,8 @@ export default {
     },
 
     supportsSide(item, side) {
-      return this.getItemSides(item).includes(String(side || '').trim().toLowerCase())
+      const normalized = String(side || '').trim().toLowerCase()
+      return !!item && ['server', 'client'].includes(normalized)
     },
 
     getActionSideForItem(item) {
@@ -872,7 +1081,9 @@ export default {
     },
 
     installStatusKey(itemOrToolId, side = '', deviceId = '') {
-      const toolId = typeof itemOrToolId === 'object' ? itemOrToolId?.id : itemOrToolId
+      const toolId = typeof itemOrToolId === 'object'
+        ? (itemOrToolId?.package_meta?.id || itemOrToolId?.package_id || itemOrToolId?.id)
+        : itemOrToolId
       const normalizedSide = side || (typeof itemOrToolId === 'object' ? this.getItemSides(itemOrToolId)[0] : '')
       const normalizedDeviceId = normalizedSide === 'server' ? '__server__' : this.normalizeDeviceId(deviceId || this.currentDeviceId)
       return `${normalizedSide}:${normalizedDeviceId}:${toolId || ''}`
@@ -925,26 +1136,47 @@ export default {
     },
 
     async refreshInstallStatuses(showToast = false) {
-      this.applyCatalogInstallStatuses(this.items, '__server__')
-      const deviceId = this.selectedTargetClientId
-      if (deviceId) {
-        await this.loadClientCatalogStatuses(deviceId, showToast)
+      const side = this.getSelectedTargetSideForAction()
+      if (side === 'server') {
+        for (const item of this.items || []) {
+          if (!this.isPackageAvailableForTarget(item)) continue
+          await this.fetchInstallStatus(item, 'server', '__server__', { silent: true, force: true })
+        }
+      } else {
+        const deviceId = this.selectedTargetClientId || this.currentDeviceId
+        if (deviceId) await this.loadClientCatalogStatuses(deviceId, showToast)
       }
       if (showToast) ElMessage.success('Install statuses refreshed')
     },
 
     isPackageAvailableForTarget(item) {
       if (!item) return false
+      const pkg = item?.package_meta || item
       const side = this.getSelectedTargetSideForAction()
-      if (!this.supportsSide(item, side)) return false
-      if (side === 'server') return this.isServerPlatformSupported(item)
-      const deviceId = this.getActionDeviceId(item)
+      if (side === 'server') return this.isServerPlatformSupported(pkg)
+      const deviceId = this.getActionDeviceId(pkg)
       const platform = this.selectedTargetPlatform || this.currentClientPlatform
-      return !!deviceId && this.selectedTargetSide === 'client' && this.doesPlatformMatch(item, platform)
+      const arch = this.selectedTargetArch || this.currentClientArch
+      return !!deviceId && this.selectedTargetSide === 'client' && this.doesPackageBuildMatch(pkg, platform, arch)
+    },
+
+    getPackageCurrentInstallStatus(item) {
+      if (!item) return null
+      const side = this.getSelectedTargetSideForAction()
+      const deviceId = this.getModuleInstallDeviceId(item)
+      return this.installStatuses[this.installStatusKey(item, side, deviceId)] || null
     },
 
     canUsePackageAction(item) {
       return this.isPackageAvailableForTarget(item)
+    },
+
+    canInstallPackageAction(item) {
+      if (!this.canUsePackageAction(item)) return false
+      if (this.installLoading) return false
+      const status = this.getPackageCurrentInstallStatus(item)
+      if (status?.loading) return false
+      return !status || status.installed !== true
     },
 
     async fetchInstallStatus(item, side = item?.side, deviceId = this.currentDeviceId, options = {}) {
@@ -1166,6 +1398,23 @@ async loadAllClientInstances(deviceId = this.currentDeviceId, showToast = true) 
       )
     },
 
+    getPlatformForConnectionId(deviceId) {
+      const conn = this.findConnectionById(deviceId) || (this.normalizeDeviceId(deviceId) === this.currentDeviceId ? this.currentConnection : null)
+      return this.normalizePlatform(conn?.os_alias || conn?.os_type || conn?.platform || conn?.system || '')
+    },
+
+    getArchForMachineId(machineId) {
+      const id = this.normalizeMachineId(machineId)
+      if (!id || id === '__server__' || id === '__all__') return ''
+      const conn = this.findConnectionByMachineId(id) || (id === this.currentMachineId ? this.currentConnection : null)
+      return this.normalizeArch(conn?.arch || conn?.cpu_arch || conn?.architecture || conn?.machine_arch || '')
+    },
+
+    getArchForConnectionId(deviceId) {
+      const conn = this.findConnectionById(deviceId) || (this.normalizeDeviceId(deviceId) === this.currentDeviceId ? this.currentConnection : null)
+      return this.normalizeArch(conn?.arch || conn?.cpu_arch || conn?.architecture || conn?.machine_arch || '')
+    },
+
     getActionDeviceId(item) {
       if (!item || !this.supportsSide(item, 'client')) return ''
       return this.selectedTargetClientId || this.currentDeviceId
@@ -1297,6 +1546,37 @@ async loadAllClientInstances(deviceId = this.currentDeviceId, showToast = true) 
       return aliases[text] || text
     },
 
+    normalizeArch(value) {
+      const text = String(value || '').trim().toLowerCase().replace(/-/g, '_')
+      const aliases = {
+        x86_64: 'amd64',
+        amd64: 'amd64',
+        i386: '386',
+        i686: '386',
+        aarch64: 'arm64',
+        arm64: 'arm64',
+        all: '*',
+        common: '*',
+        '*': '*',
+      }
+      return aliases[text] || text
+    },
+
+    normalizeArchs(archs) {
+      const source = Array.isArray(archs)
+        ? archs
+        : (typeof archs === 'string' && archs.trim() ? [archs] : [])
+      const result = []
+      const seen = new Set()
+      source.forEach((arch) => {
+        const normalized = this.normalizeArch(arch)
+        if (!normalized || seen.has(normalized)) return
+        seen.add(normalized)
+        result.push(normalized)
+      })
+      return result.length ? result : ['*']
+    },
+
     normalizePlatforms(platforms) {
       const source = Array.isArray(platforms)
         ? platforms
@@ -1314,9 +1594,33 @@ async loadAllClientInstances(deviceId = this.currentDeviceId, showToast = true) 
 
     doesPlatformMatch(item, platform) {
       const target = this.normalizePlatform(platform)
-      const platforms = this.normalizePlatforms(item?.platforms || item?.platform)
+      const platforms = this.normalizePlatforms(item?.platforms || item?.package_platforms || item?.platform)
       if (!target || platforms.includes('*')) return true
       return platforms.includes(target)
+    },
+
+    doesArchMatch(item, arch) {
+      const target = this.normalizeArch(arch)
+      const archs = this.normalizeArchs(item?.archs || item?.package_archs || item?.arch)
+      if (!target || archs.includes('*')) return true
+      return archs.includes(target)
+    },
+
+    doesPackageBuildMatch(item, platform, arch) {
+      const packages = item?.platform_packages || item?.packages || item?.package_meta?.platform_packages || null
+      if (!packages || typeof packages !== 'object') return this.doesPlatformMatch(item, platform) && this.doesArchMatch(item, arch)
+      const platformValue = this.normalizePlatform(platform)
+      const archValue = this.normalizeArch(arch)
+      if (!platformValue) return false
+      const exactKey = archValue ? `${platformValue}-${archValue}` : ''
+      if (exactKey && packages[exactKey]) return true
+      return Object.values(packages).some((info) => {
+        const itemPlatform = this.normalizePlatform(info?.platform || '')
+        const itemArch = this.normalizeArch(info?.arch || '')
+        const platformOk = itemPlatform === '*' || itemPlatform === platformValue
+        const archOk = !archValue || itemArch === '*' || itemArch === archValue
+        return platformOk && archOk
+      })
     },
 
     // isServerPlatformSupported(item) {
@@ -1326,11 +1630,11 @@ async loadAllClientInstances(deviceId = this.currentDeviceId, showToast = true) 
     isServerPlatformSupported(item) {
   if (!item) return false
   if (!this.serverPlatform) return true
-  return this.doesPlatformMatch(item, this.serverPlatform)
+  return this.doesPackageBuildMatch(item, this.serverPlatform, this.serverArch)
 },
 
     isClientPlatformSupported(item) {
-      return this.doesPlatformMatch(item, this.currentClientPlatform)
+      return this.doesPackageBuildMatch(item, this.currentClientPlatform, this.currentClientArch)
     },
 
     formatPlatforms(platforms) {
@@ -1346,6 +1650,8 @@ async loadAllClientInstances(deviceId = this.currentDeviceId, showToast = true) 
     },
 
     moduleSearchText(item) {
+      const moduleText = this.getPackageModules(item).map(module => [module.id, module.module_id, module.name, module.display_name, module.description].join(' ')).join(' ')
+      const execText = Object.keys(item?.execs || {}).join(' ')
       return [
         item.id,
         item.name,
@@ -1353,6 +1659,8 @@ async loadAllClientInstances(deviceId = this.currentDeviceId, showToast = true) 
         item.description,
         item.package?.filename,
         item.package?.executable_rel_path,
+        moduleText,
+        execText,
         (item.tags || []).join(' '),
       ].map(value => String(value || '').toLowerCase()).join(' ')
     },
@@ -1469,10 +1777,10 @@ async loadAllClientInstances(deviceId = this.currentDeviceId, showToast = true) 
       return String(raw || 'default').trim().replace(/[^A-Za-z0-9_.-]+/g, '-').replace(/^[._-]+|[._-]+$/g, '') || 'default'
     },
 
-    openStartDialog(item, side, mode = 'start') {
+    openStartDialog(item, side, mode = 'run') {
       this.pendingToolId = String(item?.id || '').trim()
       this.pendingTargetSide = side
-      this.pendingStartMode = mode === 'run_only' ? 'run_only' : 'start'
+      this.pendingStartMode = 'run'
       this.paramForm = this.buildParamDefaults(item)
       this.startDialogVisible = true
     },
@@ -1482,14 +1790,20 @@ async loadAllClientInstances(deviceId = this.currentDeviceId, showToast = true) 
       this.submitting = false
       this.pendingToolId = ''
       this.pendingTargetSide = ''
-      this.pendingStartMode = 'start'
+      this.pendingStartMode = 'run'
       this.paramForm = {}
     },
 
     downloadTool(item) {
       const id = String(item?.id || '').trim()
       if (!id) return
-      window.open(`/api/external-tools/${encodeURIComponent(id)}/download`, '_blank')
+      const params = new URLSearchParams()
+      const platform = this.selectedTargetPlatform || (this.getSelectedTargetSideForAction() === 'server' ? this.serverPlatform : this.currentClientPlatform)
+      const arch = this.selectedTargetArch || (this.getSelectedTargetSideForAction() === 'server' ? this.serverArch : this.currentClientArch)
+      if (platform) params.set('platform', platform)
+      if (arch) params.set('arch', arch)
+      const query = params.toString()
+      window.open(`/api/external-tools/${encodeURIComponent(id)}/download${query ? `?${query}` : ''}`, '_blank')
     },
 
     getSelectedTargetSideForAction() {
@@ -1500,13 +1814,14 @@ async loadAllClientInstances(deviceId = this.currentDeviceId, showToast = true) 
       return this.isServerTargetSelected ? 'Run on Server' : 'Run on This Client'
     },
 
-    getInstallMenuLabel() {
+    getInstallMenuLabel(item = null) {
+      const status = item ? this.getPackageCurrentInstallStatus(item) : null
+      if (status?.installed) {
+        return this.isServerTargetSelected ? 'Installed on Server' : 'Installed on This Client'
+      }
       return this.isServerTargetSelected ? 'Install on Server' : 'Install on This Client'
     },
 
-    getRunOnlyMenuLabel() {
-      return this.isServerTargetSelected ? 'Run Only on Server' : 'Run Only on This Client'
-    },
 
     getUninstallMenuLabel() {
       return this.isServerTargetSelected ? 'Uninstall from Server' : 'Uninstall from This Client'
@@ -1516,10 +1831,9 @@ handlePackageMoreCommand(command, item) {
   if (command === 'download') return this.downloadTool(item)
   if (command === 'edit') return this.$emit('open-tool-meta-editor', item.id)
   if (!this.canUsePackageAction(item)) return null
-  if (command === 'install') return this.installOnly(item)
-  if (command === 'run_only') return this.openStartDialog(item, this.getSelectedTargetSideForAction(), 'run_only')
   if (command === 'status') return this.showInstallStatus(item)
   if (command === 'copy') return this.copyInstallCommand(item)
+  if (command === 'clear_cache') return this.clearPackageCache(item)
   if (command === 'uninstall') return this.uninstallPackage(item)
   return null
 },
@@ -1541,15 +1855,16 @@ getPackageTargetConnectionIds(item) {
 
 getPackageTargetInstanceRows(item) {
   if (!item?.id) return []
+  const packageId = String(item.id || '').trim()
 
   if (this.getSelectedTargetSideForAction() === 'server') {
-    return this.allInstances.filter(row => row.side === 'server' && row.tool_id === item.id)
+    return this.allInstances.filter(row => row.side === 'server' && (row.package_id === packageId || String(row.tool_id || '').startsWith(`${packageId}.`)))
   }
 
   const machineId = this.getPackageTargetMachineId(item)
   return this.allInstances.filter(row => (
     row.side === 'client' &&
-    row.tool_id === item.id &&
+    (row.package_id === packageId || String(row.tool_id || '').startsWith(`${packageId}.`)) &&
     row.machine_id === machineId
   ))
 },
@@ -1656,12 +1971,85 @@ async uninstallClientTool(item, deviceId) {
   const res = await fetch(`/api/connections/${encodeURIComponent(targetDeviceId)}/external-tools/${encodeURIComponent(item.id)}/uninstall`, {
     method: 'POST',
     headers: this.buildJsonHeaders({ 'Content-Type': 'application/json' }),
-    body: JSON.stringify({ params: {} }),
+    body: JSON.stringify({
+      params: {},
+      platform: this.getPlatformForConnectionId(targetDeviceId),
+      arch: this.getArchForConnectionId(targetDeviceId),
+    }),
   })
   const json = await res.json()
   if (!res.ok || json.code !== 0) throw new Error(json.message || 'Failed to uninstall client package')
   return json.data || {}
 },
+
+    async clearPackageCache(item) {
+      if (!item?.id) return
+      if (!this.canUsePackageAction(item)) {
+        ElMessage.warning(this.getSelectedTargetSideForAction() === 'client' ? 'Please select a supported client first' : 'This package is not supported')
+        return
+      }
+
+      try {
+        await ElMessageBox.confirm(
+          `Clear cached package archive for ${item.display_name || item.id} on ${this.getSelectedTargetSideForAction() === 'server' ? 'server' : 'this machine'}? Installed files will not be removed.`,
+          'Clear Package Cache',
+          {
+            type: 'warning',
+            confirmButtonText: 'Clear Cache',
+            cancelButtonText: 'Cancel',
+          },
+        )
+      } catch (_) {
+        return
+      }
+
+      try {
+        this.installLoading = true
+        let data
+        const side = this.getSelectedTargetSideForAction()
+        const deviceId = side === 'server' ? '__server__' : this.getActionDeviceId(item)
+        if (side === 'server') {
+          data = await this.clearServerPackageCache(item)
+        } else {
+          if (!deviceId) throw new Error('Please select a device')
+          data = await this.clearClientPackageCache(item, deviceId)
+          await this.loadClientCatalogStatuses(deviceId, false)
+        }
+        ElMessage.success(data?.message || 'Package cache cleared')
+      } catch (e) {
+        ElMessage.error(e.message || 'Failed to clear package cache')
+      } finally {
+        this.installLoading = false
+      }
+    },
+
+    async clearServerPackageCache(item) {
+      const res = await fetch(`/api/external-tools/${encodeURIComponent(item.id)}/server/clear-cache`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ params: {} }),
+      })
+      const json = await res.json()
+      if (!res.ok || json.code !== 0) throw new Error(json.message || 'Failed to clear server package cache')
+      return json.data || {}
+    },
+
+    async clearClientPackageCache(item, deviceId) {
+      const targetDeviceId = this.normalizeDeviceId(deviceId || this.selectedId)
+      if (!targetDeviceId) throw new Error('Please select a device')
+      const res = await fetch(`/api/connections/${encodeURIComponent(targetDeviceId)}/external-tools/${encodeURIComponent(item.id)}/clear-cache`, {
+        method: 'POST',
+        headers: this.buildJsonHeaders({ 'Content-Type': 'application/json' }),
+        body: JSON.stringify({
+          params: {},
+          platform: this.getPlatformForConnectionId(targetDeviceId),
+          arch: this.getArchForConnectionId(targetDeviceId),
+        }),
+      })
+      const json = await res.json()
+      if (!res.ok || json.code !== 0) throw new Error(json.message || 'Failed to clear client package cache')
+      return json.data || {}
+    },
 
     async installOnly(item) {
       if (!this.canUsePackageAction(item)) {
@@ -1683,16 +2071,27 @@ async uninstallClientTool(item, deviceId) {
           res = await fetch(`/api/connections/${encodeURIComponent(deviceId)}/external-tools/${encodeURIComponent(item.id)}/install`, {
             method: 'POST',
             headers: this.buildJsonHeaders({ 'Content-Type': 'application/json' }),
-            body: JSON.stringify({ params: {} }),
+            body: JSON.stringify({
+              params: {},
+              platform: this.getPlatformForConnectionId(deviceId),
+              arch: this.getArchForConnectionId(deviceId),
+            }),
           })
         }
         const json = await res.json()
         if (!res.ok || json.code !== 0) throw new Error(json.message || 'Failed to install package')
         const data = json.data || {}
-        this.setInstallStatus(item, side, deviceId, data)
+        this.setInstallStatus(item, side, deviceId, { ...data, loading: false, error: data.error || '' })
+        const sourceLabel = data.used_cache
+          ? 'Installed from cached package'
+          : data.downloaded
+            ? 'Downloaded and installed'
+            : data.package_source === 'local'
+              ? 'Installed from local package file'
+              : 'Installed successfully'
         const message = data.already_installed
           ? `Already installed: ${data.executable_path || data.install_dir || item.id}`
-          : `Installed successfully: ${data.executable_path || data.install_dir || item.id}`
+          : `${sourceLabel}: ${data.executable_path || data.install_dir || item.id}`
         ElMessage.success(message)
       } catch (e) {
         ElMessage.error(e.message || 'Failed to install package')
@@ -1701,15 +2100,56 @@ async uninstallClientTool(item, deviceId) {
       }
     },
 
+    formatBytes(value) {
+      const size = Number(value || 0)
+      if (!Number.isFinite(size) || size <= 0) return '0 B'
+      const units = ['B', 'KB', 'MB', 'GB']
+      let n = size
+      let i = 0
+      while (n >= 1024 && i < units.length - 1) {
+        n /= 1024
+        i += 1
+      }
+      return `${n.toFixed(i === 0 ? 0 : 1)} ${units[i]}`
+    },
+
+    formatExecMap(value) {
+      const map = value && typeof value === 'object' ? value : {}
+      const entries = Object.entries(map).filter(([name, path]) => String(name || '').trim() && String(path || '').trim())
+      if (!entries.length) return '-'
+      return entries.map(([name, path]) => `${name}: ${path}`).join('\n')
+    },
+
+    formatCommandMap(data) {
+      const commands = data?.commands && typeof data.commands === 'object' ? data.commands : {}
+      const entries = Object.entries(commands).filter(([name, command]) => String(name || '').trim() && String(command || '').trim())
+      if (entries.length) return entries.map(([name, command]) => `${name}: ${command}`).join('\n')
+      if (data?.command) return String(data.command)
+      if (data?.executable_path) return String(data.executable_path)
+      return '-'
+    },
+
+    packageExecNames(item) {
+      return Object.keys(item?.execs || {}).filter(Boolean).join(', ') || '-'
+    },
+
     formatInstallStatusDetails(data) {
       if (!data) return 'No install status available'
+      const cache = data.cache || {}
       return [
         `Status: ${data.installed ? 'installed' : 'not installed'}`,
         `Install dir: ${data.install_dir || '-'}`,
-        `Executable: ${data.executable_path || '-'}`,
-        `Skip path: ${data.skip_path || '-'}`,
-        `Command: ${data.command || data.executable_path || '-'}`,
-        data.message ? `Message: ${data.message}` : '',
+        `Exec paths:
+${this.formatExecMap(data.exec_paths)}`,
+        `Commands:
+${this.formatCommandMap(data)}`,
+        `Cached package: ${cache.exists || cache.cached ? 'yes' : 'no'}`,
+        `Cache path: ${cache.cache_path || data.cache_path || '-'}`,
+        `Cache size: ${cache.size ? this.formatBytes(cache.size) : '-'}`,
+        `Cache mtime: ${cache.mtime || '-'}`,
+        data.package_source ? `Package source: ${data.package_source}` : '',
+        data.install_log ? `Install log:
+${data.install_log}` : '',
       ].filter(Boolean).join('\n')
     },
 
@@ -1722,20 +2162,48 @@ async uninstallClientTool(item, deviceId) {
     async showInstallStatus(item) {
       const data = await this.getInstallStatusForAction(item)
       if (!data) return
+      const modulesText = this.formatPackageModules(item) || '-'
+      const execsText = this.packageExecNames(item)
       this.showDetailDialog({
         title: `${item.display_name || item.id} install status`,
         subtitle: `${item.id} / ${this.getSelectedTargetSideForAction()}`,
-        copyText: data.command || data.executable_path || '',
+        copyText: this.formatCommandMap(data),
         sections: [
           {
-            title: 'Package install',
+            title: 'Package',
+            rows: [
+              { label: 'ID', value: item.id || '-', mono: true },
+              { label: 'Modules', value: modulesText, mono: true, multiline: modulesText.includes('\n') },
+              { label: 'Execs', value: execsText, mono: true },
+              { label: 'Platform package', value: data.package_key || '-', mono: true },
+              { label: 'Package source', value: data.package_source || '-' },
+            ],
+          },
+          {
+            title: 'Install status',
             rows: [
               { label: 'Status', value: data.installed ? 'Installed' : (data.installed === false ? 'Not installed' : 'Unknown') },
               { label: 'Install dir', value: data.install_dir || '-', mono: true },
-              { label: 'Executable', value: data.executable_path || '-', mono: true },
-              { label: 'Skip path', value: data.skip_path || '-', mono: true },
-              { label: 'Command', value: data.command || data.executable_path || '-', mono: true },
-              { label: 'Message', value: data.message || data.error || '-' },
+              { label: 'Exec paths', value: this.formatExecMap(data.exec_paths), mono: true, multiline: true },
+              { label: 'Commands', value: this.formatCommandMap(data), mono: true, multiline: true },
+              { label: 'Missing execs', value: this.formatExecMap(data.missing_execs), mono: true, multiline: true },
+            ],
+          },
+          {
+            title: 'Package cache',
+            rows: [
+              { label: 'Cached package', value: (data.cache?.exists || data.cache?.cached || data.cached) ? 'Yes' : 'No' },
+              { label: 'Cache path', value: data.cache?.cache_path || data.cache_path || '-', mono: true },
+              { label: 'Cache dir', value: data.cache?.cache_dir || '-', mono: true },
+              { label: 'Cache size', value: data.cache?.size ? this.formatBytes(data.cache.size) : '-' },
+              { label: 'Cache mtime', value: data.cache?.mtime || '-' },
+            ],
+          },
+          {
+            title: 'Install log',
+            rows: [
+              { label: 'Path', value: data.install_log_path || '-', mono: true },
+              { label: 'Log', value: data.install_log || '-', mono: true, multiline: true },
             ],
           },
         ],
@@ -1745,8 +2213,8 @@ async uninstallClientTool(item, deviceId) {
     async copyInstallCommand(item) {
       const data = await this.getInstallStatusForAction(item)
       if (!data) return
-      const command = data.command || data.executable_path || ''
-      if (!command) {
+      const command = this.formatCommandMap(data)
+      if (!command || command === '-') {
         ElMessage.warning('No command available to copy')
         return
       }
@@ -1839,11 +2307,10 @@ async uninstallClientTool(item, deviceId) {
         this.submitting = true
         const params = this.buildStartParams()
         const instanceId = this.deriveInstanceId(params)
-        const installIfNeeded = this.pendingStartMode !== 'run_only'
         if (this.pendingTargetSide === 'server') {
-          await this.startServerInstance(item, params, instanceId, installIfNeeded)
+          await this.startServerInstance(item, params, instanceId, false)
         } else {
-          await this.startClientInstance(item, params, instanceId, installIfNeeded)
+          await this.startClientInstance(item, params, instanceId, false)
         }
         this.activeTab = 'instances'
         this.resetStartDialog()
@@ -1854,31 +2321,37 @@ async uninstallClientTool(item, deviceId) {
       }
     },
 
-    async startServerInstance(item, params, instanceId, installIfNeeded = true) {
+    async startServerInstance(item, params, instanceId, installIfNeeded = false) {
       const res = await fetch(`/api/external-tools/${encodeURIComponent(item.id)}/server/instances/start`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ params, instance_id: instanceId, install_if_needed: installIfNeeded }),
+        body: JSON.stringify({ params, instance_id: instanceId, install_if_needed: false }),
       })
       const json = await res.json()
       if (!res.ok || json.code !== 0) throw new Error(json.message || 'Failed to start server tool')
       ElMessage.success(json.data?.message || 'Server instance started')
-      if (json.data?.install) this.setInstallStatus(item, 'server', '__server__', json.data.install)
+      if (json.data?.install) this.setInstallStatus(this.getPackageForModule(item), 'server', '__server__', json.data.install)
       await this.loadServerInstances(item.id, false)
     },
 
-    async startClientInstance(item, params, instanceId, installIfNeeded = true, deviceId = '') {
-      const targetDeviceId = this.normalizeDeviceId(deviceId || this.getActionDeviceId(item))
+    async startClientInstance(item, params, instanceId, installIfNeeded = false, deviceId = '') {
+      const targetDeviceId = this.normalizeDeviceId(deviceId || this.getActionDeviceId(this.getPackageForModule(item)))
       if (!targetDeviceId) throw new Error('Please select a target machine')
       const res = await fetch(`/api/connections/${encodeURIComponent(targetDeviceId)}/external-tools/${encodeURIComponent(item.id)}/instances/start`, {
         method: 'POST',
         headers: this.buildJsonHeaders({ 'Content-Type': 'application/json' }),
-        body: JSON.stringify({ params, instance_id: instanceId, install_if_needed: installIfNeeded }),
+        body: JSON.stringify({
+          params,
+          instance_id: instanceId,
+          install_if_needed: false,
+          platform: this.getPlatformForConnectionId(targetDeviceId),
+          arch: this.getArchForConnectionId(targetDeviceId),
+        }),
       })
       const json = await res.json()
       if (!res.ok || json.code !== 0) throw new Error(json.message || 'Failed to start client tool')
       ElMessage.success(json.data?.message || 'Client instance started')
-      if (json.data?.install) this.setInstallStatus(item, 'client', targetDeviceId, json.data.install)
+      if (json.data?.install) this.setInstallStatus(this.getPackageForModule(item), 'client', targetDeviceId, json.data.install)
       await this.loadClientInstances(item.id, targetDeviceId, false)
     },
 
@@ -1899,6 +2372,8 @@ async uninstallClientTool(item, deviceId) {
         hostname,
         machine_label: this.getMachineLabel(machineId, side, normalizedDeviceId),
         tool_id: item.id,
+        package_id: item.package_id || instance.package_id || '',
+        module_id: item.module_id || instance.module_id || '',
         display_name: item.display_name || item.id,
         instance_id: instance.instance_id || 'default',
         status: instance.status || '-',
@@ -2350,9 +2825,9 @@ openWebInstance(row) {
 
       try {
         if (row.side === 'server') {
-          await this.startServerInstance(row.module, row.params || {}, row.instance_id, true)
+          await this.startServerInstance(row.module, row.params || {}, row.instance_id, false)
         } else {
-          await this.startClientInstance(row.module, row.params || {}, row.instance_id, true, row.connection_id || row.device_id)
+          await this.startClientInstance(row.module, row.params || {}, row.instance_id, false, row.connection_id || row.device_id)
         }
         ElMessage.success(`Restarted: ${row.instance_id}`)
       } catch (e) {
@@ -2611,6 +3086,83 @@ formatVersionLabel(version) {
   padding-right: 4px;
 }
 
+.external-tool-package-split {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(280px, 360px) minmax(0, 1fr);
+  gap: 14px;
+  overflow: hidden;
+}
+
+.external-tool-package-list-panel,
+.external-tool-package-detail-panel {
+  min-height: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.external-tool-package-list {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-right: 4px;
+}
+
+.external-tool-package-list-card {
+  cursor: pointer;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
+}
+
+.external-tool-package-list-card.active {
+  border-color: rgba(59, 130, 246, 0.45);
+  box-shadow: 0 6px 18px rgba(37, 99, 235, 0.12);
+  background: #f8fbff;
+}
+
+.external-tool-package-detail-card {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  padding: 16px;
+  border: 1px solid rgba(15, 23, 42, 0.06);
+  border-radius: 14px;
+  background: #fff;
+  box-shadow: 0 4px 14px rgba(15, 23, 42, 0.04);
+}
+
+.external-tool-package-detail-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.external-tool-package-detail-main {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.external-tool-package-detail-actions {
+  flex: 0 0 auto;
+}
+
+.external-tool-title.large {
+  font-size: 17px;
+}
+
+.external-tool-package-detail-section {
+  margin-top: 18px;
+}
+
+.external-tool-package-modules.detail {
+  margin-top: 10px;
+}
+
 .external-tool-card {
   display: flex;
   align-items: flex-start;
@@ -2658,6 +3210,41 @@ formatVersionLabel(version) {
   margin-top: 9px;
   color: var(--muted, #64748b);
   font-size: 12px;
+}
+
+
+.external-tool-package-modules {
+  margin-top: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.external-tool-package-module-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 8px 10px;
+  border: 1px solid rgba(15, 23, 42, 0.06);
+  border-radius: 10px;
+  background: #f8fafc;
+}
+
+.external-tool-package-module-main {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.strong {
+  font-weight: 700;
+}
+
+.muted {
+  color: var(--muted, #64748b);
 }
 
 .external-tool-actions {
@@ -3113,6 +3700,26 @@ formatVersionLabel(version) {
   .external-tool-search {
     width: 100%;
   }
+
+  .external-tool-package-split {
+    grid-template-columns: 1fr;
+    overflow: auto;
+  }
+
+  .external-tool-package-list-panel,
+  .external-tool-package-detail-panel {
+    min-height: auto;
+    overflow: visible;
+  }
+
+  .external-tool-package-list,
+  .external-tool-package-detail-card {
+    overflow: visible;
+  }
+
+  .external-tool-package-detail-header {
+    flex-direction: column;
+  }
 }
 
 @media (max-width: 768px), (max-height: 720px) {
@@ -3160,7 +3767,42 @@ formatVersionLabel(version) {
     max-width: 100%;
   }
 
-  .external-tool-actions {
+  
+.external-tool-package-modules {
+  margin-top: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.external-tool-package-module-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 8px 10px;
+  border: 1px solid rgba(15, 23, 42, 0.06);
+  border-radius: 10px;
+  background: #f8fafc;
+}
+
+.external-tool-package-module-main {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.strong {
+  font-weight: 700;
+}
+
+.muted {
+  color: var(--muted, #64748b);
+}
+
+.external-tool-actions {
     width: 100%;
     align-items: stretch;
     min-width: 0;

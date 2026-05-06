@@ -1,6 +1,7 @@
 import glob
 import json
 import os
+import platform
 from copy import deepcopy
 from typing import Any
 
@@ -9,12 +10,14 @@ from core.platform.platform_identity import detect_platform_alias
 
 class ExternalToolCatalogService:
     """
-    External tool meta catalog.
+    External tool package catalog.
 
-    First-version convention:
-    - one meta file describes one executable resource
-    - frps and frpc should be maintained as separate meta files
-    - packages are maintained by the server under packages_root_dir
+    v2 convention:
+    - one meta file describes one installable package
+    - package may expose multiple daemon modules under modules[]
+    - package may expose multiple CLI execs under execs{}
+    - platform/arch selection is resolved from platform_packages{}
+    - side is no longer a capability constraint; target host decides platform/arch
     """
 
     def __init__(self, metas_root_dir: str, packages_root_dir: str):
@@ -46,104 +49,24 @@ class ExternalToolCatalogService:
         }
         return aliases.get(text, text)
 
-    def _normalize_platforms(self, meta: dict) -> list[str]:
-        source = meta.get('platforms')
-        if source is None:
-            source = meta.get('platform')
-        if isinstance(source, str):
-            items = [source]
-        elif isinstance(source, list):
-            items = source
-        else:
-            items = []
-        normalized = []
-        seen = set()
-        for item in items:
-            value = self._normalize_platform(item)
-            if not value or value in seen:
-                continue
-            seen.add(value)
-            normalized.append(value)
-        return normalized or ['*']
+    def _normalize_arch(self, value: Any) -> str:
+        text = str(value or '').strip().lower().replace('-', '_')
+        aliases = {
+            'x86_64': 'amd64',
+            'amd64': 'amd64',
+            'i386': '386',
+            'i686': '386',
+            'aarch64': 'arm64',
+            'arm64': 'arm64',
+        }
+        return aliases.get(text, text)
 
-    def _normalize_side_value(self, value: Any) -> str:
-        text = str(value or '').strip().lower()
-        if text in ('server', 'client'):
-            return text
-        return ''
-
-    def _normalize_sides(self, value: Any) -> list[str]:
-        if isinstance(value, list):
-            source = value
-        elif isinstance(value, tuple):
-            source = list(value)
-        else:
-            source = [value]
-
-        sides = []
-        seen = set()
-        for item in source:
-            side = self._normalize_side_value(item)
-            if not side or side in seen:
-                continue
-            seen.add(side)
-            sides.append(side)
-
-        return sides or ['client']
-
-
-    #xt
-    def _normalize_cli_aliases(self, value: Any) -> list[str]:
-        if isinstance(value, str):
-            source = [value]
-        elif isinstance(value, list):
-            source = value
-        elif isinstance(value, tuple):
-            source = list(value)
-        else:
-            source = []
-
-        aliases = []
-        seen = set()
-        for item in source:
-            alias = str(item or '').strip()
-            if not alias or alias in seen:
-                continue
-            seen.add(alias)
-            aliases.append(alias)
-        return aliases
-
-    def _normalize_cli(self, meta: dict) -> dict:
-        source = meta.get('cli') if isinstance(meta.get('cli'), dict) else {}
-        enabled = bool(source.get('enabled'))
-        aliases = self._normalize_cli_aliases(source.get('aliases') or source.get('alias'))
-
-        cli = dict(source)
-        cli['enabled'] = enabled and bool(aliases)
-        cli['aliases'] = aliases
-        cli['arg_mode'] = str(source.get('arg_mode') or 'raw_append').strip() or 'raw_append'
-        return cli
-
-    def _platform_matches(self, meta: dict, platform_alias: str = '') -> bool:
-        target = self._normalize_platform(platform_alias or '')
-        if not target:
-            return True
-        platforms = meta.get('platforms') or []
-        return not platforms or '*' in platforms or target in platforms
-
-    def _arch_matches(self, meta: dict, arch: str = '') -> bool:
-        target = str(arch or '').strip().lower()
-        expected = str(meta.get('arch') or '').strip().lower()
-        return not target or not expected or expected in ('*', 'all') or expected == target
-
-    def _side_matches(self, meta: dict, side: str = '') -> bool:
-        target = self._normalize_side_value(side or '')
-        if not target:
-            return True
-        return target in (meta.get('sides') or [])
-
-    # end xt
-
+    def _platform_key(self, platform_alias: str, arch: str) -> str:
+        platform_value = self._normalize_platform(platform_alias)
+        arch_value = self._normalize_arch(arch)
+        if not platform_value or not arch_value:
+            return ''
+        return f'{platform_value}-{arch_value}'
 
     def _normalize_param(self, item: Any) -> dict:
         if not isinstance(item, dict):
@@ -158,52 +81,197 @@ class ExternalToolCatalogService:
         param['description'] = str(item.get('description') or '').strip()
         return param
 
-    def normalize_meta(self, meta: dict, path: str = '') -> dict:
-        item = deepcopy(meta)
-        tool_id = str(item.get('id') or item.get('name') or '').strip()
-        if not tool_id:
-            if path:
-                tool_id = os.path.splitext(os.path.basename(path))[0]
-            else:
-                raise ValueError('external tool id is required')
-        item['id'] = tool_id
-        item['name'] = str(item.get('name') or tool_id).strip() or tool_id
-        item['display_name'] = str(item.get('display_name') or item.get('name') or tool_id).strip() or tool_id
-        item['description'] = str(item.get('description') or '').strip()
-        item['version'] = str(item.get('version') or '').strip()
-        sides = self._normalize_sides(item.get('side'))
-        item['sides'] = sides
-        item['side'] = sides[0] if len(sides) == 1 else sides
-        item['platforms'] = self._normalize_platforms(item)
-        item['arch'] = str(item.get('arch') or item.get('architecture') or '').strip().lower()
-        item['category'] = str(item.get('category') or '').strip()
-        item['tags'] = item.get('tags') if isinstance(item.get('tags'), list) else []
-        item['params'] = [p for p in (self._normalize_param(p) for p in (item.get('params') or [])) if p]
+    def _normalize_params(self, values: Any) -> list[dict]:
+        source = values if isinstance(values, list) else []
+        return [p for p in (self._normalize_param(p) for p in source) if p]
 
-        item['cli'] = self._normalize_cli(item)
+    def _normalize_platform_package(self, key: str, item: Any) -> dict:
+        if not isinstance(item, dict):
+            item = {}
+        package = dict(item)
+        raw_key = str(package.get('key') or key or '').strip().lower().replace('_', '-')
+        if not raw_key:
+            platform_value = self._normalize_platform(package.get('platform'))
+            arch_value = self._normalize_arch(package.get('arch'))
+            raw_key = self._platform_key(platform_value, arch_value)
+        if not raw_key:
+            raise ValueError('platform package key is required')
 
-        package = item.get('package') if isinstance(item.get('package'), dict) else {}
-        filename = str(package.get('filename') or item.get('filename') or '').strip()
+        if '-' in raw_key:
+            maybe_platform, maybe_arch = raw_key.split('-', 1)
+        else:
+            maybe_platform, maybe_arch = '', ''
+
+        platform_value = self._normalize_platform(package.get('platform') or maybe_platform)
+        arch_value = self._normalize_arch(package.get('arch') or maybe_arch)
+        if not platform_value or not arch_value:
+            raise ValueError(f'platform package {raw_key} requires platform and arch')
+
+        filename = str(package.get('filename') or '').strip()
         if filename:
             package['filename'] = os.path.basename(filename)
-        package['download_url'] = str(package.get('download_url') or item.get('download_url') or '').strip()
-        package['executable_rel_path'] = str(package.get('executable_rel_path') or item.get('executable_rel_path') or '').strip()
-        item['package'] = package
+
+        package['key'] = raw_key
+        package['platform'] = platform_value
+        package['arch'] = arch_value
+        package['download_url'] = str(package.get('download_url') or '').strip()
+        package['root'] = str(package.get('root') or '').strip()
+        return package
+
+    def _normalize_platform_packages(self, meta: dict) -> dict[str, dict]:
+        raw = meta.get('platform_packages')
+        if raw is None:
+            raw = meta.get('packages')
+        if not isinstance(raw, dict) or not raw:
+            raise ValueError('platform_packages is required')
+
+        packages = {}
+        for key, value in raw.items():
+            package = self._normalize_platform_package(str(key), value)
+            packages[package['key']] = package
+        return packages
+
+    def _normalize_execs(self, meta: dict, platform_packages: dict[str, dict]) -> dict[str, dict]:
+        raw = meta.get('execs')
+        if not isinstance(raw, dict) or not raw:
+            raise ValueError('execs is required')
+
+        execs = {}
+        for name, value in raw.items():
+            exec_name = str(name or '').strip()
+            if not exec_name:
+                continue
+            source = value if isinstance(value, dict) else {}
+            paths = source.get('paths') if isinstance(source.get('paths'), dict) else {}
+            normalized_paths = {}
+            for key, path in paths.items():
+                package_key = str(key or '').strip().lower().replace('_', '-')
+                if package_key in platform_packages and str(path or '').strip():
+                    normalized_paths[package_key] = str(path or '').strip()
+            if not normalized_paths:
+                raise ValueError(f'exec {exec_name} requires paths for platform packages')
+            item = dict(source)
+            item['name'] = exec_name
+            item['paths'] = normalized_paths
+            item['description'] = str(item.get('description') or '').strip()
+            item['enabled'] = bool(item.get('enabled', True))
+            item['arg_mode'] = str(item.get('arg_mode') or 'raw_append').strip() or 'raw_append'
+            execs[exec_name] = item
+        if not execs:
+            raise ValueError('execs is required')
+        return execs
+
+    def _normalize_module(self, package: dict, item: Any) -> dict:
+        if not isinstance(item, dict):
+            return {}
+        module_id = str(item.get('id') or item.get('name') or '').strip()
+        if not module_id:
+            return {}
+        module = deepcopy(item)
+        package_id = package.get('id') or ''
+        tool_id = f'{package_id}.{module_id}'
+        module['id'] = module_id
+        module['tool_id'] = tool_id
+        module['package_id'] = package_id
+        module['name'] = str(module.get('name') or module_id).strip() or module_id
+        module['display_name'] = str(module.get('display_name') or module.get('name') or module_id).strip() or module_id
+        module['description'] = str(module.get('description') or package.get('description') or '').strip()
+        module['version'] = str(module.get('version') or package.get('version') or '').strip()
+        module['category'] = str(module.get('category') or package.get('category') or '').strip()
+        module['tags'] = module.get('tags') if isinstance(module.get('tags'), list) else list(package.get('tags') or [])
+        module['execution'] = str(module.get('execution') or module.get('mode') or 'daemon').strip().lower() or 'daemon'
+        if module['execution'] != 'daemon':
+            raise ValueError(f'module {module_id} execution must be daemon')
+        module['exec'] = str(module.get('exec') or module.get('exec_name') or module_id).strip()
+        if module['exec'] not in (package.get('execs') or {}):
+            raise ValueError(f'module {module_id} references unknown exec: {module["exec"]}')
+
+        common_params = self._normalize_params(package.get('params'))
+        module_params = self._normalize_params(module.get('params'))
+        module['params'] = common_params + module_params
+        module['config'] = module.get('config') if isinstance(module.get('config'), dict) else {}
+        module['runtime'] = module.get('runtime') if isinstance(module.get('runtime'), dict) else {}
+        if isinstance(module.get('runtimes'), list):
+            module['runtimes'] = module.get('runtimes')
+        elif isinstance(module.get('runtime_variants'), list):
+            module['runtimes'] = module.get('runtime_variants')
+        else:
+            module['runtimes'] = []
+        module['lifecycle'] = module.get('lifecycle') if isinstance(module.get('lifecycle'), dict) else (package.get('lifecycle') if isinstance(package.get('lifecycle'), dict) else {})
+        module['web'] = module.get('web') if isinstance(module.get('web'), dict) else (package.get('web') if isinstance(package.get('web'), dict) else {})
+        module['package_display_name'] = package.get('display_name') or package_id
+        return module
+
+    def _derive_package_platforms(self, platform_packages: dict[str, dict]) -> list[str]:
+        result = []
+        seen = set()
+        for item in platform_packages.values():
+            value = self._normalize_platform(item.get('platform'))
+            if value and value not in seen:
+                seen.add(value)
+                result.append(value)
+        return result or ['*']
+
+    def _derive_package_arches(self, platform_packages: dict[str, dict]) -> list[str]:
+        result = []
+        seen = set()
+        for item in platform_packages.values():
+            value = self._normalize_arch(item.get('arch'))
+            if value and value not in seen:
+                seen.add(value)
+                result.append(value)
+        return result or ['*']
+
+    def normalize_meta(self, meta: dict, path: str = '') -> dict:
+        item = deepcopy(meta)
+        package_id = str(item.get('id') or item.get('name') or '').strip()
+        if not package_id:
+            if path:
+                package_id = os.path.splitext(os.path.basename(path))[0]
+            else:
+                raise ValueError('external tool package id is required')
+
+        item['id'] = package_id
+        item['name'] = str(item.get('name') or package_id).strip() or package_id
+        item['display_name'] = str(item.get('display_name') or item.get('name') or package_id).strip() or package_id
+        item['description'] = str(item.get('description') or '').strip()
+        item['version'] = str(item.get('version') or '').strip()
+        item['category'] = str(item.get('category') or '').strip()
+        item['tags'] = item.get('tags') if isinstance(item.get('tags'), list) else []
+        item['params'] = self._normalize_params(item.get('params'))
+
+        platform_packages = self._normalize_platform_packages(item)
+        item['platform_packages'] = platform_packages
+        item['package_keys'] = sorted(platform_packages.keys())
+        item['platforms'] = self._derive_package_platforms(platform_packages)
+        item['arches'] = self._derive_package_arches(platform_packages)
+        item['arch'] = ','.join(item['arches']) if len(item['arches']) > 1 else (item['arches'][0] if item['arches'] else '')
+        item['execs'] = self._normalize_execs(item, platform_packages)
 
         install = item.get('install') if isinstance(item.get('install'), dict) else {}
         item['install'] = install
+        item['config'] = item.get('config') if isinstance(item.get('config'), dict) else {}
+        item['runtime'] = item.get('runtime') if isinstance(item.get('runtime'), dict) else {}
+        item['lifecycle'] = item.get('lifecycle') if isinstance(item.get('lifecycle'), dict) else {}
 
-        config = item.get('config') if isinstance(item.get('config'), dict) else {}
-        item['config'] = config
+        modules = []
+        for module_item in (item.get('modules') if isinstance(item.get('modules'), list) else []):
+            module = self._normalize_module(item, module_item)
+            if module:
+                modules.append(module)
+        if not modules:
+            raise ValueError('modules is required')
+        item['modules'] = modules
 
-        runtime = item.get('runtime') if isinstance(item.get('runtime'), dict) else {}
-        item['runtime'] = runtime
+        # Side is intentionally no longer a constraint, but expose both values so old UI labels/status chips remain harmless.
+        item['sides'] = ['server', 'client']
+        item['side'] = ['server', 'client']
 
         if path:
             item['_meta_path'] = os.path.abspath(path)
         return item
 
-    def list_tools(self) -> list[dict]:
+    def list_packages(self) -> list[dict]:
         items = []
         pattern = os.path.join(self.metas_root_dir, '**/*.json')
         for path in sorted(glob.iglob(pattern, recursive=True)):
@@ -216,60 +284,131 @@ class ExternalToolCatalogService:
                     'id': os.path.splitext(os.path.basename(path))[0],
                     'display_name': os.path.basename(path),
                     'description': f'Invalid meta: {e}',
-                    'side': '',
-                    'sides': [],
                     'platforms': [],
-                    'params': [],
+                    'arches': [],
+                    'modules': [],
+                    'execs': {},
                     'error': str(e),
                     '_meta_path': os.path.abspath(path),
                 })
         return items
 
-    # def get_catalog(self) -> dict:
-    #     return {'items': self.list_tools()}
+    def list_tools(self) -> list[dict]:
+        """Return runnable module records."""
+        modules = []
+        for package in self.list_packages():
+            if package.get('error'):
+                continue
+            for module in package.get('modules') or []:
+                row = deepcopy(module)
+                row['package'] = self.public_package_ref(package)
+                row['package_meta'] = package
+                modules.append(row)
+        return modules
 
     def get_catalog(self) -> dict:
         return {
-            'items': self.list_tools(),
+            'items': self.list_packages(),
+            'modules': self.list_tools(),
             'server_platform': detect_platform_alias(),
+            'server_arch': self._normalize_arch(platform.machine()),
         }
+
+    def get_package(self, package_id: str) -> dict:
+        target = str(package_id or '').strip()
+        if not target:
+            raise ValueError('package_id is required')
+        for item in self.list_packages():
+            if str(item.get('id') or '').strip() == target:
+                if item.get('error'):
+                    raise ValueError(item.get('error'))
+                return item
+        raise FileNotFoundError(f'External tool package not found: {package_id}')
 
     def get_tool(self, tool_id: str) -> dict:
         target = str(tool_id or '').strip()
         if not target:
             raise ValueError('tool_id is required')
         for item in self.list_tools():
-            if str(item.get('id') or '').strip() == target:
-                if item.get('error'):
-                    raise ValueError(item.get('error'))
+            if str(item.get('tool_id') or item.get('id') or '').strip() == target:
                 return item
-        raise FileNotFoundError(f'External tool not found: {tool_id}')
+        raise FileNotFoundError(f'External tool module not found: {tool_id}')
 
-    def get_meta_path(self, tool_id: str) -> str:
-        meta = self.get_tool(tool_id)
+    def get_module(self, tool_id: str) -> dict:
+        return self.get_tool(tool_id)
+
+    def public_package_ref(self, package: dict) -> dict:
+        return {
+            'id': package.get('id') or '',
+            'name': package.get('name') or package.get('id') or '',
+            'display_name': package.get('display_name') or package.get('id') or '',
+            'version': package.get('version') or '',
+            'platforms': package.get('platforms') or [],
+            'arches': package.get('arches') or [],
+            'package_keys': package.get('package_keys') or [],
+        }
+
+    def select_package_key(self, package: dict, platform_alias: str = '', arch: str = '') -> str:
+        packages = package.get('platform_packages') if isinstance(package.get('platform_packages'), dict) else {}
+        if not packages:
+            raise ValueError(f'{package.get("id") or "package"} has no platform packages')
+
+        target_platform = self._normalize_platform(platform_alias or '')
+        target_arch = self._normalize_arch(arch or '')
+        exact_key = self._platform_key(target_platform, target_arch)
+        if exact_key and exact_key in packages:
+            return exact_key
+
+        matches = []
+        for key, item in packages.items():
+            platform_ok = not target_platform or item.get('platform') == '*' or item.get('platform') == target_platform
+            arch_ok = not target_arch or item.get('arch') in ('*', 'all') or item.get('arch') == target_arch
+            if platform_ok and arch_ok:
+                matches.append(key)
+
+        if len(matches) == 1:
+            return matches[0]
+        if matches:
+            raise ValueError(f'Ambiguous platform package for {package.get("id")}: {target_platform}/{target_arch} -> {", ".join(matches)}')
+        raise ValueError(f'{package.get("id")} does not support {target_platform or "unknown"}/{target_arch or "unknown"}')
+
+    def resolve_exec_rel_path(self, package: dict, exec_name: str, package_key: str) -> str:
+        execs = package.get('execs') if isinstance(package.get('execs'), dict) else {}
+        exec_item = execs.get(str(exec_name or '').strip())
+        if not isinstance(exec_item, dict):
+            raise ValueError(f'exec not found: {exec_name}')
+        paths = exec_item.get('paths') if isinstance(exec_item.get('paths'), dict) else {}
+        rel_path = str(paths.get(package_key) or '').strip()
+        if not rel_path:
+            raise ValueError(f'exec {exec_name} does not support {package_key}')
+        return rel_path
+
+    def get_meta_path(self, package_id: str) -> str:
+        meta = self.get_package(package_id)
         path = os.path.abspath(str(meta.get('_meta_path') or '').strip())
         if not path:
-            raise FileNotFoundError(f'External tool meta not found: {tool_id}')
+            raise FileNotFoundError(f'External tool meta not found: {package_id}')
         if os.path.commonpath([self.metas_root_dir, path]) != self.metas_root_dir:
             raise ValueError('invalid external tool meta path')
         if not os.path.isfile(path):
-            raise FileNotFoundError(f'External tool meta not found: {tool_id}')
+            raise FileNotFoundError(f'External tool meta not found: {package_id}')
         return path
 
-    def read_meta_content(self, tool_id: str) -> dict:
-        path = self.get_meta_path(tool_id)
+    def read_meta_content(self, package_id: str) -> dict:
+        path = self.get_meta_path(package_id)
         with open(path, 'r', encoding='utf-8') as file_obj:
             content = file_obj.read()
         return {
-            'tool_id': tool_id,
+            'tool_id': package_id,
+            'package_id': package_id,
             'path': path,
             'name': os.path.basename(path),
             'content': content,
             'size': len(content.encode('utf-8')),
         }
 
-    def save_meta_content(self, tool_id: str, content: str) -> dict:
-        path = self.get_meta_path(tool_id)
+    def save_meta_content(self, package_id: str, content: str) -> dict:
+        path = self.get_meta_path(package_id)
         text = str(content or '')
         try:
             parsed = json.loads(text)
@@ -279,14 +418,15 @@ class ExternalToolCatalogService:
             raise ValueError('Invalid JSON meta: expected object')
 
         normalized = self.normalize_meta(parsed, path=path)
-        new_tool_id = str(normalized.get('id') or '').strip()
-        if new_tool_id and new_tool_id != str(tool_id or '').strip():
-            raise ValueError('Changing external tool id is not supported from this editor')
+        new_package_id = str(normalized.get('id') or '').strip()
+        if new_package_id and new_package_id != str(package_id or '').strip():
+            raise ValueError('Changing external tool package id is not supported from this editor')
 
         with open(path, 'w', encoding='utf-8') as file_obj:
             file_obj.write(text)
         return {
-            'tool_id': tool_id,
+            'tool_id': package_id,
+            'package_id': package_id,
             'path': path,
             'name': os.path.basename(path),
             'size': len(text.encode('utf-8')),
@@ -303,42 +443,77 @@ class ExternalToolCatalogService:
             raise FileNotFoundError(f'External tool package not found: {safe_name}')
         return path
 
-    #xt
+    def get_package_download_filename(self, package_id: str, platform_alias: str = '', arch: str = '') -> str:
+        package = self.get_package(package_id)
+        key = self.select_package_key(package, platform_alias=platform_alias, arch=arch)
+        info = (package.get('platform_packages') or {}).get(key) or {}
+        filename = str(info.get('filename') or '').strip()
+        if not filename:
+            raise ValueError(f'package {package_id} has no filename for {key}')
+        return filename
+
+    def _platform_matches(self, package: dict, platform_alias: str = '') -> bool:
+        target = self._normalize_platform(platform_alias or '')
+        if not target:
+            return True
+        platforms = package.get('platforms') or []
+        return not platforms or '*' in platforms or target in platforms
+
+    def _arch_matches(self, package: dict, arch: str = '') -> bool:
+        target = self._normalize_arch(arch or '')
+        if not target:
+            return True
+        return any((item.get('arch') in ('*', 'all') or item.get('arch') == target) for item in (package.get('platform_packages') or {}).values())
+
     def list_cli_aliases(self, side: str = '', platform_alias: str = '', arch: str = '') -> list[dict]:
+        del side
         items = []
-        for meta in self.list_tools():
-            if meta.get('error'):
+        for package in self.list_packages():
+            if package.get('error'):
                 continue
-            cli = meta.get('cli') if isinstance(meta.get('cli'), dict) else {}
-            if not cli.get('enabled'):
+            if not self._platform_matches(package, platform_alias):
                 continue
-            if not self._side_matches(meta, side):
+            if not self._arch_matches(package, arch):
                 continue
-            if not self._platform_matches(meta, platform_alias):
+            try:
+                package_key = self.select_package_key(package, platform_alias=platform_alias, arch=arch)
+            except Exception:
                 continue
-            if not self._arch_matches(meta, arch):
-                continue
-
-            for alias in cli.get('aliases') or []:
+            for exec_name, exec_item in (package.get('execs') or {}).items():
+                if not isinstance(exec_item, dict) or not exec_item.get('enabled', True):
+                    continue
+                rel_path = str((exec_item.get('paths') or {}).get(package_key) or '').strip()
+                if not rel_path:
+                    continue
                 items.append({
-                    'alias': alias,
-                    'tool_id': meta.get('id') or '',
-                    'display_name': meta.get('display_name') or meta.get('id') or '',
-                    'description': meta.get('description') or '',
-                    'side': side or (meta.get('sides') or ['client'])[0],
-                    'platforms': meta.get('platforms') or [],
-                    'arch': meta.get('arch') or '',
-                    'package': meta.get('package') or {},
-                    'cli': cli,
-                    'meta': meta,
+                    'alias': exec_name,
+                    'exec_name': exec_name,
+                    'tool_id': package.get('id') or '',
+                    'package_id': package.get('id') or '',
+                    'display_name': package.get('display_name') or package.get('id') or '',
+                    'description': exec_item.get('description') or package.get('description') or '',
+                    'side': 'client',
+                    'platforms': package.get('platforms') or [],
+                    'arch': package.get('arch') or '',
+                    'package_key': package_key,
+                    'executable_rel_path': rel_path,
+                    'package': package,
+                    'exec': exec_item,
+                    'cli': {
+                        'enabled': True,
+                        'exec_name': exec_name,
+                        'arg_mode': exec_item.get('arg_mode') or 'raw_append',
+                        'cwd': exec_item.get('cwd') or '',
+                        'timeout_sec': exec_item.get('timeout_sec'),
+                    },
+                    'meta': package,
                 })
-
         return sorted(items, key=lambda item: (item.get('alias') or '').lower())
 
     def resolve_cli_alias(self, alias: str, side: str = '', platform_alias: str = '', arch: str = '') -> dict:
         target = str(alias or '').strip()
         if not target:
-            raise ValueError('external tool cli alias is required')
+            raise ValueError('external tool exec name is required')
 
         matches = [
             item for item in self.list_cli_aliases(side=side, platform_alias=platform_alias, arch=arch)
@@ -346,13 +521,13 @@ class ExternalToolCatalogService:
         ]
 
         if not matches:
-            raise FileNotFoundError(f'External tool CLI alias not found: {target}')
+            raise FileNotFoundError(f'External tool exec not found: {target}')
 
         if len(matches) > 1:
-            lines = [f'Ambiguous external tool CLI alias: {target}', '', 'Matched:']
+            lines = [f'Ambiguous external tool exec: {target}', '', 'Matched:']
             for item in matches:
-                lines.append(f'- {item.get("alias")} -> {item.get("tool_id")}')
-            lines.append('Please keep cli.aliases unique for the current side/platform/arch.')
+                lines.append(f'- {item.get("alias")} -> {item.get("package_id")}')
+            lines.append('Keep exec names unique for the current platform/arch.')
             raise ValueError('\n'.join(lines))
 
         return matches[0]
