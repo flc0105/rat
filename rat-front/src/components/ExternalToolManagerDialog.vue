@@ -80,9 +80,118 @@
                         {{ getModuleInstallStatus(item).label }}
                       </el-tag>
                       <span v-else class="muted small-text">Unknown</span>
+                      <template v-if="selectedPackage?.id === item.id">
+                        <el-tag size="small" type="info" class="external-tool-package-list-mobile-meta-tag">
+                          {{ formatPlatforms(item.platforms) }}
+                        </el-tag>
+                        <el-tag
+                          v-if="item.version"
+                          size="small"
+                          type="info"
+                          class="external-tool-package-list-mobile-meta-tag"
+                        >
+                          {{ formatVersionLabel(item.version) }}
+                        </el-tag>
+                      </template>
                     </div>
                     <div class="external-tool-package-list-desc" :title="item.description || ''">
                       {{ item.description || 'No description' }}
+                    </div>
+
+                    <div
+                      v-if="selectedPackage?.id === item.id"
+                      class="external-tool-package-mobile-detail"
+                      @click.stop
+                    >
+                      <div class="external-tool-package-mobile-actions">
+                        <el-button
+                          class="external-tool-package-mobile-action-button"
+                          size="small"
+                          type="primary"
+                          plain
+                          :disabled="!canInstallPackageAction(item)"
+                          @click.stop="installOnly(item)"
+                        >
+                          {{ getInstallMenuLabel(item) }}
+                        </el-button>
+
+                        <el-dropdown
+                          trigger="click"
+                          size="small"
+                          @command="handlePackageMoreCommand($event, item)"
+                        >
+                          <el-button
+                            class="external-tool-package-mobile-action-button"
+                            size="small"
+                            plain
+                            @click.stop
+                          >
+                            More
+                          </el-button>
+                          <template #dropdown>
+                            <el-dropdown-menu>
+                              <el-dropdown-item command="download">
+                                Download Zip
+                              </el-dropdown-item>
+                              <el-dropdown-item command="edit">
+                                Edit Metadata
+                              </el-dropdown-item>
+                              <el-dropdown-item divided command="status" :disabled="!canUsePackageAction(item)">
+                                Install Status
+                              </el-dropdown-item>
+                              <el-dropdown-item command="copy" :disabled="!canUsePackageAction(item)">
+                                Copy Command
+                              </el-dropdown-item>
+                              <el-dropdown-item
+                                command="clear_cache"
+                                divided
+                                :disabled="!canUsePackageAction(item)"
+                              >
+                                Clear Package Cache
+                              </el-dropdown-item>
+                              <el-dropdown-item
+                                command="uninstall"
+                                :disabled="!canUninstallPackageAction(item)"
+                              >
+                                {{ getUninstallMenuLabel(item) }}
+                              </el-dropdown-item>
+                            </el-dropdown-menu>
+                          </template>
+                        </el-dropdown>
+                      </div>
+
+                      <div class="external-tool-modules-panel external-tool-package-mobile-modules">
+                        <div class="external-tool-detail-section-title">Modules</div>
+                        <div v-if="getPackageModules(item).length" class="external-tool-package-modules detail">
+                          <div
+                            v-for="module in getPackageModules(item)"
+                            :key="module.id"
+                            class="external-tool-package-module-card"
+                          >
+                            <div class="external-tool-package-module-content">
+                              <div class="external-tool-package-module-title-row">
+                                <span class="strong">{{ module.display_name || module.id }}</span>
+                                <el-tag size="small" type="info">daemon</el-tag>
+                              </div>
+                              <div class="external-tool-package-module-desc" :title="module.description || ''">
+                                {{ module.description || 'No description' }}
+                              </div>
+                            </div>
+                            <el-button
+                              size="small"
+                              type="primary"
+                              plain
+                              :disabled="!canRunModuleAction(module)"
+                              @click.stop="openStartDialog(module, getSelectedTargetSideForAction(), 'run')"
+                            >
+                              {{ getRunButtonLabel(module) }}
+                            </el-button>
+                          </div>
+                        </div>
+                        <div v-else class="external-tool-empty small">
+                          No runnable modules.
+                        </div>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -3135,6 +3244,18 @@ formatVersionLabel(version) {
   align-items: center;
 }
 
+.external-tool-package-list-status {
+  margin-top: 8px;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.external-tool-package-list-mobile-meta-tag {
+  display: none;
+}
+
 .external-tool-package-list-desc {
   margin-top: 8px;
   color: var(--muted, #64748b);
@@ -3144,6 +3265,10 @@ formatVersionLabel(version) {
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
+}
+
+.external-tool-package-mobile-detail {
+  display: none;
 }
 
 .external-tool-package-detail-tags {
@@ -3187,7 +3312,6 @@ formatVersionLabel(version) {
 
 .external-tool-package-detail-actions {
   flex: 0 0 auto;
-  align-items: flex-end;
 }
 
 .external-tool-package-detail-action-row {
@@ -3197,24 +3321,17 @@ formatVersionLabel(version) {
   gap: 8px;
 }
 
-.external-tool-package-detail-action-button.el-button,
-.el-dropdown .external-tool-package-detail-action-button.el-button {
+.external-tool-package-detail-actions :deep(.el-button.external-tool-package-detail-action-button),
+.external-tool-package-detail-actions :deep(.el-dropdown .el-button.external-tool-package-detail-action-button) {
+  width: auto;
+  min-width: 0;
   height: 26px;
   min-height: 26px;
   padding: 0 9px;
   border-radius: 7px;
   font-size: 12px;
   line-height: 24px;
-}
-
-.external-tool-package-detail-actions :deep(.el-button.external-tool-package-detail-action-button),
-.external-tool-package-detail-actions :deep(.el-dropdown .el-button.external-tool-package-detail-action-button) {
-  height: 26px !important;
-  min-height: 26px !important;
-  padding: 0 9px !important;
-  border-radius: 7px !important;
-  font-size: 12px !important;
-  line-height: 24px !important;
+  margin-left: 0;
 }
 
 .external-tool-title.large {
@@ -3806,34 +3923,81 @@ formatVersionLabel(version) {
   }
 
   .external-tool-package-split {
-    display: flex;
-    flex-direction: column;
-    overflow: hidden;
+    display: block;
+    overflow: auto;
+    padding-right: 4px;
   }
 
   .external-tool-package-list-panel {
-    flex: 0 0 32%;
-    min-height: 150px;
-    max-height: 34vh;
-    overflow: hidden;
+    min-height: 0;
+    max-height: none;
+    overflow: visible;
   }
 
   .external-tool-package-list {
-    overflow: auto;
+    overflow: visible;
+    padding-right: 0;
   }
 
   .external-tool-package-detail-panel {
-    flex: 1 1 auto;
-    min-height: 0;
-    overflow: hidden;
+    display: none;
   }
 
-  .external-tool-package-detail-card {
-    overflow: auto;
+  .external-tool-package-mobile-detail {
+    display: block;
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px solid rgba(15, 23, 42, 0.08);
   }
 
-  .external-tool-package-detail-header {
+  .external-tool-package-list-mobile-meta-tag {
+    display: inline-flex;
+  }
+
+  .external-tool-package-mobile-actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+    margin-top: 12px;
+  }
+
+  .external-tool-package-mobile-actions :deep(.el-button),
+  .external-tool-package-mobile-actions :deep(.el-dropdown),
+  .external-tool-package-mobile-actions :deep(.el-dropdown .el-button) {
+    width: 100%;
+    min-width: 0;
+    margin: 0;
+  }
+
+  .external-tool-package-mobile-actions :deep(.el-button) {
+    min-height: 32px;
+    height: 32px;
+    border-radius: 10px;
+    padding-inline: 12px;
+    justify-content: center;
+  }
+
+  .external-tool-package-mobile-actions :deep(.el-dropdown) {
+    display: block;
+  }
+
+  .external-tool-package-mobile-modules {
+    margin-top: 12px;
+  }
+
+  .external-tool-package-mobile-modules .external-tool-package-module-card {
     flex-direction: column;
+    align-items: stretch;
+  }
+
+  .external-tool-package-mobile-modules .external-tool-package-module-card > .el-button {
+    width: 100%;
+    min-height: 32px;
+    height: 32px;
+    border-radius: 10px;
+    padding-inline: 12px;
+    justify-content: center;
+    margin-left: 0;
   }
 
 }
@@ -3936,29 +4100,6 @@ formatVersionLabel(version) {
   .external-tool-action-row :deep(.el-dropdown),
   .external-tool-action-row :deep(.el-dropdown .el-button) {
     width: 100%;
-  }
-
-  .external-tool-package-detail-action-row {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    justify-content: stretch;
-    width: 100%;
-  }
-
-  .external-tool-package-detail-actions,
-  .external-tool-package-detail-actions :deep(.el-dropdown),
-  .external-tool-package-detail-actions :deep(.el-button.external-tool-package-detail-action-button),
-  .external-tool-package-detail-actions :deep(.el-dropdown .el-button.external-tool-package-detail-action-button) {
-    width: 100%;
-  }
-
-  .external-tool-package-detail-actions :deep(.el-button.external-tool-package-detail-action-button),
-  .external-tool-package-detail-actions :deep(.el-dropdown .el-button.external-tool-package-detail-action-button) {
-    height: 32px !important;
-    min-height: 32px !important;
-    padding: 0 12px !important;
-    border-radius: 10px !important;
-    justify-content: center;
   }
 
   .external-tool-package-module-card {

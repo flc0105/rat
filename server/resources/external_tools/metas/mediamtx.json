@@ -1,0 +1,127 @@
+{
+  "id": "mediamtx",
+  "name": "mediamtx",
+  "display_name": "MediaMTX",
+  "description": "Realtime media gateway for receiving FFmpeg streams and exposing WebRTC/HLS pages in browser.",
+  "version": "1.18.0",
+  "category": "media",
+  "tags": [
+    "mediamtx",
+    "rtsp",
+    "rtmp",
+    "webrtc",
+    "hls",
+    "screen-live"
+  ],
+  "web": {
+    "url": "http://{{access_host}}:{{webrtc_port}}/screen-live/"
+  },
+  "platform_packages": {
+    "darwin-arm64": {
+      "platform": "mac",
+      "arch": "arm64",
+      "filename": "mediamtx_v1.18.0_darwin_arm64.zip",
+      "download_url": "/api/external-tools/packages/mediamtx_v1.18.0_darwin_arm64.zip",
+      "root": "mediamtx_v1.18.0_darwin_arm64"
+    }
+  },
+  "execs": {
+    "mediamtx": {
+      "paths": {
+        "darwin-arm64": "mediamtx_v1.18.0_darwin_arm64/mediamtx"
+      }
+    }
+  },
+  "install": {
+    "install_dir": "{{external_tools_root}}/{{package_id}}/{{version}}/{{package_key}}"
+  },
+  "modules": [
+    {
+      "id": "main",
+      "name": "mediamtx",
+      "display_name": "MediaMTX Server",
+      "description": "Realtime media gateway for receiving FFmpeg streams and exposing WebRTC/HLS pages in browser.",
+      "execution": "daemon",
+      "exec": "mediamtx",
+      "params": [
+        {
+          "name": "instance_name",
+          "label": "Instance Name",
+          "type": "string",
+          "required": true,
+          "default": "mediamtx-main",
+          "description": "Unique name for this MediaMTX server instance."
+        },
+        {
+          "name": "rtsp_port",
+          "label": "RTSP Publish Port",
+          "type": "integer",
+          "required": true,
+          "default": 8554,
+          "min": 1,
+          "max": 65535,
+          "description": "RTSP port used by FFmpeg to publish streams."
+        },
+        {
+          "name": "rtmp_port",
+          "label": "RTMP Publish Port",
+          "type": "integer",
+          "required": true,
+          "default": 1935,
+          "min": 1,
+          "max": 65535,
+          "description": "Optional RTMP publish port."
+        },
+        {
+          "name": "hls_port",
+          "label": "HLS Web Port",
+          "type": "integer",
+          "required": true,
+          "default": 8888,
+          "min": 1,
+          "max": 65535,
+          "description": "HLS browser playback port."
+        },
+        {
+          "name": "webrtc_port",
+          "label": "WebRTC Web Port",
+          "type": "integer",
+          "required": true,
+          "default": 8889,
+          "min": 1,
+          "max": 65535,
+          "description": "WebRTC browser playback port. Open http://server_ip:webrtc_port/stream_name/."
+        }
+      ],
+      "config": {
+        "target": "{{instance_runtime_dir}}/mediamtx.yml",
+        "template": "rtsp: yes\nrtspAddress: :{{rtsp_port}}\n\nrtmp: yes\nrtmpAddress: :{{rtmp_port}}\n\nhls: yes\nhlsAddress: :{{hls_port}}\n\nwebrtc: yes\nwebrtcAddress: :{{webrtc_port}}\n\npaths:\n  all:\n"
+      },
+      "runtime": {
+        "cwd": "{{install_dir}}/{{package_root}}",
+        "argv": [
+          "{{bin_mediamtx}}",
+          "{{instance_runtime_dir}}/mediamtx.yml"
+        ],
+        "stdout": "{{instance_runtime_dir}}/stdout.log",
+        "stderr": "stdout",
+        "pid_file": "{{instance_runtime_dir}}/tool.pid",
+        "state_file": "{{instance_runtime_dir}}/state.json"
+      },
+      "lifecycle": {
+        "stop": {
+          "type": "signal",
+          "signal": "TERM",
+          "timeout_sec": 5,
+          "kill_after_timeout": true
+        },
+        "status": {
+          "type": "pid_file"
+        }
+      },
+      "web": {
+        "url": "http://{{access_host}}:{{webrtc_port}}/screen-macbook/"
+      }
+    }
+  ]
+}

@@ -1,0 +1,104 @@
+{
+  "id": "ffmpeg",
+  "name": "ffmpeg",
+  "display_name": "FFmpeg",
+  "description": "FFmpeg package with a daemon module for screen live RTSP push.",
+  "version": "snapshot-124113-g4ea59d5665b",
+  "category": "media",
+  "tags": ["ffmpeg", "screen", "recording", "rtsp", "live"],
+  "source": "https://deolaha.ca/pub/ffmpeg/snapshots/ffmpeg-124113-g4ea59d5665b.zip",
+  "compile_date": "2026-04-27",
+  "platform_packages": {
+    "darwin-arm64": {
+      "platform": "mac",
+      "arch": "arm64",
+      "filename": "ffmpeg-124113-g4ea59d5665b.zip",
+      "download_url": "/api/external-tools/packages/ffmpeg-124113-g4ea59d5665b.zip",
+      "root": "ffmpeg-124113-g4ea59d5665b"
+    },
+    "linux-amd64": {
+      "platform": "linux",
+      "arch": "amd64",
+      "filename": "ffmpeg-124113-g4ea59d5665b-linux-amd64.zip",
+      "download_url": "/api/external-tools/packages/ffmpeg-124113-g4ea59d5665b-linux-amd64.zip",
+      "root": "ffmpeg-124113-g4ea59d5665b"
+    },
+    "win-amd64": {
+      "platform": "win",
+      "arch": "amd64",
+      "filename": "ffmpeg-124113-g4ea59d5665b-win-amd64.zip",
+      "download_url": "/api/external-tools/packages/ffmpeg-124113-g4ea59d5665b-win-amd64.zip",
+      "root": "ffmpeg-124113-g4ea59d5665b"
+    }
+  },
+  "execs": {
+    "ffmpeg": {
+      "paths": {
+        "darwin-arm64": "ffmpeg-124113-g4ea59d5665b/ffmpeg",
+        "linux-amd64": "ffmpeg-124113-g4ea59d5665b/ffmpeg",
+        "win-amd64": "ffmpeg-124113-g4ea59d5665b/bin/ffmpeg.exe"
+      }
+    }
+  },
+  "install": {
+    "install_dir": "{{external_tools_root}}/{{package_id}}/{{version}}/{{package_key}}"
+  },
+  "modules": [
+    {
+      "id": "screen-push",
+      "name": "ffmpeg-screen-push",
+      "display_name": "FFmpeg Screen Push",
+      "description": "Capture screen with FFmpeg and publish a low-latency RTSP stream to MediaMTX.",
+      "execution": "daemon",
+      "exec": "ffmpeg",
+      "params": [
+        {"name": "instance_name", "label": "Instance Name", "type": "string", "required": true, "default": "screen-live", "description": "Unique name for this screen live stream instance."},
+        {"name": "server_addr", "label": "MediaMTX Server Address", "type": "string", "required": true, "default": "127.0.0.1", "description": "MediaMTX server IP or domain."},
+        {"name": "rtsp_port", "label": "MediaMTX RTSP Port", "type": "integer", "required": true, "default": 8554, "min": 1, "max": 65535, "description": "MediaMTX RTSP publish port."},
+        {"name": "stream_name", "label": "Stream Name", "type": "string", "required": true, "default": "screen-live", "description": "MediaMTX stream path."},
+        {"name": "framerate", "label": "Frame Rate", "type": "integer", "required": true, "default": 15, "min": 1, "max": 60, "description": "Screen capture frame rate."},
+        {"name": "scale_width", "label": "Scale Width", "type": "integer", "required": true, "default": 1280, "min": 320, "max": 7680, "description": "Output video width. Height is calculated automatically."},
+        {"name": "encoder", "label": "Video Encoder", "type": "string", "required": true, "default": "libx264", "description": "Video encoder."},
+        {"name": "preset", "label": "Encoder Preset", "type": "string", "required": true, "default": "ultrafast", "description": "x264 preset."},
+        {"name": "profile", "label": "H.264 Profile", "type": "string", "required": true, "default": "baseline", "description": "H.264 profile."},
+        {"name": "level", "label": "H.264 Level", "type": "string", "required": true, "default": "4.0", "description": "H.264 level."},
+        {"name": "gop", "label": "GOP / Keyframe Interval", "type": "integer", "required": true, "default": 30, "min": 1, "max": 300, "description": "Keyframe interval."},
+        {"name": "video_device_index", "label": "AVFoundation Video Device", "type": "string", "required": false, "default": "2", "description": "macOS AVFoundation video device index or name."},
+        {"name": "audio_device_index", "label": "AVFoundation Audio Device", "type": "string", "required": false, "default": "none", "description": "macOS AVFoundation audio device index. Use none to disable audio."},
+        {"name": "input_pixel_format", "label": "AVFoundation Input Pixel Format", "type": "string", "required": false, "default": "uyvy422", "description": "macOS AVFoundation input pixel format."},
+        {"name": "capture_cursor", "label": "Capture Cursor", "type": "integer", "required": false, "default": 1, "min": 0, "max": 1, "description": "macOS cursor capture toggle."},
+        {"name": "display", "label": "X11 Display", "type": "string", "required": false, "default": ":0.0", "description": "Linux x11grab display."},
+        {"name": "desktop_source", "label": "Windows Desktop Source", "type": "string", "required": false, "default": "desktop", "description": "Windows gdigrab desktop source."}
+      ],
+      "config": {
+        "target": "{{instance_runtime_dir}}/ffmpeg-screen-push.env",
+        "template": "SERVER_ADDR={{server_addr}}\nRTSP_PORT={{rtsp_port}}\nSTREAM_NAME={{stream_name}}\nFRAMERATE={{framerate}}\nSCALE_WIDTH={{scale_width}}\nENCODER={{encoder}}\nPRESET={{preset}}\nPROFILE={{profile}}\nLEVEL={{level}}\nGOP={{gop}}\nPUBLISH_URL=rtsp://{{server_addr}}:{{rtsp_port}}/{{stream_name}}\nWEBRTC_URL=http://{{server_addr}}:8889/{{stream_name}}/\nHLS_URL=http://{{server_addr}}:8888/{{stream_name}}/\n"
+      },
+      "runtime": {
+        "cwd": "{{install_dir}}/{{package_root}}",
+        "stdout": "{{instance_runtime_dir}}/stdout.log",
+        "stderr": "stdout",
+        "pid_file": "{{instance_runtime_dir}}/tool.pid",
+        "state_file": "{{instance_runtime_dir}}/state.json"
+      },
+      "runtimes": [
+        {
+          "platform": "mac",
+          "argv": ["{{bin_ffmpeg}}", "-f", "avfoundation", "-pixel_format", "{{input_pixel_format}}", "-capture_cursor", "{{capture_cursor}}", "-framerate", "{{framerate}}", "-i", "{{video_device_index}}:{{audio_device_index}}", "-vf", "fps={{framerate}},scale={{scale_width}}:-2,format=yuv420p", "-c:v", "{{encoder}}", "-preset", "{{preset}}", "-tune", "zerolatency", "-profile:v", "{{profile}}", "-level:v", "{{level}}", "-g", "{{gop}}", "-keyint_min", "{{gop}}", "-sc_threshold", "0", "-bf", "0", "-an", "-rtsp_transport", "tcp", "-f", "rtsp", "rtsp://{{server_addr}}:{{rtsp_port}}/{{stream_name}}"]
+        },
+        {
+          "platform": "linux",
+          "argv": ["{{bin_ffmpeg}}", "-f", "x11grab", "-framerate", "{{framerate}}", "-i", "{{display}}", "-vf", "fps={{framerate}},scale={{scale_width}}:-2,format=yuv420p", "-c:v", "{{encoder}}", "-preset", "{{preset}}", "-tune", "zerolatency", "-profile:v", "{{profile}}", "-level:v", "{{level}}", "-g", "{{gop}}", "-keyint_min", "{{gop}}", "-sc_threshold", "0", "-bf", "0", "-an", "-rtsp_transport", "tcp", "-f", "rtsp", "rtsp://{{server_addr}}:{{rtsp_port}}/{{stream_name}}"]
+        },
+        {
+          "platform": "win",
+          "argv": ["{{bin_ffmpeg}}", "-f", "gdigrab", "-framerate", "{{framerate}}", "-i", "{{desktop_source}}", "-vf", "fps={{framerate}},scale={{scale_width}}:-2,format=yuv420p", "-c:v", "{{encoder}}", "-preset", "{{preset}}", "-tune", "zerolatency", "-profile:v", "{{profile}}", "-level:v", "{{level}}", "-g", "{{gop}}", "-keyint_min", "{{gop}}", "-sc_threshold", "0", "-bf", "0", "-an", "-rtsp_transport", "tcp", "-f", "rtsp", "rtsp://{{server_addr}}:{{rtsp_port}}/{{stream_name}}"]
+        }
+      ],
+      "lifecycle": {
+        "stop": {"type": "signal", "signal": "TERM", "timeout_sec": 5, "kill_after_timeout": true},
+        "status": {"type": "pid_file"}
+      }
+    }
+  ]
+}
