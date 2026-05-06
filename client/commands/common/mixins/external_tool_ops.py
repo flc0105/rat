@@ -512,17 +512,95 @@ finally:
         except Exception:
             return None
 
+    # def _external_tool_is_pid_alive(self, pid) -> bool:
+    #     if not pid or pid <= 0:
+    #         return False
+    #
+    #     try:
+    #         os.kill(pid, 0)
+    #         return True
+    #     except OSError as e:
+    #         return e.errno == errno.EPERM
+    #     except Exception:
+    #         return False
+
     def _external_tool_is_pid_alive(self, pid) -> bool:
-        if not pid or pid <= 0:
+        try:
+            pid = int(pid)
+        except (TypeError, ValueError):
             return False
+
+        if pid <= 0:
+            return False
+
+        if os.name == "nt":
+            return self._external_tool_is_windows_pid_alive(pid)
 
         try:
             os.kill(pid, 0)
-            return True
-        except OSError as e:
-            return e.errno == errno.EPERM
-        except Exception:
+        except ProcessLookupError:
             return False
+        except PermissionError:
+            return True
+        except OSError:
+            return False
+
+        return True
+
+    def _external_tool_is_windows_pid_alive(self, pid: int) -> bool:
+        """
+        Windows 下不能用 os.kill(pid, 0) 探活。
+        Python on Windows 的 os.kill 可能会调用 TerminateProcess，导致探测直接杀死目标进程。
+        这里用 Win32 OpenProcess + GetExitCodeProcess 非破坏性检测。
+        """
+        import ctypes
+        from ctypes import wintypes
+
+        PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
+        STILL_ACTIVE = 259
+        ERROR_ACCESS_DENIED = 5
+        ERROR_INVALID_PARAMETER = 87
+
+        kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+
+        OpenProcess = kernel32.OpenProcess
+        OpenProcess.argtypes = [wintypes.DWORD, wintypes.BOOL, wintypes.DWORD]
+        OpenProcess.restype = wintypes.HANDLE
+
+        GetExitCodeProcess = kernel32.GetExitCodeProcess
+        GetExitCodeProcess.argtypes = [wintypes.HANDLE, ctypes.POINTER(wintypes.DWORD)]
+        GetExitCodeProcess.restype = wintypes.BOOL
+
+        CloseHandle = kernel32.CloseHandle
+        CloseHandle.argtypes = [wintypes.HANDLE]
+        CloseHandle.restype = wintypes.BOOL
+
+        handle = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, False, pid)
+        if not handle:
+            err = ctypes.get_last_error()
+
+            # 没权限通常说明进程存在，只是不能查询。
+            if err == ERROR_ACCESS_DENIED:
+                return True
+
+            # PID 不存在 / 参数无效。
+            if err == ERROR_INVALID_PARAMETER:
+                return False
+
+            return False
+
+        try:
+            exit_code = wintypes.DWORD()
+            ok = GetExitCodeProcess(handle, ctypes.byref(exit_code))
+            if not ok:
+                err = ctypes.get_last_error()
+                if err == ERROR_ACCESS_DENIED:
+                    return True
+                return False
+
+            return exit_code.value == STILL_ACTIVE
+        finally:
+            CloseHandle(handle)
 
     def _external_tool_signal_process_group_or_pid(self, pid: int, sig: int):
         if os.name != 'nt':
