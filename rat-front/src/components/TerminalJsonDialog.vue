@@ -15,10 +15,18 @@
           >
             Copy Raw
           </el-button>
+
+          <el-button
+            v-if="hasTerminalJsonRenderView"
+            size="small"
+            @click="toggleTerminalJsonViewMode"
+          >
+            {{ isTerminalJsonRawView ? 'Render View' : 'Raw View' }}
+          </el-button>
         </div>
 
         <div class="terminal-json-toolbar-right">
-          <template v-if="displayMode === 'table'">
+          <template v-if="displayMode === 'table' && !isTerminalJsonRawView">
             <el-input
               v-model="tableSearchText"
               class="terminal-json-search"
@@ -37,7 +45,7 @@
         </div>
       </div>
 
-      <template v-if="displayMode === 'table'">
+      <template v-if="displayMode === 'table' && !isTerminalJsonRawView">
         <div class="terminal-json-scroll">
           <el-table
             :data="visibleTableRows"
@@ -60,7 +68,7 @@
         </div>
       </template>
 
-      <template v-else-if="displayMode === 'flat'">
+      <template v-else-if="displayMode === 'flat' && !isTerminalJsonRawView">
         <div class="terminal-json-scroll">
           <div
             v-for="item in flatRows"
@@ -103,6 +111,7 @@ export default {
       tableRows: [],
       flatRows: [],
       tableSearchText: '',
+      isRawViewVisible: false,
       tableSort: {
         prop: '',
         order: '',
@@ -113,6 +122,14 @@ export default {
   computed: {
     formattedRawText() {
       return this.formatTerminalJsonRawForDisplay(this.text)
+    },
+
+    hasTerminalJsonRenderView() {
+      return this.displayMode === 'table' || this.displayMode === 'flat'
+    },
+
+    isTerminalJsonRawView() {
+      return this.displayMode === 'raw' || this.isRawViewVisible
     },
 
     filteredTableRows() {
@@ -155,6 +172,7 @@ export default {
       this.title = 'JSON Viewer'
       this.text = jsonText
       this.tableSearchText = ''
+      this.isRawViewVisible = false
       this.tableSort = {
         prop: '',
         order: '',
@@ -188,6 +206,7 @@ export default {
       this.tableRows = []
       this.flatRows = []
       this.tableSearchText = ''
+      this.isRawViewVisible = false
       this.tableSort = {
         prop: '',
         order: '',
@@ -335,6 +354,13 @@ export default {
           ElMessage.error('Copy failed')
         }
       }
+    },
+
+    toggleTerminalJsonViewMode() {
+      if (!this.hasTerminalJsonRenderView) return
+
+      // 可 render 的 JSON 支持 raw/render 视图切换。
+      this.isRawViewVisible = !this.isRawViewVisible
     },
 
     copyTextWithLegacyTextarea(text) {
