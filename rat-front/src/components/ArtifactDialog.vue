@@ -22,6 +22,16 @@
             v-if="isServerFilesTab"
             size="small"
             type="primary"
+            plain
+            @click="createServerFilePrompt"
+          >
+            Create File
+          </el-button>
+
+          <el-button
+            v-if="isServerFilesTab"
+            size="small"
+            type="primary"
             :loading="serverFileUploading"
             @click="triggerServerFileUpload"
           >
@@ -398,7 +408,7 @@ export default {
     },
   },
 
-  emits: ['preview', 'append-output', 'set-active-task'],
+  emits: ['preview', 'append-output', 'set-active-task', 'open-new-server-file-editor'],
 
   data() {
     return {
@@ -601,6 +611,33 @@ export default {
         ElMessage.error(e.message || 'Failed to load artifacts')
       } finally {
         this.artifactLoading = false
+      }
+    },
+
+    async createServerFilePrompt() {
+      if (!this.isServerFilesTab) return
+
+      try {
+        const { value } = await ElMessageBox.prompt(
+          'Enter the new server file name',
+          'Create File',
+          {
+            confirmButtonText: 'Create',
+            cancelButtonText: 'Cancel',
+            inputValue: 'new_file.txt',
+            inputPlaceholder: 'new_file.txt',
+          }
+        )
+
+        const filename = String(value || 'new_file.txt').trim()
+        if (!filename) {
+          ElMessage.warning('File name is required')
+          return
+        }
+
+        this.$emit('open-new-server-file-editor', filename)
+      } catch (e) {
+        if (e === 'cancel' || e === 'close') return
       }
     },
 

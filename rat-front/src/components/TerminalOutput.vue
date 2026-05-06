@@ -331,6 +331,7 @@ export default {
 
     getTerminalCommandGroupActionItems(lines, endIndex) {
       const groupLines = this.getTerminalCommandGroupLines(lines, endIndex)
+      const commandInfo = this.buildTerminalJsonCommandInfo(groupLines)
       const result = []
 
       groupLines.forEach((item, itemIndex) => {
@@ -349,6 +350,7 @@ export default {
             type: 'json',
             key: `json:${endIndex}:${itemIndex}`,
             line: item,
+            commandInfo,
           })
         }
       })
@@ -365,7 +367,55 @@ export default {
       }
 
       if (actionItem.type === 'json') {
-        this.$emit('open-json', actionItem.line)
+        this.$emit('open-json', this.buildTerminalJsonOpenPayload(actionItem))
+      }
+    },
+
+    buildTerminalJsonOpenPayload(actionItem) {
+      const line = actionItem?.line || {}
+
+      return {
+        ...line,
+        jsonCommandInfo: actionItem?.commandInfo || {},
+      }
+    },
+
+    buildTerminalJsonCommandInfo(groupLines) {
+      const safeLines = Array.isArray(groupLines) ? groupLines : []
+      const commandLine = safeLines.find(line => line?.kind === 'command') || null
+      const commandText = this.normalizeTerminalBlockCommandText(commandLine?.text || '')
+      const entries = safeLines.map(line => ({ line }))
+      const block = {
+        commandLine: commandLine ? { line: commandLine } : null,
+        bodyLines: entries,
+        lines: entries,
+        commandText,
+      }
+      const blockModel = this.buildTerminalBlockModel(block)
+      const commandBlock = {
+        ...block,
+        ...blockModel,
+      }
+      const sourceCommandId = this.getTerminalBlockSourceCommandId(commandBlock)
+      const isScript = this.isTerminalScriptRunBlock(commandBlock)
+      const scriptMeta = commandBlock.scriptMeta || {}
+      const commandName = isScript
+        ? String(scriptMeta.script_display_name || scriptMeta.script_name || commandText).trim()
+        : commandText
+
+      return {
+        command_id: sourceCommandId,
+        source_command_id: sourceCommandId,
+        command_name: commandName,
+        name: commandName,
+        source_command: commandName,
+        source_task_id: commandBlock.taskId || '',
+        category: this.getTerminalBlockArtifactCategory(commandBlock),
+        is_script: isScript,
+        script_name: scriptMeta.script_name || '',
+        script_path: scriptMeta.script_path || '',
+        script_display_name: scriptMeta.script_display_name || '',
+        params: scriptMeta.params || {},
       }
     },
 

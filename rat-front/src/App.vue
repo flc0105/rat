@@ -15,14 +15,18 @@
             <span class="tool-separator" style="margin-right: 12px; margin-left: 6px"></span>
 
             <div class="banner-action-links">
-              <button class="banner-inline-action"
-                      type="button"
-                      @click="openAgentBuilderDialog">
+              <button
+                class="banner-inline-action"
+                type="button"
+                @click="openAgentBuilderDialog"
+              >
                 Build Agent
               </button>
-              <button class="banner-inline-action"
-                      type="button"
-                      onclick="window.RatAuth && window.RatAuth.logout()">
+              <button
+                class="banner-inline-action"
+                type="button"
+                onclick="window.RatAuth && window.RatAuth.logout()"
+              >
                 Sign out
               </button>
             </div>
@@ -31,15 +35,18 @@
       </div>
     </header>
 
-    <div class="content" :class="{ 'content-sidebar-collapsed': deviceSidebarCollapsed }">
-<DeviceSidebar
-    v-show="!deviceSidebarCollapsed"
-    :connections="connections"
-    :selected-id="selectedId"
-    :status-now-tick="statusNowTick"
-    @refresh="loadConnections"
-    @select="selectConnection"
-/>
+    <div
+      class="content"
+      :class="{ 'content-sidebar-collapsed': deviceSidebarCollapsed }"
+    >
+      <DeviceSidebar
+        v-show="!deviceSidebarCollapsed"
+        :connections="connections"
+        :selected-id="selectedId"
+        :status-now-tick="statusNowTick"
+        @refresh="loadConnections"
+        @select="selectConnection"
+      />
 
       <main class="main panel">
         <template v-if="currentConnection">
@@ -49,80 +56,79 @@
             <!--                :status-now-tick="statusNowTick"-->
             <!--            />-->
 
-
             <div
-                class="connection-info-shell"
-                :class="{ 'connection-info-shell-collapsed': connectionInfoCollapsed }"
+              class="connection-info-shell"
+              :class="{ 'connection-info-shell-collapsed': connectionInfoCollapsed }"
             >
               <button
-                  class="connection-info-toggle"
-                  type="button"
-                  :title="connectionInfoCollapsed ? 'Show connection info' : 'Hide connection info'"
-                  @click="toggleConnectionInfo"
+                class="connection-info-toggle"
+                type="button"
+                :title="connectionInfoCollapsed ? 'Show connection info' : 'Hide connection info'"
+                @click="toggleConnectionInfo"
               >
                 <el-icon class="connection-info-toggle-icon">
-                  <ArrowDown v-if="connectionInfoCollapsed"/>
-                  <ArrowUp v-else/>
+                  <ArrowDown v-if="connectionInfoCollapsed" />
+                  <ArrowUp v-else />
                 </el-icon>
               </button>
 
               <ConnectionInfoCards
-                  v-show="!connectionInfoCollapsed"
-                  :connection="currentConnection"
-                  :status-now-tick="statusNowTick"
+                v-show="!connectionInfoCollapsed"
+                :connection="currentConnection"
+                :status-now-tick="statusNowTick"
               />
             </div>
 
             <section class="terminal-panel">
               <div class="terminal-frame">
-  <TerminalToolbar
-    :selected-id="selectedId"
-    :current-connection-offline="isCurrentConnectionOffline"
-    :device-sidebar-collapsed="deviceSidebarCollapsed"
-    :connection-info-collapsed="connectionInfoCollapsed"
-    @layout-command="handleToolbarLayoutCommand"
-    @open-remote-files="openRemoteFilesDialog"
-    @open-artifacts="openArtifactDialog"
-    @open-external-tools="openExternalToolManagerDialog"
-    @open-keychains="openKeychainManagerDialog"
-    @open-info="openConnectionInfoDialog"
-    @open-jobs="openBackgroundJobsDialog"
-    @open-scripts="openScriptLibraryDialog"
-    @open-agents="openAgentOutputsDialog"
-    @open-history="openCommandHistoryDialog"
-    @open-pty="openPtyDialog"
-    @open-processes="openProcessDialog"
-    @clear="clearOutput"
-    @bottom="scrollToBottom"
-/>
-
-                <CommandInputBar
-                    ref="commandInputBarRef"
-                    :selected-id="selectedId"
-                    :current-connection="currentConnection"
-                    :current-active-task-id="currentActiveTaskId"
-                    :tab-id="tabId"
-                    @append-output="appendOutput"
-                    @set-active-task="setActiveTask"
+                <TerminalToolbar
+                  :selected-id="selectedId"
+                  :current-connection-offline="isCurrentConnectionOffline"
+                  :device-sidebar-collapsed="deviceSidebarCollapsed"
+                  :connection-info-collapsed="connectionInfoCollapsed"
+                  @layout-command="handleToolbarLayoutCommand"
+                  @open-remote-files="openRemoteFilesDialog"
+                  @open-artifacts="openArtifactDialog"
+                  @open-external-tools="openExternalToolManagerDialog"
+                  @open-keychains="openKeychainManagerDialog"
+                  @open-info="openConnectionInfoDialog"
+                  @open-jobs="openBackgroundJobsDialog"
+                  @open-scripts="openScriptLibraryDialog"
+                  @open-agents="openAgentOutputsDialog"
+                  @open-history="openCommandHistoryDialog"
+                  @open-pty="openPtyDialog"
+                  @open-processes="openProcessDialog"
+                  @clear="clearOutput"
+                  @bottom="scrollToBottom"
                 />
 
-<!--                <TerminalOutput-->
-<!--                    ref="terminalOutputRef"-->
-<!--                    :lines="currentOutputLines"-->
-<!--                    @preview-artifact="previewArtifact"-->
-<!--                    @open-json="$refs.terminalJsonDialogRef?.open($event)"-->
-<!--                />-->
+                <CommandInputBar
+                  ref="commandInputBarRef"
+                  :selected-id="selectedId"
+                  :current-connection="currentConnection"
+                  :current-active-task-id="currentActiveTaskId"
+                  :tab-id="tabId"
+                  @append-output="appendOutput"
+                  @set-active-task="setActiveTask"
+                />
+
+                <!--                <TerminalOutput-->
+                <!--                    ref="terminalOutputRef"-->
+                <!--                    :lines="currentOutputLines"-->
+                <!--                    @preview-artifact="previewArtifact"-->
+                <!--                    @open-json="$refs.terminalJsonDialogRef?.open($event)"-->
+                <!--                />-->
 
                 <TerminalOutput
-    ref="terminalOutputRef"
-    :lines="currentOutputLines"
-    :selected-id="selectedId"
-    :current-connection="currentConnection"
-    @preview-artifact="previewArtifact"
-    @open-json="$refs.terminalJsonDialogRef?.open($event)"
-    @artifact-saved="refreshArtifactsIfOpen"
-    @rerun-terminal-block="rerunTerminalBlock"
-/>
+                  ref="terminalOutputRef"
+                  :lines="currentOutputLines"
+                  :selected-id="selectedId"
+                  :current-connection="currentConnection"
+                  @preview-artifact="previewArtifact"
+                  @open-json="$refs.terminalJsonDialogRef?.open($event)"
+                  @artifact-saved="refreshArtifactsIfOpen"
+                  @rerun-terminal-block="rerunTerminalBlock"
+                />
               </div>
             </section>
           </div>
@@ -131,7 +137,8 @@
         <template v-else>
           <div class="main-empty">
             <div class="main-empty-title">No device selected</div>
-            <div class="main-empty-text">Choose a device from the left sidebar to start an interactive
+            <div class="main-empty-text">
+              Choose a device from the left sidebar to start an interactive
               session.
             </div>
           </div>
@@ -141,164 +148,163 @@
   </div>
 
   <input
-      ref="remoteUploadInputRef"
-      type="file"
-      class="hidden-file-input"
-      @change="handleRemoteUploadChange"
-  />
-  <RemoteFilesDialog
-      ref="remoteFilesDialogRef"
-      :selected-id="selectedId"
-      :get-tab-scoped-headers="getTabScopedHeaders"
-      @append-output="appendOutput"
-      @set-active-task="setActiveTask"
-      @preview="previewRemoteEntry"
-      @request-upload="triggerRemoteUploadInput"
-      @upload-started="pendingRemoteUploadRefresh = $event"
-      @visible-change="remoteFilesDialogVisible = $event"
-      @artifacts-maybe-changed="refreshArtifactsIfOpen"
-  />
+    ref="remoteUploadInputRef"
+    type="file"
+    class="hidden-file-input"
+    @change="handleRemoteUploadChange"
+  >
 
+  <RemoteFilesDialog
+    ref="remoteFilesDialogRef"
+    :selected-id="selectedId"
+    :get-tab-scoped-headers="getTabScopedHeaders"
+    @append-output="appendOutput"
+    @set-active-task="setActiveTask"
+    @preview="previewRemoteEntry"
+    @request-upload="triggerRemoteUploadInput"
+    @upload-started="pendingRemoteUploadRefresh = $event"
+    @visible-change="remoteFilesDialogVisible = $event"
+    @artifacts-maybe-changed="refreshArtifactsIfOpen"
+  />
 
   <ArtifactDialog
-      ref="artifactDialogRef"
-      :selected-id="selectedId"
-      :current-connection="currentConnection"
-      :get-tab-scoped-headers="getTabScopedHeaders"
-      @preview="previewArtifact"
-      @append-output="appendOutput"
-      @set-active-task="setActiveTask"
+    ref="artifactDialogRef"
+    :selected-id="selectedId"
+    :current-connection="currentConnection"
+    :get-tab-scoped-headers="getTabScopedHeaders"
+    @preview="previewArtifact"
+    @append-output="appendOutput"
+    @set-active-task="setActiveTask"
+    @open-new-server-file-editor="openNewServerFileEditor"
   />
 
   <ExternalToolManagerDialog
-      ref="externalToolManagerDialogRef"
-      :selected-id="selectedId"
-      :current-connection="currentConnection"
-      :connections="connections"
-      :get-tab-scoped-headers="getTabScopedHeaders"
-      @append-output="appendOutput"
-      @set-active-task="setActiveTask"
-      @open-tool-meta-editor="openExternalToolMetaEditor"
+    ref="externalToolManagerDialogRef"
+    :selected-id="selectedId"
+    :current-connection="currentConnection"
+    :connections="connections"
+    :get-tab-scoped-headers="getTabScopedHeaders"
+    @append-output="appendOutput"
+    @set-active-task="setActiveTask"
+    @open-tool-meta-editor="openExternalToolMetaEditor"
   />
-
 
   <KeychainManagerDialog
-      ref="keychainManagerDialogRef"
-      :current-connection="currentConnection"
+    ref="keychainManagerDialogRef"
+    :current-connection="currentConnection"
   />
-
 
   <ScriptLibraryDialog
-      ref="scriptLibraryDialogRef"
-      :selected-id="selectedId"
-      :current-connection="currentConnection"
-      :get-tab-scoped-headers="getTabScopedHeaders"
-      :open-script-editor="openRemoteScriptEditorInternal"
-      :open-new-script-editor="openNewRemoteScriptEditor"
-      @append-output="appendOutput"
-      @set-active-task="setActiveTask"
+    ref="scriptLibraryDialogRef"
+    :selected-id="selectedId"
+    :current-connection="currentConnection"
+    :get-tab-scoped-headers="getTabScopedHeaders"
+    :open-script-editor="openRemoteScriptEditorInternal"
+    :open-new-script-editor="openNewRemoteScriptEditor"
+    @append-output="appendOutput"
+    @set-active-task="setActiveTask"
   />
 
-
   <BackgroundJobsDialog
-      ref="backgroundJobsDialogRef"
-      :selected-id="selectedId"
-      :current-connection="currentConnection"
-      :get-tab-scoped-headers="getTabScopedHeaders"
-      :format-date-time-standard="formatDateTimeStandard"
-      :format-bytes="formatBytes"
-      @set-active-task="setActiveTask"
-      @preview-file="previewBackgroundJobFile"
-      @open-job-editor="openRemoteJobEditor"
-      @open-new-job-editor="openNewRemoteJobEditor"
-      @job-deleted="handleBackgroundJobDeleted"
+    ref="backgroundJobsDialogRef"
+    :selected-id="selectedId"
+    :current-connection="currentConnection"
+    :get-tab-scoped-headers="getTabScopedHeaders"
+    :format-date-time-standard="formatDateTimeStandard"
+    :format-bytes="formatBytes"
+    @set-active-task="setActiveTask"
+    @preview-file="previewBackgroundJobFile"
+    @open-job-editor="openRemoteJobEditor"
+    @open-new-job-editor="openNewRemoteJobEditor"
+    @job-deleted="handleBackgroundJobDeleted"
   />
 
   <PreviewDialog
-      ref="previewDialogRef"
-      :selected-id="selectedId"
-      :remote-files-dialog-visible="remoteFilesDialogVisible"
-      @remote-directory-maybe-changed="refreshRemoteDirectory"
-      @artifacts-maybe-changed="refreshArtifactsIfOpen"
-      @scripts-maybe-changed="refreshScriptsIfOpen"
-      @background-job-modules-maybe-changed="refreshBackgroundJobModulesIfOpen"
-      @external-tools-maybe-changed="refreshExternalToolsIfOpen"
+    ref="previewDialogRef"
+    :selected-id="selectedId"
+    :remote-files-dialog-visible="remoteFilesDialogVisible"
+    @remote-directory-maybe-changed="refreshRemoteDirectory"
+    @artifacts-maybe-changed="refreshArtifactsIfOpen"
+    @scripts-maybe-changed="refreshScriptsIfOpen"
+    @background-job-modules-maybe-changed="refreshBackgroundJobModulesIfOpen"
+    @external-tools-maybe-changed="refreshExternalToolsIfOpen"
   />
-
 
   <CommandHistoryDialog
-      ref="commandHistoryDialogRef"
-      :selected-id="selectedId"
-      :current-connection="currentConnection"
-      :format-date-time-standard="formatDateTimeStandard"
-      :format-bytes="formatBytes"
-      :reload-command-candidates="reloadCommandCandidatesFromHistory"
-      @apply-command="applyHistoryCommand"
-      @preview-file="previewArtifact"
+    ref="commandHistoryDialogRef"
+    :selected-id="selectedId"
+    :current-connection="currentConnection"
+    :format-date-time-standard="formatDateTimeStandard"
+    :format-bytes="formatBytes"
+    :reload-command-candidates="reloadCommandCandidatesFromHistory"
+    @apply-command="applyHistoryCommand"
+    @preview-file="previewArtifact"
   />
-
 
   <ConnectionInfoDialogs
-      ref="connectionInfoDialogRef"
-      :selected-id="selectedId"
-      :current-connection="currentConnection"
-      :status-now-tick="statusNowTick"
+    ref="connectionInfoDialogRef"
+    :selected-id="selectedId"
+    :current-connection="currentConnection"
+    :status-now-tick="statusNowTick"
   />
 
-
   <ProcessDialogs
-      ref="processDialogRef"
-      :selected-id="selectedId"
+    ref="processDialogRef"
+    :selected-id="selectedId"
   />
 
   <AgentBuilderDialog
-      ref="agentBuilderDialogRef"
-      @built="refreshAgentOutputsIfOpen"
+    ref="agentBuilderDialogRef"
+    @built="refreshAgentOutputsIfOpen"
   />
 
-  <TerminalJsonDialog ref="terminalJsonDialogRef"/>
+  <TerminalJsonDialog
+    ref="terminalJsonDialogRef"
+    :selected-id="selectedId"
+    :current-connection="currentConnection"
+    @artifact-saved="refreshArtifactsIfOpen"
+  />
 
   <AgentOutputsDialog
-      ref="agentOutputsDialogRef"
-      @open-builder="openAgentBuilderDialog"
+    ref="agentOutputsDialogRef"
+    @open-builder="openAgentBuilderDialog"
   />
 
   <PtyDialog
-      ref="ptyDialogRef"
-      :selected-id="selectedId"
-      :current-connection="currentConnection"
-      :get-tab-scoped-headers="getTabScopedHeaders"
+    ref="ptyDialogRef"
+    :selected-id="selectedId"
+    :current-connection="currentConnection"
+    :get-tab-scoped-headers="getTabScopedHeaders"
   />
 </template>
 
 <script>
-
 import AppUtilsModule from './legacy/modules/utils.js'
 import AppSseModule from './legacy/modules/sse.js'
 import AppConnectionModule from './legacy/modules/connection.js'
 import AppTaskModule from './legacy/modules/task.js'
 import AppTerminalModule from './legacy/modules/terminal.js'
-import DeviceSidebar from "./components/DeviceSidebar.vue";
-import ConnectionInfoCards from "./components/ConnectionInfoCards.vue";
-import TerminalToolbar from "./components/TerminalToolbar.vue";
-import CommandInputBar from "./components/CommandInputBar.vue";
-import TerminalOutput from "./components/TerminalOutput.vue";
-import ConnectionInfoDialogs from "./components/ConnectionInfoDialogs.vue";
-import ProcessDialogs from "./components/ProcessDialogs.vue";
-import AgentBuilderDialog from "./components/AgentBuilderDialog.vue";
-import AgentOutputsDialog from "./components/AgentOutputsDialog.vue";
-import CommandHistoryDialog from "./components/CommandHistoryDialog.vue";
-import RemoteFilesDialog from "./components/RemoteFilesDialog.vue";
-import ArtifactDialog from "./components/ArtifactDialog.vue";
-import ExternalToolManagerDialog from "./components/ExternalToolManagerDialog.vue";
-import KeychainManagerDialog from "./components/KeychainManagerDialog.vue";
-import ScriptLibraryDialog from "./components/ScriptLibraryDialog.vue";
-import BackgroundJobsDialog from "./components/BackgroundJobsDialog.vue";
-import PreviewDialog from "./components/PreviewDialog.vue";
-import TerminalJsonDialog from "./components/TerminalJsonDialog.vue";
-import PtyDialog from "./components/PtyDialog.vue";
+import DeviceSidebar from './components/DeviceSidebar.vue'
+import ConnectionInfoCards from './components/ConnectionInfoCards.vue'
+import TerminalToolbar from './components/TerminalToolbar.vue'
+import CommandInputBar from './components/CommandInputBar.vue'
+import TerminalOutput from './components/TerminalOutput.vue'
+import ConnectionInfoDialogs from './components/ConnectionInfoDialogs.vue'
+import ProcessDialogs from './components/ProcessDialogs.vue'
+import AgentBuilderDialog from './components/AgentBuilderDialog.vue'
+import AgentOutputsDialog from './components/AgentOutputsDialog.vue'
+import CommandHistoryDialog from './components/CommandHistoryDialog.vue'
+import RemoteFilesDialog from './components/RemoteFilesDialog.vue'
+import ArtifactDialog from './components/ArtifactDialog.vue'
+import ExternalToolManagerDialog from './components/ExternalToolManagerDialog.vue'
+import KeychainManagerDialog from './components/KeychainManagerDialog.vue'
+import ScriptLibraryDialog from './components/ScriptLibraryDialog.vue'
+import BackgroundJobsDialog from './components/BackgroundJobsDialog.vue'
+import PreviewDialog from './components/PreviewDialog.vue'
+import TerminalJsonDialog from './components/TerminalJsonDialog.vue'
+import PtyDialog from './components/PtyDialog.vue'
 
-import {ArrowDown, ArrowUp} from '@element-plus/icons-vue'
+import { ArrowDown, ArrowUp } from '@element-plus/icons-vue'
 
 export default {
   components: {
@@ -318,11 +324,15 @@ export default {
     AgentBuilderDialog,
     ProcessDialogs,
     ConnectionInfoDialogs,
-    TerminalOutput, CommandInputBar, TerminalToolbar, ConnectionInfoCards, DeviceSidebar
+    TerminalOutput,
+    CommandInputBar,
+    TerminalToolbar,
+    ConnectionInfoCards,
+    DeviceSidebar,
   },
+
   data() {
     return {
-
       ...AppTerminalModule.data(),
       ...AppConnectionModule.data(),
       ...AppTaskModule.data(),
@@ -334,7 +344,7 @@ export default {
       pendingRemoteUploadRefresh: null,
 
       connectionInfoCollapsed: false,
-deviceSidebarCollapsed: false,
+      deviceSidebarCollapsed: false,
     }
   },
 
@@ -343,10 +353,10 @@ deviceSidebarCollapsed: false,
     ...AppTerminalModule.computed,
     ...AppTaskModule.computed,
 
-      isCurrentConnectionOffline() {
-    if (!this.currentConnection) return false
-    return this.getConnectionDisplayState(this.currentConnection) === 'offline'
-  },
+    isCurrentConnectionOffline() {
+      if (!this.currentConnection) return false
+      return this.getConnectionDisplayState(this.currentConnection) === 'offline'
+    },
   },
 
   watch: {
@@ -369,27 +379,27 @@ deviceSidebarCollapsed: false,
     },
 
     toggleDeviceSidebar() {
-  this.deviceSidebarCollapsed = !this.deviceSidebarCollapsed
-},
+      this.deviceSidebarCollapsed = !this.deviceSidebarCollapsed
+    },
 
-handleToolbarLayoutCommand(command) {
-  const normalizedCommand = String(command || '').trim()
+    handleToolbarLayoutCommand(command) {
+      const normalizedCommand = String(command || '').trim()
 
-  if (normalizedCommand === 'toggle-device-sidebar') {
-    this.toggleDeviceSidebar()
-    return
-  }
+      if (normalizedCommand === 'toggle-device-sidebar') {
+        this.toggleDeviceSidebar()
+        return
+      }
 
-  if (normalizedCommand === 'toggle-connection-info') {
-    this.toggleConnectionInfo()
-    return
-  }
+      if (normalizedCommand === 'toggle-connection-info') {
+        this.toggleConnectionInfo()
+        return
+      }
 
-  if (normalizedCommand === 'hide-both') {
-    this.deviceSidebarCollapsed = true
-    this.connectionInfoCollapsed = true
-  }
-},
+      if (normalizedCommand === 'hide-both') {
+        this.deviceSidebarCollapsed = true
+        this.connectionInfoCollapsed = true
+      }
+    },
 
     refreshArtifactsIfOpen() {
       return this.$refs.artifactDialogRef?.refreshIfOpen()
@@ -436,7 +446,6 @@ handleToolbarLayoutCommand(command) {
       return this.$refs.remoteFilesDialogRef?.refreshRemoteDirectory()
     },
 
-
     openBackgroundJobsDialog() {
       return this.$refs.backgroundJobsDialogRef?.open()
     },
@@ -474,7 +483,7 @@ handleToolbarLayoutCommand(command) {
     },
 
     refreshAgentOutputsIfOpen() {
-      return this.$refs.agentOutputsDialogRef?.refreshIfOpen({silent: true})
+      return this.$refs.agentOutputsDialogRef?.refreshIfOpen({ silent: true })
     },
 
     openConnectionInfoDialog() {
@@ -513,24 +522,27 @@ handleToolbarLayoutCommand(command) {
       return this.$refs.previewDialogRef?.openNewRemoteJobEditor(scriptName)
     },
 
+    openNewServerFileEditor(filename = 'new_file.txt') {
+      return this.$refs.previewDialogRef?.openNewServerFileEditor(filename)
+    },
+
     openRemoteJobEditor(scriptName) {
       return this.$refs.previewDialogRef?.openRemoteJobEditor(scriptName)
     },
-
 
     openCommandHistoryDialog() {
       return this.$refs.commandHistoryDialogRef?.open()
     },
 
     rerunTerminalBlock(payload = {}) {
-  const type = String(payload.type || '').trim()
+      const type = String(payload.type || '').trim()
 
-  if (type === 'script') {
-    return this.$refs.scriptLibraryDialogRef?.runScriptFromTerminalBlock(payload)
-  }
+      if (type === 'script') {
+        return this.$refs.scriptLibraryDialogRef?.runScriptFromTerminalBlock(payload)
+      }
 
-  return this.$refs.commandInputBarRef?.runCommandText(payload.command || '')
-},
+      return this.$refs.commandInputBarRef?.runCommandText(payload.command || '')
+    },
 
     applyHistoryCommand(row) {
       if (!row || !row.command) return
@@ -545,7 +557,6 @@ handleToolbarLayoutCommand(command) {
     async reloadCommandCandidatesFromRuntime(options = {}) {
       await this.$refs.commandInputBarRef?.reloadCommandCandidates(options)
     },
-
   },
 
   mounted() {
@@ -568,7 +579,6 @@ handleToolbarLayoutCommand(command) {
   },
 }
 </script>
-
 
 <style scoped>
 /*connection info card*/
@@ -629,13 +639,11 @@ handleToolbarLayoutCommand(command) {
   grid-column: 1 / -1;
 }
 
-
 @media (max-width: 640px) {
   .terminal-panel {
     padding-top: 8px;
     padding-left: 8px;
     padding-right: 8px;
   }
-
 }
 </style>

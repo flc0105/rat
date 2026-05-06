@@ -17,6 +17,15 @@
           </el-button>
 
           <el-button
+            size="small"
+            type="primary"
+            :loading="savingJsonArtifact"
+            @click="saveTerminalJsonToArtifact"
+          >
+            Save to Artifact
+          </el-button>
+
+          <el-button
             v-if="hasTerminalJsonRenderView"
             size="small"
             @click="toggleTerminalJsonViewMode"
@@ -101,6 +110,20 @@ import { ElMessage } from 'element-plus'
 export default {
   name: 'TerminalJsonDialog',
 
+  props: {
+    selectedId: {
+      type: [String, Number],
+      default: '',
+    },
+
+    currentConnection: {
+      type: Object,
+      default: null,
+    },
+  },
+
+  emits: ['artifact-saved'],
+
   data() {
     return {
       visible: false,
@@ -112,6 +135,8 @@ export default {
       flatRows: [],
       tableSearchText: '',
       isRawViewVisible: false,
+      savingJsonArtifact: false,
+      commandInfo: {},
       tableSort: {
         prop: '',
         order: '',
@@ -171,8 +196,10 @@ export default {
 
       this.title = 'JSON Viewer'
       this.text = jsonText
+      this.commandInfo = this.normalizeTerminalJsonCommandInfo(line.jsonCommandInfo || line.commandInfo || {})
       this.tableSearchText = ''
       this.isRawViewVisible = false
+      this.savingJsonArtifact = false
       this.tableSort = {
         prop: '',
         order: '',
@@ -207,6 +234,8 @@ export default {
       this.flatRows = []
       this.tableSearchText = ''
       this.isRawViewVisible = false
+      this.savingJsonArtifact = false
+      this.commandInfo = {}
       this.tableSort = {
         prop: '',
         order: '',
@@ -361,6 +390,95 @@ export default {
 
       // 可 render 的 JSON 支持 raw/render 视图切换。
       this.isRawViewVisible = !this.isRawViewVisible
+    },
+
+    normalizeTerminalJsonCommandInfo(info) {
+      const payload = info && typeof info === 'object' ? info : {}
+      const commandName = String(payload.command_name || payload.source_command || payload.name || '').trim()
+      const commandId = payload.command_id ?? payload.source_command_id ?? null
+
+      return {
+        ...payload,
+        command_id: commandId,
+        source_command_id: commandId,
+        command_name: commandName,
+        name: commandName,
+        source_command: commandName,
+        category: String(payload.category || 'command_output').trim() || 'command_output',
+      }
+    },
+
+    buildTerminalJsonArtifactExtra() {
+      const commandInfo = this.normalizeTerminalJsonCommandInfo(this.commandInfo)
+      const sourceCommandId = commandInfo.source_command_id ?? null
+      const sourceCommandName = String(commandInfo.source_command || commandInfo.command_name || '').trim()
+      const extra = commandInfo.extra && typeof commandInfo.extra === 'object' && !Array.isArray(commandInfo.extra)
+        ? commandInfo.extra
+        : {}
+
+      return {
+        ...extra,
+        source: 'terminal_json_viewer_action',
+        wrapper_command: '',
+        source_history_entry_id: '',
+        source_task_id: commandInfo.source_task_id || commandInfo.task_id || '',
+        source_command_id: sourceCommandId,
+        source_command_name: sourceCommandName,
+        saved_from: 'terminal_json_viewer',
+        category: commandInfo.category || 'command_output',
+        render_mode: this.displayMode,
+        raw_view: this.isTerminalJsonRawView,
+        line_count: 1,
+        saved_at: new Date().toISOString(),
+      }
+    },
+
+    async saveTerminalJsonToArtifact() {
+      if (this.savingJsonArtifact) return
+
+      const raw = String(this.text || '')
+      if (!raw.trim()) {
+        ElMessage.warning('No JSON to save')
+        return
+      }
+
+      const commandInfo = this.normalizeTerminalJsonCommandInfo(this.commandInfo)
+      const sourceCommand = String(commandInfo.source_command || commandInfo.command_name || '').trim()
+
+      this.savingJsonArtifact = true
+
+      try {
+        const res = await fetch('/api/artifacts/command-output/save', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            content: raw,
+            artifact_type: 'command_output',
+            category: commandInfo.category || 'command_output',
+            client_id: String(this.selectedId || ''),
+            hostname: String(this.currentConnection?.hostname || ''),
+            machine_id: String(this.currentConnection?.machine_id || ''),
+            source: 'terminal_json_viewer_action',
+            source_command: sourceCommand,
+            source_command_id: commandInfo.source_command_id ?? null,
+            extra: this.buildTerminalJsonArtifactExtra(),
+          }),
+        })
+
+        const json = await res.json()
+        if (!res.ok || json.code !== 0) {
+          throw new Error(json.message || 'Save failed')
+        }
+
+        ElMessage.success('Saved to Command Output')
+        this.$emit('artifact-saved', json.data || null)
+      } catch (e) {
+        ElMessage.error(e.message || 'Save failed')
+      } finally {
+        this.savingJsonArtifact = false
+      }
     },
 
     copyTextWithLegacyTextarea(text) {

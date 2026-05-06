@@ -329,6 +329,9 @@ export default {
       if (this.previewSource === 'artifact') {
         return 'Artifact'
       }
+      if (this.previewSource === 'new_server_file') {
+        return 'Server File'
+      }
       if (this.previewSource === 'background_job') {
         return 'Background Job'
       }
@@ -714,6 +717,8 @@ fontSize: 13,
         await this.saveToRemoteFile(currentContent)
       } else if (this.previewSource === 'artifact') {
         await this.saveToArtifact(currentContent)
+      } else if (this.previewSource === 'new_server_file') {
+        await this.saveToNewServerFile(currentContent)
       } else if (this.previewSource === 'background_job') {
         await this.saveToBackgroundJob(currentContent)
       } else if (this.previewSource === 'server_script') {
@@ -877,6 +882,68 @@ fontSize: 13,
         }
       } catch (e) {
         ElMessage.error(e.message || 'Failed to save file')
+      } finally {
+        this.previewSaving = false
+      }
+    },
+
+    async saveToNewServerFile(content) {
+      const filename = this.normalizeServerArtifactFilename(this.previewFilePath)
+      if (!filename) {
+        ElMessage.warning('Invalid file name')
+        return
+      }
+
+      this.previewSaving = true
+
+      try {
+        const formData = new FormData()
+        const blob = new Blob([content == null ? '' : String(content)], {
+          type: 'text/plain;charset=utf-8',
+        })
+
+        // 复用现有 upload artifact 逻辑，不新建/销毁 Monaco 组件。
+        if (typeof File === 'function') {
+          formData.append('file', new File([blob], filename, { type: blob.type }))
+        } else {
+          formData.append('file', blob, filename)
+        }
+        formData.append('artifact_type', 'server_files')
+        formData.append('extra', JSON.stringify({
+          source: 'server_file_editor',
+          saved_from: 'artifact_dialog_create_file',
+          saved_at: new Date().toISOString(),
+        }))
+
+        const res = await fetch('/api/files/upload', {
+          method: 'POST',
+          body: formData,
+        })
+
+        const json = await res.json()
+        if (!res.ok || json.code !== 0) {
+          throw new Error(json.message || 'Failed to create server file')
+        }
+
+        const artifact = json.data || {}
+        ElMessage.success('Server file created successfully')
+
+        this.previewOriginalContent = content
+        this.previewText = content
+        this.previewEditMode = false
+        this.setMonacoEditorReadOnly(true)
+        this.previewFileSize = formatBytes(artifact.size || String(content || '').length)
+
+        if (artifact.artifact_id) {
+          this.previewSource = 'artifact'
+          this.previewFilePath = artifact.artifact_id
+          this.previewArtifactInfo = artifact
+          this.previewTitle = artifact.original_name || artifact.stored_name || filename
+        }
+
+        this.$emit('artifacts-maybe-changed')
+      } catch (e) {
+        ElMessage.error(e.message || 'Failed to create server file')
       } finally {
         this.previewSaving = false
       }
@@ -1119,6 +1186,43 @@ print(value)
 # Example:
 # value = kwargs.get('example', '')
 `
+    },
+
+    normalizeServerArtifactFilename(filename, fallbackName = 'new_file.txt') {
+      let normalized = String(filename || '').trim().replace(/\\/g, '/').replace(/^\/+/, '')
+      if (!normalized) {
+        normalized = fallbackName
+      }
+      return normalized
+    },
+
+    openNewServerFileEditor(filename = 'new_file.txt') {
+      const normalizedFilename = this.normalizeServerArtifactFilename(filename)
+      if (!normalizedFilename) {
+        ElMessage.warning('Invalid file name')
+        return
+      }
+
+      const content = ''
+
+      this.previewSource = 'new_server_file'
+      this.previewFilePath = normalizedFilename
+      this.previewTitle = normalizedFilename
+      this.previewText = content
+      this.previewOriginalContent = content
+      this.previewArtifactInfo = null
+      this.previewType = 'text'
+      this.previewTruncated = false
+      this.previewFileSize = formatBytes(content.length)
+      this.previewFileEncoding = 'UTF-8'
+      this.previewDetectedLanguage = this.getLanguageDisplayName(this.getLanguageFromFilename(this.previewTitle))
+
+      this.previewEditMode = true
+      this.previewDialogVisible = true
+
+      this.$nextTick(() => {
+        this.initMonacoEditor(content, false)
+      })
     },
 
     normalizeServerJobFilename(scriptName, fallbackName = 'new_job.py') {
