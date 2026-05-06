@@ -602,7 +602,25 @@ finally:
         finally:
             CloseHandle(handle)
 
+    # def _external_tool_signal_process_group_or_pid(self, pid: int, sig: int):
+    #     if os.name != 'nt':
+    #         try:
+    #             os.killpg(pid, sig)
+    #             return
+    #         except ProcessLookupError:
+    #             return
+    #         except Exception:
+    #             pass
+    #
+    #     try:
+    #         os.kill(pid, sig)
+    #     except ProcessLookupError:
+    #         return
+
     def _external_tool_signal_process_group_or_pid(self, pid: int, sig: int):
+        if not pid or pid <= 0:
+            return
+
         if os.name != 'nt':
             try:
                 os.killpg(pid, sig)
@@ -616,6 +634,15 @@ finally:
             os.kill(pid, sig)
         except ProcessLookupError:
             return
+        except OSError as exc:
+            # Windows stale instance:
+            # os.kill(dead_pid, sig) may raise [WinError 87] The parameter is incorrect.
+            # Treat it as "already gone" instead of failing stop/cleanup.
+            if os.name == 'nt' and getattr(exc, 'winerror', None) == 87:
+                return
+            if getattr(exc, 'errno', None) in (errno.ESRCH, errno.EINVAL):
+                return
+            raise
 
     def _external_tool_read_json(self, path: str) -> dict:
         try:
@@ -829,6 +856,36 @@ finally:
 
         pid_file = self._external_tool_pid_file_from_payload(payload)
         pid = self._external_tool_read_pid(pid_file)
+
+
+
+        # If the pid file exists but the process is already gone, this is a stale
+        # instance. Do not try to signal it, especially on Windows where
+        # os.kill(dead_pid, sig) can raise WinError 87. Just clean runtime state.
+        if not pid or not self._external_tool_is_pid_alive(pid):
+            result = {
+                'type': 'cleanup',
+                'sent': False,
+                'already_stopped': True,
+                'message': 'process is not running; cleaned stale instance',
+            }
+
+            try:
+                if os.path.exists(pid_file):
+                    os.unlink(pid_file)
+            except OSError:
+                pass
+
+            state_file = self._external_tool_state_file_from_payload(payload)
+            state = self._external_tool_read_json(state_file)
+            state['last_status'] = 'stopped'
+            state['stopped_at'] = time.strftime('%Y-%m-%dT%H:%M:%S')
+            state['stop_result'] = result
+            self._external_tool_write_json(state_file, state)
+
+            return result
+
+
 
         if str(stop_spec.get('type') or 'signal').strip().lower() == 'command':
             result = self._external_tool_run_stop_command(stop_spec)
