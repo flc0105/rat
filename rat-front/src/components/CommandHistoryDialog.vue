@@ -1346,13 +1346,18 @@ export default {
 }
 
 .execution-history-command {
+  display: block;
   font-size: 14px;
   font-weight: 600;
   color: #1e293b;
   line-height: 1.4;
-  word-break: break-word;
-  flex: 1;
+  flex: 0 1 560px;
+  max-width: min(560px, 100%);
   min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  word-break: normal;
 }
 
 .execution-history-badges {
@@ -1508,6 +1513,14 @@ export default {
   .execution-history-card-header {
     flex-direction: column;
     align-items: flex-start;
+    width: 100%;
+    min-width: 0;
+  }
+
+  .execution-history-command {
+    width: 100%;
+    max-width: 100%;
+    flex: 0 1 auto;
   }
 
   .execution-history-badges {
@@ -1589,6 +1602,18 @@ export default {
 </style>
 
 <style>
+
+
+/* Detail 弹窗标题限制为一行，超出省略。 */
+.command-execution-detail-dialog .el-dialog__title {
+  display: block;
+  max-width: calc(100% - 44px);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+
 .command-history-overlay .el-overlay-dialog {
   overflow: hidden !important;
 }
