@@ -285,7 +285,6 @@ class ExternalToolRuntimeService:
             'exists': exists,
             'size': 0,
             'mtime': '',
-            'note': 'server uses the packaged archive directly; client targets use ~/.ops/external_tools/packages cache',
         }
         if exists:
             try:
@@ -624,6 +623,7 @@ class ExternalToolRuntimeService:
             'package_id': package.get('id') or '',
             'module_id': module.get('id') if module else '',
             'display_name': package.get('display_name') or package.get('id') or '',
+            'source': package.get('source') or '',
             'side': context.get('side') or '',
             'platform': context.get('platform') or '',
             'arch': context.get('arch') or '',
@@ -1267,6 +1267,7 @@ finally:
             'package_id': package.get('id') or '',
             'display_name': package.get('display_name') or package.get('id') or '',
             'version': package.get('version') or '',
+            'source': package.get('source') or '',
             'side': 'client',
             'platform': context.get('platform') or '',
             'arch': context.get('arch') or '',
@@ -1311,6 +1312,7 @@ finally:
             'module_id': meta.get('id') or '',
             'display_name': meta.get('display_name') or meta.get('tool_id') or '',
             'version': meta.get('version') or '',
+            'source': package.get('source') or '',
             'side': 'client',
             'platform': context.get('platform') or '',
             'arch': context.get('arch') or '',
@@ -1449,6 +1451,7 @@ finally:
             'package_id': package.get('id') or '',
             'display_name': package.get('display_name') or package.get('id') or '',
             'version': package.get('version') or '',
+            'source': package.get('source') or '',
             'side': 'client',
             'platform': context.get('platform') or '',
             'arch': context.get('arch') or '',

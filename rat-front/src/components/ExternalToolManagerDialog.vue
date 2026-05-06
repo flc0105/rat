@@ -67,16 +67,10 @@
                   @click="selectPackage(item)"
                 >
                   <div class="external-tool-card-main">
-                    <div class="external-tool-title-row">
-                      <div class="external-tool-title" :title="item.display_name || item.id">
-                        {{ item.display_name || item.id }}
-                      </div>
-                      <el-tag size="small" type="info">
-                        {{ formatPlatforms(item.platforms) }}
-                      </el-tag>
-                      <el-tag v-if="item.version" size="small" type="info">
-                        {{ formatVersionLabel(item.version) }}
-                      </el-tag>
+                    <div class="external-tool-package-list-title" :title="item.display_name || item.id">
+                      {{ item.display_name || item.id }}
+                    </div>
+                    <div class="external-tool-package-list-status">
                       <el-tag
                         v-if="getModuleInstallStatus(item).label"
                         size="small"
@@ -85,9 +79,9 @@
                       >
                         {{ getModuleInstallStatus(item).label }}
                       </el-tag>
+                      <span v-else class="muted small-text">Unknown</span>
                     </div>
-
-                    <div class="external-tool-desc" :title="item.description || ''">
+                    <div class="external-tool-package-list-desc" :title="item.description || ''">
                       {{ item.description || 'No description' }}
                     </div>
                   </div>
@@ -99,10 +93,10 @@
               <div v-if="selectedPackage" class="external-tool-package-detail-card">
                 <div class="external-tool-package-detail-header">
                   <div class="external-tool-package-detail-main">
-                    <div class="external-tool-title-row">
-                      <div class="external-tool-title large" :title="selectedPackage.display_name || selectedPackage.id">
-                        {{ selectedPackage.display_name || selectedPackage.id }}
-                      </div>
+                    <div class="external-tool-title large" :title="selectedPackage.display_name || selectedPackage.id">
+                      {{ selectedPackage.display_name || selectedPackage.id }}
+                    </div>
+                    <div class="external-tool-package-detail-tags">
                       <el-tag size="small" type="info">
                         {{ formatPlatforms(selectedPackage.platforms) }}
                       </el-tag>
@@ -118,14 +112,15 @@
                         {{ getModuleInstallStatus(selectedPackage).label }}
                       </el-tag>
                     </div>
-                    <div class="external-tool-desc" :title="selectedPackage.description || ''">
+                    <div class="external-tool-desc external-tool-package-detail-desc" :title="selectedPackage.description || ''">
                       {{ selectedPackage.description || 'No description' }}
                     </div>
                   </div>
 
-                  <div class="external-tool-actions external-tool-package-detail-actions">
-                    <div class="external-tool-action-row single">
+                  <div class="external-tool-package-detail-actions">
+                    <div class="external-tool-package-detail-action-row">
                       <el-button
+                        class="external-tool-package-detail-action-button"
                         size="small"
                         type="primary"
                         plain
@@ -140,7 +135,7 @@
                         size="small"
                         @command="handlePackageMoreCommand($event, selectedPackage)"
                       >
-                        <el-button size="small" plain>
+                        <el-button class="external-tool-package-detail-action-button" size="small" plain>
                           More
                         </el-button>
                         <template #dropdown>
@@ -177,18 +172,22 @@
                   </div>
                 </div>
 
-                <div class="external-tool-package-detail-section">
+                <div class="external-tool-package-detail-section external-tool-modules-panel">
                   <div class="external-tool-detail-section-title">Modules</div>
                   <div v-if="getPackageModules(selectedPackage).length" class="external-tool-package-modules detail">
                     <div
                       v-for="module in getPackageModules(selectedPackage)"
                       :key="module.id"
-                      class="external-tool-package-module-row"
+                      class="external-tool-package-module-card"
                     >
-                      <div class="external-tool-package-module-main">
-                        <span class="strong">{{ module.display_name || module.id }}</span>
-                        <span class="mono muted">{{ module.id }}</span>
-                        <el-tag size="small" type="info">daemon</el-tag>
+                      <div class="external-tool-package-module-content">
+                        <div class="external-tool-package-module-title-row">
+                          <span class="strong">{{ module.display_name || module.id }}</span>
+                          <el-tag size="small" type="info">daemon</el-tag>
+                        </div>
+                        <div class="external-tool-package-module-desc" :title="module.description || ''">
+                          {{ module.description || 'No description' }}
+                        </div>
                       </div>
                       <el-button
                         size="small"
@@ -2133,24 +2132,22 @@ async uninstallClientTool(item, deviceId) {
       return Object.keys(item?.execs || {}).filter(Boolean).join(', ') || '-'
     },
 
-    formatInstallStatusDetails(data) {
+    formatInstallStatusDetails(data, item = null) {
       if (!data) return 'No install status available'
       const cache = data.cache || {}
+      const newline = String.fromCharCode(10)
+      const installLog = data.install_log || 'No install log available.'
       return [
         `Status: ${data.installed ? 'installed' : 'not installed'}`,
         `Install dir: ${data.install_dir || '-'}`,
-        `Exec paths:
-${this.formatExecMap(data.exec_paths)}`,
-        `Commands:
-${this.formatCommandMap(data)}`,
+        `Exec paths:${newline}${this.formatExecMap(data.exec_paths)}`,
         `Cached package: ${cache.exists || cache.cached ? 'yes' : 'no'}`,
         `Cache path: ${cache.cache_path || data.cache_path || '-'}`,
         `Cache size: ${cache.size ? this.formatBytes(cache.size) : '-'}`,
         `Cache mtime: ${cache.mtime || '-'}`,
-        data.package_source ? `Package source: ${data.package_source}` : '',
-        data.install_log ? `Install log:
-${data.install_log}` : '',
-      ].filter(Boolean).join('\n')
+        item?.source ? `Source: ${item.source}` : '',
+        `Install log:${newline}${installLog}`,
+      ].filter(Boolean).join(newline)
     },
 
     async getInstallStatusForAction(item) {
@@ -2176,7 +2173,7 @@ ${data.install_log}` : '',
               { label: 'Modules', value: modulesText, mono: true, multiline: modulesText.includes('\n') },
               { label: 'Execs', value: execsText, mono: true },
               { label: 'Platform package', value: data.package_key || '-', mono: true },
-              { label: 'Package source', value: data.package_source || '-' },
+              { label: 'Source', value: item.source || data.source || data.package_source || '-' },
             ],
           },
           {
@@ -2185,8 +2182,6 @@ ${data.install_log}` : '',
               { label: 'Status', value: data.installed ? 'Installed' : (data.installed === false ? 'Not installed' : 'Unknown') },
               { label: 'Install dir', value: data.install_dir || '-', mono: true },
               { label: 'Exec paths', value: this.formatExecMap(data.exec_paths), mono: true, multiline: true },
-              { label: 'Commands', value: this.formatCommandMap(data), mono: true, multiline: true },
-              { label: 'Missing execs', value: this.formatExecMap(data.missing_execs), mono: true, multiline: true },
             ],
           },
           {
@@ -2203,7 +2198,7 @@ ${data.install_log}` : '',
             title: 'Install log',
             rows: [
               { label: 'Path', value: data.install_log_path || '-', mono: true },
-              { label: 'Log', value: data.install_log || '-', mono: true, multiline: true },
+              { label: 'Log', value: data.install_log || 'No install log available.', mono: true, multiline: true },
             ],
           },
         ],
@@ -3124,6 +3119,49 @@ formatVersionLabel(version) {
   background: #f8fbff;
 }
 
+.external-tool-package-list-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text, #0f172a);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.external-tool-package-list-status {
+  margin-top: 8px;
+  min-height: 22px;
+  display: flex;
+  align-items: center;
+}
+
+.external-tool-package-list-desc {
+  margin-top: 8px;
+  color: var(--muted, #64748b);
+  font-size: 13px;
+  line-height: 1.45;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.external-tool-package-detail-tags {
+  margin-top: 8px;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.external-tool-package-detail-desc {
+  margin-top: 12px;
+}
+
+.small-text {
+  font-size: 12px;
+}
+
 .external-tool-package-detail-card {
   flex: 1 1 auto;
   min-height: 0;
@@ -3149,6 +3187,34 @@ formatVersionLabel(version) {
 
 .external-tool-package-detail-actions {
   flex: 0 0 auto;
+  align-items: flex-end;
+}
+
+.external-tool-package-detail-action-row {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.external-tool-package-detail-action-button.el-button,
+.el-dropdown .external-tool-package-detail-action-button.el-button {
+  height: 26px;
+  min-height: 26px;
+  padding: 0 9px;
+  border-radius: 7px;
+  font-size: 12px;
+  line-height: 24px;
+}
+
+.external-tool-package-detail-actions :deep(.el-button.external-tool-package-detail-action-button),
+.external-tool-package-detail-actions :deep(.el-dropdown .el-button.external-tool-package-detail-action-button) {
+  height: 26px !important;
+  min-height: 26px !important;
+  padding: 0 9px !important;
+  border-radius: 7px !important;
+  font-size: 12px !important;
+  line-height: 24px !important;
 }
 
 .external-tool-title.large {
@@ -3237,6 +3303,44 @@ formatVersionLabel(version) {
   align-items: center;
   flex-wrap: wrap;
   gap: 8px;
+}
+
+.external-tool-modules-panel {
+  padding: 14px;
+  border: 1px solid rgba(15, 23, 42, 0.06);
+  border-radius: 14px;
+  background: #f8fafc;
+}
+
+.external-tool-package-module-card {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid rgba(15, 23, 42, 0.06);
+  border-radius: 12px;
+  background: #fff;
+  box-shadow: 0 2px 10px rgba(15, 23, 42, 0.03);
+}
+
+.external-tool-package-module-content {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.external-tool-package-module-title-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.external-tool-package-module-desc {
+  margin-top: 6px;
+  color: var(--muted, #64748b);
+  font-size: 13px;
+  line-height: 1.45;
 }
 
 .strong {
@@ -3702,24 +3806,36 @@ formatVersionLabel(version) {
   }
 
   .external-tool-package-split {
-    grid-template-columns: 1fr;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  .external-tool-package-list-panel {
+    flex: 0 0 32%;
+    min-height: 150px;
+    max-height: 34vh;
+    overflow: hidden;
+  }
+
+  .external-tool-package-list {
     overflow: auto;
   }
 
-  .external-tool-package-list-panel,
   .external-tool-package-detail-panel {
-    min-height: auto;
-    overflow: visible;
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: hidden;
   }
 
-  .external-tool-package-list,
   .external-tool-package-detail-card {
-    overflow: visible;
+    overflow: auto;
   }
 
   .external-tool-package-detail-header {
     flex-direction: column;
   }
+
 }
 
 @media (max-width: 768px), (max-height: 720px) {
@@ -3819,6 +3935,37 @@ formatVersionLabel(version) {
   .external-tool-action-row :deep(.el-button),
   .external-tool-action-row :deep(.el-dropdown),
   .external-tool-action-row :deep(.el-dropdown .el-button) {
+    width: 100%;
+  }
+
+  .external-tool-package-detail-action-row {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    justify-content: stretch;
+    width: 100%;
+  }
+
+  .external-tool-package-detail-actions,
+  .external-tool-package-detail-actions :deep(.el-dropdown),
+  .external-tool-package-detail-actions :deep(.el-button.external-tool-package-detail-action-button),
+  .external-tool-package-detail-actions :deep(.el-dropdown .el-button.external-tool-package-detail-action-button) {
+    width: 100%;
+  }
+
+  .external-tool-package-detail-actions :deep(.el-button.external-tool-package-detail-action-button),
+  .external-tool-package-detail-actions :deep(.el-dropdown .el-button.external-tool-package-detail-action-button) {
+    height: 32px !important;
+    min-height: 32px !important;
+    padding: 0 12px !important;
+    border-radius: 10px !important;
+    justify-content: center;
+  }
+
+  .external-tool-package-module-card {
+    flex-direction: column;
+  }
+
+  .external-tool-package-module-card > .el-button {
     width: 100%;
   }
 
