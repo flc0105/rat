@@ -113,7 +113,8 @@ export default {
     }
 );
 
-                this.clearActiveTask(payload.client_id, payload.task_id);
+                // this.clearActiveTask(payload.client_id, payload.task_id);
+                this.markTaskCompleted(payload.client_id, payload.task_id);
 
                 const pendingRefresh = this.pendingRemoteUploadRefresh;
                 if (
