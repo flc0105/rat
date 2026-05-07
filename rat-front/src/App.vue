@@ -258,12 +258,17 @@
     @built="refreshAgentOutputsIfOpen"
   />
 
+<!--  <TerminalJsonDialog-->
+<!--    ref="terminalJsonDialogRef"-->
+<!--    :selected-id="selectedId"-->
+<!--    :current-connection="currentConnection"-->
+<!--    @artifact-saved="refreshArtifactsIfOpen"-->
+<!--  />-->
+
   <TerminalJsonDialog
-    ref="terminalJsonDialogRef"
-    :selected-id="selectedId"
-    :current-connection="currentConnection"
-    @artifact-saved="refreshArtifactsIfOpen"
-  />
+  ref="terminalJsonDialogRef"
+  @save-json-output="saveTerminalJsonOutputFromViewer"
+/>
 
   <AgentOutputsDialog
     ref="agentOutputsDialogRef"
@@ -369,6 +374,11 @@ export default {
     ...AppConnectionModule.methods,
     ...AppTaskModule.methods,
     ...AppTerminalModule.methods,
+
+
+    saveTerminalJsonOutputFromViewer(payload = {}) {
+  return this.$refs.terminalOutputRef?.saveTerminalJsonOutputFromViewer(payload)
+},
 
     openArtifactDialog() {
       return this.$refs.artifactDialogRef?.open()

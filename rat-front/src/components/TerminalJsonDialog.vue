@@ -122,7 +122,7 @@ export default {
     },
   },
 
-  emits: ['artifact-saved'],
+  emits: ['save-json-output'],
 
   data() {
     return {
@@ -408,78 +408,27 @@ export default {
       }
     },
 
-    buildTerminalJsonArtifactExtra() {
-      const commandInfo = this.normalizeTerminalJsonCommandInfo(this.commandInfo)
-      const sourceCommandId = commandInfo.source_command_id ?? null
-      const sourceCommandName = String(commandInfo.source_command || commandInfo.command_name || '').trim()
-      const extra = commandInfo.extra && typeof commandInfo.extra === 'object' && !Array.isArray(commandInfo.extra)
-        ? commandInfo.extra
-        : {}
 
-      return {
-        ...extra,
-        source: 'terminal_json_viewer_action',
-        wrapper_command: '',
-        source_history_entry_id: '',
-        source_task_id: commandInfo.source_task_id || commandInfo.task_id || '',
-        source_command_id: sourceCommandId,
-        source_command_name: sourceCommandName,
-        saved_from: 'terminal_json_viewer',
-        category: commandInfo.category || 'command_output',
-        render_mode: this.displayMode,
-        raw_view: this.isTerminalJsonRawView,
-        line_count: 1,
-        saved_at: new Date().toISOString(),
-      }
+
+    saveTerminalJsonToArtifact() {
+  if (this.savingJsonArtifact) return
+
+  const raw = String(this.text || '')
+  if (!raw.trim()) {
+    ElMessage.warning('No JSON to save')
+    return
+  }
+
+  this.savingJsonArtifact = true
+
+  this.$emit('save-json-output', {
+    content: raw,
+    saveContext: this.commandInfo,
+    onDone: () => {
+      this.savingJsonArtifact = false
     },
-
-    async saveTerminalJsonToArtifact() {
-      if (this.savingJsonArtifact) return
-
-      const raw = String(this.text || '')
-      if (!raw.trim()) {
-        ElMessage.warning('No JSON to save')
-        return
-      }
-
-      const commandInfo = this.normalizeTerminalJsonCommandInfo(this.commandInfo)
-      const sourceCommand = String(commandInfo.source_command || commandInfo.command_name || '').trim()
-
-      this.savingJsonArtifact = true
-
-      try {
-        const res = await fetch('/api/artifacts/command-output/save', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            content: raw,
-            artifact_type: 'command_output',
-            category: commandInfo.category || 'command_output',
-            client_id: String(this.selectedId || ''),
-            hostname: String(this.currentConnection?.hostname || ''),
-            machine_id: String(this.currentConnection?.machine_id || ''),
-            source: 'terminal_json_viewer_action',
-            source_command: sourceCommand,
-            source_command_id: commandInfo.source_command_id ?? null,
-            extra: this.buildTerminalJsonArtifactExtra(),
-          }),
-        })
-
-        const json = await res.json()
-        if (!res.ok || json.code !== 0) {
-          throw new Error(json.message || 'Save failed')
-        }
-
-        ElMessage.success('Saved to Command Output')
-        this.$emit('artifact-saved', json.data || null)
-      } catch (e) {
-        ElMessage.error(e.message || 'Save failed')
-      } finally {
-        this.savingJsonArtifact = false
-      }
-    },
+  })
+},
 
     copyTextWithLegacyTextarea(text) {
       const textarea = document.createElement('textarea')
