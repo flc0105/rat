@@ -804,14 +804,9 @@ buildTerminalJsonCommandInfo(groupLines) {
     },
 
 
-    buildTerminalOutputArtifactExtra(block, options = {}) {
-  const outputEntries = this.getTerminalBlockOutputLineEntries(block)
+   buildTerminalOutputArtifactExtra(block, options = {}) {
   const sourceCommandId = this.getTerminalBlockSourceCommandId(block)
   const isScript = this.isTerminalScriptRunBlock(block)
-
-  const lineCount = Number.isFinite(Number(options.lineCount))
-    ? Number(options.lineCount)
-    : outputEntries.length
 
   const artifactSource = String(options.source || '').trim()
     || (isScript ? 'script_terminal_inline_action' : 'terminal_inline_action')
@@ -826,7 +821,6 @@ buildTerminalJsonCommandInfo(groupLines) {
     source_command_id: sourceCommandId,
     saved_from: savedFrom,
     category: this.getTerminalBlockArtifactCategory(block),
-    line_count: lineCount,
     saved_at: new Date().toISOString(),
   }
 
@@ -890,12 +884,6 @@ async saveTerminalOutputArtifactBody(body) {
   return json.data || null
 },
 
-getTerminalOutputTextLineCount(text) {
-  const value = String(text ?? '')
-  if (!value) return 0
-  return value.split(/\r\n|\r|\n/).length
-},
-
 normalizeTerminalJsonSaveBlock(saveContext) {
   const context = saveContext && typeof saveContext === 'object' ? saveContext : {}
   const directScriptMeta = context.scriptMeta && typeof context.scriptMeta === 'object'
@@ -941,7 +929,6 @@ normalizeTerminalJsonSaveBlock(saveContext) {
     lines: [],
   }
 },
-
 async saveTerminalJsonOutputFromViewer(payload = {}) {
   const content = String(payload.content || '')
   const done = typeof payload.onDone === 'function' ? payload.onDone : null
@@ -953,10 +940,8 @@ async saveTerminalJsonOutputFromViewer(payload = {}) {
     }
 
     const block = this.normalizeTerminalJsonSaveBlock(payload.saveContext)
-    const lineCount = this.getTerminalOutputTextLineCount(content)
 
     const body = this.buildTerminalOutputArtifactSaveBody(block, content, {
-      lineCount,
       source: 'terminal_json_viewer_action',
       savedFrom: 'terminal_json_viewer',
     })
