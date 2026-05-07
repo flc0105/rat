@@ -55,7 +55,7 @@
       </div>
 
       <template v-if="displayMode === 'table' && !isTerminalJsonRawView">
-        <div class="terminal-json-scroll">
+        <div class="terminal-json-scroll terminal-json-table-scroll">
           <el-table
             :data="visibleTableRows"
             border
@@ -642,6 +642,17 @@ export default {
 .terminal-json-scroll {
   max-height: 65vh;
   overflow: auto;
+}
+
+/* JSON table 横向内容超出时才显示滚动条。 */
+.terminal-json-table-scroll :deep(.el-table) {
+  min-width: max-content;
+}
+
+.terminal-json-table-scroll :deep(.el-table__inner-wrapper),
+.terminal-json-table-scroll :deep(.el-table__header-wrapper),
+.terminal-json-table-scroll :deep(.el-table__body-wrapper) {
+  min-width: max-content;
 }
 
 .terminal-json-flat-row {
