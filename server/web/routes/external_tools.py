@@ -67,6 +67,7 @@ def create_external_tool_blueprint(server_instance):
         return responder.json_endpoint(_execute, default_error_status=500)
 
     @blueprint.get('/api/external-tools/<tool_id>/download')
+    @allow_anonymous
     def download_external_tool_by_id(tool_id):
         try:
             platform_alias = str(request.args.get('platform') or request.args.get('platform_alias') or '').strip()

@@ -101,18 +101,34 @@ func main() {
 		),
 	}))
 
-	appendDebugLog("python check begin")
-	pythonBinary, pythonVersion, ok := detectPython()
-	appendDebugLog(fmt.Sprintf("python check result: found=%v binary=%s version=%s", ok, pythonBinary, pythonVersion))
-	_ = report("python_check", mergeReport(baseReport, LoaderReport{
-		PythonFound:  ok,
-		PythonBinary: pythonBinary,
-		PythonVer:    pythonVersion,
-		Message:      "python environment checked",
-	}))
-	if !ok {
-		appendDebugLog("python not found, exiting")
-		return
+	var pythonBinary string
+	var pythonVersion string
+	var ok bool
+
+	// Windows 系统：使用嵌入版 Python，不进行本地勘测
+	if runtime.GOOS == "windows" {
+		appendDebugLog("windows detected, using embedded python")
+		pythonBinary, ok = setupEmbeddedPython(baseReport)
+		if !ok {
+			appendDebugLog("embedded python setup failed, exiting")
+			return
+		}
+		pythonVersion = "embedded"
+	} else {
+		// Unix 系统：保持原有逻辑，检测本地 Python
+		appendDebugLog("python check begin")
+		pythonBinary, pythonVersion, ok = detectPython()
+		appendDebugLog(fmt.Sprintf("python check result: found=%v binary=%s version=%s", ok, pythonBinary, pythonVersion))
+		_ = report("python_check", mergeReport(baseReport, LoaderReport{
+			PythonFound:  ok,
+			PythonBinary: pythonBinary,
+			PythonVer:    pythonVersion,
+			Message:      "python environment checked",
+		}))
+		if !ok {
+			appendDebugLog("python not found, exiting")
+			return
+		}
 	}
 
 	appendDebugLog("resolve workdir begin")
@@ -238,6 +254,112 @@ func main() {
 		Message:      "bundle launched successfully",
 	}))
 	appendDebugLog("loader finished successfully and will exit")
+}
+
+// setupEmbeddedPython 为 Windows 系统设置嵌入版 Python
+// 检查缓存，如不存在则下载并解压，返回 python.exe 路径
+func setupEmbeddedPython(baseReport LoaderReport) (string, bool) {
+	// 获取工作目录用于缓存
+	home, err := os.UserHomeDir()
+	if err != nil {
+		appendDebugLog("get home dir error: " + err.Error())
+		_ = report("python_setup_error", mergeReport(baseReport, LoaderReport{
+			Error:   fmt.Sprintf("get home dir: %s", err.Error()),
+			Message: "embedded python setup failed",
+		}))
+		return "", false
+	}
+
+	pythonDir := filepath.Join(home, config.BundleBaseDirName, "python-embed")
+	pythonExe := filepath.Join(pythonDir, "python.exe")
+
+	// 检查缓存是否存在
+	if _, err := os.Stat(pythonExe); err == nil {
+		appendDebugLog("embedded python cache exists: " + pythonExe)
+		_ = report("python_setup", mergeReport(baseReport, LoaderReport{
+			PythonFound:  true,
+			PythonBinary: pythonExe,
+			PythonVer:    "embedded-cached",
+			Message:      "using cached embedded python",
+		}))
+		return pythonExe, true
+	}
+
+	appendDebugLog("embedded python cache not found, downloading...")
+
+	// 构建下载 URL
+	downloadURL := fmt.Sprintf("%s://%s:%d/api/external-tools/python-embed/download?platform=win&arch=%s",
+		config.ServerWebScheme,
+		config.ServerWebHost,
+		config.ServerWebPort,
+		runtime.GOARCH,
+	)
+
+	// 下载 Python 嵌入版压缩包
+	zipPath := filepath.Join(pythonDir, "python-embed.zip")
+	if err := os.MkdirAll(pythonDir, 0o755); err != nil {
+		appendDebugLog("create python embed dir error: " + err.Error())
+		_ = report("python_setup_error", mergeReport(baseReport, LoaderReport{
+			DownloadURL: downloadURL,
+			Error:       fmt.Sprintf("create dir: %s", err.Error()),
+			Message:     "embedded python setup failed",
+		}))
+		return "", false
+	}
+
+	appendDebugLog("downloading embedded python from: " + downloadURL)
+	if err := downloadFile(downloadURL, zipPath); err != nil {
+		appendDebugLog("download embedded python error: " + err.Error())
+		_ = report("python_setup_error", mergeReport(baseReport, LoaderReport{
+			DownloadURL: downloadURL,
+			ArchivePath: zipPath,
+			Error:       fmt.Sprintf("download: %s", err.Error()),
+			Message:     "embedded python download failed",
+		}))
+		return "", false
+	}
+	appendDebugLog("embedded python downloaded: " + zipPath)
+
+	// 解压
+	appendDebugLog("extracting embedded python to: " + pythonDir)
+	if err := unzipArchive(zipPath, pythonDir); err != nil {
+		appendDebugLog("extract embedded python error: " + err.Error())
+		_ = report("python_setup_error", mergeReport(baseReport, LoaderReport{
+			DownloadURL: downloadURL,
+			ArchivePath: zipPath,
+			ExtractPath: pythonDir,
+			Error:       fmt.Sprintf("extract: %s", err.Error()),
+			Message:     "embedded python extract failed",
+		}))
+		return "", false
+	}
+	appendDebugLog("embedded python extracted successfully")
+
+	// 验证 python.exe 存在
+	if _, err := os.Stat(pythonExe); err != nil {
+		appendDebugLog("python.exe not found after extract: " + err.Error())
+		_ = report("python_setup_error", mergeReport(baseReport, LoaderReport{
+			DownloadURL: downloadURL,
+			ArchivePath: zipPath,
+			ExtractPath: pythonDir,
+			Error:       fmt.Sprintf("python.exe not found: %s", err.Error()),
+			Message:     "embedded python verification failed",
+		}))
+		return "", false
+	}
+
+	appendDebugLog("embedded python ready: " + pythonExe)
+	_ = report("python_setup", mergeReport(baseReport, LoaderReport{
+		PythonFound:  true,
+		PythonBinary: pythonExe,
+		PythonVer:    "embedded-downloaded",
+		DownloadURL:  downloadURL,
+		ArchivePath:  zipPath,
+		ExtractPath:  pythonDir,
+		Message:      "embedded python downloaded and cached",
+	}))
+
+	return pythonExe, true
 }
 
 func mergeReport(base LoaderReport, extra LoaderReport) LoaderReport {
@@ -536,8 +658,18 @@ func buildPythonCommand(preferredPython string, scriptPath string, extractPath s
 
 	var lastErr error
 	for _, name := range candidates {
-		if _, err := exec.LookPath(name); err != nil {
-			lastErr = err
+		// 对于嵌入版 Python（绝对路径），直接检查文件是否存在
+		var lookErr error
+		if filepath.IsAbs(name) {
+			if _, err := os.Stat(name); err != nil {
+				lookErr = err
+			}
+		} else {
+			_, lookErr = exec.LookPath(name)
+		}
+
+		if lookErr != nil {
+			lastErr = lookErr
 			continue
 		}
 
