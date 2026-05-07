@@ -4,16 +4,21 @@ from datetime import datetime
 
 from flask import Blueprint, Response, request, stream_with_context
 
-from server.application.connection.control_command_store import ControlCommandStore
+from server.application.connection.control_command_store import (
+    HTTP_CONTROL_COMMANDS,
+    get_control_command_store,
+)
 from server.web.api_response import WebApiResponder
 from server.web.auth_guard import allow_anonymous
+
+
 
 
 def create_stream_control_blueprint(server_instance):
     blueprint = Blueprint('stream_control', __name__)
     web_service = server_instance.web_service
     responder = WebApiResponder()
-    control_command_store = ControlCommandStore()
+    control_command_store = get_control_command_store()
 
     @blueprint.get('/api/connections/<client_id>/control')
     @allow_anonymous
@@ -29,8 +34,8 @@ def create_stream_control_blueprint(server_instance):
             payload = request.get_json(silent=True) or {}
             command = str(payload.get('command') or '').strip().lower()
 
-            if command not in ('kill', 'reset', 'spawn'):
-                raise ValueError('command must be kill, reset or spawn')
+            if command not in HTTP_CONTROL_COMMANDS:
+                raise ValueError('Unsupported HTTP control action')
 
             server_instance.get_target_connection_by_client_id(client_id)
             return control_command_store.set_pending_command(client_id, command)

@@ -1,13 +1,31 @@
-import json
-import urllib.error
-import urllib.request
+import shlex
 
-from server.config.config import WEB_PUBLIC_BASE_URL
+from server.application.connection.control_command_store import (
+    HTTP_CONTROL_COMMANDS,
+    get_control_command_store,
+)
+
+
+HTTP_CONTROL_ACTIONS = {
+    'stop': {
+        'label': 'Stop client',
+        'description': 'stop current client through the independent HTTP control channel',
+    },
+    'restart': {
+        'label': 'Restart client',
+        'description': 'restart current client through the independent HTTP control channel',
+    },
+    'start': {
+        'label': 'Start client',
+        'description': 'start a new client instance through the independent HTTP control channel',
+    },
+}
 
 
 class ControlBuiltinSupport:
     def __init__(self, conn):
         self.conn = conn
+        self.control_command_store = get_control_command_store()
 
 
     def _get_client_id(self) -> str:
@@ -15,67 +33,58 @@ class ControlBuiltinSupport:
         return str(getattr(session_info, 'client_id', '') or '').strip()
 
 
-    def _build_control_url(self) -> str:
-        client_id = self._get_client_id()
-        if not client_id:
-            raise ValueError('Missing client_id for current connection')
+    def _format_httpctl_usage(self) -> str:
+        lines = ['Usage: httpctl <action>', '']
+        for action, spec in HTTP_CONTROL_ACTIONS.items():
+            lines.append(f'  {action:<8} {spec["description"]}')
+        return '\n'.join(lines)
 
-        return f'{WEB_PUBLIC_BASE_URL}/api/connections/{client_id}/control'
+
+    def _resolve_http_control_action(self, action: str) -> dict:
+        action_text = str(action or '').strip().lower()
+        spec = HTTP_CONTROL_ACTIONS.get(action_text)
+
+        if spec is None or action_text not in HTTP_CONTROL_COMMANDS:
+            supported = ', '.join(HTTP_CONTROL_ACTIONS.keys())
+            raise ValueError(
+                f'Unsupported HTTP control action: {action_text or "-"}\n'
+                f'{self._format_httpctl_usage()}\n'
+                f'Available actions: {supported}'
+            )
+
+        return {
+            **spec,
+            'action': action_text,
+        }
 
 
-    def _post_control_command(self, command: str) -> dict:
-        normalized_command = str(command or '').strip().lower()
-        if normalized_command not in ('kill', 'reset', 'spawn'):
-            raise ValueError('command must be kill, reset or spawn')
+    def httpctl(self, arg=''):
+        parts = shlex.split(str(arg or '').strip())
 
-        payload = json.dumps({
-            'command': normalized_command
-        }).encode('utf-8')
+        if not parts or parts[0].lower() in ('help', '-h', '--help'):
+            yield 1, self._format_httpctl_usage()
+            return
 
-        request = urllib.request.Request(
-            self._build_control_url(),
-            data=payload,
-            headers={
-                'Content-Type': 'application/json',
-                'Accept': 'application/json',
-            },
-            method='POST'
-        )
+        if len(parts) > 1:
+            yield 0, self._format_httpctl_usage()
+            return
 
         try:
-            with urllib.request.urlopen(request, timeout=5) as response:
-                response_text = response.read().decode('utf-8', errors='replace')
-        except urllib.error.HTTPError as e:
-            body = e.read().decode('utf-8', errors='replace')
-            raise RuntimeError(f'HTTP {e.code}: {body or e.reason}')
-        except urllib.error.URLError as e:
-            raise RuntimeError(f'Failed to call control api: {e}')
+            action = self._resolve_http_control_action(parts[0])
+            client_id = self._get_client_id()
+
+            if not client_id:
+                raise ValueError('Missing client_id for current connection')
+
+            payload = self.control_command_store.set_pending_command(
+                client_id,
+                action['action'],
+            )
         except Exception as e:
-            raise RuntimeError(f'Failed to call control api: {e}')
+            yield 0, str(e)
+            return
 
-        try:
-            result = json.loads(response_text or '{}')
-        except Exception:
-            raise RuntimeError(f'Invalid control api response: {response_text}')
-
-        if not isinstance(result, dict):
-            raise RuntimeError('Invalid control api response')
-
-        if result.get('code') != 0:
-            raise RuntimeError(result.get('message') or 'Control api failed')
-
-        return result.get('data') or {}
-
-
-    def force_kill(self):
-        payload = self._post_control_command('kill')
-        yield 1, f'force_kill sent -> client_id={payload.get("client_id", self._get_client_id())}, command=kill'
-
-
-    def force_reset(self):
-        payload = self._post_control_command('reset')
-        yield 1, f'force_reset sent -> client_id={payload.get("client_id", self._get_client_id())}, command=reset'
-
-    def force_spawn(self):
-        payload = self._post_control_command('spawn')
-        yield 1, f'force_spawn sent -> client_id={payload.get("client_id", self._get_client_id())}, command=spawn'
+        yield 1, (
+            f'httpctl {action["action"]} queued via HTTP control channel '
+            f'-> client_id={payload.get("client_id", client_id)}, action={action["action"]}'
+        )

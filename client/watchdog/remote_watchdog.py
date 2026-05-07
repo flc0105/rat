@@ -10,6 +10,7 @@ import urllib.request
 
 from core.utils.client_util import spawn_new_instance, is_process_alive
 
+HTTP_CONTROL_COMMANDS = {'stop', 'restart', 'start'}
 
 def _build_remote_watchdog_file_logger(log_file_path: str):
     logger_name = f'remote_watchdog_file_logger::{os.path.abspath(log_file_path)}'
@@ -159,27 +160,27 @@ class RemoteHttpWatchdogMonitor:
             return ''
 
         command = str(data.get('command') or '').strip().lower()
-        if command in ('kill', 'reset', 'spawn'):
+        if command in HTTP_CONTROL_COMMANDS:
             return command
 
         return ''
 
-
     def _execute_command(self, command: str):
         command_text = str(command or '').strip().lower()
 
-        if command_text == 'kill':
+        if command_text == 'stop':
             self.action_executor.kill_parent_and_exit()
+            return
 
-        if command_text == 'reset':
+        if command_text == 'restart':
             self.action_executor.restart_parent_and_exit()
+            return
 
-        if command_text == 'spawn':
+        if command_text == 'start':
             self.action_executor.spawn_new_instance()
             return
 
-        raise ValueError(f'Unsupported remote watchdog control command: {command_text}')
-
+        raise ValueError(f'Unsupported remote HTTP control action: {command_text}')
    
     def run_iteration(self, now: float):
         if now < self._next_poll_at:

@@ -2,6 +2,9 @@ import threading
 from datetime import datetime
 
 
+HTTP_CONTROL_COMMANDS = {'stop', 'restart', 'start'}
+
+
 class ControlCommandStore:
     def __init__(self):
         self._commands_by_client = {}
@@ -19,8 +22,8 @@ class ControlCommandStore:
         if not client_id_text:
             raise ValueError('client_id is required')
 
-        if command_text not in ('kill', 'reset', 'spawn'):
-            raise ValueError('command must be kill, reset or spawn')
+        if command_text not in HTTP_CONTROL_COMMANDS:
+            raise ValueError('Unsupported HTTP control action')
 
         payload = {
             'client_id': client_id_text,
@@ -46,3 +49,10 @@ class ControlCommandStore:
             return None
 
         return dict(payload)
+
+
+_CONTROL_COMMAND_STORE = ControlCommandStore()
+
+
+def get_control_command_store() -> ControlCommandStore:
+    return _CONTROL_COMMAND_STORE

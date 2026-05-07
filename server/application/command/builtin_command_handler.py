@@ -76,23 +76,24 @@ class BuiltinCommandHandler:
             'source': 'server'
         },
         {
-            'name': 'force_kill',
-            'template': 'force_kill',
-            'help': 'Send HTTP control kill command to the current client',
+            'name': 'httpctl',
+            'template': 'httpctl stop',
+            'help': 'httpctl stop | Stop current client through the independent HTTP control channel',
             'source': 'server'
         },
         {
-            'name': 'force_reset',
-            'template': 'force_reset',
-            'help': 'Send HTTP control reset command to the current client',
+            'name': 'httpctl',
+            'template': 'httpctl restart',
+            'help': 'httpctl restart | Restart current client through the independent HTTP control channel',
             'source': 'server'
         },
         {
-            'name': 'force_spawn',
-            'template': 'force_spawn',
-            'help': 'Send HTTP control spawn command to the current client',
+            'name': 'httpctl',
+            'template': 'httpctl start',
+            'help': 'httpctl start | Start a new client instance through the independent HTTP control channel',
             'source': 'server'
         },
+
         {
             'name': 'saveout',
             'template': 'saveout ',
@@ -268,16 +269,6 @@ class BuiltinCommandHandler:
         for item in self.rtt_support.rtt(arg):
             yield item
 
-
-    def force_kill(self, arg=''):
-        for item in self.control_support.force_kill():
-            yield item
-
-
-    def force_reset(self, arg=''):
-        for item in self.control_support.force_reset():
-            yield item
-
-    def force_spawn(self, arg=''):
-        for item in self.control_support.force_spawn():
+    def httpctl(self, arg=''):
+        for item in self.control_support.httpctl(arg):
             yield item
