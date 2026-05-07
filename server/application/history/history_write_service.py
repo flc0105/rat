@@ -18,6 +18,12 @@ class HistoryWriteService:
     def _normalize_lookup_machine_id(self, machine_id: str) -> str:
         return str(machine_id or '').strip() or 'unknown_machine'
 
+    def _find_latest_entry_for_command(self, entries: list, command_text: str):
+        for item in reversed(entries or []):
+            if str(item.get('command') or '').strip() == command_text:
+                return item
+        return None
+
     def create_entry_for_connection(self, conn, command: str, source: str = 'cli'):
         if conn is None:
             return ''
@@ -30,14 +36,7 @@ class HistoryWriteService:
 
         with self.store._lock:
             entries = self.store._read_entries(machine_id)
-            inherited_is_pinned, inherited_pinned_at, inherited_pin_order = (
-                self.store._find_latest_pinned_metadata(entries, command_text)
-            )
-
             entry = self.store._build_entry(conn, command_text, source)
-            entry['is_pinned'] = inherited_is_pinned
-            entry['pinned_at'] = inherited_pinned_at if inherited_is_pinned else ''
-            entry['pin_order'] = inherited_pin_order if inherited_is_pinned else 0
 
             entries.append(entry)
             entries = self.store._trim_entries(entries)
@@ -129,16 +128,9 @@ class HistoryWriteService:
             if current_command == command_text:
                 return False
 
-            inherited_is_pinned, inherited_pinned_at, inherited_pin_order = (
-                self.store._find_latest_pinned_metadata(entries, command_text, skip_entry=entry)
-            )
-
             entry['command'] = command_text
-            entry['is_pinned'] = inherited_is_pinned
             if not str(entry.get('raw_command') or '').strip():
                 entry['raw_command'] = current_command
-            entry['pinned_at'] = inherited_pinned_at if inherited_is_pinned else ''
-            entry['pin_order'] = inherited_pin_order if inherited_is_pinned else 0
             changed = True
 
             if changed:
@@ -197,89 +189,20 @@ class HistoryWriteService:
             return False
 
         machine_id_text = self._normalize_lookup_machine_id(machine_id)
-        pinned = bool(is_pinned)
-        changed = False
 
         with self.store._lock:
             entries = self.store._read_entries(machine_id_text)
-            current_pin_order = 0
-            for item in entries:
-                self.store._normalize_entry_flags(item)
-                if (item.get('command') or '') != command_text:
-                    continue
-                if item.get('is_pinned') and int(item.get('pin_order', 0) or 0) > 0:
-                    current_pin_order = int(item.get('pin_order', 0) or 0)
-                    break
+            self.store.pinned_store.ensure_seeded_from_legacy_entries(machine_id_text, entries)
+            latest_entry = self._find_latest_entry_for_command(entries, command_text)
+            changed = self.store.pinned_store.set_command_pinned(
+                machine_id_text,
+                command_text,
+                bool(is_pinned),
+                seed_entry=latest_entry,
+            )
 
-            if pinned and current_pin_order <= 0:
-                current_pin_order = self.store._next_pin_order(entries)
-
-            for item in entries:
-                self.store._normalize_entry_flags(item)
-                if (item.get('command') or '') != command_text:
-                    continue
-
-                target_pinned_at = self.store._now_text() if pinned and not item.get('is_pinned') else str(item.get('pinned_at') or '').strip()
-                target_pin_order = current_pin_order if pinned else 0
-
-                if (
-                    item.get('is_pinned') == pinned and
-                    str(item.get('pinned_at') or '').strip() == (target_pinned_at if pinned else '') and
-                    int(item.get('pin_order', 0) or 0) == target_pin_order
-                ):
-                    continue
-
-                item['is_pinned'] = pinned
-                item['pinned_at'] = target_pinned_at if pinned else ''
-                item['pin_order'] = target_pin_order
-                changed = True
-
-            if changed:
-                self.store._write_entries(machine_id_text, entries)
-
-        return changed
-
-    def _build_pinned_snapshot_items(self, entries: list) -> list:
-        seen = set()
-        pinned_items = []
-
-        for item in reversed(entries):
-            self.store._normalize_entry_flags(item)
-            command_text = str(item.get('command') or '').strip()
-            if not command_text or command_text in seen:
-                continue
-            seen.add(command_text)
-
-            if item.get('is_pinned'):
-                pinned_items.append(dict(item))
-
-        return self.store._sort_pinned_snapshot_items(pinned_items)
-
-    def _apply_pin_order_to_command_entries(self, entries: list, command_text: str, pin_order: int) -> bool:
-        changed = False
-
-        for item in entries:
-            self.store._normalize_entry_flags(item)
-            if (item.get('command') or '') != command_text:
-                continue
-            if not item.get('is_pinned'):
-                continue
-            if int(item.get('pin_order', 0) or 0) == int(pin_order):
-                continue
-            item['pin_order'] = int(pin_order)
-            changed = True
-
-        return changed
-
-    def _normalize_pinned_command_orders(self, entries: list, pinned_items: list) -> bool:
-        changed = False
-
-        for index, item in enumerate(pinned_items, start=1):
-            command_text = str(item.get('command') or '').strip()
-            if not command_text:
-                continue
-            if self._apply_pin_order_to_command_entries(entries, command_text, index):
-                changed = True
+            # 顺手清理历史文件中旧版本残留的 pin 字段。
+            self.store._write_entries(machine_id_text, entries)
 
         return changed
 
@@ -303,45 +226,17 @@ class HistoryWriteService:
 
         with self.store._lock:
             entries = self.store._read_entries(machine_id_text)
-            pinned_items = self._build_pinned_snapshot_items(entries)
+            self.store.pinned_store.ensure_seeded_from_legacy_entries(machine_id_text, entries)
+            changed = self.store.pinned_store.move_pinned_command(
+                machine_id_text,
+                command_text,
+                direction_text,
+            )
 
-            if not pinned_items:
-                return False
+            # 顺手清理历史文件中旧版本残留的 pin 字段。
+            self.store._write_entries(machine_id_text, entries)
 
-            command_list = [str(item.get('command') or '').strip() for item in pinned_items]
-            if command_text not in command_list:
-                raise ValueError('Only pinned commands can be moved')
-
-            changed = self._normalize_pinned_command_orders(entries, pinned_items)
-
-            current_index = command_list.index(command_text)
-            if direction_text == 'up':
-                if current_index <= 0:
-                    if changed:
-                        self.store._write_entries(machine_id_text, entries)
-                    return False
-                target_index = current_index - 1
-            else:
-                if current_index >= len(command_list) - 1:
-                    if changed:
-                        self.store._write_entries(machine_id_text, entries)
-                    return False
-                target_index = current_index + 1
-
-            current_command = command_list[current_index]
-            target_command = command_list[target_index]
-            current_order = current_index + 1
-            target_order = target_index + 1
-
-            if self._apply_pin_order_to_command_entries(entries, current_command, target_order):
-                changed = True
-            if self._apply_pin_order_to_command_entries(entries, target_command, current_order):
-                changed = True
-
-            if changed:
-                self.store._write_entries(machine_id_text, entries)
-
-            return True
+        return changed
 
     def delete_execution_entry_for_connection(self, conn, entry_id: str):
         if conn is None:

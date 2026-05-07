@@ -7,6 +7,7 @@ from datetime import datetime
 from core.utils.files import secure_filename
 from server.application.history.history_view_service import HistoryViewService
 from server.application.history.history_write_service import HistoryWriteService
+from server.application.history.pinned_command_store import PinnedCommandStore
 from server.config.config import (
     COMMAND_HISTORY_MAX_ENTRIES_PER_HOST,
     COMMAND_HISTORY_MAX_OUTPUT_RECORD_CHARS,
@@ -30,6 +31,7 @@ class CommandHistoryStore:
     MAX_OUTPUT_SUMMARY_CHARS = COMMAND_HISTORY_MAX_OUTPUT_SUMMARY_CHARS
     MAX_OUTPUT_RECORDS = COMMAND_HISTORY_MAX_OUTPUT_RECORDS
     TIME_FORMAT = '%Y-%m-%d %H:%M:%S'
+    ENTRY_PIN_FIELDS = ('is_pinned', 'pinned_at', 'pin_order')
 
     def __init__(self):
         self.history_root_dir = COMMAND_HISTORY_ROOT_DIR
@@ -37,10 +39,10 @@ class CommandHistoryStore:
         self._lock = threading.RLock()
         self.artifact_service = None
 
+        self._prepare_dirs()
+        self.pinned_store = PinnedCommandStore(self.history_root_dir, self._now_text)
         self.write_service = HistoryWriteService(self)
         self.view_service = HistoryViewService(self)
-
-        self._prepare_dirs()
 
     def _prepare_dirs(self):
         os.makedirs(self.history_root_dir, exist_ok=True)
@@ -68,10 +70,30 @@ class CommandHistoryStore:
 
         return []
 
+    def _strip_entry_pin_fields(self, entry: dict) -> dict:
+        if not isinstance(entry, dict):
+            return {}
+
+        for field in self.ENTRY_PIN_FIELDS:
+            entry.pop(field, None)
+        return entry
+
+    def _strip_entries_pin_fields(self, entries: list) -> list:
+        return [self._strip_entry_pin_fields(item) for item in entries or [] if isinstance(item, dict)]
+
+    def _has_entry_pin_fields(self, entries: list) -> bool:
+        for item in entries or []:
+            if not isinstance(item, dict):
+                continue
+            if any(field in item for field in self.ENTRY_PIN_FIELDS):
+                return True
+        return False
+
     def _write_entries(self, machine_id: str, entries: list):
         file_path = self._get_history_file_path(machine_id)
+        clean_entries = self._strip_entries_pin_fields(entries)
         with open(file_path, 'w', encoding='utf-8') as file_obj:
-            json.dump(entries, file_obj, ensure_ascii=False, indent=2)
+            json.dump(clean_entries, file_obj, ensure_ascii=False, indent=2)
 
     def _now_text(self) -> str:
         return datetime.now().strftime(self.TIME_FORMAT)
@@ -107,9 +129,6 @@ class CommandHistoryStore:
             'addr': getattr(session_info, 'addr', '') or '',
             'cwd_start': getattr(session_info, 'cwd', '') or '',
             'cwd_end': '',
-            'is_pinned': False,
-            'pinned_at': '',
-            'pin_order': 0,
             'has_output': False,
             'output_summary': '',
             'output_line_count': 0,
@@ -190,60 +209,10 @@ class CommandHistoryStore:
         entry['duration_ms'] = max(int((end_dt - start_dt).total_seconds() * 1000), 0)
 
     def _normalize_entry_flags(self, entry: dict) -> dict:
-        if not isinstance(entry, dict):
-            return {}
-
-        entry['is_pinned'] = bool(entry.get('is_pinned', False))
-        entry['pinned_at'] = str(entry.get('pinned_at') or '').strip()
-
-        try:
-            entry['pin_order'] = int(entry.get('pin_order', 0) or 0)
-        except Exception:
-            entry['pin_order'] = 0
-
-        return entry
-
-    def _find_latest_pinned_metadata(self, entries: list, command_text: str, skip_entry=None):
-        inherited_is_pinned = False
-        inherited_pinned_at = ''
-        inherited_pin_order = 0
-
-        for item in reversed(entries):
-            if item is skip_entry:
-                continue
-
-            self._normalize_entry_flags(item)
-            if (item.get('command') or '') != command_text:
-                continue
-            if not item.get('is_pinned'):
-                continue
-
-            inherited_is_pinned = True
-            inherited_pinned_at = str(item.get('pinned_at') or '').strip()
-            inherited_pin_order = int(item.get('pin_order', 0) or 0)
-            break
-
-        return inherited_is_pinned, inherited_pinned_at, inherited_pin_order
-
-    def _next_pin_order(self, entries: list) -> int:
-        max_order = 0
-        for item in entries:
-            self._normalize_entry_flags(item)
-            if not item.get('is_pinned'):
-                continue
-            max_order = max(max_order, int(item.get('pin_order', 0) or 0))
-        return max_order + 1
-
-    def _sort_pinned_snapshot_items(self, pinned_items: list) -> list:
-        return sorted(
-            pinned_items,
-            key=lambda item: (
-                int(item.get('pin_order', 0) or 0) <= 0,
-                int(item.get('pin_order', 0) or 0),
-                str(item.get('pinned_at') or ''),
-                str(item.get('time') or ''),
-            ),
-        )
+        """
+        兼容旧调用名：execution history entry 不再承载 pin 字段。
+        """
+        return self._strip_entry_pin_fields(entry)
 
     def create_entry_for_connection(self, conn, command: str, source: str = 'cli'):
         return self.write_service.create_entry_for_connection(conn, command, source=source)
