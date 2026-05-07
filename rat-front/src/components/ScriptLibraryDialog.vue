@@ -315,6 +315,7 @@ export default {
       scriptSearchText: '',
       scriptTreeRenderKey: 0,
       scriptTreeExpandedKeys: [],
+      scriptDirectorySelectionContextKey: '',
       scriptRunDialogVisible: false,
       scriptRunSubmitting: false,
       pendingRunScriptName: '',
@@ -502,6 +503,20 @@ export default {
       return normalized ? `dir:${normalized}` : 'dir:.'
     },
 
+    getScriptDirectorySelectionContextKey() {
+  const connection = this.currentConnection || {}
+  const machineId = String(
+    connection.machine_id
+    || connection.client_id
+    || this.selectedId
+    || ''
+  ).trim()
+
+  const platform = String(this.resolvePreferredScriptDirectoryPlatform() || '').trim()
+
+  return `${machineId}::${platform}`
+},
+
     getScriptDirectoryPathFromTreeKey(key) {
       const value = String(key || '').trim()
       if (value === 'dir:.') return ''
@@ -679,11 +694,46 @@ export default {
 //   }
 // } else if (!this.selectedDirectory) {
 
-        if (options?.selectForConnection) {
-  const preferredDirectory = this.getPreferredScriptDirectoryForCurrentConnection()
-  this.selectedDirectory = preferredDirectory || this.getFirstAvailableScriptDirectory()
+//         if (options?.selectForConnection) {
+//   const preferredDirectory = this.getPreferredScriptDirectoryForCurrentConnection()
+//   this.selectedDirectory = preferredDirectory || this.getFirstAvailableScriptDirectory()
+//
+//   // 打开弹窗时只展开当前设备对应目录路径，不沿用上次手动展开状态。
+//   this.scriptTreeExpandedKeys = this.selectedDirectory
+//     ? this.includeScriptTreeAncestorKeys([
+//       this.getScriptDirectoryTreeKey(this.selectedDirectory),
+//     ])
+//     : []
+// } else if (!this.selectedDirectory) {
+//   this.selectedDirectory = this.getFirstAvailableScriptDirectory()
+// } else {
+//   const hasCurrentDir = this.scriptCatalogDirectories.some(item => this.normalizeScriptDirectoryPath(item?.path || '') === this.selectedDirectory)
+//   if (!hasCurrentDir) this.selectedDirectory = this.getFirstAvailableScriptDirectory()
+// }
 
-  // 打开弹窗时只展开当前设备对应目录路径，不沿用上次手动展开状态。
+        if (options?.selectForConnection) {
+  const selectionContextKey = this.getScriptDirectorySelectionContextKey()
+  const currentDirectory = this.normalizeScriptDirectoryPath(this.selectedDirectory)
+
+  const hasCurrentDir = this.scriptCatalogDirectories.some(item => {
+    return this.normalizeScriptDirectoryPath(item?.path || '') === currentDirectory
+  })
+
+  if (
+    selectionContextKey
+    && selectionContextKey === this.scriptDirectorySelectionContextKey
+    && hasCurrentDir
+  ) {
+    // 同一台机器 + 同一 platform：保留上次操作目录。
+    this.selectedDirectory = currentDirectory
+  } else {
+    // 切换机器或 platform：回到当前 platform 的目录。
+    const preferredDirectory = this.getPreferredScriptDirectoryForCurrentConnection()
+    this.selectedDirectory = preferredDirectory || this.getFirstAvailableScriptDirectory()
+  }
+
+  this.scriptDirectorySelectionContextKey = selectionContextKey
+
   this.scriptTreeExpandedKeys = this.selectedDirectory
     ? this.includeScriptTreeAncestorKeys([
       this.getScriptDirectoryTreeKey(this.selectedDirectory),
@@ -737,6 +787,48 @@ export default {
 
   return ''
 },
+//
+// getPreferredScriptDirectoryForCurrentConnection() {
+//   const platform = this.resolvePreferredScriptDirectoryPlatform()
+//   const platformAliases = {
+//     mac: ['mac', 'macos', 'darwin', 'osx'],
+//     win: ['win', 'windows', 'win32', 'nt'],
+//     linux: ['linux', 'ubuntu', 'debian', 'centos', 'fedora', 'redhat', 'rhel', 'alpine', 'arch'],
+//     ios: ['ios', 'iphone', 'ipad', 'iphoneos', 'ipados'],
+//   }
+//
+//   const aliases = platformAliases[platform] || (platform ? [platform] : [])
+//   const aliasSet = new Set(aliases.map(item => String(item || '').toLowerCase()))
+//
+//   if (!aliasSet.size) return ''
+//
+//   const directories = (this.scriptCatalogDirectories || [])
+//     .map(item => this.normalizeScriptDirectoryPath(item?.path || ''))
+//     .filter(Boolean)
+//     .sort((a, b) => a.localeCompare(b))
+//
+//   const matchesPlatformRoot = (directory) => {
+//     const root = String(directory || '').split('/').filter(Boolean)[0]?.toLowerCase() || ''
+//     return aliasSet.has(root)
+//   }
+//
+//   const hasDirectScripts = (directory) => {
+//     return (this.scriptCatalogItems || []).some(item => this.getScriptItemDirectory(item) === directory)
+//   }
+//
+//   const exactDirectory = directories.find(directory => aliasSet.has(directory.toLowerCase()))
+//
+//   if (exactDirectory && hasDirectScripts(exactDirectory)) {
+//     return exactDirectory
+//   }
+//
+//   const scriptDirectory = directories.find(directory => matchesPlatformRoot(directory) && hasDirectScripts(directory))
+//   if (scriptDirectory) return scriptDirectory
+//
+//   return exactDirectory || directories.find(matchesPlatformRoot) || ''
+// },
+
+
 
 getPreferredScriptDirectoryForCurrentConnection() {
   const platform = this.resolvePreferredScriptDirectoryPlatform()
@@ -762,21 +854,13 @@ getPreferredScriptDirectoryForCurrentConnection() {
     return aliasSet.has(root)
   }
 
-  const hasDirectScripts = (directory) => {
-    return (this.scriptCatalogItems || []).some(item => this.getScriptItemDirectory(item) === directory)
-  }
-
+  // 只选 platform 当前目录，不再找“第一个有脚本内容的目录”。
   const exactDirectory = directories.find(directory => aliasSet.has(directory.toLowerCase()))
+  if (exactDirectory) return exactDirectory
 
-  if (exactDirectory && hasDirectScripts(exactDirectory)) {
-    return exactDirectory
-  }
-
-  const scriptDirectory = directories.find(directory => matchesPlatformRoot(directory) && hasDirectScripts(directory))
-  if (scriptDirectory) return scriptDirectory
-
-  return exactDirectory || directories.find(matchesPlatformRoot) || ''
+  return directories.find(matchesPlatformRoot) || ''
 },
+
 
     getParentScriptDirectory(directory) {
       const normalized = this.normalizeScriptDirectoryPath(directory)
