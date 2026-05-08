@@ -104,15 +104,27 @@ class WebAgentApi:
         if not isinstance(payload, dict):
             raise ValueError('Invalid loader payload')
 
-        record = {
-            'time': datetime.now().isoformat(),
-            **payload,
-        }
+        line = payload.get('line', '')
+        if not line or not isinstance(line, str):
+            raise ValueError('Missing or invalid line field')
+
         log_path = self._get_loader_log_path()
         with open(log_path, 'a', encoding='utf-8') as fp:
-            fp.write(json.dumps(record, ensure_ascii=False) + '\n')
+            fp.write(line.strip() + '\n')
 
         return {'logged': True, 'log_file': os.path.basename(log_path)}
+        # if not isinstance(payload, dict):
+        #     raise ValueError('Invalid loader payload')
+        #
+        # record = {
+        #     'time': datetime.now().isoformat(),
+        #     **payload,
+        # }
+        # log_path = self._get_loader_log_path()
+        # with open(log_path, 'a', encoding='utf-8') as fp:
+        #     fp.write(json.dumps(record, ensure_ascii=False) + '\n')
+        #
+        # return {'logged': True, 'log_file': os.path.basename(log_path)}
 
     def cleanup_agent_build(self, work_dir: str):
         if work_dir:
