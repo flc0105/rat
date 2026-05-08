@@ -1,3 +1,4 @@
+import logging
 import os
 
 from flask import Blueprint, request, send_file
@@ -5,6 +6,9 @@ from flask import Blueprint, request, send_file
 from server.web.api_response import WebApiResponder
 from server.web.auth_guard import allow_anonymous
 from server.web.request_parsers import get_json_payload, get_optional_tab_id
+
+
+logger = logging.getLogger(__name__)
 
 
 def create_external_tool_blueprint(server_instance):
@@ -25,6 +29,53 @@ def create_external_tool_blueprint(server_instance):
         arch = str(payload.get('arch') or payload.get('architecture') or '').strip()
         return platform_alias, arch
 
+    def _target_from_client_payload(client_id, payload):
+        requested_platform, requested_arch = _target_from_payload(payload or {})
+        resolved_platform = requested_platform
+        resolved_arch = requested_arch
+
+        session_info = None
+        try:
+            session = server_instance.get_target_connection_by_client_id(client_id)
+            session_info = getattr(session, 'session_info', None)
+
+            real_platform = str(
+                getattr(session_info, 'os_alias', '') or
+                getattr(session_info, 'os_type', '') or
+                ''
+            ).strip()
+
+            real_arch = str(getattr(session_info, 'arch', '') or '').strip()
+
+            if real_platform:
+                resolved_platform = real_platform
+            if real_arch:
+                resolved_arch = real_arch
+
+        except Exception as e:
+            logger.warning(
+                '[external-tools] failed to resolve client session target: '
+                'client_id=%s requested=%s/%s error=%s',
+                client_id,
+                requested_platform or 'unknown',
+                requested_arch or 'unknown',
+                e,
+            )
+
+        logger.info(
+            '[external-tools] client target resolved: '
+            'client_id=%s machine_id=%s hostname=%s requested=%s/%s resolved=%s/%s',
+            client_id,
+            getattr(session_info, 'machine_id', '') if session_info else '',
+            getattr(session_info, 'hostname', '') if session_info else '',
+            requested_platform or 'unknown',
+            requested_arch or 'unknown',
+            resolved_platform or 'unknown',
+            resolved_arch or 'unknown',
+        )
+
+        return resolved_platform, resolved_arch
+
     @blueprint.get('/api/external-tools/catalog')
     def list_external_tools():
         return responder.json_endpoint(
@@ -36,7 +87,7 @@ def create_external_tool_blueprint(server_instance):
     def list_client_external_tools(client_id):
         def _execute():
             payload = get_json_payload()
-            platform_alias, arch = _target_from_payload(payload)
+            platform_alias, arch = _target_from_client_payload(client_id, payload)
             return external_tool_api.list_client_catalog(
                 client_id,
                 tab_id=get_optional_tab_id(),
@@ -223,7 +274,7 @@ def create_external_tool_blueprint(server_instance):
     def start_client_instance(client_id, tool_id):
         def _execute():
             payload, params = _params_from_payload()
-            platform_alias, arch = _target_from_payload(payload)
+            platform_alias, arch = _target_from_client_payload(client_id, payload)
             return external_tool_api.start_client_instance(
                 client_id,
                 tool_id,
@@ -240,7 +291,7 @@ def create_external_tool_blueprint(server_instance):
     def install_client_tool(client_id, tool_id):
         def _execute():
             payload, params = _params_from_payload()
-            platform_alias, arch = _target_from_payload(payload)
+            platform_alias, arch = _target_from_client_payload(client_id, payload)
             return external_tool_api.install_client_tool(
                 client_id,
                 tool_id,
@@ -256,7 +307,7 @@ def create_external_tool_blueprint(server_instance):
     def client_install_status(client_id, tool_id):
         def _execute():
             payload, params = _params_from_payload()
-            platform_alias, arch = _target_from_payload(payload)
+            platform_alias, arch = _target_from_client_payload(client_id, payload)
             return external_tool_api.client_install_status(
                 client_id,
                 tool_id,
@@ -272,7 +323,7 @@ def create_external_tool_blueprint(server_instance):
     def uninstall_client_tool(client_id, tool_id):
         def _execute():
             payload, params = _params_from_payload()
-            platform_alias, arch = _target_from_payload(payload)
+            platform_alias, arch = _target_from_client_payload(client_id, payload)
             return external_tool_api.uninstall_client_tool(
                 client_id,
                 tool_id,
@@ -289,7 +340,7 @@ def create_external_tool_blueprint(server_instance):
     def clear_client_package_cache(client_id, tool_id):
         def _execute():
             payload, params = _params_from_payload()
-            platform_alias, arch = _target_from_payload(payload)
+            platform_alias, arch = _target_from_client_payload(client_id, payload)
             return external_tool_api.clear_client_package_cache(
                 client_id,
                 tool_id,

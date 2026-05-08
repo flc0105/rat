@@ -861,7 +861,7 @@ export default {
 
     selectedTargetArch() {
       if (this.selectedTargetSide !== 'client') return this.serverArch
-      return this.getArchForMachineId(this.selectedTargetMachineId) || this.currentClientArch
+      return this.getArchForMachineId(this.selectedTargetMachineId)
     },
 
     filteredModules() {
@@ -987,6 +987,33 @@ export default {
       return extra
     },
 
+    logExternalToolTarget(action, item = null, extra = {}) {
+      const selectedMachineId = this.selectedTargetMachineId
+      const selectedClientId = this.selectedTargetSide === 'client'
+        ? this.getClientDeviceIdForMachine(selectedMachineId)
+        : '__server__'
+
+      const payload = {
+        action,
+        package_id: item?.package_meta?.id || item?.package_id || item?.id || '',
+        selected_side: this.selectedTargetSide,
+        selected_machine_id: selectedMachineId,
+        selected_client_id: selectedClientId,
+        current_device_id: this.currentDeviceId,
+        current_machine_id: this.currentMachineId,
+        selected_target_platform: this.selectedTargetPlatform,
+        selected_target_arch: this.selectedTargetArch,
+        current_client_platform: this.currentClientPlatform,
+        current_client_arch: this.currentClientArch,
+        server_platform: this.serverPlatform,
+        server_arch: this.serverArch,
+        ...extra,
+      }
+
+      console.info('[external-tools] target', payload)
+      return payload
+    },
+
 
     selectPackage(item) {
       if (!item?.id) return
@@ -1040,6 +1067,13 @@ export default {
 
       const targetPlatform = this.getPlatformForConnectionId(targetDeviceId)
       const targetArch = this.getArchForConnectionId(targetDeviceId)
+
+      this.logExternalToolTarget('client-catalog-request', null, {
+        request_client_id: targetDeviceId,
+        request_platform: targetPlatform,
+        request_arch: targetArch,
+      })
+
       const targetItems = (this.items || []).filter(item => this.doesPackageBuildMatch(item, targetPlatform, targetArch))
       for (const item of targetItems) {
         const previous = this.installStatuses[this.installStatusKey(item, 'client', targetDeviceId)] || {}
@@ -1251,8 +1285,16 @@ export default {
           await this.fetchInstallStatus(item, 'server', '__server__', { silent: true, force: true })
         }
       } else {
-        const deviceId = this.selectedTargetClientId || this.currentDeviceId
-        if (deviceId) await this.loadClientCatalogStatuses(deviceId, showToast)
+        const deviceId = this.selectedTargetClientId
+        if (!deviceId) {
+          this.logExternalToolTarget('refresh-install-statuses-skip', null, {
+            reason: 'no selectedTargetClientId',
+          })
+          if (showToast) ElMessage.warning('Please select an online client')
+          return
+        }
+
+        await this.loadClientCatalogStatuses(deviceId, showToast)
       }
       if (showToast) ElMessage.success('Install statuses refreshed')
     },
@@ -1263,9 +1305,13 @@ export default {
       const side = this.getSelectedTargetSideForAction()
       if (side === 'server') return this.isServerPlatformSupported(pkg)
       const deviceId = this.getActionDeviceId(pkg)
-      const platform = this.selectedTargetPlatform || this.currentClientPlatform
-      const arch = this.selectedTargetArch || this.currentClientArch
-      return !!deviceId && this.selectedTargetSide === 'client' && this.doesPackageBuildMatch(pkg, platform, arch)
+      const platform = this.selectedTargetPlatform
+      const arch = this.selectedTargetArch
+      return !!deviceId &&
+        this.selectedTargetSide === 'client' &&
+        !!platform &&
+        !!arch &&
+        this.doesPackageBuildMatch(pkg, platform, arch)
     },
 
     getPackageCurrentInstallStatus(item) {
@@ -1290,8 +1336,14 @@ export default {
     async fetchInstallStatus(item, side = item?.side, deviceId = this.currentDeviceId, options = {}) {
       if (!item?.id) return null
       const targetSide = side || item.side
-      const targetDeviceId = targetSide === 'server' ? '__server__' : this.normalizeDeviceId(deviceId || this.selectedId)
-      if (targetSide === 'client' && !targetDeviceId) return null
+      const targetDeviceId = targetSide === 'server' ? '__server__' : this.normalizeDeviceId(deviceId)
+      if (targetSide === 'client' && !targetDeviceId) {
+        this.logExternalToolTarget('fetch-install-status-skip', item, {
+          reason: 'missing targetDeviceId',
+          requested_device_id: deviceId,
+        })
+        return null
+      }
       const statusKey = this.installStatusKey(item, targetSide, targetDeviceId)
       const cachedStatus = this.installStatuses[statusKey]
       if (cachedStatus && !cachedStatus.loading && !cachedStatus.error && !options.force) return cachedStatus
@@ -1334,10 +1386,17 @@ export default {
   if (device === '__server__' || !device) {
     await this.loadAllServerInstances(false)
   } else {
-    const deviceId = this.getClientDeviceIdForMachine(device) || this.currentDeviceId
-    if (deviceId) {
-      await this.loadAllClientInstances(deviceId, false)
+    const deviceId = this.getClientDeviceIdForMachine(device)
+    if (!deviceId) {
+      this.logExternalToolTarget('refresh-instances-skip', null, {
+        reason: 'selected machine has no matching online client_id',
+        selected_machine_id: device,
+      })
+      if (showToast) ElMessage.warning('Please select an online client')
+      return
     }
+
+    await this.loadAllClientInstances(deviceId, false)
   }
 
   if (showToast) ElMessage.success('Instances refreshed')
@@ -1525,7 +1584,18 @@ async loadAllClientInstances(deviceId = this.currentDeviceId, showToast = true) 
 
     getActionDeviceId(item) {
       if (!item || !this.supportsSide(item, 'client')) return ''
-      return this.selectedTargetClientId || this.currentDeviceId
+
+      const machineId = this.selectedTargetMachineId
+      if (!machineId || machineId === '__server__' || machineId === '__all__') return ''
+
+      const deviceId = this.getClientDeviceIdForMachine(machineId)
+      if (!deviceId) {
+        this.logExternalToolTarget('resolve-client-id-missing', item, {
+          reason: 'selected machine has no matching online client_id',
+        })
+      }
+
+      return deviceId
     },
 
     normalizeDeviceId(value) {
@@ -1905,11 +1975,23 @@ async loadAllClientInstances(deviceId = this.currentDeviceId, showToast = true) 
     downloadTool(item) {
       const id = String(item?.id || '').trim()
       if (!id) return
+
+      const platform = this.selectedTargetPlatform
+      const arch = this.selectedTargetArch
+
+      this.logExternalToolTarget('download-package', item, {
+        request_platform: platform,
+        request_arch: arch,
+      })
+
+      if (!platform || !arch) {
+        ElMessage.warning('Please select a valid target first')
+        return
+      }
+
       const params = new URLSearchParams()
-      const platform = this.selectedTargetPlatform || (this.getSelectedTargetSideForAction() === 'server' ? this.serverPlatform : this.currentClientPlatform)
-      const arch = this.selectedTargetArch || (this.getSelectedTargetSideForAction() === 'server' ? this.serverArch : this.currentClientArch)
-      if (platform) params.set('platform', platform)
-      if (arch) params.set('arch', arch)
+      params.set('platform', platform)
+      params.set('arch', arch)
       const query = params.toString()
       window.open(`/api/external-tools/${encodeURIComponent(id)}/download${query ? `?${query}` : ''}`, '_blank')
     },
@@ -2042,7 +2124,12 @@ async uninstallPackage(item) {
       const deviceIds = this.getPackageTargetConnectionIds(item)
       if (!deviceIds.length) throw new Error('Please select a device')
       // 实际卸载只对当前选中的连接发命令；同 machine 多连接时，后端命令仍落在该机器本地路径。
-      const deviceId = this.normalizeDeviceId(this.selectedId || deviceIds[0])
+      const deviceId = this.normalizeDeviceId(deviceIds[0])
+      this.logExternalToolTarget('uninstall-client-package', item, {
+        request_client_id: deviceId,
+        request_platform: this.getPlatformForConnectionId(deviceId),
+        request_arch: this.getArchForConnectionId(deviceId),
+      })
       data = await this.uninstallClientTool(item, deviceId)
       this.setInstallStatus(item, 'client', deviceId, {
         ...(data || {}),
@@ -2073,8 +2160,14 @@ async uninstallServerTool(item) {
 },
 
 async uninstallClientTool(item, deviceId) {
-  const targetDeviceId = this.normalizeDeviceId(deviceId || this.selectedId)
+  const targetDeviceId = this.normalizeDeviceId(deviceId)
   if (!targetDeviceId) throw new Error('Please select a device')
+
+  this.logExternalToolTarget('uninstall-client-request', item, {
+    request_client_id: targetDeviceId,
+    request_platform: this.getPlatformForConnectionId(targetDeviceId),
+    request_arch: this.getArchForConnectionId(targetDeviceId),
+  })
 
   const res = await fetch(`/api/connections/${encodeURIComponent(targetDeviceId)}/external-tools/${encodeURIComponent(item.id)}/uninstall`, {
     method: 'POST',
@@ -2143,8 +2236,15 @@ async uninstallClientTool(item, deviceId) {
     },
 
     async clearClientPackageCache(item, deviceId) {
-      const targetDeviceId = this.normalizeDeviceId(deviceId || this.selectedId)
+      const targetDeviceId = this.normalizeDeviceId(deviceId)
       if (!targetDeviceId) throw new Error('Please select a device')
+
+      this.logExternalToolTarget('clear-client-cache-request', item, {
+        request_client_id: targetDeviceId,
+        request_platform: this.getPlatformForConnectionId(targetDeviceId),
+        request_arch: this.getArchForConnectionId(targetDeviceId),
+      })
+
       const res = await fetch(`/api/connections/${encodeURIComponent(targetDeviceId)}/external-tools/${encodeURIComponent(item.id)}/clear-cache`, {
         method: 'POST',
         headers: this.buildJsonHeaders({ 'Content-Type': 'application/json' }),
@@ -2176,13 +2276,24 @@ async uninstallClientTool(item, deviceId) {
             body: JSON.stringify({ params: {} }),
           })
         } else {
+          if (!deviceId) throw new Error('Please select a target machine')
+
+          const requestPlatform = this.getPlatformForConnectionId(deviceId)
+          const requestArch = this.getArchForConnectionId(deviceId)
+
+          this.logExternalToolTarget('install-client-package', item, {
+            request_client_id: deviceId,
+            request_platform: requestPlatform,
+            request_arch: requestArch,
+          })
+
           res = await fetch(`/api/connections/${encodeURIComponent(deviceId)}/external-tools/${encodeURIComponent(item.id)}/install`, {
             method: 'POST',
             headers: this.buildJsonHeaders({ 'Content-Type': 'application/json' }),
             body: JSON.stringify({
               params: {},
-              platform: this.getPlatformForConnectionId(deviceId),
-              arch: this.getArchForConnectionId(deviceId),
+              platform: requestPlatform,
+              arch: requestArch,
             }),
           })
         }
@@ -2441,6 +2552,16 @@ async uninstallClientTool(item, deviceId) {
     async startClientInstance(item, params, instanceId, installIfNeeded = false, deviceId = '') {
       const targetDeviceId = this.normalizeDeviceId(deviceId || this.getActionDeviceId(this.getPackageForModule(item)))
       if (!targetDeviceId) throw new Error('Please select a target machine')
+
+      const requestPlatform = this.getPlatformForConnectionId(targetDeviceId)
+      const requestArch = this.getArchForConnectionId(targetDeviceId)
+
+      this.logExternalToolTarget('start-client-instance', item, {
+        request_client_id: targetDeviceId,
+        request_platform: requestPlatform,
+        request_arch: requestArch,
+      })
+
       const res = await fetch(`/api/connections/${encodeURIComponent(targetDeviceId)}/external-tools/${encodeURIComponent(item.id)}/instances/start`, {
         method: 'POST',
         headers: this.buildJsonHeaders({ 'Content-Type': 'application/json' }),
@@ -2448,8 +2569,8 @@ async uninstallClientTool(item, deviceId) {
           params,
           instance_id: instanceId,
           install_if_needed: false,
-          platform: this.getPlatformForConnectionId(targetDeviceId),
-          arch: this.getArchForConnectionId(targetDeviceId),
+          platform: requestPlatform,
+          arch: requestArch,
         }),
       })
       const json = await res.json()

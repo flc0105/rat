@@ -1,11 +1,15 @@
 import glob
 import json
+import logging
 import os
 import platform
 from copy import deepcopy
 from typing import Any
 
 from core.platform.platform_identity import detect_platform_alias
+
+
+logger = logging.getLogger(__name__)
 
 
 class ExternalToolCatalogService:
@@ -350,13 +354,28 @@ class ExternalToolCatalogService:
 
     def select_package_key(self, package: dict, platform_alias: str = '', arch: str = '') -> str:
         packages = package.get('platform_packages') if isinstance(package.get('platform_packages'), dict) else {}
+        package_id = package.get('id') or 'package'
+
         if not packages:
-            raise ValueError(f'{package.get("id") or "package"} has no platform packages')
+            logger.warning(
+                '[external-tools] package has no platform packages: package_id=%s',
+                package_id,
+            )
+            raise ValueError(f'{package_id} has no platform packages')
 
         target_platform = self._normalize_platform(platform_alias or '')
         target_arch = self._normalize_arch(arch or '')
         exact_key = self._platform_key(target_platform, target_arch)
+
         if exact_key and exact_key in packages:
+            logger.info(
+                '[external-tools] selected exact package build: package_id=%s target=%s/%s package_key=%s supported=%s',
+                package_id,
+                target_platform or 'unknown',
+                target_arch or 'unknown',
+                exact_key,
+                sorted(packages.keys()),
+            )
             return exact_key
 
         matches = []
@@ -367,10 +386,38 @@ class ExternalToolCatalogService:
                 matches.append(key)
 
         if len(matches) == 1:
+            logger.info(
+                '[external-tools] selected compatible package build: package_id=%s target=%s/%s package_key=%s supported=%s',
+                package_id,
+                target_platform or 'unknown',
+                target_arch or 'unknown',
+                matches[0],
+                sorted(packages.keys()),
+            )
             return matches[0]
+
         if matches:
-            raise ValueError(f'Ambiguous platform package for {package.get("id")}: {target_platform}/{target_arch} -> {", ".join(matches)}')
-        raise ValueError(f'{package.get("id")} does not support {target_platform or "unknown"}/{target_arch or "unknown"}')
+            logger.warning(
+                '[external-tools] ambiguous package build: package_id=%s target=%s/%s matches=%s supported=%s',
+                package_id,
+                target_platform or 'unknown',
+                target_arch or 'unknown',
+                matches,
+                sorted(packages.keys()),
+            )
+            raise ValueError(f'Ambiguous platform package for {package_id}: {target_platform}/{target_arch} -> {", ".join(matches)}')
+
+        logger.warning(
+            '[external-tools] unsupported package target: package_id=%s target=%s/%s supported=%s raw_platform=%s raw_arch=%s',
+            package_id,
+            target_platform or 'unknown',
+            target_arch or 'unknown',
+            sorted(packages.keys()),
+            platform_alias or '',
+            arch or '',
+        )
+
+        raise ValueError(f'{package_id} does not support {target_platform or "unknown"}/{target_arch or "unknown"}')
 
     def resolve_exec_rel_path(self, package: dict, exec_name: str, package_key: str) -> str:
         execs = package.get('execs') if isinstance(package.get('execs'), dict) else {}
