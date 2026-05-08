@@ -234,6 +234,10 @@ class ExternalToolRuntimeService:
             raise ValueError(f'package build not found: {package_key}')
         return info
 
+    def _package_source(self, package: dict, package_key: str) -> str:
+        package_file = self._package_file(package, package_key)
+        return str(package_file.get('source') or package.get('source') or '').strip()
+
     def _module_runtime_for_platform(self, module: dict, platform_alias: str, arch: str) -> dict:
         base = module.get('runtime') if isinstance(module.get('runtime'), dict) else {}
         selected = dict(base)
@@ -640,7 +644,7 @@ class ExternalToolRuntimeService:
             'package_id': package.get('id') or '',
             'module_id': module.get('id') if module else '',
             'display_name': package.get('display_name') or package.get('id') or '',
-            'source': package.get('source') or '',
+            'source': self._package_source(package, context.get('package_key') or ''),
             'side': context.get('side') or '',
             'platform': context.get('platform') or '',
             'arch': context.get('arch') or '',
@@ -766,6 +770,90 @@ class ExternalToolRuntimeService:
             'pid_file': pid_file,
             'state_file': state_file,
         }
+
+    def _run_foreground_process(self, runtime_spec: dict, timeout_sec: float | None = None) -> dict:
+        if not os.path.isdir(runtime_spec['cwd']):
+            raise FileNotFoundError(f'Configured runtime cwd not found: {runtime_spec["cwd"]}')
+        stdout_dir = os.path.dirname(runtime_spec.get('stdout') or '')
+        if stdout_dir:
+            os.makedirs(stdout_dir, exist_ok=True)
+        started = time.time()
+        try:
+            completed = subprocess.run(
+                runtime_spec['argv'],
+                cwd=runtime_spec['cwd'],
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                timeout=timeout_sec,
+                close_fds=True,
+            )
+            timed_out = False
+            returncode = int(completed.returncode)
+            stdout = completed.stdout or ''
+            stderr = completed.stderr or ''
+        except subprocess.TimeoutExpired as e:
+            timed_out = True
+            returncode = -1
+            stdout = e.stdout or ''
+            stderr = e.stderr or ''
+            if isinstance(stdout, bytes):
+                stdout = stdout.decode('utf-8', errors='replace')
+            if isinstance(stderr, bytes):
+                stderr = stderr.decode('utf-8', errors='replace')
+            stderr = (stderr + ('\n' if stderr else '') + f'Command timed out after {timeout_sec} seconds').strip()
+
+        finished = time.time()
+        return {
+            'returncode': returncode,
+            'stdout': stdout,
+            'stderr': stderr,
+            'timed_out': timed_out,
+            'started_at': datetime.fromtimestamp(started).isoformat(timespec='seconds'),
+            'finished_at': datetime.fromtimestamp(finished).isoformat(timespec='seconds'),
+            'duration_sec': round(finished - started, 3),
+        }
+
+    def _oneshot_timeout_sec(self, meta: dict, runtime: dict | None = None) -> float | None:
+        source = runtime if isinstance(runtime, dict) else {}
+        oneshot = meta.get('oneshot') if isinstance(meta.get('oneshot'), dict) else {}
+        raw = source.get('timeout_sec', oneshot.get('timeout_sec', meta.get('timeout_sec', 60)))
+        if raw in ('', None):
+            return None
+        try:
+            value = float(raw)
+        except Exception:
+            raise ValueError(f'invalid oneshot timeout_sec: {raw}')
+        if value <= 0:
+            raise ValueError(f'invalid oneshot timeout_sec: {raw}')
+        return value
+
+    def _make_oneshot_run_id(self, meta: dict) -> str:
+        prefix = self._sanitize_instance_id(meta.get('name') or meta.get('id') or 'oneshot')
+        return f'{prefix}-{datetime.now().strftime("%Y%m%d-%H%M%S-%f")}'[:96]
+
+    def _apply_server_oneshot_context(self, context: dict, meta: dict, run_id: str) -> dict:
+        package_id = str(meta.get('package_id') or '').strip()
+        module_id = str(meta.get('id') or meta.get('module_id') or '').strip()
+        run_dir = self._expand_path(os.path.join(self.runtime_root_dir, package_id, module_id, 'oneshot', run_id))
+        context['run_id'] = run_id
+        context['instance_id'] = ''
+        context['instance_name'] = ''
+        context['instance_runtime_dir'] = run_dir
+        context['state_file'] = os.path.join(run_dir, 'result.json')
+        return context
+
+    def _apply_client_oneshot_context(self, context: dict, meta: dict, run_id: str) -> dict:
+        package_id = str(meta.get('package_id') or '').strip()
+        module_id = str(meta.get('id') or meta.get('module_id') or '').strip()
+        run_dir = os.path.join('~/.ops/external_tools/runtime', package_id, module_id, 'oneshot', run_id).replace('\\', '/')
+        context['run_id'] = run_id
+        context['instance_id'] = ''
+        context['instance_name'] = ''
+        context['instance_runtime_dir'] = run_dir
+        context['state_file'] = os.path.join(run_dir, 'result.json').replace('\\', '/')
+        return context
 
     def _start_detached_process(self, runtime_spec: dict) -> SimpleNamespace:
         if not os.path.isdir(runtime_spec['cwd']):
@@ -1138,6 +1226,60 @@ finally:
         state_file = self._write_state_file(meta, context, runtime_spec, process, install_info, config_info, resolved_params)
         return {'tool_id': meta.get('tool_id') or '', 'package_id': meta.get('package_id') or '', 'module_id': meta.get('id') or '', 'side': 'server', 'instance_id': instance_id, 'status': 'running', 'running': True, 'pid': process.pid, 'install': install_info, 'config': config_info, 'runtime': runtime_spec, 'state_file': state_file, 'message': f'{meta.get("display_name") or meta.get("tool_id")} instance {instance_id} started on server'}
 
+    def run_server_oneshot(self, tool_id: str, params: dict | None = None, instance_id: str = '') -> dict:
+        del instance_id
+        meta = self.catalog_service.get_tool(tool_id)
+        if str(meta.get('execution') or '').strip().lower() != 'oneshot':
+            raise ValueError(f'module {tool_id} execution is not oneshot')
+        package = meta.get('package_meta') or self.catalog_service.get_package(meta.get('package_id') or '')
+        resolved_params = self.resolve_params(meta, params)
+        run_id = self._make_oneshot_run_id(meta)
+        context = self.build_server_context(meta, resolved_params, instance_id=run_id)
+        context = self._apply_server_oneshot_context(context, meta, run_id)
+        os.makedirs(context['instance_runtime_dir'], exist_ok=True)
+        install_info = self._build_install_status(package, context, module=meta)
+        if not install_info.get('installed'):
+            raise ValueError('Package is not installed. Please install it first.')
+        install_info.update({'already_installed': True, 'extracted': False, 'message': 'using existing installation'})
+        for path in (context.get('bin') or {}).values():
+            self._chmod_executable(path)
+        config_info = self._write_config(meta, context)
+        runtime_spec = self._build_runtime_spec(meta, context)
+        timeout_sec = self._oneshot_timeout_sec(meta, self._module_runtime_for_platform(meta, context.get('platform') or '', context.get('arch') or ''))
+        logger.info(
+            '[external-tools] run server oneshot: tool_id=%s run_id=%s timeout=%s argv=%s',
+            meta.get('tool_id') or tool_id,
+            run_id,
+            timeout_sec,
+            runtime_spec.get('argv') or [],
+        )
+        run_result = self._run_foreground_process(runtime_spec, timeout_sec=timeout_sec)
+        success = run_result.get('returncode') == 0 and not run_result.get('timed_out')
+        return {
+            'tool_id': meta.get('tool_id') or '',
+            'package_id': meta.get('package_id') or '',
+            'module_id': meta.get('id') or '',
+            'display_name': meta.get('display_name') or meta.get('tool_id') or '',
+            'execution': 'oneshot',
+            'side': 'server',
+            'run_id': run_id,
+            'status': 'completed' if success else 'failed',
+            'success': success,
+            'running': False,
+            'returncode': run_result.get('returncode'),
+            'stdout': run_result.get('stdout') or '',
+            'stderr': run_result.get('stderr') or '',
+            'timed_out': bool(run_result.get('timed_out')),
+            'started_at': run_result.get('started_at') or '',
+            'finished_at': run_result.get('finished_at') or '',
+            'duration_sec': run_result.get('duration_sec'),
+            'install': install_info,
+            'config': config_info,
+            'runtime': runtime_spec,
+            'params': resolved_params,
+            'message': f'{meta.get("display_name") or meta.get("tool_id")} completed on server' if success else f'{meta.get("display_name") or meta.get("tool_id")} failed on server',
+        }
+
     def stop_server_instance(self, tool_id: str, instance_id: str, params: dict | None = None) -> dict:
         meta = self.catalog_service.get_tool(tool_id)
         instance_id = self._sanitize_instance_id(instance_id)
@@ -1292,7 +1434,7 @@ finally:
             'package_id': package.get('id') or '',
             'display_name': package.get('display_name') or package.get('id') or '',
             'version': package.get('version') or '',
-            'source': package.get('source') or '',
+            'source': self._package_source(package, context.get('package_key') or ''),
             'side': 'client',
             'platform': context.get('platform') or '',
             'arch': context.get('arch') or '',
@@ -1344,7 +1486,7 @@ finally:
             'module_id': meta.get('id') or '',
             'display_name': meta.get('display_name') or meta.get('tool_id') or '',
             'version': meta.get('version') or '',
-            'source': package.get('source') or '',
+            'source': self._package_source(package, context.get('package_key') or ''),
             'side': 'client',
             'platform': context.get('platform') or '',
             'arch': context.get('arch') or '',
@@ -1357,6 +1499,62 @@ finally:
             'config': config_payload,
             'runtime': runtime,
             'lifecycle': rendered_meta.get('lifecycle') or {},
+        }
+
+    def build_client_oneshot_payload(self, meta: dict, params: dict | None = None, platform_alias: str = '', arch: str = '') -> dict:
+        if str(meta.get('execution') or '').strip().lower() != 'oneshot':
+            raise ValueError(f'module {meta.get("tool_id") or meta.get("id") or "unknown"} execution is not oneshot')
+        package = meta.get('package_meta') or self.catalog_service.get_package(meta.get('package_id') or '')
+        platform_value, arch_value = self._require_target(platform_alias, arch, f'client oneshot {meta.get("tool_id") or meta.get("id") or "unknown"}')
+        logger.info(
+            '[external-tools] build client oneshot payload: tool_id=%s target=%s/%s',
+            meta.get('tool_id') or meta.get('id') or '',
+            platform_value,
+            arch_value,
+        )
+        resolved_params = self.resolve_params(meta, params, require_required=True)
+        run_id = self._make_oneshot_run_id(meta)
+        context = self.build_client_context(meta, resolved_params, instance_id=run_id, platform_alias=platform_value, arch=arch_value)
+        context = self._apply_client_oneshot_context(context, meta, run_id)
+        package_file = self._package_file(package, context.get('package_key') or '')
+        filename = str(package_file.get('filename') or '').strip()
+        if not filename:
+            raise ValueError('platform package filename is required')
+        rendered_meta = self._render_value(meta, context)
+        runtime = self._render_value(self._module_runtime_for_platform(meta, context.get('platform') or '', context.get('arch') or ''), context)
+        runtime.setdefault('state_file', context.get('state_file') or '')
+        runtime_argv = runtime.get('argv') or []
+        if isinstance(runtime_argv, str):
+            runtime_argv = shlex.split(runtime_argv)
+        if isinstance(runtime_argv, list):
+            runtime['argv'] = self._append_runtime_extra_args(runtime_argv, runtime, context)
+        config = rendered_meta.get('config') or {}
+        config_payload = {}
+        if config.get('target') and config.get('template') is not None:
+            config_payload = {'target': config.get('target'), 'content': self._render_value(str(config.get('template')), context)}
+        exec_name = self._primary_exec_name(package, meta)
+        rel_path = (context.get('exec') or {}).get(exec_name) or ''
+        return {
+            'action': 'oneshot',
+            'install_if_needed': False,
+            'tool_id': meta.get('tool_id') or '',
+            'package_id': meta.get('package_id') or '',
+            'module_id': meta.get('id') or '',
+            'display_name': meta.get('display_name') or meta.get('tool_id') or '',
+            'version': meta.get('version') or '',
+            'source': self._package_source(package, context.get('package_key') or ''),
+            'execution': 'oneshot',
+            'side': 'client',
+            'platform': context.get('platform') or '',
+            'arch': context.get('arch') or '',
+            'package_key': context.get('package_key') or '',
+            'run_id': run_id,
+            'params': resolved_params,
+            'package': {'filename': filename, 'download_url': self._client_download_url(filename, package_file), 'executable_rel_path': rel_path, 'exec_paths': context.get('exec') or {}},
+            'install': {'install_dir': context.get('install_dir') or '', 'skip_if_exists': self._client_skip_path(package, context, module=meta)},
+            'config': config_payload,
+            'runtime': runtime,
+            'timeout_sec': self._oneshot_timeout_sec(meta, runtime),
         }
 
     def build_client_payload(self, meta: dict, params: dict | None = None) -> dict:
@@ -1394,6 +1592,12 @@ finally:
         meta = self.catalog_service.get_tool(tool_id)
         payload = self.build_client_start_payload(meta, params=params, instance_id=instance_id, platform_alias=platform_alias, arch=arch)
         command = f'external_tool_start {self._encode_payload_arg(payload)}'
+        return self._run_client_lifecycle_command(client_id, command, tab_id=tab_id)
+
+    def run_client_oneshot(self, client_id: str, tool_id: str, params: dict | None = None, tab_id: str = '', platform_alias: str = '', arch: str = '') -> dict:
+        meta = self.catalog_service.get_tool(tool_id)
+        payload = self.build_client_oneshot_payload(meta, params=params, platform_alias=platform_alias, arch=arch)
+        command = f'external_tool_oneshot {self._encode_payload_arg(payload)}'
         return self._run_client_lifecycle_command(client_id, command, tab_id=tab_id)
 
     def install_client_tool(self, client_id: str, package_id: str, params: dict | None = None, tab_id: str = '', instance_id: str = '', platform_alias: str = '', arch: str = '') -> dict:
@@ -1491,7 +1695,7 @@ finally:
             'package_id': package.get('id') or '',
             'display_name': package.get('display_name') or package.get('id') or '',
             'version': package.get('version') or '',
-            'source': package.get('source') or '',
+            'source': self._package_source(package, context.get('package_key') or ''),
             'side': 'client',
             'platform': context.get('platform') or '',
             'arch': context.get('arch') or '',

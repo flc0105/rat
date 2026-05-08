@@ -171,7 +171,7 @@
                             <div class="external-tool-package-module-content">
                               <div class="external-tool-package-module-title-row">
                                 <span class="strong">{{ module.display_name || module.id }}</span>
-                                <el-tag size="small" type="info">daemon</el-tag>
+                                <el-tag size="small" :type="getExecutionTagType(module)">{{ formatExecutionLabel(module) }}</el-tag>
                               </div>
                               <div class="external-tool-package-module-desc" :title="module.description || ''">
                                 {{ module.description || 'No description' }}
@@ -292,7 +292,7 @@
                       <div class="external-tool-package-module-content">
                         <div class="external-tool-package-module-title-row">
                           <span class="strong">{{ module.display_name || module.id }}</span>
-                          <el-tag size="small" type="info">daemon</el-tag>
+                          <el-tag size="small" :type="getExecutionTagType(module)">{{ formatExecutionLabel(module) }}</el-tag>
                         </div>
                         <div class="external-tool-package-module-desc" :title="module.description || ''">
                           {{ module.description || 'No description' }}
@@ -572,7 +572,7 @@
         <div><strong>{{ pendingItem.display_name || pendingItem.id }}</strong></div>
         <div class="mono">{{ pendingItem.id }} / {{ activeDeviceFilterLabel }}</div>
         <div class="external-tool-param-help">
-          Instance Name isolates config, pid, state and logs. Example: vite-8087 or ssh-6000.
+          {{ isPendingOneshot ? 'Runs once, captures stdout/stderr, and does not create an instance.' : 'Instance Name isolates config, pid, state and logs. Example: vite-8087 or ssh-6000.' }}
         </div>
       </div>
 
@@ -596,6 +596,14 @@
           />
 
           <el-input
+            v-else-if="normalizeParamType(param.type) === 'textarea'"
+            v-model="paramForm[param.name]"
+            type="textarea"
+            :rows="8"
+            :placeholder="param.description || param.name"
+          />
+
+          <el-input
             v-else
             v-model="paramForm[param.name]"
             :placeholder="param.description || param.name"
@@ -616,7 +624,7 @@
     <template #footer>
       <el-button size="small" @click="startDialogVisible = false">Cancel</el-button>
       <el-button size="small" type="primary" :loading="submitting" @click="confirmStart">
-        Run
+        {{ isPendingOneshot ? 'Run Once' : 'Run' }}
       </el-button>
     </template>
   </el-dialog>
@@ -634,6 +642,42 @@
     <template #footer>
       <el-button size="small" :loading="logLoading" @click="refreshCurrentLogs">Refresh Logs</el-button>
       <el-button size="small" @click="logDialogVisible = false">Close</el-button>
+    </template>
+  </el-dialog>
+
+  <el-dialog
+    v-model="oneshotDialogVisible"
+    :title="oneshotDialogTitle"
+    width="940px"
+    top="6vh"
+    append-to-body
+    modal-class="external-tool-info-overlay"
+    class="external-tool-detail-dialog external-tool-info-dialog"
+  >
+    <div class="external-tool-oneshot-body">
+      <div class="external-tool-detail-subtitle">
+        {{ formatOneshotSummary(oneshotResult) }}
+      </div>
+
+      <div class="external-tool-detail-section">
+        <div class="external-tool-detail-section-title">Stdout</div>
+        <pre class="external-tool-log-content external-tool-oneshot-output">{{ oneshotResult?.stdout || 'No stdout.' }}</pre>
+      </div>
+
+      <div class="external-tool-detail-section">
+        <div class="external-tool-detail-section-title">Stderr</div>
+        <pre class="external-tool-log-content external-tool-oneshot-output">{{ oneshotResult?.stderr || 'No stderr.' }}</pre>
+      </div>
+
+      <div class="external-tool-detail-section">
+        <div class="external-tool-detail-section-title">Result</div>
+        <pre class="external-tool-detail-pre">{{ stringifyDetailValue(oneshotResult || {}) }}</pre>
+      </div>
+    </div>
+
+    <template #footer>
+      <el-button size="small" plain @click="copyOneshotResult">Copy Result</el-button>
+      <el-button size="small" @click="oneshotDialogVisible = false">Close</el-button>
     </template>
   </el-dialog>
 
@@ -758,6 +802,9 @@ export default {
       detailSubtitle: '',
       detailSections: [],
       detailCopyText: '',
+      oneshotDialogVisible: false,
+      oneshotDialogTitle: 'External Tool Result',
+      oneshotResult: null,
       serverPlatform: '',
       serverArch: '',
     }
@@ -940,11 +987,19 @@ export default {
       return Array.isArray(this.pendingItem?.params) ? this.pendingItem.params : []
     },
 
+    pendingExecution() {
+      return this.getModuleExecution(this.pendingItem)
+    },
+
+    isPendingOneshot() {
+      return this.pendingExecution === 'oneshot'
+    },
+
     startDialogTitle() {
       const item = this.pendingItem
       const name = item ? (item.display_name || item.id) : 'External Tool'
       const side = this.pendingTargetSide === 'server' ? 'Server' : 'This Client'
-      const action = 'Run'
+      const action = this.isPendingOneshot ? 'Run Once' : 'Run'
       return `${action} ${name} on ${side}`
     },
   },
@@ -1174,6 +1229,7 @@ export default {
         package_platforms: pkg.platforms || [],
         package_archs: pkg.archs || [],
         version: module.version || pkg.version || '',
+        execution: this.getModuleExecution(module),
         sides: ['server', 'client'],
         platforms: pkg.platforms || module.platforms || [],
         archs: pkg.archs || module.archs || [],
@@ -1197,7 +1253,28 @@ export default {
       return module?.package_meta || this.getPackageById(module?.package_id || '') || module
     },
 
+    getModuleExecution(module) {
+      if (!module) return ''
+      const value = String(module.execution || '').trim().toLowerCase()
+      return value
+    },
+
+    isOneshotModule(module) {
+      return this.getModuleExecution(module) === 'oneshot'
+    },
+
+    formatExecutionLabel(module) {
+      const execution = this.getModuleExecution(module)
+      return execution || 'unknown'
+    },
+
+    getExecutionTagType(module) {
+      return this.isOneshotModule(module) ? 'success' : 'info'
+    },
+
     canRunModuleAction(module) {
+      const execution = this.getModuleExecution(module)
+      if (!['daemon', 'oneshot'].includes(execution)) return false
       const pkg = this.getPackageForModule(module)
       if (!this.isPackageAvailableForTarget(pkg)) return false
       const side = this.getSelectedTargetSideForAction()
@@ -1791,6 +1868,22 @@ async loadAllClientInstances(deviceId = '', showToast = true) {
       return archs.includes(target)
     },
 
+    doesPackageCompatibleTargetMatch(packageInfo, platform, arch) {
+      const targetPlatform = this.normalizePlatform(platform)
+      const targetArch = this.normalizeArch(arch)
+      if (!targetPlatform || !targetArch) return false
+
+      const compatibleTargets = Array.isArray(packageInfo?.compatible_targets)
+        ? packageInfo.compatible_targets
+        : []
+
+      return compatibleTargets.some((item) => {
+        const itemPlatform = this.normalizePlatform(item?.platform || '')
+        const itemArch = this.normalizeArch(item?.arch || '')
+        return itemPlatform === targetPlatform && itemArch === targetArch
+      })
+    },
+
     doesPackageBuildMatch(item, platform, arch) {
       const packages = item?.platform_packages || item?.package_meta?.platform_packages || null
       if (!packages || typeof packages !== 'object') return false
@@ -1804,7 +1897,8 @@ async loadAllClientInstances(deviceId = '', showToast = true) {
         const itemArch = this.normalizeArch(info?.arch || '')
         const platformOk = itemPlatform === '*' || itemPlatform === platformValue
         const archOk = itemArch === '*' || itemArch === archValue
-        return platformOk && archOk
+        if (platformOk && archOk) return true
+        return this.doesPackageCompatibleTargetMatch(info, platformValue, archValue)
       })
     },
 
@@ -1849,6 +1943,7 @@ async loadAllClientInstances(deviceId = '', showToast = true) {
       const value = String(type || 'string').trim().toLowerCase()
       if (value === 'int' || value === 'number') return 'integer'
       if (value === 'bool') return 'boolean'
+      if (value === 'multiline' || value === 'text') return 'textarea'
       return value || 'string'
     },
 
@@ -2000,8 +2095,9 @@ async loadAllClientInstances(deviceId = '', showToast = true) {
       return this.isServerTargetSelected ? 'server' : 'client'
     },
 
-    getRunButtonLabel() {
-      return this.isServerTargetSelected ? 'Run on Server' : 'Run on This Client'
+    getRunButtonLabel(module = null) {
+      const action = this.isOneshotModule(module) ? 'Run Once' : 'Run'
+      return this.isServerTargetSelected ? `${action} on Server` : `${action} on This Client`
     },
 
     getInstallMenuLabel(item = null) {
@@ -2530,6 +2626,15 @@ async uninstallClientTool(item, deviceId) {
       try {
         this.submitting = true
         const params = this.buildStartParams()
+        if (this.isOneshotModule(item)) {
+          const result = this.pendingTargetSide === 'server'
+            ? await this.runServerOneshot(item, params)
+            : await this.runClientOneshot(item, params)
+          this.resetStartDialog()
+          this.openOneshotResultDialog(item, result)
+          return
+        }
+
         const instanceId = this.deriveInstanceId(params)
         if (this.pendingTargetSide === 'server') {
           await this.startServerInstance(item, params, instanceId, false)
@@ -2587,6 +2692,86 @@ async uninstallClientTool(item, deviceId) {
       ElMessage.success(json.data?.message || 'Client instance started')
       if (json.data?.install) this.setInstallStatus(this.getPackageForModule(item), 'client', targetDeviceId, json.data.install)
       await this.loadClientInstances(item.id, targetDeviceId, false)
+    },
+
+    async runServerOneshot(item, params) {
+      this.logExternalToolTarget('run-server-oneshot', item, {
+        request_platform: this.serverPlatform,
+        request_arch: this.serverArch,
+      })
+      const res = await fetch(`/api/external-tools/${encodeURIComponent(item.id)}/server/oneshot`, {
+        method: 'POST',
+        headers: this.buildJsonHeaders({ 'Content-Type': 'application/json' }),
+        body: JSON.stringify({ params }),
+      })
+      const json = await res.json()
+      if (!res.ok || json.code !== 0) throw new Error(json.message || 'Failed to run server oneshot')
+      return json.data || {}
+    },
+
+    async runClientOneshot(item, params, deviceId = '') {
+      const targetDeviceId = this.normalizeDeviceId(deviceId || this.getActionDeviceId(this.getPackageForModule(item)))
+      if (!targetDeviceId) throw new Error('Please select a target machine')
+
+      const requestPlatform = this.getPlatformForConnectionId(targetDeviceId)
+      const requestArch = this.getArchForConnectionId(targetDeviceId)
+      this.logExternalToolTarget('run-client-oneshot', item, {
+        request_client_id: targetDeviceId,
+        request_platform: requestPlatform,
+        request_arch: requestArch,
+      })
+      if (!requestPlatform || !requestArch) throw new Error(`Unable to resolve target platform/arch for client ${targetDeviceId}`)
+
+      const res = await fetch(`/api/connections/${encodeURIComponent(targetDeviceId)}/external-tools/${encodeURIComponent(item.id)}/oneshot`, {
+        method: 'POST',
+        headers: this.buildJsonHeaders({ 'Content-Type': 'application/json' }),
+        body: JSON.stringify({
+          params,
+          platform: requestPlatform,
+          arch: requestArch,
+        }),
+      })
+      const json = await res.json()
+      if (!res.ok || json.code !== 0) throw new Error(json.message || 'Failed to run client oneshot')
+      if (json.data?.install) this.setInstallStatus(this.getPackageForModule(item), 'client', targetDeviceId, json.data.install)
+      return json.data || {}
+    },
+
+    openOneshotResultDialog(item, result) {
+      this.oneshotResult = result || {}
+      this.oneshotDialogTitle = `${item?.display_name || item?.id || 'External Tool'} Result`
+      this.oneshotDialogVisible = true
+      if (result?.success) {
+        ElMessage.success(result.message || 'External tool completed')
+      } else {
+        ElMessage.error(result?.message || 'External tool failed')
+      }
+    },
+
+    formatOneshotSummary(result) {
+      if (!result) return ''
+      const pieces = [
+        result.side || '',
+        result.status || '',
+        `exit=${result.returncode ?? '-'}`,
+        result.duration_sec !== undefined && result.duration_sec !== null ? `${result.duration_sec}s` : '',
+        result.run_id || '',
+      ].filter(Boolean)
+      return pieces.join(' / ')
+    },
+
+    async copyOneshotResult() {
+      const text = this.stringifyDetailValue(this.oneshotResult || {})
+      try {
+        if (window.isSecureContext && navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+          await navigator.clipboard.writeText(text)
+        } else {
+          this.copyTextFallback(text)
+        }
+        ElMessage.success('Copied')
+      } catch (_) {
+        ElMessage.error('Failed to copy')
+      }
     },
 
     normalizeInstanceRow(item, instance, side, deviceId = '') {
@@ -3526,6 +3711,17 @@ formatVersionLabel(version) {
 }
 
 
+.external-tool-oneshot-body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.external-tool-oneshot-output {
+  min-height: 140px;
+  max-height: 260px;
+}
+
 .external-tool-package-modules {
   margin-top: 12px;
   display: flex;
@@ -4178,6 +4374,17 @@ formatVersionLabel(version) {
   }
 
   
+.external-tool-oneshot-body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.external-tool-oneshot-output {
+  min-height: 140px;
+  max-height: 260px;
+}
+
 .external-tool-package-modules {
   margin-top: 12px;
   display: flex;

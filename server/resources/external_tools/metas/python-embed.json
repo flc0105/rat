@@ -36,31 +36,19 @@
       "id": "test",
       "name": "python-embed-test",
       "display_name": "Python Embed Test",
-      "description": "Run a short Python code snippet with the embedded Python runtime.",
-      "execution": "daemon",
+      "description": "Run a short Python code snippet once with the embedded Python runtime and return stdout/stderr.",
+      "execution": "oneshot",
       "exec": "python",
       "params": [
         {
-          "name": "instance_name",
-          "label": "Instance Name",
-          "type": "string",
-          "required": true,
-          "default": "python-embed-test",
-          "description": "Unique name for this Python test instance."
-        },
-        {
           "name": "code",
           "label": "Python Code",
-          "type": "string",
+          "type": "textarea",
           "required": true,
           "default": "import sys; print(sys.version); print('python-embed ok')",
           "description": "Short Python code snippet passed to python -c."
         }
       ],
-      "config": {
-        "target": "{{instance_runtime_dir}}/python-embed-test.env",
-        "template": "PYTHON={{bin_python}}\nCODE={{code}}\n"
-      },
       "runtime": {
         "cwd": "{{install_dir}}/{{package_root}}",
         "argv": [
@@ -68,21 +56,7 @@
           "-c",
           "{{code}}"
         ],
-        "stdout": "{{instance_runtime_dir}}/stdout.log",
-        "stderr": "stdout",
-        "pid_file": "{{instance_runtime_dir}}/tool.pid",
-        "state_file": "{{instance_runtime_dir}}/state.json"
-      },
-      "lifecycle": {
-        "stop": {
-          "type": "signal",
-          "signal": "TERM",
-          "timeout_sec": 5,
-          "kill_after_timeout": true
-        },
-        "status": {
-          "type": "pid_file"
-        }
+        "timeout_sec": 30
       }
     }
   ]

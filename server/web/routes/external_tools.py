@@ -180,6 +180,13 @@ def create_external_tool_blueprint(server_instance):
             )
         return responder.json_endpoint(_execute, default_error_status=500)
 
+    @blueprint.post('/api/external-tools/<tool_id>/server/oneshot')
+    def run_server_oneshot(tool_id):
+        def _execute():
+            _payload, params = _params_from_payload()
+            return external_tool_api.run_server_oneshot(tool_id, params=params)
+        return responder.json_endpoint(_execute, default_error_status=500)
+
     @blueprint.post('/api/external-tools/<tool_id>/server/install')
     def install_server_tool(tool_id):
         def _execute():
@@ -285,6 +292,21 @@ def create_external_tool_blueprint(server_instance):
                 params=params,
                 instance_id=str(payload.get('instance_id') or '').strip(),
                 install_if_needed=False,
+                tab_id=get_optional_tab_id(),
+                platform_alias=platform_alias,
+                arch=arch,
+            )
+        return responder.json_endpoint(_execute, default_error_status=500)
+
+    @blueprint.post('/api/connections/<client_id>/external-tools/<tool_id>/oneshot')
+    def run_client_oneshot(client_id, tool_id):
+        def _execute():
+            payload, params = _params_from_payload()
+            platform_alias, arch = _target_from_client_payload(client_id, payload)
+            return external_tool_api.run_client_oneshot(
+                client_id,
+                tool_id,
+                params=params,
                 tab_id=get_optional_tab_id(),
                 platform_alias=platform_alias,
                 arch=arch,

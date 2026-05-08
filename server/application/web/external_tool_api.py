@@ -111,6 +111,9 @@ class WebExternalToolApi:
         del install_if_needed
         return self.runtime_service.start_server_instance(tool_id, params=params, instance_id=instance_id, install_if_needed=False)
 
+    def run_server_oneshot(self, tool_id: str, params=None):
+        return self.runtime_service.run_server_oneshot(tool_id, params=params)
+
     def stop_server_instance(self, tool_id: str, instance_id: str, params=None):
         return self.runtime_service.stop_server_instance(tool_id, instance_id=instance_id, params=params)
 
@@ -158,6 +161,9 @@ class WebExternalToolApi:
     def start_client_instance(self, client_id: str, tool_id: str, params=None, tab_id: str = '', instance_id: str = '', install_if_needed: bool = False, platform_alias: str = '', arch: str = ''):
         del install_if_needed
         return self.runtime_service.start_client_instance(client_id, tool_id, params=params, tab_id=tab_id, instance_id=instance_id, install_if_needed=False, platform_alias=platform_alias, arch=arch)
+
+    def run_client_oneshot(self, client_id: str, tool_id: str, params=None, tab_id: str = '', platform_alias: str = '', arch: str = ''):
+        return self.runtime_service.run_client_oneshot(client_id, tool_id, params=params, tab_id=tab_id, platform_alias=platform_alias, arch=arch)
 
     def stop_client_instance(self, client_id: str, tool_id: str, instance_id: str, params=None, tab_id: str = ''):
         return self.runtime_service.stop_client_instance(client_id, tool_id, instance_id=instance_id, params=params, tab_id=tab_id)

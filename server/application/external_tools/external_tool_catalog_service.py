@@ -89,6 +89,29 @@ class ExternalToolCatalogService:
         source = values if isinstance(values, list) else []
         return [p for p in (self._normalize_param(p) for p in source) if p]
 
+    def _normalize_compatible_targets(self, values: Any, package_key: str) -> list[dict]:
+        if values in (None, ''):
+            return []
+        if not isinstance(values, list):
+            raise ValueError(f'platform package {package_key} compatible_targets must be a list')
+
+        result = []
+        for index, item in enumerate(values):
+            if not isinstance(item, dict):
+                raise ValueError(f'platform package {package_key} compatible_targets[{index}] must be an object')
+            platform_value = self._normalize_platform(item.get('platform'))
+            arch_value = self._normalize_arch(item.get('arch'))
+            if not platform_value or not arch_value:
+                raise ValueError(f'platform package {package_key} compatible_targets[{index}] requires platform and arch')
+
+            normalized = dict(item)
+            normalized['platform'] = platform_value
+            normalized['arch'] = arch_value
+            requires = normalized.get('requires')
+            normalized['requires'] = [str(v).strip() for v in requires if str(v).strip()] if isinstance(requires, list) else []
+            result.append(normalized)
+        return result
+
     def _normalize_platform_package(self, key: str, item: Any) -> dict:
         if not isinstance(item, dict):
             item = {}
@@ -120,6 +143,7 @@ class ExternalToolCatalogService:
         package['arch'] = arch_value
         package['download_url'] = str(package.get('download_url') or '').strip()
         package['root'] = str(package.get('root') or '').strip()
+        package['compatible_targets'] = self._normalize_compatible_targets(package.get('compatible_targets'), raw_key)
         return package
 
     def _normalize_platform_packages(self, meta: dict) -> dict[str, dict]:
@@ -181,9 +205,9 @@ class ExternalToolCatalogService:
         module['version'] = str(module.get('version') or package.get('version') or '').strip()
         module['category'] = str(module.get('category') or package.get('category') or '').strip()
         module['tags'] = module.get('tags') if isinstance(module.get('tags'), list) else list(package.get('tags') or [])
-        module['execution'] = str(module.get('execution') or module.get('mode') or 'daemon').strip().lower() or 'daemon'
-        if module['execution'] != 'daemon':
-            raise ValueError(f'module {module_id} execution must be daemon')
+        module['execution'] = str(module.get('execution') or '').strip().lower()
+        if module['execution'] not in ('daemon', 'oneshot'):
+            raise ValueError(f'module {module_id} execution must be daemon or oneshot')
         module['exec'] = str(module.get('exec') or module.get('exec_name') or module_id).strip()
         if module['exec'] not in (package.get('execs') or {}):
             raise ValueError(f'module {module_id} references unknown exec: {module["exec"]}')
@@ -385,19 +409,30 @@ class ExternalToolCatalogService:
             platform_ok = item.get('platform') == '*' or item.get('platform') == target_platform
             arch_ok = item.get('arch') in ('*', 'all') or item.get('arch') == target_arch
             if platform_ok and arch_ok:
-                matches.append(key)
+                matches.append((key, 'direct'))
+                continue
+
+            for compatible in item.get('compatible_targets') or []:
+                compatible_platform = self._normalize_platform(compatible.get('platform'))
+                compatible_arch = self._normalize_arch(compatible.get('arch'))
+                if compatible_platform == target_platform and compatible_arch == target_arch:
+                    matches.append((key, 'explicit-compatible'))
+                    break
 
         if len(matches) == 1:
+            match_key, match_reason = matches[0]
             logger.info(
-                '[external-tools] selected compatible package build: package_id=%s target=%s/%s package_key=%s supported=%s',
+                '[external-tools] selected package build: package_id=%s target=%s/%s package_key=%s reason=%s supported=%s',
                 package_id,
                 target_platform,
                 target_arch,
-                matches[0],
+                match_key,
+                match_reason,
                 sorted(packages.keys()),
             )
-            return matches[0]
+            return match_key
         if matches:
+            match_keys = [key for key, _reason in matches]
             logger.warning(
                 '[external-tools] ambiguous package build: package_id=%s target=%s/%s matches=%s supported=%s',
                 package_id,
@@ -406,7 +441,7 @@ class ExternalToolCatalogService:
                 matches,
                 sorted(packages.keys()),
             )
-            raise ValueError(f'Ambiguous platform package for {package_id}: {target_platform}/{target_arch} -> {", ".join(matches)}')
+            raise ValueError(f'Ambiguous platform package for {package_id}: {target_platform}/{target_arch} -> {", ".join(match_keys)}')
 
         logger.warning(
             '[external-tools] unsupported package target: package_id=%s target=%s/%s supported=%s raw_platform=%s raw_arch=%s',

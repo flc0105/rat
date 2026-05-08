@@ -120,7 +120,7 @@
         }
       },
       "web": {
-        "url": "http://{{access_host}}:{{webrtc_port}}/screen-macbook/"
+        "url": "http://{{access_host}}:{{webrtc_port}}/screen-live/"
       }
     }
   ]
