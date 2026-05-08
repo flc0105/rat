@@ -27,54 +27,56 @@ def create_external_tool_blueprint(server_instance):
     def _target_from_payload(payload):
         platform_alias = str(payload.get('platform') or payload.get('platform_alias') or '').strip()
         arch = str(payload.get('arch') or payload.get('architecture') or '').strip()
+        if not platform_alias or not arch:
+            raise ValueError(f'target platform and arch are required, got {platform_alias or "unknown"}/{arch or "unknown"}')
         return platform_alias, arch
+
+    def _client_session_target(client_id):
+        session = server_instance.get_target_connection_by_client_id(client_id)
+        session_info = getattr(session, 'session_info', None)
+        if session_info is None:
+            raise ValueError(f'target client session info not found: {client_id}')
+
+        platform_alias = str(
+            getattr(session_info, 'os_alias', '') or
+            getattr(session_info, 'os_type', '') or
+            ''
+        ).strip()
+        arch = str(getattr(session_info, 'arch', '') or '').strip()
+
+        if not platform_alias or not arch:
+            raise ValueError(f'target client session is missing platform/arch: client_id={client_id} target={platform_alias or "unknown"}/{arch or "unknown"}')
+
+        return platform_alias, arch, session_info
 
     def _target_from_client_payload(client_id, payload):
         requested_platform, requested_arch = _target_from_payload(payload or {})
-        resolved_platform = requested_platform
-        resolved_arch = requested_arch
+        session_platform, session_arch, session_info = _client_session_target(client_id)
 
-        session_info = None
-        try:
-            session = server_instance.get_target_connection_by_client_id(client_id)
-            session_info = getattr(session, 'session_info', None)
-
-            real_platform = str(
-                getattr(session_info, 'os_alias', '') or
-                getattr(session_info, 'os_type', '') or
-                ''
-            ).strip()
-
-            real_arch = str(getattr(session_info, 'arch', '') or '').strip()
-
-            if real_platform:
-                resolved_platform = real_platform
-            if real_arch:
-                resolved_arch = real_arch
-
-        except Exception as e:
-            logger.warning(
-                '[external-tools] failed to resolve client session target: '
-                'client_id=%s requested=%s/%s error=%s',
-                client_id,
-                requested_platform or 'unknown',
-                requested_arch or 'unknown',
-                e,
-            )
+        requested_platform_norm = external_tool_api._normalize_platform(requested_platform)
+        requested_arch_norm = external_tool_api._normalize_arch(requested_arch)
+        session_platform_norm = external_tool_api._normalize_platform(session_platform)
+        session_arch_norm = external_tool_api._normalize_arch(session_arch)
 
         logger.info(
-            '[external-tools] client target resolved: '
-            'client_id=%s machine_id=%s hostname=%s requested=%s/%s resolved=%s/%s',
+            '[external-tools] client target check: client_id=%s machine_id=%s hostname=%s requested=%s/%s session=%s/%s',
             client_id,
             getattr(session_info, 'machine_id', '') if session_info else '',
             getattr(session_info, 'hostname', '') if session_info else '',
-            requested_platform or 'unknown',
-            requested_arch or 'unknown',
-            resolved_platform or 'unknown',
-            resolved_arch or 'unknown',
+            requested_platform_norm or 'unknown',
+            requested_arch_norm or 'unknown',
+            session_platform_norm or 'unknown',
+            session_arch_norm or 'unknown',
         )
 
-        return resolved_platform, resolved_arch
+        if requested_platform_norm != session_platform_norm or requested_arch_norm != session_arch_norm:
+            raise ValueError(
+                'target platform/arch mismatch: '
+                f'client_id={client_id} requested={requested_platform_norm or "unknown"}/{requested_arch_norm or "unknown"} '
+                f'session={session_platform_norm or "unknown"}/{session_arch_norm or "unknown"}'
+            )
+
+        return session_platform_norm, session_arch_norm
 
     @blueprint.get('/api/external-tools/catalog')
     def list_external_tools():
@@ -123,6 +125,8 @@ def create_external_tool_blueprint(server_instance):
         try:
             platform_alias = str(request.args.get('platform') or request.args.get('platform_alias') or '').strip()
             arch = str(request.args.get('arch') or request.args.get('architecture') or '').strip()
+            if not platform_alias or not arch:
+                raise ValueError(f'target platform and arch are required, got {platform_alias or "unknown"}/{arch or "unknown"}')
             filename = external_tool_api.get_package_download_filename(tool_id, platform_alias=platform_alias, arch=arch)
             file_path = external_tool_api.get_package_path(filename)
             return send_file(file_path, as_attachment=True, download_name=os.path.basename(file_path))

@@ -124,8 +124,6 @@ class ExternalToolCatalogService:
 
     def _normalize_platform_packages(self, meta: dict) -> dict[str, dict]:
         raw = meta.get('platform_packages')
-        if raw is None:
-            raw = meta.get('packages')
         if not isinstance(raw, dict) or not raw:
             raise ValueError('platform_packages is required')
 
@@ -214,7 +212,7 @@ class ExternalToolCatalogService:
             if value and value not in seen:
                 seen.add(value)
                 result.append(value)
-        return result or ['*']
+        return result
 
     def _derive_package_arches(self, platform_packages: dict[str, dict]) -> list[str]:
         result = []
@@ -224,16 +222,13 @@ class ExternalToolCatalogService:
             if value and value not in seen:
                 seen.add(value)
                 result.append(value)
-        return result or ['*']
+        return result
 
     def normalize_meta(self, meta: dict, path: str = '') -> dict:
         item = deepcopy(meta)
         package_id = str(item.get('id') or item.get('name') or '').strip()
         if not package_id:
-            if path:
-                package_id = os.path.splitext(os.path.basename(path))[0]
-            else:
-                raise ValueError('external tool package id is required')
+            raise ValueError('external tool package id is required')
 
         item['id'] = package_id
         item['name'] = str(item.get('name') or package_id).strip() or package_id
@@ -355,24 +350,31 @@ class ExternalToolCatalogService:
     def select_package_key(self, package: dict, platform_alias: str = '', arch: str = '') -> str:
         packages = package.get('platform_packages') if isinstance(package.get('platform_packages'), dict) else {}
         package_id = package.get('id') or 'package'
-
         if not packages:
-            logger.warning(
-                '[external-tools] package has no platform packages: package_id=%s',
-                package_id,
-            )
+            logger.warning('[external-tools] package has no platform packages: package_id=%s', package_id)
             raise ValueError(f'{package_id} has no platform packages')
 
         target_platform = self._normalize_platform(platform_alias or '')
         target_arch = self._normalize_arch(arch or '')
-        exact_key = self._platform_key(target_platform, target_arch)
+        if not target_platform or not target_arch:
+            logger.warning(
+                '[external-tools] missing target platform/arch: package_id=%s target=%s/%s supported=%s raw_platform=%s raw_arch=%s',
+                package_id,
+                target_platform or 'unknown',
+                target_arch or 'unknown',
+                sorted(packages.keys()),
+                platform_alias or '',
+                arch or '',
+            )
+            raise ValueError(f'target platform and arch are required for {package_id}, got {target_platform or "unknown"}/{target_arch or "unknown"}')
 
+        exact_key = self._platform_key(target_platform, target_arch)
         if exact_key and exact_key in packages:
             logger.info(
                 '[external-tools] selected exact package build: package_id=%s target=%s/%s package_key=%s supported=%s',
                 package_id,
-                target_platform or 'unknown',
-                target_arch or 'unknown',
+                target_platform,
+                target_arch,
                 exact_key,
                 sorted(packages.keys()),
             )
@@ -380,8 +382,8 @@ class ExternalToolCatalogService:
 
         matches = []
         for key, item in packages.items():
-            platform_ok = not target_platform or item.get('platform') == '*' or item.get('platform') == target_platform
-            arch_ok = not target_arch or item.get('arch') in ('*', 'all') or item.get('arch') == target_arch
+            platform_ok = item.get('platform') == '*' or item.get('platform') == target_platform
+            arch_ok = item.get('arch') in ('*', 'all') or item.get('arch') == target_arch
             if platform_ok and arch_ok:
                 matches.append(key)
 
@@ -389,19 +391,18 @@ class ExternalToolCatalogService:
             logger.info(
                 '[external-tools] selected compatible package build: package_id=%s target=%s/%s package_key=%s supported=%s',
                 package_id,
-                target_platform or 'unknown',
-                target_arch or 'unknown',
+                target_platform,
+                target_arch,
                 matches[0],
                 sorted(packages.keys()),
             )
             return matches[0]
-
         if matches:
             logger.warning(
                 '[external-tools] ambiguous package build: package_id=%s target=%s/%s matches=%s supported=%s',
                 package_id,
-                target_platform or 'unknown',
-                target_arch or 'unknown',
+                target_platform,
+                target_arch,
                 matches,
                 sorted(packages.keys()),
             )
@@ -410,14 +411,13 @@ class ExternalToolCatalogService:
         logger.warning(
             '[external-tools] unsupported package target: package_id=%s target=%s/%s supported=%s raw_platform=%s raw_arch=%s',
             package_id,
-            target_platform or 'unknown',
-            target_arch or 'unknown',
+            target_platform,
+            target_arch,
             sorted(packages.keys()),
             platform_alias or '',
             arch or '',
         )
-
-        raise ValueError(f'{package_id} does not support {target_platform or "unknown"}/{target_arch or "unknown"}')
+        raise ValueError(f'{package_id} does not support {target_platform}/{target_arch}')
 
     def resolve_exec_rel_path(self, package: dict, exec_name: str, package_key: str) -> str:
         execs = package.get('execs') if isinstance(package.get('execs'), dict) else {}
@@ -502,18 +502,22 @@ class ExternalToolCatalogService:
     def _platform_matches(self, package: dict, platform_alias: str = '') -> bool:
         target = self._normalize_platform(platform_alias or '')
         if not target:
-            return True
+            return False
         platforms = package.get('platforms') or []
         return not platforms or '*' in platforms or target in platforms
 
     def _arch_matches(self, package: dict, arch: str = '') -> bool:
         target = self._normalize_arch(arch or '')
         if not target:
-            return True
+            return False
         return any((item.get('arch') in ('*', 'all') or item.get('arch') == target) for item in (package.get('platform_packages') or {}).values())
 
     def list_cli_aliases(self, side: str = '', platform_alias: str = '', arch: str = '') -> list[dict]:
         del side
+        target_platform = self._normalize_platform(platform_alias or '')
+        target_arch = self._normalize_arch(arch or '')
+        if not target_platform or not target_arch:
+            raise ValueError(f'target platform and arch are required for external tool aliases, got {target_platform or "unknown"}/{target_arch or "unknown"}')
         items = []
         for package in self.list_packages():
             if package.get('error'):
@@ -524,7 +528,14 @@ class ExternalToolCatalogService:
                 continue
             try:
                 package_key = self.select_package_key(package, platform_alias=platform_alias, arch=arch)
-            except Exception:
+            except Exception as e:
+                logger.warning(
+                    '[external-tools] skip cli alias package because target selection failed: package_id=%s target=%s/%s error=%s',
+                    package.get('id') or '',
+                    target_platform or 'unknown',
+                    target_arch or 'unknown',
+                    e,
+                )
                 continue
             for exec_name, exec_item in (package.get('execs') or {}).items():
                 if not isinstance(exec_item, dict) or not exec_item.get('enabled', True):

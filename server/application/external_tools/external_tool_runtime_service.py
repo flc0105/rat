@@ -1,6 +1,7 @@
 import base64
 import errno
 import json
+import logging
 import os
 import platform
 import re
@@ -17,6 +18,9 @@ from types import SimpleNamespace
 from typing import Any
 
 from core.platform.platform_identity import detect_platform_alias
+
+
+logger = logging.getLogger(__name__)
 
 
 _VAR_PATTERN = re.compile(r'{{\s*([A-Za-z_][A-Za-z0-9_.]*)\s*}}')
@@ -57,7 +61,7 @@ class ExternalToolRuntimeService:
         return self.catalog_service._normalize_platform(value or '')
 
     def _normalize_arch(self, value: Any = '') -> str:
-        text = str(value or platform.machine() or '').strip().lower().replace('-', '_')
+        text = str(value or '').strip().lower().replace('-', '_')
         aliases = {
             'x86_64': 'amd64',
             'amd64': 'amd64',
@@ -67,6 +71,19 @@ class ExternalToolRuntimeService:
             'arm64': 'arm64',
         }
         return aliases.get(text, text)
+
+    def _detect_arch(self) -> str:
+        value = self._normalize_arch(platform.machine())
+        if not value:
+            raise ValueError('server arch detection failed')
+        return value
+
+    def _require_target(self, platform_alias: Any, arch: Any, context: str) -> tuple[str, str]:
+        platform_value = self._normalize_platform(platform_alias or '')
+        arch_value = self._normalize_arch(arch or '')
+        if not platform_value or not arch_value:
+            raise ValueError(f'target platform and arch are required for {context}, got {platform_value or "unknown"}/{arch_value or "unknown"}')
+        return platform_value, arch_value
 
     def _context_get(self, context: dict, dotted_key: str) -> Any:
         key = str(dotted_key or '').strip()
@@ -325,8 +342,7 @@ class ExternalToolRuntimeService:
     ) -> dict:
         version = str(package.get('version') or 'default').strip() or 'default'
         package_id = str(package.get('id') or '').strip()
-        platform_value = self._normalize_platform(platform_alias or detect_platform_alias())
-        arch_value = self._normalize_arch(arch or '')
+        platform_value, arch_value = self._require_target(platform_alias, arch, f'package {package_id or package.get("id") or "unknown"}')
         package_key = self._select_package_key(package, platform_value, arch_value)
         package_file = self._package_file(package, package_key)
         context = {
@@ -372,7 +388,7 @@ class ExternalToolRuntimeService:
             package,
             install_root=install_root,
             runtime_root=runtime_root,
-            platform_alias=platform_alias or detect_platform_alias(),
+            platform_alias=platform_alias,
             arch=arch,
         )
         params = params if isinstance(params, dict) else {}
@@ -408,7 +424,7 @@ class ExternalToolRuntimeService:
             install_root=self.install_root_dir,
             runtime_root=self.runtime_root_dir,
             platform_alias=detect_platform_alias(),
-            arch=self._normalize_arch(''),
+            arch=self._detect_arch(),
         )
         for key in ('external_tools_root', 'external_tools_runtime', 'runtime_dir', 'install_dir'):
             context[key] = self._expand_path(context[key])
@@ -429,7 +445,7 @@ class ExternalToolRuntimeService:
             instance_id=instance_id,
             side='server',
             platform_alias=detect_platform_alias(),
-            arch=self._normalize_arch(''),
+            arch=self._detect_arch(),
         )
         for key in ('external_tools_root', 'external_tools_runtime', 'runtime_dir', 'tool_runtime_dir', 'instance_runtime_dir', 'state_file', 'install_dir'):
             context[key] = self._expand_path(context[key])
@@ -494,7 +510,8 @@ class ExternalToolRuntimeService:
         return context
 
     def _assert_package_usable(self, package: dict, platform_alias: str = '', arch: str = ''):
-        self._select_package_key(package, platform_alias or detect_platform_alias(), arch or self._normalize_arch(''))
+        platform_value, arch_value = self._require_target(platform_alias, arch, f'package {package.get("id") or "unknown"}')
+        self._select_package_key(package, platform_value, arch_value)
 
     def _safe_extract_zip(self, zip_path: str, destination_dir: str) -> str:
         destination_dir = self._expand_path(destination_dir)
@@ -770,6 +787,7 @@ class ExternalToolRuntimeService:
                 json.dump(launch_spec, file_obj, ensure_ascii=False)
             launcher_code = r'''
 import json
+import logging
 import os
 import subprocess
 import sys
@@ -1254,7 +1272,14 @@ finally:
         return download_url
 
     def build_client_install_payload(self, package: dict, platform_alias: str, arch: str) -> dict:
-        context = self.build_client_package_context(package, platform_alias=platform_alias, arch=arch)
+        platform_value, arch_value = self._require_target(platform_alias, arch, f'client package {package.get("id") or "unknown"}')
+        logger.info(
+            '[external-tools] build client install payload: package_id=%s target=%s/%s',
+            package.get('id') or '',
+            platform_value,
+            arch_value,
+        )
+        context = self.build_client_package_context(package, platform_alias=platform_value, arch=arch_value)
         package_file = self._package_file(package, context.get('package_key') or '')
         filename = str(package_file.get('filename') or '').strip()
         if not filename:
@@ -1284,8 +1309,15 @@ finally:
     def build_client_start_payload(self, meta: dict, params: dict | None = None, instance_id: str = '', install_if_needed: bool = False, require_required_params: bool = True, platform_alias: str = '', arch: str = '') -> dict:
         del install_if_needed
         package = meta.get('package_meta') or self.catalog_service.get_package(meta.get('package_id') or '')
+        platform_value, arch_value = self._require_target(platform_alias, arch, f'client module {meta.get("tool_id") or meta.get("id") or "unknown"}')
+        logger.info(
+            '[external-tools] build client start payload: tool_id=%s target=%s/%s',
+            meta.get('tool_id') or meta.get('id') or '',
+            platform_value,
+            arch_value,
+        )
         resolved_params = self.resolve_params(meta, params, require_required=require_required_params)
-        context = self.build_client_context(meta, resolved_params, instance_id=instance_id, platform_alias=platform_alias, arch=arch)
+        context = self.build_client_context(meta, resolved_params, instance_id=instance_id, platform_alias=platform_value, arch=arch_value)
         package_file = self._package_file(package, context.get('package_key') or '')
         filename = str(package_file.get('filename') or '').strip()
         if not filename:
@@ -1440,7 +1472,15 @@ finally:
     def build_client_exec_payload(self, target: dict, raw_args: str = '', platform_alias: str = '', arch: str = '', cwd: str = '') -> dict:
         package = target.get('package') or target.get('meta') or {}
         exec_name = target.get('exec_name') or target.get('alias') or ''
-        context = self.build_client_package_context(package, platform_alias=platform_alias, arch=arch)
+        platform_value, arch_value = self._require_target(platform_alias, arch, f'client exec {exec_name or "unknown"}')
+        logger.info(
+            '[external-tools] build client exec payload: package_id=%s exec=%s target=%s/%s',
+            package.get('id') or '',
+            exec_name,
+            platform_value,
+            arch_value,
+        )
+        context = self.build_client_package_context(package, platform_alias=platform_value, arch=arch_value)
         package_file = self._package_file(package, context.get('package_key') or '')
         filename = str(package_file.get('filename') or '').strip()
         rel_path = self.catalog_service.resolve_exec_rel_path(package, exec_name, context.get('package_key') or '')

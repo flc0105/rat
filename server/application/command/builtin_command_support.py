@@ -698,11 +698,18 @@ class ExternalToolCliBuiltinSupport:
     def _client_platform(self) -> str:
         info = getattr(self.conn, 'session_info', None)
         value = getattr(info, 'os_alias', '') if info is not None else ''
-        return self._catalog_service()._normalize_platform(value or '')
+        normalized = self._catalog_service()._normalize_platform(value or '')
+        if not normalized:
+            raise ValueError('client platform is required for external tool command resolution')
+        return normalized
 
     def _client_arch(self) -> str:
         info = getattr(self.conn, 'session_info', None)
-        return str(getattr(info, 'arch', '') if info is not None else '').strip().lower()
+        value = getattr(info, 'arch', '') if info is not None else ''
+        normalized = self._catalog_service()._normalize_arch(value or '')
+        if not normalized:
+            raise ValueError('client arch is required for external tool command resolution')
+        return normalized
 
     def _client_cwd(self) -> str:
         info = getattr(self.conn, 'session_info', None)

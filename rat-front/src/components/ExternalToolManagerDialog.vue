@@ -1014,7 +1014,6 @@ export default {
       return payload
     },
 
-
     selectPackage(item) {
       if (!item?.id) return
       this.selectedPackageId = item.id
@@ -1055,24 +1054,33 @@ export default {
         const status = item?.install_status
         if (!status) continue
         const side = status.side || this.getItemSides(item)[0] || ''
-        const deviceId = side === 'server' ? '__server__' : this.normalizeDeviceId(clientDeviceId || this.currentDeviceId)
-        if (side === 'client' && !deviceId) continue
+        const deviceId = side === 'server' ? '__server__' : this.normalizeDeviceId(clientDeviceId)
+        if (side === 'client' && !deviceId) {
+          this.logExternalToolTarget('apply-catalog-status-skip', item, {
+            reason: 'client install_status returned without explicit client_id',
+          })
+          continue
+        }
         this.setInstallStatus(item, side, deviceId, { ...status, loading: false, error: status.error || '' })
       }
     },
 
-    async loadClientCatalogStatuses(deviceId = this.currentDeviceId, showError = true) {
+    async loadClientCatalogStatuses(deviceId = '', showError = true) {
       const targetDeviceId = this.normalizeDeviceId(deviceId)
       if (!targetDeviceId || targetDeviceId === '__server__' || targetDeviceId === '__all__') return []
 
       const targetPlatform = this.getPlatformForConnectionId(targetDeviceId)
       const targetArch = this.getArchForConnectionId(targetDeviceId)
-
       this.logExternalToolTarget('client-catalog-request', null, {
         request_client_id: targetDeviceId,
         request_platform: targetPlatform,
         request_arch: targetArch,
       })
+      if (!targetPlatform || !targetArch) {
+        const message = `Unable to resolve target platform/arch for client ${targetDeviceId}`
+        if (showError) ElMessage.error(message)
+        throw new Error(message)
+      }
 
       const targetItems = (this.items || []).filter(item => this.doesPackageBuildMatch(item, targetPlatform, targetArch))
       for (const item of targetItems) {
@@ -1227,7 +1235,7 @@ export default {
         ? (itemOrToolId?.package_meta?.id || itemOrToolId?.package_id || itemOrToolId?.id)
         : itemOrToolId
       const normalizedSide = side || (typeof itemOrToolId === 'object' ? this.getItemSides(itemOrToolId)[0] : '')
-      const normalizedDeviceId = normalizedSide === 'server' ? '__server__' : this.normalizeDeviceId(deviceId || this.currentDeviceId)
+      const normalizedDeviceId = normalizedSide === 'server' ? '__server__' : this.normalizeDeviceId(deviceId)
       return `${normalizedSide}:${normalizedDeviceId}:${toolId || ''}`
     },
 
@@ -1293,7 +1301,6 @@ export default {
           if (showToast) ElMessage.warning('Please select an online client')
           return
         }
-
         await this.loadClientCatalogStatuses(deviceId, showToast)
       }
       if (showToast) ElMessage.success('Install statuses refreshed')
@@ -1333,7 +1340,7 @@ export default {
       return !status || status.installed !== true
     },
 
-    async fetchInstallStatus(item, side = item?.side, deviceId = this.currentDeviceId, options = {}) {
+    async fetchInstallStatus(item, side = item?.side, deviceId = '', options = {}) {
       if (!item?.id) return null
       const targetSide = side || item.side
       const targetDeviceId = targetSide === 'server' ? '__server__' : this.normalizeDeviceId(deviceId)
@@ -1381,26 +1388,25 @@ export default {
 
 
     async refreshInstances(showToast = true) {
-  const device = this.normalizeMachineId(this.deviceFilter || this.defaultTargetValue())
+      const device = this.normalizeMachineId(this.deviceFilter || this.defaultTargetValue())
 
-  if (device === '__server__' || !device) {
-    await this.loadAllServerInstances(false)
-  } else {
-    const deviceId = this.getClientDeviceIdForMachine(device)
-    if (!deviceId) {
-      this.logExternalToolTarget('refresh-instances-skip', null, {
-        reason: 'selected machine has no matching online client_id',
-        selected_machine_id: device,
-      })
-      if (showToast) ElMessage.warning('Please select an online client')
-      return
-    }
+      if (device === '__server__' || !device) {
+        await this.loadAllServerInstances(false)
+      } else {
+        const deviceId = this.getClientDeviceIdForMachine(device)
+        if (!deviceId) {
+          this.logExternalToolTarget('refresh-instances-skip', null, {
+            reason: 'selected machine has no matching online client_id',
+            selected_machine_id: device,
+          })
+          if (showToast) ElMessage.warning('Please select an online client')
+          return
+        }
+        await this.loadAllClientInstances(deviceId, false)
+      }
 
-    await this.loadAllClientInstances(deviceId, false)
-  }
-
-  if (showToast) ElMessage.success('Instances refreshed')
-},
+      if (showToast) ElMessage.success('Instances refreshed')
+    },
 
 
     groupInstancesByTool(items = []) {
@@ -1454,7 +1460,7 @@ async loadAllServerInstances(showToast = true) {
   }
 },
 
-async loadAllClientInstances(deviceId = this.currentDeviceId, showToast = true) {
+async loadAllClientInstances(deviceId = '', showToast = true) {
   const targetDeviceId = this.normalizeDeviceId(deviceId)
   if (!targetDeviceId || targetDeviceId === '__server__' || targetDeviceId === '__all__') return
 
@@ -1516,7 +1522,7 @@ async loadAllClientInstances(deviceId = this.currentDeviceId, showToast = true) 
       }
     },
 
-    async loadClientInstances(toolId, deviceId = this.currentDeviceId, showToast = true) {
+    async loadClientInstances(toolId, deviceId = '', showToast = true) {
       const targetDeviceId = this.normalizeDeviceId(deviceId)
       if (!toolId || !targetDeviceId || targetDeviceId === '__server__' || targetDeviceId === '__all__') return
       try {
@@ -1666,7 +1672,7 @@ async loadAllClientInstances(deviceId = this.currentDeviceId, showToast = true) 
     },
 
     getClientDeviceIdsForFilter(filterValue) {
-      const value = this.normalizeMachineId(filterValue || this.currentMachineId)
+      const value = this.normalizeMachineId(filterValue)
       if (!value || value === '__server__') return []
       if (value === '__all__') {
         const ids = []
@@ -1677,7 +1683,6 @@ async loadAllClientInstances(deviceId = this.currentDeviceId, showToast = true) 
           seen.add(id)
           ids.push(id)
         }
-        if (this.currentDeviceId && !seen.has(this.currentDeviceId)) ids.push(this.currentDeviceId)
         return ids
       }
 
@@ -1773,43 +1778,40 @@ async loadAllClientInstances(deviceId = this.currentDeviceId, showToast = true) 
     doesPlatformMatch(item, platform) {
       const target = this.normalizePlatform(platform)
       const platforms = this.normalizePlatforms(item?.platforms || item?.package_platforms || item?.platform)
-      if (!target || platforms.includes('*')) return true
+      if (!target || !platforms.length) return false
+      if (platforms.includes('*')) return true
       return platforms.includes(target)
     },
 
     doesArchMatch(item, arch) {
       const target = this.normalizeArch(arch)
       const archs = this.normalizeArchs(item?.archs || item?.package_archs || item?.arch)
-      if (!target || archs.includes('*')) return true
+      if (!target || !archs.length) return false
+      if (archs.includes('*')) return true
       return archs.includes(target)
     },
 
     doesPackageBuildMatch(item, platform, arch) {
-      const packages = item?.platform_packages || item?.packages || item?.package_meta?.platform_packages || null
-      if (!packages || typeof packages !== 'object') return this.doesPlatformMatch(item, platform) && this.doesArchMatch(item, arch)
+      const packages = item?.platform_packages || item?.package_meta?.platform_packages || null
+      if (!packages || typeof packages !== 'object') return false
       const platformValue = this.normalizePlatform(platform)
       const archValue = this.normalizeArch(arch)
-      if (!platformValue) return false
-      const exactKey = archValue ? `${platformValue}-${archValue}` : ''
-      if (exactKey && packages[exactKey]) return true
+      if (!platformValue || !archValue) return false
+      const exactKey = `${platformValue}-${archValue}`
+      if (packages[exactKey]) return true
       return Object.values(packages).some((info) => {
         const itemPlatform = this.normalizePlatform(info?.platform || '')
         const itemArch = this.normalizeArch(info?.arch || '')
         const platformOk = itemPlatform === '*' || itemPlatform === platformValue
-        const archOk = !archValue || itemArch === '*' || itemArch === archValue
+        const archOk = itemArch === '*' || itemArch === archValue
         return platformOk && archOk
       })
     },
 
-    // isServerPlatformSupported(item) {
-    //   return !!item
-    // },
-
     isServerPlatformSupported(item) {
-  if (!item) return false
-  if (!this.serverPlatform) return true
-  return this.doesPackageBuildMatch(item, this.serverPlatform, this.serverArch)
-},
+      if (!item || !this.serverPlatform || !this.serverArch) return false
+      return this.doesPackageBuildMatch(item, this.serverPlatform, this.serverArch)
+    },
 
     isClientPlatformSupported(item) {
       return this.doesPackageBuildMatch(item, this.currentClientPlatform, this.currentClientArch)
@@ -1975,7 +1977,6 @@ async loadAllClientInstances(deviceId = this.currentDeviceId, showToast = true) 
     downloadTool(item) {
       const id = String(item?.id || '').trim()
       if (!id) return
-
       const platform = this.selectedTargetPlatform
       const arch = this.selectedTargetArch
 
@@ -1992,8 +1993,7 @@ async loadAllClientInstances(deviceId = this.currentDeviceId, showToast = true) 
       const params = new URLSearchParams()
       params.set('platform', platform)
       params.set('arch', arch)
-      const query = params.toString()
-      window.open(`/api/external-tools/${encodeURIComponent(id)}/download${query ? `?${query}` : ''}`, '_blank')
+      window.open(`/api/external-tools/${encodeURIComponent(id)}/download?${params.toString()}`, '_blank')
     },
 
     getSelectedTargetSideForAction() {
@@ -2038,9 +2038,13 @@ getPackageTargetConnectionIds(item) {
   if (!item || this.getSelectedTargetSideForAction() !== 'client' || !this.supportsSide(item, 'client')) return []
   const machineId = this.getPackageTargetMachineId(item)
   const ids = this.getClientDeviceIdsForFilter(machineId)
-  if (ids.length) return ids
-  const actionDeviceId = this.getActionDeviceId(item)
-  return actionDeviceId ? [actionDeviceId] : []
+  if (!ids.length) {
+    this.logExternalToolTarget('package-target-connections-empty', item, {
+      reason: 'selected machine has no matching client connections',
+      selected_machine_id: machineId,
+    })
+  }
+  return ids
 },
 
 getPackageTargetInstanceRows(item) {
@@ -2163,19 +2167,22 @@ async uninstallClientTool(item, deviceId) {
   const targetDeviceId = this.normalizeDeviceId(deviceId)
   if (!targetDeviceId) throw new Error('Please select a device')
 
+  const requestPlatform = this.getPlatformForConnectionId(targetDeviceId)
+  const requestArch = this.getArchForConnectionId(targetDeviceId)
   this.logExternalToolTarget('uninstall-client-request', item, {
     request_client_id: targetDeviceId,
-    request_platform: this.getPlatformForConnectionId(targetDeviceId),
-    request_arch: this.getArchForConnectionId(targetDeviceId),
+    request_platform: requestPlatform,
+    request_arch: requestArch,
   })
+  if (!requestPlatform || !requestArch) throw new Error(`Unable to resolve target platform/arch for client ${targetDeviceId}`)
 
   const res = await fetch(`/api/connections/${encodeURIComponent(targetDeviceId)}/external-tools/${encodeURIComponent(item.id)}/uninstall`, {
     method: 'POST',
     headers: this.buildJsonHeaders({ 'Content-Type': 'application/json' }),
     body: JSON.stringify({
       params: {},
-      platform: this.getPlatformForConnectionId(targetDeviceId),
-      arch: this.getArchForConnectionId(targetDeviceId),
+      platform: requestPlatform,
+      arch: requestArch,
     }),
   })
   const json = await res.json()
@@ -2239,19 +2246,22 @@ async uninstallClientTool(item, deviceId) {
       const targetDeviceId = this.normalizeDeviceId(deviceId)
       if (!targetDeviceId) throw new Error('Please select a device')
 
+      const requestPlatform = this.getPlatformForConnectionId(targetDeviceId)
+      const requestArch = this.getArchForConnectionId(targetDeviceId)
       this.logExternalToolTarget('clear-client-cache-request', item, {
         request_client_id: targetDeviceId,
-        request_platform: this.getPlatformForConnectionId(targetDeviceId),
-        request_arch: this.getArchForConnectionId(targetDeviceId),
+        request_platform: requestPlatform,
+        request_arch: requestArch,
       })
+      if (!requestPlatform || !requestArch) throw new Error(`Unable to resolve target platform/arch for client ${targetDeviceId}`)
 
       const res = await fetch(`/api/connections/${encodeURIComponent(targetDeviceId)}/external-tools/${encodeURIComponent(item.id)}/clear-cache`, {
         method: 'POST',
         headers: this.buildJsonHeaders({ 'Content-Type': 'application/json' }),
         body: JSON.stringify({
           params: {},
-          platform: this.getPlatformForConnectionId(targetDeviceId),
-          arch: this.getArchForConnectionId(targetDeviceId),
+          platform: requestPlatform,
+          arch: requestArch,
         }),
       })
       const json = await res.json()
@@ -2277,15 +2287,14 @@ async uninstallClientTool(item, deviceId) {
           })
         } else {
           if (!deviceId) throw new Error('Please select a target machine')
-
           const requestPlatform = this.getPlatformForConnectionId(deviceId)
           const requestArch = this.getArchForConnectionId(deviceId)
-
           this.logExternalToolTarget('install-client-package', item, {
             request_client_id: deviceId,
             request_platform: requestPlatform,
             request_arch: requestArch,
           })
+          if (!requestPlatform || !requestArch) throw new Error(`Unable to resolve target platform/arch for client ${deviceId}`)
 
           res = await fetch(`/api/connections/${encodeURIComponent(deviceId)}/external-tools/${encodeURIComponent(item.id)}/install`, {
             method: 'POST',
@@ -2555,12 +2564,12 @@ async uninstallClientTool(item, deviceId) {
 
       const requestPlatform = this.getPlatformForConnectionId(targetDeviceId)
       const requestArch = this.getArchForConnectionId(targetDeviceId)
-
       this.logExternalToolTarget('start-client-instance', item, {
         request_client_id: targetDeviceId,
         request_platform: requestPlatform,
         request_arch: requestArch,
       })
+      if (!requestPlatform || !requestArch) throw new Error(`Unable to resolve target platform/arch for client ${targetDeviceId}`)
 
       const res = await fetch(`/api/connections/${encodeURIComponent(targetDeviceId)}/external-tools/${encodeURIComponent(item.id)}/instances/start`, {
         method: 'POST',
@@ -2585,7 +2594,7 @@ async uninstallClientTool(item, deviceId) {
       const config = instance.config || {}
       const params = instance.params || {}
       const configPath = config.target || instance.config_file || ''
-      const normalizedDeviceId = side === 'server' ? '__server__' : this.normalizeDeviceId(deviceId || this.currentDeviceId)
+      const normalizedDeviceId = side === 'server' ? '__server__' : this.normalizeDeviceId(deviceId)
       const machineId = side === 'server' ? '__server__' : this.getMachineIdForConnectionId(normalizedDeviceId)
       const hostname = side === 'server' ? '' : this.getHostnameForConnectionId(normalizedDeviceId)
       return {
@@ -2751,8 +2760,8 @@ async uninstallClientTool(item, deviceId) {
     },
 
     async stopClientInstance(row) {
-      const deviceId = this.normalizeDeviceId(row.device_id || this.selectedId)
-      if (!deviceId) throw new Error('Please select a device')
+      const deviceId = this.normalizeDeviceId(row.device_id)
+      if (!deviceId) throw new Error('Client instance row is missing device_id')
       const res = await fetch(`/api/connections/${encodeURIComponent(deviceId)}/external-tools/${encodeURIComponent(row.tool_id)}/instances/${encodeURIComponent(row.instance_id)}/stop`, {
         method: 'POST',
         headers: this.buildJsonHeaders({ 'Content-Type': 'application/json' }),
@@ -2802,8 +2811,8 @@ async uninstallClientTool(item, deviceId) {
     },
 
     async readClientLogs(row) {
-      const deviceId = this.normalizeDeviceId(row.device_id || this.selectedId)
-      if (!deviceId) throw new Error('Please select a device')
+      const deviceId = this.normalizeDeviceId(row.device_id)
+      if (!deviceId) throw new Error('Client instance row is missing device_id')
       const res = await fetch(`/api/connections/${encodeURIComponent(deviceId)}/external-tools/${encodeURIComponent(row.tool_id)}/instances/${encodeURIComponent(row.instance_id)}/logs`, {
         method: 'POST',
         headers: this.buildJsonHeaders({ 'Content-Type': 'application/json' }),
@@ -3099,8 +3108,8 @@ openWebInstance(row) {
     },
 
     async removeClientInstance(row) {
-      const deviceId = this.normalizeDeviceId(row.connection_id || row.device_id || this.selectedId)
-      if (!deviceId) throw new Error('Please select a device')
+      const deviceId = this.normalizeDeviceId(row.connection_id || row.device_id)
+      if (!deviceId) throw new Error('Client instance row is missing connection_id/device_id')
       const res = await fetch(`/api/connections/${encodeURIComponent(deviceId)}/external-tools/${encodeURIComponent(row.tool_id)}/instances/${encodeURIComponent(row.instance_id)}/remove`, {
         method: 'POST',
         headers: this.buildJsonHeaders({ 'Content-Type': 'application/json' }),
@@ -3153,8 +3162,8 @@ openWebInstance(row) {
     },
 
     async clearClientInstanceLogs(row) {
-      const deviceId = this.normalizeDeviceId(row.connection_id || row.device_id || this.selectedId)
-      if (!deviceId) throw new Error('Please select a device')
+      const deviceId = this.normalizeDeviceId(row.connection_id || row.device_id)
+      if (!deviceId) throw new Error('Client instance row is missing connection_id/device_id')
       const res = await fetch(`/api/connections/${encodeURIComponent(deviceId)}/external-tools/${encodeURIComponent(row.tool_id)}/instances/${encodeURIComponent(row.instance_id)}/clear-logs`, {
         method: 'POST',
         headers: this.buildJsonHeaders({ 'Content-Type': 'application/json' }),

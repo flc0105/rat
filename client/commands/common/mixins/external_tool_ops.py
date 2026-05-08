@@ -1,6 +1,7 @@
 import errno
 import json
 import os
+import platform
 import re
 import shlex
 import shutil
@@ -13,6 +14,7 @@ import sys
 
 from client.commands.runtime.context import CommandCancelledError, CommandTimeoutError
 from client.commands.runtime.interrupts import interruptible
+from core.platform.platform_identity import detect_platform_alias
 from core.utils.client_util import safe_extract_zip_file
 from core.utils.decorator import desc
 
@@ -35,6 +37,65 @@ class CommandExternalToolMixin:
     DOWNLOAD_CHUNK_SIZE = 64 * 1024
     DEFAULT_STOP_TIMEOUT_SEC = 5
     DEFAULT_LOG_TAIL_BYTES = 65536
+
+    def _external_tool_normalize_platform(self, value) -> str:
+        text = str(value or '').strip().lower()
+        aliases = {
+            'windows': 'win',
+            'win32': 'win',
+            'darwin': 'mac',
+            'macos': 'mac',
+            'osx': 'mac',
+            'linux': 'linux',
+            'ios': 'ios',
+            'common': '*',
+            'all': '*',
+            '*': '*',
+        }
+        return aliases.get(text, text)
+
+    def _external_tool_normalize_arch(self, value) -> str:
+        text = str(value or '').strip().lower().replace('-', '_')
+        aliases = {
+            'x86_64': 'amd64',
+            'amd64': 'amd64',
+            'i386': '386',
+            'i686': '386',
+            'aarch64': 'arm64',
+            'arm64': 'arm64',
+        }
+        return aliases.get(text, text)
+
+    def _external_tool_local_target(self) -> tuple[str, str]:
+        local_platform = self._external_tool_normalize_platform(detect_platform_alias())
+        local_arch = self._external_tool_normalize_arch(platform.machine())
+        if not local_platform or not local_arch:
+            raise ValueError(f'unable to detect local platform/arch, got {local_platform or "unknown"}/{local_arch or "unknown"}')
+        return local_platform, local_arch
+
+    def _external_tool_validate_package_payload(self, payload: dict, action: str = '') -> tuple[str, str]:
+        requested_platform = self._external_tool_normalize_platform(payload.get('platform'))
+        requested_arch = self._external_tool_normalize_arch(payload.get('arch'))
+        package_key = str(payload.get('package_key') or '').strip()
+        package_id = str(payload.get('package_id') or payload.get('tool_id') or '').strip()
+
+        if not package_id:
+            raise ValueError('external tool payload.package_id is required')
+        if not package_key:
+            raise ValueError(f'external tool payload.package_key is required for {package_id}')
+        if not requested_platform or not requested_arch:
+            raise ValueError(f'external tool payload platform/arch is required for {package_id}, got {requested_platform or "unknown"}/{requested_arch or "unknown"}')
+
+        local_platform, local_arch = self._external_tool_local_target()
+        platform_ok = requested_platform in ('*', local_platform)
+        arch_ok = requested_arch in ('*', 'all', local_arch)
+        if not platform_ok or not arch_ok:
+            suffix = f' during {action}' if action else ''
+            raise ValueError(
+                f'external tool target mismatch{suffix}: payload requests '
+                f'{requested_platform}/{requested_arch} ({package_key}) but this client is {local_platform}/{local_arch}'
+            )
+        return requested_platform, requested_arch
 
     def _external_tool_expand_path(self, path: str) -> str:
         return os.path.abspath(os.path.expandvars(os.path.expanduser(str(path or '').strip())))
@@ -170,6 +231,7 @@ class CommandExternalToolMixin:
         return info
 
     def _external_tool_download_package(self, payload: dict) -> dict:
+        self._external_tool_validate_package_payload(payload, 'download')
         package = payload.get('package') or {}
         download_url = str(package.get('download_url') or '').strip()
 
@@ -209,6 +271,7 @@ class CommandExternalToolMixin:
         return after
 
     def _external_tool_clear_cache_payload(self, payload: dict) -> dict:
+        self._external_tool_validate_package_payload(payload, 'clear-cache')
         cache = self._external_tool_cache_info(payload)
         cache_path = cache.get('cache_path') or ''
         removed = False
@@ -237,6 +300,7 @@ class CommandExternalToolMixin:
         }
 
     def _external_tool_install_status_payload(self, payload: dict) -> dict:
+        self._external_tool_validate_package_payload(payload, 'install-status')
         install = payload.get('install') or {}
         install_dir = self._external_tool_expand_path(
             install.get('install_dir') or '~/.ops/external_tools/installed/unknown'
@@ -299,6 +363,7 @@ class CommandExternalToolMixin:
         }
 
     def _external_tool_install_if_needed(self, payload: dict, package_info) -> dict:
+        self._external_tool_validate_package_payload(payload, 'install')
         status = self._external_tool_install_status_payload(payload)
         install_dir = status['install_dir']
         already_installed = bool(status['installed'])
@@ -375,6 +440,7 @@ class CommandExternalToolMixin:
         return {'target': target_path, 'size': os.path.getsize(target_path)}
 
     def _external_tool_build_runtime(self, payload: dict) -> dict:
+        self._external_tool_validate_package_payload(payload, 'start')
         runtime = payload.get('runtime') or {}
         argv = self._external_tool_render_path_list(runtime.get('argv') or [])
 
@@ -438,6 +504,7 @@ class CommandExternalToolMixin:
             launcher_code = r'''
 import json
 import os
+import platform
 import subprocess
 import sys
 
@@ -1469,7 +1536,7 @@ finally:
             cli = payload.get('cli') if isinstance(payload.get('cli'), dict) else {}
             cwd = self._external_tool_expand_path(cli.get('cwd') or os.getcwd())
             if not os.path.isdir(cwd):
-                cwd = os.getcwd()
+                raise FileNotFoundError(f'external tool cli cwd does not exist: {cwd}')
 
             timeout_sec = cli.get('timeout_sec')
             try:

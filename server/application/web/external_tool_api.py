@@ -1,6 +1,3 @@
-from core.platform.platform_identity import detect_platform_alias
-
-
 class WebExternalToolApi:
     def __init__(self, catalog_service, runtime_service):
         self.catalog_service = catalog_service
@@ -23,8 +20,10 @@ class WebExternalToolApi:
 
     def list_catalog(self):
         catalog = self.catalog_service.get_catalog()
-        server_platform = catalog.get('server_platform') or detect_platform_alias()
-        server_arch = catalog.get('server_arch') or self.catalog_service._normalize_arch('')
+        server_platform = catalog.get('server_platform') or ''
+        server_arch = catalog.get('server_arch') or ''
+        if not server_platform or not server_arch:
+            raise ValueError(f'server platform and arch are required, got {server_platform or "unknown"}/{server_arch or "unknown"}')
         for item in catalog.get('items') or []:
             if item.get('error') or not self._package_supports_target(item, server_platform, server_arch):
                 continue
@@ -78,11 +77,9 @@ class WebExternalToolApi:
         return catalog
 
     def get_tool(self, tool_id: str):
-        # Package-first UI uses this for package details/meta-adjacent inspection.
-        try:
-            return self.catalog_service.get_package(tool_id)
-        except Exception:
-            return self.catalog_service.get_tool(tool_id)
+        # Package-only API. Do not fall back to legacy module lookup; callers must
+        # use package ids here so id mistakes fail immediately.
+        return self.catalog_service.get_package(tool_id)
 
     def get_package_path(self, filename: str):
         return self.catalog_service.get_package_path(filename)
