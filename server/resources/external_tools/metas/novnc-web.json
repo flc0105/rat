@@ -2,7 +2,7 @@
   "id": "novnc-web",
   "name": "novnc-web",
   "display_name": "noVNC Web Gateway",
-  "description": "Browser-based VNC gateway using noVNC and websockify. It exposes a web port and proxies WebSocket traffic to a target VNC TCP endpoint.",
+  "description": "Browser gateway for opening VNC desktops without a native client.",
   "version": "1.7.0",
   "category": "remote-desktop",
   "tags": [
@@ -13,21 +13,20 @@
     "browser"
   ],
   "web": {
-    "url": "http://{{access_host}}:{{listen_port}}/vnc.html?view_only=1&resize=scale"
   },
   "platform_packages": {
     "darwin-arm64": {
       "platform": "mac",
       "arch": "arm64",
-      "filename": "noVNC-1.7.0.zip",
-      "download_url": "/api/external-tools/packages/noVNC-1.7.0.zip",
-      "root": "noVNC-1.7.0"
+      "filename": "novnc-v1.7.0-any-any.zip",
+      "download_url": "/api/external-tools/packages/novnc-v1.7.0-any-any.zip",
+      "root": ""
     }
   },
   "execs": {
     "novnc-web": {
       "paths": {
-        "darwin-arm64": "noVNC-1.7.0/utils/novnc_proxy"
+        "darwin-arm64": "utils/novnc_proxy"
       }
     }
   },
@@ -39,7 +38,7 @@
       "id": "web",
       "name": "novnc-web",
       "display_name": "noVNC Web Gateway",
-      "description": "Browser-based VNC gateway using noVNC and websockify. It exposes a web port and proxies WebSocket traffic to a target VNC TCP endpoint.",
+      "description": "Proxies a VNC endpoint into a browser-accessible noVNC session.",
       "execution": "daemon",
       "exec": "novnc-web",
       "params": [

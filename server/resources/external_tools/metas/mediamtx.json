@@ -2,7 +2,7 @@
   "id": "mediamtx",
   "name": "mediamtx",
   "display_name": "MediaMTX",
-  "description": "Realtime media gateway for receiving FFmpeg streams and exposing WebRTC/HLS pages in browser.",
+  "description": "Media relay for receiving live streams and serving them to browsers and players.",
   "version": "1.18.0",
   "category": "media",
   "tags": [
@@ -20,15 +20,15 @@
     "darwin-arm64": {
       "platform": "mac",
       "arch": "arm64",
-      "filename": "mediamtx_v1.18.0_darwin_arm64.zip",
-      "download_url": "/api/external-tools/packages/mediamtx_v1.18.0_darwin_arm64.zip",
-      "root": "mediamtx_v1.18.0_darwin_arm64"
+      "filename": "mediamtx-v1.18.0-darwin-arm64.zip",
+      "download_url": "/api/external-tools/packages/mediamtx-v1.18.0-darwin-arm64.zip",
+      "root": ""
     }
   },
   "execs": {
     "mediamtx": {
       "paths": {
-        "darwin-arm64": "mediamtx_v1.18.0_darwin_arm64/mediamtx"
+        "darwin-arm64": "mediamtx"
       }
     }
   },
@@ -40,7 +40,7 @@
       "id": "main",
       "name": "mediamtx",
       "display_name": "MediaMTX Server",
-      "description": "Realtime media gateway for receiving FFmpeg streams and exposing WebRTC/HLS pages in browser.",
+      "description": "Accepts published streams and serves them over RTSP, HLS, and WebRTC.",
       "execution": "daemon",
       "exec": "mediamtx",
       "params": [

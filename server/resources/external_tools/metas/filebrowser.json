@@ -2,8 +2,8 @@
   "id": "filebrowser",
   "name": "filebrowser",
   "display_name": "File Browser",
-  "description": "File Browser web UI executable. It can run on the server host or on a client machine and serves a selected filesystem root over HTTP.",
-  "version": "2.63.2",
+  "description": "Remote file manager for browsing and managing a selected directory.",
+  "version": "2.63.3",
   "category": "files",
   "tags": [
     "filebrowser",
@@ -18,15 +18,34 @@
     "darwin-arm64": {
       "platform": "mac",
       "arch": "arm64",
-      "filename": "darwin-arm64-filebrowser.zip",
-      "download_url": "/api/external-tools/packages/darwin-arm64-filebrowser.zip",
-      "root": "darwin-arm64-filebrowser"
+      "filename": "filebrowser-v2.63.3-darwin-arm64.zip",
+      "download_url": "/api/external-tools/packages/filebrowser-v2.63.3-darwin-arm64.zip",
+      "root": "",
+      "notes": "Archive has no top-level directory; filebrowser executable is at the archive root."
+    },
+    "linux-amd64": {
+      "platform": "linux",
+      "arch": "amd64",
+      "filename": "filebrowser-v2.63.3-linux-amd64.zip",
+      "download_url": "/api/external-tools/packages/filebrowser-v2.63.3-linux-amd64.zip",
+      "root": "",
+      "notes": "Archive has no top-level directory; filebrowser executable is at the archive root."
+    },
+    "win-amd64": {
+      "platform": "win",
+      "arch": "amd64",
+      "filename": "filebrowser-v2.63.3-windows-amd64.zip",
+      "download_url": "/api/external-tools/packages/filebrowser-v2.63.3-windows-amd64.zip",
+      "root": "",
+      "notes": "Archive has no top-level directory; filebrowser.exe is at the archive root."
     }
   },
   "execs": {
     "filebrowser": {
       "paths": {
-        "darwin-arm64": "darwin-arm64-filebrowser/filebrowser"
+        "darwin-arm64": "filebrowser",
+        "linux-amd64": "filebrowser",
+        "win-amd64": "filebrowser.exe"
       }
     }
   },
@@ -38,7 +57,7 @@
       "id": "main",
       "name": "filebrowser",
       "display_name": "File Browser",
-      "description": "File Browser web UI executable. It can run on the server host or on a client machine and serves a selected filesystem root over HTTP.",
+      "description": "Serves a selected directory through a browser-based file manager.",
       "execution": "daemon",
       "exec": "filebrowser",
       "params": [
@@ -95,7 +114,7 @@
       ],
       "config": {},
       "runtime": {
-        "cwd": "{{install_dir}}/{{package_root}}",
+        "cwd": "{{install_dir}}",
         "argv": [
           "{{bin_filebrowser}}",
           "-a",

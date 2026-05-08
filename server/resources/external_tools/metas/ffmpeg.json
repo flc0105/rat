@@ -2,7 +2,7 @@
   "id": "ffmpeg",
   "name": "ffmpeg",
   "display_name": "FFmpeg",
-  "description": "FFmpeg package for screen live RTSP push and one-shot version checks.",
+  "description": "Media capture and streaming runtime for publishing screen video.",
   "version": "8.1.1",
   "category": "media",
   "tags": [
@@ -17,8 +17,8 @@
     "darwin-amd64": {
       "platform": "mac",
       "arch": "amd64",
-      "filename": "ffmpeg-8.1.1-darwin-amd64.zip",
-      "download_url": "/api/external-tools/packages/ffmpeg-8.1.1-darwin-amd64.zip",
+      "filename": "ffmpeg-v8.1.1-darwin-amd64.zip",
+      "download_url": "/api/external-tools/packages/ffmpeg-v8.1.1-darwin-amd64.zip",
       "source": "https://evermeet.cx/ffmpeg/getrelease/zip",
       "source_filename": "ffmpeg-8.1.1.zip",
       "root": "",
@@ -38,12 +38,12 @@
     "win-amd64": {
       "platform": "win",
       "arch": "amd64",
-      "filename": "ffmpeg-8.1.1-win-amd64-ffmpeg-only.zip",
-      "download_url": "/api/external-tools/packages/ffmpeg-8.1.1-win-amd64-ffmpeg-only.zip",
+      "filename": "ffmpeg-v8.1.1-windows-amd64-ffmpeg-only.zip",
+      "download_url": "/api/external-tools/packages/ffmpeg-v8.1.1-windows-amd64-ffmpeg-only.zip",
       "source": "https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip",
       "source_filename": "ffmpeg-release-essentials.zip",
       "source_provider": "gyan.dev",
-      "root": "ffmpeg-8.1.1-essentials_build",
+      "root": "",
       "repacked": true,
       "notes": "Windows amd64 gyan.dev release essentials archive. The archive keeps its upstream top-level directory ffmpeg-8.1.1-essentials_build; only ffmpeg is exposed by this meta."
     }
@@ -52,7 +52,7 @@
     "ffmpeg": {
       "paths": {
         "darwin-amd64": "ffmpeg",
-        "win-amd64": "ffmpeg-8.1.1-essentials_build/bin/ffmpeg.exe"
+        "win-amd64": "bin/ffmpeg.exe"
       }
     }
   },
@@ -64,7 +64,7 @@
       "id": "version",
       "name": "ffmpeg-version",
       "display_name": "FFmpeg Version Test",
-      "description": "Run ffmpeg once and return version/build information. This validates package installation and executable resolution without creating an instance.",
+      "description": "Checks the installed FFmpeg binary and reports its build version.",
       "execution": "oneshot",
       "exec": "ffmpeg",
       "params": [],
@@ -82,7 +82,7 @@
       "id": "screen-push",
       "name": "ffmpeg-screen-push",
       "display_name": "FFmpeg Screen Push",
-      "description": "Capture screen with FFmpeg and publish a low-latency RTSP stream to MediaMTX.",
+      "description": "Publishes the target screen as a low-latency RTSP stream.",
       "execution": "daemon",
       "exec": "ffmpeg",
       "params": [

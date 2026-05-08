@@ -2,7 +2,7 @@
   "id": "frp",
   "name": "frp",
   "display_name": "FRP",
-  "description": "FRP client/server package. Install once per platform and run frps or frpc modules from the same package.",
+  "description": "Reverse proxy toolkit for exposing private network services through a relay.",
   "version": "0.68.1",
   "category": "network",
   "tags": [
@@ -17,38 +17,38 @@
     "darwin-arm64": {
       "platform": "mac",
       "arch": "arm64",
-      "filename": "frp_0.68.1_darwin_arm64.zip",
-      "download_url": "/api/external-tools/packages/frp_0.68.1_darwin_arm64.zip",
-      "root": "frp_0.68.1_darwin_arm64"
+      "filename": "frp-v0.68.1-darwin-arm64.zip",
+      "download_url": "/api/external-tools/packages/frp-v0.68.1-darwin-arm64.zip",
+      "root": ""
     },
     "linux-amd64": {
       "platform": "linux",
       "arch": "amd64",
-      "filename": "frp_0.68.1_linux_amd64.zip",
-      "download_url": "/api/external-tools/packages/frp_0.68.1_linux_amd64.zip",
-      "root": "frp_0.68.1_linux_amd64"
+      "filename": "frp-v0.68.1-linux-amd64.zip",
+      "download_url": "/api/external-tools/packages/frp-v0.68.1-linux-amd64.zip",
+      "root": ""
     },
     "win-amd64": {
       "platform": "win",
       "arch": "amd64",
-      "filename": "frp_0.68.1_windows_amd64.zip",
-      "download_url": "/api/external-tools/packages/frp_0.68.1_windows_amd64.zip",
-      "root": "frp_0.68.1_windows_amd64"
+      "filename": "frp-v0.68.1-windows-amd64.zip",
+      "download_url": "/api/external-tools/packages/frp-v0.68.1-windows-amd64.zip",
+      "root": ""
     }
   },
   "execs": {
     "frps": {
       "paths": {
-        "darwin-arm64": "frp_0.68.1_darwin_arm64/frps",
-        "linux-amd64": "frp_0.68.1_linux_amd64/frps",
-        "win-amd64": "frp_0.68.1_windows_amd64/frps.exe"
+        "darwin-arm64": "frps",
+        "linux-amd64": "frps",
+        "win-amd64": "frps.exe"
       }
     },
     "frpc": {
       "paths": {
-        "darwin-arm64": "frp_0.68.1_darwin_arm64/frpc",
-        "linux-amd64": "frp_0.68.1_linux_amd64/frpc",
-        "win-amd64": "frp_0.68.1_windows_amd64/frpc.exe"
+        "darwin-arm64": "frpc",
+        "linux-amd64": "frpc",
+        "win-amd64": "frpc.exe"
       }
     }
   },
@@ -60,7 +60,7 @@
       "id": "frps",
       "name": "frps",
       "display_name": "FRP Server",
-      "description": "FRP server daemon module.",
+      "description": "Runs the relay that accepts FRP client connections.",
       "execution": "daemon",
       "exec": "frps",
       "params": [
@@ -115,7 +115,7 @@
       "id": "frpc",
       "name": "frpc",
       "display_name": "FRP Client",
-      "description": "FRP client daemon module.",
+      "description": "Connects local services to an FRP relay.",
       "execution": "daemon",
       "exec": "frpc",
       "params": [
