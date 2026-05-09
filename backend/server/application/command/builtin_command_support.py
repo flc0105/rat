@@ -762,7 +762,67 @@ class ExternalToolCliBuiltinSupport:
         for item in executor():
             yield item
 
-    def _format_cli_list(self) -> str:
+    def _collect_nested_command_text(self, command_text: str) -> tuple[int, str]:
+        """执行一个内部 client 命令，并收集文本结果。"""
+        status = 1
+        chunks = []
+        for item_status, item_text in self._iter_nested_command(command_text):
+            status = item_status
+            if item_text is not None:
+                chunks.append(str(item_text))
+        return status, ''.join(chunks)
+
+    def _normalize_install_status(self, item: dict | None) -> dict:
+        status = item if isinstance(item, dict) else {}
+        if status.get('error'):
+            return {'installed': False, 'install_status': 'error'}
+
+        installed = status.get('installed')
+        if installed is True:
+            return {'installed': True, 'install_status': 'installed'}
+        if installed is False:
+            return {'installed': False, 'install_status': 'not_installed'}
+        return {'installed': False, 'install_status': 'unknown'}
+
+    def _load_cli_install_status_map(self, items: list[dict]) -> dict[tuple[str, str], dict]:
+        payloads = []
+        keys = []
+
+        for item in items:
+            try:
+                payload = self._build_client_payload(item, raw_args='')
+                package_id = payload.get('package_id') or item.get('package_id') or item.get('tool_id') or ''
+                package_key = payload.get('package_key') or item.get('package_key') or ''
+                payloads.append(payload)
+                keys.append((package_id, package_key))
+            except Exception as e:
+                package_id = item.get('package_id') or item.get('tool_id') or ''
+                package_key = item.get('package_key') or ''
+                keys.append((package_id, package_key))
+                payloads.append({'error': str(e)})
+
+        if not payloads:
+            return {}
+
+        command = f'external_tool_install_statuses {self._encode_payload_arg({"tools": payloads})}'
+        try:
+            status, text = self._collect_nested_command_text(command)
+            if not status:
+                raise RuntimeError(text or 'external_tool_install_statuses failed')
+            decoded = json.loads(text or '{}')
+            status_items = decoded.get('items') if isinstance(decoded, dict) else decoded
+            if not isinstance(status_items, list):
+                raise ValueError('invalid install statuses payload')
+        except Exception as e:
+            return {key: {'installed': False, 'install_status': 'unknown', 'error': str(e)} for key in keys}
+
+        result = {}
+        for index, key in enumerate(keys):
+            status_item = status_items[index] if index < len(status_items) and isinstance(status_items[index], dict) else {}
+            result[key] = status_item
+        return result
+
+    def _build_cli_list_payload(self) -> list[dict]:
         catalog = self._catalog_service()
         items = catalog.list_cli_aliases(
             side='client',
@@ -770,54 +830,85 @@ class ExternalToolCliBuiltinSupport:
             arch=self._client_arch(),
         )
 
-        if not items:
-            return 'No external tool execs available. Add execs to external tool package meta.'
-
+        status_map = self._load_cli_install_status_map(items)
         rows = []
         for item in items:
+            package_id = item.get('package_id') or item.get('tool_id') or ''
+            package_key = item.get('package_key') or ''
+            install_status = self._normalize_install_status(status_map.get((package_id, package_key)))
             rows.append({
-                'alias': item.get('alias') or '',
-                'exec': item.get('exec_name') or item.get('alias') or '',
-                'package_id': item.get('package_id') or item.get('tool_id') or '',
+                'exec_name': item.get('exec_name') or '',
+                'package_id': package_id,
                 'display_name': item.get('display_name') or '',
-                'package_key': item.get('package_key') or '',
+                'package_key': package_key,
                 'executable': item.get('executable_rel_path') or '',
+                'installed': install_status['installed'],
+                'install_status': install_status['install_status'],
             })
 
-        return json.dumps({'items': rows}, ensure_ascii=False, indent=2)
+        rows.sort(key=lambda item: (not bool(item.get('installed')), str(item.get('exec_name') or '').lower()))
+        return rows
 
-    def _format_info(self, alias: str) -> str:
+    def _render_cli_list(self, output_format: str):
+        rows = self._build_cli_list_payload()
+        if not rows and output_format != 'json':
+            return 1, 'No external tool execs available. Add execs to external tool package meta.'
+
+        return render_structured_result(
+            StructuredCommandResult(
+                status=1,
+                data=rows,
+                shape='table',
+            ),
+            output_format=output_format,
+        )
+
+    def _format_info(self, alias: str, output_format: str = 'json'):
         target = self._resolve_alias(alias)
         meta = target.get('meta') or {}
         cli = target.get('cli') or {}
         payload = self._build_client_payload(target, raw_args='')
         install = payload.get('install') or {}
         package_payload = payload.get('package') or {}
+        status_map = self._load_cli_install_status_map([target])
+        status = self._normalize_install_status(
+            status_map.get((payload.get('package_id') or '', payload.get('package_key') or ''))
+        )
 
-        return json.dumps({
-            'exec': target.get('exec_name') or target.get('alias') or alias,
-            'package_id': meta.get('id') or '',
-            'display_name': meta.get('display_name') or '',
-            'description': target.get('description') or meta.get('description') or '',
-            'side': 'client',
-            'platforms': meta.get('platforms') or [],
-            'arch': meta.get('arch') or '',
-            'package_key': payload.get('package_key') or target.get('package_key') or '',
-            'cli': {
-                'enabled': bool(cli.get('enabled', True)),
-                'exec_name': target.get('exec_name') or target.get('alias') or alias,
-                'arg_mode': cli.get('arg_mode') or 'raw_append',
-            },
-            'package': {
-                'filename': package_payload.get('filename') or '',
-                'executable_rel_path': package_payload.get('executable_rel_path') or '',
-            },
-            'install': {
-                'install_dir': install.get('install_dir') or '',
-                'skip_if_exists': install.get('skip_if_exists') or '',
-            },
-            'usage': f'xt {target.get("exec_name") or alias} <raw args>',
-        }, ensure_ascii=False, indent=2)
+        return render_structured_result(
+            StructuredCommandResult(
+                status=1,
+                data={
+                    'exec_name': target.get('exec_name') or alias,
+                    'package_id': meta.get('id') or '',
+                    'display_name': meta.get('display_name') or '',
+                    'description': target.get('description') or meta.get('description') or '',
+                    'side': 'client',
+                    'platforms': meta.get('platforms') or [],
+                    'arch': meta.get('arch') or '',
+                    'package_key': payload.get('package_key') or target.get('package_key') or '',
+                    'executable': package_payload.get('executable_rel_path') or '',
+                    'installed': status['installed'],
+                    'install_status': status['install_status'],
+                    'cli': {
+                        'enabled': bool(cli.get('enabled', True)),
+                        'exec_name': target.get('exec_name') or alias,
+                        'arg_mode': cli.get('arg_mode') or 'raw_append',
+                    },
+                    'package': {
+                        'filename': package_payload.get('filename') or '',
+                    },
+                    'install': {
+                        'install_dir': install.get('install_dir') or '',
+                        'skip_if_exists': install.get('skip_if_exists') or '',
+                    },
+                    'usage': f'xt {target.get("exec_name") or alias} <raw args>',
+                },
+                shape='dict',
+                width=20,
+            ),
+            output_format=output_format,
+        )
 
     def _which(self, alias: str):
         target = self._resolve_alias(alias)
@@ -834,23 +925,26 @@ class ExternalToolCliBuiltinSupport:
             yield item
 
     def xt(self, arg=''):
-        arg_text = str(arg or '').strip()
+        output_format = parse_output_format(arg)
+        arg_text = strip_output_format_arg(arg)
 
         if not arg_text or arg_text == 'list':
-            yield 1, self._format_cli_list()
+            yield self._render_cli_list(output_format)
             return
 
         if arg_text in ('help', '-h', '--help'):
-            yield 1, 'Usage: xt list | xt info <exec> | xt which <exec> | xt <exec> [--] <raw args>'
+            yield 1, 'Usage: xt [list] [--json] | xt info <exec> [--json] | xt which <exec> | xt <exec> [--] <raw args>'
             return
 
         subcommand, rest = self._split_first_token(arg_text)
 
         if subcommand == 'info':
+            output_format = parse_output_format(rest, default=output_format)
+            rest = strip_output_format_arg(rest)
             alias, _ = self._split_first_token(rest)
             if not alias:
-                raise ValueError('Usage: xt info <exec>')
-            yield 1, self._format_info(alias)
+                raise ValueError('Usage: xt info <exec> [--json]')
+            yield self._format_info(alias, output_format)
             return
 
         if subcommand == 'which':
