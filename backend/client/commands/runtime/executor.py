@@ -1,25 +1,11 @@
-import inspect
-from dataclasses import dataclass
 from typing import Any, Callable
 
+from client.commands.runtime.acmd_runner import ArgumentCommandRunner
 from client.commands.runtime.catalog import CommandCatalog
 from client.commands.runtime.context_store import CommandExecutionContextStore
-from core.utils.command_output import render_structured_result
-from core.utils.parsing import parse
-
-
-@dataclass
-class CommandExecutionRequest:
-    """
-    统一命令执行请求。
-
-    说明：
-    - 这里只承载 CommandExecutor 主链分发所需的最小字段
-    - 不引入额外兼容入口，统一 command / acmd / script 三类请求的绑定流程
-    """
-
-    command_id: int
-    timeout: float | None = None
+from client.commands.runtime.request import CommandExecutionRequest
+from client.commands.runtime.script_runner import ScriptCommandRunner
+from client.commands.runtime.shell_command_runner import ShellCommandRunner
 
 
 class CommandExecutor:
@@ -29,13 +15,16 @@ class CommandExecutor:
     当前职责收口为：
     - 使用 CommandCatalog 获取平台命令对象 / acmd registry
     - 使用 CommandExecutionContextStore 管理单次命令生命周期
-    - 只保留命令路由与调用编排
+    - 只负责三类命令执行链的公共上下文绑定和清理
     """
 
     def __init__(self, socket):
         self.socket = socket
         self.catalog = CommandCatalog(socket)
         self.context_store = CommandExecutionContextStore()
+        self.shell_command_runner = ShellCommandRunner(self)
+        self.argument_command_runner = ArgumentCommandRunner(self)
+        self.script_command_runner = ScriptCommandRunner(self)
 
     def get_commands(self):
         """
@@ -94,47 +83,13 @@ class CommandExecutor:
         commands = self.get_commands()
         return self._bind_execution(commands, request)
 
-    def _render_command_result(self, result, output_format='text'):
-        return render_structured_result(result, output_format=output_format)
-
-    def _resolve_builtin_output_format(self, arg: Any) -> str:
-        return 'json' if str(arg or '').strip().lower() in ('json', '--json') else 'text'
-
-    # ------------------ 命令路由 ------------------ #
-    def _resolve_builtin_command(self, commands, name):
-        """
-        解析平台内置命令方法；如果不存在或不是导出命令，则返回 None
-        """
-        if not hasattr(commands, name):
-            return None
-
-        func = getattr(commands, name)
-        if not hasattr(func, 'help'):
-            return None
-
-        return func
-
-    def _resolve_default_command(self, commands, raw_command):
-        """
-        默认回退到 shell 执行
-        """
-        return lambda: commands.shell(raw_command)
-
-    def _invoke_command_method(self, func, arg):
-        """
-        调用命令方法
-        """
-        if len(inspect.signature(func).parameters):
-            return func(arg)
-        return func()
-
     def _execute_with_cleanup(self, command_id, invoke: Callable[[], Any]):
         try:
             return invoke()
         finally:
             self._clear_execution_context(command_id)
 
-    def _execute_bound_request(self, request: CommandExecutionRequest, invoke: Callable[[Any], Any]):
+    def execute_bound_request(self, request: CommandExecutionRequest, invoke: Callable[[Any], Any]):
         def _runner():
             commands = self._prepare_commands(request)
             return invoke(commands)
@@ -150,22 +105,7 @@ class CommandExecutor:
         :return: 执行结果元组（状态和消息）
         """
         request = self._build_request(command_id, options=options)
-
-        def _invoke(commands):
-            name, arg = parse(command)
-
-            builtin_command = self._resolve_builtin_command(commands, name)
-            if builtin_command:
-                result = self._invoke_command_method(builtin_command, arg)
-                return self._render_command_result(
-                    result,
-                    output_format=self._resolve_builtin_output_format(arg),
-                )
-
-            default_command = self._resolve_default_command(commands, command)
-            return default_command()
-
-        return self._execute_bound_request(request, _invoke)
+        return self.shell_command_runner.execute(request, command)
 
     def execute_argument_command(self, command_id, payload: dict, options=None):
         """
@@ -176,25 +116,12 @@ class CommandExecutor:
         :return: 执行结果元组（状态和消息）
         """
         request = self._build_request(command_id, options=options, payload_options=payload)
-
-        def _invoke(_commands):
-            registry = self.get_argument_command_registry()
-            return registry.execute(payload)
-
-        return self._execute_bound_request(request, _invoke)
+        return self.argument_command_runner.execute(request, payload)
 
     def execute_script_command(self, command_id, script_text: str, kwargs=None, options=None):
         """
         执行 script 消息
         统一通过 CommandExecutor 入口分发，避免绕过命令执行器
-
-        当前约定：
-        - script 默认只走 stream 语义
-        - 当前进程 / 子进程由 Python execution strategy 决定
         """
         request = self._build_request(command_id, options=options, payload_options=kwargs)
-
-        def _invoke(commands):
-            return commands.execute_script_stream(script_text, kwargs=kwargs)
-
-        return self._execute_bound_request(request, _invoke)
+        return self.script_command_runner.execute(request, script_text, kwargs=kwargs)
