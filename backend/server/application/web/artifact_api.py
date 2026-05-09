@@ -123,6 +123,35 @@ class WebArtifactApi:
         return artifact
 
 
+    def allocate_command_output_artifact_path(self, *, category: str, machine_id: str, source_command: str) -> dict:
+        return self.artifact_service.allocate_command_output_artifact_path(
+            category=category,
+            machine_id=machine_id,
+            source_command=source_command,
+        )
+
+    def register_command_output_artifact(self, *, allocation: dict, category: str, hostname: str, machine_id: str,
+                                         client_id: str = '', addr: str = '', source: str = '',
+                                         source_command: str = '', source_command_id=None, extra=None) -> dict:
+        artifact = self.artifact_service.register_command_output_artifact(
+            allocation=allocation,
+            category=category,
+            hostname=hostname,
+            machine_id=machine_id,
+            client_id=client_id,
+            addr=addr,
+            source=source,
+            source_command=source_command,
+            source_command_id=source_command_id,
+            extra=extra if isinstance(extra, dict) else {},
+        )
+        try:
+            self.publish_artifact_created(artifact)
+        except Exception:
+            pass
+        return artifact
+
+
     def save_command_output_artifact(self, *, content: str, category: str = 'command_output',
                                      client_id: str = '', hostname: str = '', machine_id: str = '',
                                      source: str = '', source_command: str = '', source_command_id=None,

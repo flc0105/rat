@@ -6,10 +6,12 @@ class WebCommandExecutionApi:
     - 提交 Web command
     - 提交 Web upload
     - 取消 Web task
+    - 为 CLI 等非路由调用方创建命令执行器
     """
 
-    def __init__(self, task_service):
+    def __init__(self, task_service, command_executor_factory=None):
         self.task_service = task_service
+        self.command_executor_factory = command_executor_factory
 
     def _normalize_client_id(self, client_id: str) -> str:
         value = (client_id or '').strip()
@@ -42,6 +44,21 @@ class WebCommandExecutionApi:
             'display_name': normalized_display_name,
             'remote_path': (remote_path or '').strip(),
         }
+
+    def create_cli_command_executor(
+        self,
+        session,
+        *,
+        use_foreground_guard: bool = True,
+        foreground_source: str = 'cli',
+    ):
+        if self.command_executor_factory is None:
+            raise RuntimeError('command_executor_factory is not available')
+        return self.command_executor_factory.create(
+            session,
+            use_foreground_guard=use_foreground_guard,
+            foreground_source=foreground_source,
+        )
 
     def submit_web_command(self, client_id: str, command: str, tab_id: str = ''):
         return self.task_service.submit_web_command(

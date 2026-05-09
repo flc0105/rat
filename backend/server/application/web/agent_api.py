@@ -1,6 +1,6 @@
-import json
 import os
 import platform
+import tempfile
 from datetime import datetime
 
 
@@ -16,9 +16,10 @@ class WebAgentApi:
     - 提供 Go loader 上报落盘能力
     """
 
-    def __init__(self, agent_builder, agent_output_registry):
+    def __init__(self, agent_builder, agent_output_registry, bootstrap_script_service=None):
         self.agent_builder = agent_builder
         self.agent_output_registry = agent_output_registry
+        self.bootstrap_script_service = bootstrap_script_service
         self.logs_dir = os.path.abspath(os.path.join('runtime', 'logs'))
         os.makedirs(self.logs_dir, exist_ok=True)
 
@@ -113,18 +114,43 @@ class WebAgentApi:
             fp.write(line.strip() + '\n')
 
         return {'logged': True, 'log_file': os.path.basename(log_path)}
-        # if not isinstance(payload, dict):
-        #     raise ValueError('Invalid loader payload')
-        #
-        # record = {
-        #     'time': datetime.now().isoformat(),
-        #     **payload,
-        # }
-        # log_path = self._get_loader_log_path()
-        # with open(log_path, 'a', encoding='utf-8') as fp:
-        #     fp.write(json.dumps(record, ensure_ascii=False) + '\n')
-        #
-        # return {'logged': True, 'log_file': os.path.basename(log_path)}
+
+    def _write_bootstrap_temp_file(self, *, content: str, suffix: str, download_name: str, mimetype: str) -> dict:
+        with tempfile.NamedTemporaryFile(
+                mode='w', suffix=suffix, delete=False, encoding='utf-8'
+        ) as file_obj:
+            file_obj.write(content)
+            temp_path = file_obj.name
+
+        return {
+            'file_path': temp_path,
+            'download_name': download_name,
+            'mimetype': mimetype,
+        }
+
+    def generate_bootstrap_file(self, payload: dict) -> dict:
+        if self.bootstrap_script_service is None:
+            raise RuntimeError('bootstrap_script_service is not available')
+
+        script_content = self.bootstrap_script_service.generate_python_script(payload)
+        return self._write_bootstrap_temp_file(
+            content=script_content,
+            suffix='.py',
+            download_name='bootstrap.py',
+            mimetype='text/x-python',
+        )
+
+    def generate_bootstrap_ps1_file(self, payload: dict) -> dict:
+        if self.bootstrap_script_service is None:
+            raise RuntimeError('bootstrap_script_service is not available')
+
+        script_content = self.bootstrap_script_service.generate_powershell_script(payload)
+        return self._write_bootstrap_temp_file(
+            content=script_content,
+            suffix='.ps1',
+            download_name='bootstrap.ps1',
+            mimetype='text/plain',
+        )
 
     def cleanup_agent_build(self, work_dir: str):
         if work_dir:

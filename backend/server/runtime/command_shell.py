@@ -95,7 +95,7 @@ class ServerCommandShell:
         统一拿外层 shell 需要展示的会话信息
         """
         try:
-            return self.server.web_service.connection_service.serialize_connection(session)
+            return self.server.web_service.connection_api.serialize_connection(session)
         except Exception:
             info = getattr(session, 'session_info', None)
             return {
@@ -293,10 +293,10 @@ class ServerCommandShell:
         在外层总控台对指定 session 执行一条命令。
         复用交互态的执行链，但不进入交互循环。
         """
-        command_executor = self.server.web_service.command_executor_factory.create(
+        command_executor = self.server.web_service.command_execution_api.create_cli_command_executor(
             session,
             use_foreground_guard=True,
-            foreground_source='cli'
+            foreground_source='cli',
         )
         return self._execute_interactive_command(session, command_executor, cmd)
 
@@ -321,10 +321,10 @@ class ServerCommandShell:
         self._print_unread_messages(session)
         session.context.is_interactive = True
 
-        command_executor = self.server.web_service.command_executor_factory.create(
+        command_executor = self.server.web_service.command_execution_api.create_cli_command_executor(
             session,
             use_foreground_guard=True,
-            foreground_source='cli'
+            foreground_source='cli',
         )
 
         try:

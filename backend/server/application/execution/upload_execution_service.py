@@ -23,16 +23,9 @@ class UploadExecutionService:
         return self.command_stream_service.get_connection(target)
 
     def _get_artifact_service(self):
-        if self.artifact_service is not None:
-            return self.artifact_service
-
-        web_service = getattr(self.server, 'web_service', None)
-        if web_service is not None:
-            artifact_service = getattr(web_service, 'artifact_service', None)
-            if artifact_service is not None:
-                return artifact_service
-
-        raise RuntimeError('artifact_service is not available on server')
+        if self.artifact_service is None:
+            raise RuntimeError('artifact_service is not available')
+        return self.artifact_service
 
     def _stage_upload(self, local_path: str):
         if not (local_path or '').strip():

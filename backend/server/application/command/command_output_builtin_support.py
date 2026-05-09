@@ -64,7 +64,7 @@ class CommandOutputBuiltinSupport:
 
     def _allocate_output_artifact(self, *, command: str, category: str) -> dict:
         session_info = self._get_session_info()
-        return self.server.web_service.artifact_service.allocate_command_output_artifact_path(
+        return self.server.web_service.artifact_api.allocate_command_output_artifact_path(
             category=category,
             machine_id=getattr(session_info, 'machine_id', '') or 'unknown_machine',
             source_command=command,
@@ -72,7 +72,7 @@ class CommandOutputBuiltinSupport:
 
     def _register_output_artifact(self, *, allocation: dict, command: str, category: str, extra: dict) -> dict:
         session_info = self._get_session_info()
-        return self.server.web_service.artifact_service.register_command_output_artifact(
+        return self.server.web_service.artifact_api.register_command_output_artifact(
             allocation=allocation,
             category=category,
             hostname=getattr(session_info, 'hostname', '') or 'unknown_host',

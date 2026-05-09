@@ -1,3 +1,4 @@
+from server.application.agent.agent_bootstrap_script_service import AgentBootstrapScriptService
 from server.application.agent.agent_builder import AgentBuilder
 from server.application.agent.agent_output_registry import AgentOutputRegistry
 from server.application.artifact.artifact_service import WebArtifactService
@@ -71,7 +72,10 @@ class ServerApplicationAssembly:
         self.artifact_service = WebArtifactService()
         self.file_service = self.artifact_service
 
-        self.remote_execution_service = RemoteExecutionService(self.server)
+        self.remote_execution_service = RemoteExecutionService(
+            self.server,
+            artifact_service=self.artifact_service,
+        )
         self.command_executor_factory = CommandExecutorFactory(
             server=self.server,
             remote_execution_service=self.remote_execution_service,
@@ -125,6 +129,7 @@ class ServerApplicationAssembly:
         self.keychain_store = KeychainStore()
         self.agent_builder = AgentBuilder()
         self.agent_output_registry = AgentOutputRegistry(self.agent_builder.output_dir)
+        self.agent_bootstrap_script_service = AgentBootstrapScriptService()
         self.pty_session_service = PtySessionService(self.server, event_bus=self.event_bus)
 
         # ------------------ web sub facades / apis ------------------ #
@@ -139,6 +144,7 @@ class ServerApplicationAssembly:
 
         self.command_execution_api = WebCommandExecutionApi(
             task_service=self.task_service,
+            command_executor_factory=self.command_executor_factory,
         )
 
         self.external_tool_runtime_service = ExternalToolRuntimeService(
@@ -193,6 +199,7 @@ class ServerApplicationAssembly:
         self.agent_api = WebAgentApi(
             agent_builder=self.agent_builder,
             agent_output_registry=self.agent_output_registry,
+            bootstrap_script_service=self.agent_bootstrap_script_service,
         )
 
         self.process_snapshot_cache = ProcessSnapshotCache()

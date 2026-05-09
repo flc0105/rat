@@ -5,6 +5,7 @@ class WebConnectionApi:
     职责：
     - 暴露 connection payload 查询
     - 暴露 connection 生命周期相关能力
+    - 暴露面向调用方的连接序列化能力
     """
 
     def __init__(self, connection_service):
@@ -12,6 +13,9 @@ class WebConnectionApi:
 
     def get_connections_payload(self):
         return self.connection_service.get_connections_payload()
+
+    def serialize_connection(self, session):
+        return self.connection_service.serialize_connection(session)
 
     def create_web_connection(self, transport, addr, info: dict):
         return self.connection_service.create_web_connection(transport, addr, info)

@@ -27,8 +27,9 @@ class RemoteExecutionService:
 
     HTTP_RECEIVE_COMMAND_NAME = 'receive_http_upload'
 
-    def __init__(self, server):
+    def __init__(self, server, artifact_service=None):
         self.server = server
+        self.artifact_service = artifact_service
         self.history_orchestrator = getattr(server, 'command_history_orchestrator', None)
 
         self.command_stream_service = CommandStreamService(server)
@@ -38,7 +39,7 @@ class RemoteExecutionService:
         self.upload_execution_service = UploadExecutionService(
             server,
             self.command_stream_service,
-            artifact_service=getattr(getattr(server, 'web_service', None), 'artifact_service', None),
+            artifact_service=self.artifact_service,
         )
 
     def get_connection(self, target):
