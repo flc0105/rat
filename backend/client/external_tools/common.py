@@ -1,14 +1,19 @@
 import json
 import os
 import platform
-import re
-import shlex
 
+from core.external_tools.paths import (
+    build_command_map,
+    chmod_executable,
+    expand_path,
+    is_url_like,
+    path_has_content,
+    render_path_list,
+    sanitize_instance_id,
+    should_expand_argv_item,
+)
 from core.external_tools.platform import normalize_arch, normalize_platform
 from core.platform.platform_identity import detect_platform_alias
-
-
-_INSTANCE_PATTERN = re.compile(r'[^A-Za-z0-9_.-]+')
 
 
 class ExternalToolCommon:
@@ -64,71 +69,28 @@ class ExternalToolCommon:
         return requested_platform, requested_arch
 
     def expand_path(self, path: str) -> str:
-        return os.path.abspath(os.path.expandvars(os.path.expanduser(str(path or '').strip())))
+        return expand_path(path)
 
     def sanitize_instance_id(self, value) -> str:
-        text = str(value or '').strip()
-        text = _INSTANCE_PATTERN.sub('-', text).strip('.-_')
-        return (text or 'default')[:96]
+        return sanitize_instance_id(value)
 
     def render_path_list(self, values):
-        if isinstance(values, str):
-            return shlex.split(values)
-        if isinstance(values, list):
-            return [str(item) for item in values]
-        return []
+        return render_path_list(values)
 
     def is_url_like(self, value: str) -> bool:
-        text = str(value or '').strip().lower()
-        if '://' not in text:
-            return False
-        scheme = text.split('://', 1)[0]
-        return bool(scheme) and all(ch.isalnum() or ch in '+-.' for ch in scheme)
+        return is_url_like(value)
 
     def should_expand_argv_item(self, value: str, index: int) -> bool:
-        text = str(value or '').strip()
-        if not text:
-            return False
-        if self.is_url_like(text):
-            return False
-        if index == 0:
-            return True
-        return (
-            text.startswith('~')
-            or text.startswith('/')
-            or text.startswith('./')
-            or text.startswith('../')
-            or text.startswith('.\\')
-            or text.startswith('..\\')
-            or ('\\' in text)
-        )
+        return should_expand_argv_item(value, index)
 
     def chmod(self, path: str):
-        if not path or os.name == 'nt' or not os.path.exists(path):
-            return
-        mode = os.stat(path).st_mode
-        os.chmod(path, mode | 0o111)
+        chmod_executable(path)
 
     def build_command_map(self, exec_paths: dict) -> dict:
-        commands = {}
-        for name, path in (exec_paths or {}).items():
-            text = str(path or '').strip()
-            if not text:
-                continue
-            commands[str(name)] = shlex.quote(self.expand_path(text))
-        return commands
+        return build_command_map(exec_paths, self.expand_path)
 
     def path_has_content(self, path: str) -> bool:
-        if not os.path.exists(path):
-            return False
-        if os.path.isfile(path):
-            return True
-        if os.path.isdir(path):
-            try:
-                return any(os.scandir(path))
-            except OSError:
-                return False
-        return True
+        return path_has_content(path)
 
     def read_json(self, path: str) -> dict:
         try:

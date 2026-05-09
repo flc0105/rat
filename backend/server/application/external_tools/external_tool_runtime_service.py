@@ -17,14 +17,22 @@ from datetime import datetime
 from types import SimpleNamespace
 from typing import Any
 
+from core.external_tools.paths import (
+    build_command_map,
+    chmod_executable,
+    expand_path,
+    is_url_like,
+    path_has_content,
+    sanitize_instance_id,
+    should_expand_argv_item,
+)
+from core.external_tools.platform import normalize_arch, normalize_platform
+from core.external_tools.template import append_runtime_extra_args, context_get, render_value, split_extra_argv
 from core.platform.platform_identity import detect_platform_alias
 
 
 logger = logging.getLogger(__name__)
 
-
-_VAR_PATTERN = re.compile(r'{{\s*([A-Za-z_][A-Za-z0-9_.]*)\s*}}')
-_INSTANCE_PATTERN = re.compile(r'[^A-Za-z0-9_.-]+')
 
 
 class ExternalToolRuntimeService:
@@ -58,19 +66,10 @@ class ExternalToolRuntimeService:
         os.makedirs(self.runtime_root_dir, exist_ok=True)
 
     def _normalize_platform(self, value: Any = '') -> str:
-        return self.catalog_service._normalize_platform(value or '')
+        return normalize_platform(value or '')
 
     def _normalize_arch(self, value: Any = '') -> str:
-        text = str(value or '').strip().lower().replace('-', '_')
-        aliases = {
-            'x86_64': 'amd64',
-            'amd64': 'amd64',
-            'i386': '386',
-            'i686': '386',
-            'aarch64': 'arm64',
-            'arm64': 'arm64',
-        }
-        return aliases.get(text, text)
+        return normalize_arch(value or '')
 
     def _detect_arch(self) -> str:
         value = self._normalize_arch(platform.machine())
@@ -86,84 +85,25 @@ class ExternalToolRuntimeService:
         return platform_value, arch_value
 
     def _context_get(self, context: dict, dotted_key: str) -> Any:
-        key = str(dotted_key or '').strip()
-        if not key:
-            return ''
-        if key in context:
-            return context[key]
-        current: Any = context
-        for part in key.split('.'):
-            if isinstance(current, dict) and part in current:
-                current = current[part]
-            else:
-                return None
-        return current
+        return context_get(context, dotted_key)
 
     def _render_value(self, value: Any, context: dict) -> Any:
-        if isinstance(value, str):
-            def replace(match):
-                key = match.group(1)
-                resolved = self._context_get(context, key)
-                return str(resolved if resolved is not None else match.group(0))
-            return _VAR_PATTERN.sub(replace, value)
-        if isinstance(value, list):
-            return [self._render_value(item, context) for item in value]
-        if isinstance(value, dict):
-            return {key: self._render_value(val, context) for key, val in value.items()}
-        return value
+        return render_value(value, context)
 
     def _split_extra_argv(self, value: Any) -> list[str]:
-        if value is None or value == '':
-            return []
-        if isinstance(value, list):
-            return [str(item) for item in value if str(item or '').strip()]
-        if isinstance(value, tuple):
-            return [str(item) for item in value if str(item or '').strip()]
-        text = str(value or '').strip()
-        if not text:
-            return []
-        try:
-            return shlex.split(text)
-        except ValueError as e:
-            raise ValueError(f'invalid extra argv: {e}')
+        return split_extra_argv(value)
 
     def _append_runtime_extra_args(self, argv: list[str], runtime: dict, context: dict) -> list[str]:
-        result = list(argv or [])
-        extra_args = runtime.get('extra_args')
-        extra_args_param = str(runtime.get('extra_args_param') or '').strip()
-        if extra_args_param:
-            extra_args = context.get(extra_args_param, extra_args)
-        rendered_extra_args = self._render_value(extra_args, context)
-        result.extend(self._split_extra_argv(rendered_extra_args))
-        return result
+        return append_runtime_extra_args(argv, runtime, context)
 
     def _expand_path(self, path: str) -> str:
-        return os.path.abspath(os.path.expandvars(os.path.expanduser(str(path or '').strip())))
+        return expand_path(path)
 
     def _is_url_like(self, value: str) -> bool:
-        text = str(value or '').strip().lower()
-        if '://' not in text:
-            return False
-        scheme = text.split('://', 1)[0]
-        return bool(scheme) and all(ch.isalnum() or ch in '+-.' for ch in scheme)
+        return is_url_like(value)
 
     def _should_expand_argv_item(self, value: str, index: int) -> bool:
-        text = str(value or '').strip()
-        if not text:
-            return False
-        if self._is_url_like(text):
-            return False
-        if index == 0:
-            return True
-        return (
-            text.startswith('~')
-            or text.startswith('/')
-            or text.startswith('./')
-            or text.startswith('../')
-            or text.startswith('.\\')
-            or text.startswith('..\\')
-            or ('\\' in text)
-        )
+        return should_expand_argv_item(value, index)
 
     def _safe_join_runtime(self, *parts: str) -> str:
         path = os.path.abspath(os.path.join(self.runtime_root_dir, *[str(part or '') for part in parts]))
@@ -172,9 +112,7 @@ class ExternalToolRuntimeService:
         return path
 
     def _sanitize_instance_id(self, value: Any) -> str:
-        text = str(value or '').strip()
-        text = _INSTANCE_PATTERN.sub('-', text).strip('.-_')
-        return (text or 'default')[:96]
+        return sanitize_instance_id(value)
 
     def _derive_instance_id(self, meta: dict, params: dict | None, explicit: str = '') -> str:
         params = params if isinstance(params, dict) else {}
@@ -529,10 +467,7 @@ class ExternalToolRuntimeService:
         return destination_dir
 
     def _chmod_executable(self, path: str):
-        if not path or os.name == 'nt' or not os.path.exists(path):
-            return
-        current_mode = os.stat(path).st_mode
-        os.chmod(path, current_mode | 0o111)
+        chmod_executable(path)
 
     def _primary_exec_name(self, package: dict, module: dict | None = None) -> str:
         if module and module.get('exec'):
@@ -552,16 +487,7 @@ class ExternalToolRuntimeService:
         return '{{install_dir}}'
 
     def _path_has_content(self, path: str) -> bool:
-        if not os.path.exists(path):
-            return False
-        if os.path.isfile(path):
-            return True
-        if os.path.isdir(path):
-            try:
-                return any(os.scandir(path))
-            except OSError:
-                return False
-        return True
+        return path_has_content(path)
 
     def _install_log_path(self, install_dir: str) -> str:
         return os.path.join(self._expand_path(install_dir), '.install.log')
@@ -590,13 +516,7 @@ class ExternalToolRuntimeService:
         return content
 
     def _build_command_map(self, exec_paths: dict) -> dict:
-        commands = {}
-        for name, path in (exec_paths or {}).items():
-            text = str(path or '').strip()
-            if not text:
-                continue
-            commands[str(name)] = shlex.quote(self._expand_path(text))
-        return commands
+        return build_command_map(exec_paths, self._expand_path)
 
     def _client_skip_path(self, package: dict, context: dict, module: dict | None = None) -> str:
         del module
