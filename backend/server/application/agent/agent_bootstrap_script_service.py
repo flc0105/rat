@@ -137,10 +137,10 @@ def unzip(zip_path, extract_dir):
         z.extractall(extract_dir)
     return extract_dir
 
-def start_ratclient(bundle_dir):
-    ratclient_path = os.path.join(bundle_dir, "ratclient.py")
-    if not os.path.isfile(ratclient_path):
-        raise FileNotFoundError(f"ratclient.py not found: {{ratclient_path}}")
+def start_rchclient(bundle_dir):
+    rchclient_path = os.path.join(bundle_dir, "rchclient.py")
+    if not os.path.isfile(rchclient_path):
+        raise FileNotFoundError(f"rchclient.py not found: {{rchclient_path}}")
 
     if is_pythonista():
         log("iOS/Pythonista detected, using runpy mode")
@@ -148,15 +148,15 @@ def start_ratclient(bundle_dir):
             os.chdir(bundle_dir)
             if bundle_dir not in sys.path:
                 sys.path.insert(0, bundle_dir)
-            sys.argv = [ratclient_path]
-            runpy.run_path(ratclient_path, run_name="__main__")
-        t = threading.Thread(target=runner, name="ratclient-main")
+            sys.argv = [rchclient_path]
+            runpy.run_path(rchclient_path, run_name="__main__")
+        t = threading.Thread(target=runner, name="rchclient-main")
         t.daemon = False
         t.start()
         return t
     else:
         log(f"Desktop detected ({{sys.platform}}), using subprocess detached mode")
-        cmd = [sys.executable, ratclient_path]
+        cmd = [sys.executable, rchclient_path]
         if sys.platform == 'win32':
             flags = 0x00000200 | 0x00000008
             return subprocess.Popen(
@@ -186,7 +186,7 @@ def main():
     extract_dir = os.path.join(RELEASE_DIR, base_name)
     download_file(download_url, zip_path)
     unzip(zip_path, extract_dir)
-    start_ratclient(extract_dir)
+    start_rchclient(extract_dir)
     log("handoff done, bootstrap exits")
     time.sleep(0.2)
     sys.exit(0)
@@ -286,22 +286,22 @@ if (-not (Test-Path $zipPath)) {{
 
 # 4. Extract (skip if already extracted)
 $extractDir = "$releaseDir\\$buildVersion"
-$ratclient = "$extractDir\\ratclient.py"
-if (Test-Path $ratclient) {{
+$rchclient = "$extractDir\\rchclient.py"
+if (Test-Path $rchclient) {{
     Write-Host "Bundle already extracted, skipping..."
 }} else {{
     Write-Host "Extracting to $extractDir..."
     Unzip-File $zipPath $extractDir
 }}
 
-# 5. Launch ratclient
-if (-not (Test-Path $ratclient)) {{
-    Write-Host "ERROR: ratclient.py not found: $ratclient"
+# 5. Launch rchclient
+if (-not (Test-Path $rchclient)) {{
+    Write-Host "ERROR: rchclient.py not found: $rchclient"
     exit 1
 }}
 
-Write-Host "Launching ratclient..."
-Start-Process -FilePath $py -ArgumentList $ratclient -WorkingDirectory $extractDir -WindowStyle Hidden
+Write-Host "Launching rchclient..."
+Start-Process -FilePath $py -ArgumentList $rchclient -WorkingDirectory $extractDir -WindowStyle Hidden
 Write-Host "Bootstrap complete."
 '''
         return script

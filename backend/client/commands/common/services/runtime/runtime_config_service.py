@@ -33,7 +33,7 @@ class RuntimeConfigService:
     - set 后实时更新当前进程 runtime_config 模块值
     - 只把“不同于 runtime_config.py 默认值”的配置写入外部 runtime_config.json
     - 如果 set 的值等于默认值，则删除对应 override
-    - 不读取、不修改 ratclient.py
+    - 不读取、不修改 rchclient.py
     - 不读取、不修改 client/config/runtime_config.py 源码文件
     """
 
@@ -318,7 +318,7 @@ class RuntimeConfigService:
         """
         兼容当前代码中已有的 from client.config.runtime_config import KEY 写法。
 
-        这里只改当前进程内已经加载的 client/core/ratclient 模块同名常量，
+        这里只改当前进程内已经加载的 client/core/rchclient 模块同名常量，
         不读写任何源码文件。
         """
         for module_name, module in list(sys.modules.items()):
@@ -335,7 +335,7 @@ class RuntimeConfigService:
 
     def _should_touch_loaded_module(self, module_name: str) -> bool:
         return (
-            module_name == 'ratclient'
+            module_name == 'rchclient'
             or module_name.startswith('client.')
             or module_name.startswith('core.')
         )

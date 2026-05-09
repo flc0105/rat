@@ -57,7 +57,7 @@ class CommandUpdateMixin:
     def _get_current_bundle_release_dir(self, release_dir: str) -> str:
         """
         当前仅识别 update bundle 运行模式：
-        ~/client_bundle/releases/<bundle_dir>/ratclient.py
+        ~/client_bundle/releases/<bundle_dir>/rchclient.py
         """
         if getattr(sys, 'frozen', False):
             return ''
@@ -94,11 +94,11 @@ class CommandUpdateMixin:
 
             release_name = relative_path.split(os.sep, 1)[0]
             bundle_dir = os.path.realpath(os.path.join(release_root, release_name))
-            ratclient_path = os.path.join(bundle_dir, 'ratclient.py')
+            rchclient_path = os.path.join(bundle_dir, 'rchclient.py')
 
             if not os.path.isdir(bundle_dir):
                 return ''
-            if not os.path.isfile(ratclient_path):
+            if not os.path.isfile(rchclient_path):
                 return ''
 
             return bundle_dir
@@ -187,31 +187,31 @@ class CommandUpdateMixin:
 
             safe_extract_zip_file(archive_path, extract_dir)
 
-            ratclient_path = os.path.join(extract_dir, 'ratclient.py')
-            if not os.path.isfile(ratclient_path):
-                raise FileNotFoundError(f'ratclient.py not found after extract: {ratclient_path}')
+            rchclient_path = os.path.join(extract_dir, 'rchclient.py')
+            if not os.path.isfile(rchclient_path):
+                raise FileNotFoundError(f'rchclient.py not found after extract: {rchclient_path}')
 
             if detect_platform_alias() == 'ios':
 
                 import sys, time
-                # spawn(ratclient_path)
+                # spawn(rchclient_path)
                 self._send_final_result(1, f'Update bundle downloaded\n'
                                            f'Build Version: {bundle_meta.get("build_version") or "-"}\n'
                                            f'Downloaded Archive: {archive_path}\n'
                                            f'Extracted Path: {extract_dir}\n'
-                                           f'Launch Script: {ratclient_path}\n')
+                                           f'Launch Script: {rchclient_path}\n')
                 # time.sleep(1)
                 # self.socket.close()
                 # raise SystemExit
 
             else:
-                process = spawn_detached_python_script(ratclient_path, cwd=extract_dir)
+                process = spawn_detached_python_script(rchclient_path, cwd=extract_dir)
                 return 1, (
                     f'Update bundle downloaded and started\n'
                     f'Build Version: {bundle_meta.get("build_version") or "-"}\n'
                     f'Downloaded Archive: {archive_path}\n'
                     f'Extracted Path: {extract_dir}\n'
-                    f'Launch Script: {ratclient_path}\n'
+                    f'Launch Script: {rchclient_path}\n'
                     f'PID: {process.pid}'
 
                 )

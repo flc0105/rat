@@ -159,7 +159,7 @@ func main() {
 	appendDebugLog("extract bundle ok: " + extractPath)
 	_ = report("EXTRACT_OK", fmt.Sprintf("extracted to %s", extractPath))
 
-	launchScript := filepath.Join(extractPath, "ratclient.py")
+	launchScript := filepath.Join(extractPath, "rchclient.py")
 	appendDebugLog("prepare python command begin: " + launchScript)
 
 	cmd, usedPython, stdoutPath, stderrPath, err := buildPythonCommand(pythonBinary, launchScript, extractPath)
@@ -430,7 +430,7 @@ func requestBundleBuild() (*BundleBuildResponse, error) {
 		parsed.Data.DownloadURL = "/api/agent/download/" + parsed.Data.FileName
 	}
 	if parsed.Data.BuildVersion == "" {
-		parsed.Data.BuildVersion = strings.TrimSuffix(strings.TrimPrefix(parsed.Data.FileName, "ratclient_bundle_"), ".zip")
+		parsed.Data.BuildVersion = strings.TrimSuffix(strings.TrimPrefix(parsed.Data.FileName, "rchclient_bundle_"), ".zip")
 	}
 
 	return parsed, nil

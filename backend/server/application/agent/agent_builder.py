@@ -13,7 +13,7 @@ class AgentBuilder:
 
     EXCLUDE_DIRS = {'venv', '__pycache__', '.git', 'node_modules', 'dist', 'build', '.idea', '.vscode' } #'runtime'
     EXCLUDE_EXTENSIONS = {'.pyc', '.pyo', '.pyd'}
-    BUNDLE_INCLUDE_PATHS = ('client', 'core', 'ratclient.py')
+    BUNDLE_INCLUDE_PATHS = ('client', 'core', 'rchclient.py')
     SUPPORTED_TARGETS = {'win', 'mac', 'linux'}
     SUPPORTED_BUILDERS = {'pyinstaller', 'go', 'go_loader', 'bundle'}
     SUPPORTED_GO_ARCHES = {'amd64', 'arm64'}
@@ -54,21 +54,21 @@ class AgentBuilder:
 
     def _build_pyinstaller_output_name(self, target_os: str, build_version: str) -> str:
         if target_os == 'win':
-            return f'ratclient_{target_os}_{build_version}.exe'
-        return f'ratclient_{target_os}_{build_version}'
+            return f'rchclient_{target_os}_{build_version}.exe'
+        return f'rchclient_{target_os}_{build_version}'
 
     def _build_go_output_name(self, target_os: str, normalized_arch: str, build_version: str) -> str:
         suffix = self.GO_TARGET_MAP[target_os]['suffix']
         label = self.GO_TARGET_MAP[target_os]['label']
-        return f'ratclient_go_simple_{label}_{normalized_arch}_{build_version}{suffix}'
+        return f'rchclient_go_simple_{label}_{normalized_arch}_{build_version}{suffix}'
 
     def _build_go_loader_output_name(self, target_os: str, normalized_arch: str, build_version: str) -> str:
         suffix = self.GO_TARGET_MAP[target_os]['suffix']
         label = self.GO_TARGET_MAP[target_os]['label']
-        return f'ratloader_go_loader_{label}_{normalized_arch}_{build_version}{suffix}'
+        return f'rchclient_go_loader_{label}_{normalized_arch}_{build_version}{suffix}'
 
     def _build_bundle_output_name(self, build_version: str) -> str:
-        return f'ratclient_bundle_{build_version}.zip'
+        return f'rchclient_bundle_{build_version}.zip'
 
     def build_agent(self, server_host: str, server_port: int,
                     web_port: int, target_os: str = 'mac',
@@ -363,41 +363,41 @@ const BundleReportAPIPath = "/api/agent/loader/report"
         }
 
     def _build_macos(self, client_dir: str, build_version: str = 'dev') -> dict:
-        cmd = ['pyinstaller', '-F', '-w', 'ratclient.py',
+        cmd = ['pyinstaller', '-F', '-w', 'rchclient.py',
                '--hidden-import', 'client.commands.platform.mac',
                '--hidden-import', 'client.commands.platform.win',
                '--hidden-import', 'client.commands.platform.linux']
         result = subprocess.run(cmd, cwd=client_dir, capture_output=True, text=True)
         if result.returncode != 0:
             raise RuntimeError(f'PyInstaller failed: {result.stderr}')
-        exe_path = os.path.join(client_dir, 'dist', 'ratclient')
+        exe_path = os.path.join(client_dir, 'dist', 'rchclient')
         if not os.path.exists(exe_path):
             raise RuntimeError(f'Build output not found: {exe_path}')
         os.chmod(exe_path, 0o755)
         return {'file_path': exe_path, 'file_name': self._build_pyinstaller_output_name('mac', build_version)}
 
     def _build_windows(self, client_dir: str, build_version: str = 'dev') -> dict:
-        cmd = ['pyinstaller', '-F', '-w', 'ratclient.py',
+        cmd = ['pyinstaller', '-F', '-w', 'rchclient.py',
                '--hidden-import', 'client.commands.platform.mac',
                '--hidden-import', 'client.commands.platform.win',
                '--hidden-import', 'client.commands.platform.linux']
         result = subprocess.run(cmd, cwd=client_dir, capture_output=True, text=True, shell=True)
         if result.returncode != 0:
             raise RuntimeError(f'PyInstaller failed: {result.stderr}')
-        exe_path = os.path.join(client_dir, 'dist', 'ratclient.exe')
+        exe_path = os.path.join(client_dir, 'dist', 'rchclient.exe')
         if not os.path.exists(exe_path):
             raise RuntimeError(f'Build output not found: {exe_path}')
         return {'file_path': exe_path, 'file_name': self._build_pyinstaller_output_name('win', build_version)}
 
     def _build_linux(self, client_dir: str, build_version: str = 'dev') -> dict:
-        cmd = ['pyinstaller', '-F', '-w', 'ratclient.py',
+        cmd = ['pyinstaller', '-F', '-w', 'rchclient.py',
                '--hidden-import', 'client.commands.platform.mac',
                '--hidden-import', 'client.commands.platform.win',
                '--hidden-import', 'client.commands.platform.linux']
         result = subprocess.run(cmd, cwd=client_dir, capture_output=True, text=True)
         if result.returncode != 0:
             raise RuntimeError(f'PyInstaller failed: {result.stderr}')
-        exe_path = os.path.join(client_dir, 'dist', 'ratclient')
+        exe_path = os.path.join(client_dir, 'dist', 'rchclient')
         if not os.path.exists(exe_path):
             raise RuntimeError(f'Build output not found: {exe_path}')
         os.chmod(exe_path, 0o755)

@@ -448,7 +448,7 @@ The active transfer mode is reported by the client handshake and affects what th
 ├── core/                   # Shared utilities and protocol code
 ├── server/                 # Web server, APIs, orchestration, runtime services
 ├── static/                 # Front-end assets (Vue + Element Plus style app)
-├── ratclient.py            # Main Python client entry
+├── rchclient.py            # Main Python client entry
 ├── ratserver.py            # Main server entry
 └── run_web.py              # Web entrypoint
 ```
@@ -776,7 +776,7 @@ The project exposes agent-building features from the web UI.
 
 ### Bundle
 
-- Packages `client/`, `core/`, and `ratclient.py` into a zip archive
+- Packages `client/`, `core/`, and `rchclient.py` into a zip archive
 - Injects build version into the bundle configuration
 - Designed for source-based delivery/update flows
 - Used by the Python-client `update` workflow to fetch and launch a newer bundle automatically
@@ -817,7 +817,7 @@ Current loader responsibilities include:
 - resolving a working directory under the user home directory
 - requesting a fresh bundle build from the server
 - downloading and extracting the bundle
-- launching `ratclient.py` via `python3` / `python`
+- launching `rchclient.py` via `python3` / `python`
 - reporting launch details (paths, PID, build version)
 - exiting after handoff
 
@@ -906,7 +906,7 @@ Typical entrypoints in the repo:
 
 Client entrypoint:
 
-- `ratclient.py`
+- `rchclient.py`
 
 ## Access the web UI
 

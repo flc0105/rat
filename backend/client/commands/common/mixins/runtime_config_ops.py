@@ -169,7 +169,7 @@ class CommandRuntimeConfigMixin:
         if key == 'RECONNECT_INTERVAL_SECONDS':
             try:
                 import rchclient
-                ratclient.Client.RECONNECT_INTERVAL = value
+                rchclient.Client.RECONNECT_INTERVAL = value
                 effects.append('Applied: Client.RECONNECT_INTERVAL updated')
             except Exception as e:
                 logger.warning(f'Failed to apply reconnect interval runtime update: {e}')

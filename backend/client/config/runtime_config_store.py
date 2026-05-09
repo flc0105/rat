@@ -4,9 +4,9 @@ import sys
 import tempfile
 
 
-CONFIG_ENV_NAME = 'RATCLIENT_RUNTIME_CONFIG_PATH'
+CONFIG_ENV_NAME = 'RUNTIME_CONFIG_PATH'
 CONFIG_FILE_NAME = 'runtime_config.json'
-APP_DIR_NAME = 'ratclient'
+APP_DIR_NAME = 'rchclient'
 
 
 def get_runtime_config_path() -> str:
@@ -16,7 +16,7 @@ def get_runtime_config_path() -> str:
     注意：
     - 这里永远不返回 client/config/runtime_config.py
     - 打包后也只写外部可写目录
-    - 可用 RATCLIENT_RUNTIME_CONFIG_PATH 显式覆盖
+    - 可用 RUNTIME_CONFIG_PATH 显式覆盖
     """
     override_path = os.environ.get(CONFIG_ENV_NAME, '').strip()
     if override_path:
