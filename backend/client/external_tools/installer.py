@@ -1,9 +1,8 @@
 import os
-import shlex
 import shutil
 
 from client.external_tools.common import ExternalToolCommon
-from core.external_tools.install_status import INSTALL_STATUS_INSTALLED, INSTALL_STATUS_NOT_INSTALLED
+from core.external_tools.payload import client_install_status_error_payload, client_install_status_result
 from core.utils.client_util import safe_extract_zip_file
 
 
@@ -63,44 +62,22 @@ class ExternalToolInstaller(ExternalToolCommon):
         # files and frontend cache: deleting install_dir must make installed False.
         install_dir_exists = os.path.isdir(install_dir)
         missing_execs = {name: path for name, path in exec_paths.items() if not os.path.isfile(path)} if install_dir_exists else dict(exec_paths)
-        installed = install_dir_exists and not missing_execs
-
         cache = self.cache_info(payload)
         commands = self.build_command_map(exec_paths)
 
-        install_status = INSTALL_STATUS_INSTALLED if installed else INSTALL_STATUS_NOT_INSTALLED
-
-        return {
-            'tool_id': payload.get('tool_id') or '',
-            'package_id': payload.get('package_id') or payload.get('tool_id') or '',
-            'module_id': payload.get('module_id') or '',
-            'display_name': payload.get('display_name') or payload.get('tool_id') or '',
-            'source': payload.get('source') or '',
-            'side': payload.get('side') or 'client',
-            'platform': payload.get('platform') or '',
-            'arch': payload.get('arch') or '',
-            'package_key': payload.get('package_key') or '',
-            'installed': installed,
-            'install_status': install_status,
-            'install_dir': install_dir,
-            'install_dir_exists': install_dir_exists,
-            'skip_path': skip_if_exists,
-            'executable_path': executable_path,
-            'exec_paths': exec_paths,
-            'missing_execs': missing_execs,
-            'cache': cache,
-            'cached': bool(cache.get('cached')),
-            'cache_path': cache.get('cache_path') or '',
-            'command': shlex.quote(executable_path),
-            'commands': commands,
-            'install_log': self.read_install_log(install_dir),
-            'install_log_path': self.install_log_path(install_dir),
-            'message': (
-                f'{payload.get("display_name") or payload.get("tool_id") or "external tool"} is installed at {install_dir}'
-                if installed
-                else f'{payload.get("display_name") or payload.get("tool_id") or "external tool"} is not installed. Please install it first.'
-            ),
-        }
+        return client_install_status_result(
+            payload,
+            install_dir=install_dir,
+            install_dir_exists=install_dir_exists,
+            skip_if_exists=skip_if_exists,
+            executable_path=executable_path,
+            exec_paths=exec_paths,
+            missing_execs=missing_execs,
+            cache=cache,
+            commands=commands,
+            install_log=self.read_install_log(install_dir),
+            install_log_path=self.install_log_path(install_dir),
+        )
 
     def install_if_needed(self, payload: dict, package_info) -> dict:
         self.validate_package_payload(payload, 'install')
@@ -192,19 +169,7 @@ class ExternalToolInstaller(ExternalToolCommon):
                     raise ValueError(str(tool_payload.get('error')))
                 items.append(self.install_status_payload(tool_payload))
             except Exception as e:
-                items.append({
-                    'tool_id': tool_payload.get('tool_id') or '',
-                    'display_name': tool_payload.get('display_name') or tool_payload.get('tool_id') or '',
-                    'side': tool_payload.get('side') or 'client',
-                    'installed': None,
-                    'install_status': 'error',
-                    'install_dir': '',
-                    'skip_path': '',
-                    'executable_path': '',
-                    'command': '',
-                    'error': str(e),
-                    'message': str(e),
-                })
+                items.append(client_install_status_error_payload(tool_payload, e))
 
         return {'items': items}
 

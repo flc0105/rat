@@ -27,6 +27,14 @@ from core.external_tools.paths import (
     should_expand_argv_item,
 )
 from core.external_tools.params import resolve_params as resolve_external_tool_params
+from core.external_tools.payload import (
+    client_action_payload,
+    client_exec_payload as build_shared_client_exec_payload,
+    client_install_payload as build_shared_client_install_payload,
+    client_module_payload as build_shared_client_module_payload,
+    config_payload_from_rendered,
+    primary_exec_name,
+)
 from core.external_tools.platform import normalize_arch, normalize_platform
 from core.external_tools.runtime import missing_exec_paths as find_missing_exec_paths
 from core.external_tools.runtime import resolved_exec_context as build_resolved_exec_context
@@ -414,11 +422,7 @@ class ExternalToolRuntimeService:
         chmod_executable(path)
 
     def _primary_exec_name(self, package: dict, module: dict | None = None) -> str:
-        if module and module.get('exec'):
-            return str(module.get('exec') or '').strip()
-        for name in (package.get('execs') or {}).keys():
-            return name
-        return ''
+        return primary_exec_name(package, module)
 
 
     def _default_package_skip_template(self, package: dict, context: dict) -> str:
@@ -1292,25 +1296,16 @@ finally:
             raise ValueError('platform package filename is required')
         exec_name = self._primary_exec_name(package)
         rel_path = (context.get('exec') or {}).get(exec_name) or ''
-        return {
-            'action': 'install',
-            'tool_id': package.get('id') or '',
-            'package_id': package.get('id') or '',
-            'display_name': package.get('display_name') or package.get('id') or '',
-            'version': package.get('version') or '',
-            'source': self._package_source(package, context.get('package_key') or ''),
-            'side': 'client',
-            'platform': context.get('platform') or '',
-            'arch': context.get('arch') or '',
-            'package_key': context.get('package_key') or '',
-            'package': {
-                'filename': filename,
-                'download_url': self._client_download_url(filename, package_file),
-                'executable_rel_path': rel_path,
-                'exec_paths': context.get('exec') or {},
-            },
-            'install': {'install_dir': context.get('install_dir') or '', 'skip_if_exists': self._client_skip_path(package, context)},
-        }
+        return build_shared_client_install_payload(
+            package,
+            context,
+            source=self._package_source(package, context.get('package_key') or ''),
+            filename=filename,
+            download_url=self._client_download_url(filename, package_file),
+            executable_rel_path=rel_path,
+            skip_if_exists=self._client_skip_path(package, context),
+            action='install',
+        )
 
     def build_client_start_payload(self, meta: dict, params: dict | None = None, instance_id: str = '', install_if_needed: bool = False, require_required_params: bool = True, platform_alias: str = '', arch: str = '') -> dict:
         del install_if_needed
@@ -1336,34 +1331,24 @@ finally:
             runtime_argv = shlex.split(runtime_argv)
         if isinstance(runtime_argv, list):
             runtime['argv'] = self._append_runtime_extra_args(runtime_argv, runtime, context)
-        config = rendered_meta.get('config') or {}
-        config_payload = {}
-        if config.get('target') and config.get('template') is not None:
-            config_payload = {'target': config.get('target'), 'content': self._render_value(str(config.get('template')), context)}
+        config_payload = config_payload_from_rendered(rendered_meta, lambda value: self._render_value(value, context))
         exec_name = self._primary_exec_name(package, meta)
         rel_path = (context.get('exec') or {}).get(exec_name) or ''
-        return {
-            'action': 'start',
-            'install_if_needed': False,
-            'tool_id': meta.get('tool_id') or '',
-            'package_id': meta.get('package_id') or '',
-            'module_id': meta.get('id') or '',
-            'display_name': meta.get('display_name') or meta.get('tool_id') or '',
-            'version': meta.get('version') or '',
-            'source': self._package_source(package, context.get('package_key') or ''),
-            'side': 'client',
-            'platform': context.get('platform') or '',
-            'arch': context.get('arch') or '',
-            'package_key': context.get('package_key') or '',
-            'instance_id': context.get('instance_id') or 'default',
-            'instance_name': context.get('instance_name') or context.get('instance_id') or 'default',
-            'params': resolved_params,
-            'package': {'filename': filename, 'download_url': self._client_download_url(filename, package_file), 'executable_rel_path': rel_path, 'exec_paths': context.get('exec') or {}},
-            'install': {'install_dir': context.get('install_dir') or '', 'skip_if_exists': self._client_skip_path(package, context, module=meta)},
-            'config': config_payload,
-            'runtime': runtime,
-            'lifecycle': rendered_meta.get('lifecycle') or {},
-        }
+        return build_shared_client_module_payload(
+            meta,
+            context,
+            action='start',
+            source=self._package_source(package, context.get('package_key') or ''),
+            filename=filename,
+            download_url=self._client_download_url(filename, package_file),
+            executable_rel_path=rel_path,
+            skip_if_exists=self._client_skip_path(package, context, module=meta),
+            params=resolved_params,
+            runtime=runtime,
+            config=config_payload,
+            lifecycle=rendered_meta.get('lifecycle') or {},
+            install_if_needed=False,
+        )
 
     def build_client_oneshot_payload(self, meta: dict, params: dict | None = None, platform_alias: str = '', arch: str = '') -> dict:
         if str(meta.get('execution') or '').strip().lower() != 'oneshot':
@@ -1392,34 +1377,26 @@ finally:
             runtime_argv = shlex.split(runtime_argv)
         if isinstance(runtime_argv, list):
             runtime['argv'] = self._append_runtime_extra_args(runtime_argv, runtime, context)
-        config = rendered_meta.get('config') or {}
-        config_payload = {}
-        if config.get('target') and config.get('template') is not None:
-            config_payload = {'target': config.get('target'), 'content': self._render_value(str(config.get('template')), context)}
+        config_payload = config_payload_from_rendered(rendered_meta, lambda value: self._render_value(value, context))
         exec_name = self._primary_exec_name(package, meta)
         rel_path = (context.get('exec') or {}).get(exec_name) or ''
-        return {
-            'action': 'oneshot',
-            'install_if_needed': False,
-            'tool_id': meta.get('tool_id') or '',
-            'package_id': meta.get('package_id') or '',
-            'module_id': meta.get('id') or '',
-            'display_name': meta.get('display_name') or meta.get('tool_id') or '',
-            'version': meta.get('version') or '',
-            'source': self._package_source(package, context.get('package_key') or ''),
-            'execution': 'oneshot',
-            'side': 'client',
-            'platform': context.get('platform') or '',
-            'arch': context.get('arch') or '',
-            'package_key': context.get('package_key') or '',
-            'run_id': run_id,
-            'params': resolved_params,
-            'package': {'filename': filename, 'download_url': self._client_download_url(filename, package_file), 'executable_rel_path': rel_path, 'exec_paths': context.get('exec') or {}},
-            'install': {'install_dir': context.get('install_dir') or '', 'skip_if_exists': self._client_skip_path(package, context, module=meta)},
-            'config': config_payload,
-            'runtime': runtime,
-            'timeout_sec': self._oneshot_timeout_sec(meta, runtime),
-        }
+        return build_shared_client_module_payload(
+            meta,
+            context,
+            action='oneshot',
+            source=self._package_source(package, context.get('package_key') or ''),
+            filename=filename,
+            download_url=self._client_download_url(filename, package_file),
+            executable_rel_path=rel_path,
+            skip_if_exists=self._client_skip_path(package, context, module=meta),
+            params=resolved_params,
+            runtime=runtime,
+            config=config_payload,
+            install_if_needed=False,
+            execution='oneshot',
+            run_id=run_id,
+            timeout_sec=self._oneshot_timeout_sec(meta, runtime),
+        )
 
     def build_client_payload(self, meta: dict, params: dict | None = None) -> dict:
         return self.build_client_start_payload(meta, params=params)
@@ -1432,7 +1409,14 @@ finally:
         sanitized = self._sanitize_instance_id(instance_id)
         runtime_dir = os.path.join('~/.ops/external_tools/runtime', package_id, module_id, 'instances', sanitized)
         runtime = {'pid_file': os.path.join(runtime_dir, 'tool.pid'), 'stdout': os.path.join(runtime_dir, 'stdout.log'), 'stderr': 'stdout', 'state_file': os.path.join(runtime_dir, 'state.json')}
-        return {'action': action, 'tool_id': meta.get('tool_id') or '', 'package_id': package_id, 'module_id': module_id, 'display_name': meta.get('display_name') or meta.get('tool_id') or '', 'version': meta.get('version') or '', 'side': 'client', 'instance_id': sanitized, 'instance_name': sanitized, 'params': resolved_params, 'runtime': runtime, 'lifecycle': meta.get('lifecycle') or {}, 'max_bytes': int(max_bytes or self.DEFAULT_LOG_TAIL_BYTES)}
+        return client_action_payload(
+            meta,
+            action=action,
+            instance_id=sanitized,
+            params=resolved_params,
+            runtime=runtime,
+            max_bytes=int(max_bytes or self.DEFAULT_LOG_TAIL_BYTES),
+        )
 
     def build_client_install_status_payloads(self, packages: list[dict], platform_alias: str = '', arch: str = '') -> list[dict]:
         payloads = []
@@ -1554,25 +1538,19 @@ finally:
         package_file = self._package_file(package, context.get('package_key') or '')
         filename = str(package_file.get('filename') or '').strip()
         rel_path = self.catalog_service.resolve_exec_rel_path(package, exec_name, context.get('package_key') or '')
-        return {
-            'action': 'exec',
-            'install_if_needed': False,
-            'tool_id': package.get('id') or '',
-            'package_id': package.get('id') or '',
-            'display_name': package.get('display_name') or package.get('id') or '',
-            'version': package.get('version') or '',
-            'source': self._package_source(package, context.get('package_key') or ''),
-            'side': 'client',
-            'platform': context.get('platform') or '',
-            'arch': context.get('arch') or '',
-            'package_key': context.get('package_key') or '',
-            'package': {'filename': filename, 'download_url': self._client_download_url(filename, package_file), 'executable_rel_path': rel_path, 'exec_paths': context.get('exec') or {}},
-            'install': {'install_dir': context.get('install_dir') or '', 'skip_if_exists': self._client_skip_path(package, context)},
-            'exec_name': exec_name,
-            'exec_options': {
+        return build_shared_client_exec_payload(
+            package,
+            context,
+            source=self._package_source(package, context.get('package_key') or ''),
+            filename=filename,
+            download_url=self._client_download_url(filename, package_file),
+            executable_rel_path=rel_path,
+            skip_if_exists=self._client_skip_path(package, context),
+            exec_name=exec_name,
+            exec_options={
                 'arg_mode': exec_options.get('arg_mode') or exec_item.get('arg_mode') or 'raw_append',
                 'cwd': cwd or exec_options.get('cwd') or exec_item.get('cwd') or '',
                 'timeout_sec': exec_options.get('timeout_sec') if exec_options.get('timeout_sec') is not None else exec_item.get('timeout_sec'),
             },
-            'raw_args': raw_args,
-        }
+            raw_args=raw_args,
+        )
