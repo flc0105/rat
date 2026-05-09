@@ -538,14 +538,49 @@ class ExternalToolCatalogService:
         target = self._normalize_platform(platform_alias or '')
         if not target:
             return False
-        platforms = package.get('platforms') or []
-        return not platforms or '*' in platforms or target in platforms
+
+        for item in (package.get('platform_packages') or {}).values():
+            item_platform = self._normalize_platform(item.get('platform'))
+            if item_platform in ('*', target):
+                return True
+
+            for compatible in item.get('compatible_targets') or []:
+                compatible_platform = self._normalize_platform(compatible.get('platform'))
+                if compatible_platform in ('*', target):
+                    return True
+
+        return False
+
+    # def _platform_matches(self, package: dict, platform_alias: str = '') -> bool:
+    #     target = self._normalize_platform(platform_alias or '')
+    #     if not target:
+    #         return False
+    #     platforms = package.get('platforms') or []
+    #     return not platforms or '*' in platforms or target in platforms
+
+    # def _arch_matches(self, package: dict, arch: str = '') -> bool:
+    #     target = self._normalize_arch(arch or '')
+    #     if not target:
+    #         return False
+    #     return any((item.get('arch') in ('*', 'all') or item.get('arch') == target) for item in (package.get('platform_packages') or {}).values())
+
 
     def _arch_matches(self, package: dict, arch: str = '') -> bool:
         target = self._normalize_arch(arch or '')
         if not target:
             return False
-        return any((item.get('arch') in ('*', 'all') or item.get('arch') == target) for item in (package.get('platform_packages') or {}).values())
+
+        for item in (package.get('platform_packages') or {}).values():
+            item_arch = self._normalize_arch(item.get('arch'))
+            if item_arch in ('*', 'all') or item_arch == target:
+                return True
+
+            for compatible in item.get('compatible_targets') or []:
+                compatible_arch = self._normalize_arch(compatible.get('arch'))
+                if compatible_arch in ('*', 'all') or compatible_arch == target:
+                    return True
+
+        return False
 
     def list_cli_aliases(self, side: str = '', platform_alias: str = '', arch: str = '') -> list[dict]:
         del side
