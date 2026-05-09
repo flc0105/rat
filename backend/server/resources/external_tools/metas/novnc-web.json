@@ -1,0 +1,132 @@
+{
+  "id": "novnc-web",
+  "name": "novnc-web",
+  "display_name": "noVNC Web Gateway",
+  "description": "Browser gateway for opening VNC desktops without a native client.",
+  "version": "1.7.0",
+  "category": "remote-desktop",
+  "tags": [
+    "vnc",
+    "novnc",
+    "websockify",
+    "remote-desktop",
+    "browser"
+  ],
+  "web": {
+  },
+  "platform_packages": {
+    "darwin-arm64": {
+      "platform": "mac",
+      "arch": "arm64",
+      "filename": "novnc-v1.7.0-any-any.zip",
+      "download_url": "/api/external-tools/packages/novnc-v1.7.0-any-any.zip",
+      "root": ""
+    }
+  },
+  "execs": {
+    "novnc-web": {
+      "paths": {
+        "darwin-arm64": "utils/novnc_proxy"
+      }
+    }
+  },
+  "install": {
+    "install_dir": "{{external_tools_root}}/{{package_id}}/{{version}}/{{package_key}}"
+  },
+  "modules": [
+    {
+      "id": "web",
+      "name": "novnc-web",
+      "display_name": "noVNC Web Gateway",
+      "description": "Proxies a VNC endpoint into a browser-accessible noVNC session.",
+      "execution": "daemon",
+      "exec": "novnc-web",
+      "params": [
+        {
+          "name": "instance_name",
+          "label": "Instance Name",
+          "type": "string",
+          "required": true,
+          "default": "novnc-6080",
+          "description": "Unique name for this noVNC gateway instance."
+        },
+        {
+          "name": "listen_host",
+          "label": "Web Listen Host",
+          "type": "string",
+          "required": true,
+          "default": "0.0.0.0",
+          "description": "Address noVNC web gateway listens on. Use 0.0.0.0 for LAN or external browser access."
+        },
+        {
+          "name": "listen_port",
+          "label": "Web Listen Port",
+          "type": "integer",
+          "required": true,
+          "default": 6080,
+          "min": 1,
+          "max": 65535,
+          "description": "Browser access port. Open http://server_ip:listen_port/vnc.html."
+        },
+        {
+          "name": "vnc_host",
+          "label": "Target VNC Host",
+          "type": "string",
+          "required": true,
+          "default": "192.168.2.15",
+          "description": "Target VNC host reachable from this server. For local FRP mapping this is usually 127.0.0.1; for LAN testing it can be a LAN IP."
+        },
+        {
+          "name": "vnc_port",
+          "label": "Target VNC Port",
+          "type": "integer",
+          "required": true,
+          "default": 5900,
+          "min": 1,
+          "max": 65535,
+          "description": "Target VNC TCP port, usually 5900."
+        },
+        {
+          "name": "access_host",
+          "label": "Access Host",
+          "type": "string",
+          "required": false,
+          "default": "",
+          "description": "Browser access host or public IP. Empty means current browser hostname."
+        }
+      ],
+      "config": {
+        "target": "{{instance_runtime_dir}}/novnc.env",
+        "template": "LISTEN_HOST={{listen_host}}\nLISTEN_PORT={{listen_port}}\nVNC_HOST={{vnc_host}}\nVNC_PORT={{vnc_port}}\nVIEW_ONLY={{view_only}}\nOPEN_URL=http://{{listen_host}}:{{listen_port}}/vnc.html?view_only={{view_only}}&resize=scale\n"
+      },
+      "runtime": {
+        "cwd": "{{install_dir}}/{{package_root}}",
+        "argv": [
+          "{{bin_novnc_web}}",
+          "--vnc",
+          "{{vnc_host}}:{{vnc_port}}",
+          "--listen",
+          "{{listen_host}}:{{listen_port}}"
+        ],
+        "stdout": "{{instance_runtime_dir}}/stdout.log",
+        "stderr": "stdout",
+        "pid_file": "{{instance_runtime_dir}}/tool.pid",
+        "state_file": "{{instance_runtime_dir}}/state.json"
+      },
+      "lifecycle": {
+        "stop": {
+          "type": "signal",
+          "signal": "TERM",
+          "timeout_sec": 5,
+          "kill_after_timeout": true
+        },
+        "status": {
+          "type": "pid_file"
+        }
+      },
+      "web": {
+        "url": "http://{{access_host}}:{{listen_port}}/vnc.html?view_only=1&resize=scale"
+      }
+    }
+  ]
+}

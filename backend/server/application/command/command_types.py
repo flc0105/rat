@@ -1,0 +1,3 @@
+COMMAND_TYPE_COMMAND = 'command'
+COMMAND_TYPE_ACMD = 'acmd'
+COMMAND_TYPE_SCRIPT = 'script'

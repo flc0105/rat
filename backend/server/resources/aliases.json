@@ -1,0 +1,53 @@
+{
+  "common": {
+    "pysleep": "pyexec_stream import time; time.sleep(<sec>)",
+    "open_url": "pyexec_collect import webbrowser;webbrowser.open('<url>')",
+    "pyver": "pyexec_collect import sys;print(sys.version)",
+    "now": "pyexec_collect import datetime;print(datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'))"
+  },
+  "win": {
+    "list_av": "powershell Get-CimInstance -Namespace root/SecurityCenter2 -ClassName AntivirusProduct ^| Select-Object displayName",
+    "list_startup": "powershell Get-CimInstance Win32_StartupCommand ^| Select-Object Name, Command, Location",
+    "list_ports": "powershell Get-NetTCPConnection -State Listen ^| Sort-Object LocalPort ^| Select-Object LocalAddress, LocalPort, OwningProcess",
+    "list_ip": "powershell Get-NetIPAddress -AddressFamily IPv4 ^| Select-Object InterfaceAlias, IPAddress",
+    "list_services": "powershell Get-Service ^| Sort-Object Status,DisplayName ^| Select-Object Status,Name,DisplayName",
+    "list_env": "powershell Get-ChildItem Env: ^| Sort-Object Name",
+    "list_users": "powershell Get-LocalUser ^| Select-Object Name, Enabled, LastLogon",
+    "os_info": "powershell Get-ComputerInfo ^| Select-Object WindowsProductName, WindowsVersion, OsHardwareAbstractionLayer",
+    "download_file": "powershell Invoke-WebRequest -Uri <url> -OutFile <file>",
+    "run_as_admin": "powershell Start-Process -Verb runas <command>",
+    "show_desktop": "powershell (New-Object -ComObject shell.application).toggleDesktop()",
+    "kill_port": "powershell Stop-Process -Id (Get-NetTCPConnection -LocalPort <port>).OwningProcess",
+    "ls": "powershell Get-ChildItem",
+    "ll": "powershell Get-ChildItem -Force",
+    "pwd": "powershell Get-Location",
+    "cat": "powershell Get-Content <file>",
+    "wc": "powershell Get-Content <file> ^| Measure-Object -Line -Word -Character",
+    "zip": "powershell Compress-Archive -Path <src> -DestinationPath <zipfile>",
+    "unzip": "powershell Expand-Archive -Path <zipfile> -DestinationPath <dir>",
+    "touch": "type nul > <filename>",
+    "lock_screen": "rundll32 user32.dll,LockWorkStation",
+    "ps": "tasklist",
+    "kill_pid": "taskkill /pid <pid> /f",
+    "kill_name": "taskkill /im <name> /f",
+    "md5": "certUtil -hashfile <file> MD5",
+    "computer_info": "wmic computersystem get manufacturer,model"
+  },
+  "mac": {
+    "ll": "ls -la",
+    "sleep": "read ping -c <sec> 127.0.0.1",
+    "kill_port": "kill -9 $(lsof -t -i:<port>)",
+    "ip": "ipconfig getifaddr en0",
+    "clean_ds": "find . -name \"._*\" -type f -delete && find . -name \".DS_Store\" -type f -delete",
+    "pause": "kill -STOP <pid>",
+    "resume": "kill -CONT <pid>",
+    "wifipass": "security find-generic-password -wa <ssid>",
+    "public_ip": "curl -s ifconfig.me;echo",
+    "gatekeeper_off": "sudo spctl --master-disable",
+    "gatekeeper_on": "sudo spctl --master-enable",
+    "file_tags": "xattr -l <path>",
+    "allow_file": "xattr -d com.apple.quarantine <path>"
+  },
+  "linux": {},
+  "ios": {}
+}

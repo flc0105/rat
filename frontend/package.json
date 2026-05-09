@@ -1,0 +1,21 @@
+{
+  "name": "rat-front",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 0.0.0.0",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "element-plus": "^2.13.7",
+    "vue": "^3.5.32",
+    "monaco-editor": "^0.45.0",
+    "@element-plus/icons-vue": "^2.3.2"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "^6.0.6",
+    "vite": "^8.0.10"
+  }
+}

@@ -1,0 +1,2 @@
+TASK_TYPE_COMMAND = 'command'
+TASK_TYPE_UPLOAD = 'upload'

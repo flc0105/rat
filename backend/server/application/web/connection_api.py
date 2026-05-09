@@ -1,0 +1,23 @@
+class WebConnectionApi:
+    """
+    Web 连接子外观。
+
+    职责：
+    - 暴露 connection payload 查询
+    - 暴露 connection 生命周期相关能力
+    """
+
+    def __init__(self, connection_service):
+        self.connection_service = connection_service
+
+    def get_connections_payload(self):
+        return self.connection_service.get_connections_payload()
+
+    def create_web_connection(self, transport, addr, info: dict):
+        return self.connection_service.create_web_connection(transport, addr, info)
+
+    def handle_connection_registered(self, session):
+        self.connection_service.handle_connection_registered(session)
+
+    def handle_connection_closed(self, session):
+        self.connection_service.handle_connection_closed(session)

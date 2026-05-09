@@ -1,0 +1,363 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8"/>
+        <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+
+<!--    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>-->
+    <title>Sign In</title>
+
+    <link rel="stylesheet" href="/app.css"/>
+    <link rel="stylesheet" href="https://unpkg.com/element-plus/dist/index.css"/>
+
+    <style>
+        :root {
+            color-scheme: light;
+        }
+
+        html, body {
+            min-height: 100%;
+        }
+
+        body {
+            margin: 0;
+            overflow: auto;
+            font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+            background:
+                radial-gradient(circle at top left, rgba(37, 99, 235, 0.16), transparent 26%),
+                radial-gradient(circle at bottom right, rgba(99, 102, 241, 0.14), transparent 24%),
+                linear-gradient(180deg, #f8fafc 0%, #eef4ff 100%);
+            color: #0f172a;
+        }
+
+        .login-shell {
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 28px;
+            box-sizing: border-box;
+        }
+
+        .login-card {
+            width: 100%;
+            max-width: 420px;
+            border-radius: 24px;
+            background: rgba(255, 255, 255, 0.9);
+            border: 1px solid rgba(255, 255, 255, 0.75);
+            box-shadow: 0 24px 80px rgba(15, 23, 42, 0.14);
+            backdrop-filter: blur(18px);
+            overflow: hidden;
+        }
+
+        .login-header {
+            position: relative;
+            padding: 34px 30px 20px;
+            background:
+                radial-gradient(circle at 0% 0%, rgba(96, 165, 250, 0.18), transparent 30%),
+                linear-gradient(135deg, #0f172a 0%, #111827 58%, #1e293b 100%);
+            color: #f8fbff;
+        }
+
+        .login-title {
+            margin: 0 0 8px;
+            font-size: 30px;
+            line-height: 1.05;
+            font-weight: 760;
+            letter-spacing: -0.03em;
+        }
+
+        .login-subtitle {
+            margin: 0;
+            font-size: 13px;
+            line-height: 1.6;
+            color: rgba(226, 232, 240, 0.92);
+        }
+
+        .login-body {
+            padding: 26px 30px 30px;
+        }
+
+        .login-form {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        .login-field {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .login-label {
+            font-size: 13px;
+            line-height: 1.4;
+            font-weight: 700;
+            color: #0f172a;
+        }
+
+        .login-input-wrap {
+            position: relative;
+        }
+
+        .login-input {
+            width: 100%;
+            height: 48px;
+            box-sizing: border-box;
+            padding: 0 14px;
+            border-radius: 14px;
+            border: 1px solid rgba(148, 163, 184, 0.24);
+            background: rgba(248, 250, 252, 0.96);
+            color: #0f172a;
+            font-size: 14px;
+            outline: none;
+            transition: border-color .18s ease, box-shadow .18s ease, background .18s ease;
+        }
+
+        .login-input::placeholder {
+            color: #94a3b8;
+        }
+
+        .login-input:focus {
+            background: #ffffff;
+            border-color: rgba(37, 99, 235, 0.42);
+            box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.11);
+        }
+
+        .login-submit {
+            margin-top: 4px;
+            height: 48px;
+            border: none;
+            border-radius: 14px;
+            background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+            color: #ffffff;
+            font-size: 14px;
+            font-weight: 700;
+            letter-spacing: 0.01em;
+            cursor: pointer;
+            box-shadow: 0 16px 32px rgba(37, 99, 235, 0.26);
+            transition: transform .14s ease, box-shadow .18s ease, opacity .18s ease;
+        }
+
+        .login-submit:hover:not(:disabled) {
+            transform: translateY(-1px);
+            box-shadow: 0 18px 34px rgba(37, 99, 235, 0.28);
+        }
+
+        .login-submit:disabled {
+            cursor: wait;
+            opacity: 0.92;
+        }
+
+        @media (max-width: 520px) {
+            .login-shell {
+                padding: 16px;
+            }
+
+            .login-card {
+                border-radius: 20px;
+            }
+
+            .login-header {
+                padding: 26px 22px 18px;
+            }
+
+            .login-body {
+                padding: 22px;
+            }
+
+            .login-title {
+                font-size: 25px;
+            }
+        }
+    </style>
+</head>
+<body>
+<div class="login-shell">
+    <div class="login-card">
+        <div class="login-header">
+            <h1 class="login-title">Remote Control Hub</h1>
+            <p class="login-subtitle">Sign in to continue.</p>
+        </div>
+
+        <div class="login-body">
+            <form id="loginForm" class="login-form">
+                <div class="login-field">
+                    <label class="login-label" for="username">Username</label>
+                    <div class="login-input-wrap">
+                        <input
+                            id="username"
+                            name="username"
+                            class="login-input"
+                            type="text"
+                            autocomplete="username"
+                            placeholder="Enter username"
+                            required
+                            autofocus
+                        />
+                    </div>
+                </div>
+
+                <div class="login-field">
+                    <label class="login-label" for="password">Password</label>
+                    <div class="login-input-wrap">
+                        <input
+                            id="password"
+                            name="password"
+                            class="login-input"
+                            type="password"
+                            autocomplete="current-password"
+                            placeholder="Enter password"
+                            required
+                        />
+                    </div>
+                </div>
+
+                <button id="submitButton" class="login-submit" type="submit">
+                    Sign In
+                </button>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+<script src="https://unpkg.com/element-plus/dist/index.full.min.js"></script>
+<script>
+    const SESSION_URL = '/api/auth/session';
+    const LOGIN_URL = '/api/auth/login';
+    const urlParams = new URLSearchParams(window.location.search);
+    const redirectTarget = urlParams.get('redirect') || '/';
+
+    const usernameInput = document.getElementById('username');
+    const passwordInput = document.getElementById('password');
+    const submitButton = document.getElementById('submitButton');
+    const loginForm = document.getElementById('loginForm');
+
+    let loadingInstance = null;
+
+    function openLoading(text) {
+        if (loadingInstance) {
+            loadingInstance.close();
+            loadingInstance = null;
+        }
+
+        loadingInstance = ElementPlus.ElLoading.service({
+            lock: true,
+            text: text || 'Loading...',
+            background: 'rgba(248, 250, 252, 0.58)'
+        });
+    }
+
+    function closeLoading() {
+        if (loadingInstance) {
+            loadingInstance.close();
+            loadingInstance = null;
+        }
+    }
+
+    function setSubmitting(submitting) {
+        submitButton.disabled = !!submitting;
+        submitButton.textContent = submitting ? 'Signing In...' : 'Sign In';
+    }
+
+    function showError(message) {
+        ElementPlus.ElMessage.closeAll();
+        ElementPlus.ElMessage({
+            type: 'error',
+            message: message || 'Sign in failed',
+            duration: 2200,
+            showClose: true
+        });
+    }
+
+    function showSuccess(message) {
+        ElementPlus.ElMessage.closeAll();
+        ElementPlus.ElMessage({
+            type: 'success',
+            message: message || 'Signed in',
+            duration: 1200
+        });
+    }
+
+    async function ensureGuestNeedsLogin() {
+        try {
+            const response = await fetch(SESSION_URL, {
+                method: 'GET',
+                credentials: 'same-origin',
+                cache: 'no-store'
+            });
+
+            if (!response.ok) return;
+
+            const payload = await response.json();
+            if (payload?.data?.authenticated) {
+                openLoading('Loading...');
+                window.setTimeout(() => {
+                    window.location.replace(redirectTarget);
+                }, 240);
+            }
+        } catch (_error) {
+        }
+    }
+
+    async function handleLogin(event) {
+        event.preventDefault();
+
+        const username = usernameInput.value.trim();
+        const password = passwordInput.value;
+
+        if (!username) {
+            showError('Please enter your username');
+            usernameInput.focus();
+            return;
+        }
+
+        if (!password) {
+            showError('Please enter your password');
+            passwordInput.focus();
+            return;
+        }
+
+        setSubmitting(true);
+        openLoading('Signing In...');
+
+        try {
+            const response = await fetch(LOGIN_URL, {
+                method: 'POST',
+                credentials: 'same-origin',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({username, password})
+            });
+
+            const payload = await response.json().catch(() => ({}));
+
+            if (!response.ok || payload?.code !== 0) {
+                closeLoading();
+                setSubmitting(false);
+                passwordInput.value = '';
+                showError(payload?.message || 'Invalid username or password');
+                passwordInput.focus();
+                return;
+            }
+
+            showSuccess('Signed in');
+            submitButton.textContent = 'Loading...';
+            openLoading('Loading workspace...');
+
+            window.setTimeout(() => {
+                window.location.replace(redirectTarget);
+            }, 650);
+        } catch (_error) {
+            closeLoading();
+            setSubmitting(false);
+            showError('Network error, please try again');
+        }
+    }
+
+    loginForm.addEventListener('submit', handleLogin);
+    ensureGuestNeedsLogin();
+</script>
+</body>
+</html>
