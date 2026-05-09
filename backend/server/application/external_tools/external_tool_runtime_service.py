@@ -26,7 +26,12 @@ from core.external_tools.paths import (
     sanitize_instance_id,
     should_expand_argv_item,
 )
+from core.external_tools.params import resolve_params as resolve_external_tool_params
 from core.external_tools.platform import normalize_arch, normalize_platform
+from core.external_tools.runtime import missing_exec_paths as find_missing_exec_paths
+from core.external_tools.runtime import resolved_exec_context as build_resolved_exec_context
+from core.external_tools.runtime import select_module_runtime_for_platform
+from core.external_tools.target import require_target as require_external_tool_target
 from core.external_tools.template import append_runtime_extra_args, context_get, render_value, split_extra_argv
 from core.platform.platform_identity import detect_platform_alias
 
@@ -78,11 +83,7 @@ class ExternalToolRuntimeService:
         return value
 
     def _require_target(self, platform_alias: Any, arch: Any, context: str) -> tuple[str, str]:
-        platform_value = self._normalize_platform(platform_alias or '')
-        arch_value = self._normalize_arch(arch or '')
-        if not platform_value or not arch_value:
-            raise ValueError(f'target platform and arch are required for {context}, got {platform_value or "unknown"}/{arch_value or "unknown"}')
-        return platform_value, arch_value
+        return require_external_tool_target(platform_alias, arch, context)
 
     def _context_get(self, context: dict, dotted_key: str) -> Any:
         return context_get(context, dotted_key)
@@ -129,38 +130,8 @@ class ExternalToolRuntimeService:
                 raw = 'default'
         return self._sanitize_instance_id(raw)
 
-    def _coerce_param_value(self, spec: dict, value: Any, require_required: bool = True) -> Any:
-        param_type = str(spec.get('type') or 'string').strip().lower()
-        if value is None or value == '':
-            if spec.get('default') is not None:
-                value = spec.get('default')
-            elif spec.get('required') and require_required:
-                raise ValueError(f'param {spec.get("name")} is required')
-            else:
-                return ''
-        if param_type in ('int', 'integer', 'number'):
-            try:
-                return int(value)
-            except Exception:
-                raise ValueError(f'param {spec.get("name")} must be an integer')
-        if param_type in ('bool', 'boolean'):
-            if isinstance(value, bool):
-                return value
-            return str(value).strip().lower() in ('1', 'true', 'yes', 'on')
-        return str(value)
-
     def resolve_params(self, meta: dict, params: dict | None, require_required: bool = True) -> dict:
-        source = params if isinstance(params, dict) else {}
-        resolved = {}
-        for spec in meta.get('params') or []:
-            name = str(spec.get('name') or '').strip()
-            if not name:
-                continue
-            resolved[name] = self._coerce_param_value(spec, source.get(name), require_required=require_required)
-        for key, value in source.items():
-            if key not in resolved:
-                resolved[key] = value
-        return resolved
+        return resolve_external_tool_params(meta, params, require_required=require_required)
 
     def _select_package_key(self, package: dict, platform_alias: str = '', arch: str = '') -> str:
         return self.catalog_service.select_package_key(package, platform_alias=platform_alias, arch=arch)
@@ -177,46 +148,19 @@ class ExternalToolRuntimeService:
         return str(package_file.get('source') or package.get('source') or '').strip()
 
     def _module_runtime_for_platform(self, module: dict, platform_alias: str, arch: str) -> dict:
-        base = module.get('runtime') if isinstance(module.get('runtime'), dict) else {}
-        selected = dict(base)
-        variants = module.get('runtimes') if isinstance(module.get('runtimes'), list) else []
-        target_platform = self._normalize_platform(platform_alias)
-        target_arch = self._normalize_arch(arch)
-        for item in variants:
-            if not isinstance(item, dict):
-                continue
-            platform_value = self._normalize_platform(item.get('platform') or '*')
-            arch_value = self._normalize_arch(item.get('arch') or '*') if item.get('arch') else '*'
-            platform_ok = platform_value in ('*', target_platform)
-            arch_ok = arch_value in ('*', 'all', target_arch)
-            if platform_ok and arch_ok:
-                overlay = dict(item)
-                overlay.pop('platform', None)
-                overlay.pop('arch', None)
-                selected.update(overlay)
-                break
-        return selected
+        return select_module_runtime_for_platform(module, platform_alias, arch)
 
     def _resolved_exec_context(self, package: dict, package_key: str, install_dir: str) -> tuple[dict, dict]:
-        rel_execs = {}
-        abs_bins = {}
-        for exec_name in (package.get('execs') or {}).keys():
-            try:
-                rel_path = self.catalog_service.resolve_exec_rel_path(package, exec_name, package_key)
-            except Exception:
-                continue
-            rel_path = str(rel_path or '').strip().lstrip('/\\')
-            rel_execs[exec_name] = rel_path
-            abs_bins[exec_name] = self._expand_path(os.path.join(install_dir, rel_path))
-        return rel_execs, abs_bins
+        return build_resolved_exec_context(
+            package,
+            package_key,
+            install_dir,
+            self.catalog_service.resolve_exec_rel_path,
+            self._expand_path,
+        )
 
     def _missing_exec_paths(self, abs_bins: dict) -> dict:
-        missing = {}
-        for name, path in (abs_bins or {}).items():
-            path = self._expand_path(path)
-            if not path or not os.path.isfile(path):
-                missing[str(name)] = path
-        return missing
+        return find_missing_exec_paths(abs_bins, self._expand_path)
 
     def _install_manifest_path(self, install_dir: str) -> str:
         return os.path.join(self._expand_path(install_dir), '.external_tool_package.json')

@@ -13,6 +13,8 @@ from core.external_tools.paths import (
     should_expand_argv_item,
 )
 from core.external_tools.platform import normalize_arch, normalize_platform
+from core.external_tools.target import runtime_parts_from_payload as parse_runtime_parts_from_payload
+from core.external_tools.target import validate_payload_target
 from core.platform.platform_identity import detect_platform_alias
 
 
@@ -45,28 +47,8 @@ class ExternalToolCommon:
         return local_platform, local_arch
 
     def validate_package_payload(self, payload: dict, action: str = '') -> tuple[str, str]:
-        requested_platform = self.normalize_platform(payload.get('platform'))
-        requested_arch = self.normalize_arch(payload.get('arch'))
-        package_key = str(payload.get('package_key') or '').strip()
-        package_id = str(payload.get('package_id') or payload.get('tool_id') or '').strip()
-
-        if not package_id:
-            raise ValueError('external tool payload.package_id is required')
-        if not package_key:
-            raise ValueError(f'external tool payload.package_key is required for {package_id}')
-        if not requested_platform or not requested_arch:
-            raise ValueError(f'external tool payload platform/arch is required for {package_id}, got {requested_platform or "unknown"}/{requested_arch or "unknown"}')
-
         local_platform, local_arch = self.local_target()
-        platform_ok = requested_platform in ('*', local_platform)
-        arch_ok = requested_arch in ('*', 'all', local_arch)
-        if not platform_ok or not arch_ok:
-            suffix = f' during {action}' if action else ''
-            raise ValueError(
-                f'external tool target mismatch{suffix}: payload requests '
-                f'{requested_platform}/{requested_arch} ({package_key}) but this client is {local_platform}/{local_arch}'
-            )
-        return requested_platform, requested_arch
+        return validate_payload_target(payload, local_platform, local_arch, action=action)
 
     def expand_path(self, path: str) -> str:
         return expand_path(path)
@@ -106,11 +88,4 @@ class ExternalToolCommon:
             json.dump(data, file_obj, ensure_ascii=False, indent=2)
 
     def runtime_parts_from_payload(self, payload: dict) -> tuple[str, str, str]:
-        tool_id = str(payload.get('tool_id') or '').strip()
-        package_id = str(payload.get('package_id') or '').strip()
-        module_id = str(payload.get('module_id') or '').strip()
-        if (not package_id or not module_id) and '.' in tool_id:
-            package_id, module_id = tool_id.split('.', 1)
-        if not package_id:
-            package_id = tool_id
-        return tool_id, package_id, module_id
+        return parse_runtime_parts_from_payload(payload)
