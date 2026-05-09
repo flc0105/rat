@@ -1,4 +1,4 @@
-from client.commands.arguments.acmd_registry import argument_command
+from client.commands.arguments.decorators import argument_command
 from client.commands.common.commands import CommonCommands
 from client.commands.runtime.interrupts import timeout, interruptible
 from client.commands.platform.services.ios.console_service import iOSConsoleService

@@ -1,4 +1,4 @@
-from client.commands.arguments.acmd_registry import (
+from client.commands.arguments.models import (
     ArgumentCommandSpec,
     ArgumentOptionSpec,
 )

@@ -1,6 +1,4 @@
-from client.commands.arguments.acmd_registry import (
-    argument_command,
-)
+from client.commands.arguments.decorators import argument_command
 from client.commands.common.commands import CommonCommands
 from client.commands.runtime.interrupts import interruptible
 from client.commands.platform.services.mac.automation_service import MacAutomationService

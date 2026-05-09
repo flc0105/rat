@@ -1,4 +1,4 @@
-from client.commands.arguments.acmd_registry import ArgumentCommandRegistry
+from client.commands.arguments.registry import ArgumentCommandRegistry
 from core.platform.platform_identity import detect_platform_alias
 
 
