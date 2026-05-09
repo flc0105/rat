@@ -1674,8 +1674,10 @@ finally:
         return self._run_client_lifecycle_command(client_id, command, tab_id=tab_id)
 
     def build_client_exec_payload(self, target: dict, raw_args: str = '', platform_alias: str = '', arch: str = '', cwd: str = '') -> dict:
-        package = target.get('package') or target.get('meta') or {}
-        exec_name = target.get('exec_name') or target.get('alias') or ''
+        package = target.get('package_meta') or {}
+        exec_item = target.get('exec_item') if isinstance(target.get('exec_item'), dict) else {}
+        exec_options = target.get('exec_options') if isinstance(target.get('exec_options'), dict) else {}
+        exec_name = target.get('exec_name') or ''
         platform_value, arch_value = self._require_target(platform_alias, arch, f'client exec {exec_name or "unknown"}')
         logger.info(
             '[external-tools] build client exec payload: package_id=%s exec=%s target=%s/%s',
@@ -1702,6 +1704,11 @@ finally:
             'package_key': context.get('package_key') or '',
             'package': {'filename': filename, 'download_url': self._client_download_url(filename, package_file), 'executable_rel_path': rel_path, 'exec_paths': context.get('exec') or {}},
             'install': {'install_dir': context.get('install_dir') or '', 'skip_if_exists': self._client_skip_path(package, context)},
-            'cli': {'alias': exec_name, 'arg_mode': (target.get('cli') or {}).get('arg_mode') or 'raw_append', 'cwd': cwd or (target.get('cli') or {}).get('cwd') or '', 'timeout_sec': (target.get('cli') or {}).get('timeout_sec')},
+            'exec_name': exec_name,
+            'exec_options': {
+                'arg_mode': exec_options.get('arg_mode') or exec_item.get('arg_mode') or 'raw_append',
+                'cwd': cwd or exec_options.get('cwd') or exec_item.get('cwd') or '',
+                'timeout_sec': exec_options.get('timeout_sec') if exec_options.get('timeout_sec') is not None else exec_item.get('timeout_sec'),
+            },
             'raw_args': raw_args,
         }

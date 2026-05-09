@@ -4,6 +4,7 @@ import platform
 import re
 import shlex
 
+from core.external_tools.platform import normalize_arch, normalize_platform
 from core.platform.platform_identity import detect_platform_alias
 
 
@@ -26,32 +27,10 @@ class ExternalToolCommon:
         return self.command_host._ensure_not_interrupted()
 
     def normalize_platform(self, value) -> str:
-        text = str(value or '').strip().lower()
-        aliases = {
-            'windows': 'win',
-            'win32': 'win',
-            'darwin': 'mac',
-            'macos': 'mac',
-            'osx': 'mac',
-            'linux': 'linux',
-            'ios': 'ios',
-            'common': '*',
-            'all': '*',
-            '*': '*',
-        }
-        return aliases.get(text, text)
+        return normalize_platform(value)
 
     def normalize_arch(self, value) -> str:
-        text = str(value or '').strip().lower().replace('-', '_')
-        aliases = {
-            'x86_64': 'amd64',
-            'amd64': 'amd64',
-            'i386': '386',
-            'i686': '386',
-            'aarch64': 'arm64',
-            'arm64': 'arm64',
-        }
-        return aliases.get(text, text)
+        return normalize_arch(value)
 
     def local_target(self) -> tuple[str, str]:
         local_platform = self.normalize_platform(detect_platform_alias())

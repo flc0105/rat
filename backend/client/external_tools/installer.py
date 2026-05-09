@@ -3,6 +3,7 @@ import shlex
 import shutil
 
 from client.external_tools.common import ExternalToolCommon
+from core.external_tools.install_status import INSTALL_STATUS_INSTALLED, INSTALL_STATUS_NOT_INSTALLED
 from core.utils.client_util import safe_extract_zip_file
 
 
@@ -67,6 +68,8 @@ class ExternalToolInstaller(ExternalToolCommon):
         cache = self.cache_info(payload)
         commands = self.build_command_map(exec_paths)
 
+        install_status = INSTALL_STATUS_INSTALLED if installed else INSTALL_STATUS_NOT_INSTALLED
+
         return {
             'tool_id': payload.get('tool_id') or '',
             'package_id': payload.get('package_id') or payload.get('tool_id') or '',
@@ -78,6 +81,7 @@ class ExternalToolInstaller(ExternalToolCommon):
             'arch': payload.get('arch') or '',
             'package_key': payload.get('package_key') or '',
             'installed': installed,
+            'install_status': install_status,
             'install_dir': install_dir,
             'install_dir_exists': install_dir_exists,
             'skip_path': skip_if_exists,
@@ -193,6 +197,7 @@ class ExternalToolInstaller(ExternalToolCommon):
                     'display_name': tool_payload.get('display_name') or tool_payload.get('tool_id') or '',
                     'side': tool_payload.get('side') or 'client',
                     'installed': None,
+                    'install_status': 'error',
                     'install_dir': '',
                     'skip_path': '',
                     'executable_path': '',

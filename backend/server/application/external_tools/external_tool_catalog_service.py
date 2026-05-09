@@ -6,6 +6,7 @@ import platform
 from copy import deepcopy
 from typing import Any
 
+from core.external_tools.platform import normalize_arch, normalize_platform, platform_key
 from core.platform.platform_identity import detect_platform_alias
 
 
@@ -38,39 +39,13 @@ class ExternalToolCatalogService:
         return data
 
     def _normalize_platform(self, value: Any) -> str:
-        text = str(value or '').strip().lower()
-        aliases = {
-            'windows': 'win',
-            'win32': 'win',
-            'darwin': 'mac',
-            'macos': 'mac',
-            'osx': 'mac',
-            'linux': 'linux',
-            'ios': 'ios',
-            'common': '*',
-            'all': '*',
-            '*': '*',
-        }
-        return aliases.get(text, text)
+        return normalize_platform(value)
 
     def _normalize_arch(self, value: Any) -> str:
-        text = str(value or '').strip().lower().replace('-', '_')
-        aliases = {
-            'x86_64': 'amd64',
-            'amd64': 'amd64',
-            'i386': '386',
-            'i686': '386',
-            'aarch64': 'arm64',
-            'arm64': 'arm64',
-        }
-        return aliases.get(text, text)
+        return normalize_arch(value)
 
     def _platform_key(self, platform_alias: str, arch: str) -> str:
-        platform_value = self._normalize_platform(platform_alias)
-        arch_value = self._normalize_arch(arch)
-        if not platform_value or not arch_value:
-            return ''
-        return f'{platform_value}-{arch_value}'
+        return platform_key(platform_alias, arch)
 
     def _normalize_param(self, item: Any) -> dict:
         if not isinstance(item, dict):
@@ -208,7 +183,7 @@ class ExternalToolCatalogService:
         module['execution'] = str(module.get('execution') or '').strip().lower()
         if module['execution'] not in ('daemon', 'oneshot'):
             raise ValueError(f'module {module_id} execution must be daemon or oneshot')
-        module['exec'] = str(module.get('exec') or module.get('exec_name') or module_id).strip()
+        module['exec'] = str(module.get('exec') or module_id).strip()
         if module['exec'] not in (package.get('execs') or {}):
             raise ValueError(f'module {module_id} references unknown exec: {module["exec"]}')
 
@@ -285,10 +260,6 @@ class ExternalToolCatalogService:
         if not modules:
             raise ValueError('modules is required')
         item['modules'] = modules
-
-        # Side is intentionally no longer a constraint, but expose both values so old UI labels/status chips remain harmless.
-        item['sides'] = ['server', 'client']
-        item['side'] = ['server', 'client']
 
         if path:
             item['_meta_path'] = os.path.abspath(path)
@@ -551,20 +522,6 @@ class ExternalToolCatalogService:
 
         return False
 
-    # def _platform_matches(self, package: dict, platform_alias: str = '') -> bool:
-    #     target = self._normalize_platform(platform_alias or '')
-    #     if not target:
-    #         return False
-    #     platforms = package.get('platforms') or []
-    #     return not platforms or '*' in platforms or target in platforms
-
-    # def _arch_matches(self, package: dict, arch: str = '') -> bool:
-    #     target = self._normalize_arch(arch or '')
-    #     if not target:
-    #         return False
-    #     return any((item.get('arch') in ('*', 'all') or item.get('arch') == target) for item in (package.get('platform_packages') or {}).values())
-
-
     def _arch_matches(self, package: dict, arch: str = '') -> bool:
         target = self._normalize_arch(arch or '')
         if not target:
@@ -582,12 +539,12 @@ class ExternalToolCatalogService:
 
         return False
 
-    def list_cli_aliases(self, side: str = '', platform_alias: str = '', arch: str = '') -> list[dict]:
-        del side
+    def list_exec_targets(self, platform_alias: str = '', arch: str = '') -> list[dict]:
         target_platform = self._normalize_platform(platform_alias or '')
         target_arch = self._normalize_arch(arch or '')
         if not target_platform or not target_arch:
-            raise ValueError(f'target platform and arch are required for external tool aliases, got {target_platform or "unknown"}/{target_arch or "unknown"}')
+            raise ValueError(f'target platform and arch are required for external tool execs, got {target_platform or "unknown"}/{target_arch or "unknown"}')
+
         items = []
         for package in self.list_packages():
             if package.get('error'):
@@ -600,13 +557,14 @@ class ExternalToolCatalogService:
                 package_key = self.select_package_key(package, platform_alias=platform_alias, arch=arch)
             except Exception as e:
                 logger.warning(
-                    '[external-tools] skip cli alias package because target selection failed: package_id=%s target=%s/%s error=%s',
+                    '[external-tools] skip exec target because target selection failed: package_id=%s target=%s/%s error=%s',
                     package.get('id') or '',
                     target_platform or 'unknown',
                     target_arch or 'unknown',
                     e,
                 )
                 continue
+
             for exec_name, exec_item in (package.get('execs') or {}).items():
                 if not isinstance(exec_item, dict) or not exec_item.get('enabled', True):
                     continue
@@ -614,38 +572,31 @@ class ExternalToolCatalogService:
                 if not rel_path:
                     continue
                 items.append({
-                    'alias': exec_name,
                     'exec_name': exec_name,
-                    'tool_id': package.get('id') or '',
                     'package_id': package.get('id') or '',
                     'display_name': package.get('display_name') or package.get('id') or '',
                     'description': exec_item.get('description') or package.get('description') or '',
-                    'side': 'client',
-                    'platforms': package.get('platforms') or [],
-                    'arch': package.get('arch') or '',
                     'package_key': package_key,
                     'executable_rel_path': rel_path,
-                    'package': package,
-                    'exec': exec_item,
-                    'cli': {
-                        'enabled': True,
-                        'exec_name': exec_name,
+                    'package_meta': package,
+                    'exec_item': exec_item,
+                    'exec_options': {
                         'arg_mode': exec_item.get('arg_mode') or 'raw_append',
                         'cwd': exec_item.get('cwd') or '',
                         'timeout_sec': exec_item.get('timeout_sec'),
                     },
-                    'meta': package,
                 })
-        return sorted(items, key=lambda item: (item.get('alias') or '').lower())
 
-    def resolve_cli_alias(self, alias: str, side: str = '', platform_alias: str = '', arch: str = '') -> dict:
-        target = str(alias or '').strip()
+        return sorted(items, key=lambda item: (item.get('exec_name') or '').lower())
+
+    def resolve_exec_target(self, exec_name: str, platform_alias: str = '', arch: str = '') -> dict:
+        target = str(exec_name or '').strip()
         if not target:
             raise ValueError('external tool exec name is required')
 
         matches = [
-            item for item in self.list_cli_aliases(side=side, platform_alias=platform_alias, arch=arch)
-            if item.get('alias') == target
+            item for item in self.list_exec_targets(platform_alias=platform_alias, arch=arch)
+            if item.get('exec_name') == target
         ]
 
         if not matches:
@@ -654,7 +605,7 @@ class ExternalToolCatalogService:
         if len(matches) > 1:
             lines = [f'Ambiguous external tool exec: {target}', '', 'Matched:']
             for item in matches:
-                lines.append(f'- {item.get("alias")} -> {item.get("package_id")}')
+                lines.append(f'- {item.get("exec_name")} -> {item.get("package_id")}')
             lines.append('Keep exec names unique for the current platform/arch.')
             raise ValueError('\n'.join(lines))
 

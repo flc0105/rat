@@ -44,12 +44,12 @@ class ExternalToolCliExec(ExternalToolCommon):
 
             argv = [executable_path] + [str(item) for item in argv_extra]
 
-            cli = payload.get('cli') if isinstance(payload.get('cli'), dict) else {}
-            cwd = self.expand_path(cli.get('cwd') or os.getcwd())
+            exec_options = payload.get('exec_options') if isinstance(payload.get('exec_options'), dict) else {}
+            cwd = self.expand_path(exec_options.get('cwd') or os.getcwd())
             if not os.path.isdir(cwd):
                 raise FileNotFoundError(f'external tool cli cwd does not exist: {cwd}')
 
-            timeout_sec = cli.get('timeout_sec')
+            timeout_sec = exec_options.get('timeout_sec')
             try:
                 timeout_sec = float(timeout_sec)
             except Exception:
