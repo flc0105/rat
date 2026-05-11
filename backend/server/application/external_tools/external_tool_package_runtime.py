@@ -1,15 +1,23 @@
 import os
 import shutil
 
+from server.application.external_tools.external_tool_runtime_component import ExternalToolRuntimeComponent
 
-class ExternalToolPackageRuntimeMixin:
+
+class ExternalToolPackageRuntime(ExternalToolRuntimeComponent):
     """Server-side package install/status/uninstall operations."""
+
+    def __init__(self, core, context_runtime, install_support, process_state):
+        super().__init__(core)
+        self.context_runtime = context_runtime
+        self.install_support = install_support
+        self.process_state = process_state
 
     def install_server_tool(self, package_id: str, params: dict | None = None, instance_id: str = '') -> dict:
         del params, instance_id
         package = self.catalog_service.get_package(package_id)
-        context = self.build_server_package_context(package)
-        install_info = self._install_package_if_needed(package, context)
+        context = self.context_runtime.build_server_package_context(package)
+        install_info = self.install_support._install_package_if_needed(package, context)
         install_info['message'] = (
             f'{package.get("display_name") or package.get("id")} already installed at {install_info.get("install_dir")}'
             if install_info.get('already_installed')
@@ -20,8 +28,8 @@ class ExternalToolPackageRuntimeMixin:
     def server_install_status(self, package_id: str, params: dict | None = None, instance_id: str = '') -> dict:
         del params, instance_id
         package = self.catalog_service.get_package(package_id)
-        context = self.build_server_package_context(package)
-        status = self._build_install_status(package, context)
+        context = self.context_runtime.build_server_package_context(package)
+        status = self.install_support._build_install_status(package, context)
         status['message'] = (f'{package.get("display_name") or package.get("id")} is installed at {status.get("install_dir")}' if status.get('installed') else f'{package.get("display_name") or package.get("id")} is not installed. Please install it first.')
         return status
 
@@ -40,7 +48,7 @@ class ExternalToolPackageRuntimeMixin:
                 continue
             for name in os.listdir(instances_dir):
                 path = os.path.join(instances_dir, name)
-                if os.path.isdir(path) and self._status_from_state(meta, name).get('running'):
+                if os.path.isdir(path) and self.process_state._status_from_state(meta, name).get('running'):
                     return True
         return False
 
@@ -49,8 +57,8 @@ class ExternalToolPackageRuntimeMixin:
         package = self.catalog_service.get_package(package_id)
         if self._has_running_server_instances_for_package(package.get('id') or ''):
             raise ValueError('This package has running instances on server. Stop them before uninstalling.')
-        context = self.build_server_package_context(package)
-        status = self._build_install_status(package, context)
+        context = self.context_runtime.build_server_package_context(package)
+        status = self.install_support._build_install_status(package, context)
         install_dir = status.get('install_dir') or ''
         removed = False
         if install_dir and os.path.isdir(install_dir):
@@ -62,8 +70,8 @@ class ExternalToolPackageRuntimeMixin:
     def clear_server_package_cache(self, package_id: str, params: dict | None = None, instance_id: str = '') -> dict:
         del params, instance_id
         package = self.catalog_service.get_package(package_id)
-        context = self.build_server_package_context(package)
-        cache = self._local_package_file_info(package, context)
+        context = self.context_runtime.build_server_package_context(package)
+        cache = self.install_support._local_package_file_info(package, context)
         return {
             'tool_id': package.get('id') or '',
             'package_id': package.get('id') or '',
@@ -77,4 +85,3 @@ class ExternalToolPackageRuntimeMixin:
             'removed': False,
             'message': 'Server packages are served from local resources; no server package cache was removed.',
         }
-

@@ -2,10 +2,12 @@ import os
 import re
 from typing import Any
 
+from server.application.external_tools.external_tool_runtime_component import ExternalToolRuntimeComponent
+
 from core.platform.platform_identity import detect_platform_alias
 
 
-class ExternalToolContextRuntimeMixin:
+class ExternalToolContextRuntime(ExternalToolRuntimeComponent):
     """Package/module context builders for server and client targets."""
 
     def _derive_instance_id(self, meta: dict, params: dict | None, explicit: str = '') -> str:

@@ -6,6 +6,7 @@ from types import SimpleNamespace
 from typing import Any
 
 from core.external_tools.files import read_json_file, write_json_file
+from server.application.external_tools.external_tool_runtime_component import ExternalToolRuntimeComponent
 from core.external_tools.processes import (
     is_pid_alive,
     read_pid_file,
@@ -18,7 +19,7 @@ from core.external_tools.processes import (
 )
 
 
-class ExternalToolProcessStateMixin:
+class ExternalToolProcessState(ExternalToolRuntimeComponent):
     """Foreground process, daemon state and stop lifecycle helpers."""
 
     def _run_foreground_process(self, runtime_spec: dict, timeout_sec: float | None = None) -> dict:

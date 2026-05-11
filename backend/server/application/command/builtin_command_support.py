@@ -747,7 +747,7 @@ class ExternalToolCliBuiltinSupport:
 
     def _build_client_payload(self, target: dict, raw_args: str = '') -> dict:
         runtime_service = self._runtime_service()
-        payload = runtime_service.build_client_exec_payload(
+        payload = runtime_service.payload_builder.build_client_exec_payload(
             target,
             raw_args=self._strip_raw_arg_separator(raw_args),
             platform_alias=self._client_platform(),

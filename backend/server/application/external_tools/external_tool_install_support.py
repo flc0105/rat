@@ -9,9 +9,10 @@ from typing import Any
 from core.external_tools.archive import safe_extract_zip_archive
 from core.external_tools.paths import build_command_map, chmod_executable, path_has_content
 from core.external_tools.payload import primary_exec_name
+from server.application.external_tools.external_tool_runtime_component import ExternalToolRuntimeComponent
 
 
-class ExternalToolInstallSupportMixin:
+class ExternalToolInstallSupport(ExternalToolRuntimeComponent):
     """Install-status, package extraction, config and runtime-spec helpers."""
 
     def _install_manifest_path(self, install_dir: str) -> str:

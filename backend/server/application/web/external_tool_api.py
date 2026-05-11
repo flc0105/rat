@@ -28,7 +28,7 @@ class WebExternalToolApi:
             if item.get('error') or not self._package_supports_target(item, server_platform, server_arch):
                 continue
             try:
-                item['install_status'] = self.runtime_service.server_install_status(item.get('id') or '', params={}, instance_id='')
+                item['install_status'] = self.runtime_service.package_runtime.server_install_status(item.get('id') or '', params={}, instance_id='')
             except Exception as e:
                 item['install_status'] = {
                     'tool_id': item.get('id') or '',
@@ -53,7 +53,7 @@ class WebExternalToolApi:
             catalog['items'] = client_items
             catalog['client_install_statuses'] = []
             return catalog
-        status_result = self.runtime_service.client_install_statuses(
+        status_result = self.runtime_service.client_lifecycle_runtime.client_install_statuses(
             client_id,
             client_items,
             tab_id=tab_id,
@@ -95,90 +95,90 @@ class WebExternalToolApi:
 
     # Server-side package lifecycle.
     def install_server_tool(self, package_id: str, params=None, instance_id: str = ''):
-        return self.runtime_service.install_server_tool(package_id, params=params, instance_id=instance_id)
+        return self.runtime_service.package_runtime.install_server_tool(package_id, params=params, instance_id=instance_id)
 
     def server_install_status(self, package_id: str, params=None, instance_id: str = ''):
-        return self.runtime_service.server_install_status(package_id, params=params, instance_id=instance_id)
+        return self.runtime_service.package_runtime.server_install_status(package_id, params=params, instance_id=instance_id)
 
     def uninstall_server_tool(self, package_id: str, params=None, instance_id: str = ''):
-        return self.runtime_service.uninstall_server_tool(package_id, params=params, instance_id=instance_id)
+        return self.runtime_service.package_runtime.uninstall_server_tool(package_id, params=params, instance_id=instance_id)
 
     def clear_server_package_cache(self, package_id: str, params=None, instance_id: str = ''):
-        return self.runtime_service.clear_server_package_cache(package_id, params=params, instance_id=instance_id)
+        return self.runtime_service.package_runtime.clear_server_package_cache(package_id, params=params, instance_id=instance_id)
 
     # Server-side module lifecycle.
     def start_server_instance(self, tool_id: str, params=None, instance_id: str = '', install_if_needed: bool = False):
         del install_if_needed
-        return self.runtime_service.start_server_instance(tool_id, params=params, instance_id=instance_id, install_if_needed=False)
+        return self.runtime_service.server_instance_runtime.start_server_instance(tool_id, params=params, instance_id=instance_id, install_if_needed=False)
 
     def run_server_oneshot(self, tool_id: str, params=None):
-        return self.runtime_service.run_server_oneshot(tool_id, params=params)
+        return self.runtime_service.server_instance_runtime.run_server_oneshot(tool_id, params=params)
 
     def stop_server_instance(self, tool_id: str, instance_id: str, params=None):
-        return self.runtime_service.stop_server_instance(tool_id, instance_id=instance_id, params=params)
+        return self.runtime_service.server_instance_runtime.stop_server_instance(tool_id, instance_id=instance_id, params=params)
 
     def status_server_instance(self, tool_id: str, instance_id: str):
-        return self.runtime_service.status_server_instance(tool_id, instance_id=instance_id)
+        return self.runtime_service.server_instance_runtime.status_server_instance(tool_id, instance_id=instance_id)
 
     def list_server_instances(self, tool_id: str):
-        return self.runtime_service.list_server_instances(tool_id)
+        return self.runtime_service.server_instance_runtime.list_server_instances(tool_id)
 
     def list_all_server_instances(self):
         modules = [item for item in (self.catalog_service.get_catalog().get('modules') or []) if not item.get('error')]
-        return self.runtime_service.list_all_server_instances(modules)
+        return self.runtime_service.server_instance_runtime.list_all_server_instances(modules)
 
     def list_all_client_instances(self, client_id: str, tab_id: str = ''):
         modules = [item for item in (self.catalog_service.get_catalog().get('modules') or []) if not item.get('error')]
-        return self.runtime_service.list_all_client_instances(client_id, modules, tab_id=tab_id)
+        return self.runtime_service.client_lifecycle_runtime.list_all_client_instances(client_id, modules, tab_id=tab_id)
 
     def read_server_logs(self, tool_id: str, instance_id: str, max_bytes=None):
-        return self.runtime_service.read_server_logs(tool_id, instance_id=instance_id, max_bytes=max_bytes)
+        return self.runtime_service.server_instance_runtime.read_server_logs(tool_id, instance_id=instance_id, max_bytes=max_bytes)
 
     def remove_server_instance(self, tool_id: str, instance_id: str):
-        return self.runtime_service.remove_server_instance(tool_id, instance_id=instance_id)
+        return self.runtime_service.server_instance_runtime.remove_server_instance(tool_id, instance_id=instance_id)
 
     def clear_server_logs(self, tool_id: str, instance_id: str):
-        return self.runtime_service.clear_server_logs(tool_id, instance_id=instance_id)
+        return self.runtime_service.server_instance_runtime.clear_server_logs(tool_id, instance_id=instance_id)
 
     # Client-side package lifecycle.
     def install_client_tool(self, client_id: str, package_id: str, params=None, tab_id: str = '', instance_id: str = '', platform_alias: str = '', arch: str = ''):
-        return self.runtime_service.install_client_tool(client_id, package_id, params=params, tab_id=tab_id, instance_id=instance_id, platform_alias=platform_alias, arch=arch)
+        return self.runtime_service.client_lifecycle_runtime.install_client_tool(client_id, package_id, params=params, tab_id=tab_id, instance_id=instance_id, platform_alias=platform_alias, arch=arch)
 
     def client_install_status(self, client_id: str, package_id: str, params=None, tab_id: str = '', instance_id: str = '', platform_alias: str = '', arch: str = ''):
-        return self.runtime_service.client_install_status(client_id, package_id, params=params, tab_id=tab_id, instance_id=instance_id, platform_alias=platform_alias, arch=arch)
+        return self.runtime_service.client_lifecycle_runtime.client_install_status(client_id, package_id, params=params, tab_id=tab_id, instance_id=instance_id, platform_alias=platform_alias, arch=arch)
 
     def client_install_statuses(self, client_id: str, tab_id: str = '', platform_alias: str = '', arch: str = ''):
         packages = [item for item in (self.catalog_service.get_catalog().get('items') or []) if not item.get('error')]
-        return self.runtime_service.client_install_statuses(client_id, packages, tab_id=tab_id, platform_alias=platform_alias, arch=arch)
+        return self.runtime_service.client_lifecycle_runtime.client_install_statuses(client_id, packages, tab_id=tab_id, platform_alias=platform_alias, arch=arch)
 
     def uninstall_client_tool(self, client_id: str, package_id: str, params=None, tab_id: str = '', instance_id: str = '', platform_alias: str = '', arch: str = ''):
-        return self.runtime_service.uninstall_client_tool(client_id, package_id, params=params, tab_id=tab_id, instance_id=instance_id, platform_alias=platform_alias, arch=arch)
+        return self.runtime_service.client_lifecycle_runtime.uninstall_client_tool(client_id, package_id, params=params, tab_id=tab_id, instance_id=instance_id, platform_alias=platform_alias, arch=arch)
 
     def clear_client_package_cache(self, client_id: str, package_id: str, params=None, tab_id: str = '', instance_id: str = '', platform_alias: str = '', arch: str = ''):
-        return self.runtime_service.clear_client_package_cache(client_id, package_id, params=params, tab_id=tab_id, instance_id=instance_id, platform_alias=platform_alias, arch=arch)
+        return self.runtime_service.client_lifecycle_runtime.clear_client_package_cache(client_id, package_id, params=params, tab_id=tab_id, instance_id=instance_id, platform_alias=platform_alias, arch=arch)
 
     # Client-side module lifecycle.
     def start_client_instance(self, client_id: str, tool_id: str, params=None, tab_id: str = '', instance_id: str = '', install_if_needed: bool = False, platform_alias: str = '', arch: str = ''):
         del install_if_needed
-        return self.runtime_service.start_client_instance(client_id, tool_id, params=params, tab_id=tab_id, instance_id=instance_id, install_if_needed=False, platform_alias=platform_alias, arch=arch)
+        return self.runtime_service.client_lifecycle_runtime.start_client_instance(client_id, tool_id, params=params, tab_id=tab_id, instance_id=instance_id, install_if_needed=False, platform_alias=platform_alias, arch=arch)
 
     def run_client_oneshot(self, client_id: str, tool_id: str, params=None, tab_id: str = '', platform_alias: str = '', arch: str = ''):
-        return self.runtime_service.run_client_oneshot(client_id, tool_id, params=params, tab_id=tab_id, platform_alias=platform_alias, arch=arch)
+        return self.runtime_service.client_lifecycle_runtime.run_client_oneshot(client_id, tool_id, params=params, tab_id=tab_id, platform_alias=platform_alias, arch=arch)
 
     def stop_client_instance(self, client_id: str, tool_id: str, instance_id: str, params=None, tab_id: str = ''):
-        return self.runtime_service.stop_client_instance(client_id, tool_id, instance_id=instance_id, params=params, tab_id=tab_id)
+        return self.runtime_service.client_lifecycle_runtime.stop_client_instance(client_id, tool_id, instance_id=instance_id, params=params, tab_id=tab_id)
 
     def status_client_instance(self, client_id: str, tool_id: str, instance_id: str, tab_id: str = ''):
-        return self.runtime_service.status_client_instance(client_id, tool_id, instance_id=instance_id, tab_id=tab_id)
+        return self.runtime_service.client_lifecycle_runtime.status_client_instance(client_id, tool_id, instance_id=instance_id, tab_id=tab_id)
 
     def list_client_instances(self, client_id: str, tool_id: str, tab_id: str = ''):
-        return self.runtime_service.list_client_instances(client_id, tool_id, tab_id=tab_id)
+        return self.runtime_service.client_lifecycle_runtime.list_client_instances(client_id, tool_id, tab_id=tab_id)
 
     def read_client_logs(self, client_id: str, tool_id: str, instance_id: str, max_bytes=None, tab_id: str = ''):
-        return self.runtime_service.read_client_logs(client_id, tool_id, instance_id=instance_id, max_bytes=max_bytes, tab_id=tab_id)
+        return self.runtime_service.client_lifecycle_runtime.read_client_logs(client_id, tool_id, instance_id=instance_id, max_bytes=max_bytes, tab_id=tab_id)
 
     def remove_client_instance(self, client_id: str, tool_id: str, instance_id: str, tab_id: str = ''):
-        return self.runtime_service.remove_client_instance(client_id, tool_id, instance_id=instance_id, tab_id=tab_id)
+        return self.runtime_service.client_lifecycle_runtime.remove_client_instance(client_id, tool_id, instance_id=instance_id, tab_id=tab_id)
 
     def clear_client_logs(self, client_id: str, tool_id: str, instance_id: str, tab_id: str = ''):
-        return self.runtime_service.clear_client_logs(client_id, tool_id, instance_id=instance_id, tab_id=tab_id)
+        return self.runtime_service.client_lifecycle_runtime.clear_client_logs(client_id, tool_id, instance_id=instance_id, tab_id=tab_id)
