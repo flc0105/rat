@@ -742,6 +742,7 @@
 
 <script>
 import { ElMessage, ElMessageBox } from 'element-plus'
+import * as externalToolsApi from '../api/externalToolsApi.js'
 
 export default {
   name: 'ExternalToolManagerDialog',
@@ -1089,10 +1090,7 @@ export default {
 
     async loadCatalog(showError = true) {
       try {
-        const res = await fetch('/api/external-tools/catalog')
-        const json = await res.json()
-        if (!res.ok || json.code !== 0) throw new Error(json.message || 'Failed to load external tools')
-        const catalog = json.data || {}
+        const catalog = await externalToolsApi.loadExternalToolCatalog()
         this.serverPlatform = this.normalizePlatform(catalog.server_platform || '')
         this.serverArch = this.normalizeArch(catalog.server_arch || '')
         this.items = Array.isArray(catalog.items) ? catalog.items : []
@@ -1148,17 +1146,14 @@ export default {
       }
 
       try {
-        const res = await fetch(`/api/connections/${encodeURIComponent(targetDeviceId)}/external-tools/catalog`, {
-          method: 'POST',
-          headers: this.buildJsonHeaders({ 'Content-Type': 'application/json' }),
-          body: JSON.stringify({
+        const catalog = await externalToolsApi.loadClientExternalToolCatalog(
+          targetDeviceId,
+          {
             platform: targetPlatform,
             arch: targetArch,
-          }),
-        })
-        const json = await res.json()
-        if (!res.ok || json.code !== 0) throw new Error(json.message || 'Failed to load client install statuses')
-        const catalog = json.data || {}
+          },
+          this.buildJsonHeaders(),
+        )
         const items = Array.isArray(catalog.items) ? catalog.items : []
         const seen = new Set()
         for (const item of items) {
@@ -1442,14 +1437,7 @@ export default {
       const previousStatus = this.installStatuses[statusKey] || {}
       this.setInstallStatus(item, targetSide, targetDeviceId, { ...previousStatus, loading: true, error: '' })
       try {
-        const res = await fetch(`/api/external-tools/${encodeURIComponent(item.id)}/server/install-status`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ params: {} }),
-        })
-        const json = await res.json()
-        if (!res.ok || json.code !== 0) throw new Error(json.message || 'Failed to read install status')
-        const data = json.data || {}
+        const data = await externalToolsApi.readServerInstallStatus(item.id, { params: {} })
         this.setInstallStatus(item, targetSide, targetDeviceId, { ...data, loading: false, error: data.error || '' })
         return data
       } catch (e) {
@@ -1518,11 +1506,7 @@ normalizeInstanceByToolPayload(data = {}, modules = []) {
 
 async loadAllServerInstances(showToast = true) {
   try {
-    const res = await fetch('/api/external-tools/server/instances')
-    const json = await res.json()
-    if (!res.ok || json.code !== 0) throw new Error(json.message || 'Failed to load server instances')
-
-    const data = json.data || {}
+    const data = await externalToolsApi.loadAllServerInstances()
     const nextServerInstances = this.normalizeInstanceByToolPayload(data, this.serverModules)
 
     this.serverInstances = {
@@ -1542,15 +1526,7 @@ async loadAllClientInstances(deviceId = '', showToast = true) {
   if (!targetDeviceId || targetDeviceId === '__server__' || targetDeviceId === '__all__') return
 
   try {
-    const res = await fetch(`/api/connections/${encodeURIComponent(targetDeviceId)}/external-tools/instances`, {
-      method: 'POST',
-      headers: this.buildJsonHeaders({ 'Content-Type': 'application/json' }),
-      body: JSON.stringify({}),
-    })
-    const json = await res.json()
-    if (!res.ok || json.code !== 0) throw new Error(json.message || 'Failed to load client instances')
-
-    const data = json.data || {}
+    const data = await externalToolsApi.loadAllClientInstances(targetDeviceId, this.buildJsonHeaders())
     const nextToolMap = this.normalizeInstanceByToolPayload(data, this.clientModules)
 
     this.clientInstances = {
@@ -1585,10 +1561,7 @@ async loadAllClientInstances(deviceId = '', showToast = true) {
     async loadServerInstances(toolId, showToast = true) {
       if (!toolId) return
       try {
-        const res = await fetch(`/api/external-tools/${encodeURIComponent(toolId)}/server/instances`)
-        const json = await res.json()
-        if (!res.ok || json.code !== 0) throw new Error(json.message || 'Failed to load server instances')
-        const data = json.data || {}
+        const data = await externalToolsApi.loadServerInstances(toolId)
         this.serverInstances = {
           ...this.serverInstances,
           [toolId]: Array.isArray(data.items) ? data.items : [],
@@ -1603,14 +1576,7 @@ async loadAllClientInstances(deviceId = '', showToast = true) {
       const targetDeviceId = this.normalizeDeviceId(deviceId)
       if (!toolId || !targetDeviceId || targetDeviceId === '__server__' || targetDeviceId === '__all__') return
       try {
-        const res = await fetch(`/api/connections/${encodeURIComponent(targetDeviceId)}/external-tools/${encodeURIComponent(toolId)}/instances`, {
-          method: 'POST',
-          headers: this.buildJsonHeaders({ 'Content-Type': 'application/json' }),
-          body: JSON.stringify({}),
-        })
-        const json = await res.json()
-        if (!res.ok || json.code !== 0) throw new Error(json.message || 'Failed to load client instances')
-        const data = json.data || {}
+        const data = await externalToolsApi.loadClientInstances(targetDeviceId, toolId, this.buildJsonHeaders())
         this.clientInstances = {
           ...this.clientInstances,
           [targetDeviceId]: {
@@ -2085,10 +2051,8 @@ async loadAllClientInstances(deviceId = '', showToast = true) {
         return
       }
 
-      const params = new URLSearchParams()
-      params.set('platform', platform)
-      params.set('arch', arch)
-      window.open(`/api/external-tools/${encodeURIComponent(id)}/download?${params.toString()}`, '_blank')
+      const downloadUrl = externalToolsApi.buildExternalToolDownloadUrl(id, { platform, arch })
+      window.open(downloadUrl, '_blank')
     },
 
     getSelectedTargetSideForAction() {
@@ -2249,14 +2213,7 @@ async uninstallPackage(item) {
 },
 
 async uninstallServerTool(item) {
-  const res = await fetch(`/api/external-tools/${encodeURIComponent(item.id)}/server/uninstall`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ params: {} }),
-  })
-  const json = await res.json()
-  if (!res.ok || json.code !== 0) throw new Error(json.message || 'Failed to uninstall server package')
-  return json.data || {}
+  return externalToolsApi.uninstallServerTool(item.id, { params: {} })
 },
 
 async uninstallClientTool(item, deviceId) {
@@ -2272,18 +2229,16 @@ async uninstallClientTool(item, deviceId) {
   })
   if (!requestPlatform || !requestArch) throw new Error(`Unable to resolve target platform/arch for client ${targetDeviceId}`)
 
-  const res = await fetch(`/api/connections/${encodeURIComponent(targetDeviceId)}/external-tools/${encodeURIComponent(item.id)}/uninstall`, {
-    method: 'POST',
-    headers: this.buildJsonHeaders({ 'Content-Type': 'application/json' }),
-    body: JSON.stringify({
+  return externalToolsApi.uninstallClientTool(
+    targetDeviceId,
+    item.id,
+    {
       params: {},
       platform: requestPlatform,
       arch: requestArch,
-    }),
-  })
-  const json = await res.json()
-  if (!res.ok || json.code !== 0) throw new Error(json.message || 'Failed to uninstall client package')
-  return json.data || {}
+    },
+    this.buildJsonHeaders(),
+  )
 },
 
     async clearPackageCache(item) {
@@ -2328,14 +2283,7 @@ async uninstallClientTool(item, deviceId) {
     },
 
     async clearServerPackageCache(item) {
-      const res = await fetch(`/api/external-tools/${encodeURIComponent(item.id)}/server/clear-cache`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ params: {} }),
-      })
-      const json = await res.json()
-      if (!res.ok || json.code !== 0) throw new Error(json.message || 'Failed to clear server package cache')
-      return json.data || {}
+      return externalToolsApi.clearServerPackageCache(item.id, { params: {} })
     },
 
     async clearClientPackageCache(item, deviceId) {
@@ -2351,18 +2299,16 @@ async uninstallClientTool(item, deviceId) {
       })
       if (!requestPlatform || !requestArch) throw new Error(`Unable to resolve target platform/arch for client ${targetDeviceId}`)
 
-      const res = await fetch(`/api/connections/${encodeURIComponent(targetDeviceId)}/external-tools/${encodeURIComponent(item.id)}/clear-cache`, {
-        method: 'POST',
-        headers: this.buildJsonHeaders({ 'Content-Type': 'application/json' }),
-        body: JSON.stringify({
+      return externalToolsApi.clearClientPackageCache(
+        targetDeviceId,
+        item.id,
+        {
           params: {},
           platform: requestPlatform,
           arch: requestArch,
-        }),
-      })
-      const json = await res.json()
-      if (!res.ok || json.code !== 0) throw new Error(json.message || 'Failed to clear client package cache')
-      return json.data || {}
+        },
+        this.buildJsonHeaders(),
+      )
     },
 
     async installOnly(item) {
@@ -2372,15 +2318,11 @@ async uninstallClientTool(item, deviceId) {
       }
       try {
         this.installLoading = true
-        let res
+        let data
         const side = this.getSelectedTargetSideForAction()
         const deviceId = side === 'server' ? '__server__' : this.getActionDeviceId(item)
         if (side === 'server') {
-          res = await fetch(`/api/external-tools/${encodeURIComponent(item.id)}/server/install`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ params: {} }),
-          })
+          data = await externalToolsApi.installServerTool(item.id, { params: {} })
         } else {
           if (!deviceId) throw new Error('Please select a target machine')
           const requestPlatform = this.getPlatformForConnectionId(deviceId)
@@ -2392,19 +2334,17 @@ async uninstallClientTool(item, deviceId) {
           })
           if (!requestPlatform || !requestArch) throw new Error(`Unable to resolve target platform/arch for client ${deviceId}`)
 
-          res = await fetch(`/api/connections/${encodeURIComponent(deviceId)}/external-tools/${encodeURIComponent(item.id)}/install`, {
-            method: 'POST',
-            headers: this.buildJsonHeaders({ 'Content-Type': 'application/json' }),
-            body: JSON.stringify({
+          data = await externalToolsApi.installClientTool(
+            deviceId,
+            item.id,
+            {
               params: {},
               platform: requestPlatform,
               arch: requestArch,
-            }),
-          })
+            },
+            this.buildJsonHeaders(),
+          )
         }
-        const json = await res.json()
-        if (!res.ok || json.code !== 0) throw new Error(json.message || 'Failed to install package')
-        const data = json.data || {}
         this.setInstallStatus(item, side, deviceId, { ...data, loading: false, error: data.error || '' })
         const sourceLabel = data.used_cache
           ? 'Installed from cached package'
@@ -2651,15 +2591,9 @@ async uninstallClientTool(item, deviceId) {
     },
 
     async startServerInstance(item, params, instanceId, installIfNeeded = false) {
-      const res = await fetch(`/api/external-tools/${encodeURIComponent(item.id)}/server/instances/start`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ params, instance_id: instanceId, install_if_needed: false }),
-      })
-      const json = await res.json()
-      if (!res.ok || json.code !== 0) throw new Error(json.message || 'Failed to start server tool')
-      ElMessage.success(json.data?.message || 'Server instance started')
-      if (json.data?.install) this.setInstallStatus(this.getPackageForModule(item), 'server', '__server__', json.data.install)
+      const data = await externalToolsApi.startServerInstance(item.id, { params, instance_id: instanceId, install_if_needed: false })
+      ElMessage.success(data?.message || 'Server instance started')
+      if (data?.install) this.setInstallStatus(this.getPackageForModule(item), 'server', '__server__', data.install)
       await this.loadServerInstances(item.id, false)
     },
 
@@ -2676,21 +2610,20 @@ async uninstallClientTool(item, deviceId) {
       })
       if (!requestPlatform || !requestArch) throw new Error(`Unable to resolve target platform/arch for client ${targetDeviceId}`)
 
-      const res = await fetch(`/api/connections/${encodeURIComponent(targetDeviceId)}/external-tools/${encodeURIComponent(item.id)}/instances/start`, {
-        method: 'POST',
-        headers: this.buildJsonHeaders({ 'Content-Type': 'application/json' }),
-        body: JSON.stringify({
+      const data = await externalToolsApi.startClientInstance(
+        targetDeviceId,
+        item.id,
+        {
           params,
           instance_id: instanceId,
           install_if_needed: false,
           platform: requestPlatform,
           arch: requestArch,
-        }),
-      })
-      const json = await res.json()
-      if (!res.ok || json.code !== 0) throw new Error(json.message || 'Failed to start client tool')
-      ElMessage.success(json.data?.message || 'Client instance started')
-      if (json.data?.install) this.setInstallStatus(this.getPackageForModule(item), 'client', targetDeviceId, json.data.install)
+        },
+        this.buildJsonHeaders(),
+      )
+      ElMessage.success(data?.message || 'Client instance started')
+      if (data?.install) this.setInstallStatus(this.getPackageForModule(item), 'client', targetDeviceId, data.install)
       await this.loadClientInstances(item.id, targetDeviceId, false)
     },
 
@@ -2699,14 +2632,7 @@ async uninstallClientTool(item, deviceId) {
         request_platform: this.serverPlatform,
         request_arch: this.serverArch,
       })
-      const res = await fetch(`/api/external-tools/${encodeURIComponent(item.id)}/server/oneshot`, {
-        method: 'POST',
-        headers: this.buildJsonHeaders({ 'Content-Type': 'application/json' }),
-        body: JSON.stringify({ params }),
-      })
-      const json = await res.json()
-      if (!res.ok || json.code !== 0) throw new Error(json.message || 'Failed to run server oneshot')
-      return json.data || {}
+      return externalToolsApi.runServerOneshot(item.id, { params }, this.buildJsonHeaders())
     },
 
     async runClientOneshot(item, params, deviceId = '') {
@@ -2722,19 +2648,18 @@ async uninstallClientTool(item, deviceId) {
       })
       if (!requestPlatform || !requestArch) throw new Error(`Unable to resolve target platform/arch for client ${targetDeviceId}`)
 
-      const res = await fetch(`/api/connections/${encodeURIComponent(targetDeviceId)}/external-tools/${encodeURIComponent(item.id)}/oneshot`, {
-        method: 'POST',
-        headers: this.buildJsonHeaders({ 'Content-Type': 'application/json' }),
-        body: JSON.stringify({
+      const data = await externalToolsApi.runClientOneshot(
+        targetDeviceId,
+        item.id,
+        {
           params,
           platform: requestPlatform,
           arch: requestArch,
-        }),
-      })
-      const json = await res.json()
-      if (!res.ok || json.code !== 0) throw new Error(json.message || 'Failed to run client oneshot')
-      if (json.data?.install) this.setInstallStatus(this.getPackageForModule(item), 'client', targetDeviceId, json.data.install)
-      return json.data || {}
+        },
+        this.buildJsonHeaders(),
+      )
+      if (data?.install) this.setInstallStatus(this.getPackageForModule(item), 'client', targetDeviceId, data.install)
+      return data || {}
     },
 
     openOneshotResultDialog(item, result) {
@@ -2934,26 +2859,14 @@ async uninstallClientTool(item, deviceId) {
     },
 
     async stopServerInstance(row) {
-      const res = await fetch(`/api/external-tools/${encodeURIComponent(row.tool_id)}/server/instances/${encodeURIComponent(row.instance_id)}/stop`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ params: {} }),
-      })
-      const json = await res.json()
-      if (!res.ok || json.code !== 0) throw new Error(json.message || 'Failed to stop server instance')
+      await externalToolsApi.stopServerInstance(row.tool_id, row.instance_id, { params: {} })
       await this.loadServerInstances(row.tool_id, false)
     },
 
     async stopClientInstance(row) {
       const deviceId = this.normalizeDeviceId(row.device_id)
       if (!deviceId) throw new Error('Client instance row is missing device_id')
-      const res = await fetch(`/api/connections/${encodeURIComponent(deviceId)}/external-tools/${encodeURIComponent(row.tool_id)}/instances/${encodeURIComponent(row.instance_id)}/stop`, {
-        method: 'POST',
-        headers: this.buildJsonHeaders({ 'Content-Type': 'application/json' }),
-        body: JSON.stringify({}),
-      })
-      const json = await res.json()
-      if (!res.ok || json.code !== 0) throw new Error(json.message || 'Failed to stop client instance')
+      await externalToolsApi.stopClientInstance(deviceId, row.tool_id, row.instance_id, {}, this.buildJsonHeaders())
       await this.loadClientInstances(row.tool_id, deviceId, false)
     },
 
@@ -2989,23 +2902,13 @@ async uninstallClientTool(item, deviceId) {
     },
 
     async readServerLogs(row) {
-      const res = await fetch(`/api/external-tools/${encodeURIComponent(row.tool_id)}/server/instances/${encodeURIComponent(row.instance_id)}/logs?bytes=65536`)
-      const json = await res.json()
-      if (!res.ok || json.code !== 0) throw new Error(json.message || 'Failed to read server logs')
-      return json.data || {}
+      return externalToolsApi.readServerInstanceLogs(row.tool_id, row.instance_id, 65536)
     },
 
     async readClientLogs(row) {
       const deviceId = this.normalizeDeviceId(row.device_id)
       if (!deviceId) throw new Error('Client instance row is missing device_id')
-      const res = await fetch(`/api/connections/${encodeURIComponent(deviceId)}/external-tools/${encodeURIComponent(row.tool_id)}/instances/${encodeURIComponent(row.instance_id)}/logs`, {
-        method: 'POST',
-        headers: this.buildJsonHeaders({ 'Content-Type': 'application/json' }),
-        body: JSON.stringify({ max_bytes: 65536 }),
-      })
-      const json = await res.json()
-      if (!res.ok || json.code !== 0) throw new Error(json.message || 'Failed to read client logs')
-      return json.data || {}
+      return externalToolsApi.readClientInstanceLogs(deviceId, row.tool_id, row.instance_id, { max_bytes: 65536 }, this.buildJsonHeaders())
     },
 
     scrollLogsToBottom() {
@@ -3282,26 +3185,14 @@ openWebInstance(row) {
     },
 
     async removeServerInstance(row) {
-      const res = await fetch(`/api/external-tools/${encodeURIComponent(row.tool_id)}/server/instances/${encodeURIComponent(row.instance_id)}/remove`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({}),
-      })
-      const json = await res.json()
-      if (!res.ok || json.code !== 0) throw new Error(json.message || 'Failed to remove server instance')
+      await externalToolsApi.removeServerInstance(row.tool_id, row.instance_id, {})
       await this.loadServerInstances(row.tool_id, false)
     },
 
     async removeClientInstance(row) {
       const deviceId = this.normalizeDeviceId(row.connection_id || row.device_id)
       if (!deviceId) throw new Error('Client instance row is missing connection_id/device_id')
-      const res = await fetch(`/api/connections/${encodeURIComponent(deviceId)}/external-tools/${encodeURIComponent(row.tool_id)}/instances/${encodeURIComponent(row.instance_id)}/remove`, {
-        method: 'POST',
-        headers: this.buildJsonHeaders({ 'Content-Type': 'application/json' }),
-        body: JSON.stringify({}),
-      })
-      const json = await res.json()
-      if (!res.ok || json.code !== 0) throw new Error(json.message || 'Failed to remove client instance')
+      await externalToolsApi.removeClientInstance(deviceId, row.tool_id, row.instance_id, {}, this.buildJsonHeaders())
       await this.loadClientInstances(row.tool_id, deviceId, false)
     },
 
@@ -3337,25 +3228,13 @@ openWebInstance(row) {
     },
 
     async clearServerInstanceLogs(row) {
-      const res = await fetch(`/api/external-tools/${encodeURIComponent(row.tool_id)}/server/instances/${encodeURIComponent(row.instance_id)}/clear-logs`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({}),
-      })
-      const json = await res.json()
-      if (!res.ok || json.code !== 0) throw new Error(json.message || 'Failed to clear server logs')
+      await externalToolsApi.clearServerInstanceLogs(row.tool_id, row.instance_id, {})
     },
 
     async clearClientInstanceLogs(row) {
       const deviceId = this.normalizeDeviceId(row.connection_id || row.device_id)
       if (!deviceId) throw new Error('Client instance row is missing connection_id/device_id')
-      const res = await fetch(`/api/connections/${encodeURIComponent(deviceId)}/external-tools/${encodeURIComponent(row.tool_id)}/instances/${encodeURIComponent(row.instance_id)}/clear-logs`, {
-        method: 'POST',
-        headers: this.buildJsonHeaders({ 'Content-Type': 'application/json' }),
-        body: JSON.stringify({}),
-      })
-      const json = await res.json()
-      if (!res.ok || json.code !== 0) throw new Error(json.message || 'Failed to clear client logs')
+      await externalToolsApi.clearClientInstanceLogs(deviceId, row.tool_id, row.instance_id, {}, this.buildJsonHeaders())
     },
 
 formatVersionLabel(version) {

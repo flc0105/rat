@@ -216,6 +216,7 @@ import 'monaco-editor/esm/vs/editor/contrib/links/browser/links'
 
 import 'monaco-editor/min/vs/editor/editor.main.css'
 import { formatBytes } from '../utils/formatters.js'
+import * as externalToolsApi from '../api/externalToolsApi.js'
 import PreviewImageInfoDialog from './PreviewImageInfoDialog.vue'
 
 const monacoEditorStore = new WeakMap()
@@ -782,16 +783,7 @@ fontSize: 13,
       this.previewSaving = true
 
       try {
-        const res = await fetch(`/api/external-tools/${encodeURIComponent(this.previewFilePath)}/meta/content`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ content }),
-        })
-
-        const json = await res.json()
-        if (!res.ok || json.code !== 0) {
-          throw new Error(json.message || 'Failed to save external tool meta')
-        }
+        const data = await externalToolsApi.saveExternalToolMetaContent(this.previewFilePath, content)
 
         ElMessage.success('External tool meta saved successfully')
 
@@ -800,8 +792,8 @@ fontSize: 13,
         this.previewEditMode = false
         this.setMonacoEditorReadOnly(true)
 
-        if (json.data && json.data.size) {
-          this.previewFileSize = formatBytes(json.data.size)
+        if (data && data.size) {
+          this.previewFileSize = formatBytes(data.size)
         }
 
         this.$emit('external-tools-maybe-changed')
@@ -1302,12 +1294,7 @@ print(value)
       }
 
       try {
-        const res = await fetch(`/api/external-tools/${encodeURIComponent(normalizedToolId)}/meta/content`)
-        const json = await res.json()
-        if (!res.ok || json.code !== 0) {
-          throw new Error(json.message || 'Failed to load external tool meta')
-        }
-        const data = json.data || {}
+        const data = await externalToolsApi.loadExternalToolMetaContent(normalizedToolId)
         const content = data.content || ''
 
         this.previewSource = 'external_tool_meta'
