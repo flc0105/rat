@@ -158,6 +158,7 @@ class ServerApplicationAssembly:
         self.external_tool_api = WebExternalToolApi(
             catalog_service=self.external_tool_catalog_service,
             runtime_service=self.external_tool_runtime_service,
+            server=self.server,
         )
 
         self.command_history_api = WebCommandHistoryApi(
