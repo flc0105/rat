@@ -11,7 +11,7 @@ from client.config.config import (
     SERVER_WEB_SCHEME,
 )
 from core.platform.platform_identity import detect_platform_alias
-from core.utils.client_util import (
+from client.runtime.client_util import (
     build_bundle_extract_dir,
     get_client_bundle_release_dir,
     safe_extract_zip_file,

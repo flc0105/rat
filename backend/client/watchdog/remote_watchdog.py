@@ -8,7 +8,7 @@ import time
 import urllib.error
 import urllib.request
 
-from core.utils.client_util import spawn_new_instance, is_process_alive
+from client.runtime.client_util import spawn_new_instance, is_process_alive
 
 HTTP_CONTROL_COMMANDS = {'stop', 'restart', 'start'}
 

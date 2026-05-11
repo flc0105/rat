@@ -8,7 +8,7 @@ SCRIPT_METADATA = {
 }
 
 import ctypes
-from core.utils.client_util import get_exec_and_args
+from client.runtime.client_util import get_exec_and_args
 
 exec, argv = get_exec_and_args()
 

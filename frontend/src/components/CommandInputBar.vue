@@ -70,10 +70,12 @@
 
 <script>
 import { ElMessage } from 'element-plus'
+import { sendCommand as sendCommandApi, getCommandCandidates, getCommandHistory } from '../api/connectionsApi.js'
+import { cancelTask } from '../api/tasksApi.js'
 import {
   formatTerminalCancelRequestedLine,
   formatTerminalCommandFailedLine,
-} from '../legacy/modules/terminalMarkers.js'
+} from '../composables/terminalMarkers.js'
 
 export default {
   name: 'CommandInputBar',
@@ -173,18 +175,8 @@ export default {
       this.$emit('append-output', this.selectedId, '> ' + command, 'command')
 
       try {
-        const res = await fetch(`/api/connections/${encodeURIComponent(this.selectedId)}/command`, {
-          method: 'POST',
-          headers: this.getTabScopedHeaders({ 'Content-Type': 'application/json' }),
-          body: JSON.stringify({ command }),
-        })
-
-        const json = await res.json()
-        if (!res.ok || json.code !== 0) {
-          throw new Error(json.message || 'Command failed')
-        }
-
-        const taskId = json.data && json.data.task_id
+        const data = await sendCommandApi(this.selectedId, command, this.getTabScopedHeaders())
+        const taskId = data && data.task_id
         this.$emit('set-active-task', this.selectedId, taskId || '')
 
         this.commandText = ''
@@ -225,15 +217,7 @@ export default {
       this.cancelSending = true
 
       try {
-        const res = await fetch(`/api/tasks/${encodeURIComponent(taskId)}/cancel`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-        })
-
-        const json = await res.json()
-        if (!res.ok || json.code !== 0) {
-          throw new Error(json.message || 'Cancel failed')
-        }
+        await cancelTask(taskId)
 
         this.$emit('append-output', this.selectedId, formatTerminalCancelRequestedLine(taskId), 'info')
         ElMessage.success('Cancel request sent')
@@ -350,28 +334,13 @@ export default {
       const historyMachineId = this.resolveCommandHistoryMachineId(clientId)
 
       try {
-        const requests = [
-          fetch(`/api/connections/${encodeURIComponent(clientId)}/command-candidates`),
-          historyMachineId
-            ? fetch(`/api/machines/${encodeURIComponent(historyMachineId)}/command-history`)
-            : Promise.resolve({ ok: true, json: async () => ({ code: 0, data: [] }) }),
-        ]
+        const [candidateData, historyData] = await Promise.all([
+          getCommandCandidates(clientId),
+          getCommandHistory(historyMachineId),
+        ])
 
-        const [candidateRes, historyRes] = await Promise.all(requests)
-
-        const candidateJson = await candidateRes.json()
-        const historyJson = await historyRes.json()
-
-        if (!candidateRes.ok || candidateJson.code !== 0) {
-          throw new Error(candidateJson.message || 'Failed to load command candidates')
-        }
-
-        if (!historyRes.ok || historyJson.code !== 0) {
-          throw new Error(historyJson.message || 'Failed to load command history')
-        }
-
-        const systemCandidates = Array.isArray(candidateJson.data) ? candidateJson.data : []
-const historyItems = Array.isArray(historyJson.data) ? historyJson.data : []
+        const systemCandidates = Array.isArray(candidateData) ? candidateData : []
+const historyItems = Array.isArray(historyData) ? historyData : []
 const pinnedHistoryItems = historyItems.filter(item => item && item.is_pinned)
 
         // const systemCandidates = Array.isArray(candidateJson.data) ? candidateJson.data : []

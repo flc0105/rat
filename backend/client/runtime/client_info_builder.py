@@ -15,7 +15,7 @@ from core.device.machine_identity import (
     build_machine_identity_payload,
 )
 from core.platform.platform_identity import detect_platform_info
-from core.utils.client_util import check_privilege, get_executable_path, get_system_paths
+from client.runtime.client_util import check_privilege, get_executable_path, get_system_paths
 
 
 class ClientInfoBuilder:

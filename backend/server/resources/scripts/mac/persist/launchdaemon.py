@@ -32,7 +32,7 @@ SCRIPT_METADATA = {
 
 import subprocess
 import os
-from core.utils.client_util import get_executable_path
+from client.runtime.client_util import get_executable_path
 
 
 def manage_launchdaemon(script_path):

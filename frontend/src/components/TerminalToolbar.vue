@@ -194,6 +194,7 @@
 
 <script>
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { killConnection as killConnectionApi } from '../api/connectionsApi.js'
 
 export default {
   name: 'TerminalToolbar',
@@ -263,14 +264,7 @@ export default {
             },
         )
 
-        const res = await fetch(`/api/connections/${encodeURIComponent(this.selectedId)}/kill`, {
-          method: 'POST',
-        })
-
-        const json = await res.json()
-        if (!res.ok || json.code !== 0) {
-          throw new Error(json.message || 'Disconnect failed')
-        }
+        await killConnectionApi(this.selectedId)
 
         ElMessage.success('Disconnect command sent')
       } catch (e) {

@@ -23,7 +23,7 @@ SCRIPT_METADATA = {
 }
 
 import webbrowser
-from core.utils.client_util import require_kwarg
+from client.runtime.client_util import require_kwarg
 
 latitude = require_kwarg(kwargs, 'latitude')
 longitude = require_kwarg(kwargs, 'longitude')

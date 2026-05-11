@@ -3,6 +3,7 @@ import {
     TERMINAL_BACKGROUND_PREFIX,
     TERMINAL_FILE_READY_PREFIX,
 } from './terminalMarkers.js';
+import { openSseStream } from '../api/streamApi.js';
 
 export default {
     data() {
@@ -19,8 +20,7 @@ export default {
             if (this.eventSource) this.eventSource.close();
 
             const tabId = this.ensureTabId();
-            const streamUrl = `/api/stream?tab_id=${encodeURIComponent(tabId)}`;
-            const es = new EventSource(streamUrl);
+            const es = openSseStream(tabId);
             this.eventSource = es;
 
             const getConnectionLabel = (clientId) => {

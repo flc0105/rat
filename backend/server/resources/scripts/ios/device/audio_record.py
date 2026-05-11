@@ -24,7 +24,7 @@ import console
 import json
 
 from client.config.config import UPLOAD_BASE_URL
-from core.utils.client_util import upload_file_via_http
+from client.runtime.client_util import upload_file_via_http
 
 UPLOAD_URL = UPLOAD_BASE_URL.rstrip('/') + '/api/files/upload'
 

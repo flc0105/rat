@@ -9,7 +9,7 @@ SCRIPT_METADATA = {
 
 from client.commands.platform.utils.win_util import enable_privilege, get_pid, duplicate_token, \
     create_process_with_token, get_process_token, start_service
-from core.utils.client_util import get_executable_path
+from client.runtime.client_util import get_executable_path
 
 
 def run_as_trusted_installer():

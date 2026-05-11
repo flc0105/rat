@@ -1,4 +1,4 @@
-from core.utils.keychains import get_secret, get_login
+from client.runtime.keychains import get_secret, get_login
 
 token = get_secret("test_secret").getvalue()
 

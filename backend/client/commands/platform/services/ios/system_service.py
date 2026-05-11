@@ -12,7 +12,7 @@ from client.commands.platform.utils.ios_util import (
     get_ios_username,
     read_info_plist,
 )
-from core.utils.client_util import get_executable_path
+from client.runtime.client_util import get_executable_path
 from core.utils.command_output import StructuredCommandResult
 from core.utils.logger import logger
 

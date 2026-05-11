@@ -153,7 +153,7 @@ import {
   isTerminalRemoteUploadText,
   TERMINAL_FILE_READY_PREFIX,
   TERMINAL_RUN_SCRIPT_PREFIX,
-} from '../legacy/modules/terminalMarkers.js'
+} from '../composables/terminalMarkers.js'
 
 export default {
   name: 'TerminalOutput',

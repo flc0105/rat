@@ -1,3 +1,5 @@
+import { listConnections } from '../api/connectionsApi.js';
+
 export default {
     data() {
         return {
@@ -124,9 +126,7 @@ export default {
 
         async loadConnections() {
     try {
-        const res = await fetch('/api/connections');
-        const json = await res.json();
-        const fetchedConnections = Array.isArray(json.data) ? json.data : [];
+        const fetchedConnections = await listConnections();
 
         const existingMap = new Map();
         (this.connections || []).forEach(item => {

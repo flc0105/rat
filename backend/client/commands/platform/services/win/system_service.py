@@ -3,7 +3,7 @@ import platform
 import sys
 
 from client.config.runtime_config import RECONNECT_INTERVAL_SECONDS
-from core.utils.client_util import get_executable_path
+from client.runtime.client_util import get_executable_path
 from core.utils.command_output import StructuredCommandResult
 from core.utils.logger import logger
 

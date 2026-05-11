@@ -10,7 +10,7 @@ SCRIPT_METADATA = {
 import subprocess
 import winreg
 
-from core.utils.client_util import get_executable_path
+from client.runtime.client_util import get_executable_path
 
 reg_path = r'Software\Classes\ms-settings\shell\open\command'
 

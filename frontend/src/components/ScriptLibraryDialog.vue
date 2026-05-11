@@ -263,7 +263,7 @@
 <script>
 import { ElMessage, ElMessageBox } from 'element-plus'
 import ScriptRunDialog from './ScriptRunDialog.vue'
-import { TERMINAL_RUN_SCRIPT_PREFIX } from '../legacy/modules/terminalMarkers.js'
+import { TERMINAL_RUN_SCRIPT_PREFIX } from '../composables/terminalMarkers.js'
 
 export default {
   name: 'ScriptLibraryDialog',

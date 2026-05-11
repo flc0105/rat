@@ -1,7 +1,7 @@
 import sys
 
 from client.commands.runtime.interrupts import interruptible
-from core.utils.client_util import reset, spawn_new_instance, reexec_restart
+from client.runtime.client_util import reset, spawn_new_instance, reexec_restart
 from core.utils.decorator import desc
 
 

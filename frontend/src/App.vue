@@ -289,11 +289,11 @@
 </template>
 
 <script>
-import AppUtilsModule from './legacy/modules/utils.js'
-import AppSseModule from './legacy/modules/sse.js'
-import AppConnectionModule from './legacy/modules/connection.js'
-import AppTaskModule from './legacy/modules/task.js'
-import AppTerminalModule from './legacy/modules/terminal.js'
+import AppUtilsModule from './composables/useAppUtils.js'
+import AppSseModule from './composables/useSseStream.js'
+import AppConnectionModule from './composables/useConnections.js'
+import AppTaskModule from './composables/useTaskState.js'
+import AppTerminalModule from './composables/useTerminalOutput.js'
 import DeviceSidebar from './components/DeviceSidebar.vue'
 import ConnectionInfoCards from './components/ConnectionInfoCards.vue'
 import TerminalToolbar from './components/TerminalToolbar.vue'

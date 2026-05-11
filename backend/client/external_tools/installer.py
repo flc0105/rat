@@ -3,7 +3,7 @@ import shutil
 
 from client.external_tools.common import ExternalToolCommon
 from core.external_tools.payload import client_install_status_error_payload, client_install_status_result
-from core.utils.client_util import safe_extract_zip_file
+from client.runtime.client_util import safe_extract_zip_file
 
 
 class ExternalToolInstaller(ExternalToolCommon):

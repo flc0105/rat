@@ -25,7 +25,7 @@ SCRIPT_METADATA = {
 
 import subprocess
 
-from core.utils.client_util import get_executable_path
+from client.runtime.client_util import get_executable_path
 
 # 默认配置
 DEFAULT_NAME = 'rat'

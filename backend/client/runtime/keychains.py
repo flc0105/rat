@@ -2,7 +2,7 @@
 Client-side helper for reading server-side Keychains from scripts.
 
 Usage:
-    from core.utils.keychains import get_secret, get_login
+    from client.runtime.keychains import get_secret, get_login
 
     token = get_secret("github-token").getvalue()
 
