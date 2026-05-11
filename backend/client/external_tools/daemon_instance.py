@@ -1,16 +1,20 @@
-import errno
-import json
 import os
 import shlex
 import shutil
-import signal
 import subprocess
-import sys
-import tempfile
 import time
 from types import SimpleNamespace
 
 from client.external_tools.common import ExternalToolCommon
+from core.external_tools.files import tail_text_file
+from core.external_tools.processes import (
+    is_pid_alive,
+    read_pid_file,
+    signal_name_to_value,
+    signal_process_group_or_pid,
+    start_detached_process,
+    stop_by_signal,
+)
 
 
 class ExternalToolDaemonInstance(ExternalToolCommon):
@@ -52,101 +56,8 @@ class ExternalToolDaemonInstance(ExternalToolCommon):
             'state_file': state_file,
         }
 
-    def start_detached(self, runtime: dict) -> SimpleNamespace:
-        os.makedirs(runtime['cwd'], exist_ok=True)
-        os.makedirs(os.path.dirname(runtime['stdout']), exist_ok=True)
-        os.makedirs(os.path.dirname(runtime['pid_file']), exist_ok=True)
-
-        if runtime.get('stderr') not in ('', None, 'stdout'):
-            os.makedirs(os.path.dirname(runtime['stderr']), exist_ok=True)
-
-        launch_spec = {
-            'argv': runtime['argv'],
-            'cwd': runtime['cwd'],
-            'stdout': runtime['stdout'],
-            'stderr': runtime.get('stderr') or 'stdout',
-            'pid_file': runtime['pid_file'],
-        }
-
-        spec_fd, spec_path = tempfile.mkstemp(
-            prefix='external-tool-launch-',
-            suffix='.json',
-            dir=os.path.dirname(runtime['pid_file']),
-        )
-
-        try:
-            with os.fdopen(spec_fd, 'w', encoding='utf-8') as file_obj:
-                json.dump(launch_spec, file_obj, ensure_ascii=False)
-
-            launcher_code = r'''
-import json
-import os
-import platform
-import subprocess
-import sys
-
-spec_path = sys.argv[1]
-with open(spec_path, 'r', encoding='utf-8') as file_obj:
-    spec = json.load(file_obj)
-
-stdout_file = open(spec['stdout'], 'ab')
-stderr_file = None
-try:
-    stderr_value = spec.get('stderr') or 'stdout'
-    if stderr_value == 'stdout':
-        stderr_target = subprocess.STDOUT
-    else:
-        stderr_file = open(stderr_value, 'ab')
-        stderr_target = stderr_file
-
-    kwargs = {
-        'cwd': spec['cwd'],
-        'stdin': subprocess.DEVNULL,
-        'stdout': stdout_file,
-        'stderr': stderr_target,
-        'close_fds': True,
-        'shell': False,
-    }
-
-    if os.name == 'nt':
-        flags = 0
-        flags |= getattr(subprocess, 'CREATE_NEW_PROCESS_GROUP', 0)
-        flags |= getattr(subprocess, 'DETACHED_PROCESS', 0)
-        process = subprocess.Popen(spec['argv'], creationflags=flags, **kwargs)
-    else:
-        process = subprocess.Popen(spec['argv'], start_new_session=True, **kwargs)
-
-    with open(spec['pid_file'], 'w', encoding='utf-8') as pid_obj:
-        pid_obj.write(str(process.pid))
-    print(process.pid)
-finally:
-    stdout_file.close()
-    if stderr_file is not None:
-        stderr_file.close()
-'''
-
-            completed = subprocess.run(
-                [sys.executable, '-c', launcher_code, spec_path],
-                stdin=subprocess.DEVNULL,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                text=True,
-                timeout=10,
-                close_fds=True,
-            )
-
-            if completed.returncode != 0:
-                raise RuntimeError((completed.stderr or completed.stdout or 'external tool launcher failed').strip())
-
-            pid_text = (completed.stdout or '').strip().splitlines()[-1]
-            return SimpleNamespace(pid=int(pid_text))
-
-        finally:
-            try:
-                os.unlink(spec_path)
-            except OSError:
-                pass
-
+    def start_detached(self, runtime: dict):
+        return start_detached_process(runtime)
     def start_payload(self, payload: dict) -> dict:
         runtime = self.build_runtime(payload)
         existing_pid = self.read_pid(runtime['pid_file'])
@@ -192,119 +103,13 @@ finally:
         }
 
     def read_pid(self, pid_file: str):
-        try:
-            with open(pid_file, 'r', encoding='utf-8') as file_obj:
-                text = file_obj.read().strip()
-            pid = int(text)
-            return pid if pid > 0 else None
-        except Exception:
-            return None
-
+        return read_pid_file(pid_file)
     def is_pid_alive(self, pid) -> bool:
-        try:
-            pid = int(pid)
-        except (TypeError, ValueError):
-            return False
-
-        if pid <= 0:
-            return False
-
-        if os.name == "nt":
-            return self.is_windows_pid_alive(pid)
-
-        try:
-            os.kill(pid, 0)
-        except ProcessLookupError:
-            return False
-        except PermissionError:
-            return True
-        except OSError:
-            return False
-
-        return True
-
+        return is_pid_alive(pid)
     def is_windows_pid_alive(self, pid: int) -> bool:
-        """
-        Windows 下不能用 os.kill(pid, 0) 探活。
-        Python on Windows 的 os.kill 可能会调用 TerminateProcess，导致探测直接杀死目标进程。
-        这里用 Win32 OpenProcess + GetExitCodeProcess 非破坏性检测。
-        """
-        import ctypes
-        from ctypes import wintypes
-
-        PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
-        STILL_ACTIVE = 259
-        ERROR_ACCESS_DENIED = 5
-        ERROR_INVALID_PARAMETER = 87
-
-        kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
-
-        OpenProcess = kernel32.OpenProcess
-        OpenProcess.argtypes = [wintypes.DWORD, wintypes.BOOL, wintypes.DWORD]
-        OpenProcess.restype = wintypes.HANDLE
-
-        GetExitCodeProcess = kernel32.GetExitCodeProcess
-        GetExitCodeProcess.argtypes = [wintypes.HANDLE, ctypes.POINTER(wintypes.DWORD)]
-        GetExitCodeProcess.restype = wintypes.BOOL
-
-        CloseHandle = kernel32.CloseHandle
-        CloseHandle.argtypes = [wintypes.HANDLE]
-        CloseHandle.restype = wintypes.BOOL
-
-        handle = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, False, pid)
-        if not handle:
-            err = ctypes.get_last_error()
-
-            # 没权限通常说明进程存在，只是不能查询。
-            if err == ERROR_ACCESS_DENIED:
-                return True
-
-            # PID 不存在 / 参数无效。
-            if err == ERROR_INVALID_PARAMETER:
-                return False
-
-            return False
-
-        try:
-            exit_code = wintypes.DWORD()
-            ok = GetExitCodeProcess(handle, ctypes.byref(exit_code))
-            if not ok:
-                err = ctypes.get_last_error()
-                if err == ERROR_ACCESS_DENIED:
-                    return True
-                return False
-
-            return exit_code.value == STILL_ACTIVE
-        finally:
-            CloseHandle(handle)
-
+        return is_pid_alive(pid)
     def signal_process_group_or_pid(self, pid: int, sig: int):
-        if not pid or pid <= 0:
-            return
-
-        if os.name != 'nt':
-            try:
-                os.killpg(pid, sig)
-                return
-            except ProcessLookupError:
-                return
-            except Exception:
-                pass
-
-        try:
-            os.kill(pid, sig)
-        except ProcessLookupError:
-            return
-        except OSError as exc:
-            # Windows stale instance:
-            # os.kill(dead_pid, sig) may raise [WinError 87] The parameter is incorrect.
-            # Treat it as "already gone" instead of failing stop/cleanup.
-            if os.name == 'nt' and getattr(exc, 'winerror', None) == 87:
-                return
-            if getattr(exc, 'errno', None) in (errno.ESRCH, errno.EINVAL):
-                return
-            raise
-
+        signal_process_group_or_pid(pid, sig)
     def state_file_from_payload(self, payload: dict) -> str:
         runtime = payload.get('runtime') or {}
         state_file = runtime.get('state_file')
@@ -416,44 +221,9 @@ finally:
         return state_file
 
     def signal_name_to_value(self, value) -> int:
-        text = str(value or 'TERM').strip().upper()
-        if not text.startswith('SIG'):
-            text = 'SIG' + text
-        return int(getattr(signal, text, signal.SIGTERM))
-
+        return signal_name_to_value(value)
     def stop_by_signal(self, pid, stop_spec: dict) -> dict:
-        if not pid:
-            return {'type': 'signal', 'signal': '', 'sent': False, 'message': 'pid not found'}
-
-        sig = self.signal_name_to_value(stop_spec.get('signal') or 'TERM')
-        timeout_sec = int(stop_spec.get('timeout_sec') or self.DEFAULT_STOP_TIMEOUT_SEC)
-        kill_after_timeout = bool(stop_spec.get('kill_after_timeout', True))
-
-        self.signal_process_group_or_pid(pid, sig)
-
-        deadline = time.time() + max(0.1, timeout_sec)
-        while time.time() < deadline:
-            if not self.is_pid_alive(pid):
-                return {
-                    'type': 'signal',
-                    'signal': signal.Signals(sig).name,
-                    'sent': True,
-                    'killed': False,
-                }
-            time.sleep(0.1)
-
-        killed = False
-        if kill_after_timeout and self.is_pid_alive(pid):
-            self.signal_process_group_or_pid(pid, signal.SIGKILL)
-            killed = True
-
-        return {
-            'type': 'signal',
-            'signal': signal.Signals(sig).name,
-            'sent': True,
-            'killed': killed,
-        }
-
+        return stop_by_signal(pid, stop_spec, default_timeout_sec=self.DEFAULT_STOP_TIMEOUT_SEC)
     def run_stop_command(self, stop_spec: dict) -> dict:
         argv = stop_spec.get('argv') or stop_spec.get('command') or []
 
@@ -596,15 +366,7 @@ finally:
         stdout = self.stdout_from_payload(payload)
         max_bytes = int(payload.get('max_bytes') or self.DEFAULT_LOG_TAIL_BYTES)
 
-        content = ''
-        if os.path.isfile(stdout):
-            with open(stdout, 'rb') as file_obj:
-                if max_bytes > 0:
-                    file_obj.seek(0, os.SEEK_END)
-                    size = file_obj.tell()
-                    file_obj.seek(max(0, size - max_bytes), os.SEEK_SET)
-                raw = file_obj.read()
-            content = raw.decode('utf-8', errors='replace')
+        content = tail_text_file(stdout, max_bytes)
 
         return {
             'tool_id': payload.get('tool_id') or '',

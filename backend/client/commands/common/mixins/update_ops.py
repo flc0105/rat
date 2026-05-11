@@ -10,11 +10,11 @@ from client.config.config import (
     SERVER_WEB_PORT,
     SERVER_WEB_SCHEME,
 )
+from core.external_tools.archive import safe_extract_zip_archive
 from core.platform.platform_identity import detect_platform_alias
 from client.runtime.client_util import (
     build_bundle_extract_dir,
     get_client_bundle_release_dir,
-    safe_extract_zip_file,
     spawn_detached_python_script,
 )
 from core.utils.decorator import desc
@@ -185,7 +185,7 @@ class CommandUpdateMixin:
             if os.path.isdir(extract_dir):
                 shutil.rmtree(extract_dir)
 
-            safe_extract_zip_file(archive_path, extract_dir)
+            safe_extract_zip_archive(archive_path, extract_dir)
 
             rchclient_path = os.path.join(extract_dir, 'rchclient.py')
             if not os.path.isfile(rchclient_path):

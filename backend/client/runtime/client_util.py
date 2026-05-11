@@ -3,7 +3,6 @@ import shlex
 import shutil
 import subprocess
 import sys
-import zipfile
 from pathlib import Path
 
 from core.platform.platform_identity import detect_platform_alias, detect_platform_name
@@ -252,19 +251,6 @@ def build_bundle_extract_dir(release_dir: str, file_name: str) -> str:
     base_name = os.path.splitext(os.path.basename(file_name))[0] or 'client_bundle'
     return os.path.join(os.path.abspath(release_dir), base_name)
 
-
-def safe_extract_zip_file(zip_path: str, destination_dir: str) -> str:
-    destination_dir = ensure_directory(destination_dir)
-    destination_dir_abs = os.path.abspath(destination_dir)
-
-    with zipfile.ZipFile(zip_path, 'r') as archive:
-        for member in archive.infolist():
-            member_path = os.path.abspath(os.path.join(destination_dir_abs, member.filename))
-            if os.path.commonpath([destination_dir_abs, member_path]) != destination_dir_abs:
-                raise ValueError(f'Unsafe zip entry detected: {member.filename}')
-        archive.extractall(destination_dir_abs)
-
-    return destination_dir_abs
 
 
 def _resolve_python_command_for_source_bundle() -> list[str]:

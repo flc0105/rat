@@ -1,8 +1,8 @@
 import os
-import subprocess
 import time
 
 from client.external_tools.common import ExternalToolCommon
+from core.external_tools.processes import run_foreground_process
 
 
 class ExternalToolOneshot(ExternalToolCommon):
@@ -31,45 +31,16 @@ class ExternalToolOneshot(ExternalToolCommon):
         if timeout_value is not None and timeout_value <= 0:
             raise ValueError(f'invalid oneshot timeout_sec: {timeout_sec}')
 
-        started = time.time()
-        try:
-            completed = subprocess.run(
-                argv,
-                cwd=cwd,
-                stdin=subprocess.DEVNULL,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                text=True,
-                timeout=timeout_value,
-                shell=False,
-            )
-            timed_out = False
-            returncode = int(completed.returncode)
-            stdout = completed.stdout or ''
-            stderr = completed.stderr or ''
-        except subprocess.TimeoutExpired as e:
-            timed_out = True
-            returncode = -1
-            stdout = e.stdout or ''
-            stderr = e.stderr or ''
-            if isinstance(stdout, bytes):
-                stdout = stdout.decode('utf-8', errors='replace')
-            if isinstance(stderr, bytes):
-                stderr = stderr.decode('utf-8', errors='replace')
-            stderr = (stderr + ('\n' if stderr else '') + f'Command timed out after {timeout_value} seconds').strip()
-
-        finished = time.time()
-        return {
-            'argv': argv,
-            'cwd': cwd,
-            'returncode': returncode,
-            'stdout': stdout,
-            'stderr': stderr,
-            'timed_out': timed_out,
-            'started_at': time.strftime('%Y-%m-%dT%H:%M:%S', time.localtime(started)),
-            'finished_at': time.strftime('%Y-%m-%dT%H:%M:%S', time.localtime(finished)),
-            'duration_sec': round(finished - started, 3),
-        }
+        result = run_foreground_process(
+            {
+                'argv': argv,
+                'cwd': cwd,
+                'stdout': runtime.get('stdout') or os.path.join(cwd, 'stdout.log'),
+            },
+            timeout_sec=timeout_value,
+        )
+        result.update({'argv': argv, 'cwd': cwd})
+        return result
 
     def oneshot_payload(self, payload: dict) -> dict:
         if str(payload.get('execution') or payload.get('action') or '').strip().lower() not in ('oneshot',):

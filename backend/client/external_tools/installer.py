@@ -3,7 +3,7 @@ import shutil
 
 from client.external_tools.common import ExternalToolCommon
 from core.external_tools.payload import client_install_status_error_payload, client_install_status_result
-from client.runtime.client_util import safe_extract_zip_file
+from core.external_tools.archive import safe_extract_zip_archive
 
 
 class ExternalToolInstaller(ExternalToolCommon):
@@ -101,7 +101,7 @@ class ExternalToolInstaller(ExternalToolCommon):
                 raise ValueError('package archive path is required')
             os.makedirs(install_dir, exist_ok=True)
             install_log.append(f'Extracting package to: {install_dir}')
-            safe_extract_zip_file(archive_path, install_dir)
+            safe_extract_zip_archive(archive_path, install_dir, self.expand_path)
             extracted = True
         else:
             install_log.append('Existing installation is valid; extraction skipped.')

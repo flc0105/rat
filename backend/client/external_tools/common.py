@@ -1,7 +1,7 @@
-import json
 import os
 import platform
 
+from core.external_tools.files import read_json_file_or_empty, write_json_file
 from core.external_tools.paths import (
     build_command_map,
     chmod_executable,
@@ -75,17 +75,10 @@ class ExternalToolCommon:
         return path_has_content(path)
 
     def read_json(self, path: str) -> dict:
-        try:
-            with open(path, 'r', encoding='utf-8') as file_obj:
-                data = json.load(file_obj)
-            return data if isinstance(data, dict) else {}
-        except Exception:
-            return {}
+        return read_json_file_or_empty(path)
 
     def write_json(self, path: str, data: dict):
-        os.makedirs(os.path.dirname(path), exist_ok=True)
-        with open(path, 'w', encoding='utf-8') as file_obj:
-            json.dump(data, file_obj, ensure_ascii=False, indent=2)
+        write_json_file(path, data)
 
     def runtime_parts_from_payload(self, payload: dict) -> tuple[str, str, str]:
         return parse_runtime_parts_from_payload(payload)
