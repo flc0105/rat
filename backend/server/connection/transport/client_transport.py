@@ -1,7 +1,7 @@
-from core.protocol.ratsocket import RATSocket
+from core.protocol.rchsocket import RCHSocket
 
 
-class ClientTransport(RATSocket):
+class ClientTransport(RCHSocket):
     """
     客户端底层传输对象。
     仅保留普通消息收发。

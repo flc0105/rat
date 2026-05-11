@@ -1,6 +1,6 @@
 import threading
 
-from core.protocol.ratsocket import RATSocket
+from core.protocol.rchsocket import RCHSocket
 from server.application.app_facade import ServerWebService
 from server.application.command.alias_manager import AliasManager
 from server.application.history.history_orchestrator import CommandHistoryOrchestrator
@@ -21,7 +21,7 @@ class Server:
         :param address: 服务器地址
         """
         self.address = address
-        self.socket = RATSocket()
+        self.socket = RCHSocket()
         self.connections = ConnectionManager()
         self.alias_manager = AliasManager()
         self.command_history = CommandHistoryStore()

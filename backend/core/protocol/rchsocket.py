@@ -4,7 +4,7 @@ import struct
 import threading
 
 
-class RATSocket:
+class RCHSocket:
     HEADER_FORMAT = 'i'
     HEADER_SIZE = struct.calcsize(HEADER_FORMAT)
 

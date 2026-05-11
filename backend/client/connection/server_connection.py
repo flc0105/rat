@@ -5,11 +5,11 @@ from client.connection.message_dispatcher import ClientInboundMessageDispatcher
 from client.connection.message_router import ClientInboundMessageRouter
 from client.runtime.client_runtime import ClientRuntime
 from core.protocol.message_types import MSG_TYPE_RESULT
-from core.protocol.ratsocket import RATSocket
+from core.protocol.rchsocket import RCHSocket
 from core.utils.logger import logger
 
 
-class ServerConnection(RATSocket):
+class ServerConnection(RCHSocket):
     """
     客户端与服务端的连接类。
 
