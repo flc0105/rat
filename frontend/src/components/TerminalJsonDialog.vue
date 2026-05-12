@@ -16,14 +16,7 @@
             Copy Raw
           </el-button>
 
-          <el-button
-            size="small"
-            type="primary"
-            :loading="savingJsonArtifact"
-            @click="saveTerminalJsonToArtifact"
-          >
-            Save to Artifact
-          </el-button>
+
 
           <el-button
             v-if="hasTerminalJsonRenderView"
@@ -31,6 +24,15 @@
             @click="toggleTerminalJsonViewMode"
           >
             {{ isTerminalJsonRawView ? 'Render View' : 'Raw View' }}
+          </el-button>
+
+                  <el-button
+            size="small"
+            type="primary"
+            :loading="savingJsonArtifact"
+            @click="saveTerminalJsonToArtifact"
+          >
+            Save to Artifact
           </el-button>
         </div>
 

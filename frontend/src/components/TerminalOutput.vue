@@ -1105,7 +1105,7 @@ async saveTerminalBlockOutput(block) {
   padding: 18px 18px 22px;
   color: var(--terminal-text);
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-  font-size: 13px;
+  font-size: 12px;
   line-height: 1.7;
   scrollbar-width: thin;
   scrollbar-color: rgba(148, 163, 184, 0.35) rgba(15, 23, 42, 0.4);

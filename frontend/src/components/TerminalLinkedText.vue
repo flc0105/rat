@@ -293,7 +293,7 @@ export default {
   font: inherit;
   line-height: inherit;
   text-align: left;
-  text-decoration: underline;
+  /*text-decoration: underline;*/
   text-decoration-thickness: 1px;
   text-underline-offset: 3px;
   cursor: pointer;

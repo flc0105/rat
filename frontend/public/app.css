@@ -490,7 +490,7 @@ body {
   line-height: 1.7;
   color: var(--el-color-primary);
   text-decoration: none;
-  font-size: 13px;
+  font-size: 12px;
   white-space: nowrap;
   vertical-align: middle;
 }
