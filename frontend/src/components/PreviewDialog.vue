@@ -31,13 +31,7 @@
   Copy
 </el-button>
 
-            <el-button
-              size="small"
-              class="preview-fullscreen-toggle"
-              @click="togglePreviewFullscreen"
-            >
-              {{ previewFullscreen ? 'Exit Fullscreen' : 'Fullscreen' }}
-            </el-button>
+
 
 
 
@@ -50,6 +44,7 @@
               Edit
             </el-button>
 
+
             <template v-else-if="previewEditMode">
               <el-button
                 size="small"
@@ -60,14 +55,7 @@
                 Save
               </el-button>
 
-              <el-button
-                size="small"
-                @click="cancelEditMode"
-              >
-                Cancel
-              </el-button>
-
-              <el-button
+                       <el-button
                 size="small"
                 type="danger"
                 plain
@@ -75,7 +63,27 @@
               >
                 Clear
               </el-button>
+
+
+              <el-button
+                size="small"
+                @click="cancelEditMode"
+              >
+                Cancel
+              </el-button>
+
+
+
+
+
             </template>
+                      <el-button
+              size="small"
+              class="preview-fullscreen-toggle"
+              @click="togglePreviewFullscreen"
+            >
+              {{ previewFullscreen ? 'Exit Fullscreen' : 'Fullscreen' }}
+            </el-button>
           </template>
 
           <template v-if="previewType === 'image' && previewUrl">
