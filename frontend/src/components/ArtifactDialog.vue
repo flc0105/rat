@@ -19,7 +19,21 @@
             Refresh
           </el-button>
 
+
+
           <el-button
+            class="artifact-toolbar-btn"
+            size="small"
+            type="danger"
+
+            :disabled="!selectedArtifactIds.length"
+            :loading="artifactBulkDeleting"
+            @click="deleteSelectedArtifacts"
+          >
+            Delete {{ selectedArtifactIds.length ? ` (${selectedArtifactIds.length})` : '' }}
+          </el-button>
+
+                <el-button
             class="artifact-toolbar-btn"
             size="small"
             type="danger"
@@ -29,29 +43,46 @@
             Clear
           </el-button>
 
-          <el-button
-            class="artifact-toolbar-btn"
-            size="small"
-            type="danger"
-            plain
-            :disabled="!selectedArtifactIds.length"
-            :loading="artifactBulkDeleting"
-            @click="deleteSelectedArtifacts"
+           <div
+            v-if="isServerFilesTab"
+            class="artifact-server-actions"
           >
-            Delete Selected{{ selectedArtifactIds.length ? ` (${selectedArtifactIds.length})` : '' }}
-          </el-button>
 
-          <div class="dialog-path-box artifact-search-box">
+             <el-button
+              class="artifact-toolbar-btn"
+              size="small"
+              type="primary"
+
+              :loading="serverFileUploading"
+              @click="triggerServerFileUpload"
+            >
+              Upload
+            </el-button>
+            <el-button
+              class="artifact-toolbar-btn"
+              size="small"
+              type="primary"
+              plain
+              @click="createServerFilePrompt"
+            >
+              Create File
+            </el-button>
+
+
+          </div>
+
+
+        </div>
+
+        <div class="dialog-head-right">
+           <div class="dialog-path-box artifact-search-box">
             <el-input
               v-model="artifactKeyword"
               clearable
               size="small"
-              placeholder="Search name/category"
+              placeholder="Search"
             />
           </div>
-        </div>
-
-        <div class="dialog-head-right">
           <div
             v-if="showArtifactMachineFilter"
             class="dialog-path-box artifact-filter-box"
@@ -73,30 +104,7 @@
             </el-select>
           </div>
 
-          <div
-            v-if="isServerFilesTab"
-            class="artifact-server-actions"
-          >
-            <el-button
-              class="artifact-toolbar-btn"
-              size="small"
-              type="primary"
-              plain
-              @click="createServerFilePrompt"
-            >
-              Create File
-            </el-button>
 
-            <el-button
-              class="artifact-toolbar-btn"
-              size="small"
-              type="primary"
-              :loading="serverFileUploading"
-              @click="triggerServerFileUpload"
-            >
-              Upload
-            </el-button>
-          </div>
         </div>
       </div>
 
@@ -161,7 +169,7 @@
           <el-table-column
             prop="original_name"
             label="Name"
-            min-width="280"
+            min-width="270"
             show-overflow-tooltip
           >
             <template #default="{ row }">
@@ -187,7 +195,7 @@
           <el-table-column
             v-if="!isServerFilesTab"
             label="Category"
-            min-width="160"
+            min-width="150"
             show-overflow-tooltip
           >
             <template #default="{ row }">
