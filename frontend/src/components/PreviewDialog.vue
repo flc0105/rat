@@ -68,6 +68,15 @@
                 Clear
               </el-button>
 
+              <el-button
+                  size="small"
+                  :loading="previewReloading"
+                  :disabled="previewSaving"
+                  @click="reloadPreviewContent"
+              >
+                Reload
+              </el-button>
+
 
               <el-button
                   size="small"
@@ -315,6 +324,7 @@ export default {
 
   data() {
     return {
+      previewReloading: false,
       previewDialogVisible: false,
       previewFullscreen: false,
       previewLoading: false,
@@ -405,6 +415,7 @@ export default {
       this.previewImageInfoDialogVisible = false
       this.cancelPendingMonacoFrames()
       this.blurMonacoEditor()
+      this.previewReloading = false
     },
 
     initMonacoEditor(content, readOnly = true) {
@@ -1661,6 +1672,199 @@ print(value)
       })
     },
 
+    // reload
+    async reloadPreviewContent() {
+      if (this.previewType !== 'text') {
+        ElMessage.warning('Only text content can be reloaded')
+        return
+      }
+
+      if (!this.previewEditMode) {
+        ElMessage.warning('Please enter edit mode first')
+        return
+      }
+
+      if (this.previewReloading || this.previewSaving) return
+
+      this.previewReloading = true
+
+      try {
+        const data = await this.fetchLatestPreviewTextPayload()
+        const content = data.content || ''
+
+        this.applyReloadedPreviewText({
+          content,
+          name: data.name,
+          size: data.size,
+          truncated: data.truncated,
+          encoding: data.encoding,
+        })
+
+        ElMessage.success('File reloaded')
+      } catch (e) {
+        ElMessage.error(e.message || 'Failed to reload file')
+      } finally {
+        this.previewReloading = false
+      }
+    },
+
+    async fetchLatestPreviewTextPayload() {
+      if (this.previewSource === 'remote_file') {
+        if (!this.selectedId || !this.previewFilePath) {
+          throw new Error('Invalid remote file path')
+        }
+
+        const res = await fetch(`/api/connections/${encodeURIComponent(this.selectedId)}/remote-files/preview`, {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({path: this.previewFilePath}),
+        })
+
+        return await this.parsePreviewTextResponse(res, 'Failed to reload remote file')
+      }
+
+      if (this.previewSource === 'artifact') {
+        if (!this.previewFilePath) {
+          throw new Error('Invalid artifact')
+        }
+
+        const res = await fetch(`/api/artifacts/${encodeURIComponent(this.previewFilePath)}/preview`)
+
+        return await this.parsePreviewTextResponse(res, 'Failed to reload artifact')
+      }
+
+      if (this.previewSource === 'server_script') {
+        if (!this.previewFilePath) {
+          throw new Error('Invalid script name')
+        }
+
+        const res = await fetch(`/api/scripts/download?name=${encodeURIComponent(this.previewFilePath)}`)
+
+        if (!res.ok) {
+          throw new Error(`Failed to reload script: ${res.statusText}`)
+        }
+
+        const content = await res.text()
+
+        return {
+          content,
+          name: this.previewTitle || this.previewFilePath,
+          size: content.length,
+          truncated: false,
+          encoding: 'UTF-8',
+        }
+      }
+
+      if (this.previewSource === 'background_job') {
+        if (!this.previewFilePath) {
+          throw new Error('Invalid job name')
+        }
+
+        const res = await fetch(`/api/jobs/download?name=${encodeURIComponent(this.previewFilePath)}`)
+
+        if (!res.ok) {
+          throw new Error(`Failed to reload job: ${res.statusText}`)
+        }
+
+        const content = await res.text()
+
+        return {
+          content,
+          name: this.previewTitle || this.previewFilePath,
+          size: content.length,
+          truncated: false,
+          encoding: 'UTF-8',
+        }
+      }
+
+      if (this.previewSource === 'external_tool_meta') {
+        if (!this.previewFilePath) {
+          throw new Error('Invalid external tool id')
+        }
+
+        const data = await externalToolsApi.loadExternalToolMetaContent(this.previewFilePath)
+        const content = data.content || ''
+
+        return {
+          content,
+          name: data.name || this.previewTitle || `${this.previewFilePath}.json`,
+          size: data.size || content.length,
+          truncated: false,
+          encoding: 'UTF-8',
+        }
+      }
+
+      if (this.previewSource === 'new_server_file') {
+        throw new Error('This file has not been created yet')
+      }
+
+      throw new Error('Unknown preview source')
+    },
+
+    async parsePreviewTextResponse(res, fallbackMessage = 'Failed to reload file') {
+      const json = await res.json()
+
+      if (!res.ok || json.code !== 0) {
+        throw new Error(json.message || fallbackMessage)
+      }
+
+      const data = json.data || {}
+
+      if (data.type && data.type !== 'text') {
+        throw new Error('Reloaded file is not text content')
+      }
+
+      return {
+        content: data.content || '',
+        name: data.name || this.previewTitle,
+        size: data.size,
+        truncated: data.truncated || false,
+        encoding: data.encoding || '',
+      }
+    },
+
+    applyReloadedPreviewText(payload) {
+      const content = payload.content || ''
+
+      this.previewText = content
+      this.previewOriginalContent = content
+      this.previewTruncated = payload.truncated || false
+
+      if (payload.name) {
+        this.previewTitle = payload.name
+      }
+
+      this.previewFileSize = formatBytes(payload.size || content.length)
+      this.previewFileEncoding = payload.encoding || this.detectEncoding(content)
+      this.previewDetectedLanguage = this.getLanguageDisplayName(this.getLanguageFromFilename(this.previewTitle))
+
+      const editor = getPreviewMonacoEditor(this)
+      const lang = this.getLanguageFromFilename(this.previewTitle)
+
+      if (editor) {
+        const model = editor.getModel && editor.getModel()
+
+        if (model) {
+          model.setValue(content)
+          monaco.editor.setModelLanguage(model, lang)
+        } else {
+          editor.setValue(content)
+        }
+
+        editor.updateOptions({readOnly: false})
+
+        if (typeof editor.setPosition === 'function') {
+          editor.setPosition({lineNumber: 1, column: 1})
+        }
+
+        editor.focus()
+      } else {
+        this.initMonacoEditor(content, false)
+      }
+
+      this.previewEditMode = true
+    },
+
 
     resetPreviewState() {
       this.previewFullscreen = false
@@ -1675,6 +1879,7 @@ print(value)
       this.previewImageInfo = null
       this.previewImageInfoDialogVisible = false
       this.previewDetectedLanguage = 'Plain Text'
+      this.previewReloading = false
     },
   },
 }
