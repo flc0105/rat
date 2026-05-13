@@ -51,6 +51,8 @@
         @toggle-client-hidden="toggleClientHiddenFromSidebar"
         @toggle-machine-hidden="toggleMachineHiddenFromSidebar"
         @rename-machine="renameMachineFromSidebar"
+        @connection-removed="forgetConnectionFromDeviceView"
+        @connection-remove-failed="restoreConnectionFromDeviceView"
       />
 
       <main class="main panel">

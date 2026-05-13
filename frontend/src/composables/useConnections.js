@@ -48,6 +48,10 @@ export default {
             selectedId: '',
             showHiddenDevices: false,
             deviceViewPrefs: readDeviceViewPrefsFromStorage(),
+            locallyRemovedConnections: {
+                clientIds: {},
+                offlineMachineIds: {},
+            },
         }
     },
 
@@ -71,6 +75,62 @@ export default {
 
         getConnectionMachineId(item) {
             return this.normalizeMachineId(item?.machine_id)
+        },
+
+        markConnectionLocallyRemoved(payload = {}) {
+            const clientId = this.normalizeClientId(payload.client_id || payload.clientId)
+            const machineId = this.normalizeMachineId(payload.machine_id || payload.machineId)
+
+            const clientIds = { ...(this.locallyRemovedConnections?.clientIds || {}) }
+            const offlineMachineIds = { ...(this.locallyRemovedConnections?.offlineMachineIds || {}) }
+
+            if (clientId) clientIds[clientId] = true
+            if (machineId) offlineMachineIds[machineId] = true
+
+            this.locallyRemovedConnections = {
+                clientIds,
+                offlineMachineIds,
+            }
+        },
+
+        clearConnectionLocallyRemoved(payload = {}) {
+            const clientId = this.normalizeClientId(payload.client_id || payload.clientId)
+            const machineId = this.normalizeMachineId(payload.machine_id || payload.machineId)
+
+            const clientIds = { ...(this.locallyRemovedConnections?.clientIds || {}) }
+            const offlineMachineIds = { ...(this.locallyRemovedConnections?.offlineMachineIds || {}) }
+
+            if (clientId) delete clientIds[clientId]
+            if (machineId) delete offlineMachineIds[machineId]
+
+            this.locallyRemovedConnections = {
+                clientIds,
+                offlineMachineIds,
+            }
+        },
+
+        isConnectionLocallyRemoved(item) {
+            if (!item) return false
+
+            const clientId = this.getConnectionClientId(item)
+            if (clientId && this.locallyRemovedConnections?.clientIds?.[clientId]) {
+                return true
+            }
+
+            const machineId = this.getConnectionMachineId(item)
+            if (
+                machineId &&
+                this.locallyRemovedConnections?.offlineMachineIds?.[machineId] &&
+                this.getConnectionDisplayState(item) === 'offline'
+            ) {
+                return true
+            }
+
+            return false
+        },
+
+        filterLocallyRemovedConnections(items) {
+            return (Array.isArray(items) ? items : []).filter(item => !this.isConnectionLocallyRemoved(item))
         },
 
         getMachineAlias(machineId) {
@@ -247,7 +307,7 @@ export default {
             const grouped = new Map()
             const ordered = []
 
-            ;(Array.isArray(items) ? items : []).forEach((item) => {
+            this.filterLocallyRemovedConnections(items).forEach((item) => {
                 if (!item || !item.client_id) return
 
                 const key = item.client_id
@@ -298,7 +358,7 @@ export default {
 
         async loadConnections() {
             try {
-                const fetchedConnections = await listConnections()
+                const fetchedConnections = this.filterLocallyRemovedConnections(await listConnections())
 
                 const existingMap = new Map()
                 ;(this.connections || []).forEach(item => {
@@ -385,6 +445,12 @@ export default {
         upsertConnection(conn) {
             if (!conn || !conn.client_id) return
 
+            if (this.isConnectionLocallyRemoved(conn)) {
+                this.connections = this.filterLocallyRemovedConnections(this.connections)
+                this.ensureSelectedConnectionVisible()
+                return
+            }
+
             const identityKey = this.buildConnectionIdentityKey(conn)
             const incomingState = this.getConnectionDisplayState(conn)
 
@@ -453,6 +519,14 @@ export default {
         },
 
         removeConnection(clientId) {
+            const normalizedClientId = this.normalizeClientId(clientId)
+
+            if (normalizedClientId && this.locallyRemovedConnections?.clientIds?.[normalizedClientId]) {
+                this.connections = this.filterLocallyRemovedConnections(this.connections)
+                this.ensureSelectedConnectionVisible()
+                return
+            }
+
             const idx = this.connections.findIndex(item => item.client_id === clientId)
             if (idx === -1) return
 
@@ -468,6 +542,28 @@ export default {
             this.connections.push(offlineItem)
             this.connections = this.dedupeConnections(this.connections)
             this.ensureSelectedConnectionVisible()
+        },
+
+        forgetConnectionFromDeviceView(payload = {}) {
+            const selectedBefore = this.selectedId
+
+            this.markConnectionLocallyRemoved(payload)
+            this.connections = this.filterLocallyRemovedConnections(this.connections)
+
+            const selectedStillExists = this.connections.some(item => {
+                return this.normalizeClientId(item?.client_id) === selectedBefore
+            })
+
+            if (!selectedStillExists) {
+                this.selectedId = this.deviceSidebarConnections[0]?.client_id || ''
+            }
+
+            this.ensureSelectedConnectionVisible()
+        },
+
+        async restoreConnectionFromDeviceView(payload = {}) {
+            this.clearConnectionLocallyRemoved(payload)
+            await this.loadConnections()
         },
 
         getConnectionActivityTimeMs(item) {

@@ -22,6 +22,7 @@ class RecentDeviceStore:
         self.file_path = os.path.abspath(file_path)
         os.makedirs(os.path.dirname(self.file_path), exist_ok=True)
         self._lock = threading.RLock()
+        self._forgotten_machine_keys = set()
 
     def _normalize_machine_id_key(self, machine_id: str) -> str:
         value = str(machine_id or '').strip()
@@ -74,7 +75,16 @@ class RecentDeviceStore:
         if not key:
             return
 
+        connection_state = str(connection_payload.get('connection_state') or '').strip().lower()
+        disconnected_at = str(connection_payload.get('disconnected_at') or '').strip()
+        is_offline_payload = connection_state == 'offline' or bool(disconnected_at)
+
         with self._lock:
+            if key in self._forgotten_machine_keys:
+                if is_offline_payload:
+                    return
+                self._forgotten_machine_keys.discard(key)
+
             current = self._read_all_unlocked()
             previous = current.get(key, {}) if isinstance(current.get(key), dict) else {}
 
@@ -130,6 +140,9 @@ class RecentDeviceStore:
             return
 
         with self._lock:
+            if key in self._forgotten_machine_keys:
+                return
+
             current = self._read_all_unlocked()
             record = current.get(key)
             if not isinstance(record, dict):
@@ -142,6 +155,42 @@ class RecentDeviceStore:
             record['recent_updated_at'] = self._now_iso()
             current[key] = record
             self._write_all_unlocked(current)
+
+    def remove_by_identity(self, client_id: str = '', machine_id: str = '') -> dict:
+        target_client_id = str(client_id or '').strip()
+        target_machine_key = self._normalize_machine_id_key(machine_id)
+        removed_keys = []
+
+        with self._lock:
+            current = self._read_all_unlocked()
+
+            if target_machine_key and target_machine_key in current:
+                removed_keys.append(target_machine_key)
+
+            if target_client_id:
+                for key, record in list(current.items()):
+                    if not isinstance(record, dict):
+                        continue
+                    if str(record.get('client_id') or '').strip() == target_client_id:
+                        removed_keys.append(key)
+
+            removed_keys = sorted(set(key for key in removed_keys if key))
+            forgotten_keys = set(removed_keys)
+            if target_machine_key:
+                forgotten_keys.add(target_machine_key)
+
+            for key in removed_keys:
+                current.pop(key, None)
+
+            self._forgotten_machine_keys.update(forgotten_keys)
+
+            if removed_keys:
+                self._write_all_unlocked(current)
+
+        return {
+            'removed_count': len(removed_keys),
+            'removed_keys': removed_keys,
+        }
 
     def list_recent_devices(self) -> list[dict]:
         with self._lock:

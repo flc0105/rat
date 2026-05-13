@@ -10,6 +10,13 @@ export function killConnection(clientId) {
   })
 }
 
+export function removeConnection(clientId, payload = {}) {
+  return apiFetch(`/api/connections/${encodeURIComponent(clientId)}`, {
+    ...jsonRequestOptions('DELETE', payload),
+    method: 'DELETE',
+  })
+}
+
 export function sendCommand(clientId, command, headers = {}) {
   return apiData(
     `/api/connections/${encodeURIComponent(clientId)}/command`,

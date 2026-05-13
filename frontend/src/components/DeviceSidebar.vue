@@ -125,14 +125,23 @@
 
         <div class="device-context-menu-separator"></div>
 
-<button
-  type="button"
-  class="device-context-menu-item danger strong-danger"
-  :disabled="!canRemoveContextConnection"
-  @click="triggerDeviceContextCommand('remove-connection')"
->
-  Remove connection
-</button>
+        <button
+          type="button"
+          class="device-context-menu-item warning"
+          :disabled="!canDisconnectContextConnection"
+          @click="triggerDeviceContextCommand('disconnect')"
+        >
+          Disconnect
+        </button>
+
+        <button
+          type="button"
+          class="device-context-menu-item danger strong-danger"
+          :disabled="!canRemoveContextConnection"
+          @click="triggerDeviceContextCommand('remove-connection')"
+        >
+          Remove connection
+        </button>
 
       </div>
     </Teleport>
@@ -142,7 +151,10 @@
 <script>
 
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { killConnection as killConnectionApi } from '../api/connectionsApi.js'
+import {
+  killConnection as killConnectionApi,
+  removeConnection as removeConnectionApi,
+} from '../api/connectionsApi.js'
 
 export default {
   name: 'DeviceSidebar',
@@ -176,6 +188,8 @@ export default {
     'toggle-client-hidden',
     'toggle-machine-hidden',
     'rename-machine',
+    'connection-removed',
+    'connection-remove-failed',
   ],
 
   data() {
@@ -207,12 +221,16 @@ computed: {
     }
   },
 
-  canRemoveContextConnection() {
+  canDisconnectContextConnection() {
     if (!this.contextMenuItem || !this.contextMenuItem.client_id) {
       return false
     }
 
     return this.getConnectionDisplayState(this.contextMenuItem) !== 'offline'
+  },
+
+  canRemoveContextConnection() {
+    return Boolean(this.contextMenuItem && this.contextMenuItem.client_id)
   },
 },
 
@@ -428,12 +446,17 @@ async triggerDeviceContextCommand(command) {
     return
   }
 
+  if (command === 'disconnect') {
+    await this.disconnectConnection(item)
+    return
+  }
+
   if (command === 'remove-connection') {
-    await this.removeConnection(item)
+    await this.removeConnectionPermanently(item)
   }
 },
 
-   async removeConnection(item) {
+async disconnectConnection(item) {
   const clientId = String(item?.client_id || '').trim()
 
   if (!clientId) {
@@ -450,7 +473,44 @@ async triggerDeviceContextCommand(command) {
 
   try {
     await ElMessageBox.confirm(
-      `Remove the active connection for "${deviceName}"? The client will be instructed to disconnect from the server, and this session will no longer be available for commands.`,
+      `Disconnect "${deviceName}"? The client will be instructed to terminate this active session.`,
+      'Disconnect Connection',
+      {
+        type: 'warning',
+        confirmButtonText: 'Disconnect',
+        cancelButtonText: 'Cancel',
+        confirmButtonClass: 'el-button--danger',
+      },
+    )
+
+    await killConnectionApi(clientId)
+    ElMessage.success('Disconnect request sent')
+  } catch (e) {
+    if (e === 'cancel' || e === 'close' || e?.message === 'cancel') {
+      return
+    }
+
+    ElMessage.error(e.message || 'Failed to disconnect connection')
+  }
+},
+
+async removeConnectionPermanently(item) {
+  const clientId = String(item?.client_id || '').trim()
+
+  if (!clientId) {
+    ElMessage.warning('Invalid connection')
+    return
+  }
+
+  const machineId = String(item?.machine_id || '').trim()
+  const deviceName = this.formatDeviceName(item)
+  const isOffline = this.getConnectionDisplayState(item) === 'offline'
+
+  try {
+    await ElMessageBox.confirm(
+      isOffline
+        ? `Remove "${deviceName}" from recent devices? This cached connection will no longer appear after refresh.`
+        : `Remove "${deviceName}"? The active session will be disconnected and the connection will be removed from recent devices.`,
       'Remove Connection',
       {
         type: 'warning',
@@ -460,13 +520,27 @@ async triggerDeviceContextCommand(command) {
       },
     )
 
-    await killConnectionApi(clientId)
+    const removedPayload = {
+      client_id: clientId,
+      machine_id: machineId,
+    }
 
-    ElMessage.success('Connection removal requested')
+    // Optimistically remove it from the sidebar immediately after confirmation.
+    // loadConnections/upsertConnection will also suppress it while the backend delete is in flight.
+    this.$emit('connection-removed', removedPayload)
+
+    await removeConnectionApi(clientId, { machine_id: machineId })
+
+    ElMessage.success('Connection removed')
   } catch (e) {
     if (e === 'cancel' || e === 'close' || e?.message === 'cancel') {
       return
     }
+
+    this.$emit('connection-remove-failed', {
+      client_id: clientId,
+      machine_id: machineId,
+    })
 
     ElMessage.error(e.message || 'Failed to remove connection')
   }
@@ -776,6 +850,11 @@ body.device-touch-callout-guard * {
 .device-context-menu-item.danger:hover {
   background: #fff1f2;
   color: #be123c;
+}
+
+.device-context-menu-item.warning:hover {
+  background: #fffbeb;
+  color: #b45309;
 }
 
 .device-context-menu-item.strong-danger {

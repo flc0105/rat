@@ -170,6 +170,73 @@ class WebConnectionService:
         recent_offline = self._build_recent_offline_entries(active_connections)
         return active_connections + recent_offline
 
+    def remove_connection(self, client_id: str, machine_id: str = '') -> dict:
+        target_client_id = str(client_id or '').strip()
+        target_machine_id = str(machine_id or '').strip()
+
+        if not target_client_id:
+            raise ValueError('Invalid client id')
+
+        session = None
+        was_online = False
+
+        try:
+            session = self.server.connections.get_by_client_id(target_client_id)
+            was_online = True
+        except Exception:
+            session = None
+
+        if session is not None:
+            try:
+                payload = self.serialize_connection(session)
+                target_machine_id = target_machine_id or str(payload.get('machine_id') or '').strip()
+            except Exception:
+                pass
+
+        recent_result = {
+            'removed_count': 0,
+            'removed_keys': [],
+        }
+
+        if self.recent_device_store:
+            recent_result = self.recent_device_store.remove_by_identity(
+                client_id=target_client_id,
+                machine_id=target_machine_id,
+            )
+
+        if session is not None:
+            try:
+                session.send_command('kill')
+            except Exception:
+                pass
+
+            try:
+                session.close()
+            except Exception:
+                pass
+
+            try:
+                self.server.connections.remove(session)
+            except Exception:
+                pass
+
+            try:
+                self.event_bus.publish('connection_removed', {
+                    'client_id': target_client_id,
+                    'machine_id': target_machine_id,
+                    'time': datetime.now().isoformat(),
+                })
+            except Exception:
+                pass
+
+        return {
+            'client_id': target_client_id,
+            'machine_id': target_machine_id,
+            'was_online': was_online,
+            'recent_removed_count': recent_result.get('removed_count', 0),
+            'recent_removed_keys': recent_result.get('removed_keys', []),
+        }
+
     # ------------------ connection lifecycle ------------------ #
     def create_web_connection(self, transport: ClientTransport, addr, info: dict) -> ClientSession:
         session = ClientSession(transport, info)
