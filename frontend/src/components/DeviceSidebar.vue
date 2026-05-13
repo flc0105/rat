@@ -253,7 +253,7 @@ export default {
       if (!event.touches || event.touches.length !== 1) return
 
        // 阻止 iOS 弹出系统菜单
-  event.preventDefault();
+  // event.preventDefault();
 
       const touch = event.touches[0]
       this.clearDeviceTouchTimer()
