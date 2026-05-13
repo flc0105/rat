@@ -1,10 +1,5 @@
-import { createApp } from 'vue'
-import ElementPlus, {
-  ElMessage,
-  ElMessageBox,
-  ElNotification,
-  ElLoading,
-} from 'element-plus'
+import {createApp} from 'vue'
+import ElementPlus, {ElLoading, ElMessage, ElMessageBox, ElNotification,} from 'element-plus'
 
 import 'element-plus/dist/index.css'
 import App from './App.vue'
@@ -17,5 +12,5 @@ window.ElementPlus.ElNotification = ElNotification
 window.ElementPlus.ElLoading = ElLoading
 
 createApp(App)
-  .use(ElementPlus)
-  .mount('#app')
+    .use(ElementPlus)
+    .mount('#app')

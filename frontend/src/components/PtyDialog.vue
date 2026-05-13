@@ -80,6 +80,9 @@
 
 <script>
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { Terminal } from 'xterm'
+import { FitAddon } from 'xterm-addon-fit'
+import 'xterm/css/xterm.css'
 
 export default {
   name: 'PtyDialog',
@@ -240,11 +243,6 @@ export default {
 
       if (this.ptyLoading) return
 
-      if (!window.Terminal || !window.FitAddon || !window.FitAddon.FitAddon) {
-        ElMessage.error('xterm.js failed to load')
-        return
-      }
-
       this.ptyLoading = true
       this.visible = true
       this.ptySessionId = ''
@@ -355,7 +353,7 @@ export default {
       const host = this.$refs.ptyTerminalRef
       if (!host) return
 
-      const term = new window.Terminal({
+      const term = new Terminal({
         cursorBlink: true,
         convertEol: false,
         scrollback: 5000,
@@ -372,7 +370,7 @@ export default {
         allowTransparency: false,
       })
 
-      const fitAddon = new window.FitAddon.FitAddon()
+      const fitAddon = new FitAddon()
       term.loadAddon(fitAddon)
       term.open(host)
 
