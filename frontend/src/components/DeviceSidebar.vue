@@ -46,8 +46,12 @@
           'device-item-hidden': item.device_hidden,
           'context-active': contextMenuClientId === item.client_id,
         }"
-        @click="handleDeviceClick(item)"
+        @click="handleDeviceClick(item, $event)"
         @contextmenu.prevent.stop="openDeviceContextMenu($event, item)"
+        @touchstart="handleDeviceTouchStart($event, item)"
+        @touchmove="handleDeviceTouchMove"
+        @touchend="handleDeviceTouchEnd"
+        @touchcancel="handleDeviceTouchEnd"
       >
         <div class="device-item-top">
           <div class="device-text">
@@ -165,6 +169,11 @@ export default {
       contextMenuItem: null,
       contextMenuX: 0,
       contextMenuY: 0,
+      touchMenuTimer: null,
+      touchStartX: 0,
+      touchStartY: 0,
+      touchMoved: false,
+      suppressNextDeviceClick: false,
     }
   },
 
@@ -189,6 +198,7 @@ export default {
     document.removeEventListener('keydown', this.handleDocumentKeydown, true)
     window.removeEventListener('resize', this.closeDeviceContextMenu)
     window.removeEventListener('scroll', this.closeDeviceContextMenu, true)
+    this.clearDeviceTouchTimer()
   },
 
   methods: {
@@ -203,21 +213,74 @@ export default {
       }
     },
 
-    handleDeviceClick(item) {
+    handleDeviceClick(item, event) {
+      if (this.suppressNextDeviceClick) {
+        this.suppressNextDeviceClick = false
+        if (event && typeof event.preventDefault === 'function') event.preventDefault()
+        if (event && typeof event.stopPropagation === 'function') event.stopPropagation()
+        return
+      }
+
       this.closeDeviceContextMenu()
       this.$emit('select', item.client_id)
     },
 
     openDeviceContextMenu(event, item) {
+      this.openDeviceContextMenuAt(event.clientX, event.clientY, item)
+    },
+
+    openDeviceContextMenuAt(x, y, item) {
+      this.clearDeviceTouchTimer()
       this.contextMenuItem = item
       this.contextMenuClientId = String(item?.client_id || '')
-      this.contextMenuX = event.clientX
-      this.contextMenuY = event.clientY
+      this.contextMenuX = x
+      this.contextMenuY = y
       this.contextMenuVisible = true
 
       this.$nextTick(() => {
         this.adjustDeviceContextMenuPosition()
       })
+    },
+
+    clearDeviceTouchTimer() {
+      if (this.touchMenuTimer) {
+        window.clearTimeout(this.touchMenuTimer)
+        this.touchMenuTimer = null
+      }
+    },
+
+    handleDeviceTouchStart(event, item) {
+      if (!event.touches || event.touches.length !== 1) return
+
+      const touch = event.touches[0]
+      this.clearDeviceTouchTimer()
+      this.touchStartX = touch.clientX
+      this.touchStartY = touch.clientY
+      this.touchMoved = false
+
+      this.touchMenuTimer = window.setTimeout(() => {
+        if (this.touchMoved) return
+
+        this.suppressNextDeviceClick = true
+        this.openDeviceContextMenuAt(this.touchStartX, this.touchStartY, item)
+      }, 520)
+    },
+
+    handleDeviceTouchMove(event) {
+      if (!this.touchMenuTimer || !event.touches || event.touches.length !== 1) return
+
+      const touch = event.touches[0]
+      const dx = Math.abs(touch.clientX - this.touchStartX)
+      const dy = Math.abs(touch.clientY - this.touchStartY)
+
+      if (dx > 8 || dy > 8) {
+        this.touchMoved = true
+        this.clearDeviceTouchTimer()
+      }
+    },
+
+    handleDeviceTouchEnd() {
+      this.clearDeviceTouchTimer()
     },
 
     adjustDeviceContextMenuPosition() {
@@ -408,6 +471,8 @@ export default {
 
 /* ========== 设备列表 ========== */
 .device-item {
+  -webkit-touch-callout: none;
+  user-select: none;
   padding: 14px;
   margin-bottom: 10px;
   border-radius: var(--radius-md);
