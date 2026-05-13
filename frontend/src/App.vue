@@ -103,15 +103,16 @@
                   @bottom="scrollToBottom"
                 />
 
-                <CommandInputBar
-                  ref="commandInputBarRef"
-                  :selected-id="selectedId"
-                  :current-connection="currentConnection"
-                  :current-active-task-id="currentActiveTaskId"
-                  :tab-id="tabId"
-                  @append-output="appendOutput"
-                  @set-active-task="setActiveTask"
-                />
+<CommandInputBar
+  ref="commandInputBarRef"
+  :selected-id="selectedId"
+  :current-connection="currentConnection"
+  :current-active-task-id="currentActiveTaskId"
+  :tab-id="tabId"
+  @append-output="appendOutput"
+  @set-active-task="setActiveTask"
+  @clear-output="clearOutput"
+/>
 
                 <!--                <TerminalOutput-->
                 <!--                    ref="terminalOutputRef"-->

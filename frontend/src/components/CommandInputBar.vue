@@ -106,6 +106,7 @@ export default {
   emits: [
     'append-output',
     'set-active-task',
+    'clear-output',
   ],
 
   data() {
@@ -155,41 +156,110 @@ export default {
   },
 
   methods: {
+
     async sendCommand() {
-      const command = String(this.commandText || '').trim()
+  const command = String(this.commandText || '').trim()
 
-      // add 暂时关闭命令自动补全下拉 2026-04-07
-      this.closeAutocomplete()
+  // add 暂时关闭命令自动补全下拉 2026-04-07
+  this.closeAutocomplete()
 
-      if (!this.selectedId) {
-        ElMessage.warning('Please select a device')
-        return
-      }
+  if (!command) {
+    ElMessage.warning('Please enter a command')
+    return
+  }
 
-      if (!command) {
-        ElMessage.warning('Please enter a command')
-        return
-      }
+  if (!this.selectedId) {
+    ElMessage.warning('Please select a device')
+    return
+  }
 
-      this.sending = true
-      this.$emit('append-output', this.selectedId, '> ' + command, 'command')
+  if (this.handleLocalFrontendCommand(command)) {
+    return
+  }
 
-      try {
-        const data = await sendCommandApi(this.selectedId, command, this.getTabScopedHeaders())
-        const taskId = data && data.task_id
-        this.$emit('set-active-task', this.selectedId, taskId || '')
+  this.sending = true
+  this.$emit('append-output', this.selectedId, '> ' + command, 'command')
 
-        this.commandText = ''
-        this.commandCandidatesLoadedFor = ''
-        await this.loadCommandCandidates(this.selectedId)
-      } catch (e) {
-        this.$emit('append-output', this.selectedId, formatTerminalCommandFailedLine(e.message || 'unknown error'), 'error')
-        ElMessage.error(e.message || 'Command failed')
-        this.commandText = ''
-      } finally {
-        this.sending = false
-      }
+  try {
+    const data = await sendCommandApi(this.selectedId, command, this.getTabScopedHeaders())
+    const taskId = data && data.task_id
+    this.$emit('set-active-task', this.selectedId, taskId || '')
+
+    this.commandText = ''
+    this.commandCandidatesLoadedFor = ''
+    await this.loadCommandCandidates(this.selectedId)
+  } catch (e) {
+    this.$emit('append-output', this.selectedId, formatTerminalCommandFailedLine(e.message || 'unknown error'), 'error')
+    ElMessage.error(e.message || 'Command failed')
+    this.commandText = ''
+  } finally {
+    this.sending = false
+  }
+},
+
+    // async sendCommand() {
+    //   const command = String(this.commandText || '').trim()
+    //
+    //   // add 暂时关闭命令自动补全下拉 2026-04-07
+    //   this.closeAutocomplete()
+    //
+    //   if (!this.selectedId) {
+    //     ElMessage.warning('Please select a device')
+    //     return
+    //   }
+    //
+    //   if (!command) {
+    //     ElMessage.warning('Please enter a command')
+    //     return
+    //   }
+    //
+    //   this.sending = true
+    //   this.$emit('append-output', this.selectedId, '> ' + command, 'command')
+    //
+    //   try {
+    //     const data = await sendCommandApi(this.selectedId, command, this.getTabScopedHeaders())
+    //     const taskId = data && data.task_id
+    //     this.$emit('set-active-task', this.selectedId, taskId || '')
+    //
+    //     this.commandText = ''
+    //     this.commandCandidatesLoadedFor = ''
+    //     await this.loadCommandCandidates(this.selectedId)
+    //   } catch (e) {
+    //     this.$emit('append-output', this.selectedId, formatTerminalCommandFailedLine(e.message || 'unknown error'), 'error')
+    //     ElMessage.error(e.message || 'Command failed')
+    //     this.commandText = ''
+    //   } finally {
+    //     this.sending = false
+    //   }
+    // },
+
+
+    handleLocalFrontendCommand(command) {
+  const normalizedCommand = String(command || '').trim().toLowerCase()
+
+  const localCommandHandlers = {
+    clear: () => {
+      this.$emit('clear-output')
+      this.commandText = ''
+      ElMessage.success('Console cleared')
     },
+
+    cls: () => {
+      this.$emit('clear-output')
+      this.commandText = ''
+      ElMessage.success('Console cleared')
+    },
+  }
+
+  const handler = localCommandHandlers[normalizedCommand]
+
+  if (!handler) {
+    return false
+  }
+
+  handler()
+  return true
+},
 
     async runCommandText(command) {
   const normalizedCommand = String(command || '').trim()

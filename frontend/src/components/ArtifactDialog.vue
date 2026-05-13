@@ -19,13 +19,10 @@
             Refresh
           </el-button>
 
-
-
           <el-button
             class="artifact-toolbar-btn"
             size="small"
             type="danger"
-
             :disabled="!selectedArtifactIds.length"
             :loading="artifactBulkDeleting"
             @click="deleteSelectedArtifacts"
@@ -33,7 +30,7 @@
             Delete {{ selectedArtifactIds.length ? ` (${selectedArtifactIds.length})` : '' }}
           </el-button>
 
-                <el-button
+          <el-button
             class="artifact-toolbar-btn"
             size="small"
             type="danger"
@@ -43,12 +40,11 @@
             Clear
           </el-button>
 
-           <div
+          <div
             v-if="isServerFilesTab"
             class="artifact-server-actions"
           >
-
-                        <el-button
+            <el-button
               class="artifact-toolbar-btn"
               size="small"
               type="primary"
@@ -58,8 +54,7 @@
               Create File
             </el-button>
 
-
-             <el-button
+            <el-button
               class="artifact-toolbar-btn"
               size="small"
               type="primary"
@@ -69,15 +64,11 @@
             >
               Upload
             </el-button>
-
-
           </div>
-
-
         </div>
 
         <div class="dialog-head-right">
-           <div class="dialog-path-box artifact-search-box">
+          <div class="dialog-path-box artifact-search-box">
             <el-input
               v-model="artifactKeyword"
               clearable
@@ -105,8 +96,6 @@
               />
             </el-select>
           </div>
-
-
         </div>
       </div>
 
@@ -128,9 +117,7 @@
           </template>
         </el-tab-pane>
 
-
-
-                <el-tab-pane name="command_output">
+        <el-tab-pane name="command_output">
           <template #label>
             Command Output ({{ artifactCountMap.command_output || 0 }})
           </template>
@@ -142,13 +129,11 @@
           </template>
         </el-tab-pane>
 
-                        <el-tab-pane name="server_files">
+        <el-tab-pane name="server_files">
           <template #label>
             Server Files ({{ artifactCountMap.server_files || 0 }})
           </template>
         </el-tab-pane>
-
-
       </el-tabs>
 
       <div class="dialog-table-shell">
@@ -261,6 +246,9 @@
                     <span class="table-action-link">More</span>
                     <template #dropdown>
                       <el-dropdown-menu>
+                        <el-dropdown-item command="info">
+                          Info
+                        </el-dropdown-item>
                         <el-dropdown-item command="rename">
                           Rename
                         </el-dropdown-item>
@@ -393,6 +381,9 @@
                         </el-button>
                         <template #dropdown>
                           <el-dropdown-menu>
+                            <el-dropdown-item command="info">
+                              Info
+                            </el-dropdown-item>
                             <el-dropdown-item command="rename">
                               Rename
                             </el-dropdown-item>
@@ -432,6 +423,47 @@
       </div>
     </div>
   </el-dialog>
+
+  <el-dialog
+    v-model="artifactInfoDialogVisible"
+    title="Artifact Info"
+    width="760px"
+    top="8vh"
+    class="fixed-dialog"
+  >
+    <div class="preview-image-info-body">
+      <template v-if="artifactInfoItem">
+        <div
+          v-for="section in formattedArtifactInfoSections"
+          :key="section.key"
+          class="preview-image-info-section"
+        >
+          <div class="preview-image-info-title">
+            {{ section.title }}
+          </div>
+
+          <div
+            v-for="item in section.items"
+            :key="section.key + '-' + item.key"
+            class="preview-image-info-row"
+          >
+            <div class="preview-image-info-label">
+              {{ item.label }}
+            </div>
+
+            <div class="preview-image-info-value">
+              {{ item.value }}
+            </div>
+          </div>
+        </div>
+      </template>
+
+      <el-empty
+        v-else
+        description="No artifact info available"
+      />
+    </div>
+  </el-dialog>
 </template>
 
 <script>
@@ -442,11 +474,6 @@ export default {
   name: 'ArtifactDialog',
 
   props: {
-    // formatBytes: {
-    //   type: Function,
-    //   required: true,
-    // },
-
     selectedId: {
       type: [String, Number],
       default: '',
@@ -478,6 +505,8 @@ export default {
       artifactClearing: false,
       artifactBulkDeleting: false,
       serverFileUploading: false,
+      artifactInfoDialogVisible: false,
+      artifactInfoItem: null,
     }
   },
 
@@ -499,38 +528,37 @@ export default {
     },
 
     artifactMachineOptions() {
-  const map = {}
+      const map = {}
 
-  ;(this.artifactMachines || []).forEach(item => {
-    const machineId = this.normalizeMachineId(item?.machine_id)
-    if (!machineId) return
+      ;(this.artifactMachines || []).forEach(item => {
+        const machineId = this.normalizeMachineId(item?.machine_id)
+        if (!machineId) return
 
-    map[machineId] = {
-      ...item,
-      machine_id: machineId,
-      hostname: String(item?.hostname || '').trim(),
-    }
-  })
+        map[machineId] = {
+          ...item,
+          machine_id: machineId,
+          hostname: String(item?.hostname || '').trim(),
+        }
+      })
 
-  const currentMachineId = this.getCurrentMachineId()
-  if (currentMachineId) {
-    const existing = map[currentMachineId] || {}
-    const currentHostname = String(this.currentConnection?.hostname || '').trim()
+      const currentMachineId = this.getCurrentMachineId()
+      if (currentMachineId) {
+        const existing = map[currentMachineId] || {}
+        const currentHostname = String(this.currentConnection?.hostname || '').trim()
 
-    // 当前选中设备即使还没有 artifact，也要出现在筛选框里。
-    map[currentMachineId] = {
-      ...existing,
-      machine_id: currentMachineId,
-      hostname: currentHostname || String(existing.hostname || '').trim(),
-    }
-  }
+        map[currentMachineId] = {
+          ...existing,
+          machine_id: currentMachineId,
+          hostname: currentHostname || String(existing.hostname || '').trim(),
+        }
+      }
 
-  return Object.values(map).sort((a, b) =>
-    this.formatArtifactMachineOptionLabel(a).localeCompare(
-      this.formatArtifactMachineOptionLabel(b)
-    )
-  )
-},
+      return Object.values(map).sort((a, b) =>
+        this.formatArtifactMachineOptionLabel(a).localeCompare(
+          this.formatArtifactMachineOptionLabel(b)
+        )
+      )
+    },
 
     filteredArtifactItems() {
       const activeType = String(this.artifactActiveTab || '').trim()
@@ -579,14 +607,13 @@ export default {
 
       return counts
     },
+
+    formattedArtifactInfoSections() {
+      return this.formatArtifactInfoSections(this.artifactInfoItem)
+    },
   },
 
   methods: {
-    // async open() {
-    //   this.visible = true
-    //   await this.loadArtifacts()
-    // },
-
     formatBytes(value) {
       return formatBytesValue(value)
     },
@@ -644,6 +671,166 @@ export default {
       return row?.original_name || row?.stored_name || 'artifact'
     },
 
+    openArtifactInfoDialog(row) {
+      if (!row || !row.artifact_id) {
+        ElMessage.warning('Invalid artifact')
+        return
+      }
+
+      this.artifactInfoItem = { ...row }
+      this.artifactInfoDialogVisible = true
+    },
+
+    formatArtifactInfoSections(row) {
+      if (!row || typeof row !== 'object') {
+        return []
+      }
+
+      const sections = [
+        {
+          key: 'basic',
+          title: 'Basic',
+          fields: [
+            ['original_name', 'Original Name'],
+            ['stored_name', 'Stored Name'],
+            ['artifact_id', 'Artifact ID'],
+            ['artifact_type', 'Artifact Type'],
+            ['category', 'Category'],
+            ['size', 'Size'],
+            ['created_at', 'Created At'],
+            ['is_available', 'Available'],
+            ['status_text', 'Status'],
+          ],
+        },
+        {
+          key: 'source',
+          title: 'Source',
+          fields: [
+            ['hostname', 'Hostname'],
+            ['machine_id', 'Machine ID'],
+            ['client_id', 'Client ID'],
+            ['addr', 'Address'],
+            ['source_command_id', 'Source Command ID'],
+            ['job_id', 'Job ID'],
+            ['job_name', 'Job Name'],
+            ['job_key', 'Job Key'],
+          ],
+        },
+        {
+          key: 'paths',
+          title: 'Paths / URLs',
+          fields: [
+            ['saved_path', 'Saved Path'],
+            ['_meta_path', 'Meta Path'],
+            ['download_url', 'Download URL'],
+            ['raw_url', 'Raw URL'],
+            ['preview_url', 'Preview URL'],
+          ],
+        },
+        {
+          key: 'extra',
+          title: 'Extra',
+          fields: [
+            ['extra', 'Extra'],
+          ],
+        },
+      ]
+
+      const usedKeys = new Set()
+      const result = []
+
+      sections.forEach(section => {
+        const items = []
+
+        section.fields.forEach(([key, label]) => {
+          if (!Object.prototype.hasOwnProperty.call(row, key)) return
+
+          const formattedValue = this.formatArtifactInfoValue(key, row[key])
+          if (formattedValue === '-') return
+
+          items.push({
+            key,
+            label,
+            value: formattedValue,
+          })
+          usedKeys.add(key)
+        })
+
+        if (items.length) {
+          result.push({
+            key: section.key,
+            title: section.title,
+            items,
+          })
+        }
+      })
+
+      const otherItems = Object.keys(row)
+        .filter(key => !usedKeys.has(key))
+        .sort((a, b) => a.localeCompare(b))
+        .map(key => ({
+          key,
+          label: key,
+          value: this.formatArtifactInfoValue(key, row[key]),
+        }))
+        .filter(item => item.value !== '-')
+
+      if (otherItems.length) {
+        result.push({
+          key: 'other',
+          title: 'Other Meta',
+          items: otherItems,
+        })
+      }
+
+      return result
+    },
+
+    formatArtifactInfoValue(key, value) {
+      if (value === null || value === undefined || value === '') return '-'
+
+      if (key === 'size') {
+        const numericValue = Number(value || 0)
+        return `${this.formatBytes(numericValue)} (${numericValue} bytes)`
+      }
+
+      if (typeof value === 'boolean') {
+        return value ? 'Yes' : 'No'
+      }
+
+      if (Array.isArray(value)) {
+        if (!value.length) return '-'
+        return value.map(item => this.formatArtifactInfoNestedValue(item)).join(', ')
+      }
+
+      if (typeof value === 'object') {
+        const keys = Object.keys(value)
+        if (!keys.length) return '-'
+
+        try {
+          return JSON.stringify(value, null, 2)
+        } catch (_e) {
+          return String(value)
+        }
+      }
+
+      return String(value)
+    },
+
+    formatArtifactInfoNestedValue(value) {
+      if (value === null || value === undefined || value === '') return '-'
+
+      if (typeof value === 'object') {
+        try {
+          return JSON.stringify(value)
+        } catch (_e) {
+          return String(value)
+        }
+      }
+
+      return String(value)
+    },
+
     isServerFileItem(item) {
       return String(item?.artifact_type || '').trim() === 'server_files'
     },
@@ -680,6 +867,8 @@ export default {
         this.artifactMachineIdFilter = ''
         this.artifactKeyword = ''
         this.selectedArtifactIds = []
+        this.artifactInfoDialogVisible = false
+        this.artifactInfoItem = null
       }
     },
 
@@ -726,8 +915,6 @@ export default {
 
       try {
         const url = new URL('/api/artifacts', window.location.origin)
-
-        // 保持前端统一持有三类 artifact，设备过滤只在视图层处理。
         const res = await fetch(url.pathname + url.search)
         const json = await res.json()
 
@@ -837,6 +1024,11 @@ export default {
     },
 
     async handleArtifactMoreCommand(row, command) {
+      if (command === 'info') {
+        this.openArtifactInfoDialog(row)
+        return
+      }
+
       if (command === 'rename') {
         await this.renameArtifact(row)
         return
@@ -1094,7 +1286,6 @@ export default {
 </script>
 
 <style scoped>
-/* ArtifactDialog 逻辑和样式都收在组件内，App 只负责打开和预览回调。 */
 .fixed-dialog-body {
   height: 100%;
   min-height: 0;
@@ -1369,7 +1560,7 @@ export default {
 .mobile-file-actions :deep(.el-button),
 .mobile-file-actions :deep(.el-dropdown),
 .mobile-file-actions .table-action-link,
-.mobile-file-actions a{
+.mobile-file-actions a {
   flex: 1 1 calc(33.333% - 8px);
   min-height: 32px;
   margin: 0;
@@ -1410,6 +1601,42 @@ export default {
   color: var(--muted);
   text-align: center;
   font-size: 13px;
+}
+
+.preview-image-info-body {
+  max-height: 65vh;
+  overflow: auto;
+}
+
+.preview-image-info-section {
+  margin-bottom: 20px;
+}
+
+.preview-image-info-title {
+  font-weight: 600;
+  font-size: 14px;
+  margin-bottom: 10px;
+}
+
+.preview-image-info-row {
+  display: grid;
+  grid-template-columns: 180px 1fr;
+  gap: 12px;
+  padding: 8px 0;
+  border-bottom: 1px solid #ebeef5;
+}
+
+.preview-image-info-label {
+  color: #606266;
+  font-weight: 500;
+}
+
+.preview-image-info-value {
+  word-break: break-word;
+  white-space: pre-wrap;
+  font-family: Monaco, Menlo, "Ubuntu Mono", Consolas, monospace;
+  font-size: 12px;
+  line-height: 1.5;
 }
 
 @media (max-width: 960px) {
@@ -1512,7 +1739,6 @@ export default {
 </style>
 
 <style>
-/* ArtifactDialog: 固定高度，只让表格或移动卡片内部滚动。 */
 .artifact-overlay .el-overlay-dialog {
   overflow: hidden !important;
 }
