@@ -252,6 +252,9 @@ export default {
     handleDeviceTouchStart(event, item) {
       if (!event.touches || event.touches.length !== 1) return
 
+       // 阻止 iOS 弹出系统菜单
+  event.preventDefault();
+
       const touch = event.touches[0]
       this.clearDeviceTouchTimer()
       this.touchStartX = touch.clientX
@@ -589,6 +592,8 @@ export default {
 </style>
 
 <style>
+
+
 .device-context-menu {
   position: fixed;
   z-index: 5000;
@@ -599,9 +604,19 @@ export default {
   background: #fff;
   box-shadow: 0 10px 28px rgba(15, 23, 42, 0.18);
   user-select: none;
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  -webkit-touch-callout: none;
+}
+
+.device-item-name, .device-item-os, .device-item-ip {
+  -webkit-touch-callout: none;
+  user-select: none;
 }
 
 .device-context-menu-item {
+    -webkit-touch-callout: none;
   display: block;
   width: 100%;
   height: 28px;
