@@ -122,12 +122,28 @@
         >
           {{ contextMenuItem && contextMenuItem.device_hidden_by_machine ? 'Unhide this machine' : 'Hide this machine' }}
         </button>
+
+        <div class="device-context-menu-separator"></div>
+
+<button
+  type="button"
+  class="device-context-menu-item danger strong-danger"
+  :disabled="!canRemoveContextConnection"
+  @click="triggerDeviceContextCommand('remove-connection')"
+>
+  Remove connection
+</button>
+
       </div>
     </Teleport>
   </aside>
 </template>
 
 <script>
+
+import { ElMessage, ElMessageBox } from 'element-plus'
+import { killConnection as killConnectionApi } from '../api/connectionsApi.js'
+
 export default {
   name: 'DeviceSidebar',
 
@@ -183,14 +199,22 @@ export default {
     }
   },
 
-  computed: {
-    contextMenuStyle() {
-      return {
-        left: `${this.contextMenuX}px`,
-        top: `${this.contextMenuY}px`,
-      }
-    },
+computed: {
+  contextMenuStyle() {
+    return {
+      left: `${this.contextMenuX}px`,
+      top: `${this.contextMenuY}px`,
+    }
   },
+
+  canRemoveContextConnection() {
+    if (!this.contextMenuItem || !this.contextMenuItem.client_id) {
+      return false
+    }
+
+    return this.getConnectionDisplayState(this.contextMenuItem) !== 'offline'
+  },
+},
 
   mounted() {
     document.addEventListener('click', this.handleDocumentClick, true)
@@ -383,20 +407,70 @@ export default {
       this.closeDeviceContextMenu()
     },
 
-    triggerDeviceContextCommand(command) {
-      const item = this.contextMenuItem
-      if (!item) return
+async triggerDeviceContextCommand(command) {
+  const item = this.contextMenuItem
+  if (!item) return
 
-      if (command === 'rename-machine') {
-        this.$emit('rename-machine', item)
-      } else if (command === 'toggle-client-hidden') {
-        this.$emit('toggle-client-hidden', item)
-      } else if (command === 'toggle-machine-hidden') {
-        this.$emit('toggle-machine-hidden', item)
-      }
+  this.closeDeviceContextMenu()
 
-      this.closeDeviceContextMenu()
-    },
+  if (command === 'rename-machine') {
+    this.$emit('rename-machine', item)
+    return
+  }
+
+  if (command === 'toggle-client-hidden') {
+    this.$emit('toggle-client-hidden', item)
+    return
+  }
+
+  if (command === 'toggle-machine-hidden') {
+    this.$emit('toggle-machine-hidden', item)
+    return
+  }
+
+  if (command === 'remove-connection') {
+    await this.removeConnection(item)
+  }
+},
+
+   async removeConnection(item) {
+  const clientId = String(item?.client_id || '').trim()
+
+  if (!clientId) {
+    ElMessage.warning('Invalid connection')
+    return
+  }
+
+  if (this.getConnectionDisplayState(item) === 'offline') {
+    ElMessage.warning('This connection is already offline')
+    return
+  }
+
+  const deviceName = this.formatDeviceName(item)
+
+  try {
+    await ElMessageBox.confirm(
+      `Remove the active connection for "${deviceName}"? The client will be instructed to disconnect from the server, and this session will no longer be available for commands.`,
+      'Remove Connection',
+      {
+        type: 'warning',
+        confirmButtonText: 'Remove Connection',
+        cancelButtonText: 'Cancel',
+        confirmButtonClass: 'el-button--danger',
+      },
+    )
+
+    await killConnectionApi(clientId)
+
+    ElMessage.success('Connection removal requested')
+  } catch (e) {
+    if (e === 'cancel' || e === 'close' || e?.message === 'cancel') {
+      return
+    }
+
+    ElMessage.error(e.message || 'Failed to remove connection')
+  }
+},
 
     formatDeviceName(item) {
       return item?.device_display_name || item?.display_hostname || item?.device_alias || item?.hostname || 'Unknown Host'
@@ -702,6 +776,15 @@ body.device-touch-callout-guard * {
 .device-context-menu-item.danger:hover {
   background: #fff1f2;
   color: #be123c;
+}
+
+.device-context-menu-item.strong-danger {
+  color: #be123c;
+}
+
+.device-context-menu-item.strong-danger:hover {
+  background: #ffe4e6;
+  color: #9f1239;
 }
 
 .device-context-menu-item.positive:hover {
