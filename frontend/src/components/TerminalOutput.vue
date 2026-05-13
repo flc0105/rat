@@ -118,15 +118,27 @@
                 class="terminal-prefix"
             >$</span>
 
+<!--            <span-->
+<!--                v-if="!shouldParseTerminalLineLinks(entry.line)"-->
+<!--                class="terminal-text"-->
+<!--            >{{ entry.line.text }}</span>-->
+<!--            <TerminalLinkedText-->
+<!--                v-else-->
+<!--                class="terminal-text"-->
+<!--                :text="entry.line.text"-->
+<!--            />-->
+
             <span
-                v-if="!shouldParseTerminalLineLinks(entry.line)"
-                class="terminal-text"
-            >{{ entry.line.text }}</span>
-            <TerminalLinkedText
-                v-else
-                class="terminal-text"
-                :text="entry.line.text"
-            />
+    v-if="!shouldParseTerminalLineLinks(entry.line)"
+    class="terminal-text"
+>{{ entry.line.text }}</span>
+
+<span
+    v-else
+    class="terminal-text"
+>
+  <TerminalLinkedText :text="entry.line.text" />
+</span>
 
             <a
                 v-for="(actionItem, actionIndex) in getTerminalInlineActionItems(lines, entry.index)"
@@ -1072,7 +1084,7 @@ export default {
 .line-command .terminal-text {
   color: #bfdbfe;
 }
-
+/*
 .line-success .terminal-text {
   color: #86efac;
 }
@@ -1088,7 +1100,27 @@ export default {
 .line-default .terminal-text {
   color: var(--terminal-text);
 }
+*/
 
+.line-success .terminal-text {
+  color: #86efac;
+}
+
+.line-error .terminal-text {
+  color: #fda4af;
+}
+
+.line-warning .terminal-text {
+  color: #fcd34d;
+}
+
+.line-info .terminal-text {
+  color: #93c5fd;
+}
+
+.line-default .terminal-text {
+  color: var(--terminal-text);
+}
 
 @media (max-width: 960px) {
   .terminal-output {

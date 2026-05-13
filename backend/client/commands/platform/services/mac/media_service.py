@@ -19,12 +19,15 @@ class MacMediaService:
         capture_command = f'screencapture -x {screenshot_path}'
 
         try:
-            self.owner._send_interim_result(1, f'Capturing screen: {capture_command}')
+            self.owner._send_info(f'Capturing screen: {capture_command}', 0)
             result = self.owner._run_shell_command(capture_command, timeout=15)
             if result.returncode != 0:
-                return 0, result.stderr or 'Failed to capture screenshot'
+                self.owner._send_error(result.stderr or 'Failed to capture screenshot', eof=1)
+                return
+            # if result.returncode != 0:
+            #     return 0, result.stderr or 'Failed to capture screenshot'
 
-            self.owner._send_interim_result(1, 'Screenshot captured successfully', 0)
+            self.owner._send_success('Screenshot captured successfully', 0)
             return self.owner.http_file_transfer_service.upload_single_file_to_server_result(
                 screenshot_path,
                 category='screenshot',

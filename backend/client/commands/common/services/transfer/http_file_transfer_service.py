@@ -3,6 +3,7 @@ import os
 
 from client.commands.strategies.http_transfer.factory import build_http_transfer_strategy
 from client.http.client_api import ClientApiClient
+from core.utils.output_marker import info, success
 
 
 class CommandHttpFileTransferService:
@@ -60,13 +61,21 @@ class CommandHttpFileTransferService:
         artifact_id = data.get('artifact_id') or ''
         download_url = data.get('download_url') or ''
 
-        lines = [message, f'Original: {original_name}']
+        # lines = [message, f'Original: {original_name}']
+        # if stored_name:
+        #     lines.append(f'Stored: {stored_name}')
+        # if artifact_id:
+        #     lines.append(f'Artifact ID: {artifact_id}')
+        # if download_url:
+        #     lines.append(f'Download URL: {download_url}')
+
+        lines = [success(message), info(f'Original: {original_name}')]
         if stored_name:
-            lines.append(f'Stored: {stored_name}')
+            lines.append(info(f'Stored: {stored_name}'))
         if artifact_id:
-            lines.append(f'Artifact ID: {artifact_id}')
+            lines.append(info(f'Artifact ID: {artifact_id}'))
         if download_url:
-            lines.append(f'Download URL: {download_url}')
+            lines.append(info(f'Download URL: {download_url}'))
 
         return '\n'.join(lines)
 
@@ -98,8 +107,11 @@ class CommandHttpFileTransferService:
     ):
         file_size = os.path.getsize(file_path)
 
-        self.owner._send_interim_result(1, f'Preparing HTTP upload: {file_path}', 0)
-        self.owner._send_interim_result(1, f'File size: {file_size} bytes', 0)
+        # self.owner._send_interim_result(1, f'Preparing HTTP upload: {file_path}', 0)
+        # self.owner._send_interim_result(1, f'File size: {file_size} bytes', 0)
+
+        self.owner._send_info(f'Preparing HTTP upload: {file_path}', 0)
+        self.owner._send_info(f'File size: {file_size} bytes', 0)
 
         response = self.upload_file_to_server_via_http(
             file_path,

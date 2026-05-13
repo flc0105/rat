@@ -53,23 +53,69 @@ export default {
             }
         },
 
-   inferLineKind(text) {
+//    inferLineKind(text) {
+//     const value = String(text ?? '');
+//     if (value.startsWith('> ')) return 'command';
+//     if (value.startsWith(TERMINAL_BACKGROUND_PREFIX) || isTerminalCancelRequestedText(value)) return 'info';
+//     if (isTerminalCommandFinishedText(value)) {
+//         if (/Success/i.test(value)) return 'success';
+//         if (/Cancelled/i.test(value)) return 'info';
+//         return 'error';
+//     }
+//     if (isTerminalCommandFailedText(value)) return 'error';
+//     if (/failed|error|not found|denied|unable/i.test(value)) return 'error';
+//     if (/completed|success|saved|started|uploaded|downloaded|created|renamed|copied/i.test(value)) return 'success';
+//     if (/preparing|loading|refresh|connected|disconnected|warning/i.test(value)) return 'info';
+//     return 'default';
+// },
+//
+
+
+        inferLineKind(text) {
     const value = String(text ?? '');
+    const trimmedValue = value.trimStart();
+
+    // 用户自定义终端前缀：
+    // [+] 成功
+    // [-] 错误
+    // [!] 警告
+    // [*] 普通信息
+    if (/^\[\+\](?:\s|$)/.test(trimmedValue)) return 'success';
+    if (/^\[-\](?:\s|$)/.test(trimmedValue)) return 'error';
+    if (/^\[!\](?:\s|$)/.test(trimmedValue)) return 'warning';
+    if (/^\[\*\](?:\s|$)/.test(trimmedValue)) return 'info';
+
     if (value.startsWith('> ')) return 'command';
-    if (value.startsWith(TERMINAL_BACKGROUND_PREFIX) || isTerminalCancelRequestedText(value)) return 'info';
+
+    if (
+        value.startsWith(TERMINAL_BACKGROUND_PREFIX) ||
+        isTerminalCancelRequestedText(value)
+    ) {
+        return 'info';
+    }
+
     if (isTerminalCommandFinishedText(value)) {
         if (/Success/i.test(value)) return 'success';
         if (/Cancelled/i.test(value)) return 'info';
         return 'error';
     }
+
     if (isTerminalCommandFailedText(value)) return 'error';
-    if (/failed|error|not found|denied|unable/i.test(value)) return 'error';
-    if (/completed|success|saved|started|uploaded|downloaded|created|renamed|copied/i.test(value)) return 'success';
-    if (/preparing|loading|refresh|connected|disconnected|warning/i.test(value)) return 'info';
+
+    if (/failed|error|not found|denied|unable/i.test(value)) {
+        return 'error';
+    }
+
+    if (/completed|success|saved|started|uploaded|downloaded|created|renamed|copied/i.test(value)) {
+        return 'success';
+    }
+
+    if (/preparing|loading|refresh|connected|disconnected|warning/i.test(value)) {
+        return 'info';
+    }
+
     return 'default';
 },
-
-
 
         calculateTerminalJsonDelta(text) {
             const raw = String(text ?? '');

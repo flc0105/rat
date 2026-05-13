@@ -5,6 +5,7 @@ from client.commands.common.services.filesystem.file_system_service import FileS
 from client.commands.common.services.filesystem.path_resolver import PathResolver
 from client.commands.arguments.structured_codec import StructuredArgCodec
 from client.http.client_api import ClientApiClient
+from core.utils.output_marker import info, success, warning, error
 
 class CommandBindingMixin:
     """
@@ -69,6 +70,18 @@ class CommandResultMixin:
         发送中间结果
         """
         self._send_result(status, result, eof)
+
+    def _send_info(self, result, eof=0):
+        self._send_interim_result(1, info(result), eof)
+
+    def _send_success(self, result, eof=0):
+        self._send_interim_result(1, success(result), eof)
+
+    def _send_warning(self, result, eof=0):
+        self._send_interim_result(1, warning(result), eof)
+
+    def _send_error(self, result, eof=0):
+        self._send_interim_result(0, error(result), eof)
 
 
 class CommandRuntimeMixin:
