@@ -48,17 +48,7 @@
             class="artifact-server-actions"
           >
 
-             <el-button
-              class="artifact-toolbar-btn"
-              size="small"
-              type="primary"
-
-              :loading="serverFileUploading"
-              @click="triggerServerFileUpload"
-            >
-              Upload
-            </el-button>
-            <el-button
+                        <el-button
               class="artifact-toolbar-btn"
               size="small"
               type="primary"
@@ -66,6 +56,18 @@
               @click="createServerFilePrompt"
             >
               Create File
+            </el-button>
+
+
+             <el-button
+              class="artifact-toolbar-btn"
+              size="small"
+              type="primary"
+              plain
+              :loading="serverFileUploading"
+              @click="triggerServerFileUpload"
+            >
+              Upload
             </el-button>
 
 

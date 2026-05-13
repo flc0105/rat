@@ -1,45 +1,42 @@
 <template>
   <el-dialog
-    v-model="previewDialogVisible"
-    :title="previewTitle || 'File Preview'"
-    :width="previewDialogWidth"
-    :top="previewDialogTop"
-    :class="previewDialogClass"
-    @close="handlePreviewDialogClose"
+      v-model="previewDialogVisible"
+      :title="previewTitle || 'File Preview'"
+      :width="previewDialogWidth"
+      :top="previewDialogTop"
+      :class="previewDialogClass"
+      @close="handlePreviewDialogClose"
   >
     <div
-      v-loading="previewLoading"
-      class="preview-wrap"
+        v-loading="previewLoading"
+        class="preview-wrap"
     >
       <div
-        v-if="previewType === 'image' || previewType === 'text'"
-        class="preview-toolbar"
+          v-if="previewType === 'image' || previewType === 'text'"
+          class="preview-toolbar"
       >
         <div class="preview-toolbar-left">
           <template v-if="previewType === 'text'">
-<!--            <el-button-->
-<!--              size="small"-->
-<!--              @click="copyPreviewText"-->
-<!--            >-->
-<!--              Copy-->
-<!--            </el-button>-->
+            <!--            <el-button-->
+            <!--              size="small"-->
+            <!--              @click="copyPreviewText"-->
+            <!--            >-->
+            <!--              Copy-->
+            <!--            </el-button>-->
 
             <el-button
-  size="small"
-  @click="copyPreviewText"
->
-  Copy
-</el-button>
-
-
-
+                size="small"
+                @click="copyPreviewText"
+            >
+              Copy
+            </el-button>
 
 
             <el-button
-              v-if="!previewEditMode && !previewTruncated"
-              size="small"
-              type="primary"
-              @click="enterEditMode"
+                v-if="!previewEditMode && !previewTruncated"
+                size="small"
+                type="primary"
+                @click="enterEditMode"
             >
               Edit
             </el-button>
@@ -47,40 +44,44 @@
 
             <template v-else-if="previewEditMode">
               <el-button
-                size="small"
-                type="primary"
-                :loading="previewSaving"
-                @click="saveEditedContent"
+                  size="small"
+                  type="primary"
+                  :loading="previewSaving"
+                  @click="saveEditedContent"
               >
                 Save
               </el-button>
 
-                       <el-button
-                size="small"
-                type="danger"
-                plain
-                @click="clearPreviewContent"
+              <el-button
+                  size="small"
+                  @click="pastePreviewText"
+              >
+                Paste
+              </el-button>
+
+              <el-button
+                  size="small"
+                  type="danger"
+                  plain
+                  @click="clearPreviewContent"
               >
                 Clear
               </el-button>
 
 
               <el-button
-                size="small"
-                @click="cancelEditMode"
+                  size="small"
+                  @click="cancelEditMode"
               >
                 Cancel
               </el-button>
 
 
-
-
-
             </template>
-                      <el-button
-              size="small"
-              class="preview-fullscreen-toggle"
-              @click="togglePreviewFullscreen"
+            <el-button
+                size="small"
+                class="preview-fullscreen-toggle"
+                @click="togglePreviewFullscreen"
             >
               {{ previewFullscreen ? 'Exit Fullscreen' : 'Fullscreen' }}
             </el-button>
@@ -88,16 +89,16 @@
 
           <template v-if="previewType === 'image' && previewUrl">
             <el-button
-              v-if="previewImageInfo"
-              size="small"
-              @click="openPreviewImageInfoDialog"
+                v-if="previewImageInfo"
+                size="small"
+                @click="openPreviewImageInfoDialog"
             >
               Image Info
             </el-button>
 
             <el-button
-              size="small"
-              @click="openPreviewOriginal"
+                size="small"
+                @click="openPreviewOriginal"
             >
               Open Original
             </el-button>
@@ -108,45 +109,45 @@
           <template v-if="previewType === 'text'">
             <div class="preview-info-tags">
               <el-tag
-                size="small"
-                type="primary"
+                  size="small"
+                  type="primary"
               >
                 {{ previewSourceLabel }}
               </el-tag>
 
               <el-tag
-                size="small"
-                type="info"
+                  size="small"
+                  type="info"
               >
                 {{ previewFileSize }}
               </el-tag>
 
               <el-tag
-                size="small"
-                type="info"
+                  size="small"
+                  type="info"
               >
                 {{ previewFileEncoding }}
               </el-tag>
 
               <el-tag
-                size="small"
-                type="info"
+                  size="small"
+                  type="info"
               >
                 {{ previewDetectedLanguage }}
               </el-tag>
 
               <el-tag
-                v-if="previewTruncated"
-                size="small"
-                type="danger"
+                  v-if="previewTruncated"
+                  size="small"
+                  type="danger"
               >
                 Truncated - Edit disabled
               </el-tag>
 
               <el-tag
-                v-else
-                size="small"
-                type="success"
+                  v-else
+                  size="small"
+                  type="success"
               >
                 Full content
               </el-tag>
@@ -158,9 +159,9 @@
       <template v-if="previewType === 'image' && previewUrl">
         <div class="image-preview-box">
           <img
-            :src="previewUrl"
-            alt="preview"
-            class="preview-image"
+              :src="previewUrl"
+              alt="preview"
+              class="preview-image"
           >
         </div>
       </template>
@@ -168,9 +169,9 @@
       <template v-else-if="previewType === 'text'">
         <!-- Monaco Editor 容器：这个 id 保留，方便调试定位 -->
         <div
-          id="monaco-editor-container"
-          ref="monacoEditorContainerRef"
-          class="monaco-editor-container"
+            id="monaco-editor-container"
+            ref="monacoEditorContainerRef"
+            class="monaco-editor-container"
         />
       </template>
 
@@ -189,13 +190,13 @@
   </el-dialog>
 
   <PreviewImageInfoDialog
-    v-model:visible="previewImageInfoDialogVisible"
-    :info="previewImageInfo"
+      v-model:visible="previewImageInfoDialogVisible"
+      :info="previewImageInfo"
   />
 </template>
 
 <script>
-import { ElMessage } from 'element-plus'
+import {ElMessage} from 'element-plus'
 import * as monaco from 'monaco-editor/esm/vs/editor/editor.api'
 import EditorWorker from 'monaco-editor/esm/vs/editor/editor.worker?worker'
 import JsonWorker from 'monaco-editor/esm/vs/language/json/json.worker?worker'
@@ -221,9 +222,8 @@ import 'monaco-editor/esm/vs/editor/contrib/format/browser/formatActions'
 import 'monaco-editor/esm/vs/editor/contrib/hover/browser/hover'
 import 'monaco-editor/esm/vs/editor/contrib/links/browser/links'
 // import 'monaco-editor/esm/vs/editor/contrib/suggest/browser/suggestController'
-
 import 'monaco-editor/min/vs/editor/editor.main.css'
-import { formatBytes } from '../utils/formatters.js'
+import {formatBytes} from '../utils/formatters.js'
 import * as externalToolsApi from '../api/externalToolsApi.js'
 import PreviewImageInfoDialog from './PreviewImageInfoDialog.vue'
 
@@ -344,7 +344,7 @@ export default {
       return [
         'fixed-dialog',
         'preview-dialog',
-        { 'preview-dialog-fullscreen': this.previewFullscreen },
+        {'preview-dialog-fullscreen': this.previewFullscreen},
       ]
     },
 
@@ -431,14 +431,14 @@ export default {
 
           const editor = getPreviewMonacoEditor(this)
           const editorDom = editor && typeof editor.getDomNode === 'function'
-            ? editor.getDomNode()
-            : null
+              ? editor.getDomNode()
+              : null
 
           const canReuseEditor = !!(
-            editor &&
-            editorDom &&
-            editorDom.isConnected &&
-            container.contains(editorDom)
+              editor &&
+              editorDom &&
+              editorDom.isConnected &&
+              container.contains(editorDom)
           )
 
           if (canReuseEditor) {
@@ -456,18 +456,18 @@ export default {
             //   contextmenu: true,
             // })
             editor.updateOptions({
-  readOnly,
-  contextmenu: true,
-  quickSuggestions: false,
-  suggestOnTriggerCharacters: false,
-  acceptSuggestionOnEnter: 'off',
-  tabCompletion: 'off',
-  wordBasedSuggestions: 'off',
-  snippetSuggestions: 'none',
-  parameterHints: {
-    enabled: false,
-  },
-})
+              readOnly,
+              contextmenu: true,
+              quickSuggestions: false,
+              suggestOnTriggerCharacters: false,
+              acceptSuggestionOnEnter: 'off',
+              tabCompletion: 'off',
+              wordBasedSuggestions: 'off',
+              snippetSuggestions: 'none',
+              parameterHints: {
+                enabled: false,
+              },
+            })
           } else {
             // 不调用 dispose：避免 Monaco 在当前环境下销毁卡死。
             setPreviewMonacoEditor(this, null)
@@ -480,24 +480,24 @@ export default {
               // contextmenu: true,
               // automaticLayout: true,
               // fontSize: 13,
-readOnly,
-contextmenu: true,
-quickSuggestions: false,
-suggestOnTriggerCharacters: false,
-acceptSuggestionOnEnter: 'off',
-tabCompletion: 'off',
-wordBasedSuggestions: 'off',
-snippetSuggestions: 'none',
-parameterHints: {
-  enabled: false,
-},
-automaticLayout: true,
-fontSize: 13,
+              readOnly,
+              contextmenu: true,
+              quickSuggestions: false,
+              suggestOnTriggerCharacters: false,
+              acceptSuggestionOnEnter: 'off',
+              tabCompletion: 'off',
+              wordBasedSuggestions: 'off',
+              snippetSuggestions: 'none',
+              parameterHints: {
+                enabled: false,
+              },
+              automaticLayout: true,
+              fontSize: 13,
 
 
               fontFamily: 'Monaco, Menlo, "Ubuntu Mono", Consolas, monospace',
               lineNumbers: 'on',
-              minimap: { enabled: false },
+              minimap: {enabled: false},
               scrollBeyondLastLine: false,
               wordWrap: 'on',
               renderWhitespace: 'boundary',
@@ -649,7 +649,7 @@ fontSize: 13,
     setMonacoEditorReadOnly(readOnly) {
       const editor = getPreviewMonacoEditor(this)
       if (editor) {
-        editor.updateOptions({ readOnly })
+        editor.updateOptions({readOnly})
       }
     },
 
@@ -706,12 +706,12 @@ fontSize: 13,
       this.previewSource = 'remote_file'  // 标记来源
 
       await this.loadPreviewPayload(
-        () => fetch(`/api/connections/${encodeURIComponent(this.selectedId)}/remote-files/preview`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ path: row.path }),
-        }),
-        row.name || 'File Preview',
+          () => fetch(`/api/connections/${encodeURIComponent(this.selectedId)}/remote-files/preview`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({path: row.path}),
+          }),
+          row.name || 'File Preview',
       )
 
       // 重置编辑模式
@@ -729,8 +729,8 @@ fontSize: 13,
       this.previewArtifactInfo = row  // 保存 artifact 信息，用于后续刷新
 
       await this.loadPreviewPayload(
-        () => fetch(`/api/artifacts/${encodeURIComponent(row.artifact_id)}/preview`),
-        row.original_name || row.stored_name || 'Artifact Preview',
+          () => fetch(`/api/artifacts/${encodeURIComponent(row.artifact_id)}/preview`),
+          row.original_name || row.stored_name || 'Artifact Preview',
       )
 
       this.previewEditMode = false
@@ -744,8 +744,8 @@ fontSize: 13,
 
       if (file.artifact_id) {
         await this.loadPreviewPayload(
-          () => fetch(`/api/artifacts/${encodeURIComponent(file.artifact_id)}/preview`),
-          file.original_name || file.stored_name || 'Job File Preview',
+            () => fetch(`/api/artifacts/${encodeURIComponent(file.artifact_id)}/preview`),
+            file.original_name || file.stored_name || 'Job File Preview',
         )
         return
       }
@@ -756,8 +756,8 @@ fontSize: 13,
       }
 
       await this.loadPreviewPayload(
-        () => fetch(file.preview_url),
-        file.original_name || file.stored_name || 'Job File Preview',
+          () => fetch(file.preview_url),
+          file.original_name || file.stored_name || 'Job File Preview',
       )
     },
 
@@ -823,7 +823,7 @@ fontSize: 13,
       try {
         const res = await fetch('/api/scripts/save', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: {'Content-Type': 'application/json'},
           body: JSON.stringify({
             name: this.previewFilePath,
             content,
@@ -861,7 +861,7 @@ fontSize: 13,
       try {
         const res = await fetch('/api/jobs/save', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: {'Content-Type': 'application/json'},
           body: JSON.stringify({
             name: this.previewFilePath,
             content,
@@ -900,7 +900,7 @@ fontSize: 13,
       try {
         const res = await fetch(`/api/connections/${encodeURIComponent(this.selectedId)}/remote-files/save`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: {'Content-Type': 'application/json'},
           body: JSON.stringify({
             path: this.previewFilePath,
             content,
@@ -947,7 +947,7 @@ fontSize: 13,
 
         // 复用现有 upload artifact 逻辑，不新建/销毁 Monaco 组件。
         if (typeof File === 'function') {
-          formData.append('file', new File([blob], filename, { type: blob.type }))
+          formData.append('file', new File([blob], filename, {type: blob.type}))
         } else {
           formData.append('file', blob, filename)
         }
@@ -1003,7 +1003,7 @@ fontSize: 13,
       try {
         const res = await fetch(`/api/artifacts/${encodeURIComponent(this.previewFilePath)}/content`, {
           method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
+          headers: {'Content-Type': 'application/json'},
           body: JSON.stringify({
             content,
             encoding: this.previewFileEncoding || 'utf-8',
@@ -1108,60 +1108,60 @@ fontSize: 13,
     },
 
 
-async copyPreviewText() {
-  const content = this.getMonacoEditorContent()
-  if (!content) {
-    ElMessage.warning('No content to copy')
-    return
-  }
+    async copyPreviewText() {
+      const content = this.getMonacoEditorContent()
+      if (!content) {
+        ElMessage.warning('No content to copy')
+        return
+      }
 
-  try {
-    if (
-      window.isSecureContext &&
-      navigator.clipboard &&
-      typeof navigator.clipboard.writeText === 'function'
-    ) {
-      await navigator.clipboard.writeText(content)
-      ElMessage.success('Content copied')
-      return
-    }
+      try {
+        if (
+            window.isSecureContext &&
+            navigator.clipboard &&
+            typeof navigator.clipboard.writeText === 'function'
+        ) {
+          await navigator.clipboard.writeText(content)
+          ElMessage.success('Content copied')
+          return
+        }
 
-    this.copyTextFallback(content)
-    ElMessage.success('Content copied')
-  } catch (e) {
-    try {
-      this.copyTextFallback(content)
-      ElMessage.success('Content copied')
-    } catch (fallbackError) {
-      ElMessage.error('Failed to copy content')
-    }
-  }
-},
+        this.copyTextFallback(content)
+        ElMessage.success('Content copied')
+      } catch (e) {
+        try {
+          this.copyTextFallback(content)
+          ElMessage.success('Content copied')
+        } catch (fallbackError) {
+          ElMessage.error('Failed to copy content')
+        }
+      }
+    },
 
-copyTextFallback(text) {
-  const textarea = document.createElement('textarea')
+    copyTextFallback(text) {
+      const textarea = document.createElement('textarea')
 
-  textarea.value = String(text || '')
-  textarea.setAttribute('readonly', '')
-  textarea.style.position = 'fixed'
-  textarea.style.left = '-9999px'
-  textarea.style.top = '0'
-  textarea.style.opacity = '0'
+      textarea.value = String(text || '')
+      textarea.setAttribute('readonly', '')
+      textarea.style.position = 'fixed'
+      textarea.style.left = '-9999px'
+      textarea.style.top = '0'
+      textarea.style.opacity = '0'
 
-  document.body.appendChild(textarea)
+      document.body.appendChild(textarea)
 
-  textarea.focus()
-  textarea.select()
-  textarea.setSelectionRange(0, textarea.value.length)
+      textarea.focus()
+      textarea.select()
+      textarea.setSelectionRange(0, textarea.value.length)
 
-  const ok = document.execCommand('copy')
+      const ok = document.execCommand('copy')
 
-  document.body.removeChild(textarea)
+      document.body.removeChild(textarea)
 
-  if (!ok) {
-    throw new Error('Fallback copy failed')
-  }
-},
+      if (!ok) {
+        throw new Error('Fallback copy failed')
+      }
+    },
 
     // async copyPreviewText() {
     //   const content = this.getMonacoEditorContent()
@@ -1197,13 +1197,13 @@ copyTextFallback(text) {
     buildServerScriptTemplate(scriptName = 'new_script.py') {
       const normalizedScriptName = String(scriptName || 'new_script.py').trim().replace(/\\/g, '/').replace(/^\/+/, '') || 'new_script.py'
       const classBaseName = normalizedScriptName
-        .replace(/\.py$/i, '')
-        .split('/')
-        .pop()
-        .split(/[^a-zA-Z0-9]+/)
-        .filter(Boolean)
-        .map(part => part.charAt(0).toUpperCase() + part.slice(1))
-        .join('') || 'NewScript'
+          .replace(/\.py$/i, '')
+          .split('/')
+          .pop()
+          .split(/[^a-zA-Z0-9]+/)
+          .filter(Boolean)
+          .map(part => part.charAt(0).toUpperCase() + part.slice(1))
+          .join('') || 'NewScript'
 
       return `SCRIPT_METADATA = {
     "name": "${normalizedScriptName.replace(/\.py$/i, '')}",
@@ -1283,13 +1283,13 @@ print(value)
     buildServerJobTemplate(scriptName = 'new_job.py') {
       const normalizedScriptName = this.normalizeServerJobFilename(scriptName)
       const classBaseName = normalizedScriptName
-        .replace(/\.py$/i, '')
-        .split('/')
-        .pop()
-        .split(/[^a-zA-Z0-9]+/)
-        .filter(Boolean)
-        .map(part => part.charAt(0).toUpperCase() + part.slice(1))
-        .join('') || 'NewBackgroundJob'
+          .replace(/\.py$/i, '')
+          .split('/')
+          .pop()
+          .split(/[^a-zA-Z0-9]+/)
+          .filter(Boolean)
+          .map(part => part.charAt(0).toUpperCase() + part.slice(1))
+          .join('') || 'NewBackgroundJob'
 
       return `JOB_METADATA = {\n    "name": "${normalizedScriptName.replace(/\.py$/i, '')}",\n    "display_name": "${classBaseName}",\n    "description": "Describe what this job does",\n    "platforms": ["mac"],\n    "params": [\n        {\n            "name": "interval_seconds",\n            "type": "integer",\n            "required": False,\n            "default": 10,\n            "min": 1,\n            "description": "Loop interval in seconds"\n        }\n    ]\n}\n\nimport time\n\nfrom client.jobs.core.job import Job\n\n\nclass ${classBaseName}(Job):\n    def __init__(self):\n        super().__init__()\n        self.interval = 10\n\n    def on_context_bound(self):\n        self.interval = int(self.get_job_param("interval_seconds", 10) or 10)\n\n    def run(self):\n        self.mark_running()\n        self.send_to_server(1, "${normalizedScriptName} started")\n\n        try:\n            while not self.stop_event.is_set():\n                self.send_to_server(1, f"heartbeat: {time.strftime('%Y-%m-%d %H:%M:%S')}")\n                time.sleep(self.interval)\n        finally:\n            self.send_to_server(1, "${normalizedScriptName} stopped")\n            self.mark_stopped()\n\n    def stop(self, notify=True):\n        self.request_stop(notify=notify)\n`
     },
@@ -1476,8 +1476,8 @@ print(value)
 
     handleBackgroundJobDeleted(normalizedName) {
       if (
-        this.previewDialogVisible &&
-        (this.previewSource === 'server_job' || this.previewSource === 'background_job')
+          this.previewDialogVisible &&
+          (this.previewSource === 'server_job' || this.previewSource === 'background_job')
       ) {
         const currentPreviewName = this.normalizeServerJobFilename(this.previewFilePath || this.previewTitle || '')
 
@@ -1486,6 +1486,181 @@ print(value)
         }
       }
     },
+
+
+    async pastePreviewText() {
+      if (this.previewType !== 'text') {
+        ElMessage.warning('Only text content can be pasted')
+        return
+      }
+
+      if (!this.previewEditMode) {
+        ElMessage.warning('Please enter edit mode first')
+        return
+      }
+
+      let text = ''
+
+      try {
+        text = await this.readClipboardTextForPaste()
+      } catch (_error) {
+        ElMessage.warning('当前浏览器不允许按钮读取剪贴板，请尝试使用 Ctrl+V 粘贴')
+        return
+      }
+
+      if (!text) {
+        ElMessage.warning('Clipboard is empty')
+        return
+      }
+
+      const editor = getPreviewMonacoEditor(this)
+
+      if (!editor) {
+        this.previewText = `${text}${this.previewText || ''}`
+        this.initMonacoEditor(this.previewText, false)
+        ElMessage.success('Content pasted')
+        return
+      }
+
+      const model = editor.getModel && editor.getModel()
+
+      if (!model) {
+        this.previewText = `${text}${this.previewText || ''}`
+        this.initMonacoEditor(this.previewText, false)
+        ElMessage.success('Content pasted')
+        return
+      }
+
+      editor.focus()
+      editor.pushUndoStop()
+
+      const selection = editor.getSelection && editor.getSelection()
+
+      const hasValidCursor = !!(
+          selection &&
+          Number.isInteger(selection.startLineNumber) &&
+          Number.isInteger(selection.startColumn) &&
+          selection.startLineNumber >= 1 &&
+          selection.startColumn >= 1
+      )
+
+      if (hasValidCursor) {
+        editor.trigger('toolbar-paste', 'type', {text})
+      } else {
+        const insertRange = new monaco.Range(1, 1, 1, 1)
+
+        editor.executeEdits('toolbar-paste', [
+          {
+            range: insertRange,
+            text,
+            forceMoveMarkers: true,
+          },
+        ])
+
+        const endPosition = model.getPositionAt(String(text).length)
+        editor.setSelection(
+            new monaco.Selection(
+                endPosition.lineNumber,
+                endPosition.column,
+                endPosition.lineNumber,
+                endPosition.column,
+            ),
+        )
+      }
+
+      editor.pushUndoStop()
+      this.previewText = editor.getValue()
+
+      ElMessage.success('Content pasted')
+    },
+
+    async readClipboardTextForPaste() {
+      if (
+          window.isSecureContext &&
+          navigator.clipboard &&
+          typeof navigator.clipboard.readText === 'function'
+      ) {
+        return await navigator.clipboard.readText()
+      }
+
+      if (
+          window.clipboardData &&
+          typeof window.clipboardData.getData === 'function'
+      ) {
+        return window.clipboardData.getData('Text') || ''
+      }
+
+      return await this.readClipboardTextFallbackForWindows()
+    },
+
+    readClipboardTextFallbackForWindows() {
+      return new Promise((resolve, reject) => {
+        const textarea = document.createElement('textarea')
+
+        textarea.value = ''
+        textarea.setAttribute('readonly', '')
+        textarea.style.position = 'fixed'
+        textarea.style.left = '-9999px'
+        textarea.style.top = '0'
+        textarea.style.opacity = '0'
+        textarea.style.pointerEvents = 'none'
+
+        let finished = false
+
+        const cleanup = () => {
+          textarea.removeEventListener('paste', handlePaste)
+          if (textarea.parentNode) {
+            textarea.parentNode.removeChild(textarea)
+          }
+        }
+
+        const finish = (value) => {
+          if (finished) return
+          finished = true
+          cleanup()
+          resolve(value || '')
+        }
+
+        const fail = (error) => {
+          if (finished) return
+          finished = true
+          cleanup()
+          reject(error)
+        }
+
+        const handlePaste = (event) => {
+          const text = event.clipboardData
+              ? event.clipboardData.getData('text/plain')
+              : textarea.value
+
+          event.preventDefault()
+          finish(text)
+        }
+
+        document.body.appendChild(textarea)
+        textarea.addEventListener('paste', handlePaste)
+        textarea.focus()
+
+        try {
+          const ok = document.execCommand && document.execCommand('paste')
+
+          window.setTimeout(() => {
+            if (finished) return
+
+            const text = textarea.value || ''
+
+            if (ok || text) {
+              finish(text)
+            } else {
+              fail(new Error('Paste blocked'))
+            }
+          }, 120)
+        } catch (error) {
+          fail(error)
+        }
+      })
+    },
+
 
     resetPreviewState() {
       this.previewFullscreen = false
@@ -1731,9 +1906,6 @@ print(value)
     flex-direction: column;
   }
 }
-
-
-
 
 
 .monaco-menu-container,
