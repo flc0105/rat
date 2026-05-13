@@ -85,16 +85,23 @@ class CommandSystemMixin:
     def ip(self):
         """显示内网IP、外网IP和归属地"""
         import requests
-        import netifaces
 
         local_ips = []
-        for iface in netifaces.interfaces():
-            addrs = netifaces.ifaddresses(iface)
-            if netifaces.AF_INET in addrs:
-                for addr in addrs[netifaces.AF_INET]:
-                    ip = addr['addr']
-                    if not ip.startswith('127.'):
+
+        try:
+            rows = self._get_network_interface_service().collect_ifconfig_rows()
+
+            for row in rows:
+                ip_text = str(row.get('ip') or '').strip()
+                if not ip_text:
+                    continue
+
+                for ip in ip_text.split(','):
+                    ip = ip.strip()
+                    if ip and ip not in local_ips:
                         local_ips.append(ip)
+        except Exception:
+            local_ips = []
 
         try:
             resp = requests.get('http://ip-api.com/json/', timeout=5)
@@ -109,7 +116,9 @@ class CommandSystemMixin:
             public_ip = 'Unable to determine'
             location = 'Unknown'
 
-        result = f"Local IPs:\n  {chr(10).join(local_ips)}\n\nPublic IP: {public_ip}\nLocation: {location}"
+        local_ip_text = chr(10).join(local_ips) if local_ips else 'Unable to determine'
+
+        result = f"Local IPs:\n  {local_ip_text}\n\nPublic IP: {public_ip}\nLocation: {location}"
         return 1, result
 
     @desc('List system user accounts', group='system')

@@ -37,7 +37,7 @@
     "ll": "ls -la",
     "sleep": "read ping -c <sec> 127.0.0.1",
     "kill_port": "kill -9 $(lsof -t -i:<port>)",
-    "ip": "ipconfig getifaddr en0",
+    "ipaddr": "ipconfig getifaddr en0",
     "clean_ds": "find . -name \"._*\" -type f -delete && find . -name \".DS_Store\" -type f -delete",
     "pause": "kill -STOP <pid>",
     "resume": "kill -CONT <pid>",
