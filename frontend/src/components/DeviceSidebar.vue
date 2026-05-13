@@ -169,11 +169,17 @@ export default {
       contextMenuItem: null,
       contextMenuX: 0,
       contextMenuY: 0,
+
       touchMenuTimer: null,
       touchStartX: 0,
       touchStartY: 0,
       touchMoved: false,
       suppressNextDeviceClick: false,
+
+      // 移动端长按打开菜单后，浏览器可能补发 click / scroll。
+      // 这两个时间窗用来避免菜单刚打开又被自动关闭。
+      ignoreNextDocumentClickUntil: 0,
+      ignoreNextScrollUntil: 0,
     }
   },
 
@@ -190,15 +196,16 @@ export default {
     document.addEventListener('click', this.handleDocumentClick, true)
     document.addEventListener('keydown', this.handleDocumentKeydown, true)
     window.addEventListener('resize', this.closeDeviceContextMenu)
-    window.addEventListener('scroll', this.closeDeviceContextMenu, true)
+    window.addEventListener('scroll', this.handleWindowScroll, true)
   },
 
   beforeUnmount() {
     document.removeEventListener('click', this.handleDocumentClick, true)
     document.removeEventListener('keydown', this.handleDocumentKeydown, true)
     window.removeEventListener('resize', this.closeDeviceContextMenu)
-    window.removeEventListener('scroll', this.closeDeviceContextMenu, true)
+    window.removeEventListener('scroll', this.handleWindowScroll, true)
     this.clearDeviceTouchTimer()
+    document.body.classList.remove('device-touch-callout-guard')
   },
 
   methods: {
@@ -216,8 +223,15 @@ export default {
     handleDeviceClick(item, event) {
       if (this.suppressNextDeviceClick) {
         this.suppressNextDeviceClick = false
-        if (event && typeof event.preventDefault === 'function') event.preventDefault()
-        if (event && typeof event.stopPropagation === 'function') event.stopPropagation()
+
+        if (event && typeof event.preventDefault === 'function') {
+          event.preventDefault()
+        }
+
+        if (event && typeof event.stopPropagation === 'function') {
+          event.stopPropagation()
+        }
+
         return
       }
 
@@ -226,11 +240,25 @@ export default {
     },
 
     openDeviceContextMenu(event, item) {
-      this.openDeviceContextMenuAt(event.clientX, event.clientY, item)
+      this.openDeviceContextMenuAt(event.clientX, event.clientY, item, {
+        fromTouch: false,
+      })
     },
 
-    openDeviceContextMenuAt(x, y, item) {
+    openDeviceContextMenuAt(x, y, item, options = {}) {
       this.clearDeviceTouchTimer()
+
+      const now = Date.now()
+
+      // 移动端长按打开菜单后，浏览器可能补发一次 click。
+      // document 捕获阶段会先收到这个 click，如果不忽略，菜单会刚出现就关闭。
+      this.ignoreNextDocumentClickUntil = now + 420
+
+      // 长按附近可能伴随轻微滚动 / 惯性滚动，不要刚打开就被 scroll 关掉。
+      if (options.fromTouch) {
+        this.ignoreNextScrollUntil = now + 420
+      }
+
       this.contextMenuItem = item
       this.contextMenuClientId = String(item?.client_id || '')
       this.contextMenuX = x
@@ -252,20 +280,32 @@ export default {
     handleDeviceTouchStart(event, item) {
       if (!event.touches || event.touches.length !== 1) return
 
-       // 阻止 iOS 弹出系统菜单
-  // event.preventDefault();
-
       const touch = event.touches[0]
+
       this.clearDeviceTouchTimer()
+
       this.touchStartX = touch.clientX
       this.touchStartY = touch.clientY
       this.touchMoved = false
+      this.suppressNextDeviceClick = false
+
+      // 不在 touchstart 立刻 preventDefault，否则会阻止列表上下滚动。
+      // 先用 body class 尽量压住 iOS 的 Copy / Look Up。
+      document.body.classList.add('device-touch-callout-guard')
 
       this.touchMenuTimer = window.setTimeout(() => {
         if (this.touchMoved) return
 
+        // 到这里说明是真的长按，不是滑动。
+        // 这里再 preventDefault，尽量阻止 iOS 长按系统菜单。
+        if (event.cancelable && typeof event.preventDefault === 'function') {
+          event.preventDefault()
+        }
+
         this.suppressNextDeviceClick = true
-        this.openDeviceContextMenuAt(this.touchStartX, this.touchStartY, item)
+        this.openDeviceContextMenuAt(this.touchStartX, this.touchStartY, item, {
+          fromTouch: true,
+        })
       }, 520)
     },
 
@@ -276,14 +316,20 @@ export default {
       const dx = Math.abs(touch.clientX - this.touchStartX)
       const dy = Math.abs(touch.clientY - this.touchStartY)
 
+      // 用户开始上下滑动，取消长按菜单，保留浏览器原生滚动。
       if (dx > 8 || dy > 8) {
         this.touchMoved = true
         this.clearDeviceTouchTimer()
+        document.body.classList.remove('device-touch-callout-guard')
       }
     },
 
     handleDeviceTouchEnd() {
       this.clearDeviceTouchTimer()
+
+      if (!this.contextMenuVisible) {
+        document.body.classList.remove('device-touch-callout-guard')
+      }
     },
 
     adjustDeviceContextMenuPosition() {
@@ -303,10 +349,17 @@ export default {
       this.contextMenuVisible = false
       this.contextMenuClientId = ''
       this.contextMenuItem = null
+      this.ignoreNextDocumentClickUntil = 0
+      this.ignoreNextScrollUntil = 0
+      document.body.classList.remove('device-touch-callout-guard')
     },
 
     handleDocumentClick(event) {
       if (!this.contextMenuVisible) return
+
+      if (Date.now() < this.ignoreNextDocumentClickUntil) {
+        return
+      }
 
       const menu = this.$refs.deviceContextMenuRef
       if (menu && menu.contains(event.target)) return
@@ -318,6 +371,16 @@ export default {
       if (event.key === 'Escape') {
         this.closeDeviceContextMenu()
       }
+    },
+
+    handleWindowScroll() {
+      if (!this.contextMenuVisible) return
+
+      if (Date.now() < this.ignoreNextScrollUntil) {
+        return
+      }
+
+      this.closeDeviceContextMenu()
     },
 
     triggerDeviceContextCommand(command) {
@@ -592,7 +655,12 @@ export default {
 </style>
 
 <style>
-
+body.device-touch-callout-guard,
+body.device-touch-callout-guard * {
+  -webkit-touch-callout: none !important;
+  -webkit-user-select: none !important;
+  user-select: none !important;
+}
 
 .device-context-menu {
   position: fixed;
@@ -610,13 +678,8 @@ export default {
   -webkit-touch-callout: none;
 }
 
-.device-item-name, .device-item-os, .device-item-ip {
-  -webkit-touch-callout: none;
-  user-select: none;
-}
-
 .device-context-menu-item {
-    -webkit-touch-callout: none;
+  -webkit-touch-callout: none;
   display: block;
   width: 100%;
   height: 28px;
