@@ -760,6 +760,10 @@ export default {
       type: Array,
       default: () => [],
     },
+    machineAliasMap: {
+      type: Object,
+      default: () => ({}),
+    },
     getTabScopedHeaders: {
       type: Function,
       default: null,
@@ -1692,10 +1696,18 @@ async loadAllClientInstances(deviceId = '', showToast = true) {
       return String(conn?.hostname || '').trim()
     },
 
+    getMachineAlias(machineId) {
+      const id = this.normalizeMachineId(machineId)
+      if (!id) return ''
+      return String(this.machineAliasMap?.[id] || '').trim()
+    },
+
     formatMachineOptionLabel(conn) {
       const machineId = this.normalizeMachineId(conn?.machine_id)
       const shortId = this.shortenMachineId(machineId)
       const hostname = String(conn?.hostname || '').trim()
+      const alias = this.getMachineAlias(machineId)
+      if (alias) return `${alias} (${shortId})`
       return hostname ? `${shortId} (${hostname})` : shortId
     },
 

@@ -41,11 +41,16 @@
     >
       <DeviceSidebar
         v-show="!deviceSidebarCollapsed"
-        :connections="connections"
+        :connections="deviceSidebarConnections"
         :selected-id="selectedId"
         :status-now-tick="statusNowTick"
+        :show-hidden-devices="showHiddenDevices"
         @refresh="loadConnections"
         @select="selectConnection"
+        @toggle-hidden-devices="toggleShowHiddenDevices"
+        @toggle-client-hidden="toggleClientHiddenFromSidebar"
+        @toggle-machine-hidden="toggleMachineHiddenFromSidebar"
+        @rename-machine="renameMachineFromSidebar"
       />
 
       <main class="main panel">
@@ -173,6 +178,7 @@
     ref="artifactDialogRef"
     :selected-id="selectedId"
     :current-connection="currentConnection"
+    :machine-alias-map="machineAliasMap"
     :get-tab-scoped-headers="getTabScopedHeaders"
     @preview="previewArtifact"
     @append-output="appendOutput"
@@ -185,6 +191,7 @@
     :selected-id="selectedId"
     :current-connection="currentConnection"
     :connections="connections"
+    :machine-alias-map="machineAliasMap"
     :get-tab-scoped-headers="getTabScopedHeaders"
     @append-output="appendOutput"
     @set-active-task="setActiveTask"
@@ -194,6 +201,7 @@
   <KeychainManagerDialog
     ref="keychainManagerDialogRef"
     :current-connection="currentConnection"
+    :machine-alias-map="machineAliasMap"
   />
 
   <ScriptLibraryDialog

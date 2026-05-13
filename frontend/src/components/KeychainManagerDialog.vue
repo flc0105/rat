@@ -458,6 +458,11 @@ export default {
       type: Object,
       default: null,
     },
+
+    machineAliasMap: {
+      type: Object,
+      default: () => ({}),
+    },
   },
 
   data() {
@@ -585,12 +590,20 @@ export default {
       return value.length > 12 ? value.slice(0, 12) : value
     },
 
+    getMachineAlias(machineId) {
+      const id = this.normalizeMachineId(machineId)
+      if (!id || id === this.serverMachineId) return ''
+      return String(this.machineAliasMap?.[id] || '').trim()
+    },
+
     formatMachineOptionLabel(machine) {
       const machineId = this.normalizeMachineId(machine?.machine_id)
       if (!machineId) return '-'
 
       const shortId = this.shortenMachineId(machineId)
       const hostname = String(machine?.hostname || '').trim()
+      const alias = this.getMachineAlias(machineId)
+      if (alias) return `${alias} (${shortId})`
       return hostname ? `${shortId} (${hostname})` : shortId
     },
 

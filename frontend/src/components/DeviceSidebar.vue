@@ -2,25 +2,57 @@
   <aside class="sidebar panel">
     <div class="panel-header">
       <div class="panel-title">Devices</div>
-      <el-button size="small" @click="$emit('refresh')">Refresh</el-button>
+
+      <el-dropdown
+        trigger="click"
+        placement="bottom-end"
+        popper-class="device-toolbar-menu-popper"
+        @command="handleToolbarCommand"
+      >
+        <button
+          type="button"
+          class="device-toolbar-more-btn"
+          title="Device actions"
+          @click.stop
+        >
+          ⋮
+        </button>
+
+        <template #dropdown>
+          <el-dropdown-menu>
+            <el-dropdown-item command="refresh">
+              Refresh
+            </el-dropdown-item>
+
+            <el-dropdown-item command="toggle-hidden">
+              {{ showHiddenDevices ? 'Hide hidden devices' : 'Show hidden devices' }}
+            </el-dropdown-item>
+          </el-dropdown-menu>
+        </template>
+      </el-dropdown>
     </div>
 
     <div class="sidebar-body">
       <div v-if="connections.length === 0" class="empty-state">
-        No active devices
+        No visible devices
       </div>
 
       <div
         v-for="item in connections"
         :key="item.client_id"
         class="device-item"
-        :class="{ active: selectedId === item.client_id }"
-        @click="$emit('select', item.client_id)"
+        :class="{
+          active: selectedId === item.client_id,
+          'device-item-hidden': item.device_hidden,
+          'context-active': contextMenuClientId === item.client_id,
+        }"
+        @click="handleDeviceClick(item)"
+        @contextmenu.prevent.stop="openDeviceContextMenu($event, item)"
       >
         <div class="device-item-top">
           <div class="device-text">
             <div class="device-name">
-              {{ item.hostname || 'Unknown Host' }}
+              {{ formatDeviceName(item) }}
             </div>
             <div class="device-os">
               {{ formatOsLabel(item.os_type, item.os_ver) }}
@@ -48,6 +80,46 @@
         </div>
       </div>
     </div>
+
+    <Teleport to="body">
+      <div
+        v-if="contextMenuVisible"
+        ref="deviceContextMenuRef"
+        class="device-context-menu"
+        :style="contextMenuStyle"
+        @click.stop
+        @contextmenu.prevent.stop
+      >
+        <button
+          type="button"
+          class="device-context-menu-item"
+          @click="triggerDeviceContextCommand('rename-machine')"
+        >
+          Set alias
+        </button>
+
+        <div class="device-context-menu-separator"></div>
+
+        <button
+          type="button"
+          class="device-context-menu-item danger"
+          :class="{ positive: contextMenuItem && contextMenuItem.device_hidden_by_client }"
+          @click="triggerDeviceContextCommand('toggle-client-hidden')"
+        >
+          {{ contextMenuItem && contextMenuItem.device_hidden_by_client ? 'Unhide current connection' : 'Hide current connection' }}
+        </button>
+
+        <button
+          type="button"
+          class="device-context-menu-item danger"
+          :class="{ positive: contextMenuItem && contextMenuItem.device_hidden_by_machine }"
+          :disabled="!contextMenuItem || !contextMenuItem.machine_id"
+          @click="triggerDeviceContextCommand('toggle-machine-hidden')"
+        >
+          {{ contextMenuItem && contextMenuItem.device_hidden_by_machine ? 'Unhide this machine' : 'Hide this machine' }}
+        </button>
+      </div>
+    </Teleport>
   </aside>
 </template>
 
@@ -70,11 +142,137 @@ export default {
       type: Number,
       default: () => Date.now(),
     },
+
+    showHiddenDevices: {
+      type: Boolean,
+      default: false,
+    },
   },
 
-  emits: ['refresh', 'select'],
+  emits: [
+    'refresh',
+    'select',
+    'toggle-hidden-devices',
+    'toggle-client-hidden',
+    'toggle-machine-hidden',
+    'rename-machine',
+  ],
+
+  data() {
+    return {
+      contextMenuVisible: false,
+      contextMenuClientId: '',
+      contextMenuItem: null,
+      contextMenuX: 0,
+      contextMenuY: 0,
+    }
+  },
+
+  computed: {
+    contextMenuStyle() {
+      return {
+        left: `${this.contextMenuX}px`,
+        top: `${this.contextMenuY}px`,
+      }
+    },
+  },
+
+  mounted() {
+    document.addEventListener('click', this.handleDocumentClick, true)
+    document.addEventListener('keydown', this.handleDocumentKeydown, true)
+    window.addEventListener('resize', this.closeDeviceContextMenu)
+    window.addEventListener('scroll', this.closeDeviceContextMenu, true)
+  },
+
+  beforeUnmount() {
+    document.removeEventListener('click', this.handleDocumentClick, true)
+    document.removeEventListener('keydown', this.handleDocumentKeydown, true)
+    window.removeEventListener('resize', this.closeDeviceContextMenu)
+    window.removeEventListener('scroll', this.closeDeviceContextMenu, true)
+  },
 
   methods: {
+    handleToolbarCommand(command) {
+      if (command === 'refresh') {
+        this.$emit('refresh')
+        return
+      }
+
+      if (command === 'toggle-hidden') {
+        this.$emit('toggle-hidden-devices')
+      }
+    },
+
+    handleDeviceClick(item) {
+      this.closeDeviceContextMenu()
+      this.$emit('select', item.client_id)
+    },
+
+    openDeviceContextMenu(event, item) {
+      this.contextMenuItem = item
+      this.contextMenuClientId = String(item?.client_id || '')
+      this.contextMenuX = event.clientX
+      this.contextMenuY = event.clientY
+      this.contextMenuVisible = true
+
+      this.$nextTick(() => {
+        this.adjustDeviceContextMenuPosition()
+      })
+    },
+
+    adjustDeviceContextMenuPosition() {
+      const menu = this.$refs.deviceContextMenuRef
+      if (!menu) return
+
+      const rect = menu.getBoundingClientRect()
+      const padding = 8
+      const maxX = window.innerWidth - rect.width - padding
+      const maxY = window.innerHeight - rect.height - padding
+
+      this.contextMenuX = Math.max(padding, Math.min(this.contextMenuX, maxX))
+      this.contextMenuY = Math.max(padding, Math.min(this.contextMenuY, maxY))
+    },
+
+    closeDeviceContextMenu() {
+      this.contextMenuVisible = false
+      this.contextMenuClientId = ''
+      this.contextMenuItem = null
+    },
+
+    handleDocumentClick(event) {
+      if (!this.contextMenuVisible) return
+
+      const menu = this.$refs.deviceContextMenuRef
+      if (menu && menu.contains(event.target)) return
+
+      this.closeDeviceContextMenu()
+    },
+
+    handleDocumentKeydown(event) {
+      if (event.key === 'Escape') {
+        this.closeDeviceContextMenu()
+      }
+    },
+
+    triggerDeviceContextCommand(command) {
+      const item = this.contextMenuItem
+      if (!item) return
+
+      if (command === 'rename-machine') {
+        this.$emit('rename-machine', item)
+      } else if (command === 'toggle-client-hidden') {
+        this.$emit('toggle-client-hidden', item)
+      } else if (command === 'toggle-machine-hidden') {
+        this.$emit('toggle-machine-hidden', item)
+      }
+
+      this.closeDeviceContextMenu()
+    },
+
+    formatDeviceName(item) {
+      return item?.device_display_name || item?.display_hostname || item?.device_alias || item?.hostname || 'Unknown Host'
+    },
+
     // 根据连接状态统一计算设备展示态
     getConnectionDisplayState(conn) {
       const state = String((conn && conn.connection_state) || '').trim()
@@ -181,6 +379,27 @@ export default {
   font-weight: 700;
 }
 
+.device-toolbar-more-btn {
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 17px;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.device-toolbar-more-btn:hover {
+  background: rgba(15, 23, 42, 0.06);
+  color: var(--text);
+}
+
 .sidebar-body {
   padding: 12px;
   overflow-y: auto;
@@ -195,7 +414,7 @@ export default {
   background: rgba(255, 255, 255, 0.96);
   border: 1px solid rgba(15, 23, 42, 0.06);
   cursor: pointer;
-  transition: border-color 0.18s ease, background 0.18s ease;
+  transition: border-color 0.18s ease, background 0.18s ease, opacity 0.18s ease;
 }
 
 .device-item:hover {
@@ -206,6 +425,26 @@ export default {
 .device-item.active {
   border-color: rgba(37, 99, 235, 0.22);
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(239, 246, 255, 0.96));
+}
+
+.device-item.context-active {
+  border-color: rgba(37, 99, 235, 0.34);
+}
+
+.device-item-hidden:not(.active) {
+  opacity: 0.64;
+  border-style: dashed;
+}
+
+.device-item-hidden.active {
+  border-style: dashed;
+}
+
+.device-item-hidden .device-name,
+.device-item-hidden .device-os,
+.device-item-hidden .device-ip,
+.device-item-hidden .device-status-row {
+  color: #64748b;
 }
 
 .device-item-top {
@@ -281,5 +520,93 @@ export default {
 
 .device-dot-offline {
   background: #94a3b8;
+}
+</style>
+
+<style>
+.device-context-menu {
+  position: fixed;
+  z-index: 5000;
+  min-width: 176px;
+  padding: 4px;
+  border-radius: 8px;
+  border: 1px solid rgba(15, 23, 42, 0.12);
+  background: #fff;
+  box-shadow: 0 10px 28px rgba(15, 23, 42, 0.18);
+  user-select: none;
+}
+
+.device-context-menu-item {
+  display: block;
+  width: 100%;
+  height: 28px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: #111827;
+  font-size: 12px;
+  line-height: 28px;
+  text-align: left;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.device-context-menu-item:hover {
+  background: #f1f5f9;
+}
+
+.device-context-menu-item.danger:hover {
+  background: #fff1f2;
+  color: #be123c;
+}
+
+.device-context-menu-item.positive:hover {
+  background: #ecfdf5;
+  color: #047857;
+}
+
+.device-context-menu-item:disabled {
+  color: #9ca3af;
+  cursor: not-allowed;
+}
+
+.device-context-menu-item:disabled:hover {
+  background: transparent;
+  color: #9ca3af;
+}
+
+.device-context-menu-separator {
+  height: 1px;
+  margin: 4px 2px;
+  background: rgba(15, 23, 42, 0.08);
+}
+
+.device-toolbar-menu-popper {
+  min-width: 156px !important;
+  border-radius: 8px !important;
+  border: 1px solid rgba(15, 23, 42, 0.12) !important;
+  box-shadow: 0 10px 26px rgba(15, 23, 42, 0.16) !important;
+  overflow: hidden !important;
+}
+
+.device-toolbar-menu-popper .el-dropdown-menu {
+  padding: 4px !important;
+}
+
+.device-toolbar-menu-popper .el-dropdown-menu__item {
+  height: 28px !important;
+  min-height: 28px !important;
+  line-height: 28px !important;
+  padding: 0 10px !important;
+  border-radius: 6px !important;
+  font-size: 12px !important;
+  color: #111827 !important;
+}
+
+.device-toolbar-menu-popper .el-dropdown-menu__item:not(.is-disabled):hover,
+.device-toolbar-menu-popper .el-dropdown-menu__item:not(.is-disabled):focus {
+  background: #f1f5f9 !important;
+  color: #111827 !important;
 }
 </style>

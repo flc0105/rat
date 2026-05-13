@@ -484,6 +484,11 @@ export default {
       default: null,
     },
 
+    machineAliasMap: {
+      type: Object,
+      default: () => ({}),
+    },
+
     getTabScopedHeaders: {
       type: Function,
       default: () => ({}),
@@ -639,22 +644,32 @@ export default {
       return value.length > 12 ? value.slice(0, 12) : value
     },
 
+    getMachineAlias(machineId) {
+      const id = this.normalizeMachineId(machineId)
+      if (!id) return ''
+      return String(this.machineAliasMap?.[id] || '').trim()
+    },
+
     formatArtifactMachineOptionLabel(machine) {
       const machineId = this.normalizeMachineId(machine?.machine_id)
       if (!machineId) return '-'
 
+      const alias = this.getMachineAlias(machineId)
       const shortId = this.shortenMachineId(machineId)
       const hostname = String(machine?.hostname || '').trim()
 
+      if (alias) return `${alias} (${shortId})`
       return hostname ? `${shortId} (${hostname})` : shortId
     },
 
     formatCurrentDeviceLabel() {
       const conn = this.currentConnection || {}
       const machineId = this.normalizeMachineId(conn.machine_id || conn.client_id || this.selectedId)
+      const alias = this.getMachineAlias(machineId)
       const hostname = String(conn.hostname || '').trim()
       const shortId = machineId ? this.shortenMachineId(machineId) : String(this.selectedId || '').trim()
 
+      if (alias) return `${alias} (${shortId})`
       if (shortId && hostname) return `${shortId} (${hostname})`
       return shortId || hostname || 'current device'
     },
