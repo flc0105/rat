@@ -2,7 +2,7 @@
   <el-dialog
     v-model="visible"
     title="Agent Outputs"
-    width="1280px"
+    width="1320px"
     top="4vh"
     class="fixed-dialog agent-outputs-dialog"
     modal-class="agent-outputs-overlay"
@@ -38,7 +38,7 @@
             :loading="bulkDeleting"
             @click="deleteSelectedAgentOutputs"
           >
-            Delete Selected{{ selectedOutputFileNames.length ? ` (${selectedOutputFileNames.length})` : '' }}
+            Delete{{ selectedOutputFileNames.length ? ` (${selectedOutputFileNames.length})` : '' }}
           </el-button>
         </div>
 
@@ -67,6 +67,7 @@
 
       <div class="agent-outputs-table-wrap">
         <el-table
+          ref="agentOutputsTableRef"
           :data="filteredOutputs"
           v-loading="loading"
           stripe
@@ -83,9 +84,10 @@
             width="46"
             align="center"
           />
+
           <el-table-column
-            label="File"
-            min-width="320"
+            label="Filename"
+            min-width="360"
           >
             <template #default="{ row }">
               <div class="agent-output-file-cell">
@@ -101,7 +103,7 @@
 
           <el-table-column
             label="Builder"
-            min-width="110"
+            min-width="70"
           >
             <template #default="{ row }">
               {{ row.builder || '-' }}
@@ -109,88 +111,23 @@
           </el-table-column>
 
           <el-table-column
-            label="Version"
-            min-width="200"
-          >
-            <template #default="{ row }">
-              <span>{{ row.build_version || '-' }}</span>
-            </template>
-          </el-table-column>
-
-          <el-table-column
             label="OS"
-            min-width="100"
+            min-width="70"
           >
             <template #default="{ row }">
-              <el-tag
-                size="small"
-                effect="plain"
-              >
+<!--              <el-tag-->
+<!--                size="small"-->
+<!--                effect="plain"-->
+<!--              >-->
                 {{ describeAgentTargetOs(row.target_os) }}
-              </el-tag>
-            </template>
-          </el-table-column>
-
-          <el-table-column
-            label="Arch"
-            min-width="100"
-          >
-            <template #default="{ row }">
-              <el-tag
-                size="small"
-                type="info"
-                effect="plain"
-              >
-                {{ row.target_arch || '-' }}
-              </el-tag>
-            </template>
-          </el-table-column>
-
-          <el-table-column
-            label="Source"
-            min-width="110"
-          >
-            <template #default="{ row }">
-              {{ formatAgentSourceText(row.source) }}
-            </template>
-          </el-table-column>
-
-          <el-table-column
-            label="Socket"
-            min-width="180"
-            show-overflow-tooltip
-          >
-            <template #default="{ row }">
-              <span class="agent-output-mono">
-                {{ formatAgentListenerText(row) }}
-              </span>
-            </template>
-          </el-table-column>
-
-          <el-table-column
-            label="Web"
-            min-width="220"
-            show-overflow-tooltip
-          >
-            <template #default="{ row }">
-              <span class="agent-output-mono">
-                {{ formatAgentWebListenerText(row) }}
-              </span>
-            </template>
-          </el-table-column>
-
-          <el-table-column
-            label="Build Time"
-            min-width="200"
-          >
-            <template #default="{ row }">
-              {{ formatOutputDateTime(row.build_time) }}
+<!--              </el-tag>-->
             </template>
           </el-table-column>
 
           <el-table-column
             label="Size"
-            min-width="120"
+            min-width="80"
+            align="center"
           >
             <template #default="{ row }">
               <span>{{ formatOutputBytes(row.size) }}</span>
@@ -199,42 +136,273 @@
 
           <el-table-column
             label="Actions"
-            width="170"
+            width="160"
+            align="center"
             fixed="right"
           >
             <template #default="{ row }">
               <div class="agent-output-actions">
-                <a
-                  class="table-action-link"
-                  :href="row.download_url || '#'"
-                  target="_blank"
-                  rel="noreferrer"
+                <el-tooltip
+                  content="Download"
+                  placement="top"
                 >
-                  Download
-                </a>
+                  <el-button
+                    size="small"
+                    type="primary"
+                    circle
+                    plain
+                    title="Download"
+                    aria-label="Download"
+                    :disabled="!row.download_url"
+                    @click="downloadAgentOutput(row)"
+                  >
+                    <el-icon>
+                      <DownloadIcon />
+                    </el-icon>
+                  </el-button>
+                </el-tooltip>
 
-                <a
-                  class="table-action-link danger"
-                  :class="{ disabled: isAgentOutputDeleting(row.file_name) }"
-                  @click.prevent="deleteAgentOutput(row)"
+                <el-tooltip
+                  content="Delete"
+                  placement="top"
                 >
-                  {{ isAgentOutputDeleting(row.file_name) ? 'Deleting...' : 'Delete' }}
-                </a>
+                  <el-button
+                    size="small"
+                    type="danger"
+                    circle
+                    plain
+                    title="Delete"
+                    aria-label="Delete"
+                    :loading="isAgentOutputDeleting(row.file_name)"
+                    :disabled="isAgentOutputDeleting(row.file_name)"
+                    @click="deleteAgentOutput(row)"
+                  >
+                    <el-icon>
+                      <DeleteIcon />
+                    </el-icon>
+                  </el-button>
+                </el-tooltip>
+
+                <el-dropdown
+                  trigger="click"
+                  placement="bottom-end"
+                  @command="command => handleAgentOutputMoreCommand(command, row)"
+                >
+                  <el-button
+                    size="small"
+                    circle
+                    plain
+                    title="More"
+                    aria-label="More"
+                  >
+                    <el-icon>
+                      <MoreFilledIcon />
+                    </el-icon>
+                  </el-button>
+
+                  <template #dropdown>
+                    <el-dropdown-menu>
+                      <el-dropdown-item command="info">
+                        Info
+                      </el-dropdown-item>
+                    </el-dropdown-menu>
+                  </template>
+                </el-dropdown>
               </div>
             </template>
           </el-table-column>
         </el-table>
       </div>
+
+      <div class="agent-outputs-mobile-wrap">
+        <div
+          class="agent-outputs-mobile-list"
+          v-loading="loading"
+        >
+          <div
+            v-if="!filteredOutputs.length && !loading"
+            class="agent-outputs-empty"
+          >
+            No agent outputs
+          </div>
+
+          <div
+            v-else
+            class="agent-outputs-mobile-grid"
+          >
+            <div
+              v-for="row in filteredOutputs"
+              :key="row.file_name"
+              class="agent-output-mobile-card"
+            >
+              <div class="agent-output-mobile-checkbox">
+                <el-checkbox
+                  :model-value="isAgentOutputSelected(row)"
+                  @change="checked => toggleAgentOutputSelection(row, checked)"
+                />
+              </div>
+
+              <div class="agent-output-mobile-top">
+                <div class="agent-output-mobile-icon">
+                  📦
+                </div>
+
+                <div class="agent-output-mobile-main">
+                  <div
+                    class="agent-output-mobile-name"
+                    :title="row.file_name"
+                  >
+                    {{ row.file_name || '-' }}
+                  </div>
+
+                  <div class="agent-output-mobile-tags">
+                    <el-tag size="small">
+                      {{ row.builder || '-' }}
+                    </el-tag>
+
+                    <el-tag
+                      size="small"
+                      type="info"
+                      effect="plain"
+                    >
+                      {{ describeAgentTargetOs(row.target_os) }} / {{ row.target_arch || '-' }}
+                    </el-tag>
+                  </div>
+
+                  <div class="agent-output-mobile-meta">
+                    <div class="agent-output-mobile-meta-item">
+                      <div class="agent-output-mobile-meta-label">Version</div>
+                      <div class="agent-output-mobile-meta-value">
+                        {{ row.build_version || '-' }}
+                      </div>
+                    </div>
+
+                    <div class="agent-output-mobile-meta-item">
+                      <div class="agent-output-mobile-meta-label">Build Time</div>
+                      <div class="agent-output-mobile-meta-value">
+                        {{ formatOutputDateTime(row.build_time) }}
+                      </div>
+                    </div>
+
+                    <div class="agent-output-mobile-meta-item">
+                      <div class="agent-output-mobile-meta-label">Size</div>
+                      <div class="agent-output-mobile-meta-value">
+                        {{ formatOutputBytes(row.size) }}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div class="agent-output-mobile-actions">
+                    <div class="agent-output-mobile-action-item">
+                      <el-button
+                        size="small"
+                        type="primary"
+                        plain
+                        :disabled="!row.download_url"
+                        @click="downloadAgentOutput(row)"
+                      >
+                        Download
+                      </el-button>
+                    </div>
+
+                    <div class="agent-output-mobile-action-item">
+                      <el-button
+                        size="small"
+                        type="danger"
+                        plain
+                        :loading="isAgentOutputDeleting(row.file_name)"
+                        :disabled="isAgentOutputDeleting(row.file_name)"
+                        @click="deleteAgentOutput(row)"
+                      >
+                        Delete
+                      </el-button>
+                    </div>
+
+                    <div class="agent-output-mobile-action-item">
+                      <el-dropdown
+                        trigger="click"
+                        placement="bottom-end"
+                        class="agent-output-mobile-more-dropdown"
+                        @command="command => handleAgentOutputMoreCommand(command, row)"
+                      >
+                        <el-button
+                          size="small"
+                          plain
+                          class="agent-output-mobile-more-button"
+                        >
+                          <el-icon>
+                            <MoreFilledIcon />
+                          </el-icon>
+                          More
+                        </el-button>
+
+                        <template #dropdown>
+                          <el-dropdown-menu>
+                            <el-dropdown-item command="info">
+                              Info
+                            </el-dropdown-item>
+                          </el-dropdown-menu>
+                        </template>
+                      </el-dropdown>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </el-dialog>
+
+  <el-dialog
+    v-model="agentOutputInfoDialogVisible"
+    title="Agent Output Info"
+    width="760px"
+    top="8vh"
+    class="fixed-dialog agent-output-info-dialog"
+  >
+    <div class="agent-output-info-body">
+      <template v-if="agentOutputInfoItem">
+        <div
+          v-for="item in formattedAgentOutputInfoRows"
+          :key="item.key"
+          class="agent-output-info-row"
+        >
+          <div class="agent-output-info-label">
+            {{ item.label }}
+          </div>
+
+          <div
+            class="agent-output-info-value"
+            :class="{ 'agent-output-mono': item.mono }"
+          >
+            {{ item.value }}
+          </div>
+        </div>
+      </template>
+
+      <el-empty
+        v-else
+        description="No agent output info available"
+      />
     </div>
   </el-dialog>
 </template>
 
 <script>
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { Delete, Download, MoreFilled } from '@element-plus/icons-vue'
 import { formatBytes, formatDateTimeStandard } from '../utils/formatters.js'
 
 export default {
   name: 'AgentOutputsDialog',
+
+  components: {
+    DeleteIcon: Delete,
+    DownloadIcon: Download,
+    MoreFilledIcon: MoreFilled,
+  },
 
   props: {
     // formatDateTimeStandard: {
@@ -261,6 +429,8 @@ export default {
       selectedOutputFileNames: [],
       bulkDeleting: false,
       agentOutputsDeleting: {},
+      agentOutputInfoDialogVisible: false,
+      agentOutputInfoItem: null,
     }
   },
 
@@ -291,6 +461,71 @@ export default {
       const base = `${count} ${count === 1 ? 'output' : 'outputs'}`
       return count === total ? base : `${base} / ${total} total`
     },
+
+    formattedAgentOutputInfoRows() {
+      const row = this.agentOutputInfoItem || {}
+      const rows = [
+                  {
+          key: 'file_name',
+          label: 'Filename',
+          value: row.file_name || '-',
+        },
+
+                  {
+          key: 'builder',
+          label: 'Builder',
+          value: row.builder || '-',
+        },
+
+        {
+          key: 'build_version',
+          label: 'Version',
+          value: row.build_version || '-',
+        },
+        {
+          key: 'target_os',
+          label: 'OS',
+          value: row.target_os || '-',
+        },
+        {
+          key: 'target_arch',
+          label: 'Arch',
+          value: row.target_arch || '-',
+        },
+        {
+          key: 'source',
+          label: 'Source',
+          value: this.formatAgentSourceText(row.source),
+        },
+        {
+          key: 'socket',
+          label: 'Socket',
+          value: this.formatAgentListenerText(row),
+          mono: true,
+        },
+        {
+          key: 'web',
+          label: 'Web',
+          value: this.formatAgentWebListenerText(row),
+          mono: true,
+        },
+        {
+          key: 'build_time',
+          label: 'Build Time',
+          value: this.formatOutputDateTime(row.build_time),
+        },
+        {
+          key: 'size',
+          label: 'Size',
+          value: this.formatOutputBytes(row.size),
+        },
+      ]
+
+      return rows.map(item => ({
+        ...item,
+        value: this.formatAgentOutputInfoValue(item.value),
+      }))
+    },
   },
 
   methods: {
@@ -313,7 +548,7 @@ export default {
         win: 'Windows',
         mac: 'macOS',
         linux: 'Linux',
-        bundle: 'Bundle',
+        bundle: '-',
       }
 
       return mapping[targetOs] || targetOs || 'macOS'
@@ -347,13 +582,72 @@ export default {
       return `${scheme}://${host}:${port}`
     },
 
-formatOutputDateTime(value) {
-  return formatDateTimeStandard(value)
-},
+    formatOutputDateTime(value) {
+      return formatDateTimeStandard(value)
+    },
 
-formatOutputBytes(value) {
-  return formatBytes(value)
-},
+    formatOutputBytes(value) {
+      return formatBytes(value)
+    },
+
+    formatAgentOutputInfoValue(value) {
+      if (value === null || value === undefined || value === '') return '-'
+      if (Array.isArray(value)) return value.length ? value.join(', ') : '-'
+
+      if (typeof value === 'object') {
+        try {
+          return JSON.stringify(value)
+        } catch (_e) {
+          return String(value)
+        }
+      }
+
+      return String(value)
+    },
+
+    getAgentOutputFileName(row) {
+      return String(row?.file_name || '').trim()
+    },
+
+    handleAgentOutputMoreCommand(command, row) {
+      if (command === 'info') {
+        this.openAgentOutputInfo(row)
+      }
+    },
+
+    openAgentOutputInfo(row) {
+      this.agentOutputInfoItem = row || null
+      this.agentOutputInfoDialogVisible = true
+    },
+
+    downloadAgentOutput(row) {
+      const url = String(row?.download_url || '').trim()
+      if (!url) {
+        ElMessage.warning('Download URL unavailable')
+        return
+      }
+
+      window.open(url, '_blank', 'noopener,noreferrer')
+    },
+
+    isAgentOutputSelected(row) {
+      const fileName = this.getAgentOutputFileName(row)
+      return Boolean(fileName && this.selectedOutputFileNames.includes(fileName))
+    },
+
+    toggleAgentOutputSelection(row, checked) {
+      const fileName = this.getAgentOutputFileName(row)
+      if (!fileName) return
+
+      if (checked) {
+        if (!this.selectedOutputFileNames.includes(fileName)) {
+          this.selectedOutputFileNames = [...this.selectedOutputFileNames, fileName]
+        }
+        return
+      }
+
+      this.selectedOutputFileNames = this.selectedOutputFileNames.filter(item => item !== fileName)
+    },
 
     handleOutputSelectionChange(rows) {
       this.selectedOutputFileNames = (rows || [])
@@ -441,6 +735,10 @@ formatOutputBytes(value) {
         await this.requestDeleteAgentOutput(fileName)
         this.outputs = this.outputs.filter(item => String(item?.file_name || '').trim() !== fileName)
         this.selectedOutputFileNames = this.selectedOutputFileNames.filter(item => item !== fileName)
+        if (this.getAgentOutputFileName(this.agentOutputInfoItem) === fileName) {
+          this.agentOutputInfoDialogVisible = false
+          this.agentOutputInfoItem = null
+        }
         ElMessage.success('Deleted')
       } catch (e) {
         ElMessage.error(e.message || 'Delete failed')
@@ -502,6 +800,11 @@ formatOutputBytes(value) {
         const deletedNames = new Set(selected.map(item => String(item?.file_name || '').trim()).filter(Boolean))
         this.outputs = this.outputs.filter(item => !deletedNames.has(String(item?.file_name || '').trim()))
         this.selectedOutputFileNames = []
+
+        if (this.agentOutputInfoItem && deletedNames.has(this.getAgentOutputFileName(this.agentOutputInfoItem))) {
+          this.agentOutputInfoDialogVisible = false
+          this.agentOutputInfoItem = null
+        }
 
         if (failedCount) {
           ElMessage.warning(`Deleted ${deletedCount}, failed ${failedCount}`)
@@ -625,13 +928,190 @@ formatOutputBytes(value) {
 .agent-output-actions {
   display: flex;
   align-items: center;
-  gap: 12px;
+  justify-content: center;
+  gap: 8px;
   padding-top: 2px;
+}
+
+.agent-output-actions :deep(.el-button) {
+  margin: 0;
 }
 
 .agent-output-actions .disabled {
   opacity: 0.55;
   pointer-events: none;
+}
+
+.agent-outputs-mobile-wrap {
+  display: none;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.agent-outputs-mobile-list {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  overflow: auto;
+}
+
+.agent-outputs-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 180px;
+  color: #909399;
+  font-size: 14px;
+}
+
+.agent-outputs-mobile-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+  padding-bottom: 10px;
+}
+
+.agent-output-mobile-card {
+  position: relative;
+  padding: 14px 14px 14px 12px;
+  border: 1px solid #ebeef5;
+  border-radius: 14px;
+  background: #fff;
+  box-shadow: 0 8px 22px rgba(15, 23, 42, 0.06);
+}
+
+.agent-output-mobile-checkbox {
+  position: absolute;
+  top: 10px;
+  right: 12px;
+  z-index: 1;
+}
+
+.agent-output-mobile-top {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  min-width: 0;
+}
+
+.agent-output-mobile-icon {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 12px;
+  background: #f5f7fa;
+  font-size: 20px;
+}
+
+.agent-output-mobile-main {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.agent-output-mobile-name {
+  padding-right: 36px;
+  color: #111827;
+  font-weight: 600;
+  line-height: 1.45;
+  word-break: break-all;
+}
+
+.agent-output-mobile-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.agent-output-mobile-meta {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px 12px;
+  margin-top: 12px;
+}
+
+.agent-output-mobile-meta-item {
+  min-width: 0;
+}
+
+.agent-output-mobile-meta-item:first-child {
+  grid-column: 1 / -1;
+}
+
+.agent-output-mobile-meta-label {
+  margin-bottom: 3px;
+  color: #8a94a6;
+  font-size: 12px;
+  line-height: 1.2;
+}
+
+.agent-output-mobile-meta-value {
+  min-width: 0;
+  color: #303133;
+  font-size: 13px;
+  line-height: 1.35;
+  word-break: break-word;
+}
+
+.agent-output-mobile-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.agent-output-mobile-action-item {
+  min-width: 0;
+}
+
+.agent-output-mobile-actions > .agent-output-mobile-action-item:last-child:nth-child(odd) {
+  grid-column: 1 / -1;
+}
+
+.agent-output-mobile-actions :deep(.el-button) {
+  width: 100%;
+  height: 34px;
+  margin: 0;
+  border-radius: 10px;
+}
+
+.agent-output-mobile-more-dropdown {
+  width: 100%;
+}
+
+.agent-output-mobile-more-dropdown :deep(.el-tooltip__trigger) {
+  width: 100%;
+}
+
+.agent-output-mobile-more-button :deep(.el-icon) {
+  margin-right: 4px;
+}
+
+.agent-output-info-body {
+  max-height: 65vh;
+  overflow: auto;
+}
+
+.agent-output-info-row {
+  display: grid;
+  grid-template-columns: 180px 1fr;
+  gap: 12px;
+  padding: 9px 0;
+  border-bottom: 1px solid #ebeef5;
+}
+
+.agent-output-info-label {
+  color: #606266;
+  font-weight: 500;
+}
+
+.agent-output-info-value {
+  color: #303133;
+  word-break: break-word;
 }
 
 @media (max-width: 768px) {
@@ -649,6 +1129,14 @@ formatOutputBytes(value) {
     flex-wrap: wrap;
   }
 
+  .agent-outputs-toolbar-left :deep(.el-button.toolbar-btn) {
+    flex: 1 1 calc(50% - 4px);
+  }
+
+  .agent-outputs-toolbar-left :deep(.el-button.toolbar-btn:last-child:nth-child(odd)) {
+    flex-basis: 100%;
+  }
+
   .agent-outputs-toolbar-right {
     justify-content: flex-start;
     margin-left: 0;
@@ -657,6 +1145,22 @@ formatOutputBytes(value) {
 
   .agent-output-builder-filter {
     width: 100%;
+  }
+
+  .agent-outputs-count {
+    width: 100%;
+  }
+
+  .agent-outputs-table-wrap {
+    display: none;
+  }
+
+  .agent-outputs-mobile-wrap {
+    display: flex;
+  }
+
+  .agent-output-info-row {
+    grid-template-columns: 118px 1fr;
   }
 }
 </style>
@@ -693,7 +1197,7 @@ formatOutputBytes(value) {
 
 @media (min-width: 769px) {
   .agent-outputs-overlay .el-dialog {
-    width: 1280px !important;
+    width: 1120px !important;
     max-width: calc(100vw - 32px) !important;
     height: 76vh !important;
     max-height: 76vh !important;
