@@ -5,6 +5,7 @@ import subprocess
 import tempfile
 import zipfile
 from datetime import datetime
+from uuid import uuid4
 
 from core.utils.logger import logger
 
@@ -37,8 +38,12 @@ class AgentBuilder:
     def _ensure_dirs(self):
         os.makedirs(self.output_dir, exist_ok=True)
 
+    # def _build_timestamp_text(self) -> str:
+    #     return datetime.now().strftime('%Y%m%d-%H%M')
+
     def _build_timestamp_text(self) -> str:
-        return datetime.now().strftime('%Y%m%d-%H%M')
+        stamp = datetime.now().strftime('%Y%m%d-%H%M%S')
+        return f'{stamp}-{uuid4().hex[:8]}'
 
     def _build_version_text(self, builder: str) -> str:
         builder_name = (builder or '').strip().lower()

@@ -1,6 +1,7 @@
 import os
 import shutil
 import sys
+import tempfile
 
 from client.commands.platform.utils.ios_util import spawn
 from client.commands.runtime.interrupts import interruptible
@@ -19,6 +20,7 @@ from client.runtime.client_util import (
     spawn_detached_python_script,
 )
 from core.utils.decorator import desc
+from core.utils.output_marker import success, info, warning, error
 
 
 class CommandUpdateMixin:
@@ -147,11 +149,11 @@ class CommandUpdateMixin:
 
     def _format_clean_outdated_releases_result(self, result: dict) -> str:
         lines = [
-            'Outdated bundle releases cleaned',
-            f'Release Dir: {result.get("release_dir", "")}',
-            f'Current Bundle Dir: {result.get("current_bundle_dir", "")}',
-            f'Deleted Version Dirs: {len(result.get("deleted_dirs") or [])}',
-            f'Deleted ZIP Files: {len(result.get("deleted_zips") or [])}',
+            success('Outdated bundle releases cleaned'),
+            info(f'Release Dir: {result.get("release_dir", "")}'),
+            info(f'Current Bundle Dir: {result.get("current_bundle_dir", "")}'),
+            success(f'Deleted Version Dirs: {len(result.get("deleted_dirs") or [])}'),
+            success(f'Deleted ZIP Files: {len(result.get("deleted_zips") or [])}'),
         ]
 
         deleted_dirs = result.get('deleted_dirs') or []
@@ -159,18 +161,83 @@ class CommandUpdateMixin:
         errors = result.get('errors') or []
 
         if deleted_dirs:
-            lines.append('Deleted dirs:')
+            lines.append(warning('Deleted dirs:'))
             lines.extend(f'  {item}' for item in deleted_dirs)
 
         if deleted_zips:
-            lines.append('Deleted zips:')
+            lines.append(warning('Deleted zips:'))
             lines.extend(f'  {item}' for item in deleted_zips)
 
         if errors:
-            lines.append('Errors:')
+            lines.append(error('Errors:'))
             lines.extend(f'  {item}' for item in errors)
 
         return '\n'.join(lines)
+
+
+    def _same_real_path(self, left: str, right: str) -> bool:
+        if not left or not right:
+            return False
+        try:
+            return os.path.realpath(os.path.abspath(left)) == os.path.realpath(os.path.abspath(right))
+        except Exception:
+            return False
+
+    def _is_extracted_bundle_usable(self, extract_dir: str) -> bool:
+        rchclient_path = os.path.join(extract_dir, 'rchclient.py')
+        return os.path.isdir(extract_dir) and os.path.isfile(rchclient_path)
+
+    def _extract_update_bundle_safely(self, archive_path: str, extract_dir: str, current_bundle_dir: str = '') -> str:
+        """
+        安全解压 update bundle。
+
+        原则：
+        1. 已存在可用目录时直接复用，避免同名 bundle 重复解压时删除正在运行的目录。
+        2. 绝不删除当前进程所在的 bundle 目录。
+        3. 先解压到临时目录，校验 rchclient.py 后再发布，避免中断后留下半成品目录。
+        """
+        release_dir = os.path.dirname(os.path.realpath(os.path.abspath(extract_dir)))
+        final_dir = os.path.realpath(os.path.abspath(extract_dir))
+        current_dir = os.path.realpath(os.path.abspath(current_bundle_dir)) if current_bundle_dir else ''
+
+        if os.path.isdir(final_dir):
+            if self._is_extracted_bundle_usable(final_dir):
+                return final_dir
+
+            if self._same_real_path(final_dir, current_dir):
+                raise RuntimeError(f'Refuse to remove current running bundle directory: {final_dir}')
+
+            shutil.rmtree(final_dir)
+
+        temp_dir = tempfile.mkdtemp(
+            prefix=f'{os.path.basename(final_dir)}.extracting.',
+            dir=release_dir,
+        )
+
+        try:
+            safe_extract_zip_archive(archive_path, temp_dir)
+
+            rchclient_path = os.path.join(temp_dir, 'rchclient.py')
+            if not os.path.isfile(rchclient_path):
+                raise FileNotFoundError(f'rchclient.py not found after extract: {rchclient_path}')
+
+            # 发布前再检查一次，兼容两个 update 几乎同时解同一个 bundle 的情况。
+            if os.path.isdir(final_dir):
+                if self._is_extracted_bundle_usable(final_dir):
+                    shutil.rmtree(temp_dir, ignore_errors=True)
+                    return final_dir
+
+                if self._same_real_path(final_dir, current_dir):
+                    raise RuntimeError(f'Refuse to replace current running bundle directory: {final_dir}')
+
+                shutil.rmtree(final_dir)
+
+            os.replace(temp_dir, final_dir)
+            return final_dir
+
+        except Exception:
+            shutil.rmtree(temp_dir, ignore_errors=True)
+            raise
 
     @desc('Build, download, extract and launch the latest client bundle', group='session')
     @interruptible()
@@ -188,18 +255,32 @@ class CommandUpdateMixin:
             self._download_bundle_archive(bundle_meta['download_url'], archive_path)
             self._send_success(f'Bundled downloaded successfully: {archive_path}', 0)
 
-            if os.path.isdir(extract_dir):
-                shutil.rmtree(extract_dir)
+            current_bundle_dir = self._get_current_bundle_release_dir(release_dir)
 
             self._send_info(f'Bundle extracting...', 0)
-            safe_extract_zip_archive(archive_path, extract_dir)
-            self._send_success(f'Bundle extracted to {extract_dir}')
+            extract_dir = self._extract_update_bundle_safely(
+                archive_path,
+                extract_dir,
+                current_bundle_dir,
+            )
+            self._send_success(f'Bundle ready at {extract_dir}')
 
             rchclient_path = os.path.join(extract_dir, 'rchclient.py')
-            if not os.path.isfile(rchclient_path):
-                raise FileNotFoundError(f'rchclient.py not found after extract: {rchclient_path}')
-
             self._send_info(f'Preparing to launch script: {rchclient_path}', 0)
+
+
+            # if os.path.isdir(extract_dir):
+            #     shutil.rmtree(extract_dir)
+            #
+            # self._send_info(f'Bundle extracting...', 0)
+            # safe_extract_zip_archive(archive_path, extract_dir)
+            # self._send_success(f'Bundle extracted to {extract_dir}')
+            #
+            # rchclient_path = os.path.join(extract_dir, 'rchclient.py')
+            # if not os.path.isfile(rchclient_path):
+            #     raise FileNotFoundError(f'rchclient.py not found after extract: {rchclient_path}')
+            #
+            # self._send_info(f'Preparing to launch script: {rchclient_path}', 0)
 
             if detect_platform_alias() == 'ios':
                 self._send_success(f'iOS detected, please restart Pythonista app and manually run script: {rchclient_path}', eof=1)
@@ -222,12 +303,11 @@ class CommandUpdateMixin:
             release_dir = get_client_bundle_release_dir()
             current_bundle_dir = self._get_current_bundle_release_dir(release_dir)
             if not current_bundle_dir:
-                return 1, (
-                    'Skipped: current client is not running from default update bundle releases directory\n'
-                    f'Release Dir: {release_dir}'
-                )
+                self._send_warning(f'Skipped: current client is not running from default bundle releases directory', 0)
+                self._send_warning(f'Default Release Dir: {release_dir}', 1)
+                return
 
             result = self._clean_outdated_bundle_releases(release_dir, current_bundle_dir)
             return 1, self._format_clean_outdated_releases_result(result)
         except Exception as e:
-            return 0, f'Failed to clean outdated releases: {e}'
+            return self._send_error(f'Failed to clean outdated releases: {e}', 1)
