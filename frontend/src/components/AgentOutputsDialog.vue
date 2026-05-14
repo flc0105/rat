@@ -255,19 +255,20 @@
                     {{ row.file_name || '-' }}
                   </div>
 
-                  <div class="agent-output-mobile-tags">
-                    <el-tag size="small">
-                      {{ row.builder || '-' }}
-                    </el-tag>
+<div class="agent-output-mobile-tags">
+  <el-tag size="small">
+    {{ row.builder || '-' }}
+  </el-tag>
 
-                    <el-tag
-                      size="small"
-                      type="info"
-                      effect="plain"
-                    >
-                      {{ describeAgentTargetOs(row.target_os) }} / {{ row.target_arch || '-' }}
-                    </el-tag>
-                  </div>
+  <el-tag
+  v-if="String(row.builder || '').trim().toLowerCase() !== 'bundle'"
+  size="small"
+  type="info"
+  effect="plain"
+>
+  {{ describeAgentTargetOs(row.target_os) }} / {{ row.target_arch || '-' }}
+</el-tag>
+</div>
 
                   <div class="agent-output-mobile-meta">
                     <div class="agent-output-mobile-meta-item">
