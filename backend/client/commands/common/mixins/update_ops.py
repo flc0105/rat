@@ -2,6 +2,7 @@ import os
 import shutil
 import sys
 
+from client.commands.platform.utils.ios_util import spawn
 from client.commands.runtime.interrupts import interruptible
 from client.config.config import (
     SERVER_HOST,
@@ -175,48 +176,40 @@ class CommandUpdateMixin:
     @interruptible()
     def update(self, arg=''):
         try:
+            self._send_info('Bundle building requested', 0)
             bundle_meta = self._request_update_bundle()
+            self._send_success('Bundle building completed', 0)
+
             release_dir = get_client_bundle_release_dir()
             archive_path = os.path.join(release_dir, bundle_meta['file_name'])
             extract_dir = build_bundle_extract_dir(release_dir, bundle_meta['file_name'])
 
+            self._send_info(f'Bundle downloading: {bundle_meta['file_name']}', 0)
             self._download_bundle_archive(bundle_meta['download_url'], archive_path)
+            self._send_success(f'Bundled downloaded successfully: {archive_path}', 0)
 
             if os.path.isdir(extract_dir):
                 shutil.rmtree(extract_dir)
 
+            self._send_info(f'Bundle extracting...', 0)
             safe_extract_zip_archive(archive_path, extract_dir)
+            self._send_success(f'Bundle extracted to {extract_dir}')
 
             rchclient_path = os.path.join(extract_dir, 'rchclient.py')
             if not os.path.isfile(rchclient_path):
                 raise FileNotFoundError(f'rchclient.py not found after extract: {rchclient_path}')
 
-            if detect_platform_alias() == 'ios':
+            self._send_info(f'Preparing to launch script: {rchclient_path}', 0)
 
-                import sys, time
-                # spawn(rchclient_path)
-                self._send_final_result(1, f'Update bundle downloaded\n'
-                                           f'Build Version: {bundle_meta.get("build_version") or "-"}\n'
-                                           f'Downloaded Archive: {archive_path}\n'
-                                           f'Extracted Path: {extract_dir}\n'
-                                           f'Launch Script: {rchclient_path}\n')
-                # time.sleep(1)
-                # self.socket.close()
-                # raise SystemExit
+            if detect_platform_alias() == 'ios':
+                self._send_success(f'iOS detected, please restart Pythonista app and manually run script: {rchclient_path}', eof=1)
+
 
             else:
                 process = spawn_detached_python_script(rchclient_path, cwd=extract_dir)
-                return 1, (
-                    f'Update bundle downloaded and started\n'
-                    f'Build Version: {bundle_meta.get("build_version") or "-"}\n'
-                    f'Downloaded Archive: {archive_path}\n'
-                    f'Extracted Path: {extract_dir}\n'
-                    f'Launch Script: {rchclient_path}\n'
-                    f'PID: {process.pid}'
-
-                )
+                self._send_success(f'Script launched successfully, PID: {process.pid}', eof=1)
         except Exception as e:
-            return 0, f'Failed to update client bundle: {e}'
+            self._send_error(f'Failed to update client bundle: {e}', eof=1)
 
     @desc('Clean outdated client bundle release directories and ZIP files', group='session')
     @interruptible()
