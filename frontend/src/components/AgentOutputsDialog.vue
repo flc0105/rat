@@ -1,42 +1,42 @@
 <template>
   <el-dialog
-    v-model="visible"
-    title="Agent Outputs"
-    width="1320px"
-    top="4vh"
-    class="fixed-dialog agent-outputs-dialog"
-    modal-class="agent-outputs-overlay"
+      v-model="visible"
+      title="Agent Outputs"
+      width="1320px"
+      top="4vh"
+      class="fixed-dialog agent-outputs-dialog"
+      modal-class="agent-outputs-overlay"
   >
     <div class="fixed-dialog-body agent-outputs-body">
       <div class="agent-outputs-toolbar">
         <div class="agent-outputs-toolbar-left">
           <el-button
-            type="primary"
-            plain
-            class="toolbar-btn"
-            size="small"
-            @click="$emit('open-builder')"
+              type="primary"
+              plain
+              class="toolbar-btn"
+              size="small"
+              @click="$emit('open-builder')"
           >
             Build Agent
           </el-button>
 
           <el-button
-            class="toolbar-btn"
-            size="small"
-            :loading="loading"
-            @click="loadAgentOutputs"
+              class="toolbar-btn"
+              size="small"
+              :loading="loading"
+              @click="loadAgentOutputs"
           >
             Refresh
           </el-button>
 
           <el-button
-            class="toolbar-btn"
-            size="small"
-            type="danger"
-            plain
-            :disabled="!selectedOutputFileNames.length"
-            :loading="bulkDeleting"
-            @click="deleteSelectedAgentOutputs"
+              class="toolbar-btn"
+              size="small"
+              type="danger"
+              plain
+              :disabled="!selectedOutputFileNames.length"
+              :loading="bulkDeleting"
+              @click="deleteSelectedAgentOutputs"
           >
             Delete{{ selectedOutputFileNames.length ? ` (${selectedOutputFileNames.length})` : '' }}
           </el-button>
@@ -44,18 +44,18 @@
 
         <div class="agent-outputs-toolbar-right">
           <el-select
-            v-model="outputBuilderFilter"
-            class="agent-output-builder-filter"
-            clearable
-            filterable
-            size="small"
-            placeholder="Filter builder"
+              v-model="outputBuilderFilter"
+              class="agent-output-builder-filter"
+              clearable
+              filterable
+              size="small"
+              placeholder="Filter builder"
           >
             <el-option
-              v-for="builder in builderOptions"
-              :key="builder"
-              :label="builder"
-              :value="builder"
+                v-for="builder in builderOptions"
+                :key="builder"
+                :label="builder"
+                :value="builder"
             />
           </el-select>
 
@@ -67,33 +67,33 @@
 
       <div class="agent-outputs-table-wrap">
         <el-table
-          ref="agentOutputsTableRef"
-          :data="filteredOutputs"
-          v-loading="loading"
-          stripe
-          border
-          height="100%"
-          table-layout="fixed"
-          row-key="file_name"
-          class="dialog-table-shell"
-          empty-text="No agent outputs"
-          @selection-change="handleOutputSelectionChange"
+            ref="agentOutputsTableRef"
+            :data="filteredOutputs"
+            v-loading="loading"
+            stripe
+            border
+            height="100%"
+            table-layout="fixed"
+            row-key="file_name"
+            class="dialog-table-shell"
+            empty-text="No agent outputs"
+            @selection-change="handleOutputSelectionChange"
         >
           <el-table-column
-            type="selection"
-            width="46"
-            align="center"
+              type="selection"
+              width="46"
+              align="center"
           />
 
           <el-table-column
-            label="Filename"
-            min-width="360"
+              label="Filename"
+              min-width="340"
           >
             <template #default="{ row }">
               <div class="agent-output-file-cell">
                 <div
-                  class="agent-output-file-name"
-                  :title="row.file_name"
+                    class="agent-output-file-name"
+                    :title="row.file_name"
                 >
                   {{ row.file_name || '-' }}
                 </div>
@@ -102,8 +102,8 @@
           </el-table-column>
 
           <el-table-column
-            label="Builder"
-            min-width="70"
+              label="Builder"
+              min-width="70"
           >
             <template #default="{ row }">
               {{ row.builder || '-' }}
@@ -111,23 +111,23 @@
           </el-table-column>
 
           <el-table-column
-            label="OS"
-            min-width="70"
+              label="OS"
+              min-width="70"
           >
             <template #default="{ row }">
-<!--              <el-tag-->
-<!--                size="small"-->
-<!--                effect="plain"-->
-<!--              >-->
-                {{ describeAgentTargetOs(row.target_os) }}
-<!--              </el-tag>-->
+              <!--              <el-tag-->
+              <!--                size="small"-->
+              <!--                effect="plain"-->
+              <!--              >-->
+              {{ describeAgentTargetOs(row.target_os) }}
+              <!--              </el-tag>-->
             </template>
           </el-table-column>
 
           <el-table-column
-            label="Size"
-            min-width="80"
-            align="center"
+              label="Size"
+              min-width="80"
+              align="center"
           >
             <template #default="{ row }">
               <span>{{ formatOutputBytes(row.size) }}</span>
@@ -135,68 +135,68 @@
           </el-table-column>
 
           <el-table-column
-            label="Actions"
-            width="160"
-            align="center"
-            fixed="right"
+              label="Actions"
+              width="160"
+              align="center"
+              fixed="right"
           >
             <template #default="{ row }">
               <div class="agent-output-actions">
                 <el-tooltip
-                  content="Download"
-                  placement="top"
+                    content="Download"
+                    placement="top"
                 >
                   <el-button
-                    size="small"
-                    type="primary"
-                    circle
-                    plain
-                    title="Download"
-                    aria-label="Download"
-                    :disabled="!row.download_url"
-                    @click="downloadAgentOutput(row)"
+                      size="small"
+                      type="primary"
+                      circle
+                      plain
+                      title="Download"
+                      aria-label="Download"
+                      :disabled="!row.download_url"
+                      @click="downloadAgentOutput(row)"
                   >
                     <el-icon>
-                      <DownloadIcon />
+                      <DownloadIcon/>
                     </el-icon>
                   </el-button>
                 </el-tooltip>
 
                 <el-tooltip
-                  content="Delete"
-                  placement="top"
+                    content="Delete"
+                    placement="top"
                 >
                   <el-button
-                    size="small"
-                    type="danger"
-                    circle
-                    plain
-                    title="Delete"
-                    aria-label="Delete"
-                    :loading="isAgentOutputDeleting(row.file_name)"
-                    :disabled="isAgentOutputDeleting(row.file_name)"
-                    @click="deleteAgentOutput(row)"
+                      size="small"
+                      type="danger"
+                      circle
+                      plain
+                      title="Delete"
+                      aria-label="Delete"
+                      :loading="isAgentOutputDeleting(row.file_name)"
+                      :disabled="isAgentOutputDeleting(row.file_name)"
+                      @click="deleteAgentOutput(row)"
                   >
                     <el-icon>
-                      <DeleteIcon />
+                      <DeleteIcon/>
                     </el-icon>
                   </el-button>
                 </el-tooltip>
 
                 <el-dropdown
-                  trigger="click"
-                  placement="bottom-end"
-                  @command="command => handleAgentOutputMoreCommand(command, row)"
+                    trigger="click"
+                    placement="bottom-end"
+                    @command="command => handleAgentOutputMoreCommand(command, row)"
                 >
                   <el-button
-                    size="small"
-                    circle
-                    plain
-                    title="More"
-                    aria-label="More"
+                      size="small"
+                      circle
+                      plain
+                      title="More"
+                      aria-label="More"
                   >
                     <el-icon>
-                      <MoreFilledIcon />
+                      <MoreFilledIcon/>
                     </el-icon>
                   </el-button>
 
@@ -216,29 +216,29 @@
 
       <div class="agent-outputs-mobile-wrap">
         <div
-          class="agent-outputs-mobile-list"
-          v-loading="loading"
+            class="agent-outputs-mobile-list"
+            v-loading="loading"
         >
           <div
-            v-if="!filteredOutputs.length && !loading"
-            class="agent-outputs-empty"
+              v-if="!filteredOutputs.length && !loading"
+              class="agent-outputs-empty"
           >
             No agent outputs
           </div>
 
           <div
-            v-else
-            class="agent-outputs-mobile-grid"
+              v-else
+              class="agent-outputs-mobile-grid"
           >
             <div
-              v-for="row in filteredOutputs"
-              :key="row.file_name"
-              class="agent-output-mobile-card"
+                v-for="row in filteredOutputs"
+                :key="row.file_name"
+                class="agent-output-mobile-card"
             >
               <div class="agent-output-mobile-checkbox">
                 <el-checkbox
-                  :model-value="isAgentOutputSelected(row)"
-                  @change="checked => toggleAgentOutputSelection(row, checked)"
+                    :model-value="isAgentOutputSelected(row)"
+                    @change="checked => toggleAgentOutputSelection(row, checked)"
                 />
               </div>
 
@@ -249,26 +249,26 @@
 
                 <div class="agent-output-mobile-main">
                   <div
-                    class="agent-output-mobile-name"
-                    :title="row.file_name"
+                      class="agent-output-mobile-name"
+                      :title="row.file_name"
                   >
                     {{ row.file_name || '-' }}
                   </div>
 
-<div class="agent-output-mobile-tags">
-  <el-tag size="small">
-    {{ row.builder || '-' }}
-  </el-tag>
+                  <div class="agent-output-mobile-tags">
+                    <el-tag size="small">
+                      {{ row.builder || '-' }}
+                    </el-tag>
 
-  <el-tag
-  v-if="String(row.builder || '').trim().toLowerCase() !== 'bundle'"
-  size="small"
-  type="info"
-  effect="plain"
->
-  {{ describeAgentTargetOs(row.target_os) }} / {{ row.target_arch || '-' }}
-</el-tag>
-</div>
+                    <el-tag
+                        v-if="String(row.builder || '').trim().toLowerCase() !== 'bundle'"
+                        size="small"
+                        type="info"
+                        effect="plain"
+                    >
+                      {{ describeAgentTargetOs(row.target_os) }} / {{ row.target_arch || '-' }}
+                    </el-tag>
+                  </div>
 
                   <div class="agent-output-mobile-meta">
                     <div class="agent-output-mobile-meta-item">
@@ -296,11 +296,11 @@
                   <div class="agent-output-mobile-actions">
                     <div class="agent-output-mobile-action-item">
                       <el-button
-                        size="small"
-                        type="primary"
-                        plain
-                        :disabled="!row.download_url"
-                        @click="downloadAgentOutput(row)"
+                          size="small"
+                          type="primary"
+                          plain
+                          :disabled="!row.download_url"
+                          @click="downloadAgentOutput(row)"
                       >
                         Download
                       </el-button>
@@ -308,12 +308,12 @@
 
                     <div class="agent-output-mobile-action-item">
                       <el-button
-                        size="small"
-                        type="danger"
-                        plain
-                        :loading="isAgentOutputDeleting(row.file_name)"
-                        :disabled="isAgentOutputDeleting(row.file_name)"
-                        @click="deleteAgentOutput(row)"
+                          size="small"
+                          type="danger"
+                          plain
+                          :loading="isAgentOutputDeleting(row.file_name)"
+                          :disabled="isAgentOutputDeleting(row.file_name)"
+                          @click="deleteAgentOutput(row)"
                       >
                         Delete
                       </el-button>
@@ -321,18 +321,18 @@
 
                     <div class="agent-output-mobile-action-item">
                       <el-dropdown
-                        trigger="click"
-                        placement="bottom-end"
-                        class="agent-output-mobile-more-dropdown"
-                        @command="command => handleAgentOutputMoreCommand(command, row)"
+                          trigger="click"
+                          placement="bottom-end"
+                          class="agent-output-mobile-more-dropdown"
+                          @command="command => handleAgentOutputMoreCommand(command, row)"
                       >
                         <el-button
-                          size="small"
-                          plain
-                          class="agent-output-mobile-more-button"
+                            size="small"
+                            plain
+                            class="agent-output-mobile-more-button"
                         >
                           <el-icon>
-                            <MoreFilledIcon />
+                            <MoreFilledIcon/>
                           </el-icon>
                           More
                         </el-button>
@@ -357,26 +357,26 @@
   </el-dialog>
 
   <el-dialog
-    v-model="agentOutputInfoDialogVisible"
-    title="Agent Output Info"
-    width="760px"
-    top="8vh"
-    class="fixed-dialog agent-output-info-dialog"
+      v-model="agentOutputInfoDialogVisible"
+      title="Agent Output Info"
+      width="760px"
+      top="8vh"
+      class="fixed-dialog agent-output-info-dialog"
   >
     <div class="agent-output-info-body">
       <template v-if="agentOutputInfoItem">
         <div
-          v-for="item in formattedAgentOutputInfoRows"
-          :key="item.key"
-          class="agent-output-info-row"
+            v-for="item in formattedAgentOutputInfoRows"
+            :key="item.key"
+            class="agent-output-info-row"
         >
           <div class="agent-output-info-label">
             {{ item.label }}
           </div>
 
           <div
-            class="agent-output-info-value"
-            :class="{ 'agent-output-mono': item.mono }"
+              class="agent-output-info-value"
+              :class="{ 'agent-output-mono': item.mono }"
           >
             {{ item.value }}
           </div>
@@ -384,17 +384,17 @@
       </template>
 
       <el-empty
-        v-else
-        description="No agent output info available"
+          v-else
+          description="No agent output info available"
       />
     </div>
   </el-dialog>
 </template>
 
 <script>
-import { ElMessage, ElMessageBox } from 'element-plus'
-import { Delete, Download, MoreFilled } from '@element-plus/icons-vue'
-import { formatBytes, formatDateTimeStandard } from '../utils/formatters.js'
+import {ElMessage, ElMessageBox} from 'element-plus'
+import {Delete, Download, MoreFilled} from '@element-plus/icons-vue'
+import {formatBytes, formatDateTimeStandard} from '../utils/formatters.js'
 
 export default {
   name: 'AgentOutputsDialog',
@@ -466,13 +466,13 @@ export default {
     formattedAgentOutputInfoRows() {
       const row = this.agentOutputInfoItem || {}
       const rows = [
-                  {
+        {
           key: 'file_name',
           label: 'Filename',
           value: row.file_name || '-',
         },
 
-                  {
+        {
           key: 'builder',
           label: 'Builder',
           value: row.builder || '-',
@@ -652,15 +652,15 @@ export default {
 
     handleOutputSelectionChange(rows) {
       this.selectedOutputFileNames = (rows || [])
-        .map(item => String(item?.file_name || '').trim())
-        .filter(Boolean)
+          .map(item => String(item?.file_name || '').trim())
+          .filter(Boolean)
     },
 
     pruneOutputSelection() {
       const available = new Set(
-        (this.outputs || [])
-          .map(item => String(item?.file_name || '').trim())
-          .filter(Boolean)
+          (this.outputs || [])
+              .map(item => String(item?.file_name || '').trim())
+              .filter(Boolean)
       )
       this.selectedOutputFileNames = this.selectedOutputFileNames.filter(item => available.has(item))
     },
@@ -669,7 +669,7 @@ export default {
       return Boolean(this.agentOutputsDeleting[String(fileName || '').trim()])
     },
 
-    async loadAgentOutputs({ silent = false } = {}) {
+    async loadAgentOutputs({silent = false} = {}) {
       if (!silent) this.loading = true
 
       try {
@@ -715,13 +715,13 @@ export default {
 
       try {
         await ElMessageBox.confirm(
-          `Delete agent output ${fileName}?`,
-          'Delete agent output',
-          {
-            confirmButtonText: 'Delete',
-            cancelButtonText: 'Cancel',
-            type: 'warning',
-          }
+            `Delete agent output ${fileName}?`,
+            'Delete agent output',
+            {
+              confirmButtonText: 'Delete',
+              cancelButtonText: 'Cancel',
+              type: 'warning',
+            }
         )
       } catch (_e) {
         return
@@ -757,13 +757,13 @@ export default {
 
       try {
         await ElMessageBox.confirm(
-          `Delete ${selected.length} selected agent output(s)?`,
-          'Delete Selected Agent Outputs',
-          {
-            confirmButtonText: 'Delete',
-            cancelButtonText: 'Cancel',
-            type: 'warning',
-          }
+            `Delete ${selected.length} selected agent output(s)?`,
+            'Delete Selected Agent Outputs',
+            {
+              confirmButtonText: 'Delete',
+              cancelButtonText: 'Cancel',
+              type: 'warning',
+            }
         )
       } catch (_e) {
         return
@@ -772,7 +772,7 @@ export default {
       this.bulkDeleting = true
       let deletedCount = 0
       let failedCount = 0
-      const deletingMap = { ...this.agentOutputsDeleting }
+      const deletingMap = {...this.agentOutputsDeleting}
 
       selected.forEach(item => {
         const fileName = String(item?.file_name || '').trim()

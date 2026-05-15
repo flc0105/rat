@@ -38,42 +38,41 @@ class AgentBuilder:
     def _ensure_dirs(self):
         os.makedirs(self.output_dir, exist_ok=True)
 
-    # def _build_timestamp_text(self) -> str:
-    #     return datetime.now().strftime('%Y%m%d-%H%M')
-
-    def _build_timestamp_text(self) -> str:
+    def _build_id_text(self) -> str:
         stamp = datetime.now().strftime('%Y%m%d-%H%M%S')
         return f'{stamp}-{uuid4().hex[:8]}'
 
-    def _build_version_text(self, builder: str) -> str:
+    def _build_kind_text(self, builder: str) -> str:
         builder_name = (builder or '').strip().lower()
+
         if builder_name == 'bundle':
-            return f'dev-source-bundle-{self._build_timestamp_text()}'
-        if builder_name == 'pyinstaller':
-            return f'dev-pyinstaller-{self._build_timestamp_text()}'
+            return 'source-bundle'
         if builder_name == 'go':
-            return f'dev-go-simple-{self._build_timestamp_text()}'
+            return 'go-client'
         if builder_name == 'go_loader':
-            return f'dev-go-loader-{self._build_timestamp_text()}'
-        return f'dev-{builder_name or "build"}-{self._build_timestamp_text()}'
+            return 'go-loader'
+        if builder_name == 'pyinstaller':
+            return 'pyinstaller'
 
-    def _build_pyinstaller_output_name(self, target_os: str, build_version: str) -> str:
-        if target_os == 'win':
-            return f'rchclient_{target_os}_{build_version}.exe'
-        return f'rchclient_{target_os}_{build_version}'
+        return builder_name or 'build'
 
-    def _build_go_output_name(self, target_os: str, normalized_arch: str, build_version: str) -> str:
+    def _build_version_text(self, builder: str, build_id: str) -> str:
+        return f'{self._build_kind_text(builder)}-{build_id}'
+
+    def _build_pyinstaller_output_name(self, target_os: str, build_id: str) -> str:
+        suffix = '.exe' if target_os == 'win' else ''
+        return f'rchclient-pyinstaller-{target_os}-{build_id}{suffix}'
+
+    def _build_go_output_name(self, target_os: str, normalized_arch: str, build_id: str) -> str:
         suffix = self.GO_TARGET_MAP[target_os]['suffix']
-        label = self.GO_TARGET_MAP[target_os]['label']
-        return f'rchclient_go_simple_{label}_{normalized_arch}_{build_version}{suffix}'
+        return f'rchclient-go-client-{target_os}-{normalized_arch}-{build_id}{suffix}'
 
-    def _build_go_loader_output_name(self, target_os: str, normalized_arch: str, build_version: str) -> str:
+    def _build_go_loader_output_name(self, target_os: str, normalized_arch: str, build_id: str) -> str:
         suffix = self.GO_TARGET_MAP[target_os]['suffix']
-        label = self.GO_TARGET_MAP[target_os]['label']
-        return f'rchclient_go_loader_{label}_{normalized_arch}_{build_version}{suffix}'
+        return f'rchclient-go-loader-{target_os}-{normalized_arch}-{build_id}{suffix}'
 
-    def _build_bundle_output_name(self, build_version: str) -> str:
-        return f'rchclient_bundle_{build_version}.zip'
+    def _build_bundle_output_name(self, build_id: str) -> str:
+        return f'rchclient-source-bundle-{build_id}.zip'
 
     def build_agent(self, server_host: str, server_port: int,
                     web_port: int, target_os: str = 'mac',
@@ -93,7 +92,8 @@ class AgentBuilder:
             raise ValueError(f'Unsupported target OS: {target_os}')
 
         work_dir = tempfile.mkdtemp(prefix='agent_build_')
-        build_version = self._build_version_text(builder)
+        build_id = self._build_id_text()
+        build_version = self._build_version_text(builder, build_id)
 
         try:
             if builder == 'pyinstaller':
@@ -103,6 +103,7 @@ class AgentBuilder:
                     server_port=server_port,
                     web_port=web_port,
                     target_os=target_os,
+                    build_id=build_id,
                     build_version=build_version,
                     server_web_scheme=server_web_scheme,
                     server_web_host=server_web_host,
@@ -113,6 +114,7 @@ class AgentBuilder:
                     server_host=server_host,
                     server_port=server_port,
                     web_port=web_port,
+                    build_id=build_id,
                     build_version=build_version,
                     server_web_scheme=server_web_scheme,
                     server_web_host=server_web_host,
@@ -125,6 +127,7 @@ class AgentBuilder:
                     web_port=web_port,
                     target_os=target_os,
                     target_arch=target_arch,
+                    build_id=build_id,
                     build_version=build_version,
                     server_web_scheme=server_web_scheme,
                     server_web_host=server_web_host,
@@ -137,6 +140,7 @@ class AgentBuilder:
                     web_port=web_port,
                     target_os=target_os,
                     target_arch=target_arch,
+                    build_id=build_id,
                     build_version=build_version,
                     server_web_scheme=server_web_scheme,
                     server_web_host=server_web_host,
@@ -231,7 +235,7 @@ const BundleReportAPIPath = "/api/agent/loader/report"
 
     def _build_with_pyinstaller(self, work_dir: str, server_host: str, server_port: int,
                                 web_port: int, target_os: str,
-                                build_version: str = 'dev', server_web_scheme: str = 'http',
+                                build_id: str = '', build_version: str = 'dev', server_web_scheme: str = 'http',
                                 server_web_host: str = '') -> dict:
         current_target = self._get_current_pyinstaller_target()
         if current_target != target_os:
@@ -247,11 +251,11 @@ const BundleReportAPIPath = "/api/agent/loader/report"
         self._inject_config(client_copy, server_host, server_port, web_port, build_version, server_web_scheme, server_web_host)
 
         if target_os == 'win':
-            result = self._build_windows(client_copy, build_version=build_version)
+            result = self._build_windows(client_copy, build_id=build_id, build_version=build_version)
         elif target_os == 'linux':
-            result = self._build_linux(client_copy, build_version=build_version)
+            result = self._build_linux(client_copy, build_id=build_id, build_version=build_version)
         else:
-            result = self._build_macos(client_copy, build_version=build_version)
+            result = self._build_macos(client_copy, build_id=build_id, build_version=build_version)
 
         result['warnings'] = [self.BUILD_STATUS_MESSAGE]
         result['target_arch'] = 'n/a'
@@ -260,7 +264,7 @@ const BundleReportAPIPath = "/api/agent/loader/report"
 
     def _build_with_go(self, work_dir: str, server_host: str, server_port: int,
                        web_port: int, target_os: str, target_arch: str,
-                       build_version: str = 'dev', server_web_scheme: str = 'http',
+                       build_id: str = '', build_version: str = 'dev', server_web_scheme: str = 'http',
                        server_web_host: str = '') -> dict:
         go_project_dir = os.path.join(self.source_dir, 'client-go')
         if not os.path.isdir(go_project_dir):
@@ -272,7 +276,7 @@ const BundleReportAPIPath = "/api/agent/loader/report"
         self._inject_go_config(client_copy, server_host, server_port, web_port, build_version, server_web_scheme, server_web_host)
 
         go_target = self.GO_TARGET_MAP[target_os]
-        output_name = self._build_go_output_name(target_os, target_arch, build_version)
+        output_name = self._build_go_output_name(target_os, target_arch, build_id)
         output_path = os.path.join(client_copy, 'client-go', output_name)
         self._run_go_build(os.path.join(client_copy, 'client-go'), output_path, go_target['GOOS'], target_arch)
 
@@ -286,7 +290,7 @@ const BundleReportAPIPath = "/api/agent/loader/report"
 
     def _build_with_go_loader(self, work_dir: str, server_host: str, server_port: int,
                               web_port: int, target_os: str, target_arch: str,
-                              build_version: str = 'dev', server_web_scheme: str = 'http',
+                              build_id: str = '', build_version: str = 'dev', server_web_scheme: str = 'http',
                               server_web_host: str = '') -> dict:
         go_project_dir = os.path.join(self.source_dir, 'go-loader')
         if not os.path.isdir(go_project_dir):
@@ -298,7 +302,7 @@ const BundleReportAPIPath = "/api/agent/loader/report"
         self._inject_go_loader_config(client_copy, server_host, server_port, web_port, build_version, server_web_scheme, server_web_host)
 
         go_target = self.GO_TARGET_MAP[target_os]
-        output_name = self._build_go_loader_output_name(target_os, target_arch, build_version)
+        output_name = self._build_go_loader_output_name(target_os, target_arch, build_id)
         output_path = os.path.join(client_copy, 'go-loader', output_name)
         self._run_go_build(os.path.join(client_copy, 'go-loader'), output_path, go_target['GOOS'], target_arch)
 
@@ -323,7 +327,7 @@ const BundleReportAPIPath = "/api/agent/loader/report"
             os.chmod(output_path, 0o755)
 
     def _build_with_bundle(self, work_dir: str, server_host: str, server_port: int,
-                           web_port: int, build_version: str,
+                           web_port: int, build_id: str, build_version: str,
                            server_web_scheme: str = 'http', server_web_host: str = '') -> dict:
         staging_dir = os.path.join(work_dir, 'bundle')
         os.makedirs(staging_dir, exist_ok=True)
@@ -344,7 +348,7 @@ const BundleReportAPIPath = "/api/agent/loader/report"
                 shutil.copy2(source_path, target_path)
 
         self._inject_config(staging_dir, server_host, server_port, web_port, build_version, server_web_scheme, server_web_host)
-        bundle_name = self._build_bundle_output_name(build_version)
+        bundle_name = self._build_bundle_output_name(build_id)
         bundle_path = os.path.join(work_dir, bundle_name)
 
         with zipfile.ZipFile(bundle_path, mode='w', compression=zipfile.ZIP_DEFLATED) as archive:
@@ -367,7 +371,7 @@ const BundleReportAPIPath = "/api/agent/loader/report"
             'target_os': 'bundle',
         }
 
-    def _build_macos(self, client_dir: str, build_version: str = 'dev') -> dict:
+    def _build_macos(self, client_dir: str, build_id: str = '', build_version: str = 'dev') -> dict:
         cmd = ['pyinstaller', '-F', '-w', 'rchclient.py',
                '--hidden-import', 'client.commands.platform.mac',
                '--hidden-import', 'client.commands.platform.win',
@@ -379,9 +383,9 @@ const BundleReportAPIPath = "/api/agent/loader/report"
         if not os.path.exists(exe_path):
             raise RuntimeError(f'Build output not found: {exe_path}')
         os.chmod(exe_path, 0o755)
-        return {'file_path': exe_path, 'file_name': self._build_pyinstaller_output_name('mac', build_version)}
+        return {'file_path': exe_path, 'file_name': self._build_pyinstaller_output_name('mac', build_id)}
 
-    def _build_windows(self, client_dir: str, build_version: str = 'dev') -> dict:
+    def _build_windows(self, client_dir: str, build_id: str = '', build_version: str = 'dev') -> dict:
         cmd = ['pyinstaller', '-F', '-w', 'rchclient.py',
                '--hidden-import', 'client.commands.platform.mac',
                '--hidden-import', 'client.commands.platform.win',
@@ -392,9 +396,9 @@ const BundleReportAPIPath = "/api/agent/loader/report"
         exe_path = os.path.join(client_dir, 'dist', 'rchclient.exe')
         if not os.path.exists(exe_path):
             raise RuntimeError(f'Build output not found: {exe_path}')
-        return {'file_path': exe_path, 'file_name': self._build_pyinstaller_output_name('win', build_version)}
+        return {'file_path': exe_path, 'file_name': self._build_pyinstaller_output_name('win', build_id)}
 
-    def _build_linux(self, client_dir: str, build_version: str = 'dev') -> dict:
+    def _build_linux(self, client_dir: str, build_id: str = '', build_version: str = 'dev') -> dict:
         cmd = ['pyinstaller', '-F', '-w', 'rchclient.py',
                '--hidden-import', 'client.commands.platform.mac',
                '--hidden-import', 'client.commands.platform.win',
@@ -406,7 +410,7 @@ const BundleReportAPIPath = "/api/agent/loader/report"
         if not os.path.exists(exe_path):
             raise RuntimeError(f'Build output not found: {exe_path}')
         os.chmod(exe_path, 0o755)
-        return {'file_path': exe_path, 'file_name': self._build_pyinstaller_output_name('linux', build_version)}
+        return {'file_path': exe_path, 'file_name': self._build_pyinstaller_output_name('linux', build_id)}
 
     def _get_current_pyinstaller_target(self) -> str:
         current_system = platform.system()
