@@ -251,8 +251,8 @@ class CommandUpdateMixin:
             archive_path = os.path.join(release_dir, bundle_meta['file_name'])
             extract_dir = build_bundle_extract_dir(release_dir, bundle_meta['file_name'])
 
-            self._send_info(f'Bundle downloading: {bundle_meta['file_name']}', 0)
-            self._download_bundle_archive(bundle_meta['download_url'], archive_path)
+            self._send_info(f'Bundle downloading: {bundle_meta["file_name"]}', 0)
+            self._download_bundle_archive(bundle_meta["download_url"], archive_path)
             self._send_success(f'Bundled downloaded successfully: {archive_path}', 0)
 
             current_bundle_dir = self._get_current_bundle_release_dir(release_dir)
