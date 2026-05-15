@@ -225,7 +225,18 @@
 
             <div class="remote-toolbar-spacer"></div>
 
+
+
             <div class="remote-toolbar-search">
+
+                            <div class="remote-recursive-control">
+                <span class="remote-recursive-label">Recursive</span>
+                <el-switch
+                    v-model="remoteSearchRecursive"
+                    size="small"
+                    @change="handleRemoteSearchRecursiveChange"
+                />
+              </div>
               <el-input
                   v-model="remoteSearchKeyword"
                   clearable
@@ -237,14 +248,7 @@
                   @keyup.enter="applyRemoteSearch"
               />
 
-              <div class="remote-recursive-control">
-                <span class="remote-recursive-label">Recursive</span>
-                <el-switch
-                    v-model="remoteSearchRecursive"
-                    size="small"
-                    @change="handleRemoteSearchRecursiveChange"
-                />
-              </div>
+
             </div>
           </div>
         </div>
@@ -2143,8 +2147,8 @@ export default {
 }
 
 .remote-toolbar-search-input {
-  flex: 0 0 300px;
-  width: 300px;
+  flex: 0 0 240px;
+  width: 240px;
 }
 
 .remote-toolbar-search-input :deep(.el-input__wrapper) {
