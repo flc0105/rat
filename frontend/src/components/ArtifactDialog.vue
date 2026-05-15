@@ -99,13 +99,6 @@
         </div>
       </div>
 
-      <input
-        ref="serverFileUploadInputRef"
-        type="file"
-        class="artifact-hidden-file-input"
-        @change="handleServerFileUploadChange"
-      />
-
       <el-tabs
         :model-value="artifactActiveTab"
         class="artifact-tabs"
@@ -424,6 +417,15 @@
     </div>
   </el-dialog>
 
+  <DragUploadDialog
+    v-model="serverFileUploadDialogVisible"
+    title="Upload Server File"
+    helper-text="Drag a file here or click the drop zone to upload it into Server Files."
+    button-text="Choose File"
+    :loading="serverFileUploading"
+    @selected="uploadServerFiles"
+  />
+
   <el-dialog
     v-model="artifactInfoDialogVisible"
     title="Artifact Info"
@@ -469,9 +471,14 @@
 <script>
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { formatBytes as formatBytesValue } from '../utils/formatters.js'
+import DragUploadDialog from './DragUploadDialog.vue'
 
 export default {
   name: 'ArtifactDialog',
+
+  components: {
+    DragUploadDialog,
+  },
 
   props: {
     selectedId: {
@@ -510,6 +517,7 @@ export default {
       artifactClearing: false,
       artifactBulkDeleting: false,
       serverFileUploading: false,
+      serverFileUploadDialogVisible: false,
       artifactInfoDialogVisible: false,
       artifactInfoItem: null,
     }
@@ -882,6 +890,7 @@ export default {
         this.artifactMachineIdFilter = ''
         this.artifactKeyword = ''
         this.selectedArtifactIds = []
+        this.serverFileUploadDialogVisible = false
         this.artifactInfoDialogVisible = false
         this.artifactInfoItem = null
       }
@@ -998,43 +1007,49 @@ export default {
     },
 
     triggerServerFileUpload() {
-      const input = this.$refs.serverFileUploadInputRef
-
-      if (input) {
-        input.value = ''
-        input.click()
-      }
+      this.serverFileUploadDialogVisible = true
     },
 
-    async handleServerFileUploadChange(event) {
-      const file = event.target.files && event.target.files[0]
-      if (!file) return
-
+    async uploadSingleServerFile(file) {
       const formData = new FormData()
       formData.append('file', file)
       formData.append('artifact_type', 'server_files')
 
+      const res = await fetch('/api/files/upload', {
+        method: 'POST',
+        headers: this.buildJsonHeaders(),
+        body: formData,
+      })
+      const json = await res.json()
+
+      if (!res.ok || json.code !== 0) {
+        throw new Error(json.message || `Upload failed: ${file.name}`)
+      }
+
+      return json.data || {}
+    },
+
+    async uploadServerFiles(files) {
+      const uploadFiles = Array.isArray(files) ? files.filter(Boolean) : []
+      if (!uploadFiles.length) return
+
       this.serverFileUploading = true
 
       try {
-        const res = await fetch('/api/files/upload', {
-          method: 'POST',
-          headers: this.buildJsonHeaders(),
-          body: formData,
-        })
-        const json = await res.json()
-
-        if (!res.ok || json.code !== 0) {
-          throw new Error(json.message || 'Upload failed')
+        for (const file of uploadFiles) {
+          await this.uploadSingleServerFile(file)
         }
 
-        ElMessage.success(`Uploaded: ${file.name}`)
+        const message = uploadFiles.length === 1
+          ? `Uploaded: ${uploadFiles[0].name}`
+          : `Uploaded ${uploadFiles.length} file(s)`
+        ElMessage.success(message)
+        this.serverFileUploadDialogVisible = false
         await this.loadArtifacts()
       } catch (e) {
         ElMessage.error(e.message || 'Upload failed')
       } finally {
         this.serverFileUploading = false
-        if (event?.target) event.target.value = ''
       }
     },
 

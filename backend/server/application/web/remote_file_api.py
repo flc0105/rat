@@ -23,6 +23,8 @@ class WebRemoteFileApi:
         page: int = 1,
         page_size: int = 100,
         show_hidden: bool = False,
+        search_keyword: str = '',
+        recursive_search: bool = False,
     ):
         return self.remote_file_service.browse_directory(
             client_id,
@@ -30,6 +32,8 @@ class WebRemoteFileApi:
             page=page,
             page_size=page_size,
             show_hidden=show_hidden,
+            search_keyword=search_keyword,
+            recursive_search=recursive_search,
         )
 
     def create_remote_directory(self, client_id: str, path: str):

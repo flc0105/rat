@@ -222,6 +222,30 @@
                 </template>
               </el-dropdown>
             </div>
+
+            <div class="remote-toolbar-spacer"></div>
+
+            <div class="remote-toolbar-search">
+              <el-input
+                  v-model="remoteSearchKeyword"
+                  clearable
+                  size="small"
+                  placeholder="Search current folder"
+                  @input="scheduleRemoteSearch"
+                  @clear="applyRemoteSearch"
+                  @keyup.enter="applyRemoteSearch"
+              />
+
+              <div class="remote-recursive-control">
+                <span class="remote-recursive-label">Recursive</span>
+                <el-switch
+                    v-model="remoteSearchRecursive"
+                    size="small"
+                    :disabled="!normalizeRemoteSearchKeyword()"
+                    @change="handleRemoteSearchRecursiveChange"
+                />
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -243,7 +267,7 @@
             stripe
             width="100%"
             height="100%"
-            empty-text="This folder is empty"
+            :empty-text="remoteFilesEmptyText"
             table-layout="fixed"
             @row-dblclick="handleRemoteRowDblClick"
             @selection-change="handleRemoteSelectionChange"
@@ -278,6 +302,19 @@
                 >
                   Hidden
                 </el-tag>
+              </div>
+            </template>
+          </el-table-column>
+
+          <el-table-column
+              v-if="isRemoteSearchActive"
+              label="Location"
+              min-width="240"
+              show-overflow-tooltip
+          >
+            <template #default="{ row }">
+              <div class="ellipsis">
+                {{ remoteEntryLocation(row) }}
               </div>
             </template>
           </el-table-column>
@@ -386,6 +423,10 @@
             </span>
 
 
+            <span v-if="isRemoteSearchActive">
+              Search "{{ normalizeRemoteSearchKeyword() }}"{{ remoteSearchRecursive ? ' recursively' : '' }} ·
+            </span>
+
             <span>Visible {{ remoteFilesTotal }} </span>
 
             <span v-if="!showHiddenFiles && remoteFilesHiddenTotal > 0">
@@ -492,6 +533,13 @@
                       <div class="mobile-file-meta-label">Modified</div>
                       <div class="mobile-file-meta-value">
                         {{ row.is_parent_entry ? '-' : (row.modified_at || '-') }}
+                      </div>
+                    </div>
+
+                    <div v-if="isRemoteSearchActive" class="mobile-file-meta-item mobile-file-meta-item-wide">
+                      <div class="mobile-file-meta-label">Location</div>
+                      <div class="mobile-file-meta-value">
+                        {{ remoteEntryLocation(row) }}
                       </div>
                     </div>
                   </div>
@@ -635,6 +683,9 @@ export default {
       remoteFilesTotalPages: 1,
       remoteFilesAllTotal: 0,
       remoteFilesHiddenTotal: 0,
+      remoteSearchKeyword: '',
+      remoteSearchRecursive: false,
+      remoteSearchTimer: null,
 
       remoteUploadLoading: false,
       showHiddenFiles: false,
@@ -660,7 +711,7 @@ export default {
           ? [...this.remoteFilesEntries]
           : []
 
-      if (this.remoteFilesParentPath && this.remoteFilesPage === 1) {
+      if (!this.isRemoteSearchActive && this.remoteFilesParentPath && this.remoteFilesPage === 1) {
         entries.unshift({
           name: '..',
           path: this.remoteFilesParentPath,
@@ -674,6 +725,14 @@ export default {
       }
 
       return entries
+    },
+
+    remoteFilesEmptyText() {
+      return this.isRemoteSearchActive ? 'No matching files or folders' : 'This folder is empty'
+    },
+
+    isRemoteSearchActive() {
+      return !!this.normalizeRemoteSearchKeyword()
     },
 
     hasRemoteSelection() {
@@ -738,6 +797,47 @@ export default {
     formatBytes(value) {
   return formatBytesValue(value)
 },
+
+    normalizeRemoteSearchKeyword() {
+      return String(this.remoteSearchKeyword || '').trim()
+    },
+
+    remoteEntryLocation(row) {
+      if (!row || row.is_parent_entry) return '-'
+
+      const relativePath = String(row.relative_path || '').trim()
+      if (relativePath && relativePath !== row.name) {
+        const normalized = relativePath.replace(/\\/g, '/')
+        const index = normalized.lastIndexOf('/')
+        return index > -1 ? normalized.slice(0, index) || '.' : '.'
+      }
+
+      return String(row.parent_path || this.remoteFilesCurrentPath || '.').trim() || '.'
+    },
+
+    scheduleRemoteSearch() {
+      if (this.remoteSearchTimer) {
+        clearTimeout(this.remoteSearchTimer)
+      }
+
+      this.remoteSearchTimer = window.setTimeout(() => {
+        this.applyRemoteSearch()
+      }, 300)
+    },
+
+    async applyRemoteSearch() {
+      if (this.remoteSearchTimer) {
+        clearTimeout(this.remoteSearchTimer)
+        this.remoteSearchTimer = null
+      }
+
+      await this.loadRemoteDirectory(this.remoteFilesCurrentPath || '', 1)
+    },
+
+    async handleRemoteSearchRecursiveChange() {
+      if (!this.isRemoteSearchActive) return
+      await this.loadRemoteDirectory(this.remoteFilesCurrentPath || '', 1)
+    },
 
     scrollRemoteMobileFileListToTop() {
       this.$nextTick(() => {
@@ -895,6 +995,12 @@ export default {
         url.searchParams.set('page', String(page || 1))
         url.searchParams.set('page_size', String(this.remoteFilesPageSize || 50))
         url.searchParams.set('show_hidden', this.showHiddenFiles ? 'true' : 'false')
+
+        const searchKeyword = this.normalizeRemoteSearchKeyword()
+        if (searchKeyword) {
+          url.searchParams.set('search', searchKeyword)
+          url.searchParams.set('recursive', this.remoteSearchRecursive ? 'true' : 'false')
+        }
 
         const res = await fetch(url.pathname + url.search)
         const json = await res.json()
@@ -1900,6 +2006,12 @@ export default {
       this.remoteFilesTotalPages = 1
       this.remoteFilesAllTotal = 0
       this.remoteFilesHiddenTotal = 0
+      this.remoteSearchKeyword = ''
+      this.remoteSearchRecursive = false
+      if (this.remoteSearchTimer) {
+        clearTimeout(this.remoteSearchTimer)
+        this.remoteSearchTimer = null
+      }
       this.showHiddenFiles = false
       this.remoteSelectedPaths = []
       this.remoteZipDownloading = false
@@ -1998,6 +2110,36 @@ export default {
   align-items: center;
   flex-wrap: wrap;
   gap: 8px;
+}
+
+.remote-toolbar-spacer {
+  flex: 1 1 auto;
+  min-width: 12px;
+}
+
+.remote-toolbar-search {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 320px;
+  margin-left: auto;
+}
+
+.remote-toolbar-search :deep(.el-input) {
+  width: 210px;
+}
+
+.remote-recursive-control {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted-2);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.remote-recursive-label {
+  line-height: 1;
 }
 
 .remote-toolbar-divider {
@@ -2125,6 +2267,10 @@ export default {
 
 .mobile-file-meta-item {
   min-width: 0;
+}
+
+.mobile-file-meta-item-wide {
+  grid-column: 1 / -1;
 }
 
 .mobile-file-meta-label {
@@ -2281,6 +2427,21 @@ export default {
 
   .remote-files-toolbar {
     gap: 6px 10px;
+  }
+
+  .remote-toolbar-spacer {
+    display: none;
+  }
+
+  .remote-toolbar-search {
+    width: 100%;
+    min-width: 0;
+    margin-left: 0;
+    justify-content: flex-start;
+  }
+
+  .remote-toolbar-search :deep(.el-input) {
+    width: min(100%, 280px);
   }
 }
 

@@ -60,12 +60,16 @@ class WebRemoteFileService:
         page: int = 1,
         page_size: int = 100,
         show_hidden: bool = False,
+        search_keyword: str = '',
+        recursive_search: bool = False,
     ) -> dict:
         command = self._build_command('browse_dir', {
             'path': path,
             'page': page,
             'page_size': page_size,
             'show_hidden': show_hidden,
+            'search_keyword': search_keyword,
+            'recursive_search': recursive_search,
         })
         payload = self.remote_execution_service.run_foreground_json_command(
             client_id,
@@ -85,6 +89,8 @@ class WebRemoteFileService:
                 'total_all': summary.get('total_all', len(payload.get('entries', []) or [])),
                 'total_hidden': summary.get('total_hidden', 0),
                 'show_hidden': bool(summary.get('show_hidden', show_hidden)),
+                'search_keyword': summary.get('search_keyword', search_keyword),
+                'recursive_search': bool(summary.get('recursive_search', recursive_search)),
             },
             'pagination': {
                 'page': pagination.get('page', page),

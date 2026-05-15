@@ -53,20 +53,78 @@ class FileSystemService:
 
         return False
 
-    def browse_directory(self, directory: str, page=1, page_size=100, show_hidden=False) -> dict:
-        page = self._normalize_positive_int(page, default=1, maximum=None)
-        page_size = self._normalize_positive_int(page_size, default=100, maximum=500)
-        show_hidden = self._normalize_bool(show_hidden)
+    def _add_search_context(self, item: dict, root_directory: str, parent_path: str) -> dict:
+        item['parent_path'] = os.path.abspath(parent_path)
+        try:
+            relative_path = os.path.relpath(item.get('path') or '', os.path.abspath(root_directory))
+        except Exception:
+            relative_path = item.get('name') or ''
 
-        all_entries = []
-        with os.scandir(directory) as iterator:
-            for entry in self._iter(iterator):
+        item['relative_path'] = '' if relative_path == '.' else relative_path
+        return item
+
+    def _collect_directory_entries(self, directory: str, recursive: bool = False, show_hidden: bool = False) -> list[dict]:
+        root_directory = os.path.abspath(directory)
+        collected = []
+
+        def _scan(current_directory: str):
+            child_directories = []
+
+            with os.scandir(current_directory) as iterator:
+                for entry in self._iter(iterator):
+                    try:
+                        item = self.build_directory_entry(entry)
+                        self._add_search_context(item, root_directory, current_directory)
+                        collected.append(item)
+
+                        # 递归搜索时不跟随符号链接，避免目录环。
+                        if recursive and item.get('is_dir') and not item.get('is_symlink'):
+                            if show_hidden or not item.get('is_hidden'):
+                                child_directories.append(entry.path)
+                    except Exception:
+                        continue
+
+            for child_directory in child_directories:
                 try:
-                    all_entries.append(self.build_directory_entry(entry))
+                    _scan(child_directory)
                 except Exception:
                     continue
 
-        all_entries.sort(key=lambda item: (not item['is_dir'], item['name'].lower()))
+        _scan(root_directory)
+        return collected
+
+    def browse_directory(
+        self,
+        directory: str,
+        page=1,
+        page_size=100,
+        show_hidden=False,
+        search_keyword: str = '',
+        recursive_search=False,
+    ) -> dict:
+        page = self._normalize_positive_int(page, default=1, maximum=None)
+        page_size = self._normalize_positive_int(page_size, default=100, maximum=500)
+        show_hidden = self._normalize_bool(show_hidden)
+        recursive_search = self._normalize_bool(recursive_search)
+        search_keyword = str(search_keyword or '').strip()
+        search_keyword_lower = search_keyword.lower()
+
+        all_entries = self._collect_directory_entries(
+            directory,
+            recursive=bool(search_keyword_lower and recursive_search),
+            show_hidden=show_hidden,
+        )
+
+        if search_keyword_lower:
+            all_entries = [
+                item for item in all_entries
+                if search_keyword_lower in str(item.get('name') or '').lower()
+            ]
+
+        if search_keyword_lower and recursive_search:
+            all_entries.sort(key=lambda item: (not item['is_dir'], str(item.get('relative_path') or item['name']).lower()))
+        else:
+            all_entries.sort(key=lambda item: (not item['is_dir'], item['name'].lower()))
 
         total_all = len(all_entries)
         total_hidden = sum(1 for item in all_entries if item.get('is_hidden'))
@@ -104,6 +162,8 @@ class FileSystemService:
                 'total_all': total_all,
                 'total_hidden': total_hidden,
                 'show_hidden': show_hidden,
+                'search_keyword': search_keyword,
+                'recursive_search': bool(search_keyword_lower and recursive_search),
             }
         }
 

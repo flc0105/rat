@@ -1,4 +1,4 @@
-from flask import Blueprint
+from flask import Blueprint, request
 
 from server.web.api_response import WebApiResponder
 from server.web.request_parsers import get_json_payload, get_optional_remote_path, parse_paging_args
@@ -14,12 +14,16 @@ def create_remote_files_blueprint(server_instance):
     def browse_remote_files(client_id):
         def _execute():
             paging = parse_paging_args(default_page=1, default_page_size=100)
+            search_keyword = (request.args.get('search') or '').strip()
+            recursive_raw = (request.args.get('recursive') or '').strip().lower()
             return remote_file_api.browse_remote_directory(
                 client_id,
                 get_optional_remote_path(),
                 page=paging['page'],
                 page_size=paging['page_size'],
                 show_hidden=paging['show_hidden'],
+                search_keyword=search_keyword,
+                recursive_search=recursive_raw in ('1', 'true', 'yes', 'on'),
             )
 
         return responder.json_endpoint(_execute, default_error_status=500)

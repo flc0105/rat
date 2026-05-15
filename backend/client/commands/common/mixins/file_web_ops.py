@@ -160,17 +160,23 @@ class CommandFileWebMixin:
                 page = payload.get('page', 1)
                 page_size = payload.get('page_size', 100)
                 show_hidden = payload.get('show_hidden', False)
+                search_keyword = payload.get('search_keyword') or payload.get('search') or ''
+                recursive_search = payload.get('recursive_search', False)
             else:
                 directory = self.path_resolver.require_existing_directory_from_arg(path)
                 page = 1
                 page_size = 100
                 show_hidden = False
+                search_keyword = ''
+                recursive_search = False
 
             result_payload = self.file_system_service.browse_directory(
                 directory,
                 page=page,
                 page_size=page_size,
                 show_hidden=show_hidden,
+                search_keyword=search_keyword,
+                recursive_search=recursive_search,
             )
             return 1, json.dumps(result_payload, ensure_ascii=False)
         except CommandCancelledError:
