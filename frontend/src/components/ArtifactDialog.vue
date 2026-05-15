@@ -419,11 +419,12 @@
 
   <DragUploadDialog
     v-model="serverFileUploadDialogVisible"
-    title="Upload Server File"
-    helper-text="Drag a file here or click the drop zone to upload it into Server Files."
-    button-text="Choose File"
+    title="Upload Server Files"
+    helper-text="Drag files here or click the drop zone to choose files. Files will not upload until you click Upload."
+    button-text="Upload"
+    :multiple="true"
     :loading="serverFileUploading"
-    @selected="uploadServerFiles"
+    @upload="uploadServerFiles"
   />
 
   <el-dialog
@@ -1395,9 +1396,6 @@ export default {
   font-size: 12px;
 }
 
-.artifact-hidden-file-input {
-  display: none;
-}
 
 .artifact-tabs {
   flex: 0 0 auto;

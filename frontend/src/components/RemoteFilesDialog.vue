@@ -230,6 +230,7 @@
                   v-model="remoteSearchKeyword"
                   clearable
                   size="small"
+                  class="remote-toolbar-search-input"
                   placeholder="Search current folder"
                   @input="scheduleRemoteSearch"
                   @clear="applyRemoteSearch"
@@ -241,7 +242,6 @@
                 <el-switch
                     v-model="remoteSearchRecursive"
                     size="small"
-                    :disabled="!normalizeRemoteSearchKeyword()"
                     @change="handleRemoteSearchRecursiveChange"
                 />
               </div>
@@ -834,6 +834,20 @@ export default {
       await this.loadRemoteDirectory(this.remoteFilesCurrentPath || '', 1)
     },
 
+    clearRemoteSearchKeyword() {
+      if (this.remoteSearchTimer) {
+        clearTimeout(this.remoteSearchTimer)
+        this.remoteSearchTimer = null
+      }
+
+      this.remoteSearchKeyword = ''
+    },
+
+    async navigateRemoteDirectory(path) {
+      this.clearRemoteSearchKeyword()
+      await this.loadRemoteDirectory(path || '', 1)
+    },
+
     async handleRemoteSearchRecursiveChange() {
       if (!this.isRemoteSearchActive) return
       await this.loadRemoteDirectory(this.remoteFilesCurrentPath || '', 1)
@@ -1040,7 +1054,7 @@ export default {
 
     async goToRemoteParent() {
       if (!this.remoteFilesParentPath) return
-      await this.loadRemoteDirectory(this.remoteFilesParentPath, 1)
+      await this.navigateRemoteDirectory(this.remoteFilesParentPath)
     },
 
     async enterRemoteDirectory(row) {
@@ -1051,7 +1065,7 @@ export default {
         return
       }
 
-      await this.loadRemoteDirectory(row.path, 1)
+      await this.navigateRemoteDirectory(row.path)
     },
 
     async handleRemotePageChange(page) {
@@ -1888,7 +1902,7 @@ export default {
             return
           }
 
-          await this.loadRemoteDirectory(path, 1)
+          await this.navigateRemoteDirectory(path)
           return
         }
       }
@@ -1900,7 +1914,7 @@ export default {
         return
       }
 
-      await this.loadRemoteDirectory(path, 1)
+      await this.navigateRemoteDirectory(path)
     },
 
     async promptRemotePathNavigate() {
@@ -1921,7 +1935,7 @@ export default {
         if (!path) return
 
         this.remoteFilesPathInput = path
-        await this.loadRemoteDirectory(path, 1)
+        await this.navigateRemoteDirectory(path)
       } catch (e) {
         if (this.isDialogCancel(e)) return
         ElMessage.error(e.message || 'Navigate failed')
@@ -1978,7 +1992,7 @@ export default {
 
     async goToRemoteBreadcrumb(item) {
       if (!item || !item.path || item.isCurrent) return
-      await this.loadRemoteDirectory(item.path, 1)
+      await this.navigateRemoteDirectory(item.path)
     },
 
     previewRow(row) {
@@ -2120,26 +2134,50 @@ export default {
 .remote-toolbar-search {
   display: inline-flex;
   align-items: center;
-  gap: 10px;
-  min-width: 320px;
+  justify-content: flex-end;
+  gap: 12px;
+  flex: 0 0 auto;
+  flex-wrap: nowrap;
+  width: 430px;
   margin-left: auto;
 }
 
-.remote-toolbar-search :deep(.el-input) {
-  width: 210px;
+.remote-toolbar-search-input {
+  flex: 0 0 300px;
+  width: 300px;
+}
+
+.remote-toolbar-search-input :deep(.el-input__wrapper) {
+  min-height: 32px;
+  height: 32px;
+  border-radius: 10px;
 }
 
 .remote-recursive-control {
   display: inline-flex;
   align-items: center;
+  justify-content: flex-end;
   gap: 6px;
+  flex: 0 0 auto;
+  height: 32px;
+  min-height: 32px;
   color: var(--muted-2);
   font-size: 12px;
+  line-height: 32px;
   white-space: nowrap;
 }
 
 .remote-recursive-label {
-  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  height: 32px;
+  line-height: 32px;
+}
+
+.remote-recursive-control :deep(.el-switch) {
+  display: inline-flex;
+  align-items: center;
+  height: 32px;
 }
 
 .remote-toolbar-divider {
@@ -2440,8 +2478,10 @@ export default {
     justify-content: flex-start;
   }
 
-  .remote-toolbar-search :deep(.el-input) {
-    width: min(100%, 280px);
+  .remote-toolbar-search-input {
+    flex: 1 1 220px;
+    width: auto;
+    min-width: 0;
   }
 }
 
