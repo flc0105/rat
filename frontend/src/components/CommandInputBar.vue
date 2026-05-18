@@ -640,6 +640,13 @@ export default {
         return
       }
 
+      if (key === 'ArrowRight' && this.autocompleteNavigationPreviewActive) {
+        event.preventDefault()
+        event.stopPropagation()
+        this.commitAutocompleteNavigationPreview()
+        return
+      }
+
       if (key === 'Escape' && this.autocompleteNavigationPreviewActive) {
         event.preventDefault()
         event.stopPropagation()
@@ -693,6 +700,41 @@ export default {
       this.clearAutocompleteNavigationState()
       this.commandText = baseText
       this.closeAutocomplete()
+    },
+
+    commitAutocompleteNavigationPreview() {
+      const committedText = String(this.commandText || '')
+
+      if (!committedText) {
+        this.clearAutocompleteNavigationState()
+        return
+      }
+
+      // 右方向键只提交 preview，不执行命令；提交后重新查询当前路径下一层候选。
+      this.clearAutocompleteNavigationState()
+      this.autocompleteCandidateQueryText = ''
+      this.autocompleteCandidateItems = []
+      this.commandText = committedText
+      this.refreshAutocompleteSuggestionsForCurrentText()
+    },
+
+    refreshAutocompleteSuggestionsForCurrentText() {
+      this.$nextTick(() => {
+        const input = this.$refs.commandInputRef
+        const queryText = String(this.commandText || '')
+
+        if (input && typeof input.getData === 'function') {
+          input.getData(queryText)
+          return
+        }
+
+        if (input && typeof input.handleChange === 'function') {
+          input.handleChange(queryText)
+          return
+        }
+
+        this.focusInput()
+      })
     },
 
     previewAutocompleteCandidateByArrowKey(key) {
