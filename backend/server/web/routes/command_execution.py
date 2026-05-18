@@ -44,6 +44,14 @@ def create_command_execution_blueprint(server_instance):
             default_error_status=500,
         )
 
+    @blueprint.get('/api/connections/<client_id>/command-candidates/cd-directories')
+    def get_cd_directory_candidates(client_id):
+        path = (request.args.get('path') or '').strip()
+        return responder.json_endpoint(
+            lambda: command_catalog_api.get_cd_directory_candidates(client_id, path),
+            default_error_status=500,
+        )
+
     @blueprint.post('/api/connections/<client_id>/upload')
     def upload_file_to_client(client_id):
         def _execute():

@@ -8,9 +8,10 @@ class WebCommandCatalogApi:
     - 输出去重后的 command candidates
     """
 
-    def __init__(self, server, command_executor_factory):
+    def __init__(self, server, command_executor_factory, remote_file_service=None):
         self.server = server
         self.command_executor_factory = command_executor_factory
+        self.remote_file_service = remote_file_service
 
     def _get_client_command_candidates(self, session):
         payload = session.session_info.command_manifest or []
@@ -39,6 +40,22 @@ class WebCommandCatalogApi:
 
         return result
 
+    def _build_cd_directory_candidate(self, item: dict) -> dict | None:
+        name = str((item or {}).get('name') or '').strip()
+        path = str((item or {}).get('path') or '').strip()
+
+        if not name:
+            return None
+
+        return {
+            'name': name,
+            'template': f'cd {name}',
+            'help': f'Change directory -> {path or name}',
+            'group': 'filesystem',
+            'source': 'cd_directory',
+            'path': path,
+        }
+
     def get_command_candidates(self, client_id: str):
         session = self.server.get_target_connection_by_client_id(client_id)
         client_candidates = self._get_client_command_candidates(session)
@@ -55,3 +72,23 @@ class WebCommandCatalogApi:
 
         merged.sort(key=lambda item: (item.get('source', ''), item.get('template', '').lower()))
         return merged
+
+    def get_cd_directory_candidates(self, client_id: str, path: str = ''):
+        if self.remote_file_service is None:
+            return []
+
+        base_path = (path or '').strip()
+        payload = self.remote_file_service.list_child_directories(client_id, base_path)
+        entries = payload.get('entries') or []
+
+        result = []
+        for item in entries:
+            if not isinstance(item, dict):
+                continue
+
+            candidate = self._build_cd_directory_candidate(item)
+            if candidate:
+                result.append(candidate)
+
+        result.sort(key=lambda item: item.get('name', '').lower())
+        return result

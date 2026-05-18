@@ -70,7 +70,12 @@
 
 <script>
 import { ElMessage } from 'element-plus'
-import { sendCommand as sendCommandApi, getCommandCandidates, getCommandHistory } from '../api/connectionsApi.js'
+import {
+  sendCommand as sendCommandApi,
+  getCommandCandidates,
+  getCommandHistory,
+  getCdDirectoryCandidates,
+} from '../api/connectionsApi.js'
 import { cancelTask } from '../api/tasksApi.js'
 import {
   formatTerminalCancelRequestedLine,
@@ -117,6 +122,11 @@ export default {
       commandCandidates: [],
       commandCandidatesLoadedFor: '',
       commandCandidatesLoadPromise: null,
+      cdDirectoryCandidatesByContext: {},
+      cdDirectoryCandidatesLoadPromises: {},
+      cdDirectoryCandidateDebounceTimer: null,
+      cdDirectoryCandidateDebounceResolve: null,
+      cdDirectoryCandidateDebounceToken: 0,
     }
   },
 
@@ -134,6 +144,7 @@ export default {
           this.cancelSending = false
           this.commandCandidates = []
           this.commandCandidatesLoadedFor = ''
+          this.clearCdDirectoryCandidateCache()
         }
 
         if (value) {
@@ -153,6 +164,16 @@ export default {
         this.reloadCommandCandidates({ reset: true, silent: true })
       }
     },
+
+    'currentConnection.cwd'(value, oldValue) {
+      if (value !== oldValue) {
+        this.clearCdDirectoryCandidateCache()
+      }
+    },
+  },
+
+  beforeUnmount() {
+    this.clearCdDirectoryCandidateCache()
   },
 
   methods: {
@@ -298,6 +319,13 @@ export default {
     },
 
     async queryCommandCandidates(queryString, callback) {
+      const cdQuery = this.parseCdDirectoryCandidateQuery(queryString)
+
+      if (cdQuery) {
+        callback(await this.buildCdDirectoryCandidates(cdQuery))
+        return
+      }
+
       await this.ensureCommandCandidatesLoaded()
 
       const keyword = String(queryString || '').trim().toLowerCase()
@@ -358,6 +386,170 @@ export default {
       })
 
       callback(result)
+    },
+
+    parseCdDirectoryCandidateQuery(queryString) {
+      const rawText = String(queryString || '')
+      const leftTrimmedText = rawText.trimStart()
+      const match = leftTrimmedText.match(/^cd(?:\s+(.*))?$/i)
+
+      if (!match) {
+        return null
+      }
+
+      return {
+        rawText,
+        searchText: String(match[1] || '').trim().toLowerCase(),
+      }
+    },
+
+    async buildCdDirectoryCandidates(cdQuery) {
+      const cacheKey = this.buildCdDirectoryCandidateCacheKey()
+      const cachedCandidates = this.cdDirectoryCandidatesByContext[cacheKey]
+
+      if (Array.isArray(cachedCandidates)) {
+        return this.filterCdDirectoryCandidates(cachedCandidates, cdQuery.searchText)
+      }
+
+      const shouldLoad = await this.waitForCdDirectoryCandidateDebounce()
+      if (!shouldLoad || !this.isCurrentCdDirectoryCandidateQuery(cdQuery) || cacheKey !== this.buildCdDirectoryCandidateCacheKey()) {
+        return []
+      }
+
+      const loadedCandidates = await this.loadCdDirectoryCandidatesForCurrentContext(cacheKey)
+      if (!this.isCurrentCdDirectoryCandidateQuery(cdQuery) || cacheKey !== this.buildCdDirectoryCandidateCacheKey()) {
+        return []
+      }
+
+      return this.filterCdDirectoryCandidates(loadedCandidates, cdQuery.searchText)
+    },
+
+    async waitForCdDirectoryCandidateDebounce() {
+      this.cdDirectoryCandidateDebounceToken += 1
+      const token = this.cdDirectoryCandidateDebounceToken
+
+      if (this.cdDirectoryCandidateDebounceTimer) {
+        clearTimeout(this.cdDirectoryCandidateDebounceTimer)
+        this.cdDirectoryCandidateDebounceTimer = null
+      }
+
+      if (typeof this.cdDirectoryCandidateDebounceResolve === 'function') {
+        this.cdDirectoryCandidateDebounceResolve(false)
+      }
+
+      return new Promise((resolve) => {
+        this.cdDirectoryCandidateDebounceResolve = resolve
+        this.cdDirectoryCandidateDebounceTimer = setTimeout(() => {
+          this.cdDirectoryCandidateDebounceTimer = null
+          this.cdDirectoryCandidateDebounceResolve = null
+          resolve(token === this.cdDirectoryCandidateDebounceToken)
+        }, 260)
+      })
+    },
+
+    isCurrentCdDirectoryCandidateQuery(cdQuery) {
+      const currentQuery = this.parseCdDirectoryCandidateQuery(this.commandText)
+
+      if (!currentQuery) {
+        return false
+      }
+
+      return currentQuery.searchText === cdQuery.searchText
+    },
+
+    buildCdDirectoryCandidateCacheKey() {
+      return [
+        String(this.selectedId || '').trim(),
+        this.getCurrentConnectionCwd(),
+      ].join('::')
+    },
+
+    getCurrentConnectionCwd() {
+      return String(this.currentConnection?.cwd || '').trim()
+    },
+
+    async loadCdDirectoryCandidatesForCurrentContext(cacheKey) {
+      if (!this.selectedId) {
+        return []
+      }
+
+      if (Array.isArray(this.cdDirectoryCandidatesByContext[cacheKey])) {
+        return this.cdDirectoryCandidatesByContext[cacheKey]
+      }
+
+      if (this.cdDirectoryCandidatesLoadPromises[cacheKey]) {
+        return this.cdDirectoryCandidatesLoadPromises[cacheKey]
+      }
+
+      // cd 候选只按当前 cwd 拉一次，后续输入变化在前端本地过滤。
+      this.cdDirectoryCandidatesLoadPromises[cacheKey] = getCdDirectoryCandidates(this.selectedId)
+        .then((items) => {
+          const normalizedItems = (Array.isArray(items) ? items : [])
+            .map(item => this.normalizeCandidateItem(item))
+            .filter(item => item.template)
+
+          this.cdDirectoryCandidatesByContext = {
+            ...this.cdDirectoryCandidatesByContext,
+            [cacheKey]: normalizedItems,
+          }
+
+          return normalizedItems
+        })
+        .catch(() => [])
+        .finally(() => {
+          const nextPromises = { ...this.cdDirectoryCandidatesLoadPromises }
+          delete nextPromises[cacheKey]
+          this.cdDirectoryCandidatesLoadPromises = nextPromises
+        })
+
+      return this.cdDirectoryCandidatesLoadPromises[cacheKey]
+    },
+
+    filterCdDirectoryCandidates(candidates, searchText) {
+      const keyword = String(searchText || '').trim().toLowerCase()
+      const list = Array.isArray(candidates) ? candidates : []
+
+      if (!keyword) {
+        return list.slice(0, 50)
+      }
+
+      const prefixMatches = []
+      const textMatches = []
+
+      list.forEach((item) => {
+        const directoryName = String(item.name || '').toLowerCase()
+        const templateText = String(item.template || item.value || '').toLowerCase()
+        const searchTextValue = String(item.searchText || '').toLowerCase()
+
+        if (directoryName.startsWith(keyword)) {
+          prefixMatches.push(item)
+          return
+        }
+
+        if (templateText.includes(keyword) || searchTextValue.includes(keyword)) {
+          textMatches.push(item)
+        }
+      })
+
+      return [
+        ...prefixMatches,
+        ...textMatches,
+      ].slice(0, 50)
+    },
+
+    clearCdDirectoryCandidateCache() {
+      if (this.cdDirectoryCandidateDebounceTimer) {
+        clearTimeout(this.cdDirectoryCandidateDebounceTimer)
+        this.cdDirectoryCandidateDebounceTimer = null
+      }
+
+      if (typeof this.cdDirectoryCandidateDebounceResolve === 'function') {
+        this.cdDirectoryCandidateDebounceResolve(false)
+      }
+
+      this.cdDirectoryCandidateDebounceResolve = null
+      this.cdDirectoryCandidatesByContext = {}
+      this.cdDirectoryCandidatesLoadPromises = {}
     },
 
     handleCandidateSelect(item) {

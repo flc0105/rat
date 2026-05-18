@@ -93,6 +93,34 @@ class FileSystemService:
         _scan(root_directory)
         return collected
 
+    def list_child_directories(self, directory: str) -> dict:
+        """
+        列出指定目录下一层子目录，供 command autocomplete 复用。
+        """
+        current_directory = os.path.abspath(directory)
+        entries = []
+
+        with os.scandir(current_directory) as iterator:
+            for entry in self._iter(iterator):
+                try:
+                    if not self._run(entry.is_dir, follow_symlinks=True):
+                        continue
+
+                    entries.append({
+                        'name': entry.name,
+                        'path': os.path.abspath(entry.path),
+                    })
+                except Exception:
+                    continue
+
+        entries.sort(key=lambda item: str(item.get('name') or '').lower())
+
+        return {
+            'current_path': current_directory,
+            'entries': entries,
+            'total': len(entries),
+        }
+
     def browse_directory(
         self,
         directory: str,

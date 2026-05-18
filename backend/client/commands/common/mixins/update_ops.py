@@ -269,19 +269,6 @@ class CommandUpdateMixin:
             self._send_info(f'Preparing to launch script: {rchclient_path}', 0)
 
 
-            # if os.path.isdir(extract_dir):
-            #     shutil.rmtree(extract_dir)
-            #
-            # self._send_info(f'Bundle extracting...', 0)
-            # safe_extract_zip_archive(archive_path, extract_dir)
-            # self._send_success(f'Bundle extracted to {extract_dir}')
-            #
-            # rchclient_path = os.path.join(extract_dir, 'rchclient.py')
-            # if not os.path.isfile(rchclient_path):
-            #     raise FileNotFoundError(f'rchclient.py not found after extract: {rchclient_path}')
-            #
-            # self._send_info(f'Preparing to launch script: {rchclient_path}', 0)
-
             if detect_platform_alias() == 'ios':
                 self._send_success(f'iOS detected, please restart Pythonista app and manually run script: {rchclient_path}', eof=1)
 
@@ -294,7 +281,7 @@ class CommandUpdateMixin:
 
     @desc('Clean outdated client bundle release directories and ZIP files', group='session')
     @interruptible()
-    def clean(self, arg=''):
+    def clean_releases(self, arg=''):
         """
         清理默认 releases 目录里的旧 update bundle。
         当前只在自身运行于 update bundle 目录时执行。

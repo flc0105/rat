@@ -186,6 +186,25 @@ class CommandFileWebMixin:
         except Exception as e:
             return 0, f'Failed to browse directory: {e}'
 
+    @desc('List child directories as JSON payload', group='file_path', suggest=False)
+    @interruptible()
+    def list_child_dirs(self, path=''):
+        try:
+            payload = self.structured_arg_codec.decode(path)
+            if isinstance(payload, dict):
+                directory = self.path_resolver.require_existing_directory_from_arg(payload.get('path', ''))
+            else:
+                directory = self.path_resolver.require_existing_directory_from_arg(path)
+
+            result_payload = self.file_system_service.list_child_directories(directory)
+            return 1, json.dumps(result_payload, ensure_ascii=False)
+        except CommandCancelledError:
+            return 0, 'Command cancelled'
+        except CommandTimeoutError:
+            return 0, 'Command timed out and was terminated'
+        except Exception as e:
+            return 0, f'Failed to list child directories: {e}'
+
     @desc('Delete a file or directory', group='file_path', suggest=False)
     @interruptible()
     def delete_path(self, path=''):

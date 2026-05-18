@@ -140,6 +140,7 @@ class ServerApplicationAssembly:
         self.command_catalog_api = WebCommandCatalogApi(
             server=self.server,
             command_executor_factory=self.command_executor_factory,
+            remote_file_service=self.remote_file_service,
         )
 
         self.command_execution_api = WebCommandExecutionApi(

@@ -29,6 +29,17 @@ export function getCommandCandidates(clientId) {
   return apiData(`/api/connections/${encodeURIComponent(clientId)}/command-candidates`, {}, [])
 }
 
+export function getCdDirectoryCandidates(clientId, path = '') {
+  const url = new URL(
+    `/api/connections/${encodeURIComponent(clientId)}/command-candidates/cd-directories`,
+    window.location.origin,
+  )
+
+  if (path) url.searchParams.set('path', path)
+
+  return apiData(url.pathname + url.search, {}, [])
+}
+
 export function getCommandHistory(machineId) {
   if (!machineId) return Promise.resolve([])
   return apiData(`/api/machines/${encodeURIComponent(machineId)}/command-history`, {}, [])
