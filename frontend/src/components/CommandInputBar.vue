@@ -711,12 +711,16 @@ export default {
         return
       }
 
-      // 右方向键只提交 preview，不执行命令；提交后重新查询当前路径下一层候选。
-      this.clearAutocompleteNavigationState()
-      this.autocompleteCandidateQueryText = ''
-      this.autocompleteCandidateItems = []
+      // 右方向键只提交 preview，不执行命令、不刷新 provider、不关闭候选列表。
+      // 继续输入 / 时，会按正常输入变更触发下一层 filesystem completion。
+      const committedIndex = this.autocompleteNavigationIndex
+      this.autocompleteNavigationBaseText = ''
+      this.autocompleteNavigationPreviewActive = false
+      this.autocompleteNavigationIndex = committedIndex
+      this.autocompleteCandidateQueryText = committedText
       this.commandText = committedText
-      this.refreshAutocompleteSuggestionsForCurrentText()
+      this.highlightAutocompleteCandidate(committedIndex)
+      this.focusInput()
     },
 
     refreshAutocompleteSuggestionsForCurrentText() {

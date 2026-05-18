@@ -146,12 +146,9 @@ class DownloadPathCommandCompletionProvider(FileSystemChildPathCommandCompletion
         return self.file_system_service.list_child_paths(directory)
 
     def normalize_candidate_path(self, candidate_path: str, item: dict) -> str:
-        if not bool((item or {}).get('is_dir')):
-            return candidate_path
-        if candidate_path.endswith(('/', '\\')):
-            return candidate_path
-        # 目录候选以 / 结尾，表示继续进入该目录补全下一层路径。
-        return f'{candidate_path}/'
+        # download 与 cd 的展示保持一致：目录候选不额外追加 /。
+        # 如需继续进入目录，用户继续输入 / 后再触发下一层补全。
+        return candidate_path
 
     def build_insert_text(self, candidate_path: str, item: dict | None = None) -> str:
         return f'download {candidate_path}'.strip()
