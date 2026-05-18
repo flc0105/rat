@@ -24,9 +24,10 @@ class FileSystemChildPathCommandCompletionProvider(CommandCompletionProvider):
         directory = self.path_resolver.require_existing_directory_from_arg(lookup_path)
         payload = self.list_entries(directory)
         entries = payload.get('entries') if isinstance(payload, dict) else []
+        sorted_entries = self.sort_filesystem_entries(entries)
 
         result = []
-        for item in entries or []:
+        for item in sorted_entries:
             if not isinstance(item, dict):
                 continue
 
@@ -46,7 +47,7 @@ class FileSystemChildPathCommandCompletionProvider(CommandCompletionProvider):
                 group=self.group,
                 kind=entry_kind,
                 name=name,
-                priority=10,
+                priority=self.resolve_candidate_priority(item),
                 metadata={
                     'path': path,
                     'candidatePath': candidate_path,
@@ -60,6 +61,18 @@ class FileSystemChildPathCommandCompletionProvider(CommandCompletionProvider):
     def list_entries(self, directory: str) -> dict:
         raise NotImplementedError
 
+    def sort_filesystem_entries(self, entries) -> list[dict]:
+        # filesystem completion 统一排序：目录在前、文件在后，各自按名称字母序。
+        valid_entries = [item for item in (entries or []) if isinstance(item, dict)]
+        return sorted(
+            valid_entries,
+            key=lambda item: (
+                not bool(item.get('is_dir')),
+                str(item.get('name') or '').casefold(),
+                str(item.get('name') or ''),
+            ),
+        )
+
     def normalize_candidate_path(self, candidate_path: str, item: dict) -> str:
         return candidate_path
 
@@ -68,6 +81,10 @@ class FileSystemChildPathCommandCompletionProvider(CommandCompletionProvider):
 
     def resolve_entry_kind(self, item: dict) -> str:
         return self.entry_kind
+
+    def resolve_candidate_priority(self, item: dict) -> int:
+        # Registry 会按 priority 再按 title 排序；filesystem provider 用 priority 固化目录优先级。
+        return 10 if bool((item or {}).get('is_dir')) else 20
 
     def build_description(self, path: str, item: dict | None = None) -> str:
         return path
