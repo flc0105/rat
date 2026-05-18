@@ -52,18 +52,6 @@ class BuiltinCommandHandler:
             'source': 'server'
         },
         {
-            'name': 'history',
-            'template': 'history run ',
-            'help': 'history run <index> | Run an item from quick history by index',
-            'source': 'server'
-        },
-        {
-            'name': 'history',
-            'template': 'history clear',
-            'help': 'Clear command history for the current host',
-            'source': 'server'
-        },
-        {
             'name': 'gopin',
             'template': 'gopin ',
             'help': 'gopin <display_name> | Jump to a saved quick jump path for the current host',
@@ -77,20 +65,8 @@ class BuiltinCommandHandler:
         },
         {
             'name': 'httpctl',
-            'template': 'httpctl stop',
-            'help': 'httpctl stop | Stop current client through the independent HTTP control channel',
-            'source': 'server'
-        },
-        {
-            'name': 'httpctl',
-            'template': 'httpctl restart',
-            'help': 'httpctl restart | Restart current client through the independent HTTP control channel',
-            'source': 'server'
-        },
-        {
-            'name': 'httpctl',
-            'template': 'httpctl start',
-            'help': 'httpctl start | Start a new client instance through the independent HTTP control channel',
+            'template': 'httpctl ',
+            'help': 'httpctl stop|restart|start | Client HTTP control channel',
             'source': 'server'
         },
 
@@ -175,14 +151,6 @@ class BuiltinCommandHandler:
 
     def get_command_candidates(self):
         candidates = [dict(item) for item in self.WEB_COMMAND_TEMPLATES]
-
-        for script in self.script_support.list_scripts():
-            candidates.append({
-                'name': 'exec',
-                'template': f'exec {script}',
-                'help': f'Execute script: {script}',
-                'source': 'script'
-            })
 
         for item in self.alias_support.list_resolved_aliases():
             alias_name = item.get('alias') or ''

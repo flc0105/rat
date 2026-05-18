@@ -21,9 +21,13 @@ class CommandCompletionRegistry:
     def complete(self, context: CompletionContext) -> list[CompletionCandidate]:
         result: list[CompletionCandidate] = []
         for provider in self._providers:
-            if not provider.supports(context):
+            try:
+                if not provider.supports(context):
+                    continue
+                result.extend(provider.complete(context))
+            except Exception:
+                # autocomplete 不能因为单个 provider 失败影响整条命令输入链路。
                 continue
-            result.extend(provider.complete(context))
 
         return self._dedupe(result)
 

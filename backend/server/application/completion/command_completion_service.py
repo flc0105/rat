@@ -1,7 +1,11 @@
 from core.command_completion.parser import CommandCompletionParser
 from core.command_completion.registry import CommandCompletionRegistry
 from server.application.completion.command_completion_providers import (
+    ExecScriptCommandCompletionProvider,
+    ExternalToolCommandCompletionProvider,
     GopinCommandCompletionProvider,
+    HistoryCommandCompletionProvider,
+    HttpctlCommandCompletionProvider,
     RemoteClientCommandCompletionProvider,
 )
 
@@ -11,13 +15,25 @@ class ServerCommandCompletionService:
     server 侧 command bar 补全服务。
     """
 
-    def __init__(self, server, remote_execution_service, pinned_path_store):
+    def __init__(self, server, remote_execution_service, pinned_path_store, external_tool_catalog_service=None):
         self.server = server
         self.parser = CommandCompletionParser()
         self.registry = CommandCompletionRegistry([
             GopinCommandCompletionProvider(
                 server=server,
                 pinned_path_store=pinned_path_store,
+            ),
+            HistoryCommandCompletionProvider(
+                server=server,
+                command_history=server.command_history,
+            ),
+            HttpctlCommandCompletionProvider(),
+            ExecScriptCommandCompletionProvider(
+                server=server,
+            ),
+            ExternalToolCommandCompletionProvider(
+                server=server,
+                external_tool_catalog_service=external_tool_catalog_service,
             ),
             RemoteClientCommandCompletionProvider(
                 remote_execution_service=remote_execution_service,

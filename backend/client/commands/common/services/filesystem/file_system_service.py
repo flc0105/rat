@@ -97,13 +97,23 @@ class FileSystemService:
         """
         列出指定目录下一层子目录，供 command autocomplete 复用。
         """
+        return self._list_child_entries_by_type(directory, want_directory=True)
+
+    def list_child_files(self, directory: str) -> dict:
+        """
+        列出指定目录下一层文件，供 command autocomplete 复用。
+        """
+        return self._list_child_entries_by_type(directory, want_directory=False)
+
+    def _list_child_entries_by_type(self, directory: str, want_directory: bool) -> dict:
         current_directory = os.path.abspath(directory)
         entries = []
 
         with os.scandir(current_directory) as iterator:
             for entry in self._iter(iterator):
                 try:
-                    if not self._run(entry.is_dir, follow_symlinks=True):
+                    is_directory = self._run(entry.is_dir, follow_symlinks=True)
+                    if bool(is_directory) != bool(want_directory):
                         continue
 
                     entries.append({

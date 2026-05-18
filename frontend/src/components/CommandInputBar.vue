@@ -218,6 +218,7 @@ export default {
 
     this.commandText = ''
     this.commandCandidatesLoadedFor = ''
+    this.clearCommandCompletionCandidateCache()
     await this.loadCommandCandidates(this.selectedId)
   } catch (e) {
     this.$emit('append-output', this.selectedId, formatTerminalCommandFailedLine(e.message || 'unknown error'), 'error')
@@ -348,29 +349,28 @@ export default {
       const sourceList = Array.isArray(this.commandCandidates) ? this.commandCandidates : []
       const visibleCandidates = this.filterExecScriptCandidatesByCurrentOs(sourceList)
 
-      const quickHistoryShortcutCandidates = this.sortQuickHistoryShortcutCandidates(
-        visibleCandidates.filter(item => item && item.source === 'quick_history_shortcut'),
-      )
-      const normalCandidates = visibleCandidates.filter(item => !(item && item.source === 'quick_history_shortcut'))
-
       if (!keyword) {
-        emitCandidates(normalCandidates)
+        emitCandidates(visibleCandidates)
         return
       }
 
-      if (keyword.startsWith('!')) {
-        emitCandidates(this.sortQuickHistoryShortcutCandidates(
-          this.filterCandidatesByTitle(quickHistoryShortcutCandidates, keyword),
-        ))
-        return
-      }
-
-      emitCandidates(this.filterCandidatesByTitle(normalCandidates, keyword))
+      emitCandidates(this.filterCandidatesByTitle(visibleCandidates, keyword))
     },
 
     parseCommandCompletionCandidateQuery(queryString) {
       const rawText = String(queryString || '')
       const leftTrimmedText = rawText.trimStart()
+
+      if (/^!\d*$/.test(leftTrimmedText)) {
+        return {
+          rawText,
+          commandName: '!',
+          requestInput: '!',
+          cacheKey: this.buildCommandCompletionCandidateCacheKey('history_shortcut', 'quick'),
+          requiresRemoteClient: false,
+        }
+      }
+
       const commandMatch = leftTrimmedText.match(/^([^\s]+)(?:\s+(.*))?$/)
 
       if (!commandMatch) {
@@ -379,14 +379,18 @@ export default {
 
       const commandName = String(commandMatch[1] || '').trim().toLowerCase()
       const argumentText = String(commandMatch[2] || '')
-      const dynamicCommands = ['cd', 'gopin', 'set']
+      const dynamicCommands = ['cd', 'download', 'gopin', 'set', 'history', 'httpctl', 'exec', 'xt']
 
       if (!dynamicCommands.includes(commandName)) {
         return null
       }
 
-      if (commandName === 'cd') {
-        return this.buildCdCommandCompletionQuery(rawText, argumentText)
+      if (commandName === 'cd' || commandName === 'download') {
+        return this.buildFileSystemCommandCompletionQuery(commandName, rawText, argumentText)
+      }
+
+      if (commandName === 'xt') {
+        return this.buildXtCommandCompletionQuery(rawText, argumentText)
       }
 
       return {
@@ -398,20 +402,34 @@ export default {
       }
     },
 
-    buildCdCommandCompletionQuery(rawText, argumentText) {
-      const pathParts = this.splitCdDirectoryCandidatePath(argumentText)
-      const requestInput = `cd ${pathParts.candidatePrefix}`
+    buildFileSystemCommandCompletionQuery(commandName, rawText, argumentText) {
+      const pathParts = this.splitFileSystemCandidatePath(argumentText)
+      const requestInput = `${commandName} ${pathParts.candidatePrefix}`
 
       return {
         rawText,
-        commandName: 'cd',
+        commandName,
         requestInput,
-        cacheKey: this.buildCommandCompletionCandidateCacheKey('cd', pathParts.lookupPath),
+        cacheKey: this.buildCommandCompletionCandidateCacheKey(commandName, pathParts.lookupPath),
         requiresRemoteClient: true,
       }
     },
 
-    splitCdDirectoryCandidatePath(argumentText) {
+    buildXtCommandCompletionQuery(rawText, argumentText) {
+      const subcommand = String(argumentText || '').trim().split(/\s+/, 1)[0] || ''
+      const contextKey = ['info', 'which', 'run'].includes(subcommand) ? subcommand : 'root'
+      const requestInput = contextKey === 'root' ? 'xt ' : `xt ${contextKey} `
+
+      return {
+        rawText,
+        commandName: 'xt',
+        requestInput,
+        cacheKey: this.buildCommandCompletionCandidateCacheKey('xt', contextKey),
+        requiresRemoteClient: false,
+      }
+    },
+
+    splitFileSystemCandidatePath(argumentText) {
       const text = String(argumentText || '').trim()
 
       if (!text) {
@@ -436,14 +454,14 @@ export default {
 
       if (hasTrailingSeparator) {
         return {
-          // 输入 cd a/b/ 时，候选目录应来自 a/b。
+          // 输入 cd a/b/ 或 download a/b/ 时，候选应来自 a/b。
           lookupPath: text,
           candidatePrefix: text,
         }
       }
 
       return {
-        // 输入 cd a/bc 时，候选目录应来自 a，并用 bc 做前端本地过滤。
+        // 输入 a/bc 时，候选应来自 a，并用 bc 做前端本地过滤。
         lookupPath: this.buildLookupPathBeforeLastSeparator(text, lastSeparatorIndex),
         candidatePrefix: text.slice(0, lastSeparatorIndex + 1),
       }
@@ -934,15 +952,7 @@ const pinnedHistoryItems = historyItems.filter(item => item && item.is_pinned)
   }))
 })
 
-        // this.buildQuickHistoryShortcutCandidates(historyItems).forEach((item) => {
-        //   merged.push(item)
-        // })
-
-
-        this.buildQuickHistoryShortcutCandidates(pinnedHistoryItems).forEach((item) => {
-  merged.push(item)
-})
-
+        // history run / !<index> 已统一由 CommandCompletionProvider 提供。
         this.commandCandidates = merged
         this.commandCandidatesLoadedFor = clientId
       } catch (_error) {

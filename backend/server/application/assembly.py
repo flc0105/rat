@@ -137,6 +137,7 @@ class ServerApplicationAssembly:
             server=self.server,
             remote_execution_service=self.remote_execution_service,
             pinned_path_store=self.pinned_path_store,
+            external_tool_catalog_service=self.external_tool_catalog_service,
         )
 
         # ------------------ web sub facades / apis ------------------ #

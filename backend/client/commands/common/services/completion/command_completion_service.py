@@ -3,6 +3,7 @@ from core.command_completion.registry import CommandCompletionRegistry
 
 from client.commands.common.services.completion.command_completion_providers import (
     CdDirectoryCommandCompletionProvider,
+    DownloadFileCommandCompletionProvider,
     RuntimeConfigSetCommandCompletionProvider,
 )
 
@@ -35,6 +36,10 @@ class ClientCommandCompletionService:
     def _build_registry(self):
         registry = CommandCompletionRegistry()
         registry.register(CdDirectoryCommandCompletionProvider(
+            path_resolver=self.command_host.path_resolver,
+            file_system_service=self.command_host.file_system_service,
+        ))
+        registry.register(DownloadFileCommandCompletionProvider(
             path_resolver=self.command_host.path_resolver,
             file_system_service=self.command_host.file_system_service,
         ))
