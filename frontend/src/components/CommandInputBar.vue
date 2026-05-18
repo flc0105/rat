@@ -7,9 +7,10 @@
   :model-value="commandText"
   :fetch-suggestions="queryCommandCandidates"
   :fit-input-width="true"
-  popper-class="command-autocomplete-popper"
-  class="command-autocomplete"
-  value-key="value"
+popper-class="command-autocomplete-popper"
+:class="{ 'command-autocomplete-preview': autocompleteNavigationPreviewActive }"
+class="command-autocomplete"
+value-key="value"
   placeholder="Enter a command."
   autocomplete="off"
   @update:model-value="handleCommandTextUpdate"
@@ -1451,6 +1452,16 @@ const pinnedHistoryItems = historyItems.filter(item => item && item.is_pinned)
 .command-autocomplete .el-input__wrapper.is-focus {
   border-color: rgba(96, 165, 250, 0.5);
   box-shadow: none !important;
+}
+
+.command-autocomplete.command-autocomplete-preview .el-input__wrapper {
+  border-color: rgba(251, 191, 36, 0.55);
+  background: rgba(251, 191, 36, 0.08) !important;
+  box-shadow: inset 0 0 0 1px rgba(251, 191, 36, 0.16) !important;
+}
+
+.command-autocomplete.command-autocomplete-preview .el-input__inner {
+  color: rgba(248, 250, 252, 0.78) !important;
 }
 
 .command-autocomplete .el-input__inner {
