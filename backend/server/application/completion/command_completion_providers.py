@@ -232,6 +232,41 @@ class HistoryCommandCompletionProvider(ServerCompletionSessionMixin, CommandComp
         return result
 
 
+class AliasCommandCompletionProvider(CommandCompletionProvider):
+    """
+    server alias 菜单子命令补全；不读取 alias.json，不补具体别名。
+    """
+
+    command_names = ('alias',)
+    source = 'server_alias'
+    group = 'alias'
+
+    MENU_ITEMS = (
+        ('alias resolve', 'Show resolved aliases for current client platform'),
+        ('alias set ', 'Create or update an alias: alias set [--platform common|win|mac|linux|ios] name = command'),
+        ('alias unset ', 'Remove an alias: alias unset [--platform common|win|mac|linux|ios] name'),
+        ('alias list', 'List all platform aliases'),
+        ('alias reload', 'Reload alias definitions'),
+    )
+
+    def complete(self, context: CompletionContext) -> list[CompletionCandidate]:
+        return self._build_candidates()
+
+    def _build_candidates(self) -> list[CompletionCandidate]:
+        result = []
+        for index, (insert_text, description) in enumerate(self.MENU_ITEMS):
+            result.append(CompletionCandidate(
+                title=insert_text,
+                insert_text=insert_text,
+                description=description,
+                source=self.source,
+                group=self.group,
+                kind='alias_menu',
+                name=insert_text.replace('alias ', '').strip() or 'alias',
+                priority=20 + index,
+            ))
+        return result
+
 class HttpctlCommandCompletionProvider(CommandCompletionProvider):
     """
     server httpctl 子命令补全。

@@ -380,7 +380,7 @@ export default {
 
       const commandName = String(commandMatch[1] || '').trim().toLowerCase()
       const argumentText = String(commandMatch[2] || '')
-      const dynamicCommands = ['cd', 'download', 'gopin', 'set', 'history', 'httpctl', 'exec', 'xt']
+      const dynamicCommands = ['cd', 'download', 'gopin', 'set', 'history', 'alias', 'httpctl', 'exec', 'xt']
 
       if (!dynamicCommands.includes(commandName)) {
         return null
