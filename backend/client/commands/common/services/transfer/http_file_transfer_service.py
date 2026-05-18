@@ -107,8 +107,6 @@ class CommandHttpFileTransferService:
     ):
         file_size = os.path.getsize(file_path)
 
-        # self.owner._send_interim_result(1, f'Preparing HTTP upload: {file_path}', 0)
-        # self.owner._send_interim_result(1, f'File size: {file_size} bytes', 0)
 
         self.owner._send_info(f'Preparing HTTP upload: {file_path}', 0)
         self.owner._send_info(f'File size: {file_size} bytes', 0)

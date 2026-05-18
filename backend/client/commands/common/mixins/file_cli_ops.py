@@ -3,6 +3,7 @@ import os
 from client.commands.runtime.interrupts import interruptible
 from client.config.runtime_config import HTTP_TRANSFER_MODE
 from core.utils.decorator import desc
+from core.utils.output_marker import error, success, info
 
 
 class CommandFileCliMixin:
@@ -50,7 +51,7 @@ class CommandFileCliMixin:
 
             payload = self.structured_arg_codec.decode(arg)
             if not isinstance(payload, dict):
-                return 0, 'Invalid HTTP upload payload'
+                return 0, error('Invalid HTTP upload payload')
 
             relative_url = str(payload.get('relative_url') or '').strip()
             url = str(payload.get('url') or '').strip()
@@ -59,32 +60,34 @@ class CommandFileCliMixin:
 
             if not url:
                 if not relative_url:
-                    return 0, 'url or relative_url is required'
+                    return 0, error('url or relative_url is required')
                 url = self.client_api.normalize_server_url(relative_url)
             else:
                 url = self.client_api.normalize_server_url(url)
 
             if not filename:
-                return 0, 'filename is required'
+                return 0, error('filename is required')
 
             target_dir = self.path_resolver.resolve_target_path(save_dir or '.')
             if os.path.exists(target_dir) and not os.path.isdir(target_dir):
-                return 0, f'Target path is not a directory: {target_dir}'
+                return 0, error(f'Target path is not a directory: {target_dir}')
 
             os.makedirs(target_dir, exist_ok=True)
             target_path = os.path.join(target_dir, os.path.basename(filename))
 
-            self._send_interim_result(1, f'Preparing HTTP download: {url}', 0)
+            self._send_info(f'Preparing HTTP download: {url}', 0)
             self.http_file_transfer_service.download_file_from_http(url, target_path)
             file_size = os.path.getsize(target_path)
 
-            return 1, (
-                f'File saved successfully via HTTP\n'
-                f'Path: {target_path}\n'
-                f'Size: {file_size} bytes'
-            )
+            lines = [
+                success('File saved successfully via HTTP\n'),
+                info(f'Path: {target_path}\n'),
+                info(f'Size: {file_size} bytes'),
+            ]
+            return 1, ''.join(lines)
+
         except Exception as e:
-            return 0, f'Failed to receive file via HTTP: {e}'
+            return 0, error(f'Failed to receive file via HTTP: {e}')
 
     @desc('Create a ZIP archive', group='file')
     def zip_dir(self, dir_name):

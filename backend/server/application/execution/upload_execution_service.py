@@ -1,5 +1,6 @@
 import os
 
+from core.utils.output_marker import success
 from server.application.command.command_types import COMMAND_TYPE_COMMAND
 from server.application.command.command_execution_event import CommandExecutionEvent
 
@@ -90,7 +91,7 @@ class UploadExecutionService:
             )
 
             yield CommandExecutionEvent.progress(
-                f'Staged upload file: {safe_name}',
+                success(f'Staged upload file: {safe_name}'),
                 payload={
                     'stage': 'staged',
                     'task_id': task_id,

@@ -4,6 +4,7 @@ from client.commands.runtime.interrupts import interruptible
 from client.commands.common.services.runtime.runtime_config_service import RuntimeConfigService
 from core.utils.decorator import desc
 from core.utils.logger import logger
+from core.utils.output_marker import success, info, error, warning
 
 
 class CommandRuntimeConfigMixin:
@@ -81,26 +82,51 @@ class CommandRuntimeConfigMixin:
             result = self.runtime_config_service.set_config_value(key, value)
             side_effects = self._apply_runtime_config_side_effects(result.key, result.new_value)
 
-            message = (
-                f'{result.key} updated\n'
-                f'Old: {self.runtime_config_service.format_value(result.old_value)}\n'
-                f'New: {self.runtime_config_service.format_value(result.new_value)}\n'
-                f'Default: {self.runtime_config_service.format_value(result.default_value)}\n'
-                f'Source: {result.source}\n'
-                f'Runtime config store: {result.store_path}'
-            )
+            lines = [
+                success(f'{result.key} updated\n'),
+                info(f'Old: {self.runtime_config_service.format_value(result.old_value)}\n'),
+                info(f'New: {self.runtime_config_service.format_value(result.new_value)}\n'),
+                info(f'Default: {self.runtime_config_service.format_value(result.default_value)}\n'),
+                info(f'Source: {result.source}\n'),
+                info(f'Runtime config store: {result.store_path}\n'),
+            ]
 
             if result.override_removed:
-                message += '\nOverride: removed because value equals runtime_config.py default'
+                lines.append(info('Override: removed because value equals runtime_config.py default\n'))
             else:
-                message += '\nOverride: stored because value differs from runtime_config.py default'
+                lines.append(info('Override: stored because value differs from runtime_config.py default\n'))
 
-            if side_effects:
-                message += '\n' + '\n'.join(side_effects)
+            for side_effect in side_effects:
+                lines.append(warning(f'{side_effect}\n'))
 
-            return 1, message
+            return 1, ''.join(lines).rstrip('\n')
         except Exception as e:
-            return 0, f'Failed to set runtime config: {e}'
+            return 0, error(f'Failed to set runtime config: {e}')
+
+        # try:
+        #     result = self.runtime_config_service.set_config_value(key, value)
+        #     side_effects = self._apply_runtime_config_side_effects(result.key, result.new_value)
+        #
+        #     message = (
+        #         f'{result.key} updated\n'
+        #         f'Old: {self.runtime_config_service.format_value(result.old_value)}\n'
+        #         f'New: {self.runtime_config_service.format_value(result.new_value)}\n'
+        #         f'Default: {self.runtime_config_service.format_value(result.default_value)}\n'
+        #         f'Source: {result.source}\n'
+        #         f'Runtime config store: {result.store_path}'
+        #     )
+        #
+        #     if result.override_removed:
+        #         message += '\nOverride: removed because value equals runtime_config.py default'
+        #     else:
+        #         message += '\nOverride: stored because value differs from runtime_config.py default'
+        #
+        #     if side_effects:
+        #         message += '\n' + '\n'.join(side_effects)
+        #
+        #     return 1, message
+        # except Exception as e:
+        #     return 0, f'Failed to set runtime config: {e}'
 
     def _format_runtime_config_listing(self, include_hidden: bool = False):
         removed = self.runtime_config_service.prune_redundant_overrides()

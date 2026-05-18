@@ -33,8 +33,63 @@ class WebRemoteFileService:
             return name
         return f'{name} {self._encode_payload_arg(payload)}'
 
+    def _strip_output_marker(self, line: str) -> str:
+        value = str(line or '').strip()
+        for marker in ('[*]', '[+]', '[!]', '[-]'):
+            if value.startswith(marker):
+                return value[len(marker):].strip()
+        return value
+
+    '''
+    TODO: 重构 remote file / artifact 返回链路，移除从命令输出文本中解析 Artifact ID 的脆弱逻辑。
+    
+    当前问题：
+    server 端 remote_file_service 在执行 download / preview / screenshot 等远程文件类命令后，需要知道 client 上传到 server 的 artifact_id。现在的实现方式是：client 上传成功后，把 Artifact ID 写进人类可读输出文本里，例如：
+    
+        Artifact ID: xxx
+        [*] Artifact ID: xxx
+    
+    然后 server 再从 result text 里逐行解析 Artifact ID。这个逻辑非常脆弱，CLI 输出格式、output marker、文案、换行、语言变化都会影响机器逻辑。例如加入 output marker 后，原本只识别 "Artifact ID:" 的解析逻辑会失败，导致报错：
+    
+        Remote file command completed, but Artifact ID was not found in result text
+    
+    短期修复：
+    当前先在 remote_file_service.py 里兼容 output marker，解析 Artifact ID 前去掉行首的 [*] / [+] / [!] / [-] 等 marker。
+    
+    长期重构目标：
+    机器字段 artifact_id 不应该依赖 CLI 文本解析。需要把远程文件命令的“人类输出”和“机器结果”分离。
+    
+    可选重构方案：
+    1. 给 command result 协议增加 metadata 字段：
+       - text: 给 CLI / Web terminal 展示
+       - metadata.artifact_id: 给 server 机器逻辑读取
+       - metadata.artifact: artifact 详情
+    
+    2. 或者让远程文件命令最后一次 eof=1 result 返回结构化 JSON，server 只解析 final result，不解析中间日志。
+       注意：不能把 JSON 直接展示到 CLI，需要展示 message 或保留原人类输出。
+    
+    涉及文件：
+    - backend/server/application/artifact/remote_file_service.py
+      当前从 result text 中提取 Artifact ID 的地方。
+    - backend/client/commands/common/services/transfer/http_file_transfer_service.py
+      当前生成 Artifact ID / Download URL 人类输出的地方。
+    - backend/client/connection/server_connection.py
+      如果采用 metadata 方案，需要扩展 send_result 协议。
+    - backend/server/application/execution/command_stream_service.py
+      如果采用 final JSON 方案，需要支持读取最后一次 eof=1 result。
+    - backend/server/application/execution/remote_execution_service.py
+      remote file 调用方需要拿结构化结果，而不是普通拼接文本。
+    
+    重构原则：
+    - CLI 输出保持原样，不要为了机器解析破坏用户可读输出。
+    - artifact_id 必须通过结构化字段传递，不再从 stdout / result text 里拆字符串。
+    - 中间日志可以继续走 text。
+    - remote file / preview / screenshot 这类 artifact 命令统一走结构化结果。
+    - 普通命令执行链路尽量不受影响。
+    '''
+
     def _extract_artifact_id_from_result_text(self, text: str) -> str:
-        lines = [str(line).strip() for line in str(text or '').splitlines()]
+        lines = [self._strip_output_marker(line) for line in str(text or '').splitlines()]
         for line in lines:
             if line.startswith(self.RESULT_ARTIFACT_ID_PREFIX):
                 return line[len(self.RESULT_ARTIFACT_ID_PREFIX):].strip()
@@ -54,14 +109,14 @@ class WebRemoteFileService:
         return artifact
 
     def browse_directory(
-        self,
-        client_id: str,
-        path: str = '',
-        page: int = 1,
-        page_size: int = 100,
-        show_hidden: bool = False,
-        search_keyword: str = '',
-        recursive_search: bool = False,
+            self,
+            client_id: str,
+            path: str = '',
+            page: int = 1,
+            page_size: int = 100,
+            show_hidden: bool = False,
+            search_keyword: str = '',
+            recursive_search: bool = False,
     ) -> dict:
         command = self._build_command('browse_dir', {
             'path': path,
@@ -181,11 +236,11 @@ class WebRemoteFileService:
         }
 
     def download_paths_as_zip(
-        self,
-        client_id: str,
-        paths: list[str],
-        archive_name: str = '',
-        history_entry_id: str = '',
+            self,
+            client_id: str,
+            paths: list[str],
+            archive_name: str = '',
+            history_entry_id: str = '',
     ) -> dict:
         if not isinstance(paths, list) or not paths:
             raise ValueError('paths is required')
@@ -245,7 +300,6 @@ class WebRemoteFileService:
             'paths': normalized_paths,
             'message': result_text
         }
-
 
     def paste_paths(self, client_id: str, paths: list[str], destination_dir: str, operation: str = 'copy') -> dict:
         if not isinstance(paths, list) or not paths:
@@ -352,11 +406,3 @@ class WebRemoteFileService:
             }
         else:
             raise ValueError('File is not a text file or cannot be edited')
-
-
-
-
-
-
-
-
