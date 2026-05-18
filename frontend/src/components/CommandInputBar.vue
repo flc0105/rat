@@ -397,31 +397,83 @@ export default {
         return null
       }
 
+      const argumentText = String(match[1] || '').trim()
+      const pathParts = this.splitCdDirectoryCandidatePath(argumentText)
+
       return {
         rawText,
-        searchText: String(match[1] || '').trim().toLowerCase(),
+        argumentText,
+        lookupPath: pathParts.lookupPath,
+        candidatePrefix: pathParts.candidatePrefix,
+        searchText: pathParts.searchText.toLowerCase(),
+      }
+    },
+
+    splitCdDirectoryCandidatePath(argumentText) {
+      const text = String(argumentText || '').trim()
+
+      if (!text) {
+        return {
+          lookupPath: '',
+          candidatePrefix: '',
+          searchText: '',
+        }
+      }
+
+      const lastForwardSlashIndex = text.lastIndexOf('/')
+      const lastBackwardSlashIndex = text.lastIndexOf('\\')
+      const lastSeparatorIndex = Math.max(lastForwardSlashIndex, lastBackwardSlashIndex)
+
+      if (lastSeparatorIndex < 0) {
+        return {
+          lookupPath: '',
+          candidatePrefix: '',
+          searchText: text,
+        }
+      }
+
+      const hasTrailingSeparator = lastSeparatorIndex === text.length - 1
+
+      if (hasTrailingSeparator) {
+        return {
+          // 输入 cd a/b/ 时，候选目录应来自 a/b。
+          lookupPath: text,
+          candidatePrefix: text,
+          searchText: '',
+        }
+      }
+
+      return {
+        // 输入 cd a/bc 时，候选目录应来自 a，并用 bc 做本地过滤。
+        lookupPath: text.slice(0, lastSeparatorIndex),
+        candidatePrefix: text.slice(0, lastSeparatorIndex + 1),
+        searchText: text.slice(lastSeparatorIndex + 1),
       }
     },
 
     async buildCdDirectoryCandidates(cdQuery) {
-      const cacheKey = this.buildCdDirectoryCandidateCacheKey()
+      const cacheKey = this.buildCdDirectoryCandidateCacheKey(cdQuery.lookupPath)
       const cachedCandidates = this.cdDirectoryCandidatesByContext[cacheKey]
 
       if (Array.isArray(cachedCandidates)) {
-        return this.filterCdDirectoryCandidates(cachedCandidates, cdQuery.searchText)
+        return this.filterCdDirectoryCandidates(cachedCandidates, cdQuery)
+      }
+
+      if (this.hasRunningWebTask) {
+        return []
       }
 
       const shouldLoad = await this.waitForCdDirectoryCandidateDebounce()
-      if (!shouldLoad || !this.isCurrentCdDirectoryCandidateQuery(cdQuery) || cacheKey !== this.buildCdDirectoryCandidateCacheKey()) {
+      if (!shouldLoad || !this.isCurrentCdDirectoryCandidateQuery(cdQuery) || cacheKey !== this.buildCdDirectoryCandidateCacheKey(cdQuery.lookupPath)) {
         return []
       }
 
-      const loadedCandidates = await this.loadCdDirectoryCandidatesForCurrentContext(cacheKey)
-      if (!this.isCurrentCdDirectoryCandidateQuery(cdQuery) || cacheKey !== this.buildCdDirectoryCandidateCacheKey()) {
+      const loadedCandidates = await this.loadCdDirectoryCandidatesForContext(cacheKey, cdQuery.lookupPath)
+      if (!this.isCurrentCdDirectoryCandidateQuery(cdQuery) || cacheKey !== this.buildCdDirectoryCandidateCacheKey(cdQuery.lookupPath)) {
         return []
       }
 
-      return this.filterCdDirectoryCandidates(loadedCandidates, cdQuery.searchText)
+      return this.filterCdDirectoryCandidates(loadedCandidates, cdQuery)
     },
 
     async waitForCdDirectoryCandidateDebounce() {
@@ -454,13 +506,18 @@ export default {
         return false
       }
 
-      return currentQuery.searchText === cdQuery.searchText
+      return (
+        currentQuery.lookupPath === cdQuery.lookupPath &&
+        currentQuery.candidatePrefix === cdQuery.candidatePrefix &&
+        currentQuery.searchText === cdQuery.searchText
+      )
     },
 
-    buildCdDirectoryCandidateCacheKey() {
+    buildCdDirectoryCandidateCacheKey(lookupPath = '') {
       return [
         String(this.selectedId || '').trim(),
         this.getCurrentConnectionCwd(),
+        String(lookupPath || '').trim(),
       ].join('::')
     },
 
@@ -468,8 +525,8 @@ export default {
       return String(this.currentConnection?.cwd || '').trim()
     },
 
-    async loadCdDirectoryCandidatesForCurrentContext(cacheKey) {
-      if (!this.selectedId) {
+    async loadCdDirectoryCandidatesForContext(cacheKey, lookupPath = '') {
+      if (!this.selectedId || this.hasRunningWebTask) {
         return []
       }
 
@@ -481,12 +538,12 @@ export default {
         return this.cdDirectoryCandidatesLoadPromises[cacheKey]
       }
 
-      // cd 候选只按当前 cwd 拉一次，后续输入变化在前端本地过滤。
-      this.cdDirectoryCandidatesLoadPromises[cacheKey] = getCdDirectoryCandidates(this.selectedId)
+      // cd 候选按“当前正在补全的父目录”懒加载，避免输入每个字符都请求远端。
+      this.cdDirectoryCandidatesLoadPromises[cacheKey] = getCdDirectoryCandidates(this.selectedId, lookupPath)
         .then((items) => {
           const normalizedItems = (Array.isArray(items) ? items : [])
             .map(item => this.normalizeCandidateItem(item))
-            .filter(item => item.template)
+            .filter(item => item.name)
 
           this.cdDirectoryCandidatesByContext = {
             ...this.cdDirectoryCandidatesByContext,
@@ -505,12 +562,32 @@ export default {
       return this.cdDirectoryCandidatesLoadPromises[cacheKey]
     },
 
-    filterCdDirectoryCandidates(candidates, searchText) {
-      const keyword = String(searchText || '').trim().toLowerCase()
+    buildCdDirectoryCandidateForDisplay(item, cdQuery) {
+      const name = String(item?.name || '').trim()
+      const candidatePath = `${String(cdQuery?.candidatePrefix || '')}${name}`
+      const template = `cd ${candidatePath}`.trim()
+      const helpTarget = String(item?.path || candidatePath).trim()
+
+      return this.normalizeCandidateItem({
+        ...item,
+        name,
+        template,
+        value: template,
+        help: helpTarget ? `Change directory -> ${helpTarget}` : 'Change directory',
+        group: item?.group || 'filesystem',
+        source: item?.source || 'cd_directory',
+        cdCandidatePath: candidatePath,
+      })
+    },
+
+    filterCdDirectoryCandidates(candidates, cdQuery) {
+      const keyword = String(cdQuery?.searchText || '').trim().toLowerCase()
       const list = Array.isArray(candidates) ? candidates : []
 
       if (!keyword) {
-        return list.slice(0, 50)
+        return list
+          .slice(0, 50)
+          .map(item => this.buildCdDirectoryCandidateForDisplay(item, cdQuery))
       }
 
       const prefixMatches = []
@@ -518,7 +595,7 @@ export default {
 
       list.forEach((item) => {
         const directoryName = String(item.name || '').toLowerCase()
-        const templateText = String(item.template || item.value || '').toLowerCase()
+        const candidatePath = `${String(cdQuery?.candidatePrefix || '')}${String(item.name || '')}`.toLowerCase()
         const searchTextValue = String(item.searchText || '').toLowerCase()
 
         if (directoryName.startsWith(keyword)) {
@@ -526,7 +603,7 @@ export default {
           return
         }
 
-        if (templateText.includes(keyword) || searchTextValue.includes(keyword)) {
+        if (candidatePath.includes(keyword) || searchTextValue.includes(keyword)) {
           textMatches.push(item)
         }
       })
@@ -534,7 +611,9 @@ export default {
       return [
         ...prefixMatches,
         ...textMatches,
-      ].slice(0, 50)
+      ]
+        .slice(0, 50)
+        .map(item => this.buildCdDirectoryCandidateForDisplay(item, cdQuery))
     },
 
     clearCdDirectoryCandidateCache() {
