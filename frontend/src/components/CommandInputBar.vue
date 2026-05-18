@@ -12,9 +12,9 @@
   value-key="value"
   placeholder="Enter a command."
   autocomplete="off"
-  @update:model-value="commandText = $event"
+  @update:model-value="handleCommandTextUpdate"
   @select="handleCandidateSelect"
-  @keyup.enter="sendCommand"
+  @keydown.capture="handleCommandInputKeydown"
 >
           <template #default="{ item }">
             <div class="command-autocomplete-item">
@@ -127,6 +127,11 @@ export default {
       cdDirectoryCandidateDebounceTimer: null,
       cdDirectoryCandidateDebounceResolve: null,
       cdDirectoryCandidateDebounceToken: 0,
+      autocompleteCandidateItems: [],
+      autocompleteCandidateQueryText: '',
+      autocompleteNavigationBaseText: '',
+      autocompleteNavigationIndex: -1,
+      autocompleteNavigationPreviewActive: false,
     }
   },
 
@@ -183,6 +188,7 @@ export default {
 
   // add 暂时关闭命令自动补全下拉 2026-04-07
   this.closeAutocomplete()
+  this.clearAutocompleteNavigationState()
 
   if (!command) {
     ElMessage.warning('Please enter a command')
@@ -319,16 +325,22 @@ export default {
     },
 
     async queryCommandCandidates(queryString, callback) {
-      const cdQuery = this.parseCdDirectoryCandidateQuery(queryString)
+      const effectiveQueryString = this.getAutocompleteCandidateQueryString(queryString)
+      const emitCandidates = (items) => {
+        const list = Array.isArray(items) ? items : []
+        this.setAutocompleteCandidateItems(list, effectiveQueryString)
+        callback(list)
+      }
+      const cdQuery = this.parseCdDirectoryCandidateQuery(effectiveQueryString)
 
       if (cdQuery) {
-        callback(await this.buildCdDirectoryCandidates(cdQuery))
+        emitCandidates(await this.buildCdDirectoryCandidates(cdQuery))
         return
       }
 
       await this.ensureCommandCandidatesLoaded()
 
-      const keyword = String(queryString || '').trim().toLowerCase()
+      const keyword = String(effectiveQueryString || '').trim().toLowerCase()
       const sourceList = Array.isArray(this.commandCandidates) ? this.commandCandidates : []
       const visibleCandidates = this.filterExecScriptCandidatesByCurrentOs(sourceList)
 
@@ -338,54 +350,18 @@ export default {
       const normalCandidates = visibleCandidates.filter(item => !(item && item.source === 'quick_history_shortcut'))
 
       if (!keyword) {
-        callback(normalCandidates)
+        emitCandidates(normalCandidates)
         return
       }
 
       if (keyword.startsWith('!')) {
-        if (keyword === '!') {
-          callback(quickHistoryShortcutCandidates)
-          return
-        }
-
-        const exactMatches = []
-        const prefixMatches = []
-        const textMatches = []
-
-        quickHistoryShortcutCandidates.forEach(item => {
-          const shortcutText = String(item.template || item.value || '').trim().toLowerCase()
-          const commandText = String(item.quickHistoryCommand || item.help || '').trim().toLowerCase()
-          const searchText = String(item.searchText || '').toLowerCase()
-
-          if (shortcutText === keyword) {
-            exactMatches.push(item)
-            return
-          }
-
-          if (shortcutText.startsWith(keyword)) {
-            prefixMatches.push(item)
-            return
-          }
-
-          if (commandText.includes(keyword) || searchText.includes(keyword)) {
-            textMatches.push(item)
-          }
-        })
-
-        callback([
-          ...this.sortQuickHistoryShortcutCandidates(exactMatches),
-          ...this.sortQuickHistoryShortcutCandidates(prefixMatches),
-          ...this.sortQuickHistoryShortcutCandidates(textMatches),
-        ])
+        emitCandidates(this.sortQuickHistoryShortcutCandidates(
+          this.filterCandidatesByTitle(quickHistoryShortcutCandidates, keyword),
+        ))
         return
       }
 
-      const result = normalCandidates.filter(item => {
-        const searchText = String(item.searchText || '').toLowerCase()
-        return searchText.includes(keyword)
-      })
-
-      callback(result)
+      emitCandidates(this.filterCandidatesByTitle(normalCandidates, keyword))
     },
 
     parseCdDirectoryCandidateQuery(queryString) {
@@ -500,7 +476,8 @@ export default {
     },
 
     isCurrentCdDirectoryCandidateQuery(cdQuery) {
-      const currentQuery = this.parseCdDirectoryCandidateQuery(this.commandText)
+      const currentText = this.getAutocompleteCandidateQueryString(this.commandText)
+      const currentQuery = this.parseCdDirectoryCandidateQuery(currentText)
 
       if (!currentQuery) {
         return false
@@ -594,26 +571,24 @@ export default {
       const textMatches = []
 
       list.forEach((item) => {
-        const directoryName = String(item.name || '').toLowerCase()
-        const candidatePath = `${String(cdQuery?.candidatePrefix || '')}${String(item.name || '')}`.toLowerCase()
-        const searchTextValue = String(item.searchText || '').toLowerCase()
+        const displayItem = this.buildCdDirectoryCandidateForDisplay(item, cdQuery)
+        const directoryName = String(displayItem.name || '').toLowerCase()
+        const titleText = this.getCandidateTitleSearchText(displayItem)
 
         if (directoryName.startsWith(keyword)) {
-          prefixMatches.push(item)
+          prefixMatches.push(displayItem)
           return
         }
 
-        if (candidatePath.includes(keyword) || searchTextValue.includes(keyword)) {
-          textMatches.push(item)
+        if (titleText.includes(keyword)) {
+          textMatches.push(displayItem)
         }
       })
 
       return [
         ...prefixMatches,
         ...textMatches,
-      ]
-        .slice(0, 50)
-        .map(item => this.buildCdDirectoryCandidateForDisplay(item, cdQuery))
+      ].slice(0, 50)
     },
 
     clearCdDirectoryCandidateCache() {
@@ -631,9 +606,223 @@ export default {
       this.cdDirectoryCandidatesLoadPromises = {}
     },
 
+    handleCommandTextUpdate(value) {
+      this.clearAutocompleteNavigationState()
+      this.autocompleteCandidateQueryText = ''
+      this.commandText = String(value || '')
+    },
+
+    handleCommandInputKeydown(event) {
+      const key = String(event?.key || '')
+
+      if (key === 'ArrowDown' || key === 'ArrowUp') {
+        if (this.previewAutocompleteCandidateByArrowKey(key)) {
+          event.preventDefault()
+          event.stopPropagation()
+        }
+        return
+      }
+
+      if (key === 'Escape' && this.autocompleteNavigationPreviewActive) {
+        event.preventDefault()
+        event.stopPropagation()
+        this.restoreAutocompleteNavigationBaseText()
+        return
+      }
+
+      if (key === 'Enter' && !event?.isComposing) {
+        event.preventDefault()
+        event.stopPropagation()
+        this.handleCommandEnterKeydown()
+      }
+    },
+
+    handleCommandEnterKeydown() {
+      if (this.autocompleteNavigationPreviewActive) {
+        this.clearAutocompleteNavigationState()
+        this.closeAutocomplete()
+        this.sendCommand()
+        return
+      }
+
+      const highlightedCandidate = this.getHighlightedAutocompleteCandidate()
+
+      if (highlightedCandidate) {
+        this.applyAutocompleteCandidateToInput(highlightedCandidate)
+        this.closeAutocomplete()
+        return
+      }
+
+      this.sendCommand()
+    },
+
     handleCandidateSelect(item) {
       if (!item) return
-      this.commandText = String(item.template || item.value || '')
+      this.applyAutocompleteCandidateToInput(item)
+    },
+
+    getAutocompleteCandidateQueryString(queryString) {
+      if (this.autocompleteNavigationPreviewActive) {
+        return this.autocompleteNavigationBaseText
+      }
+
+      return String(queryString || '')
+    },
+
+    setAutocompleteCandidateItems(items, queryString = '') {
+      this.autocompleteCandidateItems = Array.isArray(items) ? items : []
+      this.autocompleteCandidateQueryText = String(queryString || '')
+    },
+
+    clearAutocompleteNavigationState() {
+      this.autocompleteNavigationBaseText = ''
+      this.autocompleteNavigationIndex = -1
+      this.autocompleteNavigationPreviewActive = false
+    },
+
+    restoreAutocompleteNavigationBaseText() {
+      const baseText = this.autocompleteNavigationBaseText
+      this.clearAutocompleteNavigationState()
+      this.commandText = baseText
+      this.closeAutocomplete()
+    },
+
+    previewAutocompleteCandidateByArrowKey(key) {
+      const candidates = Array.isArray(this.autocompleteCandidateItems) ? this.autocompleteCandidateItems : []
+
+      const expectedQueryString = this.getAutocompleteCandidateQueryString(this.commandText)
+
+      if (!candidates.length || this.autocompleteCandidateQueryText !== expectedQueryString) {
+        return false
+      }
+
+      const currentIndex = this.autocompleteNavigationPreviewActive
+        ? this.autocompleteNavigationIndex
+        : this.getAutocompleteHighlightedIndex()
+      const nextIndex = key === 'ArrowUp'
+        ? this.getPreviousAutocompleteCandidateIndex(currentIndex, candidates.length)
+        : this.getNextAutocompleteCandidateIndex(currentIndex, candidates.length)
+      const nextCandidate = candidates[nextIndex]
+      const nextCommandText = this.getCandidateInsertText(nextCandidate)
+
+      if (!nextCommandText) {
+        return false
+      }
+
+      // 导航预览只改 input 展示，候选列表仍按原始输入过滤，避免选不到后续项。
+      if (!this.autocompleteNavigationPreviewActive) {
+        this.autocompleteNavigationBaseText = String(this.commandText || '')
+      }
+
+      this.autocompleteNavigationPreviewActive = true
+      this.autocompleteNavigationIndex = nextIndex
+      this.commandText = nextCommandText
+      this.highlightAutocompleteCandidate(nextIndex)
+
+      return true
+    },
+
+    getPreviousAutocompleteCandidateIndex(currentIndex, total) {
+      if (!Number.isInteger(currentIndex) || currentIndex <= 0) {
+        return total - 1
+      }
+
+      return currentIndex - 1
+    },
+
+    getNextAutocompleteCandidateIndex(currentIndex, total) {
+      if (!Number.isInteger(currentIndex) || currentIndex < 0 || currentIndex >= total - 1) {
+        return 0
+      }
+
+      return currentIndex + 1
+    },
+
+    getHighlightedAutocompleteCandidate() {
+      const candidates = Array.isArray(this.autocompleteCandidateItems) ? this.autocompleteCandidateItems : []
+      const index = this.getAutocompleteHighlightedIndex()
+
+      if (index < 0 || index >= candidates.length) {
+        return null
+      }
+
+      return candidates[index]
+    },
+
+    getAutocompleteHighlightedIndex() {
+      const input = this.$refs.commandInputRef
+      const index = Number.parseInt(input?.highlightedIndex, 10)
+
+      if (Number.isInteger(index)) {
+        return index
+      }
+
+      return -1
+    },
+
+    highlightAutocompleteCandidate(index) {
+      this.$nextTick(() => {
+        const input = this.$refs.commandInputRef
+
+        if (input && typeof input.highlight === 'function') {
+          input.highlight(index)
+        }
+      })
+    },
+
+    applyAutocompleteCandidateToInput(item) {
+      const text = this.getCandidateInsertText(item)
+
+      if (!text) return
+
+      this.clearAutocompleteNavigationState()
+      this.commandText = text
+      this.focusInput()
+    },
+
+    getCandidateInsertText(item) {
+      return String(item?.template || item?.value || item?.name || '').trim()
+    },
+
+    filterCandidatesByTitle(candidates, keyword) {
+      const normalizedKeyword = String(keyword || '').trim().toLowerCase()
+      const exactMatches = []
+      const prefixMatches = []
+      const textMatches = []
+
+      ;(Array.isArray(candidates) ? candidates : []).forEach((item) => {
+        const titleText = this.getCandidateTitleSearchText(item)
+
+        if (!titleText) return
+
+        if (titleText === normalizedKeyword) {
+          exactMatches.push(item)
+          return
+        }
+
+        if (titleText.startsWith(normalizedKeyword)) {
+          prefixMatches.push(item)
+          return
+        }
+
+        if (titleText.includes(normalizedKeyword)) {
+          textMatches.push(item)
+        }
+      })
+
+      return [
+        ...exactMatches,
+        ...prefixMatches,
+        ...textMatches,
+      ]
+    },
+
+    getCandidateTitleText(item) {
+      return String(item?.template || item?.value || item?.name || '').trim()
+    },
+
+    getCandidateTitleSearchText(item) {
+      return this.getCandidateTitleText(item).toLowerCase()
     },
 
     async ensureCommandCandidatesLoaded() {
@@ -812,12 +1001,14 @@ const pinnedHistoryItems = historyItems.filter(item => item && item.is_pinned)
     },
 
     normalizeCandidateItem(item) {
-      const template = String(item.template || '').trim()
-      const name = String(item.name || template || '').trim()
+      const rawValue = String(item.value || '').trim()
+      const template = String(item.template || rawValue || '').trim()
+      const name = String(item.name || template || rawValue || '').trim()
       const help = String(item.help || '').trim()
       const group = String(item.group || '').trim()
       const source = String(item.source || '').trim()
       const groupLabel = this.buildCandidateGroupLabel(item)
+      const titleText = this.getCandidateTitleText({ template, value: rawValue, name })
 
       return {
         ...item,
@@ -828,17 +1019,7 @@ const pinnedHistoryItems = historyItems.filter(item => item && item.is_pinned)
         group,
         source,
         groupLabel,
-        searchText: [
-          template,
-          name,
-          help,
-          group,
-          source,
-          groupLabel,
-        ]
-          .filter(Boolean)
-          .join(' ')
-          .toLowerCase(),
+        searchText: titleText.toLowerCase(),
       }
     },
 
@@ -865,17 +1046,7 @@ const pinnedHistoryItems = historyItems.filter(item => item && item.is_pinned)
             groupLabel: 'quick_history',
             quickHistoryIndex: indexValue,
             quickHistoryCommand: commandText,
-            searchText: [
-              shortcutText,
-              `! ${indexValue}`,
-              String(indexValue),
-              commandText,
-              'quick history',
-              'history shortcut',
-            ]
-              .filter(Boolean)
-              .join(' ')
-              .toLowerCase(),
+            searchText: shortcutText.toLowerCase(),
           }
         })
         .filter(Boolean)
