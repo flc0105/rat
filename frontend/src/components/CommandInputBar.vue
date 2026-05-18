@@ -805,6 +805,7 @@ export default {
       const exactMatches = []
       const prefixMatches = []
       const textMatches = []
+      const fuzzyMatches = []
 
       ;(Array.isArray(candidates) ? candidates : []).forEach((item) => {
         const titleText = this.getCandidateTitleSearchText(item)
@@ -823,6 +824,12 @@ export default {
 
         if (titleText.includes(normalizedKeyword)) {
           textMatches.push(item)
+          return
+        }
+
+        // 仍然只基于标题筛选；这里支持 exec url -> exec common/browser/open_url.py 这类模糊命中。
+        if (this.isCandidateTitleFuzzyMatch(titleText, normalizedKeyword)) {
+          fuzzyMatches.push(item)
         }
       })
 
@@ -830,7 +837,29 @@ export default {
         ...exactMatches,
         ...prefixMatches,
         ...textMatches,
+        ...fuzzyMatches,
       ]
+    },
+
+    isCandidateTitleFuzzyMatch(titleText, keyword) {
+      const title = String(titleText || '').toLowerCase()
+      const tokens = String(keyword || '').toLowerCase().split(/\s+/).filter(Boolean)
+
+      if (!title || !tokens.length) return false
+
+      return tokens.every(token => this.isFuzzySubsequence(token, title))
+    },
+
+    isFuzzySubsequence(needle, haystack) {
+      let haystackIndex = 0
+
+      for (const char of String(needle || '')) {
+        haystackIndex = String(haystack || '').indexOf(char, haystackIndex)
+        if (haystackIndex < 0) return false
+        haystackIndex += 1
+      }
+
+      return true
     },
 
     getCandidateTitleText(item) {

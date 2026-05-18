@@ -105,7 +105,13 @@ class FileSystemService:
         """
         return self._list_child_entries_by_type(directory, want_directory=False)
 
-    def _list_child_entries_by_type(self, directory: str, want_directory: bool) -> dict:
+    def list_child_paths(self, directory: str) -> dict:
+        """
+        列出指定目录下一层文件和目录，供 command autocomplete 复用。
+        """
+        return self._list_child_entries_by_type(directory, want_directory=None)
+
+    def _list_child_entries_by_type(self, directory: str, want_directory: bool | None) -> dict:
         current_directory = os.path.abspath(directory)
         entries = []
 
@@ -113,17 +119,18 @@ class FileSystemService:
             for entry in self._iter(iterator):
                 try:
                     is_directory = self._run(entry.is_dir, follow_symlinks=True)
-                    if bool(is_directory) != bool(want_directory):
+                    if want_directory is not None and bool(is_directory) != bool(want_directory):
                         continue
 
                     entries.append({
                         'name': entry.name,
                         'path': os.path.abspath(entry.path),
+                        'is_dir': bool(is_directory),
                     })
                 except Exception:
                     continue
 
-        entries.sort(key=lambda item: str(item.get('name') or '').lower())
+        entries.sort(key=lambda item: (not bool(item.get('is_dir')), str(item.get('name') or '').lower()))
 
         return {
             'current_path': current_directory,

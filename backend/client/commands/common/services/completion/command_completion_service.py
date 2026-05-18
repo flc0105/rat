@@ -3,7 +3,7 @@ from core.command_completion.registry import CommandCompletionRegistry
 
 from client.commands.common.services.completion.command_completion_providers import (
     CdDirectoryCommandCompletionProvider,
-    DownloadFileCommandCompletionProvider,
+    DownloadPathCommandCompletionProvider,
     RuntimeConfigSetCommandCompletionProvider,
 )
 
@@ -39,7 +39,7 @@ class ClientCommandCompletionService:
             path_resolver=self.command_host.path_resolver,
             file_system_service=self.command_host.file_system_service,
         ))
-        registry.register(DownloadFileCommandCompletionProvider(
+        registry.register(DownloadPathCommandCompletionProvider(
             path_resolver=self.command_host.path_resolver,
             file_system_service=self.command_host.file_system_service,
         ))

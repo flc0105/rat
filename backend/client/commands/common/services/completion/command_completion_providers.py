@@ -37,19 +37,21 @@ class FileSystemChildPathCommandCompletionProvider(CommandCompletionProvider):
 
             candidate_path = f'{candidate_prefix}{name}'
             insert_text = self.build_insert_text(candidate_path)
+            entry_kind = self.resolve_entry_kind(item)
             result.append(CompletionCandidate(
                 title=insert_text,
                 insert_text=insert_text,
-                description=self.build_description(path or candidate_path),
+                description=self.build_description(path or candidate_path, item),
                 source=self.source,
                 group=self.group,
-                kind=self.entry_kind,
+                kind=entry_kind,
                 name=name,
                 priority=10,
                 metadata={
                     'path': path,
                     'candidatePath': candidate_path,
                     'lookupPath': lookup_path,
+                    'isDir': bool(item.get('is_dir')),
                 },
             ))
 
@@ -61,7 +63,10 @@ class FileSystemChildPathCommandCompletionProvider(CommandCompletionProvider):
     def build_insert_text(self, candidate_path: str) -> str:
         raise NotImplementedError
 
-    def build_description(self, path: str) -> str:
+    def resolve_entry_kind(self, item: dict) -> str:
+        return self.entry_kind
+
+    def build_description(self, path: str, item: dict | None = None) -> str:
         return path
 
     def _split_path_argument(self, argument_text: str) -> dict:
@@ -121,27 +126,31 @@ class CdDirectoryCommandCompletionProvider(FileSystemChildPathCommandCompletionP
     def build_insert_text(self, candidate_path: str) -> str:
         return f'cd {candidate_path}'.strip()
 
-    def build_description(self, path: str) -> str:
+    def build_description(self, path: str, item: dict | None = None) -> str:
         return f'Change directory -> {path}'
 
 
-class DownloadFileCommandCompletionProvider(FileSystemChildPathCommandCompletionProvider):
+class DownloadPathCommandCompletionProvider(FileSystemChildPathCommandCompletionProvider):
     """
-    client download 命令文件补全，只返回文件，不返回目录。
+    client download 命令路径补全，同时返回目录和文件。
     """
 
     command_names = ('download',)
     source = 'client_download'
-    entry_kind = 'file'
+    entry_kind = 'path'
 
     def list_entries(self, directory: str) -> dict:
-        return self.file_system_service.list_child_files(directory)
+        return self.file_system_service.list_child_paths(directory)
 
     def build_insert_text(self, candidate_path: str) -> str:
         return f'download {candidate_path}'.strip()
 
-    def build_description(self, path: str) -> str:
-        return f'Download file -> {path}'
+    def resolve_entry_kind(self, item: dict) -> str:
+        return 'directory' if bool(item.get('is_dir')) else 'file'
+
+    def build_description(self, path: str, item: dict | None = None) -> str:
+        entry_label = 'directory' if bool((item or {}).get('is_dir')) else 'file'
+        return f'Download {entry_label} -> {path}'
 
 
 class RuntimeConfigSetCommandCompletionProvider(CommandCompletionProvider):
@@ -157,26 +166,35 @@ class RuntimeConfigSetCommandCompletionProvider(CommandCompletionProvider):
         self.runtime_config_service = runtime_config_service
 
     def complete(self, context: CompletionContext) -> list[CompletionCandidate]:
-        # 只补 set KEY value 形态，不再补 --reset / --reset-all 等管理参数。
-        return self._build_config_value_candidates()
+        # set 只补 key，当前值和 override 状态放到 description。
+        return self._build_config_key_candidates()
 
-    def _build_config_value_candidates(self) -> list[CompletionCandidate]:
+    def _build_config_key_candidates(self) -> list[CompletionCandidate]:
         result = []
-        for key, value, _default_value, _source in self.runtime_config_service.list_config_items():
+        for key, value, default_value, source in self.runtime_config_service.list_config_items():
             value_text = self.runtime_config_service.format_value(value)
-            insert_text = f'set {key} {value_text}'
+            default_text = self.runtime_config_service.format_value(default_value)
+            insert_text = f'set {key}'
             result.append(CompletionCandidate(
                 title=insert_text,
                 insert_text=insert_text,
-                description=value_text,
+                description=self._build_config_description(value_text, default_text, source),
                 source=self.source,
                 group=self.group,
-                kind='runtime_config_value',
+                kind='runtime_config_key',
                 name=key,
                 priority=30,
                 metadata={
                     'configKey': key,
                     'configValue': value,
+                    'defaultValue': default_value,
+                    'configSource': source,
                 },
             ))
         return result
+
+    def _build_config_description(self, value_text: str, default_text: str, source: str) -> str:
+        source_text = str(source or '').strip() or 'default'
+        if source_text == 'override':
+            return f'Current: {value_text} [override, default={default_text}]'
+        return f'Current: {value_text} [default]'
