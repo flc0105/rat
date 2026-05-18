@@ -12,7 +12,6 @@ from client.commands.common.services.process.process_execution_service import Pr
 from client.config.runtime_config import (
     COMMAND_DEFAULT_SHELL_TIMEOUT,
     COMMAND_DEFAULT_STREAM_TIMEOUT,
-    COMMAND_PROCESS_WAIT_POLL_INTERVAL,
 )
 from core.utils.decorator import desc
 
@@ -36,7 +35,8 @@ class CommandExecutionMixin:
     DEFAULT_SHELL_TIMEOUT = COMMAND_DEFAULT_SHELL_TIMEOUT
     DEFAULT_STREAM_TIMEOUT = COMMAND_DEFAULT_STREAM_TIMEOUT
     PROCESS_KILL_GRACE_SECONDS = 2
-    PROCESS_WAIT_POLL_INTERVAL = COMMAND_PROCESS_WAIT_POLL_INTERVAL
+    # 固定子进程等待轮询间隔，不再作为 runtime_config 暴露。
+    PROCESS_WAIT_POLL_INTERVAL = 0.2
 
     def __init__(self, *args, **kwargs):
         self._process_execution_service = None

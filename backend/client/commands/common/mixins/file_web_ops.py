@@ -7,13 +7,10 @@ from client.commands.runtime.interrupts import interruptible
 from client.commands.common.services.transfer.http_file_transfer_service import CommandHttpFileTransferService
 from client.commands.common.services.filesystem.preview_image_service import PreviewImageService
 from client.config.runtime_config import (
-    HTTP_DOWNLOAD_CHUNK_SIZE,
-    HTTP_DOWNLOAD_CONNECT_TIMEOUT_CANCELABLE,
-    HTTP_DOWNLOAD_READ_TIMEOUT_CANCELABLE,
+    HTTP_DOWNLOAD_CONNECT_TIMEOUT,
+    HTTP_DOWNLOAD_READ_TIMEOUT,
     HTTP_TRANSFER_MODE,
-    HTTP_UPLOAD_CHUNK_SIZE,
-    HTTP_UPLOAD_TIMEOUT_CANCELABLE,
-    HTTP_DOWNLOAD_CANCEL_UNSUPPORTED_MESSAGE,
+    HTTP_UPLOAD_TIMEOUT,
 )
 from core.utils.decorator import desc
 
@@ -37,13 +34,11 @@ class CommandFileWebMixin:
     """
 
     HTTP_TRANSFER_MODE = HTTP_TRANSFER_MODE
-    HTTP_UPLOAD_TIMEOUT = HTTP_UPLOAD_TIMEOUT_CANCELABLE
+    HTTP_UPLOAD_TIMEOUT = HTTP_UPLOAD_TIMEOUT
     HTTP_DOWNLOAD_TIMEOUT = (
-        HTTP_DOWNLOAD_CONNECT_TIMEOUT_CANCELABLE,
-        HTTP_DOWNLOAD_READ_TIMEOUT_CANCELABLE,
+        HTTP_DOWNLOAD_CONNECT_TIMEOUT,
+        HTTP_DOWNLOAD_READ_TIMEOUT,
     )
-    HTTP_DOWNLOAD_CHUNK_SIZE = HTTP_DOWNLOAD_CHUNK_SIZE
-    HTTP_UPLOAD_CHUNK_SIZE = HTTP_UPLOAD_CHUNK_SIZE
 
     @property
     def http_file_transfer_service(self):
@@ -75,7 +70,7 @@ class CommandFileWebMixin:
             if HTTP_TRANSFER_MODE == 'legacy':
                 self._set_cancel_policy(
                     supported=False,
-                    message=HTTP_DOWNLOAD_CANCEL_UNSUPPORTED_MESSAGE)
+                    message='Current HTTP transfer mode is legacy; download cancellation is not supported')
 
             file_path = self.path_resolver.require_existing_file_from_arg(path)
             return self.http_file_transfer_service.upload_single_file_to_server_result(

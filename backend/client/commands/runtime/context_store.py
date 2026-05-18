@@ -1,7 +1,6 @@
 import threading
 
 from client.commands.runtime.context import CommandExecutionContext
-from client.config.runtime_config import COMMAND_DEFAULT_TIMEOUT
 
 
 class CommandExecutionContextStore:
@@ -34,9 +33,14 @@ class CommandExecutionContextStore:
         if not isinstance(options, dict):
             return None
 
-        return self.normalize_timeout(
-            options.get('_timeout', options.get('timeout', COMMAND_DEFAULT_TIMEOUT))
-        )
+        # 这里只提取显式下发的 timeout。
+        # COMMAND_DEFAULT_TIMEOUT 作为兜底 fallback 在 CommandRuntimeMixin 内处理，
+        # 避免创建 context 时就覆盖 shell / stream / HTTP 的专用 timeout。
+        if '_timeout' in options:
+            return self.normalize_timeout(options.get('_timeout'))
+        if 'timeout' in options:
+            return self.normalize_timeout(options.get('timeout'))
+        return None
 
     def get_or_create(self, command_id, timeout=None):
         normalized_timeout = self.normalize_timeout(timeout)

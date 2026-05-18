@@ -1,8 +1,4 @@
-from client.config.runtime_config import (
-    HTTP_DOWNLOAD_CANCEL_UNSUPPORTED_MESSAGE,
-    HTTP_TRANSFER_MODE,
-    HTTP_UPLOAD_CANCEL_UNSUPPORTED_MESSAGE,
-)
+from client.config.runtime_config import HTTP_TRANSFER_MODE
 
 
 class HttpTransferStrategy:
@@ -20,13 +16,13 @@ class HttpTransferStrategy:
     def configure_context_for_upload(self):
         self.owner._set_cancel_policy(
             supported=self.is_cancel_supported(),
-            message=HTTP_UPLOAD_CANCEL_UNSUPPORTED_MESSAGE,
+            message='Current HTTP transfer mode is legacy; upload cancellation is not supported',
         )
 
     def configure_context_for_download(self):
         self.owner._set_cancel_policy(
             supported=self.is_cancel_supported(),
-            message=HTTP_DOWNLOAD_CANCEL_UNSUPPORTED_MESSAGE,
+            message='Current HTTP transfer mode is legacy; download cancellation is not supported',
         )
 
     def resolve_http_timeout(self, fallback_timeout=None):

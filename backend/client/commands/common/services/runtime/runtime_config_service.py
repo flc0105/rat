@@ -41,38 +41,61 @@ class RuntimeConfigService:
     BOOL_TRUE_VALUES = {'true', '1', 'yes', 'y', 'on'}
     BOOL_FALSE_VALUES = {'false', '0', 'no', 'n', 'off'}
 
-    def list_config_items(self) -> list[tuple[str, object, object, str]]:
+    def list_config_items(self, include_hidden: bool = False) -> list[tuple[str, object, object, str]]:
         overrides = load_runtime_overrides()
         defaults = self.get_default_values()
 
         items = []
         for key in sorted(self._iter_runtime_config_keys()):
+            if not include_hidden and not self.is_exposed_key(key):
+                continue
+
             value = getattr(runtime_config, key)
             default_value = defaults.get(key)
             source = 'override' if key in overrides else 'default'
             items.append((key, value, default_value, source))
         return items
 
-    def format_config_items(self) -> str:
-        items = self.list_config_items()
+    def format_config_items(self, include_hidden: bool = False) -> str:
+        items = self.list_config_items(include_hidden=include_hidden)
         if not items:
             return 'No runtime config items'
 
+        grouped_items: dict[str, list[tuple[str, object, object, str]]] = {}
+        for item in items:
+            key = item[0]
+            group = self.get_config_group(key)
+            grouped_items.setdefault(group, []).append(item)
+
         lines = []
-        for key, value, default_value, source in items:
-            value_text = self.format_value(value)
-            if source == 'override':
-                lines.append(
-                    f'{key} = {value_text}  [override, default={self.format_value(default_value)}]'
-                )
-            else:
-                lines.append(
-                    f'{key} = {value_text}  [default]'
-                )
+        for group in sorted(grouped_items.keys()):
+            if lines:
+                lines.append('')
+            lines.append(f'[{group}]')
+            for key, value, default_value, source in grouped_items[group]:
+                lines.append(self.format_config_item_line(key, value, default_value, source))
         return '\n'.join(lines)
 
-    def format_active_overrides(self) -> str:
+    def format_config_item_line(self, key: str, value, default_value, source: str) -> str:
+        value_text = self.format_value(value)
+
+        if source == 'override':
+            return (
+                f'{key} = {value_text}  '
+                f'[override, default={self.format_value(default_value)}]'
+            )
+
+        return f'{key} = {value_text}  [default]'
+
+    def format_active_overrides(self, include_hidden: bool = False) -> str:
         overrides = load_runtime_overrides()
+        if not include_hidden:
+            overrides = {
+                key: value
+                for key, value in overrides.items()
+                if self.is_exposed_key(key)
+            }
+
         if not overrides:
             return 'Active overrides: none'
 
@@ -168,7 +191,7 @@ class RuntimeConfigService:
         store_path = clear_runtime_overrides()
 
         for key, default_value in defaults.items():
-            if self.is_supported_key(key):
+            if self.is_known_config_key(key):
                 setattr(runtime_config, key, default_value)
 
         self._refresh_runtime_override_markers()
@@ -212,16 +235,41 @@ class RuntimeConfigService:
             return dict(defaults)
         return {}
 
+    def get_config_meta(self, key: str) -> dict:
+        metadata = getattr(runtime_config, '_RUNTIME_CONFIG_META', None)
+        if not isinstance(metadata, dict):
+            return {}
+
+        item = metadata.get(self.normalize_key(key))
+        return dict(item) if isinstance(item, dict) else {}
+
+    def get_config_group(self, key: str) -> str:
+        group = self.get_config_meta(key).get('group')
+        return str(group or 'other').strip() or 'other'
+
+    def get_config_desc(self, key: str) -> str:
+        desc = self.get_config_meta(key).get('desc')
+        return str(desc or '').strip()
+
+    def is_exposed_key(self, key: str) -> bool:
+        return bool(self.get_config_meta(key).get('expose'))
+
     def normalize_key(self, key: str) -> str:
         return str(key or '').strip().upper()
 
-    def is_supported_key(self, key: str) -> bool:
+    def is_known_config_key(self, key: str) -> bool:
         if not isinstance(key, str) or not key.isupper():
             return False
         if not hasattr(runtime_config, key):
             return False
         value = getattr(runtime_config, key)
         return isinstance(value, self.SUPPORTED_TYPES)
+
+    def is_supported_key(self, key: str) -> bool:
+        # 默认只允许修改 expose=True 的配置，避免内部常量/低频参数被误改。
+        # 如果以后要允许所有 runtime_config 基础类型被 set 修改，把这里改成：
+        # return self.is_known_config_key(key)
+        return self.is_known_config_key(key) and self.is_exposed_key(key)
 
     def format_value(self, value) -> str:
         if isinstance(value, str):

@@ -4,11 +4,14 @@ import requests
 
 from client.commands.strategies.http_transfer.base import HttpTransferStrategy
 from client.config.runtime_config import (
-    HTTP_DOWNLOAD_CHUNK_SIZE,
-    HTTP_DOWNLOAD_CONNECT_TIMEOUT_LEGACY,
-    HTTP_DOWNLOAD_READ_TIMEOUT_LEGACY,
-    HTTP_UPLOAD_TIMEOUT_LEGACY,
+    HTTP_DOWNLOAD_CONNECT_TIMEOUT,
+    HTTP_DOWNLOAD_READ_TIMEOUT,
+    HTTP_UPLOAD_TIMEOUT,
 )
+
+
+# 固定下载分块大小，不再作为 runtime_config 暴露。
+HTTP_DOWNLOAD_CHUNK_SIZE = 64 * 1024
 
 
 class LegacyHttpTransferStrategy(HttpTransferStrategy):
@@ -23,7 +26,7 @@ class LegacyHttpTransferStrategy(HttpTransferStrategy):
                 upload_url,
                 files={'file': (os.path.basename(file_path), file_obj)},
                 data=form_data,
-                timeout=self.resolve_http_timeout(HTTP_UPLOAD_TIMEOUT_LEGACY),
+                timeout=self.resolve_http_timeout(HTTP_UPLOAD_TIMEOUT),
             )
 
     def download_file(self, url: str, target_path: str):
@@ -33,8 +36,8 @@ class LegacyHttpTransferStrategy(HttpTransferStrategy):
                 url,
                 stream=True,
                 timeout=(
-                        HTTP_DOWNLOAD_CONNECT_TIMEOUT_LEGACY,
-                        HTTP_DOWNLOAD_READ_TIMEOUT_LEGACY,
+                        HTTP_DOWNLOAD_CONNECT_TIMEOUT,
+                        HTTP_DOWNLOAD_READ_TIMEOUT,
                 ),
         ) as response:
             response.raise_for_status()

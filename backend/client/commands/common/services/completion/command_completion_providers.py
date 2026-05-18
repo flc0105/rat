@@ -200,13 +200,15 @@ class RuntimeConfigSetCommandCompletionProvider(CommandCompletionProvider):
         for key, value, default_value, source in self.runtime_config_service.list_config_items():
             value_text = self.runtime_config_service.format_value(value)
             default_text = self.runtime_config_service.format_value(default_value)
+            config_group = self.runtime_config_service.get_config_group(key)
+            config_desc = self.runtime_config_service.get_config_desc(key)
             insert_text = f'set {key}'
             result.append(CompletionCandidate(
                 title=insert_text,
                 insert_text=insert_text,
-                description=self._build_config_description(value_text, default_text, source),
+                description=self._build_config_description(value_text, default_text, source, config_desc),
                 source=self.source,
-                group=self.group,
+                group=config_group or self.group,
                 kind='runtime_config_key',
                 name=key,
                 priority=30,
@@ -215,12 +217,15 @@ class RuntimeConfigSetCommandCompletionProvider(CommandCompletionProvider):
                     'configValue': value,
                     'defaultValue': default_value,
                     'configSource': source,
+                    'configGroup': config_group,
+                    'configDesc': config_desc,
                 },
             ))
         return result
 
-    def _build_config_description(self, value_text: str, default_text: str, source: str) -> str:
+    def _build_config_description(self, value_text: str, default_text: str, source: str, config_desc: str = '') -> str:
         source_text = str(source or '').strip() or 'default'
+        suffix = f' · {config_desc}' if config_desc else ''
         if source_text == 'override':
-            return f'Current: {value_text} [override, default={default_text}]'
-        return f'Current: {value_text} [default]'
+            return f'Current: {value_text} [override, default={default_text}]{suffix}'
+        return f'Current: {value_text} [default]{suffix}'

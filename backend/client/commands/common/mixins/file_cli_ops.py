@@ -1,11 +1,7 @@
 import os
 
 from client.commands.runtime.interrupts import interruptible
-from client.config.runtime_config import (
-    HTTP_TRANSFER_MODE,
-    HTTP_DOWNLOAD_CANCEL_UNSUPPORTED_MESSAGE,
-    HTTP_UPLOAD_CANCEL_UNSUPPORTED_MESSAGE,
-)
+from client.config.runtime_config import HTTP_TRANSFER_MODE
 from core.utils.decorator import desc
 
 
@@ -21,7 +17,7 @@ class CommandFileCliMixin:
             if HTTP_TRANSFER_MODE == 'legacy':
                 self._set_cancel_policy(
                     supported=False,
-                    message=HTTP_DOWNLOAD_CANCEL_UNSUPPORTED_MESSAGE)
+                    message='Current HTTP transfer mode is legacy; download cancellation is not supported')
 
             file_path = self.path_resolver.require_existing_file_from_arg(filename)
             return self.http_file_transfer_service.upload_single_file_to_server_result(
@@ -50,7 +46,7 @@ class CommandFileCliMixin:
             if HTTP_TRANSFER_MODE == 'legacy':
                 self._set_cancel_policy(
                     supported=False,
-                    message=HTTP_UPLOAD_CANCEL_UNSUPPORTED_MESSAGE)
+                    message='Current HTTP transfer mode is legacy; upload cancellation is not supported')
 
             payload = self.structured_arg_codec.decode(arg)
             if not isinstance(payload, dict):

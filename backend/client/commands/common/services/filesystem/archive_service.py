@@ -4,7 +4,6 @@ import tempfile
 import time
 import zipfile
 
-from client.config.runtime_config import ZIP_CANCEL_CHECK_INTERVAL
 from client.commands.common.services.filesystem.path_resolver import PathResolver
 
 
@@ -57,8 +56,8 @@ class ArchiveService:
         return f'bundle_{timestamp}.zip'
 
     def iter_directory_files(self, directory: str):
-        for root, _, files in self._iter(os.walk(directory), check_interval=ZIP_CANCEL_CHECK_INTERVAL):
-            for filename in self._iter(files, check_interval=ZIP_CANCEL_CHECK_INTERVAL):
+        for root, _, files in self._iter(os.walk(directory), check_interval=64):
+            for filename in self._iter(files, check_interval=64):
                 yield os.path.join(root, filename)
 
     def write_path_to_zip(self, archive: zipfile.ZipFile, path: str, used_names: set[str]):
@@ -100,7 +99,7 @@ class ArchiveService:
 
         used_names = set()
         with zipfile.ZipFile(archive_path, mode='w', compression=zipfile.ZIP_DEFLATED) as archive:
-            for path in self._iter(paths, check_interval=ZIP_CANCEL_CHECK_INTERVAL):
+            for path in self._iter(paths, check_interval=64):
                 self.write_path_to_zip(archive, path, used_names)
 
         return archive_path

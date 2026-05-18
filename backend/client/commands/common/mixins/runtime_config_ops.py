@@ -32,10 +32,13 @@ class CommandRuntimeConfigMixin:
     def set(self, arg=''):
         """
         set
-            列出 runtime_config 下所有可配置项和值，并标注 default / override 来源
+            列出 runtime_config 下 expose=True 的配置项和值，并标注 default / override 来源
+
+        set --all
+            按分组列出 runtime_config 下所有基础配置项和值
 
         set KEY value
-            修改 runtime_config.KEY。
+            修改 runtime_config.KEY。默认只允许修改 expose=True 的配置项。
             如果 value 和 runtime_config.py 默认值相同，则删除 JSON override。
             如果 value 和默认值不同，则写入外部 runtime_config.json。
 
@@ -56,6 +59,9 @@ class CommandRuntimeConfigMixin:
 
         if not parts:
             return 1, self._format_runtime_config_listing()
+
+        if parts[0] in ('--all', 'all'):
+            return 1, self._format_runtime_config_listing(include_hidden=True)
 
         if parts[0] in ('--reset', 'reset', '--unset', 'unset'):
             if len(parts) != 2:
@@ -96,11 +102,11 @@ class CommandRuntimeConfigMixin:
         except Exception as e:
             return 0, f'Failed to set runtime config: {e}'
 
-    def _format_runtime_config_listing(self):
+    def _format_runtime_config_listing(self, include_hidden: bool = False):
         removed = self.runtime_config_service.prune_redundant_overrides()
         store_path = self.runtime_config_service.get_store_path()
-        active_overrides = self.runtime_config_service.format_active_overrides()
-        config_items = self.runtime_config_service.format_config_items()
+        active_overrides = self.runtime_config_service.format_active_overrides(include_hidden=include_hidden)
+        config_items = self.runtime_config_service.format_config_items(include_hidden=include_hidden)
 
         message = (
             f'Runtime config store path: {store_path}\n'
@@ -141,7 +147,7 @@ class CommandRuntimeConfigMixin:
             store_path = self.runtime_config_service.reset_all_overrides()
             side_effects = []
 
-            for key, value, _, _ in self.runtime_config_service.list_config_items():
+            for key, value, _, _ in self.runtime_config_service.list_config_items(include_hidden=True):
                 side_effects.extend(self._apply_runtime_config_side_effects(key, value))
 
             message = (
@@ -190,13 +196,6 @@ class CommandRuntimeConfigMixin:
             except Exception as e:
                 logger.warning(f'Failed to apply stream timeout runtime update: {e}')
 
-        if key == 'COMMAND_PROCESS_WAIT_POLL_INTERVAL':
-            try:
-                from client.commands.common.mixins.execution_ops import CommandExecutionMixin
-                CommandExecutionMixin.PROCESS_WAIT_POLL_INTERVAL = value
-                effects.append('Applied: CommandExecutionMixin.PROCESS_WAIT_POLL_INTERVAL updated')
-            except Exception as e:
-                logger.warning(f'Failed to apply process wait poll interval runtime update: {e}')
 
         if key in self.WATCHDOG_CONFIG_KEYS:
             if self._restart_guard_manager():

@@ -5,6 +5,7 @@ from client.commands.common.services.filesystem.file_system_service import FileS
 from client.commands.common.services.filesystem.path_resolver import PathResolver
 from client.commands.arguments.structured_codec import StructuredArgCodec
 from client.http.client_api import ClientApiClient
+from client.config.runtime_config import COMMAND_DEFAULT_TIMEOUT
 from core.utils.output_marker import info, success, warning, error
 
 class CommandBindingMixin:
@@ -100,9 +101,17 @@ class CommandRuntimeMixin:
 
     def _resolve_timeout(self, fallback_timeout=None):
         context = self._get_execution_context()
+        effective_fallback = self._resolve_command_fallback_timeout(fallback_timeout)
         if context is None:
+            return effective_fallback
+        return context.resolve_timeout(effective_fallback)
+
+    def _resolve_command_fallback_timeout(self, fallback_timeout=None):
+        # 显式传入的 fallback 优先，例如 shell / stream / HTTP 自己的 timeout。
+        # COMMAND_DEFAULT_TIMEOUT 只作为没有专用 timeout 时的通用兜底。
+        if fallback_timeout is not None:
             return fallback_timeout
-        return context.resolve_timeout(fallback_timeout)
+        return COMMAND_DEFAULT_TIMEOUT
 
     def _ensure_not_cancelled(self):
         context = self._get_execution_context()
@@ -114,13 +123,17 @@ class CommandRuntimeMixin:
         context = self._get_execution_context()
         if context is None:
             return
-        context.raise_if_timed_out(fallback_timeout=fallback_timeout)
+        context.raise_if_timed_out(
+            fallback_timeout=self._resolve_command_fallback_timeout(fallback_timeout)
+        )
 
     def _ensure_not_interrupted(self, fallback_timeout=None):
         context = self._get_execution_context()
         if context is None:
             return
-        context.raise_if_interrupted(fallback_timeout=fallback_timeout)
+        context.raise_if_interrupted(
+            fallback_timeout=self._resolve_command_fallback_timeout(fallback_timeout)
+        )
 
     def _set_cancel_policy(self, supported: bool = True, message: str = ''):
         context = self._get_execution_context()
