@@ -6,12 +6,13 @@ class WebCommandCatalogApi:
     - 聚合客户端命令清单
     - 聚合服务端命令候选
     - 输出去重后的 command candidates
+    - 对外暴露 CommandCompletionProvider 补全入口
     """
 
-    def __init__(self, server, command_executor_factory, remote_file_service=None):
+    def __init__(self, server, command_executor_factory, command_completion_service=None):
         self.server = server
         self.command_executor_factory = command_executor_factory
-        self.remote_file_service = remote_file_service
+        self.command_completion_service = command_completion_service
 
     def _get_client_command_candidates(self, session):
         payload = session.session_info.command_manifest or []
@@ -40,22 +41,6 @@ class WebCommandCatalogApi:
 
         return result
 
-    def _build_cd_directory_candidate(self, item: dict) -> dict | None:
-        name = str((item or {}).get('name') or '').strip()
-        path = str((item or {}).get('path') or '').strip()
-
-        if not name:
-            return None
-
-        return {
-            'name': name,
-            'template': f'cd {name}',
-            'help': f'Change directory -> {path or name}',
-            'group': 'filesystem',
-            'source': 'cd_directory',
-            'path': path,
-        }
-
     def get_command_candidates(self, client_id: str):
         session = self.server.get_target_connection_by_client_id(client_id)
         client_candidates = self._get_client_command_candidates(session)
@@ -73,22 +58,16 @@ class WebCommandCatalogApi:
         merged.sort(key=lambda item: (item.get('source', ''), item.get('template', '').lower()))
         return merged
 
-    def get_cd_directory_candidates(self, client_id: str, path: str = ''):
-        if self.remote_file_service is None:
-            return []
+    def get_command_completions(self, client_id: str, raw_input: str = '', cursor_position=None, max_results: int = 50):
+        if self.command_completion_service is None:
+            return {
+                'context': {},
+                'items': [],
+            }
 
-        base_path = (path or '').strip()
-        payload = self.remote_file_service.list_child_directories(client_id, base_path)
-        entries = payload.get('entries') or []
-
-        result = []
-        for item in entries:
-            if not isinstance(item, dict):
-                continue
-
-            candidate = self._build_cd_directory_candidate(item)
-            if candidate:
-                result.append(candidate)
-
-        result.sort(key=lambda item: item.get('name', '').lower())
-        return result
+        return self.command_completion_service.complete(
+            client_id=client_id,
+            raw_input=raw_input,
+            cursor_position=cursor_position,
+            max_results=max_results,
+        )

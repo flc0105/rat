@@ -8,6 +8,7 @@ from server.web.request_parsers import (
     get_optional_tab_id,
     get_required_command,
     get_required_upload,
+    get_json_payload,
 )
 
 
@@ -44,13 +45,21 @@ def create_command_execution_blueprint(server_instance):
             default_error_status=500,
         )
 
-    @blueprint.get('/api/connections/<client_id>/command-candidates/cd-directories')
-    def get_cd_directory_candidates(client_id):
-        path = (request.args.get('path') or '').strip()
-        return responder.json_endpoint(
-            lambda: command_catalog_api.get_cd_directory_candidates(client_id, path),
-            default_error_status=500,
-        )
+    @blueprint.post('/api/connections/<client_id>/command-completions')
+    def get_command_completions(client_id):
+        def _execute():
+            payload = get_json_payload()
+            raw_input = str(payload.get('raw_input') or '')
+            cursor_position = payload.get('cursor_position')
+            max_results = payload.get('max_results') or 50
+            return command_catalog_api.get_command_completions(
+                client_id,
+                raw_input=raw_input,
+                cursor_position=cursor_position,
+                max_results=max_results,
+            )
+
+        return responder.json_endpoint(_execute, default_error_status=500)
 
     @blueprint.post('/api/connections/<client_id>/upload')
     def upload_file_to_client(client_id):

@@ -101,23 +101,6 @@ class WebRemoteFileService:
             }
         }
 
-    def list_child_directories(self, client_id: str, path: str = '') -> dict:
-        command = self._build_command('list_child_dirs', {
-            'path': path,
-        })
-        payload = self.remote_execution_service.run_foreground_json_command(
-            client_id,
-            command,
-            task_type='command_candidate',
-            source='web_command_autocomplete',
-        )
-
-        return {
-            'current_path': payload.get('current_path', path),
-            'entries': payload.get('entries', []),
-            'total': payload.get('total', len(payload.get('entries', []) or [])),
-        }
-
     def delete_path(self, client_id: str, path: str) -> dict:
         if not (path or '').strip():
             raise ValueError('path is required')

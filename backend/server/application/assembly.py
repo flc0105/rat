@@ -4,6 +4,7 @@ from server.application.agent.agent_output_registry import AgentOutputRegistry
 from server.application.artifact.artifact_service import WebArtifactService
 from server.application.artifact.remote_file_service import WebRemoteFileService
 from server.application.command.command_executor_factory import CommandExecutorFactory
+from server.application.completion.command_completion_service import ServerCommandCompletionService
 from server.application.connection.connection_service import WebConnectionService
 from server.application.connection.recent_device_store import RecentDeviceStore
 from server.application.execution.remote_execution_service import RemoteExecutionService
@@ -132,6 +133,12 @@ class ServerApplicationAssembly:
         self.agent_bootstrap_script_service = AgentBootstrapScriptService()
         self.pty_session_service = PtySessionService(self.server, event_bus=self.event_bus)
 
+        self.command_completion_service = ServerCommandCompletionService(
+            server=self.server,
+            remote_execution_service=self.remote_execution_service,
+            pinned_path_store=self.pinned_path_store,
+        )
+
         # ------------------ web sub facades / apis ------------------ #
         self.connection_api = WebConnectionApi(
             connection_service=self.connection_service,
@@ -140,7 +147,7 @@ class ServerApplicationAssembly:
         self.command_catalog_api = WebCommandCatalogApi(
             server=self.server,
             command_executor_factory=self.command_executor_factory,
-            remote_file_service=self.remote_file_service,
+            command_completion_service=self.command_completion_service,
         )
 
         self.command_execution_api = WebCommandExecutionApi(

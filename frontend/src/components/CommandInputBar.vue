@@ -15,9 +15,13 @@
   @update:model-value="handleCommandTextUpdate"
   @select="handleCandidateSelect"
   @keydown.capture="handleCommandInputKeydown"
+  @keyup.enter="sendCommand"
 >
           <template #default="{ item }">
-            <div class="command-autocomplete-item">
+            <div
+              class="command-autocomplete-item"
+              @mouseenter="handleAutocompleteCandidateMouseEnter(item)"
+            >
               <div class="command-autocomplete-item-main">
                 <div
                   class="command-autocomplete-item-name"
@@ -74,7 +78,7 @@ import {
   sendCommand as sendCommandApi,
   getCommandCandidates,
   getCommandHistory,
-  getCdDirectoryCandidates,
+  getCommandCompletions,
 } from '../api/connectionsApi.js'
 import { cancelTask } from '../api/tasksApi.js'
 import {
@@ -122,11 +126,11 @@ export default {
       commandCandidates: [],
       commandCandidatesLoadedFor: '',
       commandCandidatesLoadPromise: null,
-      cdDirectoryCandidatesByContext: {},
-      cdDirectoryCandidatesLoadPromises: {},
-      cdDirectoryCandidateDebounceTimer: null,
-      cdDirectoryCandidateDebounceResolve: null,
-      cdDirectoryCandidateDebounceToken: 0,
+      commandCompletionCandidatesByContext: {},
+      commandCompletionCandidatesLoadPromises: {},
+      commandCompletionDebounceTimer: null,
+      commandCompletionDebounceResolve: null,
+      commandCompletionDebounceToken: 0,
       autocompleteCandidateItems: [],
       autocompleteCandidateQueryText: '',
       autocompleteNavigationBaseText: '',
@@ -149,7 +153,7 @@ export default {
           this.cancelSending = false
           this.commandCandidates = []
           this.commandCandidatesLoadedFor = ''
-          this.clearCdDirectoryCandidateCache()
+          this.clearCommandCompletionCandidateCache()
         }
 
         if (value) {
@@ -172,13 +176,13 @@ export default {
 
     'currentConnection.cwd'(value, oldValue) {
       if (value !== oldValue) {
-        this.clearCdDirectoryCandidateCache()
+        this.clearCommandCompletionCandidateCache()
       }
     },
   },
 
   beforeUnmount() {
-    this.clearCdDirectoryCandidateCache()
+    this.clearCommandCompletionCandidateCache()
   },
 
   methods: {
@@ -331,10 +335,10 @@ export default {
         this.setAutocompleteCandidateItems(list, effectiveQueryString)
         callback(list)
       }
-      const cdQuery = this.parseCdDirectoryCandidateQuery(effectiveQueryString)
+      const completionQuery = this.parseCommandCompletionCandidateQuery(effectiveQueryString)
 
-      if (cdQuery) {
-        emitCandidates(await this.buildCdDirectoryCandidates(cdQuery))
+      if (completionQuery) {
+        emitCandidates(await this.buildCommandCompletionCandidates(completionQuery))
         return
       }
 
@@ -364,24 +368,46 @@ export default {
       emitCandidates(this.filterCandidatesByTitle(normalCandidates, keyword))
     },
 
-    parseCdDirectoryCandidateQuery(queryString) {
+    parseCommandCompletionCandidateQuery(queryString) {
       const rawText = String(queryString || '')
       const leftTrimmedText = rawText.trimStart()
-      const match = leftTrimmedText.match(/^cd(?:\s+(.*))?$/i)
+      const commandMatch = leftTrimmedText.match(/^([^\s]+)(?:\s+(.*))?$/)
 
-      if (!match) {
+      if (!commandMatch) {
         return null
       }
 
-      const argumentText = String(match[1] || '').trim()
-      const pathParts = this.splitCdDirectoryCandidatePath(argumentText)
+      const commandName = String(commandMatch[1] || '').trim().toLowerCase()
+      const argumentText = String(commandMatch[2] || '')
+      const dynamicCommands = ['cd', 'gopin', 'set']
+
+      if (!dynamicCommands.includes(commandName)) {
+        return null
+      }
+
+      if (commandName === 'cd') {
+        return this.buildCdCommandCompletionQuery(rawText, argumentText)
+      }
 
       return {
         rawText,
-        argumentText,
-        lookupPath: pathParts.lookupPath,
-        candidatePrefix: pathParts.candidatePrefix,
-        searchText: pathParts.searchText.toLowerCase(),
+        commandName,
+        requestInput: `${commandName} `,
+        cacheKey: this.buildCommandCompletionCandidateCacheKey(commandName, commandName),
+        requiresRemoteClient: commandName === 'set',
+      }
+    },
+
+    buildCdCommandCompletionQuery(rawText, argumentText) {
+      const pathParts = this.splitCdDirectoryCandidatePath(argumentText)
+      const requestInput = `cd ${pathParts.candidatePrefix}`
+
+      return {
+        rawText,
+        commandName: 'cd',
+        requestInput,
+        cacheKey: this.buildCommandCompletionCandidateCacheKey('cd', pathParts.lookupPath),
+        requiresRemoteClient: true,
       }
     },
 
@@ -392,7 +418,6 @@ export default {
         return {
           lookupPath: '',
           candidatePrefix: '',
-          searchText: '',
         }
       }
 
@@ -404,7 +429,6 @@ export default {
         return {
           lookupPath: '',
           candidatePrefix: '',
-          searchText: text,
         }
       }
 
@@ -415,86 +439,95 @@ export default {
           // 输入 cd a/b/ 时，候选目录应来自 a/b。
           lookupPath: text,
           candidatePrefix: text,
-          searchText: '',
         }
       }
 
       return {
-        // 输入 cd a/bc 时，候选目录应来自 a，并用 bc 做本地过滤。
-        lookupPath: text.slice(0, lastSeparatorIndex),
+        // 输入 cd a/bc 时，候选目录应来自 a，并用 bc 做前端本地过滤。
+        lookupPath: this.buildLookupPathBeforeLastSeparator(text, lastSeparatorIndex),
         candidatePrefix: text.slice(0, lastSeparatorIndex + 1),
-        searchText: text.slice(lastSeparatorIndex + 1),
       }
     },
 
-    async buildCdDirectoryCandidates(cdQuery) {
-      const cacheKey = this.buildCdDirectoryCandidateCacheKey(cdQuery.lookupPath)
-      const cachedCandidates = this.cdDirectoryCandidatesByContext[cacheKey]
+    buildLookupPathBeforeLastSeparator(text, lastSeparatorIndex) {
+      if (lastSeparatorIndex <= 0) {
+        return text.slice(0, lastSeparatorIndex + 1)
+      }
+
+      // Windows 盘符根目录：C:\foo 应查询 C:\。
+      if (lastSeparatorIndex === 2 && text.length >= 2 && text[1] === ':') {
+        return text.slice(0, lastSeparatorIndex + 1)
+      }
+
+      return text.slice(0, lastSeparatorIndex)
+    },
+
+    async buildCommandCompletionCandidates(completionQuery) {
+      const cacheKey = completionQuery.cacheKey
+      const cachedCandidates = this.commandCompletionCandidatesByContext[cacheKey]
 
       if (Array.isArray(cachedCandidates)) {
-        return this.filterCdDirectoryCandidates(cachedCandidates, cdQuery)
+        return this.filterCommandCompletionCandidates(cachedCandidates, completionQuery)
       }
 
-      if (this.hasRunningWebTask) {
+      if (completionQuery.requiresRemoteClient && this.hasRunningWebTask) {
         return []
       }
 
-      const shouldLoad = await this.waitForCdDirectoryCandidateDebounce()
-      if (!shouldLoad || !this.isCurrentCdDirectoryCandidateQuery(cdQuery) || cacheKey !== this.buildCdDirectoryCandidateCacheKey(cdQuery.lookupPath)) {
+      const shouldLoad = await this.waitForCommandCompletionDebounce()
+      if (!shouldLoad || !this.isCurrentCommandCompletionQuery(completionQuery)) {
         return []
       }
 
-      const loadedCandidates = await this.loadCdDirectoryCandidatesForContext(cacheKey, cdQuery.lookupPath)
-      if (!this.isCurrentCdDirectoryCandidateQuery(cdQuery) || cacheKey !== this.buildCdDirectoryCandidateCacheKey(cdQuery.lookupPath)) {
+      const loadedCandidates = await this.loadCommandCompletionCandidatesForContext(completionQuery)
+      if (!this.isCurrentCommandCompletionQuery(completionQuery)) {
         return []
       }
 
-      return this.filterCdDirectoryCandidates(loadedCandidates, cdQuery)
+      return this.filterCommandCompletionCandidates(loadedCandidates, completionQuery)
     },
 
-    async waitForCdDirectoryCandidateDebounce() {
-      this.cdDirectoryCandidateDebounceToken += 1
-      const token = this.cdDirectoryCandidateDebounceToken
+    async waitForCommandCompletionDebounce() {
+      this.commandCompletionDebounceToken += 1
+      const token = this.commandCompletionDebounceToken
 
-      if (this.cdDirectoryCandidateDebounceTimer) {
-        clearTimeout(this.cdDirectoryCandidateDebounceTimer)
-        this.cdDirectoryCandidateDebounceTimer = null
+      if (this.commandCompletionDebounceTimer) {
+        clearTimeout(this.commandCompletionDebounceTimer)
+        this.commandCompletionDebounceTimer = null
       }
 
-      if (typeof this.cdDirectoryCandidateDebounceResolve === 'function') {
-        this.cdDirectoryCandidateDebounceResolve(false)
+      if (typeof this.commandCompletionDebounceResolve === 'function') {
+        this.commandCompletionDebounceResolve(false)
       }
 
       return new Promise((resolve) => {
-        this.cdDirectoryCandidateDebounceResolve = resolve
-        this.cdDirectoryCandidateDebounceTimer = setTimeout(() => {
-          this.cdDirectoryCandidateDebounceTimer = null
-          this.cdDirectoryCandidateDebounceResolve = null
-          resolve(token === this.cdDirectoryCandidateDebounceToken)
+        this.commandCompletionDebounceResolve = resolve
+        this.commandCompletionDebounceTimer = setTimeout(() => {
+          this.commandCompletionDebounceTimer = null
+          this.commandCompletionDebounceResolve = null
+          resolve(token === this.commandCompletionDebounceToken)
         }, 260)
       })
     },
 
-    isCurrentCdDirectoryCandidateQuery(cdQuery) {
+    isCurrentCommandCompletionQuery(completionQuery) {
       const currentText = this.getAutocompleteCandidateQueryString(this.commandText)
-      const currentQuery = this.parseCdDirectoryCandidateQuery(currentText)
+      const currentQuery = this.parseCommandCompletionCandidateQuery(currentText)
 
       if (!currentQuery) {
         return false
       }
 
-      return (
-        currentQuery.lookupPath === cdQuery.lookupPath &&
-        currentQuery.candidatePrefix === cdQuery.candidatePrefix &&
-        currentQuery.searchText === cdQuery.searchText
-      )
+      return currentQuery.cacheKey === completionQuery.cacheKey
     },
 
-    buildCdDirectoryCandidateCacheKey(lookupPath = '') {
+    buildCommandCompletionCandidateCacheKey(commandName, contextKey = '') {
       return [
         String(this.selectedId || '').trim(),
+        String(this.currentConnection?.machine_id || '').trim(),
         this.getCurrentConnectionCwd(),
-        String(lookupPath || '').trim(),
+        String(commandName || '').trim().toLowerCase(),
+        String(contextKey || '').trim(),
       ].join('::')
     },
 
@@ -502,28 +535,35 @@ export default {
       return String(this.currentConnection?.cwd || '').trim()
     },
 
-    async loadCdDirectoryCandidatesForContext(cacheKey, lookupPath = '') {
-      if (!this.selectedId || this.hasRunningWebTask) {
+    async loadCommandCompletionCandidatesForContext(completionQuery) {
+      const cacheKey = completionQuery.cacheKey
+
+      if (!this.selectedId || (completionQuery.requiresRemoteClient && this.hasRunningWebTask)) {
         return []
       }
 
-      if (Array.isArray(this.cdDirectoryCandidatesByContext[cacheKey])) {
-        return this.cdDirectoryCandidatesByContext[cacheKey]
+      if (Array.isArray(this.commandCompletionCandidatesByContext[cacheKey])) {
+        return this.commandCompletionCandidatesByContext[cacheKey]
       }
 
-      if (this.cdDirectoryCandidatesLoadPromises[cacheKey]) {
-        return this.cdDirectoryCandidatesLoadPromises[cacheKey]
+      if (this.commandCompletionCandidatesLoadPromises[cacheKey]) {
+        return this.commandCompletionCandidatesLoadPromises[cacheKey]
       }
 
-      // cd 候选按“当前正在补全的父目录”懒加载，避免输入每个字符都请求远端。
-      this.cdDirectoryCandidatesLoadPromises[cacheKey] = getCdDirectoryCandidates(this.selectedId, lookupPath)
-        .then((items) => {
-          const normalizedItems = (Array.isArray(items) ? items : [])
+      // 动态补全按 provider 上下文懒加载，前端只做标题过滤和最多 50 项展示。
+      this.commandCompletionCandidatesLoadPromises[cacheKey] = getCommandCompletions(this.selectedId, {
+        raw_input: completionQuery.requestInput,
+        cursor_position: completionQuery.requestInput.length,
+        max_results: 0,
+      })
+        .then((payload) => {
+          const items = Array.isArray(payload?.items) ? payload.items : []
+          const normalizedItems = items
             .map(item => this.normalizeCandidateItem(item))
-            .filter(item => item.name)
+            .filter(item => item.template)
 
-          this.cdDirectoryCandidatesByContext = {
-            ...this.cdDirectoryCandidatesByContext,
+          this.commandCompletionCandidatesByContext = {
+            ...this.commandCompletionCandidatesByContext,
             [cacheKey]: normalizedItems,
           }
 
@@ -531,79 +571,38 @@ export default {
         })
         .catch(() => [])
         .finally(() => {
-          const nextPromises = { ...this.cdDirectoryCandidatesLoadPromises }
+          const nextPromises = { ...this.commandCompletionCandidatesLoadPromises }
           delete nextPromises[cacheKey]
-          this.cdDirectoryCandidatesLoadPromises = nextPromises
+          this.commandCompletionCandidatesLoadPromises = nextPromises
         })
 
-      return this.cdDirectoryCandidatesLoadPromises[cacheKey]
+      return this.commandCompletionCandidatesLoadPromises[cacheKey]
     },
 
-    buildCdDirectoryCandidateForDisplay(item, cdQuery) {
-      const name = String(item?.name || '').trim()
-      const candidatePath = `${String(cdQuery?.candidatePrefix || '')}${name}`
-      const template = `cd ${candidatePath}`.trim()
-      const helpTarget = String(item?.path || candidatePath).trim()
-
-      return this.normalizeCandidateItem({
-        ...item,
-        name,
-        template,
-        value: template,
-        help: helpTarget ? `Change directory -> ${helpTarget}` : 'Change directory',
-        group: item?.group || 'filesystem',
-        source: item?.source || 'cd_directory',
-        cdCandidatePath: candidatePath,
-      })
-    },
-
-    filterCdDirectoryCandidates(candidates, cdQuery) {
-      const keyword = String(cdQuery?.searchText || '').trim().toLowerCase()
+    filterCommandCompletionCandidates(candidates, completionQuery) {
+      const keyword = String(completionQuery?.rawText || '').trim().toLowerCase()
       const list = Array.isArray(candidates) ? candidates : []
 
       if (!keyword) {
-        return list
-          .slice(0, 50)
-          .map(item => this.buildCdDirectoryCandidateForDisplay(item, cdQuery))
+        return list.slice(0, 50)
       }
 
-      const prefixMatches = []
-      const textMatches = []
-
-      list.forEach((item) => {
-        const displayItem = this.buildCdDirectoryCandidateForDisplay(item, cdQuery)
-        const directoryName = String(displayItem.name || '').toLowerCase()
-        const titleText = this.getCandidateTitleSearchText(displayItem)
-
-        if (directoryName.startsWith(keyword)) {
-          prefixMatches.push(displayItem)
-          return
-        }
-
-        if (titleText.includes(keyword)) {
-          textMatches.push(displayItem)
-        }
-      })
-
-      return [
-        ...prefixMatches,
-        ...textMatches,
-      ].slice(0, 50)
+      return this.filterCandidatesByTitle(list, keyword).slice(0, 50)
     },
 
-    clearCdDirectoryCandidateCache() {
-      if (this.cdDirectoryCandidateDebounceTimer) {
-        clearTimeout(this.cdDirectoryCandidateDebounceTimer)
-        this.cdDirectoryCandidateDebounceTimer = null
+    clearCommandCompletionCandidateCache() {
+      if (this.commandCompletionDebounceTimer) {
+        clearTimeout(this.commandCompletionDebounceTimer)
+        this.commandCompletionDebounceTimer = null
       }
 
-      if (typeof this.cdDirectoryCandidateDebounceResolve === 'function') {
-        this.cdDirectoryCandidateDebounceResolve(false)
+      if (typeof this.commandCompletionDebounceResolve === 'function') {
+        this.commandCompletionDebounceResolve(false)
       }
 
-      this.cdDirectoryCandidateDebounceResolve = null
-      this.cdDirectoryCandidatesByContext = {}
-      this.cdDirectoryCandidatesLoadPromises = {}
+      this.commandCompletionDebounceResolve = null
+      this.commandCompletionCandidatesByContext = {}
+      this.commandCompletionCandidatesLoadPromises = {}
     },
 
     handleCommandTextUpdate(value) {
@@ -630,30 +629,6 @@ export default {
         return
       }
 
-      if (key === 'Enter' && !event?.isComposing) {
-        event.preventDefault()
-        event.stopPropagation()
-        this.handleCommandEnterKeydown()
-      }
-    },
-
-    handleCommandEnterKeydown() {
-      if (this.autocompleteNavigationPreviewActive) {
-        this.clearAutocompleteNavigationState()
-        this.closeAutocomplete()
-        this.sendCommand()
-        return
-      }
-
-      const highlightedCandidate = this.getHighlightedAutocompleteCandidate()
-
-      if (highlightedCandidate) {
-        this.applyAutocompleteCandidateToInput(highlightedCandidate)
-        this.closeAutocomplete()
-        return
-      }
-
-      this.sendCommand()
     },
 
     handleCandidateSelect(item) {
@@ -670,8 +645,23 @@ export default {
     },
 
     setAutocompleteCandidateItems(items, queryString = '') {
-      this.autocompleteCandidateItems = Array.isArray(items) ? items : []
-      this.autocompleteCandidateQueryText = String(queryString || '')
+      const normalizedQueryString = String(queryString || '')
+      const list = Array.isArray(items) ? items : []
+      const shouldKeepIndex = (
+        this.autocompleteCandidateQueryText === normalizedQueryString &&
+        this.autocompleteNavigationIndex >= 0 &&
+        this.autocompleteNavigationIndex < list.length
+      )
+
+      this.autocompleteCandidateItems = list
+      this.autocompleteCandidateQueryText = normalizedQueryString
+
+      if (!shouldKeepIndex) {
+        this.autocompleteNavigationIndex = -1
+        return
+      }
+
+      this.highlightAutocompleteCandidate(this.autocompleteNavigationIndex)
     },
 
     clearAutocompleteNavigationState() {
@@ -696,9 +686,7 @@ export default {
         return false
       }
 
-      const currentIndex = this.autocompleteNavigationPreviewActive
-        ? this.autocompleteNavigationIndex
-        : this.getAutocompleteHighlightedIndex()
+      const currentIndex = this.autocompleteNavigationIndex
       const nextIndex = key === 'ArrowUp'
         ? this.getPreviousAutocompleteCandidateIndex(currentIndex, candidates.length)
         : this.getNextAutocompleteCandidateIndex(currentIndex, candidates.length)
@@ -738,27 +726,6 @@ export default {
       return currentIndex + 1
     },
 
-    getHighlightedAutocompleteCandidate() {
-      const candidates = Array.isArray(this.autocompleteCandidateItems) ? this.autocompleteCandidateItems : []
-      const index = this.getAutocompleteHighlightedIndex()
-
-      if (index < 0 || index >= candidates.length) {
-        return null
-      }
-
-      return candidates[index]
-    },
-
-    getAutocompleteHighlightedIndex() {
-      const input = this.$refs.commandInputRef
-      const index = Number.parseInt(input?.highlightedIndex, 10)
-
-      if (Number.isInteger(index)) {
-        return index
-      }
-
-      return -1
-    },
 
     highlightAutocompleteCandidate(index) {
       this.$nextTick(() => {
@@ -768,6 +735,37 @@ export default {
           input.highlight(index)
         }
       })
+    },
+
+    handleAutocompleteCandidateMouseEnter(item) {
+      const index = this.findAutocompleteCandidateIndex(item)
+
+      if (index < 0) return
+
+      this.autocompleteNavigationIndex = index
+
+      if (this.autocompleteNavigationPreviewActive) {
+        const text = this.getCandidateInsertText(item)
+        if (text) {
+          this.commandText = text
+        }
+      }
+    },
+
+    findAutocompleteCandidateIndex(item) {
+      const candidates = Array.isArray(this.autocompleteCandidateItems) ? this.autocompleteCandidateItems : []
+      const sameReferenceIndex = candidates.indexOf(item)
+
+      if (sameReferenceIndex >= 0) {
+        return sameReferenceIndex
+      }
+
+      const titleText = this.getCandidateTitleText(item)
+      if (!titleText) {
+        return -1
+      }
+
+      return candidates.findIndex(candidate => this.getCandidateTitleText(candidate) === titleText)
     },
 
     applyAutocompleteCandidateToInput(item) {

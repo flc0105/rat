@@ -199,18 +199,6 @@ class BuiltinCommandHandler:
                 'source': 'alias'
             })
 
-        for item in self.pinned_path_support.list_pinned_paths():
-            display_name = item.get('display_name', '')
-            target_path = item.get('path', '')
-            if not display_name or not target_path:
-                continue
-            candidates.append({
-                'name': 'gopin',
-                'template': f'gopin {display_name}',
-                'help': f'Quick jump -> {target_path}',
-                'source': 'quick_jump'
-            })
-
         return candidates
 
     def resolve_builtin_command(self, name, arg):

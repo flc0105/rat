@@ -29,15 +29,12 @@ export function getCommandCandidates(clientId) {
   return apiData(`/api/connections/${encodeURIComponent(clientId)}/command-candidates`, {}, [])
 }
 
-export function getCdDirectoryCandidates(clientId, path = '') {
-  const url = new URL(
-    `/api/connections/${encodeURIComponent(clientId)}/command-candidates/cd-directories`,
-    window.location.origin,
+export function getCommandCompletions(clientId, payload = {}) {
+  return apiData(
+    `/api/connections/${encodeURIComponent(clientId)}/command-completions`,
+    jsonRequestOptions('POST', payload),
+    { items: [] },
   )
-
-  if (path) url.searchParams.set('path', path)
-
-  return apiData(url.pathname + url.search, {}, [])
 }
 
 export function getCommandHistory(machineId) {
