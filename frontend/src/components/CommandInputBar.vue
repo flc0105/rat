@@ -827,8 +827,8 @@ export default {
           return
         }
 
-        // 仍然只基于标题筛选；这里支持 exec url -> exec common/browser/open_url.py 这类模糊命中。
-        if (this.isCandidateTitleFuzzyMatch(titleText, normalizedKeyword)) {
+        // 仍然只基于标题筛选；exec 仅按脚本路径/文件名做保守模糊匹配。
+        if (this.isExecScriptPathCandidateMatch(item, normalizedKeyword)) {
           fuzzyMatches.push(item)
         }
       })
@@ -841,25 +841,27 @@ export default {
       ]
     },
 
-    isCandidateTitleFuzzyMatch(titleText, keyword) {
-      const title = String(titleText || '').toLowerCase()
-      const tokens = String(keyword || '').toLowerCase().split(/\s+/).filter(Boolean)
+    isExecScriptPathCandidateMatch(item, keyword) {
+      if (!this.isExecScriptCandidate(item)) return false
 
-      if (!title || !tokens.length) return false
+      const scriptPath = this.getExecScriptPathSearchText(item)
+      const queryText = String(keyword || '').trim().toLowerCase().replace(/^exec\s+/, '')
+      const tokens = queryText.split(/\s+/).filter(Boolean)
 
-      return tokens.every(token => this.isFuzzySubsequence(token, title))
+      if (!scriptPath || !tokens.length) return false
+
+      // 不做字符子序列匹配，避免 app 误命中 machine_fingerprint.py 这类路径。
+      return tokens.every(token => scriptPath.includes(token))
     },
 
-    isFuzzySubsequence(needle, haystack) {
-      let haystackIndex = 0
+    getExecScriptPathSearchText(item) {
+      const metadataScript = String(item?.metadata?.script || item?.script || '').trim()
+      if (metadataScript) return metadataScript.toLowerCase()
 
-      for (const char of String(needle || '')) {
-        haystackIndex = String(haystack || '').indexOf(char, haystackIndex)
-        if (haystackIndex < 0) return false
-        haystackIndex += 1
-      }
-
-      return true
+      return this.getCandidateTitleText(item)
+        .replace(/^exec\s+/i, '')
+        .trim()
+        .toLowerCase()
     },
 
     getCandidateTitleText(item) {

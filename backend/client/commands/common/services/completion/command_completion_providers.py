@@ -35,8 +35,8 @@ class FileSystemChildPathCommandCompletionProvider(CommandCompletionProvider):
             if not name:
                 continue
 
-            candidate_path = f'{candidate_prefix}{name}'
-            insert_text = self.build_insert_text(candidate_path)
+            candidate_path = self.normalize_candidate_path(f'{candidate_prefix}{name}', item)
+            insert_text = self.build_insert_text(candidate_path, item)
             entry_kind = self.resolve_entry_kind(item)
             result.append(CompletionCandidate(
                 title=insert_text,
@@ -60,7 +60,10 @@ class FileSystemChildPathCommandCompletionProvider(CommandCompletionProvider):
     def list_entries(self, directory: str) -> dict:
         raise NotImplementedError
 
-    def build_insert_text(self, candidate_path: str) -> str:
+    def normalize_candidate_path(self, candidate_path: str, item: dict) -> str:
+        return candidate_path
+
+    def build_insert_text(self, candidate_path: str, item: dict | None = None) -> str:
         raise NotImplementedError
 
     def resolve_entry_kind(self, item: dict) -> str:
@@ -123,7 +126,7 @@ class CdDirectoryCommandCompletionProvider(FileSystemChildPathCommandCompletionP
     def list_entries(self, directory: str) -> dict:
         return self.file_system_service.list_child_directories(directory)
 
-    def build_insert_text(self, candidate_path: str) -> str:
+    def build_insert_text(self, candidate_path: str, item: dict | None = None) -> str:
         return f'cd {candidate_path}'.strip()
 
     def build_description(self, path: str, item: dict | None = None) -> str:
@@ -142,15 +145,24 @@ class DownloadPathCommandCompletionProvider(FileSystemChildPathCommandCompletion
     def list_entries(self, directory: str) -> dict:
         return self.file_system_service.list_child_paths(directory)
 
-    def build_insert_text(self, candidate_path: str) -> str:
+    def normalize_candidate_path(self, candidate_path: str, item: dict) -> str:
+        if not bool((item or {}).get('is_dir')):
+            return candidate_path
+        if candidate_path.endswith(('/', '\\')):
+            return candidate_path
+        # 目录候选以 / 结尾，表示继续进入该目录补全下一层路径。
+        return f'{candidate_path}/'
+
+    def build_insert_text(self, candidate_path: str, item: dict | None = None) -> str:
         return f'download {candidate_path}'.strip()
 
     def resolve_entry_kind(self, item: dict) -> str:
         return 'directory' if bool(item.get('is_dir')) else 'file'
 
     def build_description(self, path: str, item: dict | None = None) -> str:
-        entry_label = 'directory' if bool((item or {}).get('is_dir')) else 'file'
-        return f'Download {entry_label} -> {path}'
+        if bool((item or {}).get('is_dir')):
+            return f'Enter directory -> {path}'
+        return f'Download file -> {path}'
 
 
 class RuntimeConfigSetCommandCompletionProvider(CommandCompletionProvider):
