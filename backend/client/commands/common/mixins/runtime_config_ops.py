@@ -1,7 +1,7 @@
 import shlex
 
-from client.commands.runtime.interrupts import interruptible
 from client.commands.common.services.runtime.runtime_config_service import RuntimeConfigService
+from client.commands.runtime.interrupts import interruptible
 from core.utils.decorator import desc
 from core.utils.logger import logger
 from core.utils.output_marker import success, info, error, warning
@@ -56,7 +56,7 @@ class CommandRuntimeConfigMixin:
         try:
             parts = shlex.split(text)
         except Exception as e:
-            return 0, f'Invalid set arguments: {e}'
+            return 0, error(f'Invalid set arguments: {e}')
 
         if not parts:
             return 1, self._format_runtime_config_listing()
@@ -88,7 +88,6 @@ class CommandRuntimeConfigMixin:
                 info(f'New: {self.runtime_config_service.format_value(result.new_value)}\n'),
                 info(f'Default: {self.runtime_config_service.format_value(result.default_value)}\n'),
                 info(f'Source: {result.source}\n'),
-                info(f'Runtime config store: {result.store_path}\n'),
             ]
 
             if result.override_removed:
@@ -103,31 +102,6 @@ class CommandRuntimeConfigMixin:
         except Exception as e:
             return 0, error(f'Failed to set runtime config: {e}')
 
-        # try:
-        #     result = self.runtime_config_service.set_config_value(key, value)
-        #     side_effects = self._apply_runtime_config_side_effects(result.key, result.new_value)
-        #
-        #     message = (
-        #         f'{result.key} updated\n'
-        #         f'Old: {self.runtime_config_service.format_value(result.old_value)}\n'
-        #         f'New: {self.runtime_config_service.format_value(result.new_value)}\n'
-        #         f'Default: {self.runtime_config_service.format_value(result.default_value)}\n'
-        #         f'Source: {result.source}\n'
-        #         f'Runtime config store: {result.store_path}'
-        #     )
-        #
-        #     if result.override_removed:
-        #         message += '\nOverride: removed because value equals runtime_config.py default'
-        #     else:
-        #         message += '\nOverride: stored because value differs from runtime_config.py default'
-        #
-        #     if side_effects:
-        #         message += '\n' + '\n'.join(side_effects)
-        #
-        #     return 1, message
-        # except Exception as e:
-        #     return 0, f'Failed to set runtime config: {e}'
-
     def _format_runtime_config_listing(self, include_hidden: bool = False):
         removed = self.runtime_config_service.prune_redundant_overrides()
         store_path = self.runtime_config_service.get_store_path()
@@ -135,15 +109,15 @@ class CommandRuntimeConfigMixin:
         config_items = self.runtime_config_service.format_config_items(include_hidden=include_hidden)
 
         message = (
-            f'Runtime config store path: {store_path}\n'
-            f'{active_overrides}\n'
+                info(f'Runtime config store path: {store_path}\n') +
+                f'{active_overrides}\n'
         )
 
         if removed:
             message += (
-                'Pruned redundant overrides: '
-                + ', '.join(removed)
-                + '\n'
+                    warning('Pruned redundant overrides: ')
+                    + ', '.join(removed)
+                    + '\n'
             )
 
         message += '\n' + config_items
@@ -155,10 +129,8 @@ class CommandRuntimeConfigMixin:
             side_effects = self._apply_runtime_config_side_effects(result.key, result.new_value)
 
             message = (
-                f'{result.key} reset to runtime_config.py default\n'
-                f'Old: {self.runtime_config_service.format_value(result.old_value)}\n'
-                f'New: {self.runtime_config_service.format_value(result.new_value)}\n'
-                f'Runtime config store: {result.store_path}'
+                    success(f'{result.key} reset to default: ') +
+                    f'{self.runtime_config_service.format_value(result.old_value)} -> {self.runtime_config_service.format_value(result.new_value)}'
             )
 
             if side_effects:
@@ -166,7 +138,7 @@ class CommandRuntimeConfigMixin:
 
             return 1, message
         except Exception as e:
-            return 0, f'Failed to reset runtime config: {e}'
+            return 0, error(f'Failed to reset runtime config: {e}')
 
     def _reset_all_runtime_config_overrides(self):
         try:
@@ -177,8 +149,8 @@ class CommandRuntimeConfigMixin:
                 side_effects.extend(self._apply_runtime_config_side_effects(key, value))
 
             message = (
-                'All runtime config overrides reset to runtime_config.py defaults\n'
-                f'Runtime config store: {store_path}'
+                    success('All runtime config overrides reset to runtime_config.py defaults\n') +
+                    info(f'Runtime config store: {store_path}')
             )
 
             if side_effects:
@@ -190,7 +162,7 @@ class CommandRuntimeConfigMixin:
 
             return 1, message
         except Exception as e:
-            return 0, f'Failed to reset all runtime config overrides: {e}'
+            return 0, error(f'Failed to reset all runtime config overrides: {e}')
 
     def _apply_runtime_config_side_effects(self, key: str, value):
         """
@@ -202,7 +174,7 @@ class CommandRuntimeConfigMixin:
             try:
                 import rchclient
                 rchclient.Client.RECONNECT_INTERVAL = value
-                effects.append('Applied: Client.RECONNECT_INTERVAL updated')
+                effects.append(success('Applied: Client.RECONNECT_INTERVAL updated'))
             except Exception as e:
                 logger.warning(f'Failed to apply reconnect interval runtime update: {e}')
 
@@ -210,7 +182,7 @@ class CommandRuntimeConfigMixin:
             try:
                 from client.commands.common.mixins.execution_ops import CommandExecutionMixin
                 CommandExecutionMixin.DEFAULT_SHELL_TIMEOUT = value
-                effects.append('Applied: CommandExecutionMixin.DEFAULT_SHELL_TIMEOUT updated')
+                effects.append(success('Applied: CommandExecutionMixin.DEFAULT_SHELL_TIMEOUT updated'))
             except Exception as e:
                 logger.warning(f'Failed to apply shell timeout runtime update: {e}')
 
@@ -218,14 +190,13 @@ class CommandRuntimeConfigMixin:
             try:
                 from client.commands.common.mixins.execution_ops import CommandExecutionMixin
                 CommandExecutionMixin.DEFAULT_STREAM_TIMEOUT = value
-                effects.append('Applied: CommandExecutionMixin.DEFAULT_STREAM_TIMEOUT updated')
+                effects.append(success('Applied: CommandExecutionMixin.DEFAULT_STREAM_TIMEOUT updated'))
             except Exception as e:
                 logger.warning(f'Failed to apply stream timeout runtime update: {e}')
 
-
         if key in self.WATCHDOG_CONFIG_KEYS:
             if self._restart_guard_manager():
-                effects.append('Applied: watchdog runtime restarted')
+                effects.append(success('Applied: watchdog runtime restarted'))
 
         return effects
 

@@ -11,6 +11,7 @@ from client.config.runtime_config_store import (
     save_runtime_overrides,
     update_runtime_override,
 )
+from core.utils.output_marker import warning, error
 
 
 @dataclass
@@ -59,7 +60,7 @@ class RuntimeConfigService:
     def format_config_items(self, include_hidden: bool = False) -> str:
         items = self.list_config_items(include_hidden=include_hidden)
         if not items:
-            return 'No runtime config items'
+            return error('No runtime config items')
 
         grouped_items: dict[str, list[tuple[str, object, object, str]]] = {}
         for item in items:
@@ -97,10 +98,10 @@ class RuntimeConfigService:
             }
 
         if not overrides:
-            return 'Active overrides: none'
+            return warning('Active overrides: none')
 
         defaults = self.get_default_values()
-        lines = ['Active overrides:']
+        lines = [warning('Active overrides:')]
         for key in sorted(overrides.keys()):
             value = overrides[key]
             default_value = defaults.get(key)
