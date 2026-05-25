@@ -32,6 +32,8 @@ class SubprocessPipePythonExecutionStrategy(PythonExecutionStrategy):
 import pickle
 import traceback
 
+from client.runtime.sdk.context import build_script_sdk_globals, use_script_sdk_context
+
 USER_CODE = {code!r}
 KWARGS_PAYLOAD = {kwargs_payload!r}
 
@@ -40,12 +42,14 @@ try:
 except Exception:
     kwargs = {{}}
 
-exec_globals = {{}}
+exec_globals = {{'__name__': '__main__'}}
 exec_globals.update(kwargs)
+exec_globals.update(build_script_sdk_globals(None, kwargs))
 exec_globals['kwargs'] = kwargs
 
 try:
-    exec(compile(USER_CODE, '<remote_pyexec>', 'exec'), exec_globals)
+    with use_script_sdk_context(None, kwargs):
+        exec(compile(USER_CODE, '<remote_pyexec>', 'exec'), exec_globals)
 except SystemExit:
     raise
 except Exception:

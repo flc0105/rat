@@ -3,6 +3,7 @@ import io
 import traceback
 
 from client.commands.runtime.context import CommandCancelledError, CommandTimeoutError
+from client.runtime.sdk.context import build_script_sdk_globals, use_script_sdk_context
 from client.commands.strategies.python_execution.base import PythonExecutionStrategy
 
 
@@ -20,6 +21,9 @@ class InProcessPythonExecutionStrategy(PythonExecutionStrategy):
         exec_globals = {'__name__': '__main__'} # 支持if __name__ == '__main__'
         exec_globals.update(kwargs)  # 用户传入的参数
 
+        # 注入 Script SDK：artifact / command / keychains / 已导出的 client 命令快捷函数。
+        exec_globals.update(build_script_sdk_globals(self.owner, kwargs))
+
         # 同时注入 kwargs 本身，方便脚本使用
         exec_globals['kwargs'] = kwargs
         return exec_globals
@@ -30,8 +34,9 @@ class InProcessPythonExecutionStrategy(PythonExecutionStrategy):
         output = io.StringIO()
         try:
             exec_globals = self._build_exec_globals(kwargs)
-            with contextlib.redirect_stdout(output), contextlib.redirect_stderr(output):
-                exec(code, exec_globals)
+            with use_script_sdk_context(self.owner, kwargs):
+                with contextlib.redirect_stdout(output), contextlib.redirect_stderr(output):
+                    exec(code, exec_globals)
             return 1, output.getvalue()
         except Exception:
             error_msg = traceback.format_exc()
@@ -82,7 +87,8 @@ class InProcessPythonExecutionStrategy(PythonExecutionStrategy):
 
             try:
                 exec_globals = self._build_exec_globals(kwargs)
-                exec(code, exec_globals)
+                with use_script_sdk_context(self.owner, kwargs):
+                    exec(code, exec_globals)
                 generator.flush()
             except Exception as e:
                 self.owner._send_interim_result(0, f'Error: {e}', 0)

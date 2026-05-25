@@ -71,7 +71,6 @@ class UploadExecutionService:
         artifact_service = None
         staged_path = ''
         safe_name = ''
-        relative_url = ''
         ok = True
 
         effective_command = (command or f'upload {os.path.basename(local_path)}').strip()
