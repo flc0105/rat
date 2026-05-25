@@ -185,37 +185,18 @@ class ScriptGrantService:
             if stored is grant:
                 stored['used_count'] = int(stored.get('used_count') or 0) + 1
 
-    def _build_authorized_context(self, grant: dict, scope: str) -> dict:
-        return {
-            'auth_type': 'script_grant',
-            'client_id': grant.get('client_id', ''),
-            'machine_id': grant.get('machine_id', ''),
-            'hostname': grant.get('hostname', ''),
-            'command_id': grant.get('command_id'),
-            'script_name': grant.get('script_name', ''),
-            'api_grants': list(grant.get('api_grants') or []),
-            'matched_scope': scope,
-        }
-
-    def authorize_request_context(self, *, method: str, path: str, headers=None) -> dict | None:
+    def authorize_request(self, *, method: str, path: str, headers=None) -> bool:
         scope = self.policy.match_request_scope(method, path)
         if not scope:
-            return None
+            return False
 
         token = self._get_header_value(headers, SCRIPT_GRANT_HEADER)
         if not token:
-            return None
+            return False
 
         grant = self._find_grant(token)
         if grant is None or not self._has_scope(grant, scope):
-            return None
+            return False
 
         self._increase_used_count(grant)
-        return self._build_authorized_context(grant, scope)
-
-    def authorize_request(self, *, method: str, path: str, headers=None) -> bool:
-        return self.authorize_request_context(
-            method=method,
-            path=path,
-            headers=headers,
-        ) is not None
+        return True

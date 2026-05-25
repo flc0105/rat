@@ -1,4 +1,4 @@
-from flask import Blueprint, g, request
+from flask import Blueprint, request
 
 from server.web.api_response import WebApiResponder
 from server.web.request_parsers import get_json_payload
@@ -34,10 +34,7 @@ def create_keychain_blueprint(server_instance):
     @blueprint.post('/api/keychains')
     def create_keychain_item():
         return responder.json_endpoint(
-            lambda: keychain_api.create_keychain_item(
-                get_json_payload(),
-                script_grant=getattr(g, 'script_grant', None),
-            ),
+            lambda: keychain_api.create_keychain_item(get_json_payload()),
             default_error_status=500,
         )
 

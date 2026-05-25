@@ -26,8 +26,6 @@ class WebApiResponder:
         return jsonify(payload), http_status
 
     def map_common_error(self, error):
-        if isinstance(error, PermissionError):
-            return self.fail(str(error), 403)
         if isinstance(error, ValueError):
             return self.fail(str(error), 400)
         if isinstance(error, FileNotFoundError):
@@ -41,8 +39,6 @@ class WebApiResponder:
             return self.fail('File is too large', 413)
         except ClientDisconnected:
             return self.fail('Client disconnected during upload', 400)
-        except PermissionError as e:
-            return self.fail(e, 403)
         except ValueError as e:
             return self.fail(e, 400)
         except FileNotFoundError as e:

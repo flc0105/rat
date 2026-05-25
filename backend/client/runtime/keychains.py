@@ -87,7 +87,7 @@ def _safe_text(value: Any) -> str:
     return '' if value is None else str(value).strip()
 
 
-def _build_missing_grant_message(scope: str) -> str:
+def _build_missing_grant_message(scope: str = KEYCHAINS_RESOLVE_GRANT) -> str:
     normalized_scope = _safe_text(scope) or KEYCHAINS_RESOLVE_GRANT
     return (
         f'Keychains access requires script grant: {normalized_scope}. '
@@ -168,6 +168,7 @@ def _request_keychain_item(name: str, *, kind: str = '', scope: str = MACHINE_SC
     return item
 
 
+
 def _create_keychain_item(payload: dict) -> dict:
     try:
         from client.http.client_api import ClientApiClient, ClientApiError
@@ -192,7 +193,6 @@ def _create_keychain_item(payload: dict) -> dict:
         raise KeychainError('Keychain item missing in create response')
 
     return item
-
 
 def _build_login_credential(item: dict) -> LoginCredential:
     if _safe_text(item.get('kind')).lower() != 'login':
@@ -226,12 +226,12 @@ def _build_secret_credential(item: dict) -> SecretCredential:
     )
 
 
+
 def create_secret(
     name: str,
     value: Any = '',
     *,
     scope: str = MACHINE_SCOPE,
-    machine_id: str = '',
     note: str = '',
 ) -> SecretCredential:
     """
@@ -249,7 +249,7 @@ def create_secret(
         'kind': 'secret',
         'secret_value': '' if value is None else str(value),
         'scope': _normalize_scope(scope),
-        'machine_id': _resolve_machine_id(scope, machine_id),
+        'machine_id': _resolve_machine_id(scope),
         'note': _safe_text(note),
     }
     return _build_secret_credential(_create_keychain_item(payload))
@@ -261,7 +261,6 @@ def create_login(
     password: Any = '',
     *,
     scope: str = MACHINE_SCOPE,
-    machine_id: str = '',
     site: str = '',
     note: str = '',
 ) -> LoginCredential:
@@ -284,12 +283,11 @@ def create_login(
         'username': normalized_username,
         'secret_value': '' if password is None else str(password),
         'scope': _normalize_scope(scope),
-        'machine_id': _resolve_machine_id(scope, machine_id),
+        'machine_id': _resolve_machine_id(scope),
         'site': _safe_text(site),
         'note': _safe_text(note),
     }
     return _build_login_credential(_create_keychain_item(payload))
-
 
 def get_secret(name: str, *, scope: str = MACHINE_SCOPE, machine_id: str = '') -> SecretValue:
     """
