@@ -12,7 +12,7 @@ Usage:
 
 说明：
 - 这个工具只读取服务端 runtime/keychains 里的凭证。
-- 第一版使用 allow_anonymous 的 resolve 接口，适合个人运维环境。
+- 第一版使用 allow_anonymous 的 resolve 接口，适合个人运维环境；当前已收口到 script grant 临时授权。
 - SecretValue 默认打印为掩码，必须显式 .getvalue() 才返回真实值。
 """
 

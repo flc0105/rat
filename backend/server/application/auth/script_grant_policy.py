@@ -19,6 +19,7 @@ class ScriptGrantPolicy:
         {'scope': 'artifacts:download', 'method': 'GET', 'path': '/api/artifacts/<artifact_id>/download'},
         {'scope': 'artifacts:raw', 'method': 'GET', 'path': '/api/artifacts/<artifact_id>/raw'},
         {'scope': 'artifacts:preview', 'method': 'GET', 'path': '/api/artifacts/<artifact_id>/preview'},
+        {'scope': 'keychains:resolve', 'method': 'POST', 'path': '/api/keychains/resolve'},
     ]
 
     def __init__(self, rules=None):
