@@ -7,6 +7,26 @@ from client.runtime.sdk.context import build_script_sdk_globals, use_script_sdk_
 from client.commands.strategies.python_execution.base import PythonExecutionStrategy
 
 
+USER_FACING_SCRIPT_ERRORS = {
+    'KeychainError',
+    'ScriptSdkArtifactError',
+    'ScriptSdkCommandError',
+    'ClientApiError',
+}
+
+
+def _is_user_facing_script_error(exc: Exception) -> bool:
+    module_name = str(exc.__class__.__module__ or '')
+    if exc.__class__.__name__ not in USER_FACING_SCRIPT_ERRORS:
+        return False
+    return module_name.startswith(('client.runtime', 'client.http'))
+
+
+def _format_user_facing_script_error(exc: Exception) -> str:
+    message = str(exc).strip() or exc.__class__.__name__
+    return f"\n[ERROR] Script execution failed:\n{exc.__class__.__name__}: {message}\n"
+
+
 class InProcessPythonExecutionStrategy(PythonExecutionStrategy):
     MODE_NAME = 'inproc'
 
@@ -38,9 +58,12 @@ class InProcessPythonExecutionStrategy(PythonExecutionStrategy):
                 with contextlib.redirect_stdout(output), contextlib.redirect_stderr(output):
                     exec(code, exec_globals)
             return 1, output.getvalue()
-        except Exception:
-            error_msg = traceback.format_exc()
-            output.write(f"\n[ERROR] Script execution failed:\n{error_msg}")
+        except Exception as exc:
+            if _is_user_facing_script_error(exc):
+                output.write(_format_user_facing_script_error(exc))
+            else:
+                error_msg = traceback.format_exc()
+                output.write(f"\n[ERROR] Script execution failed:\n{error_msg}")
             return 0, output.getvalue()
 
     def execute_stream(self, code, kwargs=None, timeout=None):
@@ -91,7 +114,11 @@ class InProcessPythonExecutionStrategy(PythonExecutionStrategy):
                     exec(code, exec_globals)
                 generator.flush()
             except Exception as e:
-                self.owner._send_interim_result(0, f'Error: {e}', 0)
+                if _is_user_facing_script_error(e):
+                    message = _format_user_facing_script_error(e).strip()
+                else:
+                    message = f'Error: {e}'
+                self.owner._send_interim_result(0, message, 0)
                 return 0, f'Execution failed: {e}'
             finally:
                 sys.stdout = old_stdout

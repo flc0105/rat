@@ -1,7 +1,7 @@
 import hmac
 from functools import wraps
 
-from flask import current_app, request, session
+from flask import current_app, g, request, session
 
 from server.config.config import ADMIN_API_TOKEN
 
@@ -66,11 +66,15 @@ class WebAuthGuard:
     def has_valid_script_grant(self) -> bool:
         if self.script_grant_service is None:
             return False
-        return self.script_grant_service.authorize_request(
+        grant = self.script_grant_service.authorize_request_context(
             method=request.method,
             path=request.path,
             headers=request.headers,
         )
+        if not grant:
+            return False
+        g.script_grant = grant
+        return True
 
     def is_authenticated(self) -> bool:
         return self.has_valid_static_token() or self.has_valid_session() or self.has_valid_script_grant()

@@ -23,6 +23,8 @@ from typing import Any
 SERVER_SCOPE = 'server'
 MACHINE_SCOPE = 'machine'
 SERVER_MACHINE_ID = '__server__'
+KEYCHAINS_RESOLVE_GRANT = 'keychains:resolve'
+KEYCHAINS_CREATE_GRANT = 'keychains:create'
 
 
 class KeychainError(RuntimeError):
@@ -85,6 +87,14 @@ def _safe_text(value: Any) -> str:
     return '' if value is None else str(value).strip()
 
 
+def _build_missing_grant_message(scope: str) -> str:
+    normalized_scope = _safe_text(scope) or KEYCHAINS_RESOLVE_GRANT
+    return (
+        f'Keychains access requires script grant: {normalized_scope}. '
+        f'Add SCRIPT_METADATA["api_grants"] = ["{normalized_scope}"] to this script.'
+    )
+
+
 def _normalize_scope(scope: str) -> str:
     value = _safe_text(scope).lower()
     if value in ('server', '__server__'):
@@ -134,13 +144,18 @@ def _request_keychain_item(name: str, *, kind: str = '', scope: str = MACHINE_SC
     }
 
     try:
-        from client.http.client_api import ClientApiClient
+        from client.http.client_api import ClientApiClient, ClientApiError
 
         data = ClientApiClient().post_data('/api/keychains/resolve', json=payload, timeout=15)
     except ImportError as exc:
         raise KeychainError('client.http.client_api is required to resolve keychains') from exc
+    except ClientApiError as exc:
+        message = str(exc) or 'Failed to resolve keychain'
+        if message in {'Authentication required', 'Forbidden'}:
+            raise KeychainError(_build_missing_grant_message(KEYCHAINS_RESOLVE_GRANT)) from None
+        raise KeychainError(message) from None
     except Exception as exc:
-        # ClientApiError 也统一包装，调用方只需要捕获 KeychainError。
+        # 其他异常保留原始原因，便于定位网络/序列化等非授权问题。
         raise KeychainError(str(exc) or 'Failed to resolve keychain') from exc
 
     if not isinstance(data, dict):
@@ -149,6 +164,32 @@ def _request_keychain_item(name: str, *, kind: str = '', scope: str = MACHINE_SC
     item = data.get('item')
     if not isinstance(item, dict):
         raise KeychainError('Keychain item missing in response')
+
+    return item
+
+
+def _create_keychain_item(payload: dict) -> dict:
+    try:
+        from client.http.client_api import ClientApiClient, ClientApiError
+
+        data = ClientApiClient().post_data('/api/keychains', json=payload, timeout=15)
+    except ImportError as exc:
+        raise KeychainError('client.http.client_api is required to create keychains') from exc
+    except ClientApiError as exc:
+        message = str(exc) or 'Failed to create keychain'
+        if message in {'Authentication required', 'Forbidden'}:
+            raise KeychainError(_build_missing_grant_message(KEYCHAINS_CREATE_GRANT)) from None
+        raise KeychainError(message) from None
+    except Exception as exc:
+        # 其他异常保留原始原因，便于定位网络/序列化等非授权问题。
+        raise KeychainError(str(exc) or 'Failed to create keychain') from exc
+
+    if not isinstance(data, dict):
+        raise KeychainError('Invalid keychain create response')
+
+    item = data.get('item')
+    if not isinstance(item, dict):
+        raise KeychainError('Keychain item missing in create response')
 
     return item
 
@@ -183,6 +224,71 @@ def _build_secret_credential(item: dict) -> SecretCredential:
         created_at=_safe_text(item.get('created_at')),
         updated_at=_safe_text(item.get('updated_at')),
     )
+
+
+def create_secret(
+    name: str,
+    value: Any = '',
+    *,
+    scope: str = MACHINE_SCOPE,
+    machine_id: str = '',
+    note: str = '',
+) -> SecretCredential:
+    """
+    创建 Secrets 类型凭证。
+
+    默认写入当前 machine_id；写入服务端凭证时使用：
+        create_secret('xxx', 'value', scope='server')
+    """
+    normalized_name = _safe_text(name)
+    if not normalized_name:
+        raise ValueError('keychain name is required')
+
+    payload = {
+        'name': normalized_name,
+        'kind': 'secret',
+        'secret_value': '' if value is None else str(value),
+        'scope': _normalize_scope(scope),
+        'machine_id': _resolve_machine_id(scope, machine_id),
+        'note': _safe_text(note),
+    }
+    return _build_secret_credential(_create_keychain_item(payload))
+
+
+def create_login(
+    name: str,
+    username: str,
+    password: Any = '',
+    *,
+    scope: str = MACHINE_SCOPE,
+    machine_id: str = '',
+    site: str = '',
+    note: str = '',
+) -> LoginCredential:
+    """
+    创建 Logins 类型凭证。
+
+    默认写入当前 machine_id；写入服务端凭证时使用：
+        create_login('xxx', 'user', 'password', scope='server')
+    """
+    normalized_name = _safe_text(name)
+    normalized_username = _safe_text(username)
+    if not normalized_name:
+        raise ValueError('keychain name is required')
+    if not normalized_username:
+        raise ValueError('username is required')
+
+    payload = {
+        'name': normalized_name,
+        'kind': 'login',
+        'username': normalized_username,
+        'secret_value': '' if password is None else str(password),
+        'scope': _normalize_scope(scope),
+        'machine_id': _resolve_machine_id(scope, machine_id),
+        'site': _safe_text(site),
+        'note': _safe_text(note),
+    }
+    return _build_login_credential(_create_keychain_item(payload))
 
 
 def get_secret(name: str, *, scope: str = MACHINE_SCOPE, machine_id: str = '') -> SecretValue:

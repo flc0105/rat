@@ -102,6 +102,49 @@ class WebKeychainApi:
         normalized['hostname'] = self._resolve_hostname(machine_id, normalized.get('hostname') or '')
         return normalized
 
+    def _is_server_scope(self, value: str) -> bool:
+        return self._safe_text(value).lower() in {'server', KeychainStore.SERVER_MACHINE_ID}
+
+    def _normalize_script_create_payload(self, payload: dict, script_grant: dict) -> dict:
+        """
+        Script grant 创建凭证时只允许写当前 client machine 或 server。
+        Web session/admin 创建仍走 _normalize_payload，保持原管理能力。
+        """
+        if not isinstance(payload, dict):
+            raise ValueError('payload is required')
+        if not isinstance(script_grant, dict) or not script_grant:
+            return self._normalize_payload(payload)
+
+        normalized = dict(payload)
+        own_machine_id = self._safe_text(script_grant.get('machine_id'))
+        own_hostname = self._safe_text(script_grant.get('hostname'))
+        requested_scope = self._safe_text(normalized.get('scope'))
+        requested_machine_id = self._safe_text(normalized.get('machine_id'))
+
+        if self._is_server_scope(requested_scope) or self._is_server_scope(requested_machine_id):
+            normalized['machine_id'] = KeychainStore.SERVER_MACHINE_ID
+            normalized['hostname'] = KeychainStore.SERVER_HOSTNAME
+            return self._normalize_payload(normalized)
+
+        if not own_machine_id:
+            raise PermissionError('Script grant is missing current machine id')
+
+        # 脚本默认写当前 client machine，不能沿用 Web 管理端的默认 server。
+        if not requested_machine_id:
+            normalized['machine_id'] = own_machine_id
+            if own_hostname and not self._safe_text(normalized.get('hostname')):
+                normalized['hostname'] = own_hostname
+            return self._normalize_payload(normalized)
+
+        if requested_machine_id != own_machine_id:
+            raise PermissionError('Script grant can only create keychains for current machine or server')
+
+        normalized['machine_id'] = own_machine_id
+        if own_hostname and not self._safe_text(normalized.get('hostname')):
+            normalized['hostname'] = own_hostname
+        return self._normalize_payload(normalized)
+
+
     def list_keychains(self, machine_id: str = '') -> dict:
         normalized_machine_id = self._safe_text(machine_id)
         return {
@@ -144,8 +187,12 @@ class WebKeychainApi:
             'server_hostname': KeychainStore.SERVER_HOSTNAME,
         }
 
-    def create_keychain_item(self, payload: dict) -> dict:
-        item = self.keychain_store.create_item(self._normalize_payload(payload))
+    def create_keychain_item(self, payload: dict, *, script_grant: dict | None = None) -> dict:
+        if script_grant:
+            normalized_payload = self._normalize_script_create_payload(payload, script_grant)
+        else:
+            normalized_payload = self._normalize_payload(payload)
+        item = self.keychain_store.create_item(normalized_payload)
         return {
             'item': self.keychain_store.public_item(item),
             'items': self.keychain_store.list_items(item.get('machine_id') or '', reveal=False),
