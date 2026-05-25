@@ -35,6 +35,9 @@ class WebAuthGuard:
     SESSION_AUTH_FLAG = 'rat_admin_authenticated'
     SESSION_USER_KEY = 'rat_admin_username'
 
+    def __init__(self, script_grant_service=None):
+        self.script_grant_service = script_grant_service
+
     def _get_authorization_token(self) -> str:
         header = str(request.headers.get('Authorization') or '').strip()
         if header:
@@ -60,8 +63,17 @@ class WebAuthGuard:
     def has_valid_session(self) -> bool:
         return bool(session.get(self.SESSION_AUTH_FLAG))
 
+    def has_valid_script_grant(self) -> bool:
+        if self.script_grant_service is None:
+            return False
+        return self.script_grant_service.authorize_request(
+            method=request.method,
+            path=request.path,
+            headers=request.headers,
+        )
+
     def is_authenticated(self) -> bool:
-        return self.has_valid_static_token() or self.has_valid_session()
+        return self.has_valid_static_token() or self.has_valid_session() or self.has_valid_script_grant()
 
     def get_session_username(self) -> str:
         return str(session.get(self.SESSION_USER_KEY) or '').strip()

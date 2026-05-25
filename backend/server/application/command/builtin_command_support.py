@@ -14,6 +14,7 @@ from core.utils.command_output import (
 from core.utils.formatting import format_dict
 from core.utils.parsing import scan_args
 from core.utils.script_metadata import read_script_metadata_from_file
+from server.application.auth.script_grant_service import SCRIPT_GRANT_REQUEST_KEY
 from server.application.command.command_execution_event import CommandExecutionEvent
 from server.application.history.history_record_policy import CommandHistoryRecordPolicy
 from server.config.config import SCRIPT_PATH
@@ -155,12 +156,17 @@ class ScriptBuiltinSupport:
         if not isinstance(params, dict):
             raise ValueError('params must be an object')
 
+        script_extra = dict(params)
+        grant_request = payload.get('script_grant_request')
+        if isinstance(grant_request, dict) and grant_request:
+            script_extra[SCRIPT_GRANT_REQUEST_KEY] = grant_request
+
         script_path = self._resolve_script_path(script_name)
         plan_executor = self.plan_executor_factory()
 
         with open(script_path, 'rt', encoding='utf-8') as file_obj:
             try:
-                plan = self.plan_builder.build_script_plan(file_obj.read(), params)
+                plan = self.plan_builder.build_script_plan(file_obj.read(), script_extra)
                 for item in plan_executor(plan)():
                     yield item
             except UnicodeDecodeError:

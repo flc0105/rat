@@ -22,6 +22,7 @@ class ServerWebService:
 
         # ------------------ shared infrastructure ------------------ #
         self.event_bus = self.assembly.event_bus
+        self.script_grant_service = self.assembly.script_grant_service
 
         # ------------------ sub facades / apis ------------------ #
         self.connection_api = self.assembly.connection_api

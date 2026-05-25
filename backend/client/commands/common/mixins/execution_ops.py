@@ -62,9 +62,21 @@ class CommandExecutionMixin:
         context['command_id'] = self.command_id if self.command_id is not None else ''
         return context
 
+    
+    # def _merge_script_kwargs_with_context(self, kwargs=None):
+    #     merged = dict(kwargs or {})
+    #     merged['__context__'] = self._build_script_context()
+    #     return merged
+
     def _merge_script_kwargs_with_context(self, kwargs=None):
         merged = dict(kwargs or {})
-        merged['__context__'] = self._build_script_context()
+        script_grant = merged.pop('__script_grant__', None)
+        merged.pop('__script_grant_request__', None)
+
+        context = self._build_script_context()
+        if isinstance(script_grant, dict) and script_grant:
+            context['script_grant'] = script_grant
+        merged['__context__'] = context
         return merged
 
     def _execute_python_collect(self, code, kwargs=None, mode: str = '', default_mode: str = 'inproc'):

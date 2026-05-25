@@ -17,11 +17,12 @@ class WebConnectionService:
 
     STALE_AFTER_SECONDS = 45
 
-    def __init__(self, server, event_bus, artifact_service, recent_device_store=None):
+    def __init__(self, server, event_bus, artifact_service, recent_device_store=None, script_grant_service=None):
         self.server = server
         self.event_bus = event_bus
         self.artifact_service = artifact_service
         self.recent_device_store = recent_device_store
+        self.script_grant_service = script_grant_service
 
     def _now(self):
         return datetime.now()
@@ -243,6 +244,7 @@ class WebConnectionService:
         session.context.command_history = self.server.command_history
         session.context.command_history_orchestrator = self.server.command_history_orchestrator
         session.context.artifact_service = self.artifact_service
+        session.context.script_grant_service = self.script_grant_service
 
         session.context.on_unexpected_message = (
             lambda status, text, end: self.publish_background_message(session, status, text, end)
@@ -273,6 +275,11 @@ class WebConnectionService:
                 machine_id=payload.get('machine_id') or '',
                 disconnected_at=payload.get('disconnected_at') or '',
             )
+        try:
+            if self.script_grant_service is not None:
+                self.script_grant_service.revoke_by_client(session.session_info.client_id)
+        except Exception:
+            pass
         self.publish_connection_offline(session)
 
     # ------------------ event publish ------------------ #

@@ -37,7 +37,9 @@ def create_app(server_instance):
     app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(days=WEB_AUTH_SESSION_DAYS)
 
     responder = WebApiResponder()
-    auth_guard = WebAuthGuard()
+    auth_guard = WebAuthGuard(
+        script_grant_service=getattr(server_instance.web_service, 'script_grant_service', None),
+    )
 
     app.register_blueprint(create_auth_blueprint())
     app.register_blueprint(create_connections_blueprint(server_instance))

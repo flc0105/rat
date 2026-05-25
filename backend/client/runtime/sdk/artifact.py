@@ -1,3 +1,4 @@
+import builtins
 import json
 import os
 from typing import Any
@@ -148,7 +149,7 @@ def list(type: str = '', machine_id: str = '') -> list[dict]:
     data = ClientApiClient().get_data('/api/artifacts', params=params, timeout=15)
     if isinstance(data, dict):
         items = data.get('items') or []
-        return items if isinstance(items, list) else []
+        return items if isinstance(items, builtins.list) else []
     return []
 
 

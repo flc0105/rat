@@ -4,7 +4,18 @@ from urllib.parse import quote
 import requests
 
 from client.config.config import UPLOAD_BASE_URL
+# from client.runtime.sdk.context import get_script_grant_token
 
+
+def _get_script_grant_token() -> str:
+    """
+    延迟读取 Script SDK 上下文，避免 client_api 与 sdk.artifact 形成初始化循环。
+    """
+    try:
+        from client.runtime.sdk.context import get_script_grant_token
+        return get_script_grant_token()
+    except ImportError:
+        return ''
 
 class ClientApiError(RuntimeError):
     """
@@ -41,6 +52,19 @@ class ClientApiClient:
 
     def normalize_server_url(self, path_or_url: str) -> str:
         return self.build_url(path_or_url)
+
+    def _should_attach_script_grant(self, url: str) -> bool:
+        base_url = (self.base_url or '').rstrip('/')
+        return bool(base_url and (url == base_url or url.startswith(base_url + '/')))
+
+    def _build_headers(self, url: str, headers=None) -> dict:
+        merged = dict(headers or {})
+        token = _get_script_grant_token()
+        if token and self._should_attach_script_grant(url):
+            has_header = any(str(key).lower() == 'x-script-grant-token' for key in merged.keys())
+            if not has_header:
+                merged['X-Script-Grant-Token'] = token
+        return merged
 
     def build_file_upload_url(self) -> str:
         return self.build_url('/api/files/upload')
@@ -93,10 +117,13 @@ class ClientApiClient:
         expect_api_code: bool = True,
         **kwargs,
     ):
+        url = self.build_url(path_or_url)
+        headers = self._build_headers(url, kwargs.pop('headers', None))
         response = requests.request(
             method,
-            self.build_url(path_or_url),
+            url,
             timeout=self.DEFAULT_TIMEOUT if timeout is None else timeout,
+            headers=headers,
             **kwargs,
         )
         return self.parse_json_response(response, expect_api_code=expect_api_code)
@@ -146,6 +173,7 @@ class ClientApiClient:
             url,
             params=params,
             timeout=self.DEFAULT_TIMEOUT if timeout is None else timeout,
+            headers=self._build_headers(url),
         )
 
         if response.status_code >= 400:
@@ -218,6 +246,7 @@ class ClientApiClient:
                 url,
                 stream=True,
                 timeout=self.DEFAULT_TIMEOUT if timeout is None else timeout,
+                headers=self._build_headers(url),
             ) as response:
                 response.raise_for_status()
                 with open(temp_path, 'wb') as file_obj:
@@ -269,13 +298,15 @@ class ClientApiClient:
             except Exception:
                 pass
 
+            url = self.build_file_upload_url()
             return requests.post(
-                self.build_file_upload_url(),
+                url,
                 files={
                     'file': (upload_name, file_obj),
                 },
                 data=form_data or {},
                 timeout=timeout,
+                headers=self._build_headers(url),
             )
         finally:
             if close_after:

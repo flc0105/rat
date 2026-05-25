@@ -1,6 +1,7 @@
 from server.application.agent.agent_bootstrap_script_service import AgentBootstrapScriptService
 from server.application.agent.agent_builder import AgentBuilder
 from server.application.agent.agent_output_registry import AgentOutputRegistry
+from server.application.auth.script_grant_service import ScriptGrantService
 from server.application.artifact.artifact_service import WebArtifactService
 from server.application.artifact.remote_file_service import WebRemoteFileService
 from server.application.command.command_executor_factory import CommandExecutorFactory
@@ -72,6 +73,7 @@ class ServerApplicationAssembly:
         # ------------------ domain/application services ------------------ #
         self.artifact_service = WebArtifactService()
         self.file_service = self.artifact_service
+        self.script_grant_service = ScriptGrantService()
 
         self.remote_execution_service = RemoteExecutionService(
             self.server,
@@ -94,6 +96,7 @@ class ServerApplicationAssembly:
             event_bus=self.event_bus,
             artifact_service=self.artifact_service,
             recent_device_store=self.recent_device_store,
+            script_grant_service=self.script_grant_service,
         )
 
         self.task_runner = WebTaskRunner(

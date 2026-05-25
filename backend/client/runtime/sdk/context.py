@@ -57,6 +57,15 @@ def get_command_id():
     return command_id if command_id != '' else None
 
 
+def get_script_grant() -> dict:
+    value = get_current_context().get('script_grant', {})
+    return dict(value) if isinstance(value, dict) else {}
+
+
+def get_script_grant_token() -> str:
+    return str(get_script_grant().get('token') or '').strip()
+
+
 @contextmanager
 def use_script_sdk_context(command_owner=None, kwargs=None):
     payload = _safe_dict(kwargs)
