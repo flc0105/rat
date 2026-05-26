@@ -1,3 +1,9 @@
+SCRIPT_METADATA = {
+    "display_name": "Command Test",
+    "params": [],
+    "api_grants": []
+}
+
 import os
 import sys
 import tempfile

@@ -1,5 +1,5 @@
 SCRIPT_METADATA = {
-    "display_name": "Script SDK Keychains Test",
+    "display_name": "Keychains Test",
     "description": "",
     "params": [],
     "api_grants": [

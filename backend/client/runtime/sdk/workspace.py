@@ -51,6 +51,11 @@ def _request_workspace() -> dict:
     return data
 
 
+def _system_path(name: str, default: str = '') -> str:
+    value = system_paths().get(name)
+    return _safe_text(value) or default
+
+
 def list() -> builtins.list[dict]:
     """返回当前 client 所属 machine 的 pinned paths。"""
     items = _request_workspace().get('items') or []
@@ -83,3 +88,46 @@ def get(display_name: str, default: str = '') -> str:
 
 def path(display_name: str, default: str = '') -> str:
     return get(display_name, default=default)
+
+
+def system_paths() -> dict[str, str]:
+    """返回脚本上下文中的当前 client 系统路径。"""
+    result = {}
+    for name, value in context.system_paths().items():
+        key = _safe_text(name)
+        path_value = _safe_text(value)
+        if key and path_value:
+            result[key] = path_value
+    return result
+
+
+def root(default: str = '') -> str:
+    return _system_path('root', default=default)
+
+
+def home(default: str = '') -> str:
+    return _system_path('home', default=default)
+
+
+def desktop(default: str = '') -> str:
+    return _system_path('desktop', default=default)
+
+
+def documents(default: str = '') -> str:
+    return _system_path('documents', default=default)
+
+
+def downloads(default: str = '') -> str:
+    return _system_path('downloads', default=default)
+
+
+def temp(default: str = '') -> str:
+    return _system_path('temp', default=default)
+
+
+def executable(default: str = '') -> str:
+    return _system_path('executable', default=default)
+
+
+def icloud(default: str = '') -> str:
+    return _system_path('icloud', default=default)

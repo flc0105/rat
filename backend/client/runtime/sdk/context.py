@@ -49,13 +49,33 @@ def _detect_machine_identity() -> dict:
         return {}
 
 
-def _detect_platform_alias() -> str:
+def _detect_machine_components() -> dict:
     try:
-        from core.platform.platform_identity import detect_platform_alias
+        from core.device.machine_identity import _detect_machine_identity_components
 
-        return _safe_text(detect_platform_alias())
+        payload = _detect_machine_identity_components()
+        return payload if isinstance(payload, dict) else {}
     except Exception:
-        return _safe_text(_platform.system()).lower()
+        return {}
+
+
+def _detect_platform_info() -> dict:
+    try:
+        from core.platform.platform_identity import detect_platform_info
+
+        info = detect_platform_info()
+        return {
+            'alias': _safe_text(getattr(info, 'alias', '')),
+            'display_name': _safe_text(getattr(info, 'display_name', '')),
+            'system_name': _safe_text(getattr(info, 'system_name', '')),
+        }
+    except Exception:
+        system_name = _safe_text(_platform.system()) or 'Unknown'
+        return {
+            'alias': system_name.lower(),
+            'display_name': system_name,
+            'system_name': system_name,
+        }
 
 
 def _detect_arch() -> str:
@@ -104,8 +124,33 @@ def get_machine_id() -> str:
     return _safe_text(payload.get('machine_id_hash') or payload.get('machine_id'))
 
 
+def get_os_alias() -> str:
+    value = _safe_text(get_current_context().get('os_alias', ''))
+    if value:
+        return value
+    value = _safe_text(get_current_context().get('platform', ''))
+    if value:
+        return value
+    return _safe_text(_detect_platform_info().get('alias'))
+
+
+def get_os_type() -> str:
+    value = _safe_text(get_current_context().get('os_type', ''))
+    if value:
+        return value
+    return _safe_text(_detect_platform_info().get('display_name'))
+
+
+def get_os_ver() -> str:
+    value = _safe_text(get_current_context().get('os_ver', ''))
+    if value:
+        return value
+    machine_info = _detect_machine_components()
+    return _safe_text(machine_info.get('os_version'))
+
+
 def get_platform() -> str:
-    return _safe_text(get_current_context().get('platform', '')) or _detect_platform_alias()
+    return get_os_alias()
 
 
 def get_arch() -> str:
@@ -118,6 +163,19 @@ def get_script_name() -> str:
     if value:
         return value
     return _safe_text(context.kwargs.get('script_name') or context.kwargs.get('name'))
+
+
+def get_system_paths() -> dict:
+    value = get_current_context().get('system_paths', {})
+    if isinstance(value, dict) and value:
+        return dict(value)
+    try:
+        from client.runtime.client_util import get_system_paths as detect_system_paths
+
+        payload = detect_system_paths()
+        return dict(payload) if isinstance(payload, dict) else {}
+    except Exception:
+        return {}
 
 
 def client_id() -> str:
@@ -140,12 +198,28 @@ def platform() -> str:
     return get_platform()
 
 
+def os_alias() -> str:
+    return get_os_alias()
+
+
+def os_type() -> str:
+    return get_os_type()
+
+
+def os_ver() -> str:
+    return get_os_ver()
+
+
 def arch() -> str:
     return get_arch()
 
 
 def script_name() -> str:
     return get_script_name()
+
+
+def system_paths() -> dict:
+    return get_system_paths()
 
 
 def get_script_grant() -> dict:

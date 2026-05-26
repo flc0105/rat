@@ -1,5 +1,5 @@
 SCRIPT_METADATA = {
-    "display_name": "Script SDK Artifact Roundtrip Test",
+    "display_name": "Artifact Roundtrip Test",
     "description": "",
     "params": [],
     "api_grants": [

@@ -63,15 +63,25 @@ class CommandExecutionMixin:
         try:
             import platform
             import socket
-            from core.device.machine_identity import build_machine_identity_payload
-            from core.platform.platform_identity import detect_platform_alias
+            from client.runtime.client_util import get_system_paths
+            from core.device.machine_identity import (
+                _detect_machine_identity_components,
+                build_machine_identity_payload,
+            )
             from core.external_tools.platform import normalize_arch
+            from core.platform.platform_identity import detect_platform_info
 
+            platform_info = detect_platform_info()
             machine_identity = build_machine_identity_payload()
+            machine_info = _detect_machine_identity_components()
             context['hostname'] = socket.gethostname()
             context['machine_id'] = machine_identity.get('machine_id_hash') or ''
-            context['platform'] = detect_platform_alias()
+            context['platform'] = platform_info.alias
+            context['os_alias'] = platform_info.alias
+            context['os_type'] = platform_info.display_name
+            context['os_ver'] = machine_info.get('os_version') or ''
             context['arch'] = normalize_arch(platform.machine())
+            context['system_paths'] = get_system_paths()
         except Exception:
             pass
         return context
