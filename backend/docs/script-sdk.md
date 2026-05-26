@@ -153,6 +153,9 @@ print("saved =", saved)
 items = artifact.list(type="server_files")
 print("items =", items)
 
+matched = artifact.find_by_file_name("a.txt", type="server_files")
+print("matched =", matched)
+
 meta = artifact.get(saved["artifact_id"], type="server_files")
 print("meta =", meta)
 
@@ -162,12 +165,13 @@ print("downloaded_path =", path)
 
 常用 API：
 
-| API | Grant | 说明 |
-|---|---|---|
-| `artifact.save(path, type='files', category='script', extra=None, timeout=None)` | 当前上传入口未强制 script grant | 上传本地文件 |
-| `artifact.list(type='', machine_id='')` | `artifacts:list` | 查询 artifacts |
-| `artifact.get(ref, type='server_files')` | `artifacts:list` | 解析 artifact 元数据 |
-| `artifact.download(ref, type='server_files', target_path='', timeout=None)` | `artifacts:list` + `artifacts:download` | 下载 artifact |
+| API | Grant | 说明                |
+|---|---|-------------------|
+| `artifact.save(path, type='files', category='script', extra=None, timeout=None)` | 当前上传入口未强制 script grant | 上传本地文件            |
+| `artifact.list(type='', machine_id='')` | `artifacts:list` | 查询 artifacts      |
+| `artifact.get(ref, type='server_files')` | `artifacts:list` | 解析 artifact 元数据   |
+| `artifact.download(ref, type='server_files', target_path='', timeout=None)` | `artifacts:list` + `artifacts:download` | 下载 artifact       |
+| `artifact.find_by_file_name(file_name, type='', machine_id='', exact=True)` | `artifacts:list` | 按文件名查找 artifacts  |
 
 支持的 `type`：
 

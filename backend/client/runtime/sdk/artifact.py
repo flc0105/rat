@@ -152,6 +152,44 @@ def list(type: str = '', machine_id: str = '') -> list[dict]:
         return items if isinstance(items, builtins.list) else []
     return []
 
+def find_by_file_name(file_name: str, *, type: str = '', machine_id: str = '', exact: bool = True) -> builtins.list[dict]:
+    """按文件名查找 server artifact，返回基础信息列表。"""
+    target = _safe_text(file_name)
+    if not target:
+        raise ValueError('file_name is required')
+
+    candidates = list(type=type, machine_id=machine_id)
+    results = []
+
+    for item in candidates:
+        if not isinstance(item, dict):
+            continue
+
+        original_name = _safe_text(item.get('original_name'))
+        stored_name = _safe_text(item.get('stored_name'))
+        names = [name for name in [original_name, stored_name] if name]
+
+        if exact:
+            matched = target in names
+        else:
+            lowered_target = target.lower()
+            matched = any(lowered_target in name.lower() for name in names)
+
+        if not matched:
+            continue
+
+        results.append({
+            'filename': original_name or stored_name,
+            'artifact_id': item.get('artifact_id', ''),
+            'created_at': item.get('created_at', ''),
+            'size': int(item.get('size', 0) or 0),
+            'machine_id': item.get('machine_id', ''),
+            'hostname': item.get('hostname', ''),
+            'artifact_type': item.get('artifact_type', ''),
+        })
+
+    return results
+
 
 def _resolve_artifact(ref: str, artifact_type: str) -> dict:
     target = _safe_text(ref)
@@ -209,5 +247,6 @@ def get(ref: str, *, type: str = 'server_files') -> dict:
 
 # 语义化别名，方便脚本里按动作阅读。
 list_artifacts = list
+find_artifacts_by_file_name = find_by_file_name
 save_file = save
 download_file = download
