@@ -149,8 +149,8 @@ def get_os_ver() -> str:
     return _safe_text(machine_info.get('os_version'))
 
 
-def get_platform() -> str:
-    return get_os_alias()
+# def get_platform() -> str:
+#     return get_os_alias()
 
 
 def get_arch() -> str:
@@ -194,8 +194,8 @@ def machine_id() -> str:
     return get_machine_id()
 
 
-def platform() -> str:
-    return get_platform()
+# def platform() -> str:
+#     return get_platform()
 
 
 def os_alias() -> str:

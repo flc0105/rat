@@ -1,0 +1,13 @@
+/.idea/
+*/__pycache__
+/backend/static
+/backend/runtime
+/backend/server/resources/external_tools/packages
+/frontend/node_modules
+/frontend/.vite
+/frontend/.vscode
+/frontend/dist
+**/__pycache__/
+*.py[cod]
+.DS_Store
+**/.DS_Store
