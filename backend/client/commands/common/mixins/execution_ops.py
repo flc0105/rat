@@ -60,6 +60,20 @@ class CommandExecutionMixin:
         socket_obj = getattr(self, 'socket', None)
         context['client_id'] = getattr(socket_obj, 'client_id', '') or ''
         context['command_id'] = self.command_id if self.command_id is not None else ''
+        try:
+            import platform
+            import socket
+            from core.device.machine_identity import build_machine_identity_payload
+            from core.platform.platform_identity import detect_platform_alias
+            from core.external_tools.platform import normalize_arch
+
+            machine_identity = build_machine_identity_payload()
+            context['hostname'] = socket.gethostname()
+            context['machine_id'] = machine_identity.get('machine_id_hash') or ''
+            context['platform'] = detect_platform_alias()
+            context['arch'] = normalize_arch(platform.machine())
+        except Exception:
+            pass
         return context
 
 
@@ -71,9 +85,12 @@ class CommandExecutionMixin:
     def _merge_script_kwargs_with_context(self, kwargs=None):
         merged = dict(kwargs or {})
         script_grant = merged.pop('__script_grant__', None)
+        script_name = merged.pop('__script_name__', None)
         merged.pop('__script_grant_request__', None)
 
         context = self._build_script_context()
+        if script_name:
+            context['script_name'] = str(script_name or '').strip()
         if isinstance(script_grant, dict) and script_grant:
             context['script_grant'] = script_grant
         merged['__context__'] = context

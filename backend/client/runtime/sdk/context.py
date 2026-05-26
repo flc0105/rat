@@ -1,3 +1,5 @@
+import platform as _platform
+import socket
 from contextlib import contextmanager
 from contextvars import ContextVar
 from dataclasses import dataclass, field
@@ -33,6 +35,38 @@ def _safe_dict(value) -> dict:
     return dict(value) if isinstance(value, dict) else {}
 
 
+def _safe_text(value) -> str:
+    return '' if value is None else str(value).strip()
+
+
+def _detect_machine_identity() -> dict:
+    try:
+        from core.device.machine_identity import build_machine_identity_payload
+
+        payload = build_machine_identity_payload()
+        return payload if isinstance(payload, dict) else {}
+    except Exception:
+        return {}
+
+
+def _detect_platform_alias() -> str:
+    try:
+        from core.platform.platform_identity import detect_platform_alias
+
+        return _safe_text(detect_platform_alias())
+    except Exception:
+        return _safe_text(_platform.system()).lower()
+
+
+def _detect_arch() -> str:
+    try:
+        from core.external_tools.platform import normalize_arch
+
+        return _safe_text(normalize_arch(_platform.machine()))
+    except Exception:
+        return _safe_text(_platform.machine()).lower()
+
+
 def get_current_context() -> ScriptSdkRuntimeContext:
     context = _current_context.get()
     if context is None:
@@ -49,12 +83,69 @@ def get_script_context() -> dict:
 
 
 def get_client_id() -> str:
-    return str(get_current_context().get('client_id', '') or '')
+    return _safe_text(get_current_context().get('client_id', ''))
 
 
 def get_command_id():
     command_id = get_current_context().get('command_id', '')
     return command_id if command_id != '' else None
+
+
+def get_hostname() -> str:
+    value = _safe_text(get_current_context().get('hostname', ''))
+    return value or socket.gethostname()
+
+
+def get_machine_id() -> str:
+    value = _safe_text(get_current_context().get('machine_id', ''))
+    if value:
+        return value
+    payload = _detect_machine_identity()
+    return _safe_text(payload.get('machine_id_hash') or payload.get('machine_id'))
+
+
+def get_platform() -> str:
+    return _safe_text(get_current_context().get('platform', '')) or _detect_platform_alias()
+
+
+def get_arch() -> str:
+    return _safe_text(get_current_context().get('arch', '')) or _detect_arch()
+
+
+def get_script_name() -> str:
+    context = get_current_context()
+    value = _safe_text(context.get('script_name', ''))
+    if value:
+        return value
+    return _safe_text(context.kwargs.get('script_name') or context.kwargs.get('name'))
+
+
+def client_id() -> str:
+    return get_client_id()
+
+
+def command_id():
+    return get_command_id()
+
+
+def hostname() -> str:
+    return get_hostname()
+
+
+def machine_id() -> str:
+    return get_machine_id()
+
+
+def platform() -> str:
+    return get_platform()
+
+
+def arch() -> str:
+    return get_arch()
+
+
+def script_name() -> str:
+    return get_script_name()
 
 
 def get_script_grant() -> dict:
@@ -63,7 +154,7 @@ def get_script_grant() -> dict:
 
 
 def get_script_grant_token() -> str:
-    return str(get_script_grant().get('token') or '').strip()
+    return _safe_text(get_script_grant().get('token'))
 
 
 @contextmanager
@@ -104,12 +195,17 @@ def build_script_sdk_globals(command_owner=None, kwargs=None) -> dict:
     """
     构造注入到 server script 的 SDK 全局变量。
     """
-    from client.runtime.sdk import artifact, command, keychains
+    import sys
+
+    from client.runtime.sdk import artifact, command, keychains, workspace, xt
 
     sdk_globals = {
         'artifact': artifact,
         'command': command,
         'keychains': keychains,
+        'context': sys.modules[__name__],
+        'workspace': workspace,
+        'xt': xt,
     }
 
     for name in _iter_exported_command_names(command_owner):

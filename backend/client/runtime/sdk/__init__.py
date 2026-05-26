@@ -7,11 +7,14 @@ Server Script SDK。
     result = command.run_shell('whoami')
     info = getinfo()
     token = keychains.get_secret('token').getvalue()
+    current = context.client_id()
+    result = xt.tool('ffmpeg')('--version')
+    paths = workspace.list()
 
 也可以显式导入：
-    from client.runtime.sdk import artifact, command, keychains
+    from client.runtime.sdk import artifact, command, context, keychains, workspace, xt
 """
 
-from client.runtime.sdk import artifact, command, keychains
+from client.runtime.sdk import artifact, command, context, keychains, workspace, xt
 
-__all__ = ['artifact', 'command', 'keychains']
+__all__ = ['artifact', 'command', 'context', 'keychains', 'workspace', 'xt']

@@ -1,6 +1,6 @@
 SCRIPT_METADATA = {
-    "display_name": "Script SDK keychains create and resolve test",
-    "description": "测试 Script SDK 通过 temp auth 创建并读取当前 machine/server scope 的 keychains secret 和 login。",
+    "display_name": "Script SDK Keychains Test",
+    "description": "",
     "params": [],
     "api_grants": [
         "keychains:create",
@@ -19,7 +19,7 @@ def assert_true(condition, message):
 
 
 def main():
-    print('=== Script SDK keychains create and resolve test ===')
+    print('=== Script SDK Keychains Test ===')
 
     stamp = str(int(time.time() * 1000))
 

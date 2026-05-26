@@ -157,6 +157,7 @@ class ScriptBuiltinSupport:
             raise ValueError('params must be an object')
 
         script_extra = dict(params)
+        script_extra['__script_name__'] = script_name
         grant_request = payload.get('script_grant_request')
         if isinstance(grant_request, dict) and grant_request:
             script_extra[SCRIPT_GRANT_REQUEST_KEY] = grant_request

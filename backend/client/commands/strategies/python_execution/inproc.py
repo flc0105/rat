@@ -11,6 +11,8 @@ USER_FACING_SCRIPT_ERRORS = {
     'KeychainError',
     'ScriptSdkArtifactError',
     'ScriptSdkCommandError',
+    'ScriptSdkExternalToolError',
+    'ScriptSdkWorkspaceError',
     'ClientApiError',
 }
 
