@@ -16,6 +16,7 @@ Usage:
 - SecretValue 默认打印为掩码，必须显式 .getvalue() 才返回真实值。
 """
 
+import builtins
 from dataclasses import dataclass
 from typing import Any
 
@@ -23,6 +24,7 @@ from typing import Any
 SERVER_SCOPE = 'server'
 MACHINE_SCOPE = 'machine'
 SERVER_MACHINE_ID = '__server__'
+KEYCHAINS_LIST_GRANT = 'keychains:list'
 KEYCHAINS_RESOLVE_GRANT = 'keychains:resolve'
 KEYCHAINS_CREATE_GRANT = 'keychains:create'
 
@@ -127,6 +129,54 @@ def _resolve_machine_id(scope: str, machine_id: str = '') -> str:
     return current_machine_id
 
 
+def _normalize_public_keychain_item(item: dict) -> dict:
+    if not isinstance(item, dict):
+        return {}
+    return {
+        'id': _safe_text(item.get('id') or item.get('cred_id')),
+        'name': _safe_text(item.get('name')),
+        'kind': _safe_text(item.get('kind')),
+        'username': _safe_text(item.get('username')),
+        'site': _safe_text(item.get('site')),
+        'note': _safe_text(item.get('note')),
+        'machine_id': _safe_text(item.get('machine_id')),
+        'hostname': _safe_text(item.get('hostname')),
+        'created_at': _safe_text(item.get('created_at')),
+        'updated_at': _safe_text(item.get('updated_at')),
+    }
+
+
+def _list_keychain_items(*, scope: str = MACHINE_SCOPE) -> builtins.list[dict]:
+    machine_id = _resolve_machine_id(scope)
+    try:
+        from client.http.client_api import ClientApiClient, ClientApiError
+
+        data = ClientApiClient().get_data(
+            '/api/keychains',
+            params={'machine_id': machine_id},
+            timeout=15,
+        )
+    except ImportError as exc:
+        raise KeychainError('client.http.client_api is required to list keychains') from exc
+    except ClientApiError as exc:
+        message = str(exc) or 'Failed to list keychains'
+        if message in {'Authentication required', 'Forbidden'}:
+            raise KeychainError(_build_missing_grant_message(KEYCHAINS_LIST_GRANT)) from None
+        raise KeychainError(message) from None
+    except Exception as exc:
+        # 其他异常保留原始原因，便于定位网络/序列化等非授权问题。
+        raise KeychainError(str(exc) or 'Failed to list keychains') from exc
+
+    if not isinstance(data, dict):
+        raise KeychainError('Invalid keychain list response')
+
+    items = data.get('items') or []
+    if not isinstance(items, builtins.list):
+        return []
+
+    return [normalized for normalized in (_normalize_public_keychain_item(item) for item in items) if normalized]
+
+
 def _request_keychain_item(name: str, *, kind: str = '', scope: str = MACHINE_SCOPE, machine_id: str = '') -> dict:
     normalized_name = _safe_text(name)
     if not normalized_name:
@@ -225,6 +275,21 @@ def _build_secret_credential(item: dict) -> SecretCredential:
         updated_at=_safe_text(item.get('updated_at')),
     )
 
+
+
+def list(*, scope: str = MACHINE_SCOPE) -> builtins.list[dict]:
+    """
+    列出当前 machine 或 server 下的凭证基础信息。
+
+    只返回 metadata，不返回 secret_value。
+    默认读取当前 machine_id；读取服务端凭证时使用：
+        keychains.list(scope='server')
+    """
+    return _list_keychain_items(scope=scope)
+
+
+def list_keychains(*, scope: str = MACHINE_SCOPE) -> builtins.list[dict]:
+    return list(scope=scope)
 
 
 def create_secret(

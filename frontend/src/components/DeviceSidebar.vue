@@ -473,7 +473,7 @@ async disconnectConnection(item) {
 
   try {
     await ElMessageBox.confirm(
-      `Disconnect "${deviceName}"? The client will be instructed to terminate this active session.`,
+      `Disconnect "${deviceName}"?`,
       'Disconnect Connection',
       {
         type: 'warning',
@@ -509,8 +509,8 @@ async removeConnectionPermanently(item) {
   try {
     await ElMessageBox.confirm(
       isOffline
-        ? `Remove "${deviceName}" from recent devices? This cached connection will no longer appear after refresh.`
-        : `Remove "${deviceName}"? The active session will be disconnected and the connection will be removed from recent devices.`,
+        ? `Remove "${deviceName}" from recent devices?`
+        : `Remove "${deviceName}"? The session will be disconnected and the connection will be removed from recent devices.`,
       'Remove Connection',
       {
         type: 'warning',

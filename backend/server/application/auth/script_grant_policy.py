@@ -19,6 +19,7 @@ class ScriptGrantPolicy:
         {'scope': 'artifacts:download', 'method': 'GET', 'path': '/api/artifacts/<artifact_id>/download'},
         {'scope': 'artifacts:raw', 'method': 'GET', 'path': '/api/artifacts/<artifact_id>/raw'},
         {'scope': 'artifacts:preview', 'method': 'GET', 'path': '/api/artifacts/<artifact_id>/preview'},
+        {'scope': 'keychains:list', 'method': 'GET', 'path': '/api/keychains'},
         {'scope': 'keychains:resolve', 'method': 'POST', 'path': '/api/keychains/resolve'},
         {'scope': 'keychains:create', 'method': 'POST', 'path': '/api/keychains'},
         {'scope': 'external_tools:catalog', 'method': 'GET', 'path': '/api/external-tools/catalog'},

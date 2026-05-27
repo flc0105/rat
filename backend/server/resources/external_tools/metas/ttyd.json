@@ -1,0 +1,217 @@
+{
+  "id": "ttyd",
+  "name": "ttyd",
+  "display_name": "ttyd Web Terminal",
+  "description": "Browser-based terminal server powered by ttyd.",
+  "version": "1.7.7",
+  "category": "terminal",
+  "tags": [
+    "ttyd",
+    "terminal",
+    "web",
+    "shell",
+    "cmd",
+    "ssh"
+  ],
+  "source": "https://github.com/tsl0922/ttyd",
+  "web": {
+    "url": "http://{{access_host}}:{{port}}"
+  },
+  "platform_packages": {
+    "darwin-arm64": {
+      "platform": "mac",
+      "arch": "arm64",
+      "filename": "ttyd-v1.7.7-darwin-arm64.zip",
+      "download_url": "/api/external-tools/packages/ttyd-v1.7.7-darwin-arm64.zip",
+      "root": "",
+      "notes": "Portable macOS arm64 bundle. Use bin/ttyd wrapper; real Mach-O binary is libexec/ttyd."
+    },
+    "linux-amd64": {
+      "platform": "linux",
+      "arch": "amd64",
+      "filename": "ttyd-v1.7.7-linux-amd64.zip",
+      "download_url": "/api/external-tools/packages/ttyd-v1.7.7-linux-amd64.zip",
+      "root": "",
+      "notes": "Archive has no top-level directory; ttyd executable is at the archive root."
+    },
+    "win-amd64": {
+      "platform": "win",
+      "arch": "amd64",
+      "filename": "ttyd-v1.7.7-windows-amd64.zip",
+      "download_url": "/api/external-tools/packages/ttyd-v1.7.7-windows-amd64.zip",
+      "root": "",
+      "notes": "Archive has no top-level directory; ttyd.win32.exe is at the archive root.",
+      "source": "https://github.com/hectorgarcia-cw/ttyd/releases/tag/1.7.7"
+    }
+  },
+  "execs": {
+    "ttyd": {
+      "paths": {
+        "darwin-arm64": "bin/ttyd",
+        "linux-amd64": "ttyd",
+        "win-amd64": "ttyd.win32.exe"
+      }
+    },
+    "ttyd_real": {
+      "paths": {
+        "darwin-arm64": "libexec/ttyd"
+      }
+    }
+  },
+  "install": {
+    "install_dir": "{{external_tools_root}}/{{package_id}}/{{version}}/{{package_key}}"
+  },
+  "modules": [
+    {
+      "id": "main",
+      "name": "ttyd",
+      "display_name": "ttyd Web Terminal",
+      "description": "Starts a browser-accessible terminal session.",
+      "execution": "daemon",
+      "exec": "ttyd",
+      "params": [
+        {
+          "name": "instance_name",
+          "label": "Instance Name",
+          "type": "string",
+          "required": true,
+          "default": "ttyd-7681",
+          "description": "Unique name for this ttyd instance. It controls log/pid/state isolation."
+        },
+        {
+          "name": "address",
+          "label": "Listen Address",
+          "type": "string",
+          "required": true,
+          "default": "0.0.0.0",
+          "description": "Address to listen on. Use 0.0.0.0 for LAN or external browser access."
+        },
+        {
+          "name": "port",
+          "label": "Listen Port",
+          "type": "integer",
+          "required": true,
+          "default": 7681,
+          "min": 1,
+          "max": 65535,
+          "description": "HTTP/WebSocket port for ttyd."
+        },
+        {
+          "name": "credential",
+          "label": "Credential",
+          "type": "string",
+          "required": true,
+          "default": "admin:Aa123456!@#",
+          "description": "Login credential in username:password format, passed to ttyd -c."
+        },
+        {
+          "name": "cwd",
+          "label": "Working Directory",
+          "type": "string",
+          "required": true,
+          "default": "C:\\",
+          "description": "Initial working directory for the shell. On macOS/Linux, usually use ~ or /."
+        },
+        {
+          "name": "command",
+          "label": "Command",
+          "type": "string",
+          "required": true,
+          "default": "C:\\Windows\\System32\\cmd.exe",
+          "description": "Command launched by ttyd. Windows default is cmd.exe; on macOS/Linux use /bin/zsh, /bin/bash, bash, or sh."
+        },
+        {
+          "name": "access_host",
+          "label": "Access Host",
+          "type": "string",
+          "required": false,
+          "default": "",
+          "description": "Browser access host or public IP. Empty means current browser hostname."
+        },
+        {
+          "name": "extra_args",
+          "label": "Extra Args",
+          "type": "string",
+          "required": false,
+          "default": "",
+          "description": "Additional command-line args appended before the command where supported by the launcher. Example: --writable or --once."
+        }
+      ],
+      "config": {
+        "target": "{{instance_runtime_dir}}/ttyd.env",
+        "template": "LISTEN_ADDRESS={{address}}\nPORT={{port}}\nCREDENTIAL={{credential}}\nCWD={{cwd}}\nCOMMAND={{command}}\nOPEN_URL=http://{{access_host}}:{{port}}\n"
+      },
+      "runtime": {
+        "cwd": "{{install_dir}}/{{package_root}}",
+        "stdout": "{{instance_runtime_dir}}/stdout.log",
+        "stderr": "stdout",
+        "pid_file": "{{instance_runtime_dir}}/tool.pid",
+        "state_file": "{{instance_runtime_dir}}/state.json"
+      },
+      "runtimes": [
+        {
+          "platform": "win",
+          "argv": [
+            "{{bin_ttyd}}",
+            "-i",
+            "{{address}}",
+            "-p",
+            "{{port}}",
+            "-W",
+            "--cwd",
+            "{{cwd}}",
+            "-c",
+            "{{credential}}",
+            "{{command}}"
+          ]
+        },
+        {
+          "platform": "mac",
+          "argv": [
+            "{{bin_ttyd}}",
+            "-i",
+            "{{address}}",
+            "-p",
+            "{{port}}",
+            "-W",
+            "--cwd",
+            "{{cwd}}",
+            "-c",
+            "{{credential}}",
+            "{{command}}"
+          ]
+        },
+        {
+          "platform": "linux",
+          "argv": [
+            "{{bin_ttyd}}",
+            "-i",
+            "{{address}}",
+            "-p",
+            "{{port}}",
+            "-W",
+            "--cwd",
+            "{{cwd}}",
+            "-c",
+            "{{credential}}",
+            "{{command}}"
+          ]
+        }
+      ],
+      "lifecycle": {
+        "stop": {
+          "type": "signal",
+          "signal": "TERM",
+          "timeout_sec": 5,
+          "kill_after_timeout": true
+        },
+        "status": {
+          "type": "pid_file"
+        }
+      },
+      "web": {
+        "url": "http://{{access_host}}:{{port}}"
+      }
+    }
+  ]
+}
