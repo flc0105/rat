@@ -242,7 +242,7 @@
                   clearable
                   size="small"
                   class="remote-toolbar-search-input"
-                  placeholder="Search current folder"
+                  placeholder="Search"
                   @input="scheduleRemoteSearch"
                   @clear="applyRemoteSearch"
                   @keyup.enter="applyRemoteSearch"

@@ -44,7 +44,7 @@
               size="small"
               clearable
               class="command-history-search-input"
-              placeholder="Search by command name"
+              placeholder="Search"
             />
           </div>
         </div>
@@ -74,7 +74,8 @@
               >
                 <template #default="{ row }">
                   <div class="ellipsis">
-                    {{ row.is_pinned ? '⭐ ' : '' }}{{ row.index || '-' }}
+<!--                    {{ row.is_pinned ? '⭐ ' : '' }}-->
+                    {{ row.index || '-' }}
                   </div>
                 </template>
               </el-table-column>
@@ -130,44 +131,98 @@
                 <template #default="{ row }">
                   <div class="table-actions table-actions-links history-actions-row">
                     <div class="history-actions-group">
-                      <a
-                        href="#"
-                        class="table-action-link"
-                        @click.prevent="applyHistoryCommand(row)"
-                      >
-                        Use
-                      </a>
+<!--                      <a-->
+<!--                        href="#"-->
+<!--                        class="table-action-link"-->
+<!--                        @click.prevent="applyHistoryCommand(row)"-->
+<!--                      >-->
+<!--                        Use-->
+<!--                      </a>-->
 
-                      <a
-                        href="#"
-                        class="table-action-link"
-                        @click.prevent="toggleCommandHistoryPinned(row)"
-                      >
-                        {{ row.is_pinned ? 'Unpin' : 'Pin' }}
-                      </a>
+
+                       <el-button
+                      size="small"
+                      circle
+                      plain
+                      title="Use"
+                      aria-label="Use"
+@click.prevent="applyHistoryCommand(row)"
+                  >
+             <el-icon><Select /></el-icon>
+                       </el-button>
+
+
+                                           <el-button
+                      size="small"
+                      circle
+                      plain
+                      title="Pin"
+                      aria-label="Pin"
+                                           @click.prevent="toggleCommandHistoryPinned(row)">
+ <el-icon>
+  <Star v-if="!row.is_pinned" />
+  <StarFilled v-else />
+</el-icon>
+
+
+
+                                           </el-button>
+
+
+<!--                      <a-->
+<!--                        href="#"-->
+<!--                        class="table-action-link"-->
+<!--                        @click.prevent="toggleCommandHistoryPinned(row)"-->
+<!--                      >-->
+<!--                        {{ row.is_pinned ? 'Unpin' : 'Pin' }}-->
+<!--                      </a>-->
                     </div>
 
                     <template v-if="row.is_pinned">
                       <span class="history-actions-divider"></span>
 
                       <div class="history-actions-move-group">
-                        <a
-                          href="#"
-                          class="table-action-link"
-                          :class="{ 'history-action-disabled': !canMovePinned(row, 'up') }"
-                          @click.prevent="canMovePinned(row, 'up') && moveCommandHistoryPinned(row, 'up')"
-                        >
-                          ↑
-                        </a>
+<!--                        <a-->
+<!--                          href="#"-->
+<!--                          class="table-action-link"-->
+<!--                          :class="{ 'history-action-disabled': !canMovePinned(row, 'up') }"-->
+<!--                          @click.prevent="canMovePinned(row, 'up') && moveCommandHistoryPinned(row, 'up')"-->
+<!--                        >-->
 
-                        <a
-                          href="#"
-                          class="table-action-link"
-                          :class="{ 'history-action-disabled': !canMovePinned(row, 'down') }"
-                          @click.prevent="canMovePinned(row, 'down') && moveCommandHistoryPinned(row, 'down')"
-                        >
-                          ↓
-                        </a>
+                         <el-button
+                      size="small"
+                      circle
+                      plain
+                      title="Move Up"
+                      aria-label="Move Up"
+                      :class="{ 'history-action-disabled': !canMovePinned(row, 'up') }"
+                      @click.prevent="canMovePinned(row, 'up') && moveCommandHistoryPinned(row, 'up')">
+                           <el-icon>
+  <ArrowUp />
+</el-icon>
+                        </el-button>
+
+<!--                        <a-->
+<!--                          href="#"-->
+<!--                          class="table-action-link"-->
+<!--                          :class="{ 'history-action-disabled': !canMovePinned(row, 'down') }"-->
+<!--                          @click.prevent="canMovePinned(row, 'down') && moveCommandHistoryPinned(row, 'down')"-->
+<!--                        >-->
+
+                          <el-button
+                      size="small"
+                      circle
+                      plain
+                      title="Move Down"
+                      aria-label="Move Down"
+                                                    :class="{ 'history-action-disabled': !canMovePinned(row, 'down') }"
+  @click.prevent="canMovePinned(row, 'down') && moveCommandHistoryPinned(row, 'down')">
+
+
+                                                     <el-icon>
+  <ArrowDown />
+</el-icon>
+                        </el-button>
                       </div>
                     </template>
                   </div>
@@ -428,12 +483,19 @@
 <script>
 import { ElMessage, ElMessageBox } from 'element-plus'
 import CommandExecutionDetailDialog from './CommandExecutionDetailDialog.vue'
+import {EditPen} from "@element-plus/icons-vue";
+import { Star, StarFilled, ArrowUp, ArrowDown, Select } from '@element-plus/icons-vue'
 
 export default {
   name: 'CommandHistoryDialog',
 
   components: {
+    EditPen,
+    Select,
+Star,
+    StarFilled,
     CommandExecutionDetailDialog,
+    ArrowUp, ArrowDown
   },
 
   props: {
@@ -1127,15 +1189,15 @@ export default {
 .history-actions-group {
   display: inline-flex;
   align-items: center;
-  gap: 12px;
+  gap: 8px;
 }
 
 .history-actions-divider {
   display: inline-block;
   width: 1px;
   height: 14px;
-    margin-left: 10px;
-  margin-right: 4px;
+  margin-left: 8px;
+  margin-right: 8px;
   background: #dcdfe6;
   vertical-align: middle;
 }
@@ -1144,7 +1206,7 @@ export default {
   display: inline-grid;
   grid-template-columns: 24px 24px;
   align-items: center;
-  column-gap: 0;
+  column-gap: 8px;
 }
 
 .history-action-disabled {
