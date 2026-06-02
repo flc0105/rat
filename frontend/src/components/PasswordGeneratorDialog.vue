@@ -100,8 +100,7 @@
       >
         <div class="apple-password-title">Apple-style Strong Password</div>
         <div class="apple-password-desc">
-          Generates a readable three-part password similar to iCloud Keychain suggestions.
-        </div>
+Generates a 20-character, Apple-style password with CVC syllable chunks, two hyphens, one digit, and one uppercase letter.        </div>
       </div>
 
       <div class="password-result-card">
@@ -146,8 +145,9 @@ const UPPERCASE_CHARS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
 const LOWERCASE_CHARS = 'abcdefghijklmnopqrstuvwxyz'
 const NUMBER_CHARS = '0123456789'
 const SYMBOL_CHARS = '!@#$%^&*()-_=+[]{};:,.?'
-const PRONOUNCEABLE_CONSONANTS = 'bcdfghjklmnpqrstvwxyz'
-const PRONOUNCEABLE_VOWELS = 'aeiou'
+const APPLE_STYLE_CONSONANTS = 'bcdfghjklmnpqrstvwz'
+const APPLE_STYLE_VOWELS = 'aeiouy'
+const APPLE_STYLE_DIGIT_POSITIONS = [5, 6, 11, 12, 17]
 
 export default {
   name: 'PasswordGeneratorDialog',
@@ -246,30 +246,29 @@ export default {
       this.generatedPassword = this.shuffleChars(chars)
     },
 
-    buildPronounceableGroup(length = 6) {
-      let group = ''
-      for (let i = 0; i < length; i += 1) {
-        const source = i % 2 === 0 ? PRONOUNCEABLE_CONSONANTS : PRONOUNCEABLE_VOWELS
-        group += this.getRandomChar(source)
-      }
-      return group
-    },
+   buildAppleStyleLetters() {
+  let letters = ''
+  for (let i = 0; i < 18; i += 1) {
+    const source = i % 3 === 1 ? APPLE_STYLE_VOWELS : APPLE_STYLE_CONSONANTS
+    letters += this.getRandomChar(source)
+  }
+  return letters.split('')
+},
 
-    generateAppleStylePassword() {
-      const groups = [
-        this.buildPronounceableGroup(6),
-        this.buildPronounceableGroup(6),
-        this.buildPronounceableGroup(6),
-      ]
+generateAppleStylePassword() {
+  const chars = this.buildAppleStyleLetters()
+  const digitIndex = APPLE_STYLE_DIGIT_POSITIONS[this.getRandomInt(APPLE_STYLE_DIGIT_POSITIONS.length)]
+  chars[digitIndex] = this.getRandomChar(NUMBER_CHARS)
 
-      const digitIndex = this.getRandomInt(groups[0].length)
-      groups[0] = `${groups[0].slice(0, digitIndex)}${this.getRandomChar(NUMBER_CHARS)}${groups[0].slice(digitIndex + 1)}`
+  // Apple-style 密码只放 1 个数字；数字位置随机落在连字符两侧或结尾。
+  const uppercaseCandidates = chars
+    .map((char, index) => ({ char, index }))
+    .filter(item => item.index !== digitIndex && /[a-z]/.test(item.char))
+  const uppercaseIndex = uppercaseCandidates[this.getRandomInt(uppercaseCandidates.length)].index
+  chars[uppercaseIndex] = chars[uppercaseIndex].toUpperCase()
 
-      const uppercaseIndex = this.getRandomInt(groups[1].length)
-      groups[1] = `${groups[1].slice(0, uppercaseIndex)}${groups[1][uppercaseIndex].toUpperCase()}${groups[1].slice(uppercaseIndex + 1)}`
-
-      this.generatedPassword = groups.join('-')
-    },
+  this.generatedPassword = `${chars.slice(0, 6).join('')}-${chars.slice(6, 12).join('')}-${chars.slice(12).join('')}`
+},
 
     generatePassword() {
       if (this.generatorMode === 'apple') {

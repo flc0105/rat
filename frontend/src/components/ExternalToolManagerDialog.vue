@@ -669,10 +669,10 @@
         <pre class="external-tool-log-content external-tool-oneshot-output">{{ oneshotResult?.stderr || 'No stderr.' }}</pre>
       </div>
 
-      <div class="external-tool-detail-section">
-        <div class="external-tool-detail-section-title">Result</div>
-        <pre class="external-tool-detail-pre">{{ stringifyDetailValue(oneshotResult || {}) }}</pre>
-      </div>
+<!--      <div class="external-tool-detail-section">-->
+<!--        <div class="external-tool-detail-section-title">Result</div>-->
+<!--        <pre class="external-tool-detail-pre">{{ stringifyDetailValue(oneshotResult || {}) }}</pre>-->
+<!--      </div>-->
     </div>
 
     <template #footer>
