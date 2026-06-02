@@ -87,6 +87,21 @@ import {
   formatTerminalCommandFailedLine,
 } from '../composables/terminalMarkers.js'
 
+const DIRECTORY_ONLY_COMPLETION_COMMANDS = [
+  'cd',
+  'rmdir',
+]
+
+const PATH_COMPLETION_COMMANDS = [
+  'download',
+  'cat',
+  'file',
+  'allow_file',
+  'acmd image_info',
+  'acmd sqlite_query',
+  'python3'
+]
+
 export default {
   name: 'CommandInputBar',
 
@@ -378,16 +393,23 @@ export default {
         return null
       }
 
+      const fileSystemRule = this.resolveFileSystemCompletionRule(leftTrimmedText)
+
+      if (fileSystemRule) {
+        return this.buildFileSystemCommandCompletionQuery(
+          fileSystemRule.commandPrefix,
+          rawText,
+          fileSystemRule.argumentText,
+          fileSystemRule,
+        )
+      }
+
       const commandName = String(commandMatch[1] || '').trim().toLowerCase()
       const argumentText = String(commandMatch[2] || '')
-      const dynamicCommands = ['cd', 'download', 'gopin', 'set', 'history', 'alias', 'httpctl', 'exec', 'xt']
+      const dynamicCommands = ['gopin', 'set', 'history', 'alias', 'httpctl', 'exec', 'xt']
 
       if (!dynamicCommands.includes(commandName)) {
         return null
-      }
-
-      if (commandName === 'cd' || commandName === 'download') {
-        return this.buildFileSystemCommandCompletionQuery(commandName, rawText, argumentText)
       }
 
       if (commandName === 'xt') {
@@ -403,16 +425,57 @@ export default {
       }
     },
 
-    buildFileSystemCommandCompletionQuery(commandName, rawText, argumentText) {
+    resolveFileSystemCompletionRule(inputText) {
+      const rules = [
+        ...DIRECTORY_ONLY_COMPLETION_COMMANDS.map(commandPrefix => ({
+          commandPrefix,
+          proxyCommand: 'cd',
+          mode: 'directory',
+        })),
+        ...PATH_COMPLETION_COMMANDS.map(commandPrefix => ({
+          commandPrefix,
+          proxyCommand: 'download',
+          mode: 'path',
+        })),
+      ].sort((left, right) => right.commandPrefix.length - left.commandPrefix.length)
+      const text = String(inputText || '')
+      const normalizedText = text.toLowerCase()
+
+      for (const rule of rules) {
+        const normalizedCommandPrefix = String(rule.commandPrefix || '').toLowerCase()
+        if (!normalizedCommandPrefix || !normalizedText.startsWith(normalizedCommandPrefix)) {
+          continue
+        }
+
+        const restText = text.slice(normalizedCommandPrefix.length)
+        if (restText && !/^\s/.test(restText)) {
+          continue
+        }
+
+        return {
+          ...rule,
+          argumentText: restText.replace(/^\s+/, ''),
+        }
+      }
+
+      return null
+    },
+
+    buildFileSystemCommandCompletionQuery(commandName, rawText, argumentText, rule = null) {
       const pathParts = this.splitFileSystemCandidatePath(argumentText)
-      const requestInput = `${commandName} ${pathParts.candidatePrefix}`
+      const proxyCommand = String(rule?.proxyCommand || commandName || '').trim().toLowerCase()
+      const commandPrefix = String(rule?.commandPrefix || commandName || '').trim().toLowerCase()
+      const requestInput = `${proxyCommand} ${pathParts.candidatePrefix}`
 
       return {
         rawText,
-        commandName,
+        commandName: commandPrefix,
         requestInput,
-        cacheKey: this.buildCommandCompletionCandidateCacheKey(commandName, pathParts.lookupPath),
+        cacheKey: this.buildCommandCompletionCandidateCacheKey(commandPrefix, pathParts.lookupPath),
         requiresRemoteClient: true,
+        fileSystemProxyCommand: proxyCommand,
+        fileSystemTargetCommand: commandPrefix,
+        fileSystemCompletionMode: String(rule?.mode || 'path'),
       }
     },
 
@@ -578,7 +641,7 @@ export default {
         .then((payload) => {
           const items = Array.isArray(payload?.items) ? payload.items : []
           const normalizedItems = items
-            .map(item => this.normalizeCandidateItem(item))
+            .map(item => this.normalizeCommandCompletionCandidate(item, completionQuery))
             .filter(item => item.template)
 
           this.commandCompletionCandidatesByContext = {
@@ -596,6 +659,50 @@ export default {
         })
 
       return this.commandCompletionCandidatesLoadPromises[cacheKey]
+    },
+
+    normalizeCommandCompletionCandidate(item, completionQuery) {
+      const normalized = this.normalizeCandidateItem(item)
+      if (!completionQuery?.fileSystemProxyCommand || !completionQuery?.fileSystemTargetCommand) {
+        return normalized
+      }
+
+      return this.normalizeFileSystemCompletionCandidate(normalized, completionQuery)
+    },
+
+    normalizeFileSystemCompletionCandidate(item, completionQuery) {
+      const sourcePrefix = `${completionQuery.fileSystemProxyCommand} `
+      const targetPrefix = `${completionQuery.fileSystemTargetCommand} `
+      const candidatePath = String(item?.candidatePath || '').trim()
+      const template = candidatePath
+        ? `${targetPrefix}${candidatePath}`.trim()
+        : this.replaceCompletionCommandPrefix(item.template, sourcePrefix, targetPrefix)
+      const value = candidatePath
+        ? template
+        : this.replaceCompletionCommandPrefix(item.value, sourcePrefix, targetPrefix)
+      const name = candidatePath
+        ? template
+        : this.replaceCompletionCommandPrefix(item.name, sourcePrefix, targetPrefix)
+
+      return {
+        ...item,
+        value,
+        name,
+        template,
+        groupLabel: this.buildCandidateGroupLabel({ ...item, group: item.group, source: item.source }),
+        searchText: this.getCandidateTitleText({ template, value, name }).toLowerCase(),
+      }
+    },
+
+    replaceCompletionCommandPrefix(value, sourcePrefix, targetPrefix) {
+      const text = String(value || '').trim()
+      if (!text) return ''
+
+      if (text.toLowerCase().startsWith(String(sourcePrefix || '').toLowerCase())) {
+        return `${targetPrefix}${text.slice(String(sourcePrefix || '').length)}`.trim()
+      }
+
+      return text
     },
 
     filterCommandCompletionCandidates(candidates, completionQuery) {
