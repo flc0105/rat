@@ -35,6 +35,14 @@
           >
             New Credential
           </el-button>
+
+          <el-button
+            size="small"
+            plain
+            @click="openPasswordGeneratorDialog"
+          >
+            Generate Password
+          </el-button>
         </div>
 
         <div class="keychain-toolbar-right">
@@ -444,14 +452,21 @@
         </div>
       </template>
     </el-dialog>
+
+    <PasswordGeneratorDialog ref="passwordGeneratorDialogRef" />
   </el-dialog>
 </template>
 
 <script>
 import { ElMessage, ElMessageBox } from 'element-plus'
+import PasswordGeneratorDialog from './PasswordGeneratorDialog.vue'
 
 export default {
   name: 'KeychainManagerDialog',
+
+  components: {
+    PasswordGeneratorDialog,
+  },
 
   props: {
     currentConnection: {
@@ -715,6 +730,10 @@ export default {
       this.form.machine_id = this.machineIdFilter || this.getCurrentMachineId() || this.serverMachineId
       this.form.hostname = this.resolveHostname(this.form.machine_id)
       this.editorVisible = true
+    },
+
+    openPasswordGeneratorDialog() {
+      this.$refs.passwordGeneratorDialogRef?.open()
     },
 
     async openEditDialog(row) {
