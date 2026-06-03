@@ -1,5 +1,5 @@
 {
-  "id": "frp",
+  "id": "frp-old",
   "name": "frp",
   "display_name": "FRP",
   "description": "Reverse proxy toolkit for exposing private network services through a relay.",
@@ -200,87 +200,6 @@
           "{{bin_frpc}}",
           "-c",
           "{{instance_runtime_dir}}/frpc.toml"
-        ],
-        "stdout": "{{instance_runtime_dir}}/stdout.log",
-        "stderr": "stdout",
-        "pid_file": "{{instance_runtime_dir}}/tool.pid",
-        "state_file": "{{instance_runtime_dir}}/state.json"
-      },
-      "lifecycle": {
-        "stop": {
-          "type": "signal",
-          "signal": "TERM",
-          "timeout_sec": 5,
-          "kill_after_timeout": true
-        },
-        "status": {
-          "type": "pid_file"
-        }
-      }
-    },
-    {
-      "id": "frpc_socks5",
-      "name": "frpc_socks5",
-      "display_name": "FRP Client SOCKS5",
-      "description": "Runs FRP's built-in SOCKS5 client plugin and exposes the SOCKS5 entrypoint on the FRPS remote port.",
-      "execution": "daemon",
-      "exec": "frpc",
-      "params": [
-        {
-          "name": "instance_name",
-          "label": "Instance Name",
-          "type": "string",
-          "required": true,
-          "default": "socks5-11080",
-          "description": "Unique name for this frpc socks5 instance. It controls config/log/pid isolation."
-        },
-        {
-          "name": "server_addr",
-          "label": "FRPS Server Address",
-          "type": "string",
-          "required": true,
-          "default": "127.0.0.1",
-          "description": "frps server IP or domain."
-        },
-        {
-          "name": "server_port",
-          "label": "FRPS Control Port",
-          "type": "integer",
-          "required": true,
-          "default": 7001,
-          "min": 1,
-          "max": 65535,
-          "description": "frps bind port."
-        },
-        {
-          "name": "proxy_name",
-          "label": "Proxy Name",
-          "type": "string",
-          "required": true,
-          "default": "socks5",
-          "description": "Unique proxy name in frpc config."
-        },
-        {
-          "name": "remote_port",
-          "label": "Remote SOCKS5 Port",
-          "type": "integer",
-          "required": true,
-          "default": 11080,
-          "min": 1,
-          "max": 65535,
-          "description": "Remote SOCKS5 port opened by frps. Clients connect to frps:remote_port."
-        }
-      ],
-      "config": {
-        "target": "{{instance_runtime_dir}}/frpc_socks5.toml",
-        "template": "serverAddr = \"{{server_addr}}\"\nserverPort = {{server_port}}\n\n[[proxies]]\nname = \"{{proxy_name}}\"\ntype = \"tcp\"\nremotePort = {{remote_port}}\n\n[proxies.plugin]\ntype = \"socks5\"\n"
-      },
-      "runtime": {
-        "cwd": "{{install_dir}}/{{package_root}}",
-        "argv": [
-          "{{bin_frpc}}",
-          "-c",
-          "{{instance_runtime_dir}}/frpc_socks5.toml"
         ],
         "stdout": "{{instance_runtime_dir}}/stdout.log",
         "stderr": "stdout",
