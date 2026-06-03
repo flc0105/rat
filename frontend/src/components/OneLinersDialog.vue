@@ -11,7 +11,7 @@
       <div class="one-liners-intro">
         <div class="one-liners-intro-title">Quick command snippets</div>
         <div class="one-liners-intro-text">
-          Edit the server values below; snippets update before copy.
+          Edit the server values below.
         </div>
       </div>
 
