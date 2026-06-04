@@ -1,0 +1,118 @@
+{
+  "id": "gost",
+  "name": "gost",
+  "display_name": "GOST",
+  "description": "GO Simple Tunnel.",
+  "version": "3.2.6",
+  "category": "network",
+  "tags": [
+    "gost",
+    "socks5",
+    "proxy"
+  ],
+  "source": "https://github.com/go-gost/gost",
+  "platform_packages": {
+    "darwin-arm64": {
+      "platform": "mac",
+      "arch": "arm64",
+      "filename": "gost-v3.2.6-darwin-arm64.zip",
+      "download_url": "/api/external-tools/packages/gost-v3.2.6-darwin-arm64.zip",
+      "root": ""
+    },
+    "linux-amd64": {
+      "platform": "linux",
+      "arch": "amd64",
+      "filename": "gost-v3.2.6-linux-amd64.zip",
+      "download_url": "/api/external-tools/packages/gost-v3.2.6-linux-amd64.zip",
+      "root": ""
+    },
+    "win-amd64": {
+      "platform": "win",
+      "arch": "amd64",
+      "filename": "gost-v3.2.6-windows-amd64.zip",
+      "download_url": "/api/external-tools/packages/gost-v3.2.6-windows-amd64.zip",
+      "root": ""
+    }
+  },
+  "execs": {
+    "gost": {
+      "paths": {
+        "darwin-arm64": "gost",
+        "linux-amd64": "gost",
+        "win-amd64": "gost.exe"
+      }
+    }
+  },
+  "install": {
+    "install_dir": "{{external_tools_root}}/{{package_id}}/{{version}}/{{package_key}}"
+  },
+  "modules": [
+    {
+      "id": "socks5",
+      "name": "socks5",
+      "display_name": "GOST SOCKS5",
+      "description": "Runs a basic SOCKS5 proxy.",
+      "execution": "daemon",
+      "exec": "gost",
+      "params": [
+        {
+          "name": "instance_name",
+          "label": "Instance Name",
+          "type": "string",
+          "required": true,
+          "default": "socks5-1080",
+          "description": "Unique name for this gost instance. It controls config/log/pid isolation."
+        },
+        {
+          "name": "listen_ip",
+          "label": "Listen IP",
+          "type": "string",
+          "required": true,
+          "default": "127.0.0.1",
+          "description": "SOCKS5 listen IP. Use 0.0.0.0 to expose it to the LAN."
+        },
+        {
+          "name": "listen_port",
+          "label": "Listen Port",
+          "type": "integer",
+          "required": true,
+          "default": 1080,
+          "min": 1,
+          "max": 65535,
+          "description": "SOCKS5 listen port."
+        },
+        {
+          "name": "auth_prefix",
+          "label": "Auth Prefix",
+          "type": "string",
+          "required": false,
+          "default": "",
+          "description": "Optional auth prefix in the form user:pass@. Leave empty to disable authentication."
+        }
+      ],
+      "runtime": {
+        "cwd": "{{install_dir}}/{{package_root}}",
+        "argv": [
+          "{{bin_gost}}",
+          "-L",
+          "socks5://{{auth_prefix}}{{listen_ip}}:{{listen_port}}"
+        ],
+        "stdout": "{{instance_runtime_dir}}/stdout.log",
+        "stderr": "stdout",
+        "pid_file": "{{instance_runtime_dir}}/tool.pid",
+        "state_file": "{{instance_runtime_dir}}/state.json"
+      },
+      "lifecycle": {
+        "stop": {
+          "type": "signal",
+          "signal": "TERM",
+          "timeout_sec": 5,
+          "kill_after_timeout": true
+        },
+        "status": {
+          "type": "pid_file"
+        }
+      }
+    }
+  ]
+}
