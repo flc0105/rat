@@ -27,6 +27,15 @@ _PARAM_TYPE_ALIASES = {
     'select': 'select',
 }
 
+_REMOTE_PATH_PARAM_TYPES = {
+    'remote_file',
+    'remote_folder',
+}
+_REMOTE_PATH_MULTI_PARAM_TYPES = {
+    'files',
+    'folders',
+}
+
 
 def _safe_literal_eval(node):
     try:
@@ -179,6 +188,32 @@ def _apply_param_limits(spec: dict, value):
     return value
 
 
+
+def _coerce_path_list(value, param_name: str) -> list[str]:
+    if isinstance(value, (list, tuple, set)):
+        source = list(value)
+    elif isinstance(value, str):
+        text = value.strip()
+        if not text:
+            return []
+        try:
+            parsed = ast.literal_eval(text)
+        except Exception:
+            parsed = None
+        if isinstance(parsed, (list, tuple, set)):
+            source = list(parsed)
+        else:
+            source = [text]
+    else:
+        source = [value]
+
+    result = []
+    for item in source:
+        text = str(item or '').strip()
+        if text:
+            result.append(text)
+    return result
+
 def coerce_script_param_value(spec: dict, value):
     param_name = str(spec.get('name') or '').strip() or 'param'
     param_type = _normalize_param_type(spec.get('type'))
@@ -194,6 +229,13 @@ def coerce_script_param_value(spec: dict, value):
         if allowed and text_value not in allowed:
             raise ValueError(f'Invalid option for {param_name}: {text_value}')
         return text_value
+    if param_type in _REMOTE_PATH_MULTI_PARAM_TYPES:
+        return _coerce_path_list(value, param_name)
+    if param_type in _REMOTE_PATH_PARAM_TYPES:
+        if isinstance(value, (list, tuple, set)):
+            path_list = _coerce_path_list(value, param_name)
+            return path_list[0] if path_list else ''
+        return str(value or '').strip()
     return str(value)
 
 

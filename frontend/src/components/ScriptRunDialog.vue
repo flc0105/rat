@@ -154,7 +154,11 @@
     :selected-id="selectedId"
     :multiple="pendingRemoteFileParamMultiple"
     :initial-path="pendingRemoteFileParamInitialPath"
+    :selection-mode="pendingRemoteFileParamSelectionMode"
+    :get-tab-scoped-headers="getTabScopedHeaders"
     @select="handleRemoteFileSelected"
+    @append-output="$emit('append-output', ...arguments)"
+    @set-active-task="$emit('set-active-task', ...arguments)"
   />
 </template>
 
@@ -199,6 +203,11 @@ export default {
       default: '',
     },
 
+    getTabScopedHeaders: {
+      type: Function,
+      default: null,
+    },
+
     isScriptSupportedForCurrentConnection: {
       type: Function,
       required: true,
@@ -213,6 +222,8 @@ export default {
   emits: [
     'update:visible',
     'update-param',
+    'append-output',
+    'set-active-task',
     'cancel',
     'confirm',
   ],
@@ -227,7 +238,17 @@ export default {
   computed: {
     pendingRemoteFileParamMultiple() {
       const param = this.pendingRemoteFileParam || {}
-      return !!(param.multiple || param.multi)
+      const type = String(param.type || '').trim().toLowerCase()
+      return !!(param.multiple || ['files', 'folders'].includes(type))
+    },
+
+    pendingRemoteFileParamSelectionMode() {
+      const param = this.pendingRemoteFileParam || {}
+      const explicitMode = String(param.selection_mode || param.selectionMode || '').trim().toLowerCase()
+      if (explicitMode === 'folder') return 'folder'
+
+      const type = String(param.type || '').trim().toLowerCase()
+      return ['remote_folder', 'folders'].includes(type) ? 'folder' : 'file'
     },
 
     pendingRemoteFileParamInitialPath() {
@@ -239,7 +260,12 @@ export default {
   methods: {
     isRemoteFileParam(param) {
       const type = String(param?.type || '').trim().toLowerCase()
-      return ['remote_file', 'file', 'filepath', 'file_path'].includes(type)
+      return [
+        'remote_file',
+        'files',
+        'remote_folder',
+        'folders',
+      ].includes(type)
     },
 
     formatRemoteFileParamValue(value) {

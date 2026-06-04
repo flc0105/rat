@@ -1,7 +1,7 @@
 <template>
   <el-dialog
     :model-value="visible"
-    title="Select Remote File"
+    :title="pickerTitle"
     width="760px"
     top="8vh"
     class="fixed-dialog remote-file-picker-dialog"
@@ -63,6 +63,21 @@
               </el-dropdown-menu>
             </template>
           </el-dropdown>
+
+          <el-button
+            size="small"
+            :loading="remoteUploadLoading"
+            @click="triggerRemoteUpload"
+          >
+            Upload
+          </el-button>
+
+          <input
+            ref="remoteUploadInputRef"
+            type="file"
+            class="remote-file-picker-upload-input"
+            @change="handleRemoteUploadChange"
+          >
         </div>
       </div>
 
@@ -119,7 +134,7 @@
             </template>
           </el-table-column>
 
-          <el-table-column label="Actions" width="92" align="center" fixed="right">
+          <el-table-column label="Actions" :width="selectionMode === 'folder' ? 132 : 92" align="center" fixed="right">
             <template #default="{ row }">
               <el-button
                 v-if="row.is_parent_entry || row.is_dir"
@@ -132,11 +147,11 @@
               </el-button>
 
               <el-button
-                v-else
+                v-if="isRemoteRowSelectable(row)"
                 size="small"
                 link
                 type="primary"
-                @click.stop="selectRemoteFile(row)"
+                @click.stop="selectRemoteEntry(row)"
               >
                 Select
               </el-button>
@@ -214,11 +229,25 @@ export default {
       type: String,
       default: '',
     },
+
+    selectionMode: {
+      type: String,
+      default: 'file',
+      validator: value => ['file', 'folder'].includes(value),
+    },
+
+    getTabScopedHeaders: {
+      type: Function,
+      default: null,
+    },
   },
 
   emits: [
     'update:visible',
     'select',
+    'append-output',
+    'set-active-task',
+    'upload-started',
   ],
 
   data() {
@@ -234,14 +263,22 @@ export default {
       remoteSelectedPaths: [],
       quickJumpLoading: false,
       quickJumpPaths: {},
+      remoteUploadLoading: false,
     }
   },
 
   computed: {
+    pickerTitle() {
+      return this.selectionMode === 'folder' ? 'Select Remote Folder' : 'Select Remote File'
+    },
+
     displayRemoteFilesEntries() {
-      const entries = Array.isArray(this.remoteFilesEntries)
+      const sourceEntries = Array.isArray(this.remoteFilesEntries)
         ? [...this.remoteFilesEntries]
         : []
+      const entries = this.selectionMode === 'folder'
+        ? sourceEntries.filter(item => item && item.is_dir)
+        : sourceEntries
 
       if (this.remoteFilesParentPath && this.remoteFilesPage === 1) {
         entries.unshift({
@@ -260,7 +297,7 @@ export default {
     },
 
     remoteFilesEmptyText() {
-      return 'This folder is empty'
+      return this.selectionMode === 'folder' ? 'No folders found' : 'This folder is empty'
     },
 
     remoteBreadcrumbItems() {
@@ -323,6 +360,7 @@ export default {
       this.remoteFilesTotal = 0
       this.remoteFilesTotalPages = 1
       this.remoteSelectedPaths = []
+      this.remoteUploadLoading = false
     },
 
     async loadRemoteDirectory(path = '', page = 1) {
@@ -399,13 +437,14 @@ export default {
         return
       }
 
-      this.selectRemoteFile(row)
+      if (this.selectionMode === 'file') {
+        this.selectRemoteEntry(row)
+      }
     },
 
     handleRemoteRowClick(row) {
-      if (!row || row.is_parent_entry || row.is_dir) return
-      if (this.multiple) return
-      this.selectRemoteFile(row)
+      if (!row || this.multiple || this.selectionMode !== 'file') return
+      this.selectRemoteEntry(row)
     },
 
     handleRemoteSelectionChange(rows) {
@@ -413,18 +452,19 @@ export default {
 
       this.remoteSelectedPaths = Array.isArray(rows)
         ? rows
-            .filter(item => item && !item.is_parent_entry && !item.is_dir)
+            .filter(item => this.isRemoteRowSelectable(item))
             .map(item => item.path)
             .filter(Boolean)
         : []
     },
 
     isRemoteRowSelectable(row) {
-      return !!(row && !row.is_parent_entry && !row.is_dir && row.path)
+      if (!row || row.is_parent_entry || !row.path) return false
+      return this.selectionMode === 'folder' ? !!row.is_dir : !row.is_dir
     },
 
-    selectRemoteFile(row) {
-      if (!row || row.is_parent_entry || row.is_dir || !row.path) return
+    selectRemoteEntry(row) {
+      if (!this.isRemoteRowSelectable(row)) return
 
       this.$emit('select', this.multiple ? [row.path] : row.path)
       this.closePicker()
@@ -448,6 +488,76 @@ export default {
           table.clearSelection()
         }
       })
+    },
+
+    buildRequestHeaders(extra = {}) {
+      if (typeof this.getTabScopedHeaders === 'function') {
+        return this.getTabScopedHeaders(extra)
+      }
+
+      return extra
+    },
+
+    triggerRemoteUpload() {
+      if (!this.selectedId) {
+        ElMessage.warning('Please select a device')
+        return
+      }
+
+      if (!this.remoteFilesCurrentPath) {
+        ElMessage.warning('Current directory is empty')
+        return
+      }
+
+      const input = this.$refs.remoteUploadInputRef
+      if (input && typeof input.click === 'function') input.click()
+    },
+
+    async handleRemoteUploadChange(event) {
+      const file = event?.target?.files && event.target.files[0]
+      if (!file) return
+
+      if (!this.selectedId) {
+        ElMessage.warning('Please select a device')
+        return
+      }
+
+      if (!this.remoteFilesCurrentPath) {
+        ElMessage.warning('Current directory is empty')
+        return
+      }
+
+      const formData = new FormData()
+      formData.append('file', file)
+      formData.append('target_path', this.remoteFilesCurrentPath)
+      this.remoteUploadLoading = true
+
+      try {
+        const res = await fetch(`/api/connections/${encodeURIComponent(this.selectedId)}/upload`, {
+          method: 'POST',
+          headers: this.buildRequestHeaders(),
+          body: formData,
+        })
+        const json = await res.json()
+
+        if (!res.ok || json.code !== 0) {
+          throw new Error(json.message || 'Upload failed')
+        }
+
+        const taskId = json.data && json.data.task_id
+        this.$emit('upload-started', {
+          taskId: taskId || '',
+          clientId: this.selectedId,
+          path: this.remoteFilesCurrentPath || '',
+        })
+        ElMessage.success(`Upload started: ${file.name}`)
+        // 上传是异步前台任务，不在这里刷新目录，避免和 upload 抢同一个 client 执行槽。
+      } catch (e) {
+        ElMessage.error(e.message || 'Upload failed')
+      } finally {
+        this.remoteUploadLoading = false
+        if (event?.target) event.target.value = ''
+      }
     },
 
     async loadQuickJumpPaths() {
@@ -635,6 +745,10 @@ export default {
   display: flex;
   align-items: center;
   gap: 8px;
+}
+
+.remote-file-picker-upload-input {
+  display: none;
 }
 
 .remote-file-picker-table-shell {

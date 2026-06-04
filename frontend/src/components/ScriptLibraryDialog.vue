@@ -253,9 +253,12 @@
     :param-form="scriptParamForm"
     :submitting="scriptRunSubmitting"
     :selected-id="selectedId"
+    :get-tab-scoped-headers="getTabScopedHeaders"
     :is-script-supported-for-current-connection="isScriptSupportedForCurrentConnection"
     :format-script-platform-label="formatScriptPlatformLabel"
     @update-param="updateScriptParam"
+    @append-output="$emit('append-output', ...arguments)"
+    @set-active-task="$emit('set-active-task', ...arguments)"
     @cancel="closeScriptRunDialog"
     @confirm="confirmRunScript"
   />
@@ -1072,7 +1075,7 @@ getPreferredScriptDirectoryForCurrentConnection() {
         return value
       }
 
-      if (['remote_file', 'file', 'filepath', 'file_path'].includes(type) && Array.isArray(rawValue)) {
+      if (['remote_file', 'files', 'remote_folder', 'folders'].includes(type) && Array.isArray(rawValue)) {
         return rawValue.map(item => String(item || '').trim()).filter(Boolean)
       }
 
