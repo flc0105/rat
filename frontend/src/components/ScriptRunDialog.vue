@@ -74,6 +74,24 @@
             />
           </el-select>
 
+          <div
+            v-else-if="isRemoteFileParam(param)"
+            class="script-run-file-param"
+          >
+            <el-input
+              :model-value="formatRemoteFileParamValue(paramForm[param.name])"
+              :placeholder="param.description || param.name"
+              class="script-run-control"
+              readonly
+            >
+              <template #append>
+                <el-button @click="openRemoteFilePicker(param)">
+                  Browse
+                </el-button>
+              </template>
+            </el-input>
+          </div>
+
           <el-input
             v-else
             :model-value="paramForm[param.name]"
@@ -130,11 +148,25 @@
       </div>
     </template>
   </el-dialog>
+
+  <RemoteFilePicker
+    v-model:visible="remoteFilePickerVisible"
+    :selected-id="selectedId"
+    :multiple="pendingRemoteFileParamMultiple"
+    :initial-path="pendingRemoteFileParamInitialPath"
+    @select="handleRemoteFileSelected"
+  />
 </template>
 
 <script>
+import RemoteFilePicker from './RemoteFilePicker.vue'
+
 export default {
   name: 'ScriptRunDialog',
+
+  components: {
+    RemoteFilePicker,
+  },
 
   props: {
     visible: {
@@ -162,6 +194,11 @@ export default {
       default: false,
     },
 
+    selectedId: {
+      type: [String, Number],
+      default: '',
+    },
+
     isScriptSupportedForCurrentConnection: {
       type: Function,
       required: true,
@@ -179,6 +216,54 @@ export default {
     'cancel',
     'confirm',
   ],
+
+  data() {
+    return {
+      remoteFilePickerVisible: false,
+      pendingRemoteFileParam: null,
+    }
+  },
+
+  computed: {
+    pendingRemoteFileParamMultiple() {
+      const param = this.pendingRemoteFileParam || {}
+      return !!(param.multiple || param.multi)
+    },
+
+    pendingRemoteFileParamInitialPath() {
+      const param = this.pendingRemoteFileParam || {}
+      return String(param.initial_path || param.initialPath || param.base_path || param.basePath || '').trim()
+    },
+  },
+
+  methods: {
+    isRemoteFileParam(param) {
+      const type = String(param?.type || '').trim().toLowerCase()
+      return ['remote_file', 'file', 'filepath', 'file_path'].includes(type)
+    },
+
+    formatRemoteFileParamValue(value) {
+      if (Array.isArray(value)) return value.join(', ')
+      return value === null || value === undefined ? '' : String(value)
+    },
+
+    openRemoteFilePicker(param) {
+      if (!param || !param.name) return
+
+      this.pendingRemoteFileParam = param
+      this.remoteFilePickerVisible = true
+    },
+
+    handleRemoteFileSelected(value) {
+      const param = this.pendingRemoteFileParam
+      if (!param || !param.name) return
+
+      // 多选时保持数组；单选直接写入路径字符串。
+      this.$emit('update-param', param.name, this.pendingRemoteFileParamMultiple ? value : String(value || ''))
+      this.remoteFilePickerVisible = false
+      this.pendingRemoteFileParam = null
+    },
+  },
 }
 </script>
 
@@ -225,6 +310,10 @@ export default {
 
 .script-run-control,
 .script-run-select {
+  width: 100%;
+}
+
+.script-run-file-param {
   width: 100%;
 }
 /*

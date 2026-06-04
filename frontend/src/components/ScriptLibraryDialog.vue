@@ -252,6 +252,7 @@
     :param-specs="pendingRunScriptParamSpecs"
     :param-form="scriptParamForm"
     :submitting="scriptRunSubmitting"
+    :selected-id="selectedId"
     :is-script-supported-for-current-connection="isScriptSupportedForCurrentConnection"
     :format-script-platform-label="formatScriptPlatformLabel"
     @update-param="updateScriptParam"
@@ -1069,6 +1070,10 @@ getPreferredScriptDirectoryForCurrentConnection() {
           throw new Error(`Param "${param.name}" has invalid option`)
         }
         return value
+      }
+
+      if (['remote_file', 'file', 'filepath', 'file_path'].includes(type) && Array.isArray(rawValue)) {
+        return rawValue.map(item => String(item || '').trim()).filter(Boolean)
       }
 
       return value
