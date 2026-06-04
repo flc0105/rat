@@ -247,6 +247,7 @@
   </el-dialog>
 
   <ScriptRunDialog
+    ref="scriptRunDialogRef"
     v-model:visible="scriptRunDialogVisible"
     :item="pendingRunScriptItem"
     :param-specs="pendingRunScriptParamSpecs"
@@ -257,8 +258,9 @@
     :is-script-supported-for-current-connection="isScriptSupportedForCurrentConnection"
     :format-script-platform-label="formatScriptPlatformLabel"
     @update-param="updateScriptParam"
-    @append-output="$emit('append-output', ...arguments)"
-    @set-active-task="$emit('set-active-task', ...arguments)"
+    @append-output="forwardAppendOutput"
+    @set-active-task="forwardSetActiveTask"
+    @upload-started="$emit('upload-started', $event)"
     @cancel="closeScriptRunDialog"
     @confirm="confirmRunScript"
   />
@@ -306,6 +308,7 @@ export default {
   emits: [
     'append-output',
     'set-active-task',
+    'upload-started',
   ],
 
   data() {
@@ -466,6 +469,18 @@ export default {
   },
 
   methods: {
+    forwardAppendOutput(clientId, line, kind) {
+      this.$emit('append-output', clientId, line, kind)
+    },
+
+    forwardSetActiveTask(clientId, taskId) {
+      this.$emit('set-active-task', clientId, taskId)
+    },
+
+    refreshRemoteFilePickerDirectory(path = '') {
+      return this.$refs.scriptRunDialogRef?.loadRemoteFilePickerDirectory(path || '')
+    },
+
     async open() {
       if (!this.selectedId) {
         ElMessage.warning('Please select a device')

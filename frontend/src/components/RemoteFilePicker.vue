@@ -545,13 +545,14 @@ export default {
         }
 
         const taskId = json.data && json.data.task_id
+        this.$emit('set-active-task', this.selectedId, taskId || '')
         this.$emit('upload-started', {
+          source: 'remote_file_picker',
           taskId: taskId || '',
           clientId: this.selectedId,
           path: this.remoteFilesCurrentPath || '',
         })
         ElMessage.success(`Upload started: ${file.name}`)
-        // 上传是异步前台任务，不在这里刷新目录，避免和 upload 抢同一个 client 执行槽。
       } catch (e) {
         ElMessage.error(e.message || 'Upload failed')
       } finally {

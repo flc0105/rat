@@ -150,6 +150,7 @@
   </el-dialog>
 
   <RemoteFilePicker
+    ref="remoteFilePickerRef"
     v-model:visible="remoteFilePickerVisible"
     :selected-id="selectedId"
     :multiple="pendingRemoteFileParamMultiple"
@@ -157,8 +158,9 @@
     :selection-mode="pendingRemoteFileParamSelectionMode"
     :get-tab-scoped-headers="getTabScopedHeaders"
     @select="handleRemoteFileSelected"
-    @append-output="$emit('append-output', ...arguments)"
-    @set-active-task="$emit('set-active-task', ...arguments)"
+    @append-output="forwardAppendOutput"
+    @set-active-task="forwardSetActiveTask"
+    @upload-started="$emit('upload-started', $event)"
   />
 </template>
 
@@ -224,6 +226,7 @@ export default {
     'update-param',
     'append-output',
     'set-active-task',
+    'upload-started',
     'cancel',
     'confirm',
   ],
@@ -258,6 +261,18 @@ export default {
   },
 
   methods: {
+    forwardAppendOutput(clientId, line, kind) {
+      this.$emit('append-output', clientId, line, kind)
+    },
+
+    forwardSetActiveTask(clientId, taskId) {
+      this.$emit('set-active-task', clientId, taskId)
+    },
+
+    loadRemoteFilePickerDirectory(path = '') {
+      return this.$refs.remoteFilePickerRef?.loadRemoteDirectory(path || '', 1)
+    },
+
     isRemoteFileParam(param) {
       const type = String(param?.type || '').trim().toLowerCase()
       return [

@@ -127,13 +127,13 @@ export default {
 
                     this.pendingRemoteUploadRefresh = null;
 
-                    if (
-                        payload.success &&
-                        this.remoteFilesDialogVisible &&
-                        this.selectedId === refreshClientId
-                    ) {
+                    if (payload.success && this.selectedId === refreshClientId) {
                         try {
-                            await this.loadRemoteDirectory(refreshPath);
+                            if (pendingRefresh.source === 'remote_file_picker') {
+                                await this.$refs.scriptLibraryDialogRef?.refreshRemoteFilePickerDirectory(refreshPath);
+                            } else if (this.remoteFilesDialogVisible) {
+                                await this.loadRemoteDirectory(refreshPath);
+                            }
                         } catch (e) {
                         }
                     }

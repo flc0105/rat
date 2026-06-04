@@ -215,6 +215,7 @@
     :open-new-script-editor="openNewRemoteScriptEditor"
     @append-output="appendOutput"
     @set-active-task="setActiveTask"
+    @upload-started="pendingRemoteUploadRefresh = $event"
   />
 
   <BackgroundJobsDialog
