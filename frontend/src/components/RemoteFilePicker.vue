@@ -513,53 +513,115 @@ export default {
       if (input && typeof input.click === 'function') input.click()
     },
 
+    // async handleRemoteUploadChange(event) {
+    //   const file = event?.target?.files && event.target.files[0]
+    //   if (!file) return
+    //
+    //   if (!this.selectedId) {
+    //     ElMessage.warning('Please select a device')
+    //     return
+    //   }
+    //
+    //   if (!this.remoteFilesCurrentPath) {
+    //     ElMessage.warning('Current directory is empty')
+    //     return
+    //   }
+    //
+    //   const formData = new FormData()
+    //   formData.append('file', file)
+    //   formData.append('target_path', this.remoteFilesCurrentPath)
+    //   this.remoteUploadLoading = true
+    //
+    //   try {
+    //     const res = await fetch(`/api/connections/${encodeURIComponent(this.selectedId)}/upload`, {
+    //       method: 'POST',
+    //       headers: this.buildRequestHeaders(),
+    //       body: formData,
+    //     })
+    //     const json = await res.json()
+    //
+    //     if (!res.ok || json.code !== 0) {
+    //       throw new Error(json.message || 'Upload failed')
+    //     }
+    //
+    //     const taskId = json.data && json.data.task_id
+    //     this.$emit('set-active-task', this.selectedId, taskId || '')
+    //     this.$emit('upload-started', {
+    //       source: 'remote_file_picker',
+    //       taskId: taskId || '',
+    //       clientId: this.selectedId,
+    //       path: this.remoteFilesCurrentPath || '',
+    //     })
+    //     ElMessage.success(`Upload started: ${file.name}`)
+    //   } catch (e) {
+    //     ElMessage.error(e.message || 'Upload failed')
+    //   } finally {
+    //     this.remoteUploadLoading = false
+    //     if (event?.target) event.target.value = ''
+    //   }
+    // },
+
     async handleRemoteUploadChange(event) {
-      const file = event?.target?.files && event.target.files[0]
-      if (!file) return
+  const file = event?.target?.files && event.target.files[0]
+  if (!file) return
 
-      if (!this.selectedId) {
-        ElMessage.warning('Please select a device')
-        return
-      }
+  if (!this.selectedId) {
+    ElMessage.warning('Please select a device')
+    return
+  }
 
-      if (!this.remoteFilesCurrentPath) {
-        ElMessage.warning('Current directory is empty')
-        return
-      }
+  if (!this.remoteFilesCurrentPath) {
+    ElMessage.warning('Current directory is empty')
+    return
+  }
 
-      const formData = new FormData()
-      formData.append('file', file)
-      formData.append('target_path', this.remoteFilesCurrentPath)
-      this.remoteUploadLoading = true
+  const formData = new FormData()
+  formData.append('file', file)
+  formData.append('target_path', this.remoteFilesCurrentPath)
+  this.remoteUploadLoading = true
 
-      try {
-        const res = await fetch(`/api/connections/${encodeURIComponent(this.selectedId)}/upload`, {
-          method: 'POST',
-          headers: this.buildRequestHeaders(),
-          body: formData,
-        })
-        const json = await res.json()
+  this.$emit(
+    'append-output',
+    this.selectedId,
+    `> [Remote Upload] ${file.name} -> ${this.remoteFilesCurrentPath}`,
+    'command'
+  )
 
-        if (!res.ok || json.code !== 0) {
-          throw new Error(json.message || 'Upload failed')
-        }
+  try {
+    const res = await fetch(`/api/connections/${encodeURIComponent(this.selectedId)}/upload`, {
+      method: 'POST',
+      headers: this.buildRequestHeaders(),
+      body: formData,
+    })
+    const json = await res.json()
 
-        const taskId = json.data && json.data.task_id
-        this.$emit('set-active-task', this.selectedId, taskId || '')
-        this.$emit('upload-started', {
-          source: 'remote_file_picker',
-          taskId: taskId || '',
-          clientId: this.selectedId,
-          path: this.remoteFilesCurrentPath || '',
-        })
-        ElMessage.success(`Upload started: ${file.name}`)
-      } catch (e) {
-        ElMessage.error(e.message || 'Upload failed')
-      } finally {
-        this.remoteUploadLoading = false
-        if (event?.target) event.target.value = ''
-      }
-    },
+    if (!res.ok || json.code !== 0) {
+      throw new Error(json.message || 'Upload failed')
+    }
+
+    const taskId = json.data && json.data.task_id
+    this.$emit('set-active-task', this.selectedId, taskId || '')
+    this.$emit('upload-started', {
+      source: 'remote_file_picker',
+      taskId: taskId || '',
+      clientId: this.selectedId,
+      path: this.remoteFilesCurrentPath || '',
+    })
+    ElMessage.success(`Upload started: ${file.name}`)
+  } catch (e) {
+    this.$emit(
+      'append-output',
+      this.selectedId,
+      `[Upload failed] ${e.message || 'unknown error'}`,
+      'error'
+    )
+
+    ElMessage.error(e.message || 'Upload failed')
+  } finally {
+    this.remoteUploadLoading = false
+    if (event?.target) event.target.value = ''
+  }
+},
 
     async loadQuickJumpPaths() {
       if (!this.selectedId) return
