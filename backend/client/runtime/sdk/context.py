@@ -265,6 +265,31 @@ def _iter_exported_command_names(command_owner):
     return sorted(set(names))
 
 
+# def build_script_sdk_globals(command_owner=None, kwargs=None) -> dict:
+#     """
+#     构造注入到 server script 的 SDK 全局变量。
+#     """
+#     import sys
+#
+#     from client.runtime.sdk import artifact, command, keychains, workspace, xt
+#
+#     sdk_globals = {
+#         'artifact': artifact,
+#         'command': command,
+#         'keychains': keychains,
+#         'context': sys.modules[__name__],
+#         'workspace': workspace,
+#         'xt': xt,
+#     }
+#
+#     for name in _iter_exported_command_names(command_owner):
+#         if name in sdk_globals or name in {'kwargs', '__context__'}:
+#             continue
+#         sdk_globals[name] = command.build_client_command_function(name)
+#
+#     return sdk_globals
+
+
 def build_script_sdk_globals(command_owner=None, kwargs=None) -> dict:
     """
     构造注入到 server script 的 SDK 全局变量。
@@ -282,8 +307,14 @@ def build_script_sdk_globals(command_owner=None, kwargs=None) -> dict:
         'xt': xt,
     }
 
+    import builtins
+
+    builtin_names = set(dir(builtins))  # 如果命令名和内置方法冲突则不导入，比如set()
+
     for name in _iter_exported_command_names(command_owner):
         if name in sdk_globals or name in {'kwargs', '__context__'}:
+            continue
+        if name in builtin_names:
             continue
         sdk_globals[name] = command.build_client_command_function(name)
 
