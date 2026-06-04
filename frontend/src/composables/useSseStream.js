@@ -129,7 +129,13 @@ export default {
 
                     if (payload.success && this.selectedId === refreshClientId) {
                         try {
-                            if (pendingRefresh.source === 'remote_file_picker') {
+                            if (pendingRefresh.source === 'script_remote_file_picker') {
+                                await this.$refs.scriptLibraryDialogRef?.refreshRemoteFilePickerDirectory(refreshPath);
+                            } else if (pendingRefresh.source === 'job_remote_file_picker') {
+                                await this.$refs.backgroundJobsDialogRef?.refreshRemoteFilePickerDirectory(refreshPath);
+                            } else if (pendingRefresh.source === 'external_tool_remote_file_picker') {
+                                await this.$refs.externalToolManagerDialogRef?.loadRemoteFilePickerDirectory(refreshPath);
+                            } else if (pendingRefresh.source === 'remote_file_picker') {
                                 await this.$refs.scriptLibraryDialogRef?.refreshRemoteFilePickerDirectory(refreshPath);
                             } else if (this.remoteFilesDialogVisible) {
                                 await this.loadRemoteDirectory(refreshPath);

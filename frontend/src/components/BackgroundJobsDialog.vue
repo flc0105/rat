@@ -282,14 +282,20 @@
   </el-dialog>
 
   <BackgroundJobStartDialog
+    ref="backgroundJobStartDialogRef"
     v-model:visible="backgroundJobStartDialogVisible"
     :item="pendingStartJobModule"
     :params="pendingStartJobModule?.metadata?.params || []"
     :param-form="backgroundJobParamForm || {}"
     :submitting="backgroundJobStartSubmitting"
+    :selected-id="selectedId"
+    :get-tab-scoped-headers="getTabScopedHeaders"
     :is-job-supported-for-current-connection="isJobSupportedForCurrentConnection"
     :format-job-platform-label="formatJobPlatformLabel"
     @update-param="updateBackgroundJobParam"
+    @append-output="forwardAppendOutput"
+    @set-active-task="forwardSetActiveTask"
+    @upload-started="$emit('upload-started', $event)"
     @cancel="closeBackgroundJobStartDialog"
     @confirm="confirmStartBackgroundJobWithParams"
   />
@@ -360,7 +366,9 @@ export default {
   },
 
   emits: [
+    'append-output',
     'set-active-task',
+    'upload-started',
     'preview-file',
     'open-job-editor',
     'open-new-job-editor',
@@ -557,6 +565,18 @@ export default {
   },
 
   methods: {
+    forwardAppendOutput(clientId, line, kind) {
+      this.$emit('append-output', clientId, line, kind)
+    },
+
+    forwardSetActiveTask(clientId, taskId) {
+      this.$emit('set-active-task', clientId, taskId)
+    },
+
+    refreshRemoteFilePickerDirectory(path = '') {
+      return this.$refs.backgroundJobStartDialogRef?.loadRemoteFilePickerDirectory(path || '')
+    },
+
     async open() {
       if (!this.selectedId) {
         ElMessage.warning('Please select a device')
@@ -861,11 +881,17 @@ export default {
       const result = {}
 
       for (const param of metadata.params || []) {
+        const type = String(param?.type || 'string').trim().toLowerCase()
+
         if (Object.prototype.hasOwnProperty.call(param, 'default')) {
           const defaultValue = param.default
-          result[param.name] = defaultValue === null || defaultValue === undefined ? '' : String(defaultValue)
+          if (['remote_files', 'remote_folders'].includes(type) && Array.isArray(defaultValue)) {
+            result[param.name] = [...defaultValue]
+          } else {
+            result[param.name] = defaultValue === null || defaultValue === undefined ? '' : defaultValue
+          }
         } else {
-          result[param.name] = ''
+          result[param.name] = ['remote_files', 'remote_folders'].includes(type) ? [] : ''
         }
       }
 
@@ -923,6 +949,18 @@ export default {
 
     coerceBackgroundJobParamValue(param, rawValue) {
       const type = String(param?.type || 'string').trim().toLowerCase()
+
+      if (['remote_files', 'remote_folders'].includes(type)) {
+        return Array.isArray(rawValue)
+          ? rawValue.map(item => String(item || '').trim()).filter(Boolean)
+          : String(rawValue || '').split(',').map(item => item.trim()).filter(Boolean)
+      }
+
+      if (['remote_file', 'remote_folder'].includes(type)) {
+        if (Array.isArray(rawValue)) return String(rawValue[0] || '').trim()
+        return String(rawValue || '').trim()
+      }
+
       const value = rawValue === null || rawValue === undefined ? '' : String(rawValue).trim()
 
       if (type === 'integer' || type === 'int') {
@@ -976,9 +1014,11 @@ export default {
       for (const param of metadata.params || []) {
         const hasValue = Object.prototype.hasOwnProperty.call(this.backgroundJobParamForm, param.name)
         const rawValue = hasValue ? this.backgroundJobParamForm[param.name] : ''
+        const type = String(param.type || 'string').trim().toLowerCase()
+        const hasRemoteMultiValue = ['remote_files', 'remote_folders'].includes(type) && Array.isArray(rawValue) && rawValue.length > 0
         const textValue = rawValue === null || rawValue === undefined ? '' : String(rawValue).trim()
 
-        if (!textValue) {
+        if (!hasRemoteMultiValue && !textValue) {
           if (param.required && (param.default === undefined || param.default === null || String(param.default).trim() === '')) {
             throw new Error(`Missing required param: ${param.name}`)
           }

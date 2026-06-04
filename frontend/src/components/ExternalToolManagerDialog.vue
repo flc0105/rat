@@ -582,8 +582,25 @@
           :key="param.name"
           :label="formatParamLabel(param)"
         >
+          <div
+            v-if="isRemoteFileParam(param)"
+            class="external-tool-file-param"
+          >
+            <el-input
+              :model-value="formatRemoteFileParamValue(paramForm[param.name])"
+              :placeholder="param.description || param.name"
+              readonly
+            >
+              <template #append>
+                <el-button @click="openRemoteFilePicker(param)">
+                  Browse
+                </el-button>
+              </template>
+            </el-input>
+          </div>
+
           <el-switch
-            v-if="normalizeParamType(param.type) === 'boolean'"
+            v-else-if="normalizeParamType(param.type) === 'boolean'"
             v-model="paramForm[param.name]"
           />
 
@@ -628,6 +645,20 @@
       </el-button>
     </template>
   </el-dialog>
+
+  <RemoteFilePicker
+    ref="remoteFilePickerRef"
+    v-model:visible="remoteFilePickerVisible"
+    :selected-id="selectedId"
+    :multiple="pendingRemoteFileParamMultiple"
+    :initial-path="pendingRemoteFileParamInitialPath"
+    :selection-mode="pendingRemoteFileParamSelectionMode"
+    :get-tab-scoped-headers="getTabScopedHeaders"
+    @select="handleRemoteFileSelected"
+    @append-output="forwardAppendOutput"
+    @set-active-task="forwardSetActiveTask"
+    @upload-started="forwardRemoteUploadStarted"
+  />
 
   <el-dialog
     v-model="logDialogVisible"
@@ -743,9 +774,14 @@
 <script>
 import { ElMessage, ElMessageBox } from 'element-plus'
 import * as externalToolsApi from '../api/externalToolsApi.js'
+import RemoteFilePicker from './RemoteFilePicker.vue'
 
 export default {
   name: 'ExternalToolManagerDialog',
+
+  components: {
+    RemoteFilePicker,
+  },
 
   props: {
     selectedId: {
@@ -773,6 +809,7 @@ export default {
   emits: [
     'append-output',
     'set-active-task',
+    'upload-started',
     'open-tool-meta-editor',
   ],
 
@@ -797,6 +834,8 @@ export default {
       pendingTargetSide: '',
       pendingStartMode: 'run',
       paramForm: {},
+      remoteFilePickerVisible: false,
+      pendingRemoteFileParam: null,
       logDialogVisible: false,
       logDialogTitle: 'External Tool Logs',
       logFilePath: '',
@@ -990,6 +1029,26 @@ export default {
 
     pendingParams() {
       return Array.isArray(this.pendingItem?.params) ? this.pendingItem.params : []
+    },
+
+    pendingRemoteFileParamMultiple() {
+      const param = this.pendingRemoteFileParam || {}
+      const type = String(param.type || '').trim().toLowerCase()
+      return !!(param.multiple || ['remote_files', 'remote_folders'].includes(type))
+    },
+
+    pendingRemoteFileParamSelectionMode() {
+      const param = this.pendingRemoteFileParam || {}
+      const explicitMode = String(param.selection_mode || param.selectionMode || '').trim().toLowerCase()
+      if (explicitMode === 'folder') return 'folder'
+
+      const type = String(param.type || '').trim().toLowerCase()
+      return ['remote_folder', 'remote_folders'].includes(type) ? 'folder' : 'file'
+    },
+
+    pendingRemoteFileParamInitialPath() {
+      const param = this.pendingRemoteFileParam || {}
+      return String(param.initial_path || param.initialPath || param.base_path || param.basePath || '').trim()
     },
 
     pendingExecution() {
@@ -1917,6 +1976,59 @@ async loadAllClientInstances(deviceId = '', showToast = true) {
       ].map(value => String(value || '').toLowerCase()).join(' ')
     },
 
+    isRemoteFileParam(param) {
+      const type = String(param?.type || '').trim().toLowerCase()
+      return [
+        'remote_file',
+        'remote_files',
+        'remote_folder',
+        'remote_folders',
+      ].includes(type)
+    },
+
+    formatRemoteFileParamValue(value) {
+      if (Array.isArray(value)) return value.join(', ')
+      return value === null || value === undefined ? '' : String(value)
+    },
+
+    openRemoteFilePicker(param) {
+      if (!param || !param.name) return
+
+      this.pendingRemoteFileParam = param
+      this.remoteFilePickerVisible = true
+    },
+
+    handleRemoteFileSelected(value) {
+      const param = this.pendingRemoteFileParam
+      if (!param || !param.name) return
+
+      this.paramForm = {
+        ...this.paramForm,
+        [param.name]: this.pendingRemoteFileParamMultiple ? value : String(value || ''),
+      }
+      this.remoteFilePickerVisible = false
+      this.pendingRemoteFileParam = null
+    },
+
+    loadRemoteFilePickerDirectory(path = '') {
+      return this.$refs.remoteFilePickerRef?.loadRemoteDirectory(path || '', 1)
+    },
+
+    forwardAppendOutput(clientId, line, kind) {
+      this.$emit('append-output', clientId, line, kind)
+    },
+
+    forwardSetActiveTask(clientId, taskId) {
+      this.$emit('set-active-task', clientId, taskId)
+    },
+
+    forwardRemoteUploadStarted(payload) {
+      this.$emit('upload-started', {
+        ...(payload && typeof payload === 'object' ? payload : {}),
+        source: 'external_tool_remote_file_picker',
+      })
+    },
+
     normalizeParamType(type) {
       const value = String(type || 'string').trim().toLowerCase()
       if (value === 'int' || value === 'number') return 'integer'
@@ -1950,26 +2062,31 @@ async loadAllClientInstances(deviceId = '', showToast = true) {
     // },
 
     buildParamDefaults(item) {
-  const form = {}
-  for (const param of item?.params || []) {
-    const name = String(param?.name || '').trim()
-    if (!name) continue
+      const form = {}
+      for (const param of item?.params || []) {
+        const name = String(param?.name || '').trim()
+        if (!name) continue
 
-    if (name === 'instance_name' && (param.default === undefined || param.default === null || String(param.default).trim() === '')) {
-      form[name] = this.defaultInstanceName(item)
-    } else if (name === 'access_host' && (param.default === undefined || param.default === null || String(param.default).trim() === '')) {
-      // 打开 config/start 弹框时直接把浏览器当前 hostname 填进 input。
-      form[name] = this.getBrowserAccessHost()
-    } else if (param.default !== undefined && param.default !== null) {
-      form[name] = param.default
-    } else if (this.normalizeParamType(param.type) === 'boolean') {
-      form[name] = false
-    } else {
-      form[name] = ''
-    }
-  }
-  return form
-},
+        const type = String(param?.type || 'string').trim().toLowerCase()
+        if (name === 'instance_name' && (param.default === undefined || param.default === null || String(param.default).trim() === '')) {
+          form[name] = this.defaultInstanceName(item)
+        } else if (name === 'access_host' && (param.default === undefined || param.default === null || String(param.default).trim() === '')) {
+          // 打开 config/start 弹框时直接把浏览器当前 hostname 填进 input。
+          form[name] = this.getBrowserAccessHost()
+        } else if (param.default !== undefined && param.default !== null) {
+          form[name] = ['remote_files', 'remote_folders'].includes(type) && Array.isArray(param.default)
+            ? [...param.default]
+            : param.default
+        } else if (['remote_files', 'remote_folders'].includes(type)) {
+          form[name] = []
+        } else if (this.normalizeParamType(param.type) === 'boolean') {
+          form[name] = false
+        } else {
+          form[name] = ''
+        }
+      }
+      return form
+    },
 
 
     defaultInstanceName(item) {
@@ -1993,35 +2110,45 @@ async loadAllClientInstances(deviceId = '', showToast = true) {
     // },
 
     buildStartParams() {
-  const params = {}
-  const hasAccessHostParam = (this.pendingParams || []).some(param => String(param?.name || '').trim() === 'access_host')
+      const params = {}
+      const hasAccessHostParam = (this.pendingParams || []).some(param => String(param?.name || '').trim() === 'access_host')
 
-  for (const param of this.pendingParams || []) {
-    const name = String(param?.name || '').trim()
-    if (!name) continue
+      for (const param of this.pendingParams || []) {
+        const name = String(param?.name || '').trim()
+        if (!name) continue
 
-    let value = this.paramForm[name]
+        const type = String(param?.type || 'string').trim().toLowerCase()
+        let value = this.paramForm[name]
 
-    // 如果用户刻意把 access_host 清空，提交前再补一次当前浏览器 hostname。
-    if (name === 'access_host' && (value === '' || value === undefined || value === null)) {
-      value = this.getBrowserAccessHost()
-    }
+        // 如果用户刻意把 access_host 清空，提交前再补一次当前浏览器 hostname。
+        if (name === 'access_host' && (value === '' || value === undefined || value === null)) {
+          value = this.getBrowserAccessHost()
+        }
 
-    if (param.required && (value === '' || value === undefined || value === null)) {
-      throw new Error(`Param ${name} is required`)
-    }
+        const hasRemoteMultiValue = ['remote_files', 'remote_folders'].includes(type) && Array.isArray(value) && value.length > 0
+        if (param.required && !hasRemoteMultiValue && (value === '' || value === undefined || value === null)) {
+          throw new Error(`Param ${name} is required`)
+        }
 
-    params[name] = value
-  }
+        if (['remote_files', 'remote_folders'].includes(type)) {
+          params[name] = Array.isArray(value)
+            ? value.map(item => String(item || '').trim()).filter(Boolean)
+            : String(value || '').split(',').map(item => item.trim()).filter(Boolean)
+        } else if (['remote_file', 'remote_folder'].includes(type)) {
+          params[name] = Array.isArray(value) ? String(value[0] || '').trim() : String(value || '').trim()
+        } else {
+          params[name] = value
+        }
+      }
 
-  // 兼容：meta 里 web.url 用了 {{access_host}}，但 params 没显式声明 access_host 时，
-  // 仍然给 runtime state 里补一个，方便后续 Open Web。
-  if (!hasAccessHostParam && this.pendingItem && this.getModuleWebUrlTemplate(this.pendingItem)) {
-    params.access_host = this.getBrowserAccessHost()
-  }
+      // 兼容：meta 里 web.url 用了 {{access_host}}，但 params 没显式声明 access_host 时，
+      // 仍然给 runtime state 里补一个，方便后续 Open Web。
+      if (!hasAccessHostParam && this.pendingItem && this.getModuleWebUrlTemplate(this.pendingItem)) {
+        params.access_host = this.getBrowserAccessHost()
+      }
 
-  return params
-},
+      return params
+    },
 
     deriveInstanceId(params) {
       const raw = params.instance_name || params.instance_id || (
@@ -4352,6 +4479,10 @@ formatVersionLabel(version) {
     gap: 4px;
   }
 }
+.external-tool-file-param {
+  width: 100%;
+}
+
 </style>
 
 <style>

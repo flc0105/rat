@@ -1090,7 +1090,7 @@ getPreferredScriptDirectoryForCurrentConnection() {
         return value
       }
 
-      if (['remote_file', 'files', 'remote_folder', 'folders'].includes(type) && Array.isArray(rawValue)) {
+      if (['remote_file', 'remote_files', 'remote_folder', 'remote_folders'].includes(type) && Array.isArray(rawValue)) {
         return rawValue.map(item => String(item || '').trim()).filter(Boolean)
       }
 

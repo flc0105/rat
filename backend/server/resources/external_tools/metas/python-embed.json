@@ -58,6 +58,31 @@
         ],
         "timeout_sec": 30
       }
+    },
+    {
+      "id": "run-remote-py",
+      "name": "python-embed-run-remote-py",
+      "display_name": "Python Embed Run Remote PY",
+      "description": "Select a remote .py file and run it with this Python Embed runtime. stdout/stderr are returned in the oneshot result.",
+      "execution": "oneshot",
+      "exec": "python",
+      "params": [
+        {
+          "name": "script_file",
+          "label": "Remote Python File",
+          "type": "remote_file",
+          "required": true,
+          "description": "Remote .py file path selected by RemoteFilePicker."
+        }
+      ],
+      "runtime": {
+        "cwd": "{{install_dir}}/{{package_root}}",
+        "argv": [
+          "{{bin_python}}",
+          "{{script_file}}"
+        ],
+        "timeout_sec": 120
+      }
     }
   ]
 }

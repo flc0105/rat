@@ -10,7 +10,7 @@ SCRIPT_METADATA = {
     "params": [
         {
             "name": "target_files",
-            "type": "files",
+            "type": "remote_files",
             "description": "选择一个或多个远程文件。",
             "required": True,
             "multiple": True,

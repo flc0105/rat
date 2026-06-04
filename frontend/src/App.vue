@@ -197,6 +197,7 @@
     :get-tab-scoped-headers="getTabScopedHeaders"
     @append-output="appendOutput"
     @set-active-task="setActiveTask"
+    @upload-started="pendingRemoteUploadRefresh = $event"
     @open-tool-meta-editor="openExternalToolMetaEditor"
   />
 
@@ -225,7 +226,9 @@
     :get-tab-scoped-headers="getTabScopedHeaders"
     :format-date-time-standard="formatDateTimeStandard"
     :format-bytes="formatBytes"
+    @append-output="appendOutput"
     @set-active-task="setActiveTask"
+    @upload-started="pendingRemoteUploadRefresh = $event"
     @preview-file="previewBackgroundJobFile"
     @open-job-editor="openRemoteJobEditor"
     @open-new-job-editor="openNewRemoteJobEditor"

@@ -160,7 +160,7 @@
     @select="handleRemoteFileSelected"
     @append-output="forwardAppendOutput"
     @set-active-task="forwardSetActiveTask"
-    @upload-started="$emit('upload-started', $event)"
+    @upload-started="forwardRemoteUploadStarted"
   />
 </template>
 
@@ -242,7 +242,7 @@ export default {
     pendingRemoteFileParamMultiple() {
       const param = this.pendingRemoteFileParam || {}
       const type = String(param.type || '').trim().toLowerCase()
-      return !!(param.multiple || ['files', 'folders'].includes(type))
+      return !!(param.multiple || ['remote_files', 'remote_folders'].includes(type))
     },
 
     pendingRemoteFileParamSelectionMode() {
@@ -251,7 +251,7 @@ export default {
       if (explicitMode === 'folder') return 'folder'
 
       const type = String(param.type || '').trim().toLowerCase()
-      return ['remote_folder', 'folders'].includes(type) ? 'folder' : 'file'
+      return ['remote_folder', 'remote_folders'].includes(type) ? 'folder' : 'file'
     },
 
     pendingRemoteFileParamInitialPath() {
@@ -269,6 +269,13 @@ export default {
       this.$emit('set-active-task', clientId, taskId)
     },
 
+    forwardRemoteUploadStarted(payload) {
+      this.$emit('upload-started', {
+        ...(payload && typeof payload === 'object' ? payload : {}),
+        source: 'script_remote_file_picker',
+      })
+    },
+
     loadRemoteFilePickerDirectory(path = '') {
       return this.$refs.remoteFilePickerRef?.loadRemoteDirectory(path || '', 1)
     },
@@ -277,9 +284,9 @@ export default {
       const type = String(param?.type || '').trim().toLowerCase()
       return [
         'remote_file',
-        'files',
+        'remote_files',
         'remote_folder',
-        'folders',
+        'remote_folders',
       ].includes(type)
     },
 

@@ -10,7 +10,7 @@ SCRIPT_METADATA = {
     "params": [
         {
             "name": "target_folders",
-            "type": "folders",
+            "type": "remote_folders",
             "description": "选择一个或多个远程目录。",
             "required": True,
             "multiple": True,

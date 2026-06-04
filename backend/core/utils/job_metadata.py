@@ -28,6 +28,15 @@ _PARAM_TYPE_ALIASES = {
     'boolean': 'boolean',
 }
 
+_REMOTE_PATH_PARAM_TYPES = {
+    'remote_file',
+    'remote_folder',
+}
+_REMOTE_PATH_MULTI_PARAM_TYPES = {
+    'remote_files',
+    'remote_folders',
+}
+
 
 def _safe_literal_eval(node):
     try:
@@ -235,6 +244,26 @@ def _apply_param_limits(spec: dict, value):
     return value
 
 
+def _coerce_path_list(value, param_name: str) -> list[str]:
+    if value is None or value == '':
+        return []
+
+    if isinstance(value, str):
+        text = value.strip()
+        if not text:
+            return []
+        return [item.strip() for item in text.split(',') if item.strip()]
+
+    if not isinstance(value, (list, tuple, set)):
+        raise ValueError(f'Invalid path list param: {param_name}')
+
+    result = []
+    for item in value:
+        text = str(item or '').strip()
+        if text:
+            result.append(text)
+    return result
+
 def coerce_job_param_value(spec: dict, value):
     param_name = str(spec.get('name') or '').strip() or 'param'
     param_type = _normalize_param_type(spec.get('type'))
@@ -247,6 +276,15 @@ def coerce_job_param_value(spec: dict, value):
 
     if param_type == 'boolean':
         return _coerce_boolean(value, param_name)
+
+    if param_type in _REMOTE_PATH_MULTI_PARAM_TYPES:
+        return _coerce_path_list(value, param_name)
+
+    if param_type in _REMOTE_PATH_PARAM_TYPES:
+        if isinstance(value, (list, tuple, set)):
+            path_list = _coerce_path_list(value, param_name)
+            return path_list[0] if path_list else ''
+        return str(value or '').strip()
 
     return str(value)
 

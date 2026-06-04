@@ -32,8 +32,8 @@ _REMOTE_PATH_PARAM_TYPES = {
     'remote_folder',
 }
 _REMOTE_PATH_MULTI_PARAM_TYPES = {
-    'files',
-    'folders',
+    'remote_files',
+    'remote_folders',
 }
 
 
