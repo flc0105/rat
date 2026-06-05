@@ -64,6 +64,19 @@
             </el-select>
           </div>
 
+          <div class="keychain-kind-filter-box">
+            <el-select
+              v-model="kindFilter"
+              size="small"
+              placeholder="All"
+              @change="handleKindFilterChange"
+            >
+              <el-option label="All" value="" />
+              <el-option label="Secrets" value="secret" />
+              <el-option label="Logins" value="login" />
+            </el-select>
+          </div>
+
           <el-input
             v-model="searchText"
             size="small"
@@ -145,12 +158,15 @@
                       </div>
                     </div>
 
-                    <div class="keychain-field keychain-secret-field">
+                    <div
+                      class="keychain-field keychain-secret-field"
+                      :class="{ 'keychain-field-wide': row.kind === 'secret' }"
+                    >
                       <div class="keychain-field-label">
                         {{ row.kind === 'secret' ? 'Value' : 'Password' }}
                       </div>
 
-                      <div class="keychain-field-value mono">
+                      <div class="keychain-field-value mono secret-inline">
                         <span
                           class="secret-value"
                           :class="{ masked: !isSecretVisible(row.cred_id) }"
@@ -159,7 +175,7 @@
                         </span>
 
                         <el-link
-                          class="secret-toggle-link"
+                          class="secret-action-link"
                           type="primary"
                           :underline="false"
                           :disabled="isSecretLoading(row.cred_id)"
@@ -171,13 +187,16 @@
                               : (isSecretVisible(row.cred_id) ? 'Hide' : 'Show')
                           }}
                         </el-link>
-                      </div>
-                    </div>
 
-                    <div class="keychain-field">
-                      <div class="keychain-field-label">Last Modified</div>
-                      <div class="keychain-field-value mono">
-                        {{ row.updated_at || row.created_at || '-' }}
+                        <el-link
+                          class="secret-action-link"
+                          type="primary"
+                          :underline="false"
+                          :disabled="isSecretLoading(row.cred_id)"
+                          @click="copyCardSecret(row)"
+                        >
+                          Copy
+                        </el-link>
                       </div>
                     </div>
                   </div>
@@ -265,7 +284,7 @@
           <el-input
             v-model="form.name"
             maxlength="160"
-            placeholder="e.g. GitHub main account"
+            placeholder="Credential name"
             show-word-limit
           />
         </el-form-item>
@@ -293,7 +312,7 @@
             <el-input
               v-model="form.site"
               maxlength="512"
-              placeholder="https://example.com"
+              placeholder="Site URL"
             />
           </el-form-item>
         </template>
@@ -305,7 +324,7 @@
               type="textarea"
               :rows="4"
               maxlength="65536"
-              placeholder="Token, recovery code, note, or other secret value"
+              placeholder="Secret value"
             />
           </el-form-item>
         </template>
@@ -365,48 +384,55 @@
         </div>
 
         <div class="keychain-detail-grid">
-          <div class="keychain-detail-item">
+          <div class="keychain-detail-item keychain-detail-wide">
             <div class="keychain-detail-label">Host</div>
             <div class="keychain-detail-value mono">
               {{ formatMachineOptionLabel(detailItem) }}
             </div>
           </div>
 
-          <div
-            v-if="detailItem.kind === 'login'"
-            class="keychain-detail-item"
-          >
-            <div class="keychain-detail-label">Username</div>
-            <div class="keychain-detail-value mono">
-              {{ detailItem.username || '-' }}
+          <template v-if="detailItem.kind === 'login'">
+            <div class="keychain-detail-item keychain-detail-wide">
+              <div class="keychain-detail-label">Site</div>
+              <div class="keychain-detail-value">
+                {{ detailItem.site || '-' }}
+              </div>
             </div>
-          </div>
+
+            <div class="keychain-detail-item">
+              <div class="keychain-detail-label">Username</div>
+              <div class="keychain-detail-value mono">
+                {{ detailItem.username || '-' }}
+              </div>
+            </div>
+          </template>
 
           <div
-            v-if="detailItem.kind === 'login' && detailItem.site"
-            class="keychain-detail-item"
+            class="keychain-detail-item keychain-detail-secret"
+            :class="{ 'keychain-detail-wide': detailItem.kind === 'secret' }"
           >
-            <div class="keychain-detail-label">Site</div>
-            <div class="keychain-detail-value">
-              {{ detailItem.site }}
-            </div>
-          </div>
-
-          <div class="keychain-detail-item keychain-detail-secret">
             <div class="keychain-detail-label">
               {{ detailItem.kind === 'secret' ? 'Value' : 'Password' }}
             </div>
-            <div class="keychain-detail-value mono">
+            <div class="keychain-detail-value mono secret-inline">
               <span class="secret-value">
                 {{ detailSecretVisible ? detailItem.secret_value : '••••••••' }}
               </span>
               <el-link
-                class="secret-toggle-link"
+                class="secret-action-link"
                 type="primary"
                 :underline="false"
                 @click="detailSecretVisible = !detailSecretVisible"
               >
                 {{ detailSecretVisible ? 'Hide' : 'Show' }}
+              </el-link>
+              <el-link
+                class="secret-action-link"
+                type="primary"
+                :underline="false"
+                @click="copyDetailSecret"
+              >
+                Copy
               </el-link>
             </div>
           </div>
@@ -490,6 +516,7 @@ export default {
       serverMachineId: '__server__',
       serverHostname: 'Server',
       machineIdFilter: '',
+      kindFilter: '',
       searchText: '',
       visibleSecretMap: {},
       secretLoadingMap: {},
@@ -535,9 +562,11 @@ export default {
 
     filteredItems() {
       const query = String(this.searchText || '').trim().toLowerCase()
-      if (!query) return this.items || []
+      const kind = String(this.kindFilter || '').trim()
+      const list = (this.items || []).filter(item => !kind || item.kind === kind)
+      if (!query) return list
 
-      return (this.items || []).filter(item => {
+      return list.filter(item => {
         const values = [
           item.name,
           item.username,
@@ -586,6 +615,7 @@ export default {
       this.machines = []
       this.searchText = ''
       this.machineIdFilter = ''
+      this.kindFilter = ''
       this.visibleSecretMap = {}
       this.secretLoadingMap = {}
     },
@@ -639,8 +669,17 @@ export default {
       this.loadKeychains()
     },
 
+    handleKindFilterChange() {
+      this.visibleSecretMap = {}
+    },
+
     handleFormMachineChange() {
       this.form.hostname = this.resolveHostname(this.form.machine_id)
+    },
+
+    setFormKind(kind) {
+      if (!['login', 'secret'].includes(kind)) return
+      this.form.kind = kind
     },
 
     async loadKeychains() {
@@ -721,6 +760,59 @@ export default {
         delete nextLoadingMap[row.cred_id]
         this.secretLoadingMap = nextLoadingMap
       }
+    },
+
+    async copyTextToClipboard(text, successMessage = 'Copied') {
+      const value = String(text || '')
+      if (!value) {
+        ElMessage.warning('Nothing to copy')
+        return
+      }
+
+      try {
+        if (navigator.clipboard?.writeText) {
+          await navigator.clipboard.writeText(value)
+        } else {
+          const textarea = document.createElement('textarea')
+          textarea.value = value
+          textarea.setAttribute('readonly', 'readonly')
+          textarea.style.position = 'fixed'
+          textarea.style.left = '-9999px'
+          document.body.appendChild(textarea)
+          textarea.select()
+          document.execCommand('copy')
+          document.body.removeChild(textarea)
+        }
+
+        ElMessage.success(successMessage)
+      } catch (e) {
+        ElMessage.error(e.message || 'Copy failed')
+      }
+    },
+
+    async copyCardSecret(row) {
+      if (!row?.cred_id) return
+
+      this.secretLoadingMap = { ...this.secretLoadingMap, [row.cred_id]: true }
+      try {
+        const cached = this.visibleSecretMap[row.cred_id]
+        const value = cached?.value ?? (await this.fetchCredential(row.cred_id))?.secret_value
+        await this.copyTextToClipboard(value, `${row.kind === 'secret' ? 'Value' : 'Password'} copied`)
+      } catch (e) {
+        ElMessage.error(e.message || 'Copy failed')
+      } finally {
+        const nextLoadingMap = { ...this.secretLoadingMap }
+        delete nextLoadingMap[row.cred_id]
+        this.secretLoadingMap = nextLoadingMap
+      }
+    },
+
+    copyDetailSecret() {
+      if (!this.detailItem) return
+      this.copyTextToClipboard(
+        this.detailItem.secret_value || '',
+        `${this.detailItem.kind === 'secret' ? 'Value' : 'Password'} copied`,
+      )
     },
 
     openCreateDialog() {
@@ -954,16 +1046,22 @@ export default {
   width: 300px;
 }
 
+.keychain-kind-filter-box {
+  width: 118px;
+}
+
 .keychain-search {
   width: 260px;
 }
 
 .keychain-filter-box :deep(.el-select),
+.keychain-kind-filter-box :deep(.el-select),
 .keychain-search :deep(.el-input__wrapper) {
   width: 100%;
 }
 
 .keychain-filter-box :deep(.el-select__wrapper),
+.keychain-kind-filter-box :deep(.el-select__wrapper),
 .keychain-search :deep(.el-input__wrapper) {
   min-height: 32px;
   height: 32px;
@@ -1091,6 +1189,10 @@ export default {
   min-width: 0;
 }
 
+.keychain-field-wide {
+  grid-column: 1 / -1;
+}
+
 .secret-value {
   white-space: pre-wrap;
 }
@@ -1099,7 +1201,15 @@ export default {
   letter-spacing: 0.08em;
 }
 
-.secret-toggle-link {
+.secret-inline {
+  min-width: 0;
+}
+
+.secret-inline .secret-value {
+  overflow-wrap: anywhere;
+}
+
+.secret-action-link {
   margin-left: 8px;
   vertical-align: baseline;
   font-size: 12px;
@@ -1179,7 +1289,8 @@ export default {
 }
 
 .keychain-detail-secret,
-.keychain-detail-note {
+.keychain-detail-note,
+.keychain-detail-wide {
   grid-column: 1 / -1;
 }
 
@@ -1221,6 +1332,7 @@ export default {
 
   .keychain-toolbar-left :deep(.el-button),
   .keychain-filter-box,
+  .keychain-kind-filter-box,
   .keychain-search {
     width: 100%;
   }
