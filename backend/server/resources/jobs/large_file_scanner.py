@@ -9,7 +9,8 @@ JOB_METADATA = {
     "params": [
         {
             "name": "scan_path",
-            "type": "string",
+            "type": "remote_folder",
+            # "type": "string",
             "required": False,
             "default": ".",
             "description": "Directory path to scan recursively. Defaults to current directory."

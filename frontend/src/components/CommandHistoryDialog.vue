@@ -888,51 +888,100 @@ Star,
     },
 
     async clearCommandHistory() {
-      if (!this.selectedId) {
-        ElMessage.warning('Please select a device')
-        return
+  if (!this.selectedId) {
+    ElMessage.warning('Please select a device')
+    return
+  }
+
+  const machineId = this.getSelectedHistoryMachineId()
+
+  if (!machineId) {
+    ElMessage.warning('Current device identity is unavailable')
+    return
+  }
+
+  try {
+    await ElMessageBox.confirm(
+      'Clear command history for the current device? Pinned commands will be kept.',
+      'Clear History',
+      {
+        type: 'warning',
+        confirmButtonText: 'Clear',
+        cancelButtonText: 'Cancel',
       }
+    )
 
-      const machineId = this.getSelectedHistoryMachineId()
+    const res = await fetch(`/api/machines/${encodeURIComponent(machineId)}/command-history`, {
+      method: 'DELETE',
+    })
 
-      if (!machineId) {
-        ElMessage.warning('Current device identity is unavailable')
-        return
-      }
+    const json = await res.json()
 
-      try {
-        await ElMessageBox.confirm(
-          'Clear command history for the current device?',
-          'Clear History',
-          {
-            type: 'warning',
-            confirmButtonText: 'Clear',
-            cancelButtonText: 'Cancel',
-          }
-        )
+    if (!res.ok || json.code !== 0) {
+      throw new Error(json.message || 'Failed to clear command history')
+    }
 
-        const res = await fetch(`/api/machines/${encodeURIComponent(machineId)}/command-history`, {
-          method: 'DELETE',
-        })
+    this.commandHistorySearchText = ''
+    this.commandExecutionDetailDialogVisible = false
+    this.selectedCommandExecutionEntryId = ''
 
-        const json = await res.json()
+    // pinned history 单独存储，clear 后重新拉取 quick history，避免 pinned 临时消失后刷新又冒出来。
+    await this.reloadCommandHistoryDialogData({ silent: true })
+    await this.reloadCandidates({ reset: true })
 
-        if (!res.ok || json.code !== 0) {
-          throw new Error(json.message || 'Failed to clear command history')
-        }
+    ElMessage.success('Command history cleared')
+  } catch (e) {
+    if (e === 'cancel' || e === 'close' || e?.toString?.().includes('cancel')) return
+    ElMessage.error(e.message || 'Failed to clear command history')
+  }
+},
 
-        this.commandHistoryItems = []
-        this.commandExecutionItems = []
-        this.commandHistorySearchText = ''
-        this.commandExecutionDetailDialogVisible = false
-        this.selectedCommandExecutionEntryId = ''
-        await this.reloadCandidates({ reset: true })
-        ElMessage.success('Command history cleared')
-      } catch (e) {
-        if (e === 'cancel' || e === 'close' || e?.toString?.().includes('cancel')) return
-        ElMessage.error(e.message || 'Failed to clear command history')
-      }
-    },
+    // async clearCommandHistory() {
+    //   if (!this.selectedId) {
+    //     ElMessage.warning('Please select a device')
+    //     return
+    //   }
+    //
+    //   const machineId = this.getSelectedHistoryMachineId()
+    //
+    //   if (!machineId) {
+    //     ElMessage.warning('Current device identity is unavailable')
+    //     return
+    //   }
+    //
+    //   try {
+    //     await ElMessageBox.confirm(
+    //       'Clear command history for the current device?',
+    //       'Clear History',
+    //       {
+    //         type: 'warning',
+    //         confirmButtonText: 'Clear',
+    //         cancelButtonText: 'Cancel',
+    //       }
+    //     )
+    //
+    //     const res = await fetch(`/api/machines/${encodeURIComponent(machineId)}/command-history`, {
+    //       method: 'DELETE',
+    //     })
+    //
+    //     const json = await res.json()
+    //
+    //     if (!res.ok || json.code !== 0) {
+    //       throw new Error(json.message || 'Failed to clear command history')
+    //     }
+    //
+    //     this.commandHistoryItems = []
+    //     this.commandExecutionItems = []
+    //     this.commandHistorySearchText = ''
+    //     this.commandExecutionDetailDialogVisible = false
+    //     this.selectedCommandExecutionEntryId = ''
+    //     await this.reloadCandidates({ reset: true })
+    //     ElMessage.success('Command history cleared')
+    //   } catch (e) {
+    //     if (e === 'cancel' || e === 'close' || e?.toString?.().includes('cancel')) return
+    //     ElMessage.error(e.message || 'Failed to clear command history')
+    //   }
+    // },
 
     buildCommandExecutionStatusTagType(status) {
       const value = String(status || '').toLowerCase()
