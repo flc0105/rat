@@ -815,10 +815,11 @@ body.device-touch-callout-guard * {
   z-index: 5000;
   min-width: 176px;
   padding: 4px;
-  border-radius: 8px;
-  border: 1px solid rgba(15, 23, 42, 0.12);
+  border-radius: 6px;
+  //border: 1px solid rgba(15, 23, 42, 0.12);
   background: #fff;
-  box-shadow: 0 10px 28px rgba(15, 23, 42, 0.18);
+  //box-shadow: 0 10px 28px rgba(15, 23, 42, 0.18);
+  box-shadow: 0 2px 4px rgba(15, 23, 42, 0.18);
   user-select: none;
   -webkit-user-select: none;
   -moz-user-select: none;

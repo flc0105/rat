@@ -47,7 +47,7 @@
             <el-button
               class="artifact-toolbar-btn"
               size="small"
-              type="primary"
+
               plain
               @click="createServerFilePrompt"
             >
@@ -57,7 +57,7 @@
             <el-button
               class="artifact-toolbar-btn"
               size="small"
-              type="primary"
+
               plain
               :loading="serverFileUploading"
               @click="triggerServerFileUpload"
