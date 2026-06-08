@@ -6,17 +6,18 @@
       <el-dropdown
         trigger="click"
         placement="bottom-end"
-        popper-class="device-toolbar-menu-popper"
         @command="handleToolbarCommand"
       >
-        <button
-          type="button"
+        <el-button
           class="device-toolbar-more-btn"
+          text
+          circle
           title="Device actions"
-          @click.stop
+          aria-label="Device actions"
+          @click="closeDeviceContextMenu"
         >
-          ⋮
-        </button>
+          <span class="device-toolbar-more-icon">⋮</span>
+        </el-button>
 
         <template #dropdown>
           <el-dropdown-menu>
@@ -106,7 +107,7 @@
 
         <button
           type="button"
-          class="device-context-menu-item danger"
+          class="device-context-menu-item"
           :class="{ positive: contextMenuItem && contextMenuItem.device_hidden_by_client }"
           @click="triggerDeviceContextCommand('toggle-client-hidden')"
         >
@@ -115,7 +116,7 @@
 
         <button
           type="button"
-          class="device-context-menu-item danger"
+          class="device-context-menu-item"
           :class="{ positive: contextMenuItem && contextMenuItem.device_hidden_by_machine }"
           :disabled="!contextMenuItem || !contextMenuItem.machine_id"
           @click="triggerDeviceContextCommand('toggle-machine-hidden')"
@@ -127,7 +128,7 @@
 
         <button
           type="button"
-          class="device-context-menu-item warning"
+          class="device-context-menu-item"
           :disabled="!canDisconnectContextConnection"
           @click="triggerDeviceContextCommand('disconnect')"
         >
@@ -136,7 +137,7 @@
 
         <button
           type="button"
-          class="device-context-menu-item danger strong-danger"
+          class="device-context-menu-item"
           :disabled="!canRemoveContextConnection"
           @click="triggerDeviceContextCommand('remove-connection')"
         >
@@ -657,24 +658,17 @@ async removeConnectionPermanently(item) {
 }
 
 .device-toolbar-more-btn {
-  width: 24px;
-  height: 24px;
-  padding: 0;
-  border: 0;
-  border-radius: 6px;
-  background: transparent;
   color: var(--muted);
-  font-size: 17px;
-  line-height: 1;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
 }
 
-.device-toolbar-more-btn:hover {
-  background: rgba(15, 23, 42, 0.06);
+.device-toolbar-more-btn:hover,
+.device-toolbar-more-btn:focus {
   color: var(--text);
+}
+
+.device-toolbar-more-icon {
+  font-size: 17px;
+  line-height: 1;
 }
 
 .sidebar-body {
@@ -814,105 +808,59 @@ body.device-touch-callout-guard * {
   position: fixed;
   z-index: 5000;
   min-width: 176px;
-  padding: 4px;
-  border-radius: 6px;
-  //border: 1px solid rgba(15, 23, 42, 0.12);
-  background: #fff;
-  //box-shadow: 0 10px 28px rgba(15, 23, 42, 0.18);
-  box-shadow: 0 2px 4px rgba(15, 23, 42, 0.18);
+  padding: 5px 0;
+  margin: 0;
+  border: 1px solid var(--el-border-color-light);
+  border-radius: var(--el-border-radius-base);
+  background-color: var(--el-bg-color-overlay);
+  box-shadow: var(--el-box-shadow-light);
+  box-sizing: border-box;
   user-select: none;
   -webkit-user-select: none;
-  -moz-user-select: none;
-  -ms-user-select: none;
   -webkit-touch-callout: none;
 }
 
 .device-context-menu-item {
-  -webkit-touch-callout: none;
-  display: block;
+  display: flex;
+  align-items: center;
   width: 100%;
-  height: 28px;
-  padding: 0 10px;
+  min-height: 34px;
+  padding: 5px 16px;
+  margin: 0;
   border: 0;
-  border-radius: 6px;
   background: transparent;
-  color: #111827;
-  font-size: 12px;
-  line-height: 28px;
+  color: var(--el-text-color-regular);
+  font-size: var(--el-font-size-base);
+  line-height: 22px;
   text-align: left;
   white-space: nowrap;
   cursor: pointer;
+  outline: none;
+  box-sizing: border-box;
+  -webkit-touch-callout: none;
 }
 
-.device-context-menu-item:hover {
-  background: #f1f5f9;
-}
-
-.device-context-menu-item.danger:hover {
-  background: #fff1f2;
-  color: #be123c;
-}
-
-.device-context-menu-item.warning:hover {
-  background: #fffbeb;
-  color: #b45309;
-}
-
-.device-context-menu-item.strong-danger {
-  color: #be123c;
-}
-
-.device-context-menu-item.strong-danger:hover {
-  background: #ffe4e6;
-  color: #9f1239;
-}
-
-.device-context-menu-item.positive:hover {
-  background: #ecfdf5;
-  color: #047857;
+.device-context-menu-item:hover,
+.device-context-menu-item:focus {
+  background-color: var(--el-fill-color-light);
+  color: var(--el-text-color-regular);
 }
 
 .device-context-menu-item:disabled {
-  color: #9ca3af;
+  background-color: transparent;
+  color: var(--el-text-color-disabled);
   cursor: not-allowed;
 }
 
-.device-context-menu-item:disabled:hover {
-  background: transparent;
-  color: #9ca3af;
+.device-context-menu-item:disabled:hover,
+.device-context-menu-item:disabled:focus {
+  background-color: transparent;
+  color: var(--el-text-color-disabled);
 }
 
 .device-context-menu-separator {
   height: 1px;
-  margin: 4px 2px;
-  background: rgba(15, 23, 42, 0.08);
-}
-
-.device-toolbar-menu-popper {
-  min-width: 156px !important;
-  border-radius: 8px !important;
-  border: 1px solid rgba(15, 23, 42, 0.12) !important;
-  box-shadow: 0 10px 26px rgba(15, 23, 42, 0.16) !important;
-  overflow: hidden !important;
-}
-
-.device-toolbar-menu-popper .el-dropdown-menu {
-  padding: 4px !important;
-}
-
-.device-toolbar-menu-popper .el-dropdown-menu__item {
-  height: 28px !important;
-  min-height: 28px !important;
-  line-height: 28px !important;
-  padding: 0 10px !important;
-  border-radius: 6px !important;
-  font-size: 12px !important;
-  color: #111827 !important;
-}
-
-.device-toolbar-menu-popper .el-dropdown-menu__item:not(.is-disabled):hover,
-.device-toolbar-menu-popper .el-dropdown-menu__item:not(.is-disabled):focus {
-  background: #f1f5f9 !important;
-  color: #111827 !important;
+  margin: 6px 0;
+  background-color: var(--el-border-color-light);
 }
 </style>
