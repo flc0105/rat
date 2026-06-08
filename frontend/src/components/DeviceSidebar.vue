@@ -126,23 +126,23 @@
 
         <div class="device-context-menu-separator"></div>
 
-        <button
-          type="button"
-          class="device-context-menu-item"
-          :disabled="!canDisconnectContextConnection"
-          @click="triggerDeviceContextCommand('disconnect')"
-        >
-          Disconnect
-        </button>
+<button
+  type="button"
+  class="device-context-menu-item is-danger"
+  :disabled="!canDisconnectContextConnection"
+  @click="triggerDeviceContextCommand('disconnect')"
+>
+  Disconnect
+</button>
 
-        <button
-          type="button"
-          class="device-context-menu-item"
-          :disabled="!canRemoveContextConnection"
-          @click="triggerDeviceContextCommand('remove-connection')"
-        >
-          Remove connection
-        </button>
+<button
+  type="button"
+  class="device-context-menu-item is-danger"
+  :disabled="!canRemoveContextConnection"
+  @click="triggerDeviceContextCommand('remove-connection')"
+>
+  Remove connection
+</button>
 
       </div>
     </Teleport>
@@ -862,5 +862,15 @@ body.device-touch-callout-guard * {
   height: 1px;
   margin: 6px 0;
   background-color: var(--el-border-color-light);
+}
+
+.device-context-menu-item.is-danger {
+  color: #be123c;
+}
+
+.device-context-menu-item.is-danger:hover,
+.device-context-menu-item.is-danger:focus {
+  background-color: #fff1f2;
+  color: #be123c;
 }
 </style>
