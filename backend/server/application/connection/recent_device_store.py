@@ -28,6 +28,9 @@ class RecentDeviceStore:
         value = str(machine_id or '').strip()
         return value.lower()
 
+    def _normalize_client_id_key(self, client_id: str) -> str:
+        return str(client_id or '').strip()
+
     def _now_iso(self) -> str:
         return datetime.now().isoformat()
 
@@ -62,6 +65,72 @@ class RecentDeviceStore:
                     os.remove(temp_path)
             except Exception:
                 logger.warning('RecentDeviceStore temp cleanup failed: %s', temp_path, exc_info=True)
+
+    def _normalize_bool_map(self, value) -> dict:
+        if isinstance(value, dict):
+            return {
+                self._normalize_client_id_key(key): True
+                for key, enabled in value.items()
+                if self._normalize_client_id_key(key) and bool(enabled)
+            }
+
+        if isinstance(value, list):
+            return {
+                self._normalize_client_id_key(item): True
+                for item in value
+                if self._normalize_client_id_key(item)
+            }
+
+        return {}
+
+    def _find_key_by_client_id_unlocked(self, current: dict, client_id: str) -> str:
+        target_client_key = self._normalize_client_id_key(client_id)
+        if not target_client_key:
+            return ''
+
+        for key, record in current.items():
+            if not isinstance(record, dict):
+                continue
+
+            if self._normalize_client_id_key(record.get('client_id')) == target_client_key:
+                return key
+
+            hidden_client_ids = self._normalize_bool_map(record.get('hidden_client_ids'))
+            if target_client_key in hidden_client_ids:
+                return key
+
+        return ''
+
+    def _get_record_key_unlocked(self, current: dict, client_id: str = '', machine_id: str = '') -> str:
+        machine_key = self._normalize_machine_id_key(machine_id)
+        if machine_key:
+            return machine_key
+
+        return self._find_key_by_client_id_unlocked(current, client_id)
+
+    def _build_device_view_prefs(self, record: dict, client_id: str = '') -> dict:
+        if not isinstance(record, dict):
+            return {
+                'machine_alias': '',
+                'device_alias': '',
+                'device_hidden': False,
+                'device_hidden_by_client': False,
+                'device_hidden_by_machine': False,
+            }
+
+        target_client_key = self._normalize_client_id_key(client_id or record.get('client_id'))
+        hidden_client_ids = self._normalize_bool_map(record.get('hidden_client_ids'))
+        hidden_by_client = bool(target_client_key and hidden_client_ids.get(target_client_key))
+        hidden_by_machine = bool(record.get('device_hidden_by_machine'))
+        machine_alias = str(record.get('machine_alias') or '').strip()
+
+        return {
+            'machine_alias': machine_alias,
+            'device_alias': machine_alias,
+            'device_hidden': hidden_by_client or hidden_by_machine,
+            'device_hidden_by_client': hidden_by_client,
+            'device_hidden_by_machine': hidden_by_machine,
+        }
 
     def upsert_from_connection(self, connection_payload: dict):
         if not isinstance(connection_payload, dict):
@@ -127,6 +196,10 @@ class RecentDeviceStore:
                 'last_rtt_ms': connection_payload.get('last_rtt_ms'),
                 'stale_after_seconds': connection_payload.get('stale_after_seconds') or previous.get('stale_after_seconds') or 45,
                 'connection_state': str(connection_payload.get('connection_state') or previous.get('connection_state') or 'offline'),
+                'machine_alias': str(previous.get('machine_alias') or '').strip(),
+                'device_hidden_by_machine': bool(previous.get('device_hidden_by_machine')),
+                'hidden_client_ids': self._normalize_bool_map(previous.get('hidden_client_ids')),
+                'device_view_prefs_updated_at': previous.get('device_view_prefs_updated_at') or '',
                 'recent_cached': True,
                 'recent_updated_at': self._now_iso(),
             }
@@ -191,6 +264,99 @@ class RecentDeviceStore:
             'removed_count': len(removed_keys),
             'removed_keys': removed_keys,
         }
+
+    def get_device_view_prefs(self, client_id: str = '', machine_id: str = '') -> dict:
+        target_client_id = self._normalize_client_id_key(client_id)
+
+        with self._lock:
+            current = self._read_all_unlocked()
+            key = self._get_record_key_unlocked(
+                current,
+                client_id=target_client_id,
+                machine_id=machine_id,
+            )
+            record = current.get(key) if key else None
+
+        return self._build_device_view_prefs(record, client_id=target_client_id)
+
+    def update_device_view_prefs(self, client_id: str = '', machine_id: str = '', patch: dict = None) -> dict:
+        patch = patch or {}
+        target_client_id = self._normalize_client_id_key(client_id)
+        target_machine_id = str(machine_id or '').strip()
+        target_machine_key = self._normalize_machine_id_key(target_machine_id)
+
+        has_machine_alias = 'machine_alias' in patch
+        has_client_hidden = 'client_hidden' in patch
+        has_machine_hidden = 'machine_hidden' in patch
+
+        if not (has_machine_alias or has_client_hidden or has_machine_hidden):
+            return self.get_device_view_prefs(
+                client_id=target_client_id,
+                machine_id=target_machine_id,
+            )
+
+        if has_client_hidden and not target_client_id:
+            raise ValueError('Invalid client id')
+
+        if (has_machine_alias or has_machine_hidden) and not target_machine_key:
+            raise ValueError('Invalid machine id')
+
+        with self._lock:
+            current = self._read_all_unlocked()
+            record_key = self._get_record_key_unlocked(
+                current,
+                client_id=target_client_id,
+                machine_id=target_machine_id,
+            )
+
+            if not record_key:
+                raise ValueError('Invalid device identity')
+
+            record = current.get(record_key)
+            if not isinstance(record, dict):
+                record = {
+                    'recent_device_key': record_key,
+                    'machine_id': target_machine_id,
+                    'client_id': target_client_id,
+                    'recent_cached': True,
+                }
+
+            if target_machine_id:
+                record['machine_id'] = target_machine_id
+            if target_client_id and not str(record.get('client_id') or '').strip():
+                record['client_id'] = target_client_id
+
+            if has_machine_alias:
+                machine_alias = str(patch.get('machine_alias') or '').strip()
+                if machine_alias:
+                    record['machine_alias'] = machine_alias
+                else:
+                    record.pop('machine_alias', None)
+
+            if has_machine_hidden:
+                record['device_hidden_by_machine'] = bool(patch.get('machine_hidden'))
+
+            if has_client_hidden:
+                hidden_client_ids = self._normalize_bool_map(record.get('hidden_client_ids'))
+                if bool(patch.get('client_hidden')):
+                    hidden_client_ids[target_client_id] = True
+                else:
+                    hidden_client_ids.pop(target_client_id, None)
+
+                if hidden_client_ids:
+                    record['hidden_client_ids'] = hidden_client_ids
+                else:
+                    record.pop('hidden_client_ids', None)
+
+            record['recent_device_key'] = record_key
+            record['recent_cached'] = True
+            record['device_view_prefs_updated_at'] = self._now_iso()
+            current[record_key] = record
+            self._write_all_unlocked(current)
+
+            prefs = self._build_device_view_prefs(record, client_id=target_client_id)
+
+        return prefs
 
     def list_recent_devices(self) -> list[dict]:
         with self._lock:

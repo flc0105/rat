@@ -17,6 +17,15 @@ export function removeConnection(clientId, payload = {}) {
   })
 }
 
+
+export function updateConnectionDeviceViewPrefs(payload = {}) {
+  return apiData(
+    '/api/connections/device-view-prefs',
+    jsonRequestOptions('PATCH', payload),
+    {},
+  )
+}
+
 export function sendCommand(clientId, command, headers = {}) {
   return apiData(
     `/api/connections/${encodeURIComponent(clientId)}/command`,

@@ -20,6 +20,29 @@ def create_connections_blueprint(server_instance):
 
         return responder.json_endpoint(_execute, default_error_status=500)
 
+    @blueprint.patch('/api/connections/device-view-prefs')
+    def update_connection_device_view_prefs():
+        def _execute():
+            body = request.get_json(silent=True) or {}
+            client_id = str(body.get('client_id') or '').strip()
+            machine_id = str(body.get('machine_id') or '').strip()
+            patch = {}
+
+            if 'machine_alias' in body:
+                patch['machine_alias'] = body.get('machine_alias')
+            if 'client_hidden' in body:
+                patch['client_hidden'] = bool(body.get('client_hidden'))
+            if 'machine_hidden' in body:
+                patch['machine_hidden'] = bool(body.get('machine_hidden'))
+
+            return connection_api.update_connection_device_view_prefs(
+                client_id=client_id,
+                machine_id=machine_id,
+                patch=patch,
+            )
+
+        return responder.json_endpoint(_execute, default_error_status=500)
+
     @blueprint.delete('/api/connections/<client_id>')
     def remove_connection(client_id):
         def _execute():

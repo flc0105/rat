@@ -1,7 +1,5 @@
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { listConnections } from '../api/connectionsApi.js'
-
-const DEVICE_VIEW_PREFS_STORAGE_KEY = 'rch.deviceViewPrefs.v1'
+import { listConnections, updateConnectionDeviceViewPrefs } from '../api/connectionsApi.js'
 
 function emptyDeviceViewPrefs() {
     return {
@@ -11,34 +9,8 @@ function emptyDeviceViewPrefs() {
     }
 }
 
-function readDeviceViewPrefsFromStorage() {
-    if (typeof window === 'undefined' || !window.localStorage) {
-        return emptyDeviceViewPrefs()
-    }
-
-    try {
-        const raw = window.localStorage.getItem(DEVICE_VIEW_PREFS_STORAGE_KEY)
-        if (!raw) return emptyDeviceViewPrefs()
-
-        const parsed = JSON.parse(raw)
-        return {
-            machineAliases: parsed && typeof parsed.machineAliases === 'object' && parsed.machineAliases ? parsed.machineAliases : {},
-            hiddenClientIds: parsed && typeof parsed.hiddenClientIds === 'object' && parsed.hiddenClientIds ? parsed.hiddenClientIds : {},
-            hiddenMachineIds: parsed && typeof parsed.hiddenMachineIds === 'object' && parsed.hiddenMachineIds ? parsed.hiddenMachineIds : {},
-        }
-    } catch (_e) {
-        return emptyDeviceViewPrefs()
-    }
-}
-
-function writeDeviceViewPrefsToStorage(prefs) {
-    if (typeof window === 'undefined' || !window.localStorage) return
-
-    try {
-        window.localStorage.setItem(DEVICE_VIEW_PREFS_STORAGE_KEY, JSON.stringify(prefs || emptyDeviceViewPrefs()))
-    } catch (_e) {
-        // localStorage may be disabled in some environments; device view prefs are non-critical.
-    }
+function hasOwn(obj, key) {
+    return Object.prototype.hasOwnProperty.call(obj || {}, key)
 }
 
 export default {
@@ -47,7 +19,7 @@ export default {
             connections: [],
             selectedId: '',
             showHiddenDevices: false,
-            deviceViewPrefs: readDeviceViewPrefsFromStorage(),
+            deviceViewPrefs: emptyDeviceViewPrefs(),
             locallyRemovedConnections: {
                 clientIds: {},
                 offlineMachineIds: {},
@@ -160,6 +132,57 @@ export default {
             return String(item?.hostname || '').trim() || 'Unknown Host'
         },
 
+        applyDeviceViewPrefsFromServer(item) {
+            if (!item) return
+
+            const clientId = this.getConnectionClientId(item)
+            const machineId = this.getConnectionMachineId(item)
+            const patch = {}
+
+            if (machineId && (hasOwn(item, 'machine_alias') || hasOwn(item, 'device_alias'))) {
+                const machineAliases = { ...(this.deviceViewPrefs.machineAliases || {}) }
+                const alias = String(hasOwn(item, 'machine_alias') ? item.machine_alias : item.device_alias || '').trim()
+
+                if (alias) {
+                    machineAliases[machineId] = alias
+                } else {
+                    delete machineAliases[machineId]
+                }
+
+                patch.machineAliases = machineAliases
+            }
+
+            if (clientId && hasOwn(item, 'device_hidden_by_client')) {
+                const hiddenClientIds = { ...(patch.hiddenClientIds || this.deviceViewPrefs.hiddenClientIds || {}) }
+                if (item.device_hidden_by_client) {
+                    hiddenClientIds[clientId] = true
+                } else {
+                    delete hiddenClientIds[clientId]
+                }
+                patch.hiddenClientIds = hiddenClientIds
+            }
+
+            if (machineId && hasOwn(item, 'device_hidden_by_machine')) {
+                const hiddenMachineIds = { ...(patch.hiddenMachineIds || this.deviceViewPrefs.hiddenMachineIds || {}) }
+                if (item.device_hidden_by_machine) {
+                    hiddenMachineIds[machineId] = true
+                } else {
+                    delete hiddenMachineIds[machineId]
+                }
+                patch.hiddenMachineIds = hiddenMachineIds
+            }
+
+            if (Object.keys(patch).length) {
+                this.patchDeviceViewPrefs(patch)
+            }
+        },
+
+        mergeDeviceViewPrefsFromConnections(items) {
+            ;(Array.isArray(items) ? items : []).forEach(item => {
+                this.applyDeviceViewPrefsFromServer(item)
+            })
+        },
+
         decorateConnectionForDeviceView(item) {
             const alias = this.getMachineAlias(item?.machine_id)
             const hiddenByClient = this.isClientIdHidden(item?.client_id)
@@ -168,15 +191,12 @@ export default {
             return {
                 ...item,
                 device_alias: alias,
+                machine_alias: alias,
                 device_display_name: alias || String(item?.hostname || '').trim() || 'Unknown Host',
                 device_hidden: hiddenByClient || hiddenByMachine,
                 device_hidden_by_client: hiddenByClient,
                 device_hidden_by_machine: hiddenByMachine,
             }
-        },
-
-        persistDeviceViewPrefs() {
-            writeDeviceViewPrefsToStorage(this.deviceViewPrefs)
         },
 
         patchDeviceViewPrefs(patch = {}) {
@@ -185,10 +205,9 @@ export default {
                 ...this.deviceViewPrefs,
                 ...patch,
             }
-            this.persistDeviceViewPrefs()
         },
 
-        setClientHidden(clientId, hidden) {
+        applyClientHiddenLocal(clientId, hidden) {
             const id = this.normalizeClientId(clientId)
             if (!id) return
 
@@ -202,7 +221,7 @@ export default {
             this.patchDeviceViewPrefs({ hiddenClientIds })
         },
 
-        setMachineHidden(machineId, hidden) {
+        applyMachineHiddenLocal(machineId, hidden) {
             const id = this.normalizeMachineId(machineId)
             if (!id) return
 
@@ -216,7 +235,7 @@ export default {
             this.patchDeviceViewPrefs({ hiddenMachineIds })
         },
 
-        setMachineAlias(machineId, alias) {
+        applyMachineAliasLocal(machineId, alias) {
             const id = this.normalizeMachineId(machineId)
             if (!id) return
 
@@ -230,6 +249,78 @@ export default {
             }
 
             this.patchDeviceViewPrefs({ machineAliases })
+        },
+
+        applyServerDeviceViewPrefsResponse(clientId, machineId, prefs = {}) {
+            this.applyDeviceViewPrefsFromServer({
+                client_id: clientId,
+                machine_id: machineId,
+                ...prefs,
+            })
+        },
+
+        async setClientHidden(clientId, machineId, hidden) {
+            const id = this.normalizeClientId(clientId)
+            const machine = this.normalizeMachineId(machineId)
+            if (!id) return
+
+            const previousPrefs = { ...this.deviceViewPrefs, hiddenClientIds: { ...(this.deviceViewPrefs.hiddenClientIds || {}) } }
+            this.applyClientHiddenLocal(id, hidden)
+
+            try {
+                const prefs = await updateConnectionDeviceViewPrefs({
+                    client_id: id,
+                    machine_id: machine,
+                    client_hidden: !!hidden,
+                })
+                this.applyServerDeviceViewPrefsResponse(id, machine, prefs)
+            } catch (e) {
+                this.deviceViewPrefs = previousPrefs
+                throw e
+            }
+        },
+
+        async setMachineHidden(machineId, clientId, hidden) {
+            const id = this.normalizeMachineId(machineId)
+            const client = this.normalizeClientId(clientId)
+            if (!id) return
+
+            const previousPrefs = { ...this.deviceViewPrefs, hiddenMachineIds: { ...(this.deviceViewPrefs.hiddenMachineIds || {}) } }
+            this.applyMachineHiddenLocal(id, hidden)
+
+            try {
+                const prefs = await updateConnectionDeviceViewPrefs({
+                    client_id: client,
+                    machine_id: id,
+                    machine_hidden: !!hidden,
+                })
+                this.applyServerDeviceViewPrefsResponse(client, id, prefs)
+            } catch (e) {
+                this.deviceViewPrefs = previousPrefs
+                throw e
+            }
+        },
+
+        async setMachineAlias(machineId, clientId, alias) {
+            const id = this.normalizeMachineId(machineId)
+            const client = this.normalizeClientId(clientId)
+            if (!id) return
+
+            const previousPrefs = { ...this.deviceViewPrefs, machineAliases: { ...(this.deviceViewPrefs.machineAliases || {}) } }
+            const value = String(alias || '').trim()
+            this.applyMachineAliasLocal(id, value)
+
+            try {
+                const prefs = await updateConnectionDeviceViewPrefs({
+                    client_id: client,
+                    machine_id: id,
+                    machine_alias: value,
+                })
+                this.applyServerDeviceViewPrefsResponse(client, id, prefs)
+            } catch (e) {
+                this.deviceViewPrefs = previousPrefs
+                throw e
+            }
         },
 
         toggleShowHiddenDevices() {
@@ -270,14 +361,15 @@ export default {
                     },
                 )
 
-                this.setMachineAlias(machineId, value)
+                await this.setMachineAlias(machineId, item?.client_id, value)
                 ElMessage.success(String(value || '').trim() ? 'Alias saved' : 'Alias cleared')
             } catch (e) {
                 if (e === 'cancel' || e === 'close' || e?.toString?.().includes('cancel')) return
+                ElMessage.error(e.message || 'Failed to save alias')
             }
         },
 
-        toggleClientHiddenFromSidebar(item) {
+        async toggleClientHiddenFromSidebar(item) {
             const clientId = this.getConnectionClientId(item)
             if (!clientId) {
                 ElMessage.warning('Invalid client id')
@@ -285,12 +377,16 @@ export default {
             }
 
             const nextHidden = !this.isClientIdHidden(clientId)
-            this.setClientHidden(clientId, nextHidden)
-            this.ensureSelectedConnectionVisible()
-            ElMessage.success(nextHidden ? 'Connection hidden' : 'Connection unhidden')
+            try {
+                await this.setClientHidden(clientId, item?.machine_id, nextHidden)
+                this.ensureSelectedConnectionVisible()
+                ElMessage.success(nextHidden ? 'Connection hidden' : 'Connection unhidden')
+            } catch (e) {
+                ElMessage.error(e.message || 'Failed to update connection hidden status')
+            }
         },
 
-        toggleMachineHiddenFromSidebar(item) {
+        async toggleMachineHiddenFromSidebar(item) {
             const machineId = this.getConnectionMachineId(item)
             if (!machineId) {
                 ElMessage.warning('Invalid machine id')
@@ -298,9 +394,13 @@ export default {
             }
 
             const nextHidden = !this.isMachineIdHidden(machineId)
-            this.setMachineHidden(machineId, nextHidden)
-            this.ensureSelectedConnectionVisible()
-            ElMessage.success(nextHidden ? 'Machine hidden' : 'Machine unhidden')
+            try {
+                await this.setMachineHidden(machineId, item?.client_id, nextHidden)
+                this.ensureSelectedConnectionVisible()
+                ElMessage.success(nextHidden ? 'Machine hidden' : 'Machine unhidden')
+            } catch (e) {
+                ElMessage.error(e.message || 'Failed to update machine hidden status')
+            }
         },
 
         dedupeConnections(items) {
@@ -359,6 +459,7 @@ export default {
         async loadConnections() {
             try {
                 const fetchedConnections = this.filterLocallyRemovedConnections(await listConnections())
+                this.mergeDeviceViewPrefsFromConnections(fetchedConnections)
 
                 const existingMap = new Map()
                 ;(this.connections || []).forEach(item => {
@@ -444,6 +545,8 @@ export default {
 
         upsertConnection(conn) {
             if (!conn || !conn.client_id) return
+
+            this.applyDeviceViewPrefsFromServer(conn)
 
             if (this.isConnectionLocallyRemoved(conn)) {
                 this.connections = this.filterLocallyRemovedConnections(this.connections)

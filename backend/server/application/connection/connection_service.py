@@ -54,6 +54,27 @@ class WebConnectionService:
     def _machine_key(self, machine_id: str) -> str:
         return str(machine_id or '').strip().lower()
 
+
+    def _decorate_connection_with_device_view_prefs(self, payload: dict) -> dict:
+        if not isinstance(payload, dict):
+            return payload
+
+        result = dict(payload)
+        if not self.recent_device_store:
+            result.setdefault('machine_alias', '')
+            result.setdefault('device_alias', '')
+            result.setdefault('device_hidden', False)
+            result.setdefault('device_hidden_by_client', False)
+            result.setdefault('device_hidden_by_machine', False)
+            return result
+
+        prefs = self.recent_device_store.get_device_view_prefs(
+            client_id=result.get('client_id') or '',
+            machine_id=result.get('machine_id') or '',
+        )
+        result.update(prefs)
+        return result
+
     # ------------------ payload ------------------ #
     def serialize_connection(self, session: ClientSession) -> dict:
         info = session.session_info
@@ -161,13 +182,14 @@ class WebConnectionService:
                 'local_watchdog_enabled': item.get('local_watchdog_enabled'),
                 'recent_cached': True,
             }
-            results.append(offline_item)
+            results.append(self._decorate_connection_with_device_view_prefs(offline_item))
 
         return results
 
     def get_connections_payload(self):
         active_connections = [self.serialize_connection(session) for session in self.server.connections.all()]
         self._sync_recent_online_connections(active_connections)
+        active_connections = [self._decorate_connection_with_device_view_prefs(item) for item in active_connections]
         recent_offline = self._build_recent_offline_entries(active_connections)
         return active_connections + recent_offline
 
@@ -238,6 +260,29 @@ class WebConnectionService:
             'recent_removed_keys': recent_result.get('removed_keys', []),
         }
 
+
+    def update_connection_device_view_prefs(self, client_id: str = '', machine_id: str = '', patch: dict = None) -> dict:
+        if not self.recent_device_store:
+            raise ValueError('Recent device store is unavailable')
+
+        prefs = self.recent_device_store.update_device_view_prefs(
+            client_id=client_id,
+            machine_id=machine_id,
+            patch=patch or {},
+        )
+
+        try:
+            self.event_bus.publish('connection_device_view_prefs_updated', {
+                'client_id': str(client_id or '').strip(),
+                'machine_id': str(machine_id or '').strip(),
+                'prefs': prefs,
+                'time': datetime.now().isoformat(),
+            })
+        except Exception:
+            pass
+
+        return prefs
+
     # ------------------ connection lifecycle ------------------ #
     def create_web_connection(self, transport: ClientTransport, addr, info: dict) -> ClientSession:
         session = ClientSession(transport, info)
@@ -285,14 +330,14 @@ class WebConnectionService:
     # ------------------ event publish ------------------ #
     def publish_connection_online(self, session: ClientSession):
         self.event_bus.publish('connection_online', {
-            'connection': self.serialize_connection(session),
+            'connection': self._decorate_connection_with_device_view_prefs(self.serialize_connection(session)),
             'time': datetime.now().isoformat()
         })
 
     def publish_connection_offline(self, session: ClientSession):
         self.event_bus.publish('connection_offline', {
             'client_id': session.session_info.client_id,
-            'connection': self.serialize_connection(session),
+            'connection': self._decorate_connection_with_device_view_prefs(self.serialize_connection(session)),
             'time': datetime.now().isoformat()
         })
 
@@ -302,7 +347,7 @@ class WebConnectionService:
             self.recent_device_store.upsert_from_connection(payload)
 
         self.event_bus.publish('connection_heartbeat', {
-            'connection': payload,
+            'connection': self._decorate_connection_with_device_view_prefs(payload),
             'time': datetime.now().isoformat()
         })
 

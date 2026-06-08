@@ -28,3 +28,11 @@ class WebConnectionApi:
 
     def remove_connection(self, client_id: str, machine_id: str = ''):
         return self.connection_service.remove_connection(client_id, machine_id=machine_id)
+
+
+    def update_connection_device_view_prefs(self, client_id: str = '', machine_id: str = '', patch: dict = None):
+        return self.connection_service.update_connection_device_view_prefs(
+            client_id=client_id,
+            machine_id=machine_id,
+            patch=patch or {},
+        )
