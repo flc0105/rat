@@ -408,8 +408,8 @@
           </template>
 
           <div
-            class="keychain-detail-item keychain-detail-secret"
-            :class="{ 'keychain-detail-wide': detailItem.kind === 'secret' }"
+            class="keychain-detail-item"
+            :class="{ 'keychain-detail-secret': detailItem.kind === 'secret' }"
           >
             <div class="keychain-detail-label">
               {{ detailItem.kind === 'secret' ? 'Value' : 'Password' }}
