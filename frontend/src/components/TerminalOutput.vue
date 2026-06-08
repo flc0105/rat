@@ -16,7 +16,10 @@
           v-for="block in terminalBlocks"
           :key="block.key"
           class="terminal-command-block"
-          :class="{ 'terminal-command-block-actionable': canUseTerminalBlockActions(block) }"
+          :class="{
+            'terminal-command-block-actionable': canUseTerminalBlockActions(block),
+            'terminal-command-block-collapsed': isTerminalBlockCollapsed(block),
+          }"
       >
         <div
             v-if="block.commandLine"
@@ -32,12 +35,12 @@
         </div>
 
         <template
-            v-for="entry in block.bodyLines"
+            v-for="entry in getVisibleTerminalBlockBodyLines(block)"
             :key="entry.index"
         >
           <template v-if="isCommandFinishedLine(entry.line)">
             <div
-                v-if="getTerminalTailActionItems(lines, entry.index).length > 0"
+                v-if="!isTerminalBlockCollapsed(block) && getTerminalTailActionItems(lines, entry.index).length > 0"
                 class="terminal-line"
                 :class="`line-${entry.line.kind || 'default'}`"
             >
@@ -78,6 +81,9 @@
 
                 <template #dropdown>
                   <el-dropdown-menu>
+                    <el-dropdown-item command="toggle-collapse">
+                      {{ isTerminalBlockCollapsed(block) ? 'Expand output' : 'Collapse output' }}
+                    </el-dropdown-item>
                     <el-dropdown-item
                         command="copy-command"
                         :disabled="isTerminalRemoteUploadBlock(block) || isTerminalScriptRunBlock(block)"
@@ -196,6 +202,7 @@ export default {
   data() {
     return {
       savingOutputBlockKeys: {},
+      collapsedTerminalBlockKeys: {},
     }
   },
 
@@ -640,6 +647,49 @@ export default {
       return String(block?.key || '')
     },
 
+    getTerminalBlockCollapseKey(block) {
+      const key = this.getTerminalBlockKey(block)
+      if (!key) return ''
+
+      return `${key}:${String(block?.endIndex ?? '')}:${this.getTerminalBlockCommandText(block)}`
+    },
+
+    isTerminalBlockCollapsed(block) {
+      const key = this.getTerminalBlockCollapseKey(block)
+      return !!(key && this.collapsedTerminalBlockKeys[key])
+    },
+
+    setTerminalBlockCollapsed(block, value) {
+      const key = this.getTerminalBlockCollapseKey(block)
+      if (!key) return
+
+      if (!value) {
+        const next = {...this.collapsedTerminalBlockKeys}
+        delete next[key]
+        this.collapsedTerminalBlockKeys = next
+        return
+      }
+
+      this.collapsedTerminalBlockKeys = {
+        ...this.collapsedTerminalBlockKeys,
+        [key]: true,
+      }
+    },
+
+    toggleTerminalBlockCollapsed(block) {
+      this.setTerminalBlockCollapsed(block, !this.isTerminalBlockCollapsed(block))
+    },
+
+    getVisibleTerminalBlockBodyLines(block) {
+      const bodyLines = Array.isArray(block?.bodyLines) ? block.bodyLines : []
+
+      if (!this.isTerminalBlockCollapsed(block)) {
+        return bodyLines
+      }
+
+      return bodyLines.filter(entry => this.isCommandFinishedLine(entry?.line))
+    },
+
     isSavingTerminalBlock(block) {
       const key = this.getTerminalBlockKey(block)
       return !!(key && this.savingOutputBlockKeys[key])
@@ -657,6 +707,11 @@ export default {
 
     handleTerminalBlockCommand(block, command) {
       const normalizedCommand = String(command || '').trim()
+
+      if (normalizedCommand === 'toggle-collapse') {
+        this.toggleTerminalBlockCollapsed(block)
+        return
+      }
 
       if (normalizedCommand === 'copy-command') {
         this.copyTerminalBlockCommand(block)
