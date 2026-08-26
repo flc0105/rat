@@ -38,6 +38,7 @@ class CommandHistoryStore:
         self.max_entries_per_host = COMMAND_HISTORY_MAX_ENTRIES_PER_HOST
         self._lock = threading.RLock()
         self.artifact_service = None
+        self.connection_history_store = None
 
         self._prepare_dirs()
         self.pinned_store = PinnedCommandStore(self.history_root_dir, self._now_text)

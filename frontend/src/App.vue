@@ -51,6 +51,7 @@
         @toggle-client-hidden="toggleClientHiddenFromSidebar"
         @toggle-machine-hidden="toggleMachineHiddenFromSidebar"
         @rename-machine="renameMachineFromSidebar"
+        @open-connection-history="openMachineConnectionHistory"
         @connection-removed="forgetConnectionFromDeviceView"
         @connection-remove-failed="restoreConnectionFromDeviceView"
       />
@@ -246,6 +247,10 @@
     @external-tools-maybe-changed="refreshExternalToolsIfOpen"
   />
 
+  <MachineConnectionHistoryDialog
+    ref="machineConnectionHistoryDialogRef"
+  />
+
   <CommandHistoryDialog
     ref="commandHistoryDialogRef"
     :selected-id="selectedId"
@@ -319,6 +324,7 @@ import ProcessDialogs from './components/ProcessDialogs.vue'
 import AgentBuilderDialog from './components/AgentBuilderDialog.vue'
 import AgentOutputsDialog from './components/AgentOutputsDialog.vue'
 import CommandHistoryDialog from './components/CommandHistoryDialog.vue'
+import MachineConnectionHistoryDialog from './components/MachineConnectionHistoryDialog.vue'
 import RemoteFilesDialog from './components/RemoteFilesDialog.vue'
 import ArtifactDialog from './components/ArtifactDialog.vue'
 import ExternalToolManagerDialog from './components/ExternalToolManagerDialog.vue'
@@ -347,6 +353,7 @@ export default {
     ArtifactDialog,
     RemoteFilesDialog,
     CommandHistoryDialog,
+    MachineConnectionHistoryDialog,
     AgentOutputsDialog,
     AgentBuilderDialog,
     ProcessDialogs,
@@ -564,6 +571,10 @@ export default {
 
     openRemoteJobEditor(scriptName) {
       return this.$refs.previewDialogRef?.openRemoteJobEditor(scriptName)
+    },
+
+    openMachineConnectionHistory(item) {
+      return this.$refs.machineConnectionHistoryDialogRef?.open(item)
     },
 
     openCommandHistoryDialog() {

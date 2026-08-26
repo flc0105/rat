@@ -50,3 +50,8 @@ export function getCommandHistory(machineId) {
   if (!machineId) return Promise.resolve([])
   return apiData(`/api/machines/${encodeURIComponent(machineId)}/command-history`, {}, [])
 }
+
+export function getMachineConnectionHistory(machineId) {
+  if (!machineId) return Promise.resolve({ sessions: [] })
+  return apiData(`/api/machines/${encodeURIComponent(machineId)}/connection-history`, {}, { sessions: [] })
+}

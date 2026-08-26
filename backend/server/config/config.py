@@ -40,6 +40,7 @@ BACKGROUND_MESSAGE_LOG_FILE = os.path.abspath(os.path.join('runtime', 'session_m
 
 # ------------------ history ------------------ #
 COMMAND_HISTORY_ROOT_DIR = os.path.abspath(os.path.join('runtime', 'command_history'))
+CONNECTION_HISTORY_ROOT_DIR = os.path.abspath(os.path.join('runtime', 'connection_history'))
 COMMAND_HISTORY_MAX_ENTRIES_PER_HOST = 300
 COMMAND_HISTORY_MAX_OUTPUT_RECORD_CHARS = 8 * 1024
 COMMAND_HISTORY_MAX_OUTPUT_SUMMARY_CHARS = 240

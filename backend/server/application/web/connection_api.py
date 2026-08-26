@@ -17,6 +17,9 @@ class WebConnectionApi:
     def serialize_connection(self, session):
         return self.connection_service.serialize_connection(session)
 
+    def get_machine_connection_history(self, machine_id: str):
+        return self.connection_service.get_machine_connection_history(machine_id)
+
     def create_web_connection(self, transport, addr, info: dict):
         return self.connection_service.create_web_connection(transport, addr, info)
 

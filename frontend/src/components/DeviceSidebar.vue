@@ -103,6 +103,15 @@
           Set alias
         </button>
 
+        <button
+          type="button"
+          class="device-context-menu-item"
+          :disabled="!contextMenuItem || !contextMenuItem.machine_id"
+          @click="triggerDeviceContextCommand('connection-history')"
+        >
+          Connection history
+        </button>
+
         <div class="device-context-menu-separator"></div>
 
         <button
@@ -189,6 +198,7 @@ export default {
     'toggle-client-hidden',
     'toggle-machine-hidden',
     'rename-machine',
+    'open-connection-history',
     'connection-removed',
     'connection-remove-failed',
   ],
@@ -434,6 +444,11 @@ async triggerDeviceContextCommand(command) {
 
   if (command === 'rename-machine') {
     this.$emit('rename-machine', item)
+    return
+  }
+
+  if (command === 'connection-history') {
+    this.$emit('open-connection-history', item)
     return
   }
 

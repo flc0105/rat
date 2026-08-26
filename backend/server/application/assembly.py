@@ -6,6 +6,7 @@ from server.application.artifact.artifact_service import WebArtifactService
 from server.application.artifact.remote_file_service import WebRemoteFileService
 from server.application.command.command_executor_factory import CommandExecutorFactory
 from server.application.completion.command_completion_service import ServerCommandCompletionService
+from server.application.connection.connection_history_store import ConnectionHistoryStore
 from server.application.connection.connection_service import WebConnectionService
 from server.application.connection.recent_device_store import RecentDeviceStore
 from server.application.execution.remote_execution_service import RemoteExecutionService
@@ -41,6 +42,7 @@ from server.config.config import (
     EXTERNAL_TOOL_META_PATH,
     EXTERNAL_TOOL_PACKAGE_PATH,
     EXTERNAL_TOOL_RUNTIME_ROOT_DIR,
+    CONNECTION_HISTORY_ROOT_DIR,
     RECENT_DEVICES_JSON_PATH,
     SCRIPT_JOBS_PATH,
     SCRIPT_PATH,
@@ -90,12 +92,15 @@ class ServerApplicationAssembly:
         )
 
         self.recent_device_store = RecentDeviceStore(RECENT_DEVICES_JSON_PATH)
+        self.connection_history_store = ConnectionHistoryStore(CONNECTION_HISTORY_ROOT_DIR)
+        self.server.command_history.connection_history_store = self.connection_history_store
 
         self.connection_service = WebConnectionService(
             server=self.server,
             event_bus=self.event_bus,
             artifact_service=self.artifact_service,
             recent_device_store=self.recent_device_store,
+            connection_history_store=self.connection_history_store,
             script_grant_service=self.script_grant_service,
         )
 

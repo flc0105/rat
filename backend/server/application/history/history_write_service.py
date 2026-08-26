@@ -24,6 +24,13 @@ class HistoryWriteService:
                 return item
         return None
 
+    def _sync_connection_history_command(self, entry: dict):
+        connection_history_store = getattr(self.store, 'connection_history_store', None)
+        if connection_history_store is None or not isinstance(entry, dict):
+            return
+
+        connection_history_store.record_command_snapshot(entry)
+
     def create_entry_for_connection(self, conn, command: str, source: str = 'cli'):
         if conn is None:
             return ''
@@ -41,6 +48,7 @@ class HistoryWriteService:
             entries.append(entry)
             entries = self.store._trim_entries(entries)
             self.store._write_entries(machine_id, entries)
+            self._sync_connection_history_command(entry)
             return entry['entry_id']
 
     def append_output_for_connection(self, conn, entry_id: str, status: int, text: str, eof: int = 0):
@@ -106,6 +114,7 @@ class HistoryWriteService:
             entry['file_count'] = len(files)
             entry['output_summary'] = self.store._build_output_summary(entry)
             self.store._write_entries(machine_id, entries)
+            self._sync_connection_history_command(entry)
 
     def update_entry_command_for_connection(self, conn, entry_id: str, command: str):
         if conn is None or not entry_id:
@@ -135,6 +144,7 @@ class HistoryWriteService:
 
             if changed:
                 self.store._write_entries(machine_id, entries)
+                self._sync_connection_history_command(entry)
 
         return changed
 
@@ -147,6 +157,7 @@ class HistoryWriteService:
         with self.store._lock:
             entries = self.store._read_entries(machine_id)
             changed = False
+            updated_entry = None
 
             for item in reversed(entries):
                 if item.get('entry_id') == entry_id:
@@ -158,10 +169,12 @@ class HistoryWriteService:
                     self.store._update_duration(item)
                     item['output_summary'] = self.store._build_output_summary(item)
                     changed = True
+                    updated_entry = item
                     break
 
             if changed:
                 self.store._write_entries(machine_id, entries)
+                self._sync_connection_history_command(updated_entry)
 
     def clear_history_for_connection(self, conn):
         if conn is None:
@@ -175,6 +188,10 @@ class HistoryWriteService:
 
         with self.store._lock:
             self.store._write_entries(machine_id_text, [])
+
+        connection_history_store = getattr(self.store, 'connection_history_store', None)
+        if connection_history_store is not None:
+            connection_history_store.clear_command_snapshots(machine_id_text)
 
     def set_command_pinned_for_connection(self, conn, command: str, is_pinned: bool):
         if conn is None:
@@ -258,4 +275,8 @@ class HistoryWriteService:
             if len(new_entries) == len(entries):
                 return False
             self.store._write_entries(machine_id_text, new_entries)
-            return True
+
+        connection_history_store = getattr(self.store, 'connection_history_store', None)
+        if connection_history_store is not None:
+            connection_history_store.remove_command_snapshot(machine_id_text, target_entry_id)
+        return True
