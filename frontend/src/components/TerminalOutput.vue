@@ -61,6 +61,12 @@
                 :class="`line-${entry.line.kind || 'default'}`"
             >
               <span class="terminal-text">{{ entry.line.text }}</span>
+              <span
+                  v-if="isTerminalBlockCollapsed(block)"
+                  class="terminal-block-collapsed-badge"
+              >
+                Collapsed
+              </span>
 
               <el-dropdown
                   v-if="canUseTerminalBlockActions(block)"
@@ -1219,6 +1225,16 @@ export default {
 .terminal-command-finished-row .terminal-text {
   flex: 0 1 auto;
   min-width: 0;
+}
+
+.terminal-block-collapsed-badge {
+  flex: 0 0 auto;
+  padding: 0 6px;
+  border: 1px solid rgba(148, 163, 184, 0.36);
+  border-radius: 999px;
+  color: rgba(203, 213, 225, 0.72);
+  font-size: 11px;
+  line-height: 16px;
 }
 
 .terminal-block-more {
