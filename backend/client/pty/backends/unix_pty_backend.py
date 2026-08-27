@@ -22,27 +22,68 @@ class UnixPtyBackend:
         self.manager = manager
 
     def open_session(self, pty_session_id: str, shell: str = '', cwd: str = '', cols: int = 120, rows: int = 32):
-        shell_path = shell or os.environ.get('SHELL') or ('/bin/zsh' if os.path.exists('/bin/zsh') else '/bin/bash')
-        if not os.path.isabs(shell_path):
-            shell_path = shutil.which(shell_path) or shell_path
+        try:
+            shell_path = self.resolve_shell_path(shell)
+        except Exception as e:
+            self.manager.send_error(pty_session_id, str(e))
+            return None
+
+        # 用 close-on-exec pipe 确认子进程已经真正 exec 到目标 shell。
+        exec_read_fd, exec_write_fd = os.pipe()
+        os.set_inheritable(exec_write_fd, False)
 
         pid, master_fd = os.forkpty()
         if pid == 0:
             try:
-                if cwd:
-                    os.chdir(cwd)
+                os.close(exec_read_fd)
+
+                try:
+                    if cwd:
+                        os.chdir(cwd)
+                except Exception:
+                    pass
+
+                env = os.environ.copy()
+                env.setdefault('TERM', 'xterm-256color')
+                env.setdefault('COLORTERM', 'truecolor')
+
+                try:
+                    os.execve(shell_path, [shell_path, '-i'], env)
+                except Exception as e:
+                    try:
+                        os.write(exec_write_fd, str(e).encode('utf-8', errors='replace'))
+                    except Exception:
+                        pass
+                    os._exit(127)
+            except Exception as e:
+                try:
+                    os.write(exec_write_fd, str(e).encode('utf-8', errors='replace'))
+                except Exception:
+                    pass
+                os._exit(127)
+
+        os.close(exec_write_fd)
+
+        try:
+            exec_error = os.read(exec_read_fd, 4096)
+        finally:
+            os.close(exec_read_fd)
+
+        if exec_error:
+            try:
+                os.close(master_fd)
+            except Exception:
+                pass
+            try:
+                os.waitpid(pid, 0)
             except Exception:
                 pass
 
-            env = os.environ.copy()
-            env.setdefault('TERM', 'xterm-256color')
-            env.setdefault('COLORTERM', 'truecolor')
-
-            # 显式启交互模式，避免 shell 退化成奇怪的半交互行为
-            try:
-                os.execve(shell_path, [shell_path, '-i'], env)
-            except Exception:
-                os.execve(shell_path, [shell_path], env)
+            self.manager.send_error(
+                pty_session_id,
+                exec_error.decode('utf-8', errors='replace') or f'Failed to start shell: {shell_path}',
+            )
+            return None
 
         self.resize_fd(master_fd, cols, rows)
         session = PtySession(
@@ -59,6 +100,31 @@ class UnixPtyBackend:
 
         threading.Thread(target=self.reader_loop, args=(pty_session_id,), daemon=True).start()
         return True
+
+    def resolve_shell_path(self, shell: str = '') -> str:
+        requested = str(shell or '').strip()
+
+        if requested:
+            candidate = requested if os.path.isabs(requested) else shutil.which(requested)
+            if not candidate:
+                raise FileNotFoundError(f'Shell not found: {requested}')
+            if not os.path.isfile(candidate) or not os.access(candidate, os.X_OK):
+                raise FileNotFoundError(f'Shell is not executable: {candidate}')
+            return candidate
+
+        candidates = [
+            str(os.environ.get('SHELL') or '').strip(),
+            '/bin/zsh',
+            '/bin/bash',
+        ]
+        for candidate in candidates:
+            if not candidate:
+                continue
+            resolved = candidate if os.path.isabs(candidate) else shutil.which(candidate)
+            if resolved and os.path.isfile(resolved) and os.access(resolved, os.X_OK):
+                return resolved
+
+        raise FileNotFoundError('No supported shell found')
 
     def write_input(self, session: PtySession, raw: bytes):
         if session.master_fd is None:

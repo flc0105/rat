@@ -31,33 +31,42 @@ def create_asgi_app(server_instance):
         async def sender_loop():
             nonlocal closed_sent
             after_seq = 0
+            last_status = None
             while True:
                 payload = pty_service.get_updates(pty_session_id, after_seq=after_seq)
                 chunks = payload.get('chunks') or []
                 status = payload.get('status') or ''
                 error = payload.get('error') or ''
+                shell = payload.get('shell') or ''
                 seq = int(payload.get('seq') or after_seq or 0)
                 if seq > after_seq:
                     after_seq = seq
 
+                status_changed = status != last_status
+
+                # 有输出时把状态一起带上，确保 error 文本先写入终端再关闭 socket。
                 if chunks:
                     await websocket.send_text(json.dumps({
                         'type': 'output',
                         'chunks': chunks,
                         'status': status,
                         'error': error,
+                        'shell': shell,
+                        'seq': seq,
+                    }, ensure_ascii=False))
+                elif status_changed:
+                    await websocket.send_text(json.dumps({
+                        'type': 'status',
+                        'status': status,
+                        'error': error,
+                        'shell': shell,
                         'seq': seq,
                     }, ensure_ascii=False))
 
+                last_status = status
+
                 if status in ('closed', 'error'):
-                    if not closed_sent:
-                        await websocket.send_text(json.dumps({
-                            'type': 'status',
-                            'status': status,
-                            'error': error,
-                            'seq': seq,
-                        }, ensure_ascii=False))
-                        closed_sent = True
+                    closed_sent = True
                     break
 
                 await asyncio.sleep(0.05)
