@@ -258,7 +258,7 @@ export default {
         await this.$nextTick()
         this.initPtyTerminal()
         this.clearPtyTerminal()
-        this.writePtySystemLine('[opening PTY...]\r\n')
+        // this.writePtySystemLine('[opening PTY...]\r\n')
         ElMessage({ type: 'info', message: 'Opening PTY session...', duration: 1200 })
 
         const dims = this.fitPtyTerminalAndGetSize()
