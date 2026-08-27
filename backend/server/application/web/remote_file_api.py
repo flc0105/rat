@@ -90,6 +90,29 @@ class WebRemoteFileApi:
             history_entry_id=history_entry_id,
         )
 
+    def create_remote_zip(
+        self,
+        client_id: str,
+        paths: list[str],
+        destination_dir: str,
+        archive_name: str = '',
+    ):
+        return self.remote_file_service.create_zip_from_paths(
+            client_id,
+            paths,
+            destination_dir,
+            archive_name=archive_name,
+        )
+
+    def peek_remote_zip(self, client_id: str, path: str):
+        return self.remote_file_service.peek_zip(client_id, path)
+
+    def read_remote_zip_entry(self, client_id: str, path: str, entry_name: str):
+        return self.remote_file_service.read_zip_entry(client_id, path, entry_name)
+
+    def extract_remote_zip(self, client_id: str, path: str, destination_dir: str):
+        return self.remote_file_service.extract_zip(client_id, path, destination_dir)
+
     def read_remote_file(
         self,
         client_id: str,

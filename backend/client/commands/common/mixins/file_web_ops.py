@@ -1,4 +1,5 @@
 import json
+import os
 
 import requests
 
@@ -117,6 +118,110 @@ class CommandFileWebMixin:
         except Exception as e:
             return 0, f'Failed to download paths via HTTP: {e}'
 
+
+    @desc('Create a ZIP archive from remote paths', group='file_path', suggest=False)
+    @interruptible()
+    def create_zip_paths(self, arg=''):
+        try:
+            payload = self.structured_arg_codec.decode(arg)
+            if not isinstance(payload, dict):
+                return 0, 'Invalid ZIP payload'
+
+            raw_paths = payload.get('paths') or []
+            destination_dir = str(payload.get('destination_dir') or '').strip()
+            archive_name = str(payload.get('archive_name') or '').strip()
+
+            if not isinstance(raw_paths, list) or not raw_paths:
+                return 0, 'paths is required'
+            if not destination_dir:
+                return 0, 'destination_dir is required'
+
+            resolved_paths = self.path_resolver.require_existing_paths_from_list(raw_paths)
+            resolved_destination = self.path_resolver.require_existing_directory_from_arg(destination_dir)
+            archive_path = self.archive_service.create_zip_in_directory(
+                resolved_paths,
+                resolved_destination,
+                archive_name=archive_name,
+            )
+
+            return 1, json.dumps({
+                'archive_path': archive_path,
+                'archive_name': self.archive_service.normalize_zip_archive_name(
+                    archive_name,
+                    fallback=self.archive_service.build_download_archive_name(resolved_paths),
+                ),
+                'source_count': len(resolved_paths),
+                'size': os.path.getsize(archive_path),
+            }, ensure_ascii=False)
+        except CommandCancelledError:
+            return 0, 'Command cancelled'
+        except CommandTimeoutError:
+            return 0, 'Command timed out and was terminated'
+        except Exception as e:
+            return 0, f'Failed to create ZIP archive: {e}'
+
+    @desc('Inspect a ZIP archive without extracting it', group='file_path', suggest=False)
+    @interruptible()
+    def peek_zip(self, arg=''):
+        try:
+            payload = self.structured_arg_codec.decode(arg)
+            if not isinstance(payload, dict):
+                return 0, 'Invalid ZIP peek payload'
+
+            archive_path = self.path_resolver.require_existing_file_from_arg(payload.get('path', ''))
+            result = self.archive_service.inspect_zip(archive_path)
+            return 1, json.dumps(result, ensure_ascii=False)
+        except CommandCancelledError:
+            return 0, 'Command cancelled'
+        except CommandTimeoutError:
+            return 0, 'Command timed out and was terminated'
+        except Exception as e:
+            return 0, f'Failed to inspect ZIP archive: {e}'
+
+    @desc('Read a text entry from a ZIP archive without extracting it', group='file_path', suggest=False)
+    @interruptible()
+    def read_zip_entry(self, arg=''):
+        try:
+            payload = self.structured_arg_codec.decode(arg)
+            if not isinstance(payload, dict):
+                return 0, 'Invalid ZIP entry payload'
+
+            archive_path = self.path_resolver.require_existing_file_from_arg(payload.get('path', ''))
+            entry_name = str(payload.get('entry_name') or '').strip()
+            if not entry_name:
+                return 0, 'entry_name is required'
+
+            result = self.archive_service.read_zip_text_entry(archive_path, entry_name)
+            return 1, json.dumps(result, ensure_ascii=False)
+        except CommandCancelledError:
+            return 0, 'Command cancelled'
+        except CommandTimeoutError:
+            return 0, 'Command timed out and was terminated'
+        except Exception as e:
+            return 0, f'Failed to read ZIP entry: {e}'
+
+    @desc('Extract a ZIP archive into a remote directory', group='file_path', suggest=False)
+    @interruptible()
+    def extract_zip_path(self, arg=''):
+        try:
+            payload = self.structured_arg_codec.decode(arg)
+            if not isinstance(payload, dict):
+                return 0, 'Invalid ZIP extract payload'
+
+            archive_path = self.path_resolver.require_existing_file_from_arg(payload.get('path', ''))
+            destination_dir = str(payload.get('destination_dir') or '').strip()
+            if not destination_dir:
+                return 0, 'destination_dir is required'
+
+            resolved_destination = self.path_resolver.require_existing_directory_from_arg(destination_dir)
+            result = self.archive_service.extract_zip_smart(archive_path, resolved_destination)
+            return 1, json.dumps(result, ensure_ascii=False)
+        except CommandCancelledError:
+            return 0, 'Command cancelled'
+        except CommandTimeoutError:
+            return 0, 'Command timed out and was terminated'
+        except Exception as e:
+            return 0, f'Failed to extract ZIP archive: {e}'
 
     @desc('Preview a file by path', group='file_path', suggest=False)
     @interruptible()

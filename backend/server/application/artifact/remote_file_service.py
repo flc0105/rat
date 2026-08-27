@@ -273,6 +273,80 @@ class WebRemoteFileService:
             'artifact': artifact,
         }
 
+    def create_zip_from_paths(
+            self,
+            client_id: str,
+            paths: list[str],
+            destination_dir: str,
+            archive_name: str = '',
+    ) -> dict:
+        if not isinstance(paths, list) or not paths:
+            raise ValueError('paths is required')
+        if not (destination_dir or '').strip():
+            raise ValueError('destination_dir is required')
+
+        normalized_paths = [
+            str(item or '').strip()
+            for item in paths
+            if str(item or '').strip()
+        ]
+        if not normalized_paths:
+            raise ValueError('paths is required')
+
+        return self.remote_execution_service.run_foreground_json_command(
+            client_id,
+            self._build_command('create_zip_paths', {
+                'paths': normalized_paths,
+                'destination_dir': destination_dir.strip(),
+                'archive_name': str(archive_name or '').strip(),
+            }),
+            task_type='remote_file',
+            source='web_remote_file',
+        )
+
+    def peek_zip(self, client_id: str, path: str) -> dict:
+        if not (path or '').strip():
+            raise ValueError('path is required')
+
+        return self.remote_execution_service.run_foreground_json_command(
+            client_id,
+            self._build_command('peek_zip', {'path': path.strip()}),
+            task_type='remote_file',
+            source='web_remote_file',
+        )
+
+    def read_zip_entry(self, client_id: str, path: str, entry_name: str) -> dict:
+        if not (path or '').strip():
+            raise ValueError('path is required')
+        if not (entry_name or '').strip():
+            raise ValueError('entry_name is required')
+
+        return self.remote_execution_service.run_foreground_json_command(
+            client_id,
+            self._build_command('read_zip_entry', {
+                'path': path.strip(),
+                'entry_name': entry_name,
+            }),
+            task_type='remote_file',
+            source='web_remote_file',
+        )
+
+    def extract_zip(self, client_id: str, path: str, destination_dir: str) -> dict:
+        if not (path or '').strip():
+            raise ValueError('path is required')
+        if not (destination_dir or '').strip():
+            raise ValueError('destination_dir is required')
+
+        return self.remote_execution_service.run_foreground_json_command(
+            client_id,
+            self._build_command('extract_zip_path', {
+                'path': path.strip(),
+                'destination_dir': destination_dir.strip(),
+            }),
+            task_type='remote_file',
+            source='web_remote_file',
+        )
+
     def delete_paths(self, client_id: str, paths: list[str]) -> dict:
         """
         批量删除远程文件或目录

@@ -89,6 +89,67 @@ def create_remote_files_blueprint(server_instance):
 
         return responder.json_endpoint(_execute, default_error_status=500)
 
+    @blueprint.post('/api/connections/<client_id>/remote-files/create-zip')
+    def create_remote_zip(client_id):
+        def _execute():
+            payload = get_json_payload()
+            paths = payload.get('paths') or []
+            destination_dir = (payload.get('destination_dir') or '').strip()
+            archive_name = (payload.get('archive_name') or '').strip()
+
+            if not isinstance(paths, list) or not paths:
+                raise ValueError('paths is required')
+            if not destination_dir:
+                raise ValueError('destination_dir is required')
+
+            return remote_file_api.create_remote_zip(
+                client_id,
+                paths,
+                destination_dir,
+                archive_name,
+            )
+
+        return responder.json_endpoint(_execute, default_error_status=500)
+
+    @blueprint.post('/api/connections/<client_id>/remote-files/zip-peek')
+    def peek_remote_zip(client_id):
+        def _execute():
+            payload = get_json_payload()
+            path = (payload.get('path') or '').strip()
+            if not path:
+                raise ValueError('path is required')
+            return remote_file_api.peek_remote_zip(client_id, path)
+
+        return responder.json_endpoint(_execute, default_error_status=500)
+
+    @blueprint.post('/api/connections/<client_id>/remote-files/zip-entry')
+    def read_remote_zip_entry(client_id):
+        def _execute():
+            payload = get_json_payload()
+            path = (payload.get('path') or '').strip()
+            entry_name = str(payload.get('entry_name') or '')
+            if not path:
+                raise ValueError('path is required')
+            if not entry_name:
+                raise ValueError('entry_name is required')
+            return remote_file_api.read_remote_zip_entry(client_id, path, entry_name)
+
+        return responder.json_endpoint(_execute, default_error_status=500)
+
+    @blueprint.post('/api/connections/<client_id>/remote-files/extract-zip')
+    def extract_remote_zip(client_id):
+        def _execute():
+            payload = get_json_payload()
+            path = (payload.get('path') or '').strip()
+            destination_dir = (payload.get('destination_dir') or '').strip()
+            if not path:
+                raise ValueError('path is required')
+            if not destination_dir:
+                raise ValueError('destination_dir is required')
+            return remote_file_api.extract_remote_zip(client_id, path, destination_dir)
+
+        return responder.json_endpoint(_execute, default_error_status=500)
+
     @blueprint.delete('/api/connections/<client_id>/remote-files/batch')
     def delete_remote_files_batch(client_id):
         def _execute():

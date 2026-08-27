@@ -182,6 +182,16 @@
                     </el-dropdown-item>
 
                     <el-dropdown-item
+                        command="create_zip"
+                        :disabled="!hasRemoteSelection || remoteZipCreating"
+                    >
+                      Create ZIP
+                      <span v-if="remoteSelectedPaths.length">
+                        ({{ remoteSelectedPaths.length }})
+                      </span>
+                    </el-dropdown-item>
+
+                    <el-dropdown-item
                         command="paste"
                         :disabled="!hasRemoteClipboard"
                     >
@@ -407,6 +417,7 @@
                         <el-dropdown-item command="copy">Copy</el-dropdown-item>
                         <el-dropdown-item command="cut">Cut</el-dropdown-item>
                         <el-dropdown-item command="copy_path">Copy Path</el-dropdown-item>
+                        <el-dropdown-item v-if="isZipEntry(row)" command="extract" divided :disabled="remoteZipExtracting">Extract Here</el-dropdown-item>
                         <el-dropdown-item command="delete">Delete</el-dropdown-item>
                       </el-dropdown-menu>
                     </template>
@@ -616,6 +627,7 @@
                               <el-dropdown-item command="copy">Copy</el-dropdown-item>
                               <el-dropdown-item command="cut">Cut</el-dropdown-item>
                               <el-dropdown-item command="copy_path">Copy Path</el-dropdown-item>
+                              <el-dropdown-item v-if="isZipEntry(row)" command="extract" divided :disabled="remoteZipExtracting">Extract Here</el-dropdown-item>
                               <el-dropdown-item command="delete">Delete</el-dropdown-item>
                             </el-dropdown-menu>
                           </template>
@@ -633,6 +645,11 @@
   </el-dialog>
 
 
+  <RemoteZipPeekDialog
+      ref="remoteZipPeekDialogRef"
+      :selected-id="selectedId"
+  />
+
   <RemotePinsDialog
       v-model="pinManagerVisible"
       :selected-id="selectedId"
@@ -644,6 +661,7 @@
 <script>
 import {ElMessage, ElMessageBox} from 'element-plus'
 import RemotePinsDialog from './RemotePinsDialog.vue'
+import RemoteZipPeekDialog from './RemoteZipPeekDialog.vue'
 import { formatBytes as formatBytesValue } from '../utils/formatters.js'
 
 
@@ -652,6 +670,7 @@ export default {
 
   components: {
     RemotePinsDialog,
+    RemoteZipPeekDialog,
   },
 
   props: {
@@ -695,6 +714,8 @@ export default {
       showHiddenFiles: false,
       remoteSelectedPaths: [],
       remoteZipDownloading: false,
+      remoteZipCreating: false,
+      remoteZipExtracting: false,
 
       quickJumpPaths: {},
       quickJumpLoading: false,
@@ -1363,6 +1384,11 @@ export default {
         return
       }
 
+      if (command === 'create_zip') {
+        this.createSelectedRemoteZip()
+        return
+      }
+
       if (command === 'toggle_select_all') {
         this.toggleRemoteCurrentPageSelection()
         return
@@ -1406,8 +1432,146 @@ export default {
         return
       }
 
+      if (command === 'extract') {
+        this.extractRemoteZip(row)
+        return
+      }
+
       if (command === 'delete') {
         this.deleteRemoteEntry(row)
+      }
+    },
+
+    isZipEntry(row) {
+      if (!row || row.is_dir || row.is_parent_entry) return false
+      const name = String(row.name || row.path || '').trim().toLowerCase()
+      return name.endsWith('.zip')
+    },
+
+    remotePathBaseName(path) {
+      const normalized = String(path || '').replace(/[\\/]+$/, '')
+      const parts = normalized.split(/[\\/]/)
+      return parts[parts.length - 1] || 'archive'
+    },
+
+    buildRemoteZipDefaultName() {
+      const paths = [...this.remoteSelectedPaths]
+      if (paths.length === 1) {
+        const baseName = this.remotePathBaseName(paths[0])
+        const stem = baseName.replace(/\.[^.]+$/, '') || baseName || 'archive'
+        return baseName.toLowerCase().endsWith('.zip') ? `${stem}_archive.zip` : `${stem}.zip`
+      }
+
+      const now = new Date()
+      const pad = value => String(value).padStart(2, '0')
+      const stamp = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}-${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`
+      return `archive_${stamp}.zip`
+    },
+
+    async createSelectedRemoteZip() {
+      if (!this.selectedId) {
+        ElMessage.warning('Please select a device')
+        return
+      }
+
+      const paths = [...this.remoteSelectedPaths]
+      if (!paths.length) {
+        ElMessage.warning('Please select at least one file or folder')
+        return
+      }
+      if (!this.remoteFilesCurrentPath) {
+        ElMessage.warning('Current directory is empty')
+        return
+      }
+
+      try {
+        const {value} = await ElMessageBox.prompt(
+            'The ZIP archive will be created in the current remote directory.',
+            'Create ZIP',
+            {
+              confirmButtonText: 'Create',
+              cancelButtonText: 'Cancel',
+              inputValue: this.buildRemoteZipDefaultName(),
+              inputPattern: /.+/,
+              inputErrorMessage: 'ZIP name is required',
+            }
+        )
+
+        let archiveName = String(value || '').trim()
+        if (!archiveName) return
+        if (!archiveName.toLowerCase().endsWith('.zip')) archiveName += '.zip'
+
+        this.remoteZipCreating = true
+        const res = await fetch(`/api/connections/${encodeURIComponent(this.selectedId)}/remote-files/create-zip`, {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({
+            paths,
+            destination_dir: this.remoteFilesCurrentPath,
+            archive_name: archiveName,
+          }),
+        })
+        const json = await res.json()
+
+        if (!res.ok || json.code !== 0) {
+          throw new Error(json.message || 'Create ZIP failed')
+        }
+
+        const data = json.data || {}
+        ElMessage.success(`ZIP created: ${data.archive_name || archiveName}`)
+        await this.refreshRemoteDirectory()
+      } catch (e) {
+        if (this.isDialogCancel(e)) return
+        ElMessage.error(e.message || 'Create ZIP failed')
+      } finally {
+        this.remoteZipCreating = false
+      }
+    },
+
+    async extractRemoteZip(row) {
+      if (!this.isZipEntry(row) || !row.path) {
+        ElMessage.warning('Please select a ZIP file')
+        return
+      }
+      if (!this.remoteFilesCurrentPath) {
+        ElMessage.warning('Current directory is empty')
+        return
+      }
+
+      try {
+        await ElMessageBox.confirm(
+            `Extract "${row.name}" into the current directory? A ZIP with one root folder is extracted directly; otherwise a new folder is created automatically.`,
+            'Extract ZIP',
+            {
+              type: 'warning',
+              confirmButtonText: 'Extract',
+              cancelButtonText: 'Cancel',
+            }
+        )
+
+        this.remoteZipExtracting = true
+        const res = await fetch(`/api/connections/${encodeURIComponent(this.selectedId)}/remote-files/extract-zip`, {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({
+            path: row.path,
+            destination_dir: this.remoteFilesCurrentPath,
+          }),
+        })
+        const json = await res.json()
+
+        if (!res.ok || json.code !== 0) {
+          throw new Error(json.message || 'Extract ZIP failed')
+        }
+
+        const data = json.data || {}
+        ElMessage.success(`Extracted to: ${data.extracted_to || this.remoteFilesCurrentPath}`)
+        await this.refreshRemoteDirectory()
+      } catch (e) {
+        if (this.isDialogCancel(e)) return
+        ElMessage.error(e.message || 'Extract ZIP failed')
+      } finally {
+        this.remoteZipExtracting = false
       }
     },
 
@@ -2001,6 +2165,10 @@ export default {
 
     previewRow(row) {
       if (!row || row.is_dir || row.is_parent_entry) return
+      if (this.isZipEntry(row)) {
+        this.$refs.remoteZipPeekDialogRef?.open(row)
+        return
+      }
       this.$emit('preview', row)
     },
 
@@ -2033,6 +2201,8 @@ export default {
       this.showHiddenFiles = false
       this.remoteSelectedPaths = []
       this.remoteZipDownloading = false
+      this.remoteZipCreating = false
+      this.remoteZipExtracting = false
       this.remotePinnedJumpItems = []
       this.remotePinnedJumpLoading = false
       this.pinManagerVisible = false
