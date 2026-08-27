@@ -145,7 +145,7 @@ class ServerApplicationAssembly:
         self.agent_output_registry = AgentOutputRegistry(self.agent_builder.output_dir)
         self.agent_bootstrap_script_service = AgentBootstrapScriptService()
         self.pty_session_service = PtySessionService(self.server, event_bus=self.event_bus)
-        self.screen_view_session_service = ScreenViewSessionService(self.server)
+        self.screen_view_session_service = ScreenViewSessionService(self.server, event_bus=self.event_bus)
 
         self.command_completion_service = ServerCommandCompletionService(
             server=self.server,

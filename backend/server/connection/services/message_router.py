@@ -24,7 +24,10 @@ class ServerInboundMessageRouter(BaseMessageRouter):
     def handle_pty_opened_message(self, data: dict) -> None:
         callback = self.connection.context.on_pty_opened
         if callable(callback):
-            callback(data.get('pty_session_id') or '')
+            callback(
+                data.get('pty_session_id') or '',
+                data.get('shell') or '',
+            )
 
     def handle_pty_output_message(self, data: dict) -> None:
         callback = self.connection.context.on_pty_output

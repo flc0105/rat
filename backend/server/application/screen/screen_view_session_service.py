@@ -2,6 +2,7 @@ import secrets
 import threading
 import time
 import uuid
+from datetime import datetime
 
 from core.protocol.message_types import (
     MSG_TYPE_SCREEN_CLOSE,
@@ -23,8 +24,9 @@ class ScreenViewSessionService:
     MIN_QUALITY = 20
     MAX_QUALITY = 95
 
-    def __init__(self, server):
+    def __init__(self, server, event_bus=None):
         self.server = server
+        self.event_bus = event_bus
         self._lock = threading.RLock()
         self._sessions = {}
 
@@ -53,17 +55,35 @@ class ScreenViewSessionService:
             'error': '',
             'control_enabled': False,
             'control_error': '',
+            'close_notified': False,
             'ws_token': secrets.token_urlsafe(24),
         }
         with self._lock:
             self._sessions[screen_session_id] = item
+            start_event = dict(item)
 
-        session.send({
-            'type': MSG_TYPE_SCREEN_OPEN,
-            'screen_session_id': screen_session_id,
-            'fps': item['fps'],
-            'quality': item['quality'],
-        })
+        # 必须先发 SSE，再真正要求 Client 启动屏幕采集。
+        self._publish_screen_lifecycle_event(start_event, state='starting')
+
+        try:
+            session.send({
+                'type': MSG_TYPE_SCREEN_OPEN,
+                'screen_session_id': screen_session_id,
+                'fps': item['fps'],
+                'quality': item['quality'],
+            })
+        except Exception as e:
+            event_item = None
+            with self._lock:
+                item['status'] = 'error'
+                item['error'] = str(e)
+                item['closed_at'] = time.time()
+                if not item.get('close_notified'):
+                    item['close_notified'] = True
+                    event_item = dict(item)
+            if event_item:
+                self._publish_screen_lifecycle_event(event_item, state='error')
+            raise
 
         return {
             'screen_session_id': screen_session_id,
@@ -178,6 +198,7 @@ class ScreenViewSessionService:
             item['captured_at'] = captured_at or time.time()
 
     def handle_client_closed(self, screen_session_id: str):
+        event_item = None
         with self._lock:
             item = self._sessions.get(str(screen_session_id or ''))
             if not item:
@@ -185,8 +206,15 @@ class ScreenViewSessionService:
             item['status'] = 'closed'
             item['closed_at'] = time.time()
             item['control_enabled'] = False
+            if not item.get('close_notified'):
+                item['close_notified'] = True
+                event_item = dict(item)
+
+        if event_item:
+            self._publish_screen_lifecycle_event(event_item, state='closed')
 
     def handle_client_error(self, screen_session_id: str, message: str):
+        event_item = None
         with self._lock:
             item = self._sessions.get(str(screen_session_id or ''))
             if not item:
@@ -195,6 +223,12 @@ class ScreenViewSessionService:
             item['error'] = str(message or 'Screen capture failed')
             item['closed_at'] = time.time()
             item['control_enabled'] = False
+            if not item.get('close_notified'):
+                item['close_notified'] = True
+                event_item = dict(item)
+
+        if event_item:
+            self._publish_screen_lifecycle_event(event_item, state='error')
 
     def handle_client_input_error(self, screen_session_id: str, message: str):
         with self._lock:
@@ -207,6 +241,7 @@ class ScreenViewSessionService:
     def handle_client_disconnected(self, client_id: str):
         client_id = str(client_id or '').strip()
         now = time.time()
+        event_items = []
         with self._lock:
             for item in self._sessions.values():
                 if item.get('client_id') != client_id:
@@ -217,6 +252,12 @@ class ScreenViewSessionService:
                 item['closed_at'] = now
                 item['error'] = 'Client disconnected'
                 item['control_enabled'] = False
+                if not item.get('close_notified'):
+                    item['close_notified'] = True
+                    event_items.append(dict(item))
+
+        for event_item in event_items:
+            self._publish_screen_lifecycle_event(event_item, state='closed')
 
     def authorize_ws(self, screen_session_id: str, token: str) -> bool:
         with self._lock:
@@ -297,6 +338,24 @@ class ScreenViewSessionService:
         except Exception as e:
             raise ValueError('Invalid screen pointer coordinate') from e
         return max(0.0, min(1.0, normalized))
+
+    def _publish_screen_lifecycle_event(self, item: dict, state: str):
+        if self.event_bus is None:
+            return
+
+        try:
+            self.event_bus.publish('screen_view_lifecycle', {
+                'client_id': item.get('client_id', ''),
+                'screen_session_id': item.get('screen_session_id', ''),
+                'state': state,
+                'status': item.get('status', ''),
+                'fps': item.get('fps'),
+                'quality': item.get('quality'),
+                'error': item.get('error', ''),
+                'time': datetime.now().isoformat(),
+            })
+        except Exception:
+            pass
 
     def _cleanup_expired_sessions(self):
         cutoff = time.time() - 300

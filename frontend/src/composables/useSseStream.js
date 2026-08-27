@@ -239,6 +239,43 @@ this.appendOutput(payload.client_id, `${TERMINAL_BACKGROUND_PREFIX} ${payload.te
                 }
             });
 
+            es.addEventListener('screen_view_lifecycle', (event) => {
+                const payload = JSON.parse(event.data || '{}');
+                const state = String(payload.state || '').trim().toLowerCase();
+                const deviceName = getConnectionLabel(payload.client_id);
+
+                if (state === 'starting') {
+                    ElementPlus.ElNotification({
+                        title: 'Screen View Starting',
+                        message: `Screen view is starting on ${deviceName}`,
+                        type: 'info',
+                        duration: 4000,
+                    });
+                    return;
+                }
+
+                if (state === 'closed') {
+                    ElementPlus.ElNotification({
+                        title: 'Screen View Stopped',
+                        message: `Screen view stopped on ${deviceName}`,
+                        type: 'warning',
+                        duration: 4000,
+                    });
+                    return;
+                }
+
+                if (state === 'error') {
+                    ElementPlus.ElNotification({
+                        title: 'Screen View Error',
+                        message: payload.error
+                            ? `Screen view ended on ${deviceName}: ${payload.error}`
+                            : `Screen view ended with an error on ${deviceName}`,
+                        type: 'error',
+                        duration: 5000,
+                    });
+                }
+            });
+
             es.addEventListener('artifact_created', async (event) => {
                 const payload = JSON.parse(event.data || '{}');
                 const fileName = payload.original_name || payload.stored_name || 'file';

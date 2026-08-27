@@ -79,7 +79,7 @@ class WindowsPtyBackend:
                 command=command,
             )
             self.manager.register_session(session)
-            self.manager.send_opened(pty_session_id)
+            self.manager.send_opened(pty_session_id, shell=command)
 
             threading.Thread(target=self.reader_loop, args=(pty_session_id,), daemon=True).start()
             return True

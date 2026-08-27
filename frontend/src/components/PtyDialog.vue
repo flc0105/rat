@@ -29,19 +29,24 @@
         </div>
 
         <div class="pty-toolbar-right">
-<!--          <span class="pty-badge">-->
-<!--  Shell: {{ shellPath || 'default' }}-->
-<!--</span>-->
-<!--          -->
+          <el-input
+            v-model="shellPath"
+            size="small"
+            clearable
+            class="pty-shell-input"
+            placeholder="default / zsh / cmd.exe / powershell.exe"
+            :disabled="ptyLoading || ptyClosing"
+            @keyup.enter="switchPtyShell"
+          />
 
-
-<!--          <el-input-->
-<!--            v-model="shellPath"-->
-<!--            size="small"-->
-<!--            placeholder="Optional shell path"-->
-<!--            class="pty-shell-input"-->
-<!--            :disabled="ptyLoading || !!ptySessionId"-->
-<!--          />-->
+          <el-button
+            size="small"
+            :loading="ptyClosing || ptyLoading"
+            :disabled="!ptySessionId"
+            @click="switchPtyShell"
+          >
+            Switch
+          </el-button>
 
           <el-button
             size="small"
@@ -54,6 +59,7 @@
           <el-button
             size="small"
             :loading="ptyClosing"
+            :disabled="ptyLoading || ptyClosing"
             @click="closePtyDialog"
           >
             Close
@@ -79,7 +85,7 @@
 </template>
 
 <script>
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage } from 'element-plus'
 import { Terminal } from 'xterm'
 import { FitAddon } from 'xterm-addon-fit'
 import 'xterm/css/xterm.css'
@@ -149,102 +155,38 @@ export default {
   },
 
   methods: {
-
-//     async open() {
-//   if (!this.selectedId) {
-//     ElMessage.warning('Please select a device')
-//     return
-//   }
-//
-//   if (this.ptyLoading) return
-//
-//   if (!window.Terminal || !window.FitAddon || !window.FitAddon.FitAddon) {
-//     ElMessage.error('xterm.js failed to load')
-//     return
-//   }
-//
-//   let requestedShell = 'default'
-//
-//   try {
-//     const { value } = await ElMessageBox.prompt(
-//       'Enter shell path/name. Use "default" for auto-detect.',
-//       'Open PTY',
-//       {
-//         confirmButtonText: 'Open',
-//         cancelButtonText: 'Cancel',
-//         inputValue: this.shellPath || 'default',
-//         inputPlaceholder: 'default, bash, zsh, /bin/zsh, powershell.exe',
-//       }
-//     )
-//
-//     requestedShell = String(value || 'default').trim() || 'default'
-//   } catch (e) {
-//     if (e === 'cancel' || e === 'close') return
-//     throw e
-//   }
-//
-//   this.shellPath = requestedShell.toLowerCase() === 'default' ? '' : requestedShell
-//
-//   this.ptyLoading = true
-//   this.visible = true
-//   this.ptySessionId = ''
-//   this.ptySeq = 0
-//   this.ptyStatus = 'opening'
-//   this.ptyError = ''
-//   this.ptyUserClosing = false
-//   this.ptyWsConnectedOnce = false
-//   this.closePtySocket()
-//   this.resetPtyInputQueue()
-//
-//   try {
-//     await this.$nextTick()
-//     this.initPtyTerminal()
-//     this.clearPtyTerminal()
-//     this.writePtySystemLine('[opening PTY...]\r\n')
-//     ElMessage({ type: 'info', message: 'Opening PTY session...', duration: 1200 })
-//
-//     const dims = this.fitPtyTerminalAndGetSize()
-//     const res = await fetch(`/api/connections/${encodeURIComponent(this.selectedId)}/pty/open`, {
-//       method: 'POST',
-//       headers: this.buildJsonHeaders({ 'Content-Type': 'application/json' }),
-//       body: JSON.stringify({
-//         cols: dims.cols,
-//         rows: dims.rows,
-//         shell: this.shellPath || '',
-//       }),
-//     })
-//     const json = await res.json()
-//     if (!res.ok || json.code !== 0) {
-//       throw new Error(json.message || 'Failed to open PTY')
-//     }
-//
-//     this.ptySessionId = json.data?.pty_session_id || ''
-//     this.ptyStatus = json.data?.status || 'opening'
-//     this.ptyLastCols = dims.cols
-//     this.ptyLastRows = dims.rows
-//     this.ptyWsPath = json.data?.ws_path || ''
-//
-//     this.openPtySocket()
-//     this.focusPtyInput()
-//     this.schedulePtyResize()
-//   } catch (e) {
-//     this.ptyStatus = 'error'
-//     this.ptyError = e?.message || String(e)
-//     ElMessage.error(this.ptyError || 'Failed to open PTY')
-//   } finally {
-//     this.ptyLoading = false
-//   }
-// },
     async open() {
       if (!this.selectedId) {
         ElMessage.warning('Please select a device')
         return
       }
 
+      if (this.ptyLoading || this.ptyClosing) return
+
+      this.visible = true
+      this.ptyUserClosing = false
+      this.shellPath = ''
+
+      try {
+        await this.$nextTick()
+        this.initPtyTerminal()
+        await this.openPtySession('')
+      } catch (e) {
+        this.ptyStatus = 'error'
+        this.ptyError = e?.message || String(e)
+        ElMessage.error(this.ptyError || 'Failed to open PTY')
+      }
+    },
+
+    normalizeShellRequest(value) {
+      const shell = String(value || '').trim()
+      return shell.toLowerCase() === 'default' ? '' : shell
+    },
+
+    async openPtySession(shell = '') {
       if (this.ptyLoading) return
 
       this.ptyLoading = true
-      this.visible = true
       this.ptySessionId = ''
       this.ptySeq = 0
       this.ptyStatus = 'opening'
@@ -255,10 +197,7 @@ export default {
       this.resetPtyInputQueue()
 
       try {
-        await this.$nextTick()
-        this.initPtyTerminal()
         this.clearPtyTerminal()
-        // this.writePtySystemLine('[opening PTY...]\r\n')
         ElMessage({ type: 'info', message: 'Opening PTY session...', duration: 1200 })
 
         const dims = this.fitPtyTerminalAndGetSize()
@@ -268,7 +207,7 @@ export default {
           body: JSON.stringify({
             cols: dims.cols,
             rows: dims.rows,
-            shell: this.shellPath || '',
+            shell,
           }),
         })
         const json = await res.json()
@@ -283,15 +222,102 @@ export default {
         this.ptyWsPath = json.data?.ws_path || ''
 
         this.openPtySocket()
+        this.syncPtyShellFromSession(this.ptySessionId)
         this.focusPtyInput()
         this.schedulePtyResize()
-      } catch (e) {
-        this.ptyStatus = 'error'
-        this.ptyError = e?.message || String(e)
-        ElMessage.error(this.ptyError || 'Failed to open PTY')
       } finally {
         this.ptyLoading = false
       }
+    },
+
+    async switchPtyShell() {
+      if (this.ptyLoading || this.ptyClosing || !this.ptySessionId) return
+
+      const nextShell = this.normalizeShellRequest(this.shellPath)
+      const previousSessionId = this.ptySessionId
+
+      this.ptyClosing = true
+      this.ptyUserClosing = true
+      this.resetPtyInputQueue()
+      this.clearPtyResizeTimer()
+      this.ptyStatus = 'closing'
+
+      try {
+        const res = await fetch(`/api/pty/${encodeURIComponent(previousSessionId)}/close`, {
+          method: 'POST',
+          headers: this.buildJsonHeaders({ 'Content-Type': 'application/json' }),
+          body: '{}',
+        })
+        const json = await res.json()
+        if (!res.ok || json.code !== 0) {
+          throw new Error(json.message || 'Failed to close current PTY')
+        }
+
+        await this.waitForPtyClosed(previousSessionId)
+        this.closePtySocket()
+
+        this.ptySessionId = ''
+        this.ptyWsPath = ''
+        this.ptyUserClosing = false
+        this.ptyClosing = false
+        await this.openPtySession(nextShell)
+      } catch (e) {
+        this.ptyStatus = 'error'
+        this.ptyError = e?.message || 'Failed to switch PTY shell'
+        ElMessage.error(this.ptyError)
+      } finally {
+        this.ptyClosing = false
+        this.ptyUserClosing = false
+      }
+    },
+
+    async syncPtyShellFromSession(ptySessionId, timeoutMs = 3000) {
+      const sessionId = String(ptySessionId || '').trim()
+      if (!sessionId) return
+
+      const deadline = Date.now() + timeoutMs
+      while (Date.now() < deadline && this.ptySessionId === sessionId) {
+        try {
+          const res = await fetch(`/api/pty/${encodeURIComponent(sessionId)}/poll?after_seq=${encodeURIComponent(this.ptySeq || 0)}`, {
+            headers: this.buildJsonHeaders(),
+          })
+          const json = await res.json()
+          if (!res.ok || json.code !== 0) return
+
+          const shell = String(json.data?.shell || '').trim()
+          if (shell) {
+            this.shellPath = shell
+            return
+          }
+
+          const status = String(json.data?.status || '').trim().toLowerCase()
+          if (status === 'closed' || status === 'error') return
+        } catch (_) {
+          return
+        }
+
+        await new Promise(resolve => setTimeout(resolve, 60))
+      }
+    },
+
+    async waitForPtyClosed(ptySessionId, timeoutMs = 5000) {
+      const deadline = Date.now() + timeoutMs
+
+      while (Date.now() < deadline) {
+        const res = await fetch(`/api/pty/${encodeURIComponent(ptySessionId)}/poll?after_seq=0`, {
+          headers: this.buildJsonHeaders(),
+        })
+        const json = await res.json()
+        if (!res.ok || json.code !== 0) {
+          throw new Error(json.message || 'Failed to wait for PTY shutdown')
+        }
+
+        const status = String(json.data?.status || '').trim().toLowerCase()
+        if (status === 'closed' || status === 'error') return
+        await new Promise(resolve => setTimeout(resolve, 80))
+      }
+
+      throw new Error('Current PTY did not stop in time')
     },
 
     async closePtyDialog() {
@@ -427,12 +453,6 @@ export default {
 
     writePtyOutput(text) {
       if (!text) return
-      if (this.ptyTerm) {
-        this.ptyTerm.write(text)
-      }
-    },
-
-    writePtySystemLine(text) {
       if (this.ptyTerm) {
         this.ptyTerm.write(text)
       }

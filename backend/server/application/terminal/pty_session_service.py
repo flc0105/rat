@@ -91,7 +91,13 @@ class PtySessionService:
 
     def close_session(self, pty_session_id: str):
         item = self._get_required(pty_session_id)
-        session = self.server.get_target_connection_by_client_id(item['client_id'])
+        with self._lock:
+            if item['status'] in ('closing', 'closed', 'error'):
+                return {'ok': True}
+            item['status'] = 'closing'
+            client_id = item['client_id']
+
+        session = self.server.get_target_connection_by_client_id(client_id)
         try:
             session.send({
                 'type': MSG_TYPE_PTY_CLOSE,
@@ -99,8 +105,6 @@ class PtySessionService:
             })
         except Exception:
             pass
-        with self._lock:
-            item['status'] = 'closing'
         return {'ok': True}
 
     def get_updates(self, pty_session_id: str, after_seq: int = 0) -> dict:
@@ -115,9 +119,10 @@ class PtySessionService:
                 'error': item.get('error') or '',
                 'cols': item.get('cols') or 120,
                 'rows': item.get('rows') or 32,
+                'shell': item.get('shell') or '',
             }
 
-    def handle_client_opened(self, pty_session_id: str):
+    def handle_client_opened(self, pty_session_id: str, shell: str = ''):
         event_item = None
         with self._lock:
             item = self._sessions.get(pty_session_id)
@@ -125,6 +130,8 @@ class PtySessionService:
                 return
             item['status'] = 'open'
             item['opened_at'] = time.time()
+            if shell:
+                item['shell'] = str(shell)
 
             if not item.get('open_notified'):
                 item['open_notified'] = True
@@ -175,7 +182,11 @@ class PtySessionService:
             item['error'] = str(message or 'PTY error')
             item['closed_at'] = time.time()
             item['seq'] += 1
-            item['chunks'].append({'seq': item['seq'], 'text': f"\n[PTY error] {item['error']}\n"})
+            item['chunks'].append({
+                'seq': item['seq'],
+                'text': f"\r\n[PTY error] {item['error']}\r\n",
+            })
+            # item['chunks'].append({'seq': item['seq'], 'text': f"\n[PTY error] {item['error']}\n"})
             if len(item['chunks']) > self.max_chunks:
                 item['chunks'] = item['chunks'][-self.max_chunks:]
 

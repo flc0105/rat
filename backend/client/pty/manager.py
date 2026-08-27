@@ -138,10 +138,11 @@ class PtyManager:
 
         return None
 
-    def send_opened(self, pty_session_id: str):
+    def send_opened(self, pty_session_id: str, shell: str = ''):
         self.connection.send({
             'type': MSG_TYPE_PTY_OPENED,
             'pty_session_id': pty_session_id,
+            'shell': str(shell or ''),
         })
 
     def send_output(self, pty_session_id: str, data: bytes):

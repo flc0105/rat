@@ -1,5 +1,6 @@
 import os
 import select
+import shutil
 import signal
 import struct
 import threading
@@ -21,6 +22,10 @@ class UnixPtyBackend:
         self.manager = manager
 
     def open_session(self, pty_session_id: str, shell: str = '', cwd: str = '', cols: int = 120, rows: int = 32):
+        shell_path = shell or os.environ.get('SHELL') or ('/bin/zsh' if os.path.exists('/bin/zsh') else '/bin/bash')
+        if not os.path.isabs(shell_path):
+            shell_path = shutil.which(shell_path) or shell_path
+
         pid, master_fd = os.forkpty()
         if pid == 0:
             try:
@@ -28,8 +33,6 @@ class UnixPtyBackend:
                     os.chdir(cwd)
             except Exception:
                 pass
-
-            shell_path = shell or os.environ.get('SHELL') or ('/bin/zsh' if os.path.exists('/bin/zsh') else '/bin/bash')
 
             env = os.environ.copy()
             env.setdefault('TERM', 'xterm-256color')
@@ -52,7 +55,7 @@ class UnixPtyBackend:
             closed=False,
         )
         self.manager.register_session(session)
-        self.manager.send_opened(pty_session_id)
+        self.manager.send_opened(pty_session_id, shell=shell_path)
 
         threading.Thread(target=self.reader_loop, args=(pty_session_id,), daemon=True).start()
         return True
