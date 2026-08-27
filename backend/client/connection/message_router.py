@@ -75,6 +75,28 @@ class ClientInboundMessageRouter(BaseMessageRouter):
         return None
 
 
+    def handle_screen_open_message(self, data: dict):
+        self.connection.runtime.screen_view_manager.open_session(
+            data.get('screen_session_id') or '',
+            fps=data.get('fps') or 4,
+            quality=data.get('quality') or 60,
+        )
+        return None
+
+    def handle_screen_config_message(self, data: dict):
+        self.connection.runtime.screen_view_manager.update_session(
+            data.get('screen_session_id') or '',
+            fps=data.get('fps'),
+            quality=data.get('quality'),
+        )
+        return None
+
+    def handle_screen_close_message(self, data: dict):
+        self.connection.runtime.screen_view_manager.close_session(
+            data.get('screen_session_id') or '',
+        )
+        return None
+
     def handle_pty_open_message(self, data: dict):
         self.connection.runtime.pty_manager.open_session(
             data.get('pty_session_id') or '',

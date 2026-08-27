@@ -39,6 +39,7 @@ class ServerWebService:
         self.agent_api = self.assembly.agent_api
         self.system_api = self.assembly.system_api
         self.terminal_api = self.assembly.terminal_api
+        self.screen_view_api = self.assembly.screen_view_api
 
     @classmethod
     def from_server(cls, server):

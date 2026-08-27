@@ -14,6 +14,13 @@ from core.protocol.message_types import (
     MSG_TYPE_PTY_OUTPUT,
     MSG_TYPE_PTY_CLOSED,
     MSG_TYPE_PTY_ERROR,
+    MSG_TYPE_SCREEN_OPEN,
+    MSG_TYPE_SCREEN_CONFIG,
+    MSG_TYPE_SCREEN_CLOSE,
+    MSG_TYPE_SCREEN_OPENED,
+    MSG_TYPE_SCREEN_FRAME,
+    MSG_TYPE_SCREEN_CLOSED,
+    MSG_TYPE_SCREEN_ERROR,
 )
 
 
@@ -74,6 +81,27 @@ class BaseMessageRouter:
         if message_type == MSG_TYPE_PTY_ERROR:
             return self.handle_pty_error_message(data)
 
+        if message_type == MSG_TYPE_SCREEN_OPEN:
+            return self.handle_screen_open_message(data)
+
+        if message_type == MSG_TYPE_SCREEN_CONFIG:
+            return self.handle_screen_config_message(data)
+
+        if message_type == MSG_TYPE_SCREEN_CLOSE:
+            return self.handle_screen_close_message(data)
+
+        if message_type == MSG_TYPE_SCREEN_OPENED:
+            return self.handle_screen_opened_message(data)
+
+        if message_type == MSG_TYPE_SCREEN_FRAME:
+            return self.handle_screen_frame_message(data)
+
+        if message_type == MSG_TYPE_SCREEN_CLOSED:
+            return self.handle_screen_closed_message(data)
+
+        if message_type == MSG_TYPE_SCREEN_ERROR:
+            return self.handle_screen_error_message(data)
+
         return self.handle_unknown_message(data)
 
     def handle_result_message(self, data: dict):
@@ -120,6 +148,27 @@ class BaseMessageRouter:
         return None
 
     def handle_pty_error_message(self, data: dict):
+        return None
+
+    def handle_screen_open_message(self, data: dict):
+        return None
+
+    def handle_screen_config_message(self, data: dict):
+        return None
+
+    def handle_screen_close_message(self, data: dict):
+        return None
+
+    def handle_screen_opened_message(self, data: dict):
+        return None
+
+    def handle_screen_frame_message(self, data: dict):
+        return None
+
+    def handle_screen_closed_message(self, data: dict):
+        return None
+
+    def handle_screen_error_message(self, data: dict):
         return None
 
     def handle_unknown_message(self, data: dict):

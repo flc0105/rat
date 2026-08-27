@@ -114,6 +114,15 @@
         PTY
       </el-button>
 
+      <el-button
+        size="small"
+        class="tool-btn ml-0"
+        :disabled="deviceActionDisabled"
+        @click="$emit('open-screen-view')"
+      >
+        Screen View
+      </el-button>
+
             <el-dropdown
         trigger="click"
         @command="handleResourceCommand"
@@ -232,6 +241,7 @@ export default {
     'open-agents',
     'open-history',
     'open-pty',
+    'open-screen-view',
     'open-processes',
     'open-one-liners',
     'clear',

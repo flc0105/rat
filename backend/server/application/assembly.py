@@ -23,6 +23,7 @@ from server.application.tasks.task_runner import WebTaskRunner
 from server.application.tasks.task_service import WebTaskService
 from server.application.tasks.task_store import WebTaskStore
 from server.application.terminal.pty_session_service import PtySessionService
+from server.application.screen.screen_view_session_service import ScreenViewSessionService
 from server.application.web.agent_api import WebAgentApi
 from server.application.web.artifact_api import WebArtifactApi
 from server.application.web.command_catalog_api import WebCommandCatalogApi
@@ -38,6 +39,7 @@ from server.application.web.remote_file_api import WebRemoteFileApi
 from server.application.web.script_api import WebScriptApi
 from server.application.web.system_api import WebSystemInspectionApi
 from server.application.web.terminal_api import WebTerminalApi
+from server.application.web.screen_view_api import WebScreenViewApi
 from server.config.config import (
     EXTERNAL_TOOL_META_PATH,
     EXTERNAL_TOOL_PACKAGE_PATH,
@@ -143,6 +145,7 @@ class ServerApplicationAssembly:
         self.agent_output_registry = AgentOutputRegistry(self.agent_builder.output_dir)
         self.agent_bootstrap_script_service = AgentBootstrapScriptService()
         self.pty_session_service = PtySessionService(self.server, event_bus=self.event_bus)
+        self.screen_view_session_service = ScreenViewSessionService(self.server)
 
         self.command_completion_service = ServerCommandCompletionService(
             server=self.server,
@@ -232,6 +235,10 @@ class ServerApplicationAssembly:
 
         self.terminal_api = WebTerminalApi(
             pty_session_service=self.pty_session_service,
+        )
+
+        self.screen_view_api = WebScreenViewApi(
+            screen_view_session_service=self.screen_view_session_service,
         )
 
         self._wire_cross_dependencies()

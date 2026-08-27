@@ -105,6 +105,7 @@
                   @open-agents="openAgentOutputsDialog"
                   @open-history="openCommandHistoryDialog"
                   @open-pty="openPtyDialog"
+                  @open-screen-view="openScreenViewDialog"
                   @open-processes="openProcessDialog"
                   @open-one-liners="openOneLinersDialog"
                   @clear="clearOutput"
@@ -303,6 +304,12 @@
     :get-tab-scoped-headers="getTabScopedHeaders"
   />
 
+  <ScreenViewDialog
+    ref="screenViewDialogRef"
+    :selected-id="selectedId"
+    :current-connection="currentConnection"
+  />
+
   <OneLinersDialog
     ref="oneLinersDialogRef"
   />
@@ -334,12 +341,14 @@ import BackgroundJobsDialog from './components/BackgroundJobsDialog.vue'
 import PreviewDialog from './components/PreviewDialog.vue'
 import TerminalJsonDialog from './components/TerminalJsonDialog.vue'
 import PtyDialog from './components/PtyDialog.vue'
+import ScreenViewDialog from './components/ScreenViewDialog.vue'
 import OneLinersDialog from './components/OneLinersDialog.vue'
 
 import { ArrowDown, ArrowUp } from '@element-plus/icons-vue'
 
 export default {
   components: {
+    ScreenViewDialog,
     OneLinersDialog,
     ArrowDown,
     ArrowUp,
@@ -411,6 +420,10 @@ export default {
 
     openArtifactDialog() {
       return this.$refs.artifactDialogRef?.open()
+    },
+
+    openScreenViewDialog() {
+      return this.$refs.screenViewDialogRef?.open()
     },
 
     toggleConnectionInfo() {

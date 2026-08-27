@@ -489,6 +489,12 @@ class WebConnectionService:
         session.context.on_pty_output = terminal_service.handle_client_output
         session.context.on_pty_closed = terminal_service.handle_client_closed
         session.context.on_pty_error = terminal_service.handle_client_error
+
+        screen_view_service = self.server.web_service.screen_view_api.screen_view_session_service
+        session.context.on_screen_opened = screen_view_service.handle_client_opened
+        session.context.on_screen_frame = screen_view_service.handle_client_frame
+        session.context.on_screen_closed = screen_view_service.handle_client_closed
+        session.context.on_screen_error = screen_view_service.handle_client_error
         return session
 
     def handle_connection_registered(self, session: ClientSession):
@@ -514,6 +520,12 @@ class WebConnectionService:
         try:
             if self.script_grant_service is not None:
                 self.script_grant_service.revoke_by_client(session.session_info.client_id)
+        except Exception:
+            pass
+        try:
+            self.server.web_service.screen_view_api.screen_view_session_service.handle_client_disconnected(
+                session.session_info.client_id
+            )
         except Exception:
             pass
         self.publish_connection_offline(session)

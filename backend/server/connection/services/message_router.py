@@ -41,6 +41,37 @@ class ServerInboundMessageRouter(BaseMessageRouter):
         if callable(callback):
             callback(data.get('pty_session_id') or '', data.get('message') or '')
 
+    def handle_screen_opened_message(self, data: dict) -> None:
+        callback = self.connection.context.on_screen_opened
+        if callable(callback):
+            callback(
+                data.get('screen_session_id') or '',
+                data.get('fps'),
+                data.get('quality'),
+            )
+
+    def handle_screen_frame_message(self, data: dict) -> None:
+        callback = self.connection.context.on_screen_frame
+        if callable(callback):
+            callback(
+                data.get('screen_session_id') or '',
+                data.get('data') or '',
+                data.get('width') or 0,
+                data.get('height') or 0,
+                data.get('bytes') or 0,
+                data.get('captured_at') or 0,
+            )
+
+    def handle_screen_closed_message(self, data: dict) -> None:
+        callback = self.connection.context.on_screen_closed
+        if callable(callback):
+            callback(data.get('screen_session_id') or '')
+
+    def handle_screen_error_message(self, data: dict) -> None:
+        callback = self.connection.context.on_screen_error
+        if callable(callback):
+            callback(data.get('screen_session_id') or '', data.get('message') or '')
+
 
 
 

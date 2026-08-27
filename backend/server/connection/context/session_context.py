@@ -35,6 +35,10 @@ class ClientSessionContext:
         self.on_pty_output = None
         self.on_pty_closed = None
         self.on_pty_error = None
+        self.on_screen_opened = None
+        self.on_screen_frame = None
+        self.on_screen_closed = None
+        self.on_screen_error = None
 
         self.connected_at = ''
         self.disconnected_at = ''
