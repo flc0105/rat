@@ -201,9 +201,6 @@ class ScreenViewManager:
                 except Exception:
                     pass
 
-    def _is_modifier_key(self, key: str) -> bool:
-        return key in {'ctrl', 'shift', 'alt', 'command', 'win'}
-
     def _apply_input_event(self, item: dict, action: str, payload: dict):
         if action == 'prepare':
             pyautogui = self._get_pyautogui()
@@ -258,22 +255,18 @@ class ScreenViewManager:
             key = self._normalize_key(payload.get('key'))
             if not key:
                 return
-
             if action == 'key_down':
                 is_repeat = bool(payload.get('repeat'))
-
                 if key in item['pressed_keys']:
                     # 浏览器长按会持续发送 repeat keydown；modifier 不需要重复注入。
                     if is_repeat and not self._is_modifier_key(key):
                         pyautogui.keyDown(key, _pause=False)
                     return
-
                 pyautogui.keyDown(key, _pause=False)
                 item['pressed_keys'].add(key)
             else:
                 pyautogui.keyUp(key, _pause=False)
                 item['pressed_keys'].discard(key)
-
             return
 
         raise ValueError(f'Unsupported screen input action: {action}')
@@ -377,6 +370,9 @@ class ScreenViewManager:
         except Exception:
             clicks = 0
         return max(-10, min(10, clicks))
+
+    def _is_modifier_key(self, key: str) -> bool:
+        return key in {'ctrl', 'shift', 'alt', 'command', 'win'}
 
     def _normalize_key(self, value) -> str:
         key = str(value or '').strip().lower()

@@ -1,17 +1,22 @@
+import ctypes
 import os
+import re
 import signal
 import threading
 import time
+from importlib import metadata
 
 from client.pty.session import PtySession
 
 if os.name == 'nt':
     try:
-        from winpty import PTY, WinptyError
+        from winpty import Backend, PTY, WinptyError
     except Exception:
+        Backend = None
         PTY = None
         WinptyError = Exception
 else:
+    Backend = None
     PTY = None
     WinptyError = Exception
 
@@ -21,30 +26,47 @@ class WindowsPtyBackend:
     Windows PTY 后端。
     """
 
+    MIN_PYWINPTY_VERSION = (3, 0, 5)
+    _CONPTY_SPAWN_LOCK = threading.Lock()
+
     def __init__(self, manager):
         self.manager = manager
 
     def open_session(self, pty_session_id: str, shell: str = '', cwd: str = '', cols: int = 120, rows: int = 32):
-        if PTY is None:
-            self.manager.send_error(pty_session_id, 'pywinpty is not installed')
+        if PTY is None or Backend is None:
+            self.manager.send_error(pty_session_id, 'pywinpty with ConPTY support is not installed')
+            return None
+
+        try:
+            pywinpty_version = metadata.version('pywinpty')
+        except metadata.PackageNotFoundError:
+            self.manager.send_error(pty_session_id, 'pywinpty 3.0.5+ is required for Windows ConPTY')
+            return None
+
+        if self._version_tuple(pywinpty_version) < self.MIN_PYWINPTY_VERSION:
+            self.manager.send_error(
+                pty_session_id,
+                f'pywinpty 3.0.5+ is required for Windows ConPTY; found {pywinpty_version}. '
+                'Reinstall backend requirements.'
+            )
             return None
 
         cols = max(20, int(cols or 120))
         rows = max(5, int(rows or 32))
 
         try:
-            pty = PTY(cols, rows)
+            # Windows PTY 统一使用 ConPTY，不保留 WinPTY fallback。
+            pty = PTY(cols, rows, backend=Backend.ConPTY)
             application_name, command = self.build_windows_command(shell)
 
-            # 这里不改你整体架构，只把 Windows 后端换成 pywinpty。
-            ok = pty.spawn(
+            ok = self._spawn_with_ctrl_c_enabled(
+                pty,
                 application_name,
-                cmdline=command,
+                command,
                 cwd=cwd if cwd and os.path.isdir(cwd) else None,
-                env=None,
             )
             if ok is False:
-                raise RuntimeError('winpty spawn failed')
+                raise RuntimeError('ConPTY spawn failed')
 
             session = PtySession(
                 pty_session_id=pty_session_id,
@@ -58,10 +80,6 @@ class WindowsPtyBackend:
             )
             self.manager.register_session(session)
             self.manager.send_opened(pty_session_id)
-            self.manager.send_output(
-                pty_session_id,
-                f'[winpty] opened pid={session.pid} command={command}\r\n'.encode('utf-8')
-            )
 
             threading.Thread(target=self.reader_loop, args=(pty_session_id,), daemon=True).start()
             return True
@@ -71,6 +89,27 @@ class WindowsPtyBackend:
         except Exception as e:
             self.manager.send_error(pty_session_id, str(e))
             return None
+
+    def _spawn_with_ctrl_c_enabled(self, pty, application_name: str, command: str, cwd: str | None = None):
+        # 主 Client 保持独立进程组；只在 ConPTY shell 创建瞬间恢复可继承的 Ctrl+C 处理。
+        kernel32 = ctypes.WinDLL('kernel32', use_last_error=True)
+        set_ctrl_handler = kernel32.SetConsoleCtrlHandler
+        set_ctrl_handler.argtypes = [ctypes.c_void_p, ctypes.c_int]
+        set_ctrl_handler.restype = ctypes.c_int
+
+        with self._CONPTY_SPAWN_LOCK:
+            if not set_ctrl_handler(None, False):
+                raise ctypes.WinError(ctypes.get_last_error())
+            try:
+                return pty.spawn(
+                    application_name,
+                    cmdline=command,
+                    cwd=cwd,
+                    env=None,
+                )
+            finally:
+                # CREATE_NEW_PROCESS_GROUP 原本让主 Client 忽略 Ctrl+C，这里立即恢复。
+                set_ctrl_handler(None, True)
 
     def write_input(self, session: PtySession, raw: bytes):
         pty = session.pty
@@ -137,8 +176,6 @@ class WindowsPtyBackend:
         pty = session.pty
         exit_code = 0
 
-        self.manager.send_output(pty_session_id, b'[winpty] reader started\r\n')
-
         try:
             while True:
                 current = self.manager.get_session(pty_session_id)
@@ -167,10 +204,6 @@ class WindowsPtyBackend:
                         exit_code = int(pty.get_exitstatus() or 0)
                     except Exception:
                         exit_code = 0
-                    self.manager.send_output(
-                        pty_session_id,
-                        f'[winpty] process exited exit_code={exit_code}\r\n'.encode('utf-8')
-                    )
                     self.drain_output(pty_session_id, pty)
                     break
 
@@ -195,6 +228,12 @@ class WindowsPtyBackend:
             if not text:
                 break
             self.manager.send_output(pty_session_id, text.encode('utf-8', errors='replace'))
+
+    def _version_tuple(self, version: str):
+        parts = [int(value) for value in re.findall(r'\d+', str(version or ''))[:3]]
+        while len(parts) < 3:
+            parts.append(0)
+        return tuple(parts)
 
     def build_windows_command(self, shell: str):
         shell = str(shell or '').strip()
