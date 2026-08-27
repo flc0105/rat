@@ -97,6 +97,13 @@ class ClientInboundMessageRouter(BaseMessageRouter):
         )
         return None
 
+    def handle_screen_input_message(self, data: dict):
+        self.connection.runtime.screen_view_manager.handle_input(
+            data.get('screen_session_id') or '',
+            data.get('event') if isinstance(data.get('event'), dict) else {},
+        )
+        return None
+
     def handle_pty_open_message(self, data: dict):
         self.connection.runtime.pty_manager.open_session(
             data.get('pty_session_id') or '',

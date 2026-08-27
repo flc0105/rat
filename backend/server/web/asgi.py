@@ -164,6 +164,8 @@ def create_asgi_app(server_instance):
                         'captured_at': payload.get('captured_at') or 0,
                         'fps': payload.get('fps') or 4,
                         'quality': payload.get('quality') or 60,
+                        'control_enabled': bool(payload.get('control_enabled')),
+                        'control_error': payload.get('control_error') or '',
                     }, ensure_ascii=False))
 
                 if status in ('closed', 'error'):
@@ -173,6 +175,8 @@ def create_asgi_app(server_instance):
                             'status': status,
                             'error': error,
                             'seq': seq,
+                            'control_enabled': bool(payload.get('control_enabled')),
+                            'control_error': payload.get('control_error') or '',
                         }, ensure_ascii=False))
                         closed_sent = True
                     break
@@ -193,6 +197,16 @@ def create_asgi_app(server_instance):
                         screen_session_id,
                         fps=message.get('fps'),
                         quality=message.get('quality'),
+                    )
+                elif msg_type == 'control':
+                    screen_view_api.set_screen_control(
+                        screen_session_id,
+                        bool(message.get('enabled')),
+                    )
+                elif msg_type == 'input':
+                    screen_view_api.send_screen_input(
+                        screen_session_id,
+                        message.get('event') if isinstance(message.get('event'), dict) else {},
                     )
                 elif msg_type == 'close':
                     screen_view_api.close_screen_view(screen_session_id)

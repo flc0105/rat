@@ -1,5 +1,6 @@
 import base64
 import io
+import sys
 import threading
 import time
 
@@ -7,6 +8,7 @@ from core.protocol.message_types import (
     MSG_TYPE_SCREEN_CLOSED,
     MSG_TYPE_SCREEN_ERROR,
     MSG_TYPE_SCREEN_FRAME,
+    MSG_TYPE_SCREEN_INPUT_ERROR,
     MSG_TYPE_SCREEN_OPENED,
 )
 from core.utils.logger import logger
@@ -17,16 +19,19 @@ class ScreenViewManager:
     Client 端只读屏幕预览管理器。
 
     当前只负责截图和帧传输，不接收鼠标/键盘输入。
+    控制能力作为独立可选输入通道附加在预览会话上，默认不启用。
     """
 
     MIN_FPS = 1
     MAX_FPS = 10
     MIN_QUALITY = 20
     MAX_QUALITY = 95
+    INPUT_BUTTONS = {'left', 'middle', 'right'}
 
     def __init__(self, connection):
         self.connection = connection
         self._lock = threading.RLock()
+        self._input_lock = threading.RLock()
         self._sessions = {}
 
     def open_session(self, screen_session_id: str, fps: int = 4, quality: int = 60):
@@ -43,6 +48,13 @@ class ScreenViewManager:
             'stop_event': threading.Event(),
             'notify_on_close': True,
             'thread': None,
+            'frame_width': 0,
+            'frame_height': 0,
+            'origin_x': 0,
+            'origin_y': 0,
+            'pressed_keys': set(),
+            'pressed_buttons': set(),
+            'pyautogui_failsafe': None,
         }
 
         worker = threading.Thread(
@@ -85,6 +97,8 @@ class ScreenViewManager:
                 return False
             item['notify_on_close'] = bool(notify)
             item['stop_event'].set()
+
+        self._release_session_inputs(item, restore_control=True)
         return True
 
     def close_all_sessions(self, notify: bool = True):
@@ -92,6 +106,28 @@ class ScreenViewManager:
             session_ids = list(self._sessions.keys())
         for session_id in session_ids:
             self.close_session(session_id, notify=notify)
+
+    def handle_input(self, screen_session_id: str, event: dict):
+        session_id = str(screen_session_id or '').strip()
+        with self._lock:
+            item = self._sessions.get(session_id)
+        if not item:
+            return False
+
+        payload = event if isinstance(event, dict) else {}
+        action = str(payload.get('action') or '').strip().lower()
+        if not action:
+            return False
+
+        try:
+            with self._input_lock:
+                self._apply_input_event(item, action, payload)
+            return True
+        except Exception as e:
+            logger.warning(f'Screen control input failed: {e}', exc_info=True)
+            self._release_session_inputs(item, restore_control=True)
+            self._send_input_error(session_id, str(e or 'Screen control input failed'))
+            return False
 
     def _capture_loop(self, screen_session_id: str):
         failed = False
@@ -111,6 +147,15 @@ class ScreenViewManager:
                 started_at = time.monotonic()
                 image = self._capture_image()
                 frame_bytes, width, height = self._encode_jpeg(image, quality)
+                origin_x, origin_y = self._capture_origin(image)
+
+                with self._lock:
+                    current = self._sessions.get(screen_session_id)
+                    if current:
+                        current['frame_width'] = int(width)
+                        current['frame_height'] = int(height)
+                        current['origin_x'] = int(origin_x)
+                        current['origin_y'] = int(origin_y)
 
                 self.connection.send({
                     'type': MSG_TYPE_SCREEN_FRAME,
@@ -144,6 +189,9 @@ class ScreenViewManager:
                 if item:
                     notify = bool(item.get('notify_on_close'))
 
+            if item:
+                self._release_session_inputs(item, restore_control=True)
+
             if notify and not failed:
                 try:
                     self.connection.send({
@@ -152,6 +200,206 @@ class ScreenViewManager:
                     })
                 except Exception:
                     pass
+
+    def _apply_input_event(self, item: dict, action: str, payload: dict):
+        if action == 'prepare':
+            pyautogui = self._get_pyautogui()
+            input_width, input_height = pyautogui.size()
+
+            # macOS Retina 截图使用物理像素，而 PyAutoGUI 使用逻辑坐标。
+            if sys.platform == 'darwin':
+                item['input_width'] = int(input_width)
+                item['input_height'] = int(input_height)
+
+            if item.get('pyautogui_failsafe') is None:
+                item['pyautogui_failsafe'] = bool(getattr(pyautogui, 'FAILSAFE', True))
+                pyautogui.FAILSAFE = False
+            return
+
+        if action == 'release_all':
+            self._release_session_inputs(item)
+            return
+
+        if action == 'control_off':
+            self._release_session_inputs(item, restore_control=True)
+            return
+
+        pyautogui = self._get_pyautogui()
+
+        if action == 'mouse_move':
+            x, y = self._resolve_pointer(item, payload)
+            pyautogui.moveTo(x, y, duration=0, _pause=False)
+            return
+
+        if action in ('mouse_down', 'mouse_up'):
+            button = self._normalize_button(payload.get('button'))
+            x, y = self._resolve_pointer(item, payload)
+            if action == 'mouse_down':
+                pyautogui.mouseDown(x=x, y=y, button=button, _pause=False)
+                item['pressed_buttons'].add(button)
+            else:
+                pyautogui.mouseUp(x=x, y=y, button=button, _pause=False)
+                item['pressed_buttons'].discard(button)
+            return
+
+        if action == 'mouse_wheel':
+            clicks = self._normalize_wheel(payload.get('delta'))
+            if not clicks:
+                return
+            x, y = self._resolve_pointer(item, payload)
+            pyautogui.moveTo(x, y, duration=0, _pause=False)
+            pyautogui.scroll(clicks, _pause=False)
+            return
+
+        if action in ('key_down', 'key_up'):
+            key = self._normalize_key(payload.get('key'))
+            if not key:
+                return
+            if action == 'key_down':
+                if key in item['pressed_keys']:
+                    return
+                pyautogui.keyDown(key, _pause=False)
+                item['pressed_keys'].add(key)
+            else:
+                pyautogui.keyUp(key, _pause=False)
+                item['pressed_keys'].discard(key)
+            return
+
+        raise ValueError(f'Unsupported screen input action: {action}')
+
+    def _release_session_inputs(self, item: dict, restore_control: bool = False):
+        if not item:
+            return
+
+        with self._input_lock:
+            pressed_keys = list(item.get('pressed_keys') or set())
+            pressed_buttons = list(item.get('pressed_buttons') or set())
+            item.get('pressed_keys', set()).clear()
+            item.get('pressed_buttons', set()).clear()
+
+            needs_restore = restore_control and item.get('pyautogui_failsafe') is not None
+            if not pressed_keys and not pressed_buttons and not needs_restore:
+                return
+
+            try:
+                pyautogui = self._get_pyautogui()
+            except Exception:
+                if restore_control:
+                    item['pyautogui_failsafe'] = None
+                return
+
+            for key in reversed(pressed_keys):
+                try:
+                    pyautogui.keyUp(key, _pause=False)
+                except Exception:
+                    pass
+            for button in pressed_buttons:
+                try:
+                    pyautogui.mouseUp(button=button, _pause=False)
+                except Exception:
+                    pass
+
+            if restore_control:
+                previous_failsafe = item.get('pyautogui_failsafe')
+                if previous_failsafe is not None:
+                    try:
+                        pyautogui.FAILSAFE = bool(previous_failsafe)
+                    except Exception:
+                        pass
+                    item['pyautogui_failsafe'] = None
+
+    def _resolve_pointer(self, item: dict, payload: dict):
+        width = int(item.get('frame_width') or 0)
+        height = int(item.get('frame_height') or 0)
+        origin_x = int(item.get('origin_x') or 0)
+        origin_y = int(item.get('origin_y') or 0)
+
+        if sys.platform == 'darwin':
+            width = int(item.get('input_width') or 0)
+            height = int(item.get('input_height') or 0)
+            origin_x = 0
+            origin_y = 0
+
+            if width <= 0 or height <= 0:
+                try:
+                    width, height = self._get_pyautogui().size()
+                    width = int(width)
+                    height = int(height)
+                except Exception as e:
+                    raise RuntimeError(
+                        f'Unable to resolve macOS input geometry: {e}'
+                    ) from e
+
+        if width <= 0 or height <= 0:
+            raise RuntimeError('Screen input geometry is not ready')
+
+        try:
+            normalized_x = float(payload.get('x'))
+            normalized_y = float(payload.get('y'))
+        except Exception as e:
+            raise ValueError('Invalid screen pointer coordinates') from e
+
+        normalized_x = max(0.0, min(1.0, normalized_x))
+        normalized_y = max(0.0, min(1.0, normalized_y))
+
+        x = origin_x + int(round(normalized_x * max(0, width - 1)))
+        y = origin_y + int(round(normalized_y * max(0, height - 1)))
+
+        return x, y
+
+    def _get_pyautogui(self):
+        try:
+            import pyautogui
+            return pyautogui
+        except Exception as e:
+            raise RuntimeError(f'pyautogui is unavailable for screen control: {e}') from e
+
+    def _normalize_button(self, value) -> str:
+        button = str(value or '').strip().lower()
+        if button not in self.INPUT_BUTTONS:
+            raise ValueError(f'Unsupported mouse button: {button or value}')
+        return button
+
+    def _normalize_wheel(self, value) -> int:
+        try:
+            clicks = int(value)
+        except Exception:
+            clicks = 0
+        return max(-10, min(10, clicks))
+
+    def _normalize_key(self, value) -> str:
+        key = str(value or '').strip().lower()
+        if not key:
+            return ''
+        if key == 'meta':
+            if sys.platform == 'darwin':
+                return 'command'
+            return 'win'
+        aliases = {
+            'control': 'ctrl',
+            'escape': 'esc',
+            'arrowup': 'up',
+            'arrowdown': 'down',
+            'arrowleft': 'left',
+            'arrowright': 'right',
+            'pageup': 'pgup',
+            'pagedown': 'pgdn',
+            'capslock': 'capslock',
+            'numlock': 'numlock',
+            'scrolllock': 'scrolllock',
+            'printscreen': 'printscreen',
+        }
+        return aliases.get(key, key)
+
+    def _send_input_error(self, screen_session_id: str, message: str):
+        try:
+            self.connection.send({
+                'type': MSG_TYPE_SCREEN_INPUT_ERROR,
+                'screen_session_id': screen_session_id,
+                'message': str(message or 'Screen control input failed'),
+            })
+        except Exception:
+            pass
 
     def _capture_image(self):
         image_grab_error = None
@@ -171,6 +419,22 @@ class ScreenViewManager:
             if image_grab_error is not None:
                 raise RuntimeError(f'Pillow ImageGrab failed: {image_grab_error}; pyautogui failed: {e}')
             raise RuntimeError(f'Screen capture failed: {e}')
+
+    def _capture_origin(self, image):
+        if not sys.platform.startswith('win'):
+            return 0, 0
+        try:
+            import ctypes
+            user32 = ctypes.windll.user32
+            origin_x = int(user32.GetSystemMetrics(76))
+            origin_y = int(user32.GetSystemMetrics(77))
+            virtual_width = int(user32.GetSystemMetrics(78))
+            virtual_height = int(user32.GetSystemMetrics(79))
+            if virtual_width == int(image.width) and virtual_height == int(image.height):
+                return origin_x, origin_y
+        except Exception:
+            pass
+        return 0, 0
 
     def _encode_jpeg(self, image, quality: int):
         if image is None:

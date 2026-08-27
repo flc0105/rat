@@ -495,6 +495,7 @@ class WebConnectionService:
         session.context.on_screen_frame = screen_view_service.handle_client_frame
         session.context.on_screen_closed = screen_view_service.handle_client_closed
         session.context.on_screen_error = screen_view_service.handle_client_error
+        session.context.on_screen_input_error = screen_view_service.handle_client_input_error
         return session
 
     def handle_connection_registered(self, session: ClientSession):

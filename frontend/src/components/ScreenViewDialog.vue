@@ -2,10 +2,10 @@
   <el-dialog
     v-model="visible"
     title="Screen View"
-    width="1120px"
-    top="4vh"
+    :width="screenDialogWidth"
+    :top="screenDialogTop"
     append-to-body
-    class="fixed-dialog screen-view-dialog"
+    :class="screenDialogClass"
     modal-class="screen-view-overlay"
     @close="handleDialogClose"
     @closed="handleDialogClosed"
@@ -49,13 +49,39 @@
             />
           </el-select>
 
+          <span class="screen-view-control-label">Control</span>
+          <el-switch
+            v-model="controlEnabled"
+            size="small"
+            :disabled="!controlAvailable"
+            @change="handleControlToggle"
+          />
+
           <el-button size="small" :loading="loading" @click="restartView">
             Restart
+          </el-button>
+          <el-button size="small" @click="toggleFullscreen">
+            {{ fullscreen ? 'Exit Fullscreen' : 'Fullscreen' }}
           </el-button>
         </div>
       </div>
 
-      <div class="screen-view-canvas" v-loading="loading && !frameSrc">
+      <div
+        ref="screenCanvas"
+        class="screen-view-canvas"
+        :class="{ 'screen-view-canvas-control': controlEnabled }"
+        :tabindex="controlEnabled ? 0 : -1"
+        v-loading="loading && !frameSrc"
+        @pointermove="handlePointerMove"
+        @pointerdown="handlePointerDown"
+        @pointerup="handlePointerUp"
+        @pointercancel="handlePointerCancel"
+        @wheel="handleWheel"
+        @keydown="handleKeyDown"
+        @keyup="handleKeyUp"
+        @blur="handleCanvasBlur"
+        @contextmenu="handleContextMenu"
+      >
         <img
           v-if="frameSrc"
           :src="frameSrc"
@@ -74,7 +100,7 @@
 
         <div v-else class="screen-view-empty">
           <div class="screen-view-empty-title">Waiting for screen frames…</div>
-          <div class="screen-view-empty-text">The preview is read-only. Mouse and keyboard input are disabled.</div>
+          <div class="screen-view-empty-text">View mode is active. Enable Control to send mouse and keyboard input.</div>
         </div>
       </div>
     </div>
@@ -106,11 +132,13 @@ export default {
   data() {
     return {
       visible: false,
+      fullscreen: false,
       loading: false,
       settingsSaving: false,
       screenSessionId: '',
       screenWs: null,
       screenWsPath: '',
+      screenWsReady: false,
       screenStatus: 'idle',
       screenError: '',
       frameSrc: '',
@@ -118,6 +146,11 @@ export default {
       frameWidth: 0,
       frameHeight: 0,
       frameBytes: 0,
+      controlEnabled: false,
+      controlError: '',
+      pendingPointerMove: null,
+      pointerMoveTimer: null,
+      lastPointerMoveSentAt: 0,
       fps: 4,
       quality: 60,
       targetClientId: '',
@@ -136,6 +169,31 @@ export default {
   },
 
   computed: {
+    screenDialogClass() {
+      return [
+        'fixed-dialog',
+        'screen-view-dialog',
+        { 'screen-view-dialog-fullscreen': this.fullscreen },
+      ]
+    },
+
+    screenDialogWidth() {
+      return this.fullscreen ? '100vw' : '1120px'
+    },
+
+    screenDialogTop() {
+      return this.fullscreen ? '0' : '4vh'
+    },
+
+    controlAvailable() {
+      return !!(
+        this.screenSessionId &&
+        this.screenWsReady &&
+        this.screenStatus === 'open' &&
+        this.frameSrc
+      )
+    },
+
     displayStatus() {
       const value = String(this.screenStatus || '').trim().toLowerCase()
       if (!value || value === 'idle') return 'Idle'
@@ -151,6 +209,8 @@ export default {
   },
 
   beforeUnmount() {
+    this.removeControlSafetyListeners()
+    this.clearPointerMoveTimer()
     this.stopFallbackPolling()
     this.closeScreenSocket()
     this.closeRemoteSession(false)
@@ -189,6 +249,11 @@ export default {
       this.frameWidth = 0
       this.frameHeight = 0
       this.frameBytes = 0
+      this.controlEnabled = false
+      this.controlError = ''
+      this.screenWsReady = false
+      this.removeControlSafetyListeners()
+      this.clearPointerMoveTimer()
       this.stopFallbackPolling()
       this.closeScreenSocket()
 
@@ -215,6 +280,283 @@ export default {
       await this.startView()
     },
 
+    toggleFullscreen() {
+      this.fullscreen = !this.fullscreen
+    },
+
+    async handleControlToggle(enabled) {
+      if (!enabled) {
+        this.sendScreenWsMessage({ type: 'control', enabled: false })
+        this.disableControl(false)
+        return
+      }
+
+      if (!this.controlAvailable) {
+        this.controlEnabled = false
+        ElMessage.warning('Screen control requires an active WebSocket preview')
+        return
+      }
+
+      this.controlError = ''
+      if (!this.sendScreenWsMessage({ type: 'control', enabled: true })) {
+        this.controlEnabled = false
+        ElMessage.warning('Screen control connection is unavailable')
+        return
+      }
+
+      this.installControlSafetyListeners()
+      this.$nextTick(() => {
+        this.$refs.screenCanvas?.focus?.()
+      })
+    },
+
+    disableControl(sendRemote = true) {
+      const wasEnabled = this.controlEnabled
+      if (sendRemote && wasEnabled) {
+        this.sendScreenWsMessage({ type: 'control', enabled: false })
+      }
+      this.controlEnabled = false
+      this.pendingPointerMove = null
+      this.clearPointerMoveTimer()
+      this.removeControlSafetyListeners()
+      this.$refs.screenCanvas?.blur?.()
+    },
+
+    applyControlPayload(payload = {}) {
+      const error = String(payload.control_error || '').trim()
+      if (!error || error === this.controlError) return
+      this.controlError = error
+      this.disableControl(false)
+      ElMessage.error(error)
+    },
+
+    sendScreenWsMessage(payload) {
+      const ws = this.screenWs
+      if (!ws || !this.screenWsReady || ws.readyState !== WebSocket.OPEN) return false
+      try {
+        ws.send(JSON.stringify(payload || {}))
+        return true
+      } catch (_) {
+        return false
+      }
+    },
+
+    sendScreenInput(event) {
+      if (!this.controlEnabled || !event) return false
+      return this.sendScreenWsMessage({ type: 'input', event })
+    },
+
+    releaseRemoteInputs() {
+      if (!this.controlEnabled) return
+      this.pendingPointerMove = null
+      this.clearPointerMoveTimer()
+      this.sendScreenInput({ action: 'release_all' })
+    },
+
+    installControlSafetyListeners() {
+      window.addEventListener('blur', this.handleWindowBlur)
+    },
+
+    removeControlSafetyListeners() {
+      window.removeEventListener('blur', this.handleWindowBlur)
+    },
+
+    handleWindowBlur() {
+      this.releaseRemoteInputs()
+    },
+
+    handleCanvasBlur() {
+      this.releaseRemoteInputs()
+    },
+
+    handlePointerMove(event) {
+      if (!this.controlEnabled || event.pointerType === 'touch') return
+      const point = this.resolveRemotePointer(event, true)
+      if (!point) return
+      event.preventDefault()
+      this.queuePointerMove(point)
+    },
+
+    handlePointerDown(event) {
+      if (!this.controlEnabled || event.pointerType === 'touch') return
+      const point = this.resolveRemotePointer(event)
+      const button = this.normalizePointerButton(event.button)
+      if (!point || !button) return
+
+      event.preventDefault()
+      this.$refs.screenCanvas?.focus?.()
+      try {
+        event.currentTarget?.setPointerCapture?.(event.pointerId)
+      } catch (_) {
+        // Pointer capture is best-effort and does not affect screen viewing.
+      }
+      this.sendScreenInput({
+        action: 'mouse_down',
+        button,
+        x: point.x,
+        y: point.y,
+      })
+    },
+
+    handlePointerUp(event) {
+      if (!this.controlEnabled || event.pointerType === 'touch') return
+      const point = this.resolveRemotePointer(event, true)
+      const button = this.normalizePointerButton(event.button)
+      if (point && button) {
+        event.preventDefault()
+        this.sendScreenInput({
+          action: 'mouse_up',
+          button,
+          x: point.x,
+          y: point.y,
+        })
+      }
+      try {
+        event.currentTarget?.releasePointerCapture?.(event.pointerId)
+      } catch (_) {
+        // Ignore pointer-capture release failures.
+      }
+    },
+
+    handlePointerCancel(event) {
+      if (!this.controlEnabled) return
+      event.preventDefault()
+      this.releaseRemoteInputs()
+    },
+
+    handleWheel(event) {
+      if (!this.controlEnabled) return
+      const point = this.resolveRemotePointer(event)
+      if (!point) return
+      event.preventDefault()
+
+      const rawDelta = Number(event.deltaY || 0)
+      if (!rawDelta) return
+      const magnitude = Math.max(1, Math.min(5, Math.round(Math.abs(rawDelta) / 100) || 1))
+      this.sendScreenInput({
+        action: 'mouse_wheel',
+        x: point.x,
+        y: point.y,
+        delta: rawDelta > 0 ? -magnitude : magnitude,
+      })
+    },
+
+    handleContextMenu(event) {
+      if (!this.controlEnabled) return
+      event.preventDefault()
+    },
+
+    handleKeyDown(event) {
+      if (!this.controlEnabled || event.isComposing) return
+      event.preventDefault()
+      if (event.repeat) return
+      const key = this.normalizeKeyboardKey(event.key)
+      if (!key) return
+      this.sendScreenInput({ action: 'key_down', key })
+    },
+
+    handleKeyUp(event) {
+      if (!this.controlEnabled || event.isComposing) return
+      event.preventDefault()
+      const key = this.normalizeKeyboardKey(event.key)
+      if (!key) return
+      this.sendScreenInput({ action: 'key_up', key })
+    },
+
+    normalizeKeyboardKey(value) {
+      const original = String(value || '')
+      const aliases = {
+        ' ': 'space',
+        Control: 'ctrl',
+        Shift: 'shift',
+        Alt: 'alt',
+        Meta: 'meta',
+        Enter: 'enter',
+        Backspace: 'backspace',
+        Tab: 'tab',
+        Escape: 'esc',
+        Delete: 'delete',
+        Insert: 'insert',
+        Home: 'home',
+        End: 'end',
+        PageUp: 'pgup',
+        PageDown: 'pgdn',
+        ArrowUp: 'up',
+        ArrowDown: 'down',
+        ArrowLeft: 'left',
+        ArrowRight: 'right',
+        CapsLock: 'capslock',
+        NumLock: 'numlock',
+        ScrollLock: 'scrolllock',
+        PrintScreen: 'printscreen',
+        Pause: 'pause',
+      }
+      if (aliases[original]) return aliases[original]
+      if (/^F\d{1,2}$/i.test(original)) return original.toLowerCase()
+      if (original.length === 1 && /^[\x20-\x7E]$/.test(original)) return original.toLowerCase()
+      return ''
+    },
+
+    normalizePointerButton(value) {
+      if (value === 0) return 'left'
+      if (value === 1) return 'middle'
+      if (value === 2) return 'right'
+      return ''
+    },
+
+    resolveRemotePointer(event, allowClamp = false) {
+      if (!this.frameWidth || !this.frameHeight) return null
+      const canvas = this.$refs.screenCanvas
+      if (!canvas) return null
+
+      const rect = canvas.getBoundingClientRect()
+      if (!rect.width || !rect.height) return null
+
+      const scale = Math.min(rect.width / this.frameWidth, rect.height / this.frameHeight)
+      const displayWidth = this.frameWidth * scale
+      const displayHeight = this.frameHeight * scale
+      const left = rect.left + ((rect.width - displayWidth) / 2)
+      const top = rect.top + ((rect.height - displayHeight) / 2)
+      const localX = Number(event.clientX || 0) - left
+      const localY = Number(event.clientY || 0) - top
+      if (!allowClamp && (localX < 0 || localY < 0 || localX > displayWidth || localY > displayHeight)) return null
+
+      return {
+        x: Math.max(0, Math.min(1, localX / displayWidth)),
+        y: Math.max(0, Math.min(1, localY / displayHeight)),
+      }
+    },
+
+    queuePointerMove(point) {
+      this.pendingPointerMove = point
+      const now = performance.now()
+      const elapsed = now - Number(this.lastPointerMoveSentAt || 0)
+      const interval = 33
+      if (elapsed >= interval) {
+        this.flushPointerMove()
+        return
+      }
+      if (this.pointerMoveTimer) return
+      this.pointerMoveTimer = window.setTimeout(() => {
+        this.pointerMoveTimer = null
+        this.flushPointerMove()
+      }, Math.max(1, interval - elapsed))
+    },
+
+    flushPointerMove() {
+      if (!this.controlEnabled || !this.pendingPointerMove) return
+      const point = this.pendingPointerMove
+      this.pendingPointerMove = null
+      this.lastPointerMoveSentAt = performance.now()
+      this.sendScreenInput({ action: 'mouse_move', x: point.x, y: point.y })
+    },
+
+    clearPointerMoveTimer() {
+      if (!this.pointerMoveTimer) return
+      window.clearTimeout(this.pointerMoveTimer)
+      this.pointerMoveTimer = null
+    },
+
     openScreenSocket() {
       if (!this.screenWsPath || !this.screenSessionId) {
         this.startFallbackPolling()
@@ -229,6 +571,10 @@ export default {
         const ws = new WebSocket(url.toString())
         this.screenWs = ws
 
+        ws.onopen = () => {
+          if (this.screenWs === ws) this.screenWsReady = true
+        }
+
         ws.onmessage = (event) => {
           let payload = null
           try {
@@ -240,12 +586,18 @@ export default {
         }
 
         ws.onerror = () => {
+          if (this.screenWs === ws) this.screenWsReady = false
+          this.disableControl(false)
           if (this.userClosing) return
           this.startFallbackPolling()
         }
 
         ws.onclose = () => {
-          if (this.screenWs === ws) this.screenWs = null
+          if (this.screenWs === ws) {
+            this.screenWs = null
+            this.screenWsReady = false
+          }
+          this.disableControl(false)
           if (!this.userClosing && this.visible && !['closed', 'error'].includes(this.screenStatus)) {
             this.startFallbackPolling()
           }
@@ -258,6 +610,7 @@ export default {
     closeScreenSocket() {
       const ws = this.screenWs
       this.screenWs = null
+      this.screenWsReady = false
       if (!ws) return
       try {
         ws.close()
@@ -268,6 +621,7 @@ export default {
 
     applyScreenPayload(payload = {}) {
       const type = String(payload.type || '').trim().toLowerCase()
+      this.applyControlPayload(payload)
       if (type === 'frame') {
         this.screenStatus = payload.status || 'open'
         this.screenError = payload.error || ''
@@ -336,6 +690,7 @@ export default {
 
     async closeRemoteSession(showError = false) {
       const screenSessionId = this.screenSessionId
+      this.disableControl(true)
       this.screenSessionId = ''
       this.stopFallbackPolling()
       this.closeScreenSocket()
@@ -354,8 +709,10 @@ export default {
 
     handleDialogClosed() {
       this.userClosing = false
+      this.fullscreen = false
       this.screenSessionId = ''
       this.screenWsPath = ''
+      this.screenWsReady = false
       this.screenStatus = 'idle'
       this.screenError = ''
       this.frameSrc = ''
@@ -363,6 +720,10 @@ export default {
       this.frameWidth = 0
       this.frameHeight = 0
       this.frameBytes = 0
+      this.controlEnabled = false
+      this.controlError = ''
+      this.removeControlSafetyListeners()
+      this.clearPointerMoveTimer()
       this.targetClientId = ''
       this.targetLabel = '-'
     },
@@ -438,6 +799,16 @@ export default {
   background: #020617;
 }
 
+.screen-view-canvas-control {
+  outline: 2px solid #409eff;
+  outline-offset: -2px;
+  cursor: default;
+}
+
+.screen-view-canvas:focus {
+  outline-color: #409eff;
+}
+
 .screen-view-image {
   display: block;
   width: 100%;
@@ -495,5 +866,51 @@ export default {
   .screen-view-canvas {
     min-height: 420px;
   }
+}
+</style>
+
+
+<style>
+.screen-view-dialog.screen-view-dialog-fullscreen.el-dialog {
+  width: 100vw !important;
+  max-width: 100vw !important;
+  height: 100dvh !important;
+  max-height: 100dvh !important;
+  margin: 0 !important;
+  top: 0 !important;
+  border-radius: 0 !important;
+  display: flex !important;
+  flex-direction: column !important;
+}
+
+.screen-view-dialog.screen-view-dialog-fullscreen .el-dialog__header {
+  flex: 0 0 auto !important;
+}
+
+.screen-view-dialog.screen-view-dialog-fullscreen .el-dialog__body {
+  flex: 1 1 auto !important;
+  min-height: 0 !important;
+  overflow: hidden !important;
+  display: flex !important;
+  flex-direction: column !important;
+}
+
+.screen-view-dialog.screen-view-dialog-fullscreen .el-dialog__footer {
+  flex: 0 0 auto !important;
+}
+
+.screen-view-dialog.screen-view-dialog-fullscreen .screen-view-body {
+  flex: 1 1 auto !important;
+  min-height: 0 !important;
+  height: 100% !important;
+}
+
+.screen-view-dialog.screen-view-dialog-fullscreen .screen-view-canvas {
+  flex: 1 1 auto !important;
+  min-height: 0 !important;
+}
+
+.screen-view-dialog.screen-view-dialog-fullscreen .screen-view-image {
+  max-height: none !important;
 }
 </style>

@@ -8,6 +8,12 @@ class WebScreenViewApi:
     def update_screen_view(self, screen_session_id: str, *, fps=None, quality=None) -> dict:
         return self.screen_view_session_service.update_settings(screen_session_id, fps=fps, quality=quality)
 
+    def set_screen_control(self, screen_session_id: str, enabled: bool) -> dict:
+        return self.screen_view_session_service.set_control_enabled(screen_session_id, enabled)
+
+    def send_screen_input(self, screen_session_id: str, event: dict) -> dict:
+        return self.screen_view_session_service.send_input(screen_session_id, event)
+
     def close_screen_view(self, screen_session_id: str) -> dict:
         return self.screen_view_session_service.close_session(screen_session_id)
 

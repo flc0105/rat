@@ -17,10 +17,12 @@ from core.protocol.message_types import (
     MSG_TYPE_SCREEN_OPEN,
     MSG_TYPE_SCREEN_CONFIG,
     MSG_TYPE_SCREEN_CLOSE,
+    MSG_TYPE_SCREEN_INPUT,
     MSG_TYPE_SCREEN_OPENED,
     MSG_TYPE_SCREEN_FRAME,
     MSG_TYPE_SCREEN_CLOSED,
     MSG_TYPE_SCREEN_ERROR,
+    MSG_TYPE_SCREEN_INPUT_ERROR,
 )
 
 
@@ -90,6 +92,9 @@ class BaseMessageRouter:
         if message_type == MSG_TYPE_SCREEN_CLOSE:
             return self.handle_screen_close_message(data)
 
+        if message_type == MSG_TYPE_SCREEN_INPUT:
+            return self.handle_screen_input_message(data)
+
         if message_type == MSG_TYPE_SCREEN_OPENED:
             return self.handle_screen_opened_message(data)
 
@@ -101,6 +106,9 @@ class BaseMessageRouter:
 
         if message_type == MSG_TYPE_SCREEN_ERROR:
             return self.handle_screen_error_message(data)
+
+        if message_type == MSG_TYPE_SCREEN_INPUT_ERROR:
+            return self.handle_screen_input_error_message(data)
 
         return self.handle_unknown_message(data)
 
@@ -159,6 +167,9 @@ class BaseMessageRouter:
     def handle_screen_close_message(self, data: dict):
         return None
 
+    def handle_screen_input_message(self, data: dict):
+        return None
+
     def handle_screen_opened_message(self, data: dict):
         return None
 
@@ -169,6 +180,9 @@ class BaseMessageRouter:
         return None
 
     def handle_screen_error_message(self, data: dict):
+        return None
+
+    def handle_screen_input_error_message(self, data: dict):
         return None
 
     def handle_unknown_message(self, data: dict):

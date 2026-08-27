@@ -72,6 +72,11 @@ class ServerInboundMessageRouter(BaseMessageRouter):
         if callable(callback):
             callback(data.get('screen_session_id') or '', data.get('message') or '')
 
+    def handle_screen_input_error_message(self, data: dict) -> None:
+        callback = self.connection.context.on_screen_input_error
+        if callable(callback):
+            callback(data.get('screen_session_id') or '', data.get('message') or '')
+
 
 
 

@@ -39,6 +39,7 @@ class ClientSessionContext:
         self.on_screen_frame = None
         self.on_screen_closed = None
         self.on_screen_error = None
+        self.on_screen_input_error = None
 
         self.connected_at = ''
         self.disconnected_at = ''
