@@ -14,44 +14,10 @@ class ExternalToolParamPresetStore:
 
     TIME_FORMAT = '%Y-%m-%d %H:%M:%S'
 
-    DEFAULT_PRESETS = {
-        'ttyd.main': [
-            {
-                'preset_id': 'macos',
-                'name': 'macOS',
-                'params': {
-                    'instance_name': 'ttyd-mac-7681',
-                    'address': '0.0.0.0',
-                    'port': 7681,
-                    'credential': 'admin:Aa123456!@#',
-                    'cwd': '~',
-                    'command': '/bin/zsh',
-                    'extra_args': '',
-                },
-            },
-            {
-                'preset_id': 'windows',
-                'name': 'Windows',
-                'params': {
-                    'instance_name': 'ttyd-win-7681',
-                    'address': '0.0.0.0',
-                    'port': 7681,
-                    'credential': 'admin:Aa123456!@#',
-                    'cwd': 'C:\\',
-                    'command': 'C:\\Windows\\System32\\cmd.exe',
-                    'extra_args': '',
-                },
-            },
-        ],
-    }
-
     def __init__(self, root_dir: str = EXTERNAL_TOOL_PARAM_PRESETS_ROOT_DIR):
         self.root_dir = os.path.abspath(root_dir)
         self._lock = threading.RLock()
-        fresh_root = not os.path.isdir(self.root_dir)
         os.makedirs(self.root_dir, exist_ok=True)
-        if fresh_root:
-            self._seed_defaults()
 
     def _now_text(self) -> str:
         return datetime.now().strftime(self.TIME_FORMAT)
@@ -77,7 +43,7 @@ class ExternalToolParamPresetStore:
         except Exception as e:
             raise ValueError(f'params must be JSON serializable: {e}') from e
 
-    def _normalize_entry(self, item, *, default_id: str = '') -> dict | None:
+    def _normalize_entry(self, item) -> dict | None:
         if not isinstance(item, dict):
             return None
 
@@ -85,7 +51,7 @@ class ExternalToolParamPresetStore:
         if not name:
             return None
 
-        preset_id = str(item.get('preset_id') or default_id or '').strip() or uuid.uuid4().hex
+        preset_id = str(item.get('preset_id') or '').strip() or uuid.uuid4().hex
         now_text = self._now_text()
         created_at = str(item.get('created_at') or '').strip() or now_text
         updated_at = str(item.get('updated_at') or '').strip() or created_at
@@ -143,19 +109,6 @@ class ExternalToolParamPresetStore:
                     os.remove(temp_path)
             except Exception:
                 pass
-
-    def _seed_defaults(self):
-        for tool_id, seed_items in self.DEFAULT_PRESETS.items():
-            items = []
-            for seed_item in seed_items:
-                normalized = self._normalize_entry(
-                    seed_item,
-                    default_id=str(seed_item.get('preset_id') or '').strip(),
-                )
-                if normalized:
-                    items.append(normalized)
-            if items:
-                self._write_payload(tool_id, items)
 
     def _ensure_unique_name(self, items: list[dict], name: str, skip_preset_id: str = ''):
         target = str(name or '').strip().lower()
