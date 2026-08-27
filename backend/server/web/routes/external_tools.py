@@ -13,6 +13,7 @@ def create_external_tool_blueprint(server_instance):
     request_context = external_tool_api.request_context
     catalog_api = external_tool_api.catalog
     client_lifecycle_api = external_tool_api.client_lifecycle
+    param_preset_api = external_tool_api.param_presets
     responder = WebApiResponder()
 
     @blueprint.get('/api/external-tools/catalog')
@@ -38,6 +39,44 @@ def create_external_tool_blueprint(server_instance):
     def get_external_tool(tool_id):
         return responder.json_endpoint(
             lambda: catalog_api.get_tool(tool_id),
+            default_error_status=500,
+        )
+
+    @blueprint.get('/api/external-tools/<tool_id>/param-presets')
+    def list_external_tool_param_presets(tool_id):
+        return responder.json_endpoint(
+            lambda: param_preset_api.list_presets(tool_id),
+            default_error_status=500,
+        )
+
+    @blueprint.post('/api/external-tools/<tool_id>/param-presets')
+    def create_external_tool_param_preset(tool_id):
+        def _execute():
+            payload = get_json_payload()
+            return param_preset_api.create_preset(
+                tool_id,
+                str(payload.get('name') or ''),
+                payload.get('params'),
+            )
+        return responder.json_endpoint(_execute, default_error_status=500)
+
+    @blueprint.put('/api/external-tools/<tool_id>/param-presets/<preset_id>')
+    def update_external_tool_param_preset(tool_id, preset_id):
+        def _execute():
+            payload = get_json_payload()
+            params = payload.get('params') if 'params' in payload else None
+            return param_preset_api.update_preset(
+                tool_id,
+                preset_id,
+                name=str(payload.get('name') or ''),
+                params=params,
+            )
+        return responder.json_endpoint(_execute, default_error_status=500)
+
+    @blueprint.delete('/api/external-tools/<tool_id>/param-presets/<preset_id>')
+    def delete_external_tool_param_preset(tool_id, preset_id):
+        return responder.json_endpoint(
+            lambda: param_preset_api.delete_preset(tool_id, preset_id),
             default_error_status=500,
         )
 

@@ -30,6 +30,7 @@ SCRIPT_JOBS_PATH = os.path.join(SERVER_DIR, 'resources/jobs')
 EXTERNAL_TOOLS_ROOT = os.path.join(SERVER_DIR, 'resources/external_tools')
 EXTERNAL_TOOL_META_PATH = os.path.join(EXTERNAL_TOOLS_ROOT, 'metas')
 EXTERNAL_TOOL_PACKAGE_PATH = os.path.join(EXTERNAL_TOOLS_ROOT, 'packages')
+EXTERNAL_TOOL_PARAM_PRESETS_ROOT_DIR = os.path.abspath(os.path.join('runtime', 'external_tool_param_presets'))
 
 # ------------------ logging ------------------ #
 BACKGROUND_MESSAGE_OUTPUT_TO_FILE = True

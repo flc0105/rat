@@ -39,6 +39,43 @@ export function loadExternalToolCatalog() {
   return externalToolRequest('/api/external-tools/catalog', {}, 'Failed to load external tools')
 }
 
+export function loadExternalToolParamPresets(toolId) {
+  return externalToolRequest(
+    `/api/external-tools/${encodeURIComponent(toolId)}/param-presets`,
+    {},
+    'Failed to load parameter presets',
+  )
+}
+
+export function createExternalToolParamPreset(toolId, payload = {}) {
+  return postJson(
+    `/api/external-tools/${encodeURIComponent(toolId)}/param-presets`,
+    payload,
+    {},
+    'Failed to create parameter preset',
+  )
+}
+
+export function updateExternalToolParamPreset(toolId, presetId, payload = {}) {
+  return externalToolRequest(
+    `/api/external-tools/${encodeURIComponent(toolId)}/param-presets/${encodeURIComponent(presetId)}`,
+    {
+      method: 'PUT',
+      headers: jsonHeaders(),
+      body: JSON.stringify(payload || {}),
+    },
+    'Failed to update parameter preset',
+  )
+}
+
+export function deleteExternalToolParamPreset(toolId, presetId) {
+  return externalToolRequest(
+    `/api/external-tools/${encodeURIComponent(toolId)}/param-presets/${encodeURIComponent(presetId)}`,
+    { method: 'DELETE' },
+    'Failed to delete parameter preset',
+  )
+}
+
 export function loadClientExternalToolCatalog(clientId, payload = {}, headers = {}) {
   return postJson(
     `/api/connections/${encodeURIComponent(clientId)}/external-tools/catalog`,

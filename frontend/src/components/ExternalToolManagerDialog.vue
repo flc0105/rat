@@ -561,6 +561,49 @@
         </div>
       </div>
 
+      <div class="external-tool-preset-bar">
+        <div class="external-tool-preset-field">
+          <div class="external-tool-preset-label">Preset</div>
+          <el-select
+            v-model="selectedParamPresetId"
+            class="external-tool-preset-select"
+            :loading="presetLoading"
+            @change="applySelectedParamPreset"
+            size="small"
+          >
+            <el-option label="Module Defaults" value="__module_defaults__" />
+            <el-option
+              v-for="preset in paramPresets"
+              :key="preset.preset_id"
+              :label="preset.name"
+              :value="preset.preset_id"
+            />
+          </el-select>
+        </div>
+        <div class="external-tool-preset-actions">
+          <el-button size="small" :loading="presetSaving" @click="saveCurrentParamPresetAs">
+            Save As
+          </el-button>
+          <el-button
+            size="small"
+            :loading="presetSaving"
+            :disabled="selectedParamPresetId === '__module_defaults__'"
+            @click="updateCurrentParamPreset"
+          >
+            Update
+          </el-button>
+          <el-button
+            size="small"
+            type="danger"
+            plain
+            :disabled="selectedParamPresetId === '__module_defaults__' || presetSaving"
+            @click="deleteCurrentParamPreset"
+          >
+            Delete
+          </el-button>
+        </div>
+      </div>
+
       <el-form label-position="top" class="external-tool-param-form">
         <el-form-item
           v-for="param in pendingParams"
@@ -813,6 +856,8 @@ export default {
       loading: false,
       submitting: false,
       previewingCommand: false,
+      presetLoading: false,
+      presetSaving: false,
       logLoading: false,
       installLoading: false,
       activeTab: 'modules',
@@ -827,6 +872,8 @@ export default {
       pendingToolId: '',
       pendingStartMode: 'run',
       paramForm: {},
+      paramPresets: [],
+      selectedParamPresetId: '__module_defaults__',
       remoteFilePickerVisible: false,
       pendingRemoteFileParam: null,
       logDialogVisible: false,
@@ -1887,6 +1934,144 @@ async loadAllClientInstances(deviceId = '', showToast = true) {
     },
 
 
+    cloneParamPresetValue(value) {
+      if (Array.isArray(value)) return value.map(item => this.cloneParamPresetValue(item))
+      if (value && typeof value === 'object') {
+        return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, this.cloneParamPresetValue(item)]))
+      }
+      return value
+    },
+
+    applyParamPreset(preset) {
+      const item = this.pendingItem
+      const form = this.buildParamDefaults(item)
+      const params = preset?.params && typeof preset.params === 'object' ? preset.params : {}
+      for (const [name, value] of Object.entries(params)) {
+        if (!Object.prototype.hasOwnProperty.call(form, name)) continue
+        form[name] = this.cloneParamPresetValue(value)
+      }
+      this.paramForm = form
+    },
+
+    applySelectedParamPreset(presetId) {
+      const targetId = String(presetId || '').trim()
+      if (!targetId || targetId === '__module_defaults__') {
+        this.paramForm = this.buildParamDefaults(this.pendingItem)
+        return
+      }
+      const preset = this.paramPresets.find(item => String(item?.preset_id || '') === targetId)
+      if (preset) this.applyParamPreset(preset)
+    },
+
+    async loadParamPresets(item) {
+      const toolId = String(item?.id || '').trim()
+      this.paramPresets = []
+      this.selectedParamPresetId = '__module_defaults__'
+      if (!toolId) return
+
+      try {
+        this.presetLoading = true
+        const data = await externalToolsApi.loadExternalToolParamPresets(toolId)
+        this.paramPresets = Array.isArray(data?.items) ? data.items : []
+      } catch (e) {
+        ElMessage.error(e.message || 'Failed to load parameter presets')
+      } finally {
+        this.presetLoading = false
+      }
+    },
+
+    currentParamPreset() {
+      const presetId = String(this.selectedParamPresetId || '').trim()
+      if (!presetId || presetId === '__module_defaults__') return null
+      return this.paramPresets.find(item => String(item?.preset_id || '') === presetId) || null
+    },
+
+    upsertParamPreset(item) {
+      if (!item?.preset_id) return
+      const presetId = String(item.preset_id)
+      const next = this.paramPresets.filter(preset => String(preset?.preset_id || '') !== presetId)
+      next.push(item)
+      this.paramPresets = next.sort((a, b) => String(a?.name || '').localeCompare(String(b?.name || '')))
+    },
+
+    async saveCurrentParamPresetAs() {
+      const item = this.pendingItem
+      if (!item) return
+
+      try {
+        const params = this.buildStartParams()
+        const result = await ElMessageBox.prompt('Enter a name for this parameter preset.', 'Save Parameter Preset', {
+          confirmButtonText: 'Save',
+          cancelButtonText: 'Cancel',
+          inputPlaceholder: 'Preset name',
+          inputValidator: value => String(value || '').trim() ? true : 'Preset name is required',
+        })
+        const name = String(result?.value || '').trim()
+        if (!name) return
+
+        this.presetSaving = true
+        const created = await externalToolsApi.createExternalToolParamPreset(item.id, { name, params })
+        this.upsertParamPreset(created)
+        this.selectedParamPresetId = String(created?.preset_id || '')
+        ElMessage.success(`Preset saved: ${created?.name || name}`)
+      } catch (e) {
+        if (e === 'cancel' || e === 'close' || e?.action === 'cancel' || e?.action === 'close') return
+        ElMessage.error(e.message || 'Failed to save parameter preset')
+      } finally {
+        this.presetSaving = false
+      }
+    },
+
+    async updateCurrentParamPreset() {
+      const item = this.pendingItem
+      const preset = this.currentParamPreset()
+      if (!item || !preset) return
+
+      try {
+        const params = this.buildStartParams()
+        await ElMessageBox.confirm(
+          `Update preset "${preset.name}" with the current parameters?`,
+          'Update Parameter Preset',
+          { confirmButtonText: 'Update', cancelButtonText: 'Cancel', type: 'warning' },
+        )
+        this.presetSaving = true
+        const updated = await externalToolsApi.updateExternalToolParamPreset(item.id, preset.preset_id, { params })
+        this.upsertParamPreset(updated)
+        ElMessage.success(`Preset updated: ${updated?.name || preset.name}`)
+      } catch (e) {
+        if (e === 'cancel' || e === 'close' || e?.action === 'cancel' || e?.action === 'close') return
+        ElMessage.error(e.message || 'Failed to update parameter preset')
+      } finally {
+        this.presetSaving = false
+      }
+    },
+
+    async deleteCurrentParamPreset() {
+      const item = this.pendingItem
+      const preset = this.currentParamPreset()
+      if (!item || !preset) return
+
+      try {
+        await ElMessageBox.confirm(
+          `Delete preset "${preset.name}"?`,
+          'Delete Parameter Preset',
+          { confirmButtonText: 'Delete', cancelButtonText: 'Cancel', type: 'warning' },
+        )
+        this.presetSaving = true
+        await externalToolsApi.deleteExternalToolParamPreset(item.id, preset.preset_id)
+        this.paramPresets = this.paramPresets.filter(entry => entry?.preset_id !== preset.preset_id)
+        this.selectedParamPresetId = '__module_defaults__'
+        this.paramForm = this.buildParamDefaults(item)
+        ElMessage.success(`Preset deleted: ${preset.name}`)
+      } catch (e) {
+        if (e === 'cancel' || e === 'close' || e?.action === 'cancel' || e?.action === 'close') return
+        ElMessage.error(e.message || 'Failed to delete parameter preset')
+      } finally {
+        this.presetSaving = false
+      }
+    },
+
+
     defaultInstanceName(item) {
       if (item?.name === 'frps') return 'frps-7000'
       if (item?.name === 'frpc') return 'vite-8087'
@@ -1951,16 +2136,23 @@ async loadAllClientInstances(deviceId = '', showToast = true) {
       this.pendingToolId = String(item?.id || '').trim()
       this.pendingStartMode = mode
       this.paramForm = this.buildParamDefaults(item)
+      this.paramPresets = []
+      this.selectedParamPresetId = '__module_defaults__'
       this.startDialogVisible = true
+      this.loadParamPresets(item)
     },
 
     resetStartDialog() {
       this.startDialogVisible = false
       this.submitting = false
       this.previewingCommand = false
+      this.presetLoading = false
+      this.presetSaving = false
       this.pendingToolId = ''
       this.pendingStartMode = 'run'
       this.paramForm = {}
+      this.paramPresets = []
+      this.selectedParamPresetId = '__module_defaults__'
     },
 
     downloadTool(item) {
@@ -3659,6 +3851,43 @@ formatVersionLabel(version) {
   border-radius: 10px;
   background: #f8fafc;
   line-height: 1.6;
+}
+
+.external-tool-preset-bar {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid rgba(15, 23, 42, 0.06);
+  border-radius: 10px;
+  background: #f8fafc;
+}
+
+.external-tool-preset-field {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.external-tool-preset-label {
+  margin-bottom: 6px;
+  font-size: 12px;
+  color: var(--muted, #64748b);
+}
+
+.external-tool-preset-select {
+  width: 100%;
+}
+
+.external-tool-preset-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 0 0 auto;
+}
+
+.external-tool-preset-actions :deep(.el-button + .el-button) {
+  margin-left: 0;
 }
 
 .external-tool-param-form {

@@ -12,6 +12,7 @@ from server.application.connection.recent_device_store import RecentDeviceStore
 from server.application.execution.remote_execution_service import RemoteExecutionService
 from server.application.external_tools.external_tool_catalog_service import ExternalToolCatalogService
 from server.application.external_tools.external_tool_runtime_service import ExternalToolRuntimeService
+from server.application.external_tools.external_tool_param_preset_store import ExternalToolParamPresetStore
 from server.application.jobs.background_job_service import BackgroundJobService
 from server.application.jobs.background_job_store import BackgroundJobStore
 from server.application.jobs.job_catalog_service import JobCatalogService
@@ -40,6 +41,7 @@ from server.application.web.terminal_api import WebTerminalApi
 from server.config.config import (
     EXTERNAL_TOOL_META_PATH,
     EXTERNAL_TOOL_PACKAGE_PATH,
+    EXTERNAL_TOOL_PARAM_PRESETS_ROOT_DIR,
     CONNECTION_HISTORY_ROOT_DIR,
     RECENT_DEVICES_JSON_PATH,
     SCRIPT_JOBS_PATH,
@@ -124,6 +126,9 @@ class ServerApplicationAssembly:
             EXTERNAL_TOOL_META_PATH,
             EXTERNAL_TOOL_PACKAGE_PATH,
         )
+        self.external_tool_param_preset_store = ExternalToolParamPresetStore(
+            EXTERNAL_TOOL_PARAM_PRESETS_ROOT_DIR,
+        )
 
         self.background_job_service = BackgroundJobService(
             event_bus=self.event_bus,
@@ -171,6 +176,7 @@ class ServerApplicationAssembly:
         self.external_tool_api = WebExternalToolApi(
             catalog_service=self.external_tool_catalog_service,
             runtime_service=self.external_tool_runtime_service,
+            param_preset_store=self.external_tool_param_preset_store,
             server=self.server,
         )
 
