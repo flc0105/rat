@@ -446,14 +446,17 @@ export default {
       event.preventDefault()
     },
 
-    handleKeyDown(event) {
-      if (!this.controlEnabled || event.isComposing) return
-      event.preventDefault()
-      if (event.repeat) return
-      const key = this.normalizeKeyboardKey(event.key)
-      if (!key) return
-      this.sendScreenInput({ action: 'key_down', key })
-    },
+handleKeyDown(event) {
+  if (!this.controlEnabled || event.isComposing) return
+  event.preventDefault()
+  const key = this.normalizeKeyboardKey(event.key)
+  if (!key) return
+  this.sendScreenInput({
+    action: 'key_down',
+    key,
+    repeat: !!event.repeat,
+  })
+},
 
     handleKeyUp(event) {
       if (!this.controlEnabled || event.isComposing) return

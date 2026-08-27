@@ -281,11 +281,20 @@ class ScreenViewSessionService:
                 raise ValueError('Unsupported screen mouse button')
             result['button'] = button
 
+        # if action in ('key_down', 'key_up'):
+        #     key = str(payload.get('key') or '').strip()
+        #     if not key or len(key) > 32:
+        #         raise ValueError('Invalid screen keyboard key')
+        #     result['key'] = key
+
         if action in ('key_down', 'key_up'):
             key = str(payload.get('key') or '').strip()
             if not key or len(key) > 32:
                 raise ValueError('Invalid screen keyboard key')
             result['key'] = key
+
+            if action == 'key_down':
+                result['repeat'] = bool(payload.get('repeat'))
 
         return result
 
