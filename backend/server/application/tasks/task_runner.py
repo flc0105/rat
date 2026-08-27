@@ -262,7 +262,7 @@ class WebTaskRunner:
         local_path = context.metadata.get('local_path') or ''
         upload_tmp_dir = context.metadata.get('upload_tmp_dir') or ''
 
-        # 只清理浏览器上传暂存区，避免误删 server_files 等永久文件。
+        # 只清理浏览器上传暂存区，避免误删 shared_files 等永久文件。
         if not self._is_under_directory(local_path, upload_tmp_dir):
             return
 

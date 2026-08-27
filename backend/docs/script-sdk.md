@@ -147,19 +147,19 @@ SCRIPT_METADATA = {
 
 from client.runtime.sdk import artifact
 
-saved = artifact.save("/tmp/a.txt", type="server_files", category="script")
+saved = artifact.save("/tmp/a.txt", type="shared_files", category="script")
 print("saved =", saved)
 
-items = artifact.list(type="server_files")
+items = artifact.list(type="shared_files")
 print("items =", items)
 
-matched = artifact.find_by_file_name("a.txt", type="server_files")
+matched = artifact.find_by_file_name("a.txt", type="shared_files")
 print("matched =", matched)
 
-meta = artifact.get(saved["artifact_id"], type="server_files")
+meta = artifact.get(saved["artifact_id"], type="shared_files")
 print("meta =", meta)
 
-path = artifact.download(saved["artifact_id"], type="server_files", target_path="/tmp")
+path = artifact.download(saved["artifact_id"], type="shared_files", target_path="/tmp")
 print("downloaded_path =", path)
 ```
 
@@ -169,8 +169,8 @@ print("downloaded_path =", path)
 |---|---|-------------------|
 | `artifact.save(path, type='files', category='script', extra=None, timeout=None)` | 当前上传入口未强制 script grant | 上传本地文件            |
 | `artifact.list(type='', machine_id='')` | `artifacts:list` | 查询 artifacts      |
-| `artifact.get(ref, type='server_files')` | `artifacts:list` | 解析 artifact 元数据   |
-| `artifact.download(ref, type='server_files', target_path='', timeout=None)` | `artifacts:list` + `artifacts:download` | 下载 artifact       |
+| `artifact.get(ref, type='shared_files')` | `artifacts:list` | 解析 artifact 元数据   |
+| `artifact.download(ref, type='shared_files', target_path='', timeout=None)` | `artifacts:list` + `artifacts:download` | 下载 artifact       |
 | `artifact.find_by_file_name(file_name, type='', machine_id='', exact=True)` | `artifacts:list` | 按文件名查找 artifacts  |
 
 支持的 `type`：
@@ -178,7 +178,7 @@ print("downloaded_path =", path)
 ```python
 "files"
 "previews"
-"server_files"
+"shared_files"
 "command_output"
 ```
 
@@ -207,9 +207,9 @@ login = keychains.get_login("demo_login")
 print("username =", login.username)
 print("password =", login.password.getvalue())
 
-keychains.create_secret("server_token", "server-value", scope="server")
-server_secret = keychains.get_secret("server_token", scope="server")
-print("server_secret =", server_secret.getvalue())
+keychains.create_secret("shared_token", "shared-value", scope="shared")
+shared_secret = keychains.get_secret("shared_token", scope="shared")
+print("shared_secret =", shared_secret.getvalue())
 ```
 
 常用 API：
@@ -226,7 +226,7 @@ print("server_secret =", server_secret.getvalue())
 
 - `create_secret/create_login` 不暴露 `machine_id` 参数。
 - 默认 `scope='machine'` 表示当前 client 对应的 machine。
-- `scope='server'` 表示 server scope。
+- `scope='shared'` 表示 shared scope。
 
 ## `xt`
 

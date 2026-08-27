@@ -15,7 +15,7 @@ class ArtifactRegistryService:
     当前正式 artifact 保留：
     - files
     - previews
-    - server_files
+    - shared_files
     - command_output
     """
 
@@ -23,13 +23,13 @@ class ArtifactRegistryService:
 
     CATEGORY_FILES = 'files'
     CATEGORY_PREVIEWS = 'previews'
-    CATEGORY_SERVER_FILES = 'server_files'
+    CATEGORY_SHARED_FILES = 'shared_files'
     CATEGORY_COMMAND_OUTPUT = 'command_output'
 
     FORMAL_CATEGORIES = {
         CATEGORY_FILES,
         CATEGORY_PREVIEWS,
-        CATEGORY_SERVER_FILES,
+        CATEGORY_SHARED_FILES,
         CATEGORY_COMMAND_OUTPUT,
     }
 
@@ -91,11 +91,11 @@ class ArtifactRegistryService:
     def _get_preview_meta_dir(self, machine_id: str) -> str:
         return self._ensure_directory(os.path.join(self._get_preview_machine_dir(machine_id), 'meta'))
 
-    def _get_server_files_dir(self, category: str = '') -> str:
-        # server_files 暂时不展示 category，但目录层级先预留。
+    def _get_shared_files_dir(self, category: str = '') -> str:
+        # shared_files 暂时不展示 category，但目录层级先预留。
         return self._ensure_directory(
             os.path.join(
-                self.artifact_service.server_files_dir,
+                self.artifact_service.shared_files_dir,
                 self._normalize_category(category),
             )
         )
@@ -113,8 +113,8 @@ class ArtifactRegistryService:
         return self._ensure_directory(os.path.join(self._get_command_output_machine_dir(category, machine_id), 'meta'))
 
 
-    def _get_server_files_meta_dir(self, category: str = '') -> str:
-        return self._ensure_directory(os.path.join(self._get_server_files_dir(category), 'meta'))
+    def _get_shared_files_meta_dir(self, category: str = '') -> str:
+        return self._ensure_directory(os.path.join(self._get_shared_files_dir(category), 'meta'))
 
     def _build_unique_path(self, directory: str, filename: str) -> str:
         base_name = os.path.basename(filename) or 'file.bin'
@@ -132,8 +132,8 @@ class ArtifactRegistryService:
             return self._get_files_machine_dir(category, machine_id), self._get_files_meta_dir(category, machine_id)
         if normalized_type == self.CATEGORY_PREVIEWS:
             return self._get_preview_machine_dir(machine_id), self._get_preview_meta_dir(machine_id)
-        if normalized_type == self.CATEGORY_SERVER_FILES:
-            return self._get_server_files_dir(category), self._get_server_files_meta_dir(category)
+        if normalized_type == self.CATEGORY_SHARED_FILES:
+            return self._get_shared_files_dir(category), self._get_shared_files_meta_dir(category)
         if normalized_type == self.CATEGORY_COMMAND_OUTPUT:
             return self._get_command_output_machine_dir(category, machine_id), self._get_command_output_meta_dir(
                 category, machine_id)
@@ -148,7 +148,7 @@ class ArtifactRegistryService:
         return {
             'artifact_type': normalized_type,
             'category': category,
-            'machine_id': '' if normalized_type == self.CATEGORY_SERVER_FILES else self._normalize_machine_id(machine_id),
+            'machine_id': '' if normalized_type == self.CATEGORY_SHARED_FILES else self._normalize_machine_id(machine_id),
             'original_name': original_name,
             'stored_name': final_stored_name,
             'file_path': target_path,
@@ -284,7 +284,7 @@ class ArtifactRegistryService:
                                 extra: dict | None = None) -> dict:
         normalized_type = self._normalize_artifact_type(artifact_type or self.CATEGORY_FILES)
         normalized_category = (category or '').strip() or 'default'
-        if normalized_type == self.CATEGORY_SERVER_FILES:
+        if normalized_type == self.CATEGORY_SHARED_FILES:
             normalized_hostname = ''
             normalized_machine_id = ''
             client_id = ''
@@ -331,7 +331,7 @@ class ArtifactRegistryService:
         normalized_type = self._normalize_artifact_type(artifact_type)
         normalized_category = (category or '').strip() or 'default'
 
-        if normalized_type == self.CATEGORY_SERVER_FILES:
+        if normalized_type == self.CATEGORY_SHARED_FILES:
             normalized_hostname = ''
             normalized_machine_id = ''
             client_id = ''
@@ -378,7 +378,7 @@ class ArtifactRegistryService:
         search_roots = [
             self.artifact_service.files_dir,
             self.artifact_service.previews_dir,
-            self.artifact_service.server_files_dir,
+            self.artifact_service.shared_files_dir,
             self.artifact_service.command_output_dir,
         ]
         for root_dir in search_roots:
@@ -425,7 +425,7 @@ class ArtifactRegistryService:
                     payload = self._read_meta_file(meta_path)
                 except Exception:
                     continue
-                if payload.get('artifact_type') == self.CATEGORY_SERVER_FILES:
+                if payload.get('artifact_type') == self.CATEGORY_SHARED_FILES:
                     continue
                 machine_id = (payload.get('machine_id') or '').strip()
                 if not machine_id:

@@ -21,9 +21,9 @@ from dataclasses import dataclass
 from typing import Any
 
 
-SERVER_SCOPE = 'server'
+SHARED_SCOPE = 'shared'
 MACHINE_SCOPE = 'machine'
-SERVER_MACHINE_ID = '__server__'
+SHARED_MACHINE_ID = '__shared__'
 KEYCHAINS_LIST_GRANT = 'keychains:list'
 KEYCHAINS_RESOLVE_GRANT = 'keychains:resolve'
 KEYCHAINS_CREATE_GRANT = 'keychains:create'
@@ -98,10 +98,12 @@ def _build_missing_grant_message(scope: str = KEYCHAINS_RESOLVE_GRANT) -> str:
 
 
 def _normalize_scope(scope: str) -> str:
-    value = _safe_text(scope).lower()
-    if value in ('server', '__server__'):
-        return SERVER_SCOPE
-    return MACHINE_SCOPE
+    value = _safe_text(scope).lower() or MACHINE_SCOPE
+    if value in (SHARED_SCOPE, SHARED_MACHINE_ID):
+        return SHARED_SCOPE
+    if value == MACHINE_SCOPE:
+        return MACHINE_SCOPE
+    raise ValueError('scope must be machine or shared')
 
 
 def _get_current_machine_id() -> str:
@@ -116,8 +118,8 @@ def _get_current_machine_id() -> str:
 
 def _resolve_machine_id(scope: str, machine_id: str = '') -> str:
     normalized_scope = _normalize_scope(scope)
-    if normalized_scope == SERVER_SCOPE:
-        return SERVER_MACHINE_ID
+    if normalized_scope == SHARED_SCOPE:
+        return SHARED_MACHINE_ID
 
     explicit_machine_id = _safe_text(machine_id)
     if explicit_machine_id:
@@ -279,11 +281,11 @@ def _build_secret_credential(item: dict) -> SecretCredential:
 
 def list(*, scope: str = MACHINE_SCOPE) -> builtins.list[dict]:
     """
-    列出当前 machine 或 server 下的凭证基础信息。
+    列出当前 machine 或 shared 下的凭证基础信息。
 
     只返回 metadata，不返回 secret_value。
-    默认读取当前 machine_id；读取服务端凭证时使用：
-        keychains.list(scope='server')
+    默认读取当前 machine_id；读取共享凭证时使用：
+        keychains.list(scope='shared')
     """
     return _list_keychain_items(scope=scope)
 
@@ -302,8 +304,8 @@ def create_secret(
     """
     创建 Secrets 类型凭证。
 
-    默认写入当前 machine_id；写入服务端凭证时使用：
-        create_secret('xxx', 'value', scope='server')
+    默认写入当前 machine_id；写入共享凭证时使用：
+        create_secret('xxx', 'value', scope='shared')
     """
     normalized_name = _safe_text(name)
     if not normalized_name:
@@ -332,8 +334,8 @@ def create_login(
     """
     创建 Logins 类型凭证。
 
-    默认写入当前 machine_id；写入服务端凭证时使用：
-        create_login('xxx', 'user', 'password', scope='server')
+    默认写入当前 machine_id；写入共享凭证时使用：
+        create_login('xxx', 'user', 'password', scope='shared')
     """
     normalized_name = _safe_text(name)
     normalized_username = _safe_text(username)
@@ -358,8 +360,8 @@ def get_secret(name: str, *, scope: str = MACHINE_SCOPE, machine_id: str = '') -
     """
     读取 Secrets 类型凭证的 value。
 
-    默认读取当前 machine_id 下的凭证；读取服务端凭证时使用：
-        get_secret('xxx', scope='server')
+    默认读取当前 machine_id 下的凭证；读取共享凭证时使用：
+        get_secret('xxx', scope='shared')
     """
     item = _request_keychain_item(name, kind='secret', scope=scope, machine_id=machine_id)
     return SecretValue(item.get('secret_value'))

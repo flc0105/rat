@@ -12,7 +12,7 @@ class ScriptSdkArtifactError(RuntimeError):
     pass
 
 
-FORMAL_ARTIFACT_TYPES = {'files', 'previews', 'server_files', 'command_output'}
+FORMAL_ARTIFACT_TYPES = {'files', 'previews', 'shared_files', 'command_output'}
 
 
 def _safe_text(value) -> str:
@@ -109,7 +109,7 @@ def save(path: str, *, type: str = 'files', category: str = 'script', extra: dic
 
     用法：
         item = artifact.save('/tmp/a.log')
-        item = artifact.save('/tmp/a.log', type='server_files')
+        item = artifact.save('/tmp/a.log', type='shared_files')
     """
     artifact_type = _normalize_artifact_type(type, default='files')
     normalized_category = _safe_text(category) or 'script'
@@ -216,15 +216,15 @@ def _resolve_artifact(ref: str, artifact_type: str) -> dict:
     raise FileNotFoundError(f'artifact not found: {target}')
 
 
-def download(ref: str, *, type: str = 'server_files', target_path: str = '', timeout=None) -> str:
+def download(ref: str, *, type: str = 'shared_files', target_path: str = '', timeout=None) -> str:
     """
     从 server artifact 下载到 client 本地。
 
     用法：
-        local_path = artifact.download('artifact_id', type='server_files')
-        local_path = artifact.download('tool.zip', type='server_files', target_path='./downloads/')
+        local_path = artifact.download('artifact_id', type='shared_files')
+        local_path = artifact.download('tool.zip', type='shared_files', target_path='./downloads/')
     """
-    artifact_type = _normalize_artifact_type(type, default='server_files')
+    artifact_type = _normalize_artifact_type(type, default='shared_files')
     item = _resolve_artifact(ref, artifact_type)
     filename = item.get('original_name') or item.get('stored_name') or item.get('artifact_id') or 'artifact.bin'
     local_path = _resolve_target_path(target_path, filename)
@@ -241,8 +241,8 @@ def download(ref: str, *, type: str = 'server_files', target_path: str = '', tim
     return local_path
 
 
-def get(ref: str, *, type: str = 'server_files') -> dict:
-    return _resolve_artifact(ref, _normalize_artifact_type(type, default='server_files'))
+def get(ref: str, *, type: str = 'shared_files') -> dict:
+    return _resolve_artifact(ref, _normalize_artifact_type(type, default='shared_files'))
 
 
 # 语义化别名，方便脚本里按动作阅读。

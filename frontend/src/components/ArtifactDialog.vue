@@ -41,15 +41,15 @@
           </el-button>
 
           <div
-            v-if="isServerFilesTab"
-            class="artifact-server-actions"
+            v-if="isSharedFilesTab"
+            class="artifact-shared-actions"
           >
             <el-button
               class="artifact-toolbar-btn"
               size="small"
 
               plain
-              @click="createServerFilePrompt"
+              @click="createSharedFilePrompt"
             >
               Create File
             </el-button>
@@ -59,8 +59,8 @@
               size="small"
 
               plain
-              :loading="serverFileUploading"
-              @click="triggerServerFileUpload"
+              :loading="sharedFileUploading"
+              @click="triggerSharedFileUpload"
             >
               Upload
             </el-button>
@@ -122,9 +122,9 @@
           </template>
         </el-tab-pane>
 
-        <el-tab-pane name="server_files">
+        <el-tab-pane name="shared_files">
           <template #label>
-            Server Files ({{ artifactCountMap.server_files || 0 }})
+            Shared Files ({{ artifactCountMap.shared_files || 0 }})
           </template>
         </el-tab-pane>
       </el-tabs>
@@ -152,6 +152,7 @@
             min-width="270"
             show-overflow-tooltip
           >
+
             <template #default="{ row }">
               <div class="ellipsis">
                 {{ formatArtifactName(row) }}
@@ -160,7 +161,7 @@
           </el-table-column>
 
           <el-table-column
-            v-if="!isServerFilesTab"
+            v-if="!isSharedFilesTab"
             label="Hostname"
             min-width="180"
             show-overflow-tooltip
@@ -173,7 +174,7 @@
           </el-table-column>
 
           <el-table-column
-            v-if="!isServerFilesTab"
+            v-if="!isSharedFilesTab"
             label="Category"
             min-width="150"
             show-overflow-tooltip
@@ -195,11 +196,17 @@
             </template>
           </el-table-column>
 
-          <el-table-column
-            label="Created"
-            width="170"
-            show-overflow-tooltip
-          >
+<!--          <el-table-column-->
+<!--            label="Created"-->
+<!--            width="170"-->
+<!--            show-overflow-tooltip-->
+<!--          >-->
+
+<el-table-column
+  label="Created"
+  :width="isSharedFilesTab ? 220 : 170"
+  show-overflow-tooltip
+>
             <template #default="{ row }">
               <div class="ellipsis">
                 {{ row.created_at || '-' }}
@@ -209,7 +216,7 @@
 
           <el-table-column
             label="Actions"
-            :width="isServerFilesTab ? 190 : 200"
+            :width="isSharedFilesTab ? 190 : 200"
             align="center"
             fixed="right"
           >
@@ -246,7 +253,7 @@
                           Rename
                         </el-dropdown-item>
                         <el-dropdown-item
-                          v-if="isServerFileItem(row)"
+                          v-if="isSharedFileItem(row)"
                           command="send-current-device"
                           :disabled="!selectedId"
                         >
@@ -314,7 +321,7 @@
                   </div>
 
                   <div
-                    v-if="row.hostname && !isServerFileItem(row)"
+                    v-if="row.hostname && !isSharedFileItem(row)"
                     class="mobile-file-tags"
                   >
                     <el-tag size="small">
@@ -324,7 +331,7 @@
 
                   <div class="mobile-file-meta">
                     <div
-                      v-if="!isServerFileItem(row)"
+                      v-if="!isSharedFileItem(row)"
                       class="mobile-file-meta-item"
                     >
                       <div class="mobile-file-meta-label">Category</div>
@@ -381,7 +388,7 @@
                               Rename
                             </el-dropdown-item>
                             <el-dropdown-item
-                              v-if="isServerFileItem(row)"
+                              v-if="isSharedFileItem(row)"
                               command="send-current-device"
                               :disabled="!selectedId"
                             >
@@ -418,13 +425,13 @@
   </el-dialog>
 
   <DragUploadDialog
-    v-model="serverFileUploadDialogVisible"
-    title="Upload Server Files"
+    v-model="sharedFileUploadDialogVisible"
+    title="Upload Shared Files"
     helper-text="Drag files here or click the drop zone to choose files. Files will not upload until you click Upload."
     button-text="Upload"
     :multiple="true"
-    :loading="serverFileUploading"
-    @upload="uploadServerFiles"
+    :loading="sharedFileUploading"
+    @upload="uploadSharedFiles"
   />
 
   <el-dialog
@@ -503,7 +510,7 @@ export default {
     },
   },
 
-  emits: ['preview', 'append-output', 'set-active-task', 'open-new-server-file-editor'],
+  emits: ['preview', 'append-output', 'set-active-task', 'open-new-shared-file-editor'],
 
   data() {
     return {
@@ -517,16 +524,16 @@ export default {
       selectedArtifactIds: [],
       artifactClearing: false,
       artifactBulkDeleting: false,
-      serverFileUploading: false,
-      serverFileUploadDialogVisible: false,
+      sharedFileUploading: false,
+      sharedFileUploadDialogVisible: false,
       artifactInfoDialogVisible: false,
       artifactInfoItem: null,
     }
   },
 
   computed: {
-    isServerFilesTab() {
-      return String(this.artifactActiveTab || '').trim() === 'server_files'
+    isSharedFilesTab() {
+      return String(this.artifactActiveTab || '').trim() === 'shared_files'
     },
 
     isCommandOutputTab() {
@@ -534,11 +541,11 @@ export default {
     },
 
     showArtifactMachineFilter() {
-      return !this.isServerFilesTab
+      return !this.isSharedFilesTab
     },
 
     showArtifactCategoryColumn() {
-      return !this.isServerFilesTab && !this.isCommandOutputTab
+      return !this.isSharedFilesTab && !this.isCommandOutputTab
     },
 
     artifactMachineOptions() {
@@ -581,7 +588,7 @@ export default {
 
       return (this.artifactItems || []).filter(item => {
         if (activeType && item.artifact_type !== activeType) return false
-        if (!this.isServerFileItem(item) && machineId && item.machine_id !== machineId) return false
+        if (!this.isSharedFileItem(item) && machineId && item.machine_id !== machineId) return false
 
         if (keyword) {
           const fileName = this.formatArtifactName(item).toLowerCase()
@@ -601,14 +608,14 @@ export default {
     artifactCountMap() {
       const machineId = String(this.artifactMachineIdFilter || '').trim()
       const keyword = String(this.artifactKeyword || '').trim().toLowerCase()
-      const counts = { files: 0, previews: 0, server_files: 0, command_output: 0 }
+      const counts = { files: 0, previews: 0, shared_files: 0, command_output: 0 }
 
       ;(this.artifactItems || []).forEach(item => {
         if (!item) return
 
         const type = String(item.artifact_type || '').trim()
         if (!Object.prototype.hasOwnProperty.call(counts, type)) return
-        if (type !== 'server_files' && machineId && item.machine_id !== machineId) return
+        if (type !== 'shared_files' && machineId && item.machine_id !== machineId) return
 
         if (keyword) {
           const fileName = this.formatArtifactName(item).toLowerCase()
@@ -855,13 +862,13 @@ export default {
       return String(value)
     },
 
-    isServerFileItem(item) {
-      return String(item?.artifact_type || '').trim() === 'server_files'
+    isSharedFileItem(item) {
+      return String(item?.artifact_type || '').trim() === 'shared_files'
     },
 
     useArtifactMoreMenu(item) {
       const type = String(item?.artifact_type || '').trim()
-      return type === 'files' || type === 'command_output' || type === 'server_files'
+      return type === 'files' || type === 'command_output' || type === 'shared_files'
     },
 
     isDialogCancel(e) {
@@ -891,7 +898,7 @@ export default {
         this.artifactMachineIdFilter = ''
         this.artifactKeyword = ''
         this.selectedArtifactIds = []
-        this.serverFileUploadDialogVisible = false
+        this.sharedFileUploadDialogVisible = false
         this.artifactInfoDialogVisible = false
         this.artifactInfoItem = null
       }
@@ -925,7 +932,7 @@ export default {
     async handleActiveTabChange(tabName) {
       this.artifactActiveTab = tabName || 'files'
       this.selectedArtifactIds = []
-      if (!this.isServerFilesTab && !this.artifactMachineIdFilter) {
+      if (!this.isSharedFilesTab && !this.artifactMachineIdFilter) {
         this.artifactMachineIdFilter = this.getCurrentMachineId()
       }
       await this.loadArtifacts()
@@ -980,12 +987,12 @@ export default {
       this.selectedArtifactIds = this.selectedArtifactIds.filter(item => available.has(item))
     },
 
-    async createServerFilePrompt() {
-      if (!this.isServerFilesTab) return
+    async createSharedFilePrompt() {
+      if (!this.isSharedFilesTab) return
 
       try {
         const { value } = await ElMessageBox.prompt(
-          'Enter the new server file name',
+          'Enter the new shared file name',
           'Create File',
           {
             confirmButtonText: 'Create',
@@ -1001,20 +1008,20 @@ export default {
           return
         }
 
-        this.$emit('open-new-server-file-editor', filename)
+        this.$emit('open-new-shared-file-editor', filename)
       } catch (e) {
         if (e === 'cancel' || e === 'close') return
       }
     },
 
-    triggerServerFileUpload() {
-      this.serverFileUploadDialogVisible = true
+    triggerSharedFileUpload() {
+      this.sharedFileUploadDialogVisible = true
     },
 
-    async uploadSingleServerFile(file) {
+    async uploadSingleSharedFile(file) {
       const formData = new FormData()
       formData.append('file', file)
-      formData.append('artifact_type', 'server_files')
+      formData.append('artifact_type', 'shared_files')
 
       const res = await fetch('/api/files/upload', {
         method: 'POST',
@@ -1030,27 +1037,27 @@ export default {
       return json.data || {}
     },
 
-    async uploadServerFiles(files) {
+    async uploadSharedFiles(files) {
       const uploadFiles = Array.isArray(files) ? files.filter(Boolean) : []
       if (!uploadFiles.length) return
 
-      this.serverFileUploading = true
+      this.sharedFileUploading = true
 
       try {
         for (const file of uploadFiles) {
-          await this.uploadSingleServerFile(file)
+          await this.uploadSingleSharedFile(file)
         }
 
         const message = uploadFiles.length === 1
           ? `Uploaded: ${uploadFiles[0].name}`
           : `Uploaded ${uploadFiles.length} file(s)`
         ElMessage.success(message)
-        this.serverFileUploadDialogVisible = false
+        this.sharedFileUploadDialogVisible = false
         await this.loadArtifacts()
       } catch (e) {
         ElMessage.error(e.message || 'Upload failed')
       } finally {
-        this.serverFileUploading = false
+        this.sharedFileUploading = false
       }
     },
 
@@ -1336,7 +1343,7 @@ export default {
 
 .dialog-head-left,
 .dialog-head-right,
-.artifact-server-actions {
+.artifact-shared-actions {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -1674,7 +1681,7 @@ export default {
 
   .dialog-head-left,
   .dialog-head-right,
-  .artifact-server-actions {
+  .artifact-shared-actions {
     width: 100%;
   }
 
@@ -1684,7 +1691,7 @@ export default {
 
   .dialog-head-right,
   .artifact-filter-box,
-  .artifact-server-actions {
+  .artifact-shared-actions {
     justify-content: flex-start;
     margin-left: 0;
   }
@@ -1725,7 +1732,7 @@ export default {
 @media (max-width: 640px) {
   .dialog-head-left,
   .dialog-head-right,
-  .artifact-server-actions {
+  .artifact-shared-actions {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
     align-items: stretch;

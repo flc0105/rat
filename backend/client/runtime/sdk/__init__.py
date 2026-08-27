@@ -3,7 +3,7 @@ Server Script SDK。
 
 脚本内可直接使用注入对象：
     artifact.save('/tmp/a.log')
-    artifact.download('tool.zip', type='server_files')
+    artifact.download('tool.zip', type='shared_files')
     result = command.run_shell('whoami')
     info = getinfo()
     token = keychains.get_secret('token').getvalue()

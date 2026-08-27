@@ -373,7 +373,7 @@ export default {
       if (this.previewSource === 'artifact') {
         return 'Artifact'
       }
-      if (this.previewSource === 'new_server_file') {
+      if (this.previewSource === 'new_shared_file') {
         return 'Artifact'
       }
       if (this.previewSource === 'background_job') {
@@ -780,8 +780,8 @@ export default {
         await this.saveToRemoteFile(currentContent)
       } else if (this.previewSource === 'artifact') {
         await this.saveToArtifact(currentContent)
-      } else if (this.previewSource === 'new_server_file') {
-        await this.saveToNewServerFile(currentContent)
+      } else if (this.previewSource === 'new_shared_file') {
+        await this.saveToNewSharedFile(currentContent)
       } else if (this.previewSource === 'background_job') {
         await this.saveToBackgroundJob(currentContent)
       } else if (this.previewSource === 'server_script') {
@@ -941,8 +941,8 @@ export default {
       }
     },
 
-    async saveToNewServerFile(content) {
-      const filename = this.normalizeServerArtifactFilename(this.previewFilePath)
+    async saveToNewSharedFile(content) {
+      const filename = this.normalizeSharedArtifactFilename(this.previewFilePath)
       if (!filename) {
         ElMessage.warning('Invalid file name')
         return
@@ -962,9 +962,9 @@ export default {
         } else {
           formData.append('file', blob, filename)
         }
-        formData.append('artifact_type', 'server_files')
+        formData.append('artifact_type', 'shared_files')
         formData.append('extra', JSON.stringify({
-          source: 'server_file_editor',
+          source: 'shared_file_editor',
           saved_from: 'artifact_dialog_create_file',
           saved_at: new Date().toISOString(),
         }))
@@ -1242,7 +1242,7 @@ print(value)
 `
     },
 
-    normalizeServerArtifactFilename(filename, fallbackName = 'new_file.txt') {
+    normalizeSharedArtifactFilename(filename, fallbackName = 'new_file.txt') {
       let normalized = String(filename || '').trim().replace(/\\/g, '/').replace(/^\/+/, '')
       if (!normalized) {
         normalized = fallbackName
@@ -1250,8 +1250,8 @@ print(value)
       return normalized
     },
 
-    openNewServerFileEditor(filename = 'new_file.txt') {
-      const normalizedFilename = this.normalizeServerArtifactFilename(filename)
+    openNewSharedFileEditor(filename = 'new_file.txt') {
+      const normalizedFilename = this.normalizeSharedArtifactFilename(filename)
       if (!normalizedFilename) {
         ElMessage.warning('Invalid file name')
         return
@@ -1260,7 +1260,7 @@ print(value)
       const content = ''
 
       this.previewFullscreen = false
-      this.previewSource = 'new_server_file'
+      this.previewSource = 'new_shared_file'
       this.previewFilePath = normalizedFilename
       this.previewTitle = normalizedFilename
       this.previewText = content
@@ -1794,7 +1794,7 @@ print(value)
         }
       }
 
-      if (this.previewSource === 'new_server_file') {
+      if (this.previewSource === 'new_shared_file') {
         throw new Error('This file has not been created yet')
       }
 

@@ -183,8 +183,8 @@ class WebArtifactApi:
             raise RuntimeError('command_execution_api is not available')
 
         artifact = self.get_artifact_by_id(artifact_id)
-        if artifact.get('artifact_type') != 'server_files':
-            raise ValueError('Only server files can be sent to client')
+        if artifact.get('artifact_type') != 'shared_files':
+            raise ValueError('Only shared files can be sent to client')
         file_path = self.get_artifact_file_path(artifact_id)
         display_name = (artifact.get('original_name') or artifact.get('stored_name') or os.path.basename(file_path)).strip()
         if not display_name:

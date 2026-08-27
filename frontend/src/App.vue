@@ -186,7 +186,7 @@
     @preview="previewArtifact"
     @append-output="appendOutput"
     @set-active-task="setActiveTask"
-    @open-new-server-file-editor="openNewServerFileEditor"
+    @open-new-shared-file-editor="openNewSharedFileEditor"
   />
 
   <ExternalToolManagerDialog
@@ -565,8 +565,8 @@ export default {
       return this.$refs.previewDialogRef?.openNewRemoteJobEditor(scriptName)
     },
 
-    openNewServerFileEditor(filename = 'new_file.txt') {
-      return this.$refs.previewDialogRef?.openNewServerFileEditor(filename)
+    openNewSharedFileEditor(filename = 'new_file.txt') {
+      return this.$refs.previewDialogRef?.openNewSharedFileEditor(filename)
     },
 
     openRemoteJobEditor(scriptName) {

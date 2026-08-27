@@ -19,8 +19,8 @@ class KeychainStore:
     - 列表接口默认隐藏 secret_value，查看时再返回明文
     """
 
-    SERVER_MACHINE_ID = '__server__'
-    SERVER_HOSTNAME = 'Server'
+    SHARED_MACHINE_ID = '__shared__'
+    SHARED_HOSTNAME = 'Shared'
     TIME_FORMAT = '%Y-%m-%d %H:%M:%S'
 
     KIND_LOGIN = 'login'
@@ -49,17 +49,17 @@ class KeychainStore:
 
     def _normalize_machine_id(self, machine_id: str) -> str:
         value = self._safe_text(machine_id)
-        return value or self.SERVER_MACHINE_ID
+        return value or self.SHARED_MACHINE_ID
 
     def _normalize_hostname(self, machine_id: str, hostname: str) -> str:
         normalized_machine_id = self._normalize_machine_id(machine_id)
-        if normalized_machine_id == self.SERVER_MACHINE_ID:
-            return self.SERVER_HOSTNAME
+        if normalized_machine_id == self.SHARED_MACHINE_ID:
+            return self.SHARED_HOSTNAME
         return self._safe_text(hostname) or 'Unknown'
 
     def _normalize_file_stem(self, machine_id: str) -> str:
         safe_name = secure_filename(self._normalize_machine_id(machine_id))
-        return safe_name or self.SERVER_MACHINE_ID
+        return safe_name or self.SHARED_MACHINE_ID
 
     def _get_file_path(self, machine_id: str) -> str:
         normalized = self._normalize_file_stem(machine_id)
@@ -278,7 +278,7 @@ class KeychainStore:
 
         return sorted(
             machines.values(),
-            key=lambda item: (item.get('machine_id') != self.SERVER_MACHINE_ID, item.get('hostname') or ''),
+            key=lambda item: (item.get('machine_id') != self.SHARED_MACHINE_ID, item.get('hostname') or ''),
         )
 
     def get_item_by_name(self, machine_id: str, name: str, kind: str = '', reveal: bool = True) -> dict:
@@ -329,7 +329,7 @@ class KeychainStore:
         if not normalized_item.get('secret_value'):
             raise ValueError('secret value is required')
 
-        machine_id = normalized_item.get('machine_id') or self.SERVER_MACHINE_ID
+        machine_id = normalized_item.get('machine_id') or self.SHARED_MACHINE_ID
         with self._lock:
             items = self._read_payload(machine_id)
             self._ensure_unique_name(items, normalized_item.get('name') or '')
@@ -362,7 +362,7 @@ class KeychainStore:
             if not normalized_item.get('secret_value'):
                 raise ValueError('secret value is required')
 
-            new_machine_id = normalized_item.get('machine_id') or self.SERVER_MACHINE_ID
+            new_machine_id = normalized_item.get('machine_id') or self.SHARED_MACHINE_ID
             if self._normalize_machine_id(old_machine_id) == self._normalize_machine_id(new_machine_id):
                 self._ensure_unique_name(old_items, normalized_item.get('name') or '', skip_cred_id=cred_id)
                 updated_items = []

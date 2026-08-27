@@ -13,7 +13,7 @@ class WebArtifactService:
 
     CATEGORY_FILES = 'files'
     CATEGORY_PREVIEWS = 'previews'
-    CATEGORY_SERVER_FILES = 'server_files'
+    CATEGORY_SHARED_FILES = 'shared_files'
     CATEGORY_COMMAND_OUTPUT = 'command_output'
     CATEGORY_UPLOAD_TMP = 'upload_tmp'
 
@@ -22,7 +22,7 @@ class WebArtifactService:
         self.artifacts_root_dir = os.path.join(self.web_root_dir, 'artifacts')
         self.files_dir = os.path.join(self.artifacts_root_dir, self.CATEGORY_FILES)
         self.previews_dir = os.path.join(self.artifacts_root_dir, self.CATEGORY_PREVIEWS)
-        self.server_files_dir = os.path.join(self.artifacts_root_dir, self.CATEGORY_SERVER_FILES)
+        self.shared_files_dir = os.path.join(self.artifacts_root_dir, self.CATEGORY_SHARED_FILES)
         self.command_output_dir = os.path.join(self.artifacts_root_dir, self.CATEGORY_COMMAND_OUTPUT)
         self.upload_tmp_dir = os.path.join(self.artifacts_root_dir, self.CATEGORY_UPLOAD_TMP)
 
@@ -39,7 +39,7 @@ class WebArtifactService:
         os.makedirs(self.artifacts_root_dir, exist_ok=True)
         os.makedirs(self.files_dir, exist_ok=True)
         os.makedirs(self.previews_dir, exist_ok=True)
-        os.makedirs(self.server_files_dir, exist_ok=True)
+        os.makedirs(self.shared_files_dir, exist_ok=True)
         os.makedirs(self.command_output_dir, exist_ok=True)
         os.makedirs(self.upload_tmp_dir, exist_ok=True)
 

@@ -513,8 +513,8 @@ export default {
       saving: false,
       items: [],
       machines: [],
-      serverMachineId: '__server__',
-      serverHostname: 'Server',
+      sharedMachineId: '__shared__',
+      sharedHostname: 'Shared',
       machineIdFilter: '',
       kindFilter: '',
       searchText: '',
@@ -542,10 +542,10 @@ export default {
   computed: {
     machineOptions() {
       const map = {}
-      const serverId = this.serverMachineId || '__server__'
-      map[serverId] = {
-        machine_id: serverId,
-        hostname: this.serverHostname || 'Server',
+      const sharedId = this.sharedMachineId || '__shared__'
+      map[sharedId] = {
+        machine_id: sharedId,
+        hostname: this.sharedHostname || 'Shared',
       }
 
       ;(this.machines || []).forEach(item => {
@@ -554,8 +554,8 @@ export default {
       })
 
       return Object.values(map).sort((a, b) => {
-        if (a.machine_id === serverId) return -1
-        if (b.machine_id === serverId) return 1
+        if (a.machine_id === sharedId) return -1
+        if (b.machine_id === sharedId) return 1
         return this.formatMachineOptionLabel(a).localeCompare(this.formatMachineOptionLabel(b))
       })
     },
@@ -596,7 +596,7 @@ export default {
     },
 
     async open() {
-      this.machineIdFilter = this.getCurrentMachineId() || this.serverMachineId
+      this.machineIdFilter = this.getCurrentMachineId() || this.sharedMachineId
       this.visible = true
       await this.loadKeychains()
     },
@@ -631,13 +631,13 @@ export default {
     shortenMachineId(machineId) {
       const value = this.normalizeMachineId(machineId)
       if (!value) return '-'
-      if (value === this.serverMachineId) return 'server'
+      if (value === this.sharedMachineId) return 'shared'
       return value.length > 12 ? value.slice(0, 12) : value
     },
 
     getMachineAlias(machineId) {
       const id = this.normalizeMachineId(machineId)
-      if (!id || id === this.serverMachineId) return ''
+      if (!id || id === this.sharedMachineId) return ''
       return String(this.machineAliasMap?.[id] || '').trim()
     },
 
@@ -656,7 +656,7 @@ export default {
       const normalizedMachineId = this.normalizeMachineId(machineId)
       const matched = this.machineOptions.find(item => item.machine_id === normalizedMachineId)
       if (matched?.hostname) return matched.hostname
-      if (normalizedMachineId === this.serverMachineId) return this.serverHostname
+      if (normalizedMachineId === this.sharedMachineId) return this.sharedHostname
       return ''
     },
 
@@ -699,8 +699,8 @@ export default {
         const data = json.data || {}
         this.items = Array.isArray(data.items) ? data.items : []
         this.machines = Array.isArray(data.machines) ? data.machines : []
-        this.serverMachineId = data.server_machine_id || '__server__'
-        this.serverHostname = data.server_hostname || 'Server'
+        this.sharedMachineId = data.shared_machine_id || '__shared__'
+        this.sharedHostname = data.shared_hostname || 'Shared'
       } catch (e) {
         this.items = []
         this.machines = []
@@ -819,7 +819,7 @@ export default {
       this.editorMode = 'create'
       this.editingCredId = ''
       this.form = this.buildEmptyForm()
-      this.form.machine_id = this.machineIdFilter || this.getCurrentMachineId() || this.serverMachineId
+      this.form.machine_id = this.machineIdFilter || this.getCurrentMachineId() || this.sharedMachineId
       this.form.hostname = this.resolveHostname(this.form.machine_id)
       this.editorVisible = true
     },
@@ -838,7 +838,7 @@ export default {
         this.editorMode = 'edit'
         this.editingCredId = item.cred_id
         this.form = {
-          machine_id: item.machine_id || this.serverMachineId,
+          machine_id: item.machine_id || this.sharedMachineId,
           hostname: item.hostname || this.resolveHostname(item.machine_id),
           kind: item.kind || 'login',
           name: item.name || '',

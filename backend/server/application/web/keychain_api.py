@@ -20,12 +20,12 @@ class WebKeychainApi:
         return '' if value is None else str(value).strip()
 
     def _normalize_machine_id(self, machine_id: str) -> str:
-        return self._safe_text(machine_id) or KeychainStore.SERVER_MACHINE_ID
+        return self._safe_text(machine_id) or KeychainStore.SHARED_MACHINE_ID
 
     def _normalize_hostname(self, machine_id: str, hostname: str) -> str:
         normalized_machine_id = self._normalize_machine_id(machine_id)
-        if normalized_machine_id == KeychainStore.SERVER_MACHINE_ID:
-            return KeychainStore.SERVER_HOSTNAME
+        if normalized_machine_id == KeychainStore.SHARED_MACHINE_ID:
+            return KeychainStore.SHARED_HOSTNAME
         return self._safe_text(hostname) or 'Unknown'
 
     def _connection_machines(self) -> list[dict]:
@@ -50,10 +50,10 @@ class WebKeychainApi:
 
     def list_machines(self) -> list[dict]:
         machine_map = {
-            KeychainStore.SERVER_MACHINE_ID: {
-                'machine_id': KeychainStore.SERVER_MACHINE_ID,
-                'hostname': KeychainStore.SERVER_HOSTNAME,
-                'connection_state': 'server',
+            KeychainStore.SHARED_MACHINE_ID: {
+                'machine_id': KeychainStore.SHARED_MACHINE_ID,
+                'hostname': KeychainStore.SHARED_HOSTNAME,
+                'connection_state': 'shared',
             }
         }
 
@@ -76,8 +76,8 @@ class WebKeychainApi:
 
         def _sort_key(item):
             machine_id = self._safe_text(item.get('machine_id'))
-            if machine_id == KeychainStore.SERVER_MACHINE_ID:
-                return (0, 'server')
+            if machine_id == KeychainStore.SHARED_MACHINE_ID:
+                return (0, 'shared')
             return (1, self._safe_text(item.get('hostname')).lower(), machine_id.lower())
 
         return sorted(machine_map.values(), key=_sort_key)
@@ -107,8 +107,8 @@ class WebKeychainApi:
         return {
             'items': self.keychain_store.list_items(normalized_machine_id, reveal=False),
             'machines': self.list_machines(),
-            'server_machine_id': KeychainStore.SERVER_MACHINE_ID,
-            'server_hostname': KeychainStore.SERVER_HOSTNAME,
+            'shared_machine_id': KeychainStore.SHARED_MACHINE_ID,
+            'shared_hostname': KeychainStore.SHARED_HOSTNAME,
         }
 
     def get_keychain_item(self, cred_id: str) -> dict:
@@ -132,16 +132,18 @@ class WebKeychainApi:
         if kind and kind not in {KeychainStore.KIND_LOGIN, KeychainStore.KIND_SECRET}:
             raise ValueError('kind must be login or secret')
 
-        if scope in ('server', KeychainStore.SERVER_MACHINE_ID):
-            machine_id = KeychainStore.SERVER_MACHINE_ID
-        else:
+        if scope in ('shared', KeychainStore.SHARED_MACHINE_ID):
+            machine_id = KeychainStore.SHARED_MACHINE_ID
+        elif not scope or scope == 'machine':
             machine_id = self._normalize_machine_id(machine_id)
+        else:
+            raise ValueError('scope must be machine or shared')
 
         item = self.keychain_store.get_item_by_name(machine_id, name, kind=kind, reveal=True)
         return {
             'item': item,
-            'server_machine_id': KeychainStore.SERVER_MACHINE_ID,
-            'server_hostname': KeychainStore.SERVER_HOSTNAME,
+            'shared_machine_id': KeychainStore.SHARED_MACHINE_ID,
+            'shared_hostname': KeychainStore.SHARED_HOSTNAME,
         }
 
     def create_keychain_item(self, payload: dict) -> dict:
