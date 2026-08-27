@@ -1915,9 +1915,6 @@ async loadAllClientInstances(deviceId = '', showToast = true) {
         const type = String(param?.type || 'string').trim().toLowerCase()
         if (name === 'instance_name' && (param.default === undefined || param.default === null || String(param.default).trim() === '')) {
           form[name] = this.defaultInstanceName(item)
-        } else if (name === 'access_host' && (param.default === undefined || param.default === null || String(param.default).trim() === '')) {
-          // 打开 config/start 弹框时直接把浏览器当前 hostname 填进 input。
-          form[name] = this.getBrowserAccessHost()
         } else if (param.default !== undefined && param.default !== null) {
           form[name] = ['remote_files', 'remote_folders'].includes(type) && Array.isArray(param.default)
             ? [...param.default]
@@ -2100,11 +2097,6 @@ async loadAllClientInstances(deviceId = '', showToast = true) {
 
         const type = String(param?.type || 'string').trim().toLowerCase()
         let value = this.paramForm[name]
-
-        // 如果用户刻意把 access_host 清空，提交前再补一次当前浏览器 hostname。
-        if (name === 'access_host' && (value === '' || value === undefined || value === null)) {
-          value = this.getBrowserAccessHost()
-        }
 
         const hasRemoteMultiValue = ['remote_files', 'remote_folders'].includes(type) && Array.isArray(value) && value.length > 0
         if (param.required && !hasRemoteMultiValue && (value === '' || value === undefined || value === null)) {
@@ -2979,22 +2971,6 @@ async uninstallClientTool(item, deviceId) {
         }
       })
     },
-
-
-
-
-    // url parse
-    getBrowserAccessHost() {
-  if (typeof window === 'undefined' || !window.location) return '127.0.0.1'
-  return window.location.hostname || '127.0.0.1'
-},
-
-
-
-
-
-
-
 
 
 

@@ -11,9 +11,6 @@
     "web",
     "http"
   ],
-  "web": {
-    "url": "http://{{access_host}}:{{port}}"
-  },
   "platform_packages": {
     "darwin-arm64": {
       "platform": "mac",
@@ -96,14 +93,6 @@
           "description": "Filesystem root served by File Browser."
         },
         {
-          "name": "access_host",
-          "label": "Access Host",
-          "type": "string",
-          "required": false,
-          "default": "",
-          "description": "Browser access host or public IP. Empty means current browser hostname."
-        },
-        {
           "name": "extra_args",
           "label": "Extra Args",
           "type": "string",
@@ -142,9 +131,6 @@
         "status": {
           "type": "pid_file"
         }
-      },
-      "web": {
-        "url": "http://{{access_host}}:{{port}}"
       }
     }
   ]

@@ -161,7 +161,6 @@ def normalize_module(package: dict, item: Any) -> dict:
     else:
         module['runtimes'] = []
     module['lifecycle'] = module.get('lifecycle') if isinstance(module.get('lifecycle'), dict) else (package.get('lifecycle') if isinstance(package.get('lifecycle'), dict) else {})
-    module['web'] = module.get('web') if isinstance(module.get('web'), dict) else (package.get('web') if isinstance(package.get('web'), dict) else {})
     module['package_display_name'] = package.get('display_name') or package_id
     return module
 

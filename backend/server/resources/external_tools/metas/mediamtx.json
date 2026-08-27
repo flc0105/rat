@@ -13,9 +13,6 @@
     "hls",
     "screen-live"
   ],
-  "web": {
-    "url": "http://{{access_host}}:{{webrtc_port}}/screen-live/"
-  },
   "platform_packages": {
     "darwin-arm64": {
       "platform": "mac",
@@ -118,9 +115,6 @@
         "status": {
           "type": "pid_file"
         }
-      },
-      "web": {
-        "url": "http://{{access_host}}:{{webrtc_port}}/screen-live/"
       }
     }
   ]

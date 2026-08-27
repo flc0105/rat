@@ -14,9 +14,6 @@
     "ssh"
   ],
   "source": "https://github.com/tsl0922/ttyd",
-  "web": {
-    "url": "http://{{access_host}}:{{port}}"
-  },
   "platform_packages": {
     "darwin-arm64": {
       "platform": "mac",
@@ -121,14 +118,6 @@
           "description": "Command launched by ttyd. Windows default is cmd.exe; on macOS/Linux use /bin/zsh, /bin/bash, bash, or sh."
         },
         {
-          "name": "access_host",
-          "label": "Access Host",
-          "type": "string",
-          "required": false,
-          "default": "",
-          "description": "Browser access host or public IP. Empty means current browser hostname."
-        },
-        {
           "name": "extra_args",
           "label": "Extra Args",
           "type": "string",
@@ -139,7 +128,7 @@
       ],
       "config": {
         "target": "{{instance_runtime_dir}}/ttyd.env",
-        "template": "LISTEN_ADDRESS={{address}}\nPORT={{port}}\nCREDENTIAL={{credential}}\nCWD={{cwd}}\nCOMMAND={{command}}\nOPEN_URL=http://{{access_host}}:{{port}}\n"
+        "template": "LISTEN_ADDRESS={{address}}\nPORT={{port}}\nCREDENTIAL={{credential}}\nCWD={{cwd}}\nCOMMAND={{command}}\n"
       },
       "runtime": {
         "cwd": "{{install_dir}}/{{package_root}}",
@@ -208,9 +197,6 @@
         "status": {
           "type": "pid_file"
         }
-      },
-      "web": {
-        "url": "http://{{access_host}}:{{port}}"
       }
     }
   ]

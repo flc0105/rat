@@ -12,8 +12,6 @@
     "remote-desktop",
     "browser"
   ],
-  "web": {
-  },
   "platform_packages": {
     "darwin-arm64": {
       "platform": "mac",
@@ -85,19 +83,11 @@
           "min": 1,
           "max": 65535,
           "description": "Target VNC TCP port, usually 5900."
-        },
-        {
-          "name": "access_host",
-          "label": "Access Host",
-          "type": "string",
-          "required": false,
-          "default": "",
-          "description": "Browser access host or public IP. Empty means current browser hostname."
         }
       ],
       "config": {
         "target": "{{instance_runtime_dir}}/novnc.env",
-        "template": "LISTEN_HOST={{listen_host}}\nLISTEN_PORT={{listen_port}}\nVNC_HOST={{vnc_host}}\nVNC_PORT={{vnc_port}}\nVIEW_ONLY={{view_only}}\nOPEN_URL=http://{{listen_host}}:{{listen_port}}/vnc.html?view_only={{view_only}}&resize=scale\n"
+        "template": "LISTEN_HOST={{listen_host}}\nLISTEN_PORT={{listen_port}}\nVNC_HOST={{vnc_host}}\nVNC_PORT={{vnc_port}}\nVIEW_ONLY={{view_only}}\n"
       },
       "runtime": {
         "cwd": "{{install_dir}}/{{package_root}}",
@@ -123,9 +113,6 @@
         "status": {
           "type": "pid_file"
         }
-      },
-      "web": {
-        "url": "http://{{access_host}}:{{listen_port}}/vnc.html?view_only=1&resize=scale"
       }
     }
   ]
