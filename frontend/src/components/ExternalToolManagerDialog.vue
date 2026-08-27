@@ -625,6 +625,15 @@
 
     <template #footer>
       <el-button size="small" @click="startDialogVisible = false">Cancel</el-button>
+      <el-button
+        v-if="!isPendingOneshot"
+        size="small"
+        :loading="previewingCommand"
+        :disabled="submitting"
+        @click="previewStartCommand"
+      >
+        Preview Command
+      </el-button>
       <el-button size="small" type="primary" :loading="submitting" @click="confirmStart">
         {{ isPendingOneshot ? 'Run Once' : 'Run' }}
       </el-button>
@@ -803,6 +812,7 @@ export default {
       visible: false,
       loading: false,
       submitting: false,
+      previewingCommand: false,
       logLoading: false,
       installLoading: false,
       activeTab: 'modules',
@@ -1947,6 +1957,7 @@ async loadAllClientInstances(deviceId = '', showToast = true) {
     resetStartDialog() {
       this.startDialogVisible = false
       this.submitting = false
+      this.previewingCommand = false
       this.pendingToolId = ''
       this.pendingStartMode = 'run'
       this.paramForm = {}
@@ -2403,6 +2414,59 @@ async uninstallClientTool(item, deviceId) {
         } catch (_) {
           ElMessage.error('Failed to copy')
         }
+      }
+    },
+
+    async previewStartCommand() {
+      const item = this.pendingItem
+      if (!item || this.isOneshotModule(item)) return
+
+      try {
+        this.previewingCommand = true
+        const params = this.buildStartParams()
+        const instanceId = this.deriveInstanceId(params)
+        const targetDeviceId = this.normalizeDeviceId(this.getActionDeviceId(this.getPackageForModule(item)))
+        if (!targetDeviceId) throw new Error('Please select a target machine')
+
+        const requestPlatform = this.getPlatformForConnectionId(targetDeviceId)
+        const requestArch = this.getArchForConnectionId(targetDeviceId)
+        if (!requestPlatform || !requestArch) {
+          throw new Error(`Unable to resolve target platform/arch for client ${targetDeviceId}`)
+        }
+
+        const data = await externalToolsApi.previewClientInstanceCommand(
+          targetDeviceId,
+          item.id,
+          {
+            params,
+            instance_id: instanceId,
+            platform: requestPlatform,
+            arch: requestArch,
+          },
+          this.buildJsonHeaders(),
+        )
+        const shellCommand = String(data?.shell_command || data?.command || '').trim()
+        if (!shellCommand) throw new Error('Preview returned an empty command')
+
+        this.showDetailDialog({
+          title: `Preview Command - ${item.display_name || item.id}`,
+          subtitle: `${this.activeDeviceFilterLabel} / ${instanceId}`,
+          sections: [
+            {
+              title: 'Final command',
+              rows: [
+                { label: 'Shell', value: data?.shell || '-', mono: true },
+                { label: 'Working directory', value: data?.cwd || '-', mono: true, multiline: true },
+                { label: 'Command', value: shellCommand, mono: true, multiline: true },
+              ],
+            },
+          ],
+          copyText: shellCommand,
+        })
+      } catch (e) {
+        ElMessage.error(e.message || 'Failed to preview external tool command')
+      } finally {
+        this.previewingCommand = false
       }
     },
 

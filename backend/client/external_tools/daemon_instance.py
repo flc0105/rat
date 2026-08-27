@@ -58,6 +58,36 @@ class ExternalToolDaemonInstance(ExternalToolCommon):
 
     def start_detached(self, runtime: dict):
         return start_detached_process(runtime)
+
+    def preview_payload(self, payload: dict) -> dict:
+        # 只构建目标端最终 argv/cwd，不启动进程。
+        runtime = self.build_runtime(payload)
+        argv = runtime.get('argv') or []
+        cwd = runtime.get('cwd') or ''
+
+        if os.name == 'nt':
+            command = subprocess.list2cmdline(argv)
+            shell_command = f'cd /d {subprocess.list2cmdline([cwd])} && {command}' if cwd else command
+            shell = 'cmd'
+        else:
+            command = shlex.join(argv)
+            shell_command = f'cd {shlex.quote(cwd)} && {command}' if cwd else command
+            shell = 'sh'
+
+        return {
+            'tool_id': payload.get('tool_id') or '',
+            'package_id': payload.get('package_id') or '',
+            'module_id': payload.get('module_id') or '',
+            'instance_id': payload.get('instance_id') or 'default',
+            'platform': payload.get('platform') or '',
+            'arch': payload.get('arch') or '',
+            'shell': shell,
+            'cwd': cwd,
+            'argv': argv,
+            'command': command,
+            'shell_command': shell_command,
+        }
+
     def start_payload(self, payload: dict) -> dict:
         runtime = self.build_runtime(payload)
         existing_pid = self.read_pid(runtime['pid_file'])

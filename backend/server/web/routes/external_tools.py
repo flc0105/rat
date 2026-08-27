@@ -112,6 +112,21 @@ def create_external_tool_blueprint(server_instance):
             )
         return responder.json_endpoint(_execute, default_error_status=500)
 
+    @blueprint.post('/api/connections/<client_id>/external-tools/<tool_id>/instances/preview-command')
+    def preview_client_instance_command(client_id, tool_id):
+        def _execute():
+            ctx = request_context.client_payload(client_id, get_json_payload(), tab_id=get_optional_tab_id())
+            return client_lifecycle_api.preview_client_instance_command(
+                client_id,
+                tool_id,
+                params=ctx.params,
+                instance_id=ctx.instance_id,
+                tab_id=ctx.tab_id,
+                platform_alias=ctx.platform_alias,
+                arch=ctx.arch,
+            )
+        return responder.json_endpoint(_execute, default_error_status=500)
+
     @blueprint.post('/api/connections/<client_id>/external-tools/<tool_id>/oneshot')
     def run_client_oneshot(client_id, tool_id):
         def _execute():

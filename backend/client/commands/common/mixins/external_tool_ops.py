@@ -56,6 +56,15 @@ class CommandExternalToolMixin:
     def external_tool_run(self, arg=''):
         return self.external_tool_start(arg)
 
+    @desc('Preview the final external tool shell command without starting it', group='runtime', suggest=False)
+    @interruptible()
+    def external_tool_preview(self, arg=''):
+        try:
+            payload = self._decode_external_tool_payload(arg)
+            return self._json_result(self.external_tool_service.preview_payload(payload))
+        except Exception as e:
+            return 0, f'Failed to preview external tool command: {e}'
+
     @desc('Run an external tool module once and return captured output', group='runtime', suggest=False)
     @interruptible()
     def external_tool_oneshot(self, arg=''):

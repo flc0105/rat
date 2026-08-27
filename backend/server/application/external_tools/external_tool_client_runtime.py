@@ -38,6 +38,14 @@ class ExternalToolClientLifecycleRuntime(ExternalToolRuntimeComponent):
         command = f'external_tool_start {self.payload_builder.encode_payload_arg(payload)}'
         return self._run_client_lifecycle_command(client_id, command, tab_id=tab_id)
 
+    def preview_client_instance_command(self, client_id: str, tool_id: str, params: dict | None = None, tab_id: str = '', instance_id: str = '', platform_alias: str = '', arch: str = '') -> dict:
+        meta = self.catalog_service.get_tool(tool_id)
+        if str(meta.get('execution') or '').strip().lower() != 'daemon':
+            raise ValueError('command preview is only available for daemon instances')
+        payload = self.payload_builder.build_client_start_payload(meta, params=params, instance_id=instance_id, platform_alias=platform_alias, arch=arch)
+        command = f'external_tool_preview {self.payload_builder.encode_payload_arg(payload)}'
+        return self._run_client_lifecycle_command(client_id, command, tab_id=tab_id)
+
     def run_client_oneshot(self, client_id: str, tool_id: str, params: dict | None = None, tab_id: str = '', platform_alias: str = '', arch: str = '') -> dict:
         meta = self.catalog_service.get_tool(tool_id)
         payload = self.payload_builder.build_client_oneshot_payload(meta, params=params, platform_alias=platform_alias, arch=arch)

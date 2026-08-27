@@ -102,6 +102,15 @@ export function startClientInstance(clientId, toolId, payload = {}, headers = {}
   )
 }
 
+export function previewClientInstanceCommand(clientId, toolId, payload = {}, headers = {}) {
+  return postJson(
+    `/api/connections/${encodeURIComponent(clientId)}/external-tools/${encodeURIComponent(toolId)}/instances/preview-command`,
+    payload,
+    headers,
+    'Failed to preview client command',
+  )
+}
+
 export function runClientOneshot(clientId, toolId, payload = {}, headers = {}) {
   return postJson(
     `/api/connections/${encodeURIComponent(clientId)}/external-tools/${encodeURIComponent(toolId)}/oneshot`,
