@@ -12,8 +12,6 @@ def create_external_tool_blueprint(server_instance):
     external_tool_api = server_instance.web_service.external_tool_api
     request_context = external_tool_api.request_context
     catalog_api = external_tool_api.catalog
-    package_api = external_tool_api.package_runtime
-    server_instance_api = external_tool_api.server_instances
     client_lifecycle_api = external_tool_api.client_lifecycle
     responder = WebApiResponder()
 
@@ -77,21 +75,7 @@ def create_external_tool_blueprint(server_instance):
         except Exception as e:
             return responder.map_common_error(e)
 
-    # Server lifecycle.
-    @blueprint.get('/api/external-tools/<tool_id>/server/instances')
-    def list_server_instances(tool_id):
-        return responder.json_endpoint(
-            lambda: server_instance_api.list_server_instances(tool_id),
-            default_error_status=500,
-        )
-
-    @blueprint.get('/api/external-tools/server/instances')
-    def list_all_server_instances():
-        return responder.json_endpoint(
-            lambda: server_instance_api.list_all_server_instances(),
-            default_error_status=500,
-        )
-
+    # Client lifecycle. These endpoints submit commands to the target client.
     @blueprint.post('/api/connections/<client_id>/external-tools/instances')
     def list_all_client_instances(client_id):
         return responder.json_endpoint(
@@ -102,104 +86,6 @@ def create_external_tool_blueprint(server_instance):
             default_error_status=500,
         )
 
-    @blueprint.post('/api/external-tools/<tool_id>/server/instances/start')
-    def start_server_instance(tool_id):
-        def _execute():
-            ctx = request_context.server_payload(get_json_payload())
-            return server_instance_api.start_server_instance(
-                tool_id,
-                params=ctx.params,
-                instance_id=ctx.instance_id,
-            )
-        return responder.json_endpoint(_execute, default_error_status=500)
-
-    @blueprint.post('/api/external-tools/<tool_id>/server/oneshot')
-    def run_server_oneshot(tool_id):
-        def _execute():
-            ctx = request_context.server_payload(get_json_payload())
-            return server_instance_api.run_server_oneshot(tool_id, params=ctx.params)
-        return responder.json_endpoint(_execute, default_error_status=500)
-
-    @blueprint.post('/api/external-tools/<tool_id>/server/install')
-    def install_server_tool(tool_id):
-        def _execute():
-            ctx = request_context.server_payload(get_json_payload())
-            return package_api.install_server_tool(
-                tool_id,
-                params=ctx.params,
-                instance_id=ctx.instance_id,
-            )
-        return responder.json_endpoint(_execute, default_error_status=500)
-
-    @blueprint.post('/api/external-tools/<tool_id>/server/install-status')
-    def server_install_status(tool_id):
-        def _execute():
-            ctx = request_context.server_payload(get_json_payload())
-            return package_api.server_install_status(
-                tool_id,
-                params=ctx.params,
-                instance_id=ctx.instance_id,
-            )
-        return responder.json_endpoint(_execute, default_error_status=500)
-
-    @blueprint.post('/api/external-tools/<tool_id>/server/uninstall')
-    def uninstall_server_tool(tool_id):
-        def _execute():
-            ctx = request_context.server_payload(get_json_payload())
-            return package_api.uninstall_server_tool(
-                tool_id,
-                params=ctx.params,
-                instance_id=ctx.instance_id,
-            )
-        return responder.json_endpoint(_execute, default_error_status=500)
-
-    @blueprint.post('/api/external-tools/<tool_id>/server/clear-cache')
-    def clear_server_package_cache(tool_id):
-        def _execute():
-            ctx = request_context.server_payload(get_json_payload())
-            return package_api.clear_server_package_cache(
-                tool_id,
-                params=ctx.params,
-                instance_id=ctx.instance_id,
-            )
-        return responder.json_endpoint(_execute, default_error_status=500)
-
-    @blueprint.post('/api/external-tools/<tool_id>/server/instances/<instance_id>/stop')
-    def stop_server_instance(tool_id, instance_id):
-        def _execute():
-            ctx = request_context.server_payload(get_json_payload())
-            return server_instance_api.stop_server_instance(tool_id, instance_id=instance_id, params=ctx.params)
-        return responder.json_endpoint(_execute, default_error_status=500)
-
-    @blueprint.get('/api/external-tools/<tool_id>/server/instances/<instance_id>/status')
-    def status_server_instance(tool_id, instance_id):
-        return responder.json_endpoint(
-            lambda: server_instance_api.status_server_instance(tool_id, instance_id=instance_id),
-            default_error_status=500,
-        )
-
-    @blueprint.get('/api/external-tools/<tool_id>/server/instances/<instance_id>/logs')
-    def read_server_instance_logs(tool_id, instance_id):
-        def _execute():
-            max_bytes = request_context.max_bytes_from_query(request.args)
-            return server_instance_api.read_server_logs(tool_id, instance_id=instance_id, max_bytes=max_bytes)
-        return responder.json_endpoint(_execute, default_error_status=500)
-
-    @blueprint.post('/api/external-tools/<tool_id>/server/instances/<instance_id>/remove')
-    def remove_server_instance(tool_id, instance_id):
-        return responder.json_endpoint(
-            lambda: server_instance_api.remove_server_instance(tool_id, instance_id=instance_id),
-            default_error_status=500,
-        )
-
-    @blueprint.post('/api/external-tools/<tool_id>/server/instances/<instance_id>/clear-logs')
-    def clear_server_instance_logs(tool_id, instance_id):
-        return responder.json_endpoint(
-            lambda: server_instance_api.clear_server_logs(tool_id, instance_id=instance_id),
-            default_error_status=500,
-        )
-
-    # Client lifecycle. These endpoints submit commands to the target client.
     @blueprint.post('/api/connections/<client_id>/external-tools/<tool_id>/instances')
     def list_client_instances(client_id, tool_id):
         return responder.json_endpoint(
@@ -303,7 +189,7 @@ def create_external_tool_blueprint(server_instance):
     @blueprint.post('/api/connections/<client_id>/external-tools/<tool_id>/instances/<instance_id>/stop')
     def stop_client_instance(client_id, tool_id, instance_id):
         def _execute():
-            ctx = request_context.server_payload(get_json_payload())
+            ctx = request_context.payload(get_json_payload())
             return client_lifecycle_api.stop_client_instance(
                 client_id,
                 tool_id,

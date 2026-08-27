@@ -38,10 +38,8 @@ from server.application.web.script_api import WebScriptApi
 from server.application.web.system_api import WebSystemInspectionApi
 from server.application.web.terminal_api import WebTerminalApi
 from server.config.config import (
-    EXTERNAL_TOOL_INSTALL_ROOT_DIR,
     EXTERNAL_TOOL_META_PATH,
     EXTERNAL_TOOL_PACKAGE_PATH,
-    EXTERNAL_TOOL_RUNTIME_ROOT_DIR,
     CONNECTION_HISTORY_ROOT_DIR,
     RECENT_DEVICES_JSON_PATH,
     SCRIPT_JOBS_PATH,
@@ -168,8 +166,6 @@ class ServerApplicationAssembly:
             catalog_service=self.external_tool_catalog_service,
             command_execution_api=self.command_execution_api,
             remote_execution_service=self.remote_execution_service,
-            install_root_dir=EXTERNAL_TOOL_INSTALL_ROOT_DIR,
-            runtime_root_dir=EXTERNAL_TOOL_RUNTIME_ROOT_DIR,
         )
 
         self.external_tool_api = WebExternalToolApi(

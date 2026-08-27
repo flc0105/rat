@@ -182,7 +182,7 @@
                               type="primary"
                               plain
                               :disabled="!canRunModuleAction(module)"
-                              @click.stop="openStartDialog(module, getSelectedTargetSideForAction(), 'run')"
+                              @click.stop="openStartDialog(module, 'run')"
                             >
                               {{ getRunButtonLabel(module) }}
                             </el-button>
@@ -303,7 +303,7 @@
                         type="primary"
                         plain
                         :disabled="!canRunModuleAction(module)"
-                        @click="openStartDialog(module, getSelectedTargetSideForAction(), 'run')"
+                        @click="openStartDialog(module, 'run')"
                       >
                         {{ getRunButtonLabel(module) }}
                       </el-button>
@@ -417,12 +417,6 @@
                             Info
                           </el-dropdown-item>
 
-                          <el-dropdown-item
-                            v-if="canOpenWebInstance(row)"
-                            command="open_web"
-                          >
-                            Open Web
-                          </el-dropdown-item>
 
                           <el-dropdown-item command="restart" :disabled="!canRestartInstance(row)">
                             Restart
@@ -462,9 +456,6 @@
                     <div class="external-tool-instance-tags">
                       <el-tag size="small" :type="statusTagType(row.status)">
                         {{ row.status || '-' }}
-                      </el-tag>
-                      <el-tag size="small" type="info">
-                        {{ row.side || '-' }}
                       </el-tag>
                       <el-tag size="small" type="info">
                         {{ row.display_name || row.tool_id }}
@@ -526,12 +517,6 @@
                           <el-dropdown-menu>
                             <el-dropdown-item command="info">
                               Info
-                            </el-dropdown-item>
-                            <el-dropdown-item
-                              v-if="canOpenWebInstance(row)"
-                              command="open_web"
-                            >
-                              Open Web
                             </el-dropdown-item>
                             <el-dropdown-item command="restart" :disabled="!canRestartInstance(row)">
                               Restart
@@ -822,7 +807,6 @@ export default {
       installLoading: false,
       activeTab: 'modules',
       items: [],
-      serverInstances: {},
       clientInstances: {},
       installStatuses: {},
       searchText: '',
@@ -831,7 +815,6 @@ export default {
       selectedPackageId: '',
       startDialogVisible: false,
       pendingToolId: '',
-      pendingTargetSide: '',
       pendingStartMode: 'run',
       paramForm: {},
       remoteFilePickerVisible: false,
@@ -849,8 +832,6 @@ export default {
       oneshotDialogVisible: false,
       oneshotDialogTitle: 'External Tool Result',
       oneshotResult: null,
-      serverPlatform: '',
-      serverArch: '',
     }
   },
 
@@ -894,10 +875,8 @@ export default {
     },
 
     deviceFilterOptions() {
-      const options = [
-        { value: '__server__', label: 'Server host' },
-      ]
-      const seen = new Set(options.map(item => item.value))
+      const options = []
+      const seen = new Set()
       for (const conn of this.connections || []) {
         const machineId = this.normalizeMachineId(conn?.machine_id)
         if (!machineId || seen.has(machineId)) continue
@@ -919,39 +898,23 @@ export default {
       return this.shortenMachineId(value)
     },
 
-    serverModules() {
-      return (this.allModules || []).filter(item => this.supportsSide(item, 'server'))
-    },
-
     clientModules() {
-      return (this.allModules || []).filter(item => this.supportsSide(item, 'client'))
-    },
-
-    isServerTargetSelected() {
-      return this.normalizeDeviceId(this.deviceFilter || this.defaultTargetValue()) === '__server__'
+      return this.allModules || []
     },
 
     selectedTargetMachineId() {
       return this.normalizeMachineId(this.deviceFilter || this.defaultTargetValue())
     },
 
-    selectedTargetSide() {
-      if (this.isServerTargetSelected) return 'server'
-      return 'client'
-    },
-
     selectedTargetClientId() {
-      if (this.selectedTargetSide !== 'client') return ''
       return this.getClientDeviceIdForMachine(this.selectedTargetMachineId)
     },
 
     selectedTargetPlatform() {
-      if (this.selectedTargetSide !== 'client') return this.serverPlatform
       return this.getPlatformForMachineId(this.selectedTargetMachineId)
     },
 
     selectedTargetArch() {
-      if (this.selectedTargetSide !== 'client') return this.serverArch
       return this.getArchForMachineId(this.selectedTargetMachineId)
     },
 
@@ -974,15 +937,11 @@ export default {
 
     allInstances() {
       const rows = []
-      for (const item of this.serverModules) {
-        const list = this.serverInstances[item.id] || []
-        for (const instance of list) rows.push(this.normalizeInstanceRow(item, instance, 'server', '__server__'))
-      }
       for (const item of this.clientModules) {
         const byDevice = this.clientInstances || {}
         for (const [deviceId, toolMap] of Object.entries(byDevice)) {
           const list = toolMap?.[item.id] || []
-          for (const instance of list) rows.push(this.normalizeInstanceRow(item, instance, 'client', deviceId))
+          for (const instance of list) rows.push(this.normalizeInstanceRow(item, instance, deviceId))
         }
       }
       return rows.sort((a, b) => {
@@ -995,14 +954,9 @@ export default {
       const keyword = String(this.searchText || '').trim().toLowerCase()
       const machine = this.normalizeMachineId(this.deviceFilter || this.defaultTargetValue())
       return this.allInstances.filter((row) => {
-        if (machine === '__server__') {
-          if (row.side !== 'server') return false
-        } else if (machine && row.machine_id !== machine) {
-          return false
-        }
+        if (machine && row.machine_id !== machine) return false
         if (!keyword) return true
         const values = [
-          row.side,
           row.status,
           row.machine_id,
           row.machine_label,
@@ -1062,9 +1016,8 @@ export default {
     startDialogTitle() {
       const item = this.pendingItem
       const name = item ? (item.display_name || item.id) : 'External Tool'
-      const side = this.pendingTargetSide === 'server' ? 'Server' : 'This Client'
       const action = this.isPendingOneshot ? 'Run Once' : 'Run'
-      return `${action} ${name} on ${side}`
+      return `${action} ${name} on This Client`
     },
   },
 
@@ -1108,14 +1061,11 @@ export default {
 
     logExternalToolTarget(action, item = null, extra = {}) {
       const selectedMachineId = this.selectedTargetMachineId
-      const selectedClientId = this.selectedTargetSide === 'client'
-        ? this.getClientDeviceIdForMachine(selectedMachineId)
-        : '__server__'
+      const selectedClientId = this.getClientDeviceIdForMachine(selectedMachineId)
 
       const payload = {
         action,
         package_id: item?.package_meta?.id || item?.package_id || item?.id || '',
-        selected_side: this.selectedTargetSide,
         selected_machine_id: selectedMachineId,
         selected_client_id: selectedClientId,
         current_device_id: this.currentDeviceId,
@@ -1124,8 +1074,6 @@ export default {
         selected_target_arch: this.selectedTargetArch,
         current_client_platform: this.currentClientPlatform,
         current_client_arch: this.currentClientArch,
-        server_platform: this.serverPlatform,
-        server_arch: this.serverArch,
         ...extra,
       }
 
@@ -1154,36 +1102,18 @@ export default {
     async loadCatalog(showError = true) {
       try {
         const catalog = await externalToolsApi.loadExternalToolCatalog()
-        this.serverPlatform = this.normalizePlatform(catalog.server_platform || '')
-        this.serverArch = this.normalizeArch(catalog.server_arch || '')
         this.items = Array.isArray(catalog.items) ? catalog.items : []
         if (!this.selectedPackageId && this.items.length) this.selectedPackageId = this.items[0].id || ''
-        this.applyCatalogInstallStatuses(this.items, '__server__')
       } catch (e) {
         if (showError) ElMessage.error(e.message || 'Failed to load external tools')
         throw e
       }
     },
 
-    applyCatalogInstallStatuses(items, clientDeviceId = '') {
-      for (const item of items || []) {
-        const status = item?.install_status
-        if (!status) continue
-        const side = status.side || this.getItemSides(item)[0] || ''
-        const deviceId = side === 'server' ? '__server__' : this.normalizeDeviceId(clientDeviceId)
-        if (side === 'client' && !deviceId) {
-          this.logExternalToolTarget('apply-catalog-status-skip', item, {
-            reason: 'client install_status returned without explicit client_id',
-          })
-          continue
-        }
-        this.setInstallStatus(item, side, deviceId, { ...status, loading: false, error: status.error || '' })
-      }
-    },
 
     async loadClientCatalogStatuses(deviceId = '', showError = true) {
       const targetDeviceId = this.normalizeDeviceId(deviceId)
-      if (!targetDeviceId || targetDeviceId === '__server__' || targetDeviceId === '__all__') return []
+      if (!targetDeviceId || targetDeviceId === '__all__') return []
 
       const targetPlatform = this.getPlatformForConnectionId(targetDeviceId)
       const targetArch = this.getArchForConnectionId(targetDeviceId)
@@ -1200,8 +1130,8 @@ export default {
 
       const targetItems = (this.items || []).filter(item => this.doesPackageBuildMatch(item, targetPlatform, targetArch))
       for (const item of targetItems) {
-        const previous = this.installStatuses[this.installStatusKey(item, 'client', targetDeviceId)] || {}
-        this.setInstallStatus(item, 'client', targetDeviceId, {
+        const previous = this.installStatuses[this.installStatusKey(item, targetDeviceId)] || {}
+        this.setInstallStatus(item, targetDeviceId, {
           ...previous,
           loading: true,
           error: '',
@@ -1225,9 +1155,8 @@ export default {
           if (!packageId) continue
           seen.add(packageId)
           if (status) {
-            this.setInstallStatus(item, 'client', targetDeviceId, {
+            this.setInstallStatus(item, targetDeviceId, {
               ...status,
-              side: 'client',
               loading: false,
               error: status.error || '',
             })
@@ -1235,10 +1164,9 @@ export default {
         }
         for (const item of targetItems) {
           if (seen.has(String(item?.id || '').trim())) continue
-          this.setInstallStatus(item, 'client', targetDeviceId, {
+          this.setInstallStatus(item, targetDeviceId, {
             tool_id: item.id,
             package_id: item.id,
-            side: 'client',
             installed: false,
             loading: false,
             error: 'client status not returned',
@@ -1248,10 +1176,9 @@ export default {
         return Array.isArray(catalog.client_install_statuses) ? catalog.client_install_statuses : []
       } catch (e) {
         for (const item of targetItems) {
-          this.setInstallStatus(item, 'client', targetDeviceId, {
+          this.setInstallStatus(item, targetDeviceId, {
             tool_id: item.id,
             package_id: item.id,
-            side: 'client',
             installed: false,
             loading: false,
             error: e.message || 'Failed to load client install statuses',
@@ -1288,7 +1215,6 @@ export default {
         package_archs: pkg.archs || [],
         version: module.version || pkg.version || '',
         execution: this.getModuleExecution(module),
-        sides: ['server', 'client'],
         platforms: pkg.platforms || module.platforms || [],
         archs: pkg.archs || module.archs || [],
       }
@@ -1335,75 +1261,39 @@ export default {
       if (!['daemon', 'oneshot'].includes(execution)) return false
       const pkg = this.getPackageForModule(module)
       if (!this.isPackageAvailableForTarget(pkg)) return false
-      const side = this.getSelectedTargetSideForAction()
-      const deviceId = side === 'server' ? '__server__' : this.getActionDeviceId(pkg)
-      const status = this.installStatuses[this.installStatusKey(pkg, side, deviceId)]
+      const deviceId = this.getActionDeviceId(pkg)
+      const status = this.installStatuses[this.installStatusKey(pkg, deviceId)]
       return !!status?.installed
     },
 
-    getItemSides(item) {
-      const raw = item?.sides !== undefined ? item.sides : item?.side
-      const source = Array.isArray(raw) ? raw : [raw]
-      const sides = []
-      const seen = new Set()
-      for (const value of source) {
-        const side = String(value || '').trim().toLowerCase()
-        if (!['server', 'client'].includes(side) || seen.has(side)) continue
-        seen.add(side)
-        sides.push(side)
-      }
-      return sides.length ? sides : ['client']
-    },
 
-    supportsSide(item, side) {
-      const normalized = String(side || '').trim().toLowerCase()
-      return !!item && ['server', 'client'].includes(normalized)
-    },
 
-    getActionSideForItem(item) {
-      const side = this.getSelectedTargetSideForAction()
-      return this.supportsSide(item, side) ? side : this.getItemSides(item)[0]
-    },
 
-    installStatusKey(itemOrToolId, side = '', deviceId = '') {
+    installStatusKey(itemOrToolId, deviceId = '') {
       const toolId = typeof itemOrToolId === 'object'
         ? (itemOrToolId?.package_meta?.id || itemOrToolId?.package_id || itemOrToolId?.id)
         : itemOrToolId
-      const normalizedSide = side || (typeof itemOrToolId === 'object' ? this.getItemSides(itemOrToolId)[0] : '')
-      const normalizedDeviceId = normalizedSide === 'server' ? '__server__' : this.normalizeDeviceId(deviceId)
-      return `${normalizedSide}:${normalizedDeviceId}:${toolId || ''}`
+      return `${this.normalizeDeviceId(deviceId)}:${toolId || ''}`
     },
 
-    getModuleTargetTagLabel(item) {
-      const sides = this.getItemSides(item)
-      if (sides.includes('server') && sides.includes('client')) return 'Server / Client'
-      return sides.includes('server') ? 'Server' : 'Client'
-    },
 
-    getModuleTargetTagType(item) {
-      const sides = this.getItemSides(item)
-      if (sides.includes('server') && sides.includes('client')) return 'info'
-      if (sides.includes('server')) return 'success'
-      return 'warning'
-    },
 
     getInstallStatusTargetLabel() {
-      return this.getSelectedTargetSideForAction() === 'server' ? 'Server' : 'This Client'
+      return 'This Client'
     },
 
     getModuleInstallDeviceId(item) {
-      return this.getSelectedTargetSideForAction() === 'server' ? '__server__' : this.getActionDeviceId(item)
+      return this.getActionDeviceId(item)
     },
 
     getModuleInstallStatus(item) {
       if (!this.isPackageAvailableForTarget(item)) {
         return { label: 'Unavailable for target', type: 'info' }
       }
-      const side = this.getSelectedTargetSideForAction()
-      const targetLabel = this.getInstallStatusTargetLabel(item)
+      const targetLabel = this.getInstallStatusTargetLabel()
       const deviceId = this.getModuleInstallDeviceId(item)
-      if (side === 'client' && !deviceId) return { label: 'Install: no client', type: 'info' }
-      const status = this.installStatuses[this.installStatusKey(item, side, deviceId)]
+      if (!deviceId) return { label: 'Install: no client', type: 'info' }
+      const status = this.installStatuses[this.installStatusKey(item, deviceId)]
       if (!status) return { label: `Status unknown on ${targetLabel}`, type: 'info' }
       if (status.loading) return { label: 'Checking...', type: 'info' }
       if (status.error) return { label: `Status unknown on ${targetLabel}`, type: 'info' }
@@ -1412,8 +1302,8 @@ export default {
         : { label: `Not installed on ${targetLabel}`, type: 'warning' }
     },
 
-    setInstallStatus(itemOrToolId, side, deviceId, status) {
-      const key = this.installStatusKey(itemOrToolId, side, deviceId)
+    setInstallStatus(itemOrToolId, deviceId, status) {
+      const key = this.installStatusKey(itemOrToolId, deviceId)
       this.installStatuses = {
         ...this.installStatuses,
         [key]: { ...(status || {}) },
@@ -1421,46 +1311,31 @@ export default {
     },
 
     async refreshInstallStatuses(showToast = false) {
-      const side = this.getSelectedTargetSideForAction()
-      if (side === 'server') {
-        for (const item of this.items || []) {
-          if (!this.isPackageAvailableForTarget(item)) continue
-          await this.fetchInstallStatus(item, 'server', '__server__', { silent: true, force: true })
-        }
-      } else {
-        const deviceId = this.selectedTargetClientId
-        if (!deviceId) {
-          this.logExternalToolTarget('refresh-install-statuses-skip', null, {
-            reason: 'no selectedTargetClientId',
-          })
-          if (showToast) ElMessage.warning('Please select an online client')
-          return
-        }
-        await this.loadClientCatalogStatuses(deviceId, showToast)
+      const deviceId = this.selectedTargetClientId
+      if (!deviceId) {
+        this.logExternalToolTarget('refresh-install-statuses-skip', null, {
+          reason: 'no selectedTargetClientId',
+        })
+        if (showToast) ElMessage.warning('Please select an online client')
+        return
       }
+      await this.loadClientCatalogStatuses(deviceId, showToast)
       if (showToast) ElMessage.success('Install statuses refreshed')
     },
 
     isPackageAvailableForTarget(item) {
       if (!item) return false
       const pkg = item?.package_meta || item
-      const side = this.getSelectedTargetSideForAction()
-      if (side === 'server') return this.isServerPlatformSupported(pkg)
       const deviceId = this.getActionDeviceId(pkg)
       const platform = this.selectedTargetPlatform
       const arch = this.selectedTargetArch
-      return !!deviceId &&
-        this.selectedTargetSide === 'client' &&
-        !!platform &&
-        !!arch &&
-        this.doesPackageBuildMatch(pkg, platform, arch)
+      return !!deviceId && !!platform && !!arch && this.doesPackageBuildMatch(pkg, platform, arch)
     },
 
     getPackageCurrentInstallStatus(item) {
       if (!item) return null
-      const side = this.getSelectedTargetSideForAction()
       const deviceId = this.getModuleInstallDeviceId(item)
-      return this.installStatuses[this.installStatusKey(item, side, deviceId)] || null
+      return this.installStatuses[this.installStatusKey(item, deviceId)] || null
     },
 
     canUsePackageAction(item) {
@@ -1475,64 +1350,37 @@ export default {
       return !status || status.installed !== true
     },
 
-    async fetchInstallStatus(item, side = item?.side, deviceId = '', options = {}) {
+    async fetchInstallStatus(item, deviceId = '', options = {}) {
       if (!item?.id) return null
-      const targetSide = side || item.side
-      const targetDeviceId = targetSide === 'server' ? '__server__' : this.normalizeDeviceId(deviceId)
-      if (targetSide === 'client' && !targetDeviceId) {
+      const targetDeviceId = this.normalizeDeviceId(deviceId)
+      if (!targetDeviceId) {
         this.logExternalToolTarget('fetch-install-status-skip', item, {
           reason: 'missing targetDeviceId',
           requested_device_id: deviceId,
         })
         return null
       }
-      const statusKey = this.installStatusKey(item, targetSide, targetDeviceId)
+      const statusKey = this.installStatusKey(item, targetDeviceId)
       const cachedStatus = this.installStatuses[statusKey]
       if (cachedStatus && !cachedStatus.loading && !cachedStatus.error && !options.force) return cachedStatus
 
-      if (targetSide === 'client') {
-        await this.loadClientCatalogStatuses(targetDeviceId, !options.silent)
-        const refreshed = this.installStatuses[statusKey]
-        if (refreshed) return refreshed
-        return null
-      }
-
-      const previousStatus = this.installStatuses[statusKey] || {}
-      this.setInstallStatus(item, targetSide, targetDeviceId, { ...previousStatus, loading: true, error: '' })
-      try {
-        const data = await externalToolsApi.readServerInstallStatus(item.id, { params: {} })
-        this.setInstallStatus(item, targetSide, targetDeviceId, { ...data, loading: false, error: data.error || '' })
-        return data
-      } catch (e) {
-        this.setInstallStatus(item, targetSide, targetDeviceId, {
-          ...previousStatus,
-          loading: false,
-          error: e.message || 'Failed to read install status',
-        })
-        if (!options.silent) ElMessage.error(e.message || 'Failed to read install status')
-        return null
-      }
+      await this.loadClientCatalogStatuses(targetDeviceId, !options.silent)
+      return this.installStatuses[statusKey] || null
     },
 
 
     async refreshInstances(showToast = true) {
-      const device = this.normalizeMachineId(this.deviceFilter || this.defaultTargetValue())
-
-      if (device === '__server__' || !device) {
-        await this.loadAllServerInstances(false)
-      } else {
-        const deviceId = this.getClientDeviceIdForMachine(device)
-        if (!deviceId) {
-          this.logExternalToolTarget('refresh-instances-skip', null, {
-            reason: 'selected machine has no matching online client_id',
-            selected_machine_id: device,
-          })
-          if (showToast) ElMessage.warning('Please select an online client')
-          return
-        }
-        await this.loadAllClientInstances(deviceId, false)
+      const machineId = this.normalizeMachineId(this.deviceFilter || this.defaultTargetValue())
+      const deviceId = this.getClientDeviceIdForMachine(machineId)
+      if (!deviceId) {
+        this.logExternalToolTarget('refresh-instances-skip', null, {
+          reason: 'selected machine has no matching online client_id',
+          selected_machine_id: machineId,
+        })
+        if (showToast) ElMessage.warning('Please select an online client')
+        return
       }
-
+      await this.loadAllClientInstances(deviceId, false)
       if (showToast) ElMessage.success('Instances refreshed')
     },
 
@@ -1567,26 +1415,10 @@ normalizeInstanceByToolPayload(data = {}, modules = []) {
   return grouped
 },
 
-async loadAllServerInstances(showToast = true) {
-  try {
-    const data = await externalToolsApi.loadAllServerInstances()
-    const nextServerInstances = this.normalizeInstanceByToolPayload(data, this.serverModules)
-
-    this.serverInstances = {
-      ...this.serverInstances,
-      ...nextServerInstances,
-    }
-
-    if (showToast) ElMessage.success('Server instances refreshed')
-  } catch (e) {
-    if (showToast) ElMessage.error(e.message || 'Failed to load server instances')
-    throw e
-  }
-},
 
 async loadAllClientInstances(deviceId = '', showToast = true) {
   const targetDeviceId = this.normalizeDeviceId(deviceId)
-  if (!targetDeviceId || targetDeviceId === '__server__' || targetDeviceId === '__all__') return
+  if (!targetDeviceId || targetDeviceId === '__all__') return
 
   try {
     const data = await externalToolsApi.loadAllClientInstances(targetDeviceId, this.buildJsonHeaders())
@@ -1604,40 +1436,10 @@ async loadAllClientInstances(deviceId = '', showToast = true) {
   }
 },
 
-    // async refreshInstances(showToast = true) {
-    //   const device = this.normalizeMachineId(this.deviceFilter || this.defaultTargetValue())
-    //
-    //   if (device === '__server__' || !device) {
-    //     await Promise.allSettled(this.serverModules.map(item => this.loadServerInstances(item.id, false)))
-    //   } else {
-    //     const clientDeviceIds = this.getClientDeviceIdsForFilter(device)
-    //     for (const deviceId of clientDeviceIds) {
-    //       for (const item of this.clientModules) {
-    //         await this.loadClientInstances(item.id, deviceId, false)
-    //       }
-    //     }
-    //   }
-    //
-    //   if (showToast) ElMessage.success('Instances refreshed')
-    // },
-
-    async loadServerInstances(toolId, showToast = true) {
-      if (!toolId) return
-      try {
-        const data = await externalToolsApi.loadServerInstances(toolId)
-        this.serverInstances = {
-          ...this.serverInstances,
-          [toolId]: Array.isArray(data.items) ? data.items : [],
-        }
-        if (showToast) ElMessage.success('Server instances refreshed')
-      } catch (e) {
-        if (showToast) ElMessage.error(e.message || 'Failed to load server instances')
-      }
-    },
 
     async loadClientInstances(toolId, deviceId = '', showToast = true) {
       const targetDeviceId = this.normalizeDeviceId(deviceId)
-      if (!toolId || !targetDeviceId || targetDeviceId === '__server__' || targetDeviceId === '__all__') return
+      if (!toolId || !targetDeviceId || targetDeviceId === '__all__') return
       try {
         const data = await externalToolsApi.loadClientInstances(targetDeviceId, toolId, this.buildJsonHeaders())
         this.clientInstances = {
@@ -1654,12 +1456,14 @@ async loadAllClientInstances(deviceId = '', showToast = true) {
     },
 
     defaultTargetValue() {
-      return this.currentMachineId || '__server__'
+      if (this.currentMachineId) return this.currentMachineId
+      const first = (this.connections || []).find(conn => this.normalizeMachineId(conn?.machine_id))
+      return this.normalizeMachineId(first?.machine_id || '')
     },
 
     getClientDeviceIdForMachine(machineId) {
       const id = this.normalizeMachineId(machineId)
-      if (!id || id === '__server__' || id === '__all__') return ''
+      if (!id || id === '__all__') return ''
       const conn = this.findConnectionByMachineId(id)
       if (conn?.client_id) return this.normalizeDeviceId(conn.client_id)
       if (id === this.currentMachineId && this.currentDeviceId) return this.currentDeviceId
@@ -1670,11 +1474,9 @@ async loadAllClientInstances(deviceId = '', showToast = true) {
 
     getPlatformForMachineId(machineId) {
       const id = this.normalizeMachineId(machineId)
-      if (!id || id === '__server__' || id === '__all__') return ''
+      if (!id || id === '__all__') return ''
       const conn = this.findConnectionByMachineId(id) || (id === this.currentMachineId ? this.currentConnection : null)
-      return this.normalizePlatform(
-        conn?.os_alias || conn?.os_type || conn?.platform || conn?.system || '',
-      )
+      return this.normalizePlatform(conn?.os_alias || conn?.os_type || conn?.platform || conn?.system || '')
     },
 
     getPlatformForConnectionId(deviceId) {
@@ -1684,7 +1486,7 @@ async loadAllClientInstances(deviceId = '', showToast = true) {
 
     getArchForMachineId(machineId) {
       const id = this.normalizeMachineId(machineId)
-      if (!id || id === '__server__' || id === '__all__') return ''
+      if (!id || id === '__all__') return ''
       const conn = this.findConnectionByMachineId(id) || (id === this.currentMachineId ? this.currentConnection : null)
       return this.normalizeArch(conn?.arch || conn?.cpu_arch || conn?.architecture || conn?.machine_arch || '')
     },
@@ -1695,10 +1497,10 @@ async loadAllClientInstances(deviceId = '', showToast = true) {
     },
 
     getActionDeviceId(item) {
-      if (!item || !this.supportsSide(item, 'client')) return ''
+      if (!item) return ''
 
       const machineId = this.selectedTargetMachineId
-      if (!machineId || machineId === '__server__' || machineId === '__all__') return ''
+      if (!machineId || machineId === '__all__') return ''
 
       const deviceId = this.getClientDeviceIdForMachine(machineId)
       if (!deviceId) {
@@ -1706,7 +1508,6 @@ async loadAllClientInstances(deviceId = '', showToast = true) {
           reason: 'selected machine has no matching online client_id',
         })
       }
-
       return deviceId
     },
 
@@ -1721,7 +1522,6 @@ async loadAllClientInstances(deviceId = '', showToast = true) {
     shortenDeviceId(deviceId) {
       const value = this.normalizeDeviceId(deviceId)
       if (!value) return '-'
-      if (value === '__server__') return 'server'
       if (value === '__all__') return 'all'
       return value.length > 12 ? value.slice(0, 12) : value
     },
@@ -1729,7 +1529,6 @@ async loadAllClientInstances(deviceId = '', showToast = true) {
     shortenMachineId(machineId) {
       const value = this.normalizeMachineId(machineId)
       if (!value) return '-'
-      if (value === '__server__') return 'server'
       if (value === '__all__') return 'all'
       return value.length > 12 ? value.slice(0, 12) : value
     },
@@ -1745,7 +1544,6 @@ async loadAllClientInstances(deviceId = '', showToast = true) {
     },
 
     getMachineIdForConnectionId(deviceId) {
-      if (deviceId === '__server__') return '__server__'
       const conn = this.findConnectionById(deviceId)
       return this.normalizeMachineId(conn?.machine_id || (deviceId === this.currentDeviceId ? this.currentConnection?.machine_id : '') || deviceId)
     },
@@ -1776,9 +1574,8 @@ async loadAllClientInstances(deviceId = '', showToast = true) {
       return this.shortenMachineId(this.currentMachineId)
     },
 
-    getMachineLabel(machineId, side = '', connectionId = '') {
+    getMachineLabel(machineId, connectionId = '') {
       const id = this.normalizeMachineId(machineId)
-      if (side === 'server' || id === '__server__') return 'Server host'
       const conn = this.findConnectionByMachineId(id) || this.findConnectionById(connectionId)
       if (conn?.machine_id) return this.formatMachineOptionLabel(conn)
       if (id === this.currentMachineId && this.currentConnection) return this.formatMachineOptionLabel(this.currentConnection)
@@ -1787,7 +1584,7 @@ async loadAllClientInstances(deviceId = '', showToast = true) {
 
     getClientDeviceIdsForFilter(filterValue) {
       const value = this.normalizeMachineId(filterValue)
-      if (!value || value === '__server__') return []
+      if (!value) return []
       if (value === '__all__') {
         const ids = []
         const seen = new Set()
@@ -1811,9 +1608,7 @@ async loadAllClientInstances(deviceId = '', showToast = true) {
           ids.push(clientId)
         }
       }
-      if (!ids.length && value === this.currentMachineId && this.currentDeviceId) {
-        ids.push(this.currentDeviceId)
-      }
+      if (!ids.length && value === this.currentMachineId && this.currentDeviceId) ids.push(this.currentDeviceId)
       return ids
     },
 
@@ -1939,14 +1734,7 @@ async loadAllClientInstances(deviceId = '', showToast = true) {
       })
     },
 
-    isServerPlatformSupported(item) {
-      if (!item || !this.serverPlatform || !this.serverArch) return false
-      return this.doesPackageBuildMatch(item, this.serverPlatform, this.serverArch)
-    },
 
-    isClientPlatformSupported(item) {
-      return this.doesPackageBuildMatch(item, this.currentClientPlatform, this.currentClientArch)
-    },
 
     formatPlatforms(platforms) {
       const normalized = this.normalizePlatforms(platforms)
@@ -2111,8 +1899,6 @@ async loadAllClientInstances(deviceId = '', showToast = true) {
 
     buildStartParams() {
       const params = {}
-      const hasAccessHostParam = (this.pendingParams || []).some(param => String(param?.name || '').trim() === 'access_host')
-
       for (const param of this.pendingParams || []) {
         const name = String(param?.name || '').trim()
         if (!name) continue
@@ -2141,12 +1927,6 @@ async loadAllClientInstances(deviceId = '', showToast = true) {
         }
       }
 
-      // 兼容：meta 里 web.url 用了 {{access_host}}，但 params 没显式声明 access_host 时，
-      // 仍然给 runtime state 里补一个，方便后续 Open Web。
-      if (!hasAccessHostParam && this.pendingItem && this.getModuleWebUrlTemplate(this.pendingItem)) {
-        params.access_host = this.getBrowserAccessHost()
-      }
-
       return params
     },
 
@@ -2157,10 +1937,9 @@ async loadAllClientInstances(deviceId = '', showToast = true) {
       return String(raw || 'default').trim().replace(/[^A-Za-z0-9_.-]+/g, '-').replace(/^[._-]+|[._-]+$/g, '') || 'default'
     },
 
-    openStartDialog(item, side, mode = 'run') {
+    openStartDialog(item, mode = 'run') {
       this.pendingToolId = String(item?.id || '').trim()
-      this.pendingTargetSide = side
-      this.pendingStartMode = 'run'
+      this.pendingStartMode = mode
       this.paramForm = this.buildParamDefaults(item)
       this.startDialogVisible = true
     },
@@ -2169,7 +1948,6 @@ async loadAllClientInstances(deviceId = '', showToast = true) {
       this.startDialogVisible = false
       this.submitting = false
       this.pendingToolId = ''
-      this.pendingTargetSide = ''
       this.pendingStartMode = 'run'
       this.paramForm = {}
     },
@@ -2194,26 +1972,20 @@ async loadAllClientInstances(deviceId = '', showToast = true) {
       window.open(downloadUrl, '_blank')
     },
 
-    getSelectedTargetSideForAction() {
-      return this.isServerTargetSelected ? 'server' : 'client'
-    },
 
     getRunButtonLabel(module = null) {
       const action = this.isOneshotModule(module) ? 'Run Once' : 'Run'
-      return this.isServerTargetSelected ? `${action} on Server` : `${action} on This Client`
+      return `${action} on This Client`
     },
 
     getInstallMenuLabel(item = null) {
       const status = item ? this.getPackageCurrentInstallStatus(item) : null
-      if (status?.installed) {
-        return this.isServerTargetSelected ? 'Installed on Server' : 'Installed on This Client'
-      }
-      return this.isServerTargetSelected ? 'Install on Server' : 'Install on This Client'
+      return status?.installed ? 'Installed on This Client' : 'Install on This Client'
     },
 
 
     getUninstallMenuLabel() {
-      return this.isServerTargetSelected ? 'Uninstall from Server' : 'Uninstall from This Client'
+      return 'Uninstall from This Client'
     },
 
 handlePackageMoreCommand(command, item) {
@@ -2228,13 +2000,12 @@ handlePackageMoreCommand(command, item) {
 },
 
     getPackageTargetMachineId(item) {
-  if (!item) return ''
-  if (this.getSelectedTargetSideForAction() === 'server') return '__server__'
-  return this.selectedTargetMachineId
-},
+      if (!item) return ''
+      return this.selectedTargetMachineId
+    },
 
 getPackageTargetConnectionIds(item) {
-  if (!item || this.getSelectedTargetSideForAction() !== 'client' || !this.supportsSide(item, 'client')) return []
+  if (!item) return []
   const machineId = this.getPackageTargetMachineId(item)
   const ids = this.getClientDeviceIdsForFilter(machineId)
   if (!ids.length) {
@@ -2249,14 +2020,8 @@ getPackageTargetConnectionIds(item) {
 getPackageTargetInstanceRows(item) {
   if (!item?.id) return []
   const packageId = String(item.id || '').trim()
-
-  if (this.getSelectedTargetSideForAction() === 'server') {
-    return this.allInstances.filter(row => row.side === 'server' && (row.package_id === packageId || String(row.tool_id || '').startsWith(`${packageId}.`)))
-  }
-
   const machineId = this.getPackageTargetMachineId(item)
   return this.allInstances.filter(row => (
-    row.side === 'client' &&
     (row.package_id === packageId || String(row.tool_id || '').startsWith(`${packageId}.`)) &&
     row.machine_id === machineId
   ))
@@ -2268,13 +2033,7 @@ hasRunningInstancesForPackage(item) {
 
 canUninstallPackageAction(item) {
   if (!this.canUsePackageAction(item)) return false
-
-  const status = this.installStatuses[this.installStatusKey(
-    item,
-    this.getSelectedTargetSideForAction(),
-    this.getModuleInstallDeviceId(item),
-  )]
-
+  const status = this.installStatuses[this.installStatusKey(item, this.getModuleInstallDeviceId(item))]
   if (status && status.installed === false) return false
   return !this.hasRunningInstancesForPackage(item)
 },
@@ -2282,7 +2041,7 @@ canUninstallPackageAction(item) {
 async uninstallPackage(item) {
   if (!item?.id) return
   if (!this.canUsePackageAction(item)) {
-    ElMessage.warning(this.getSelectedTargetSideForAction() === 'client' ? 'Please select a supported client first' : 'This package is not supported')
+    ElMessage.warning('Please select a supported client first')
     return
   }
 
@@ -2300,13 +2059,9 @@ async uninstallPackage(item) {
 
   try {
     await ElMessageBox.confirm(
-      `Uninstall ${item.display_name || item.id} from ${this.getSelectedTargetSideForAction() === 'server' ? 'server' : 'this machine'}?`,
+      `Uninstall ${item.display_name || item.id} from this machine?`,
       'Uninstall External Tool',
-      {
-        type: 'warning',
-        confirmButtonText: 'Uninstall',
-        cancelButtonText: 'Cancel',
-      },
+      { type: 'warning', confirmButtonText: 'Uninstall', cancelButtonText: 'Cancel' },
     )
   } catch (_) {
     return
@@ -2314,35 +2069,20 @@ async uninstallPackage(item) {
 
   try {
     this.installLoading = true
-    let data
-    if (this.getSelectedTargetSideForAction() === 'server') {
-      data = await this.uninstallServerTool(item)
-      this.setInstallStatus(item, 'server', '__server__', {
-        ...(data || {}),
-        installed: false,
-        loading: false,
-        error: '',
-      })
-    } else {
-      const deviceIds = this.getPackageTargetConnectionIds(item)
-      if (!deviceIds.length) throw new Error('Please select a device')
-      // 实际卸载只对当前选中的连接发命令；同 machine 多连接时，后端命令仍落在该机器本地路径。
-      const deviceId = this.normalizeDeviceId(deviceIds[0])
-      this.logExternalToolTarget('uninstall-client-package', item, {
-        request_client_id: deviceId,
-        request_platform: this.getPlatformForConnectionId(deviceId),
-        request_arch: this.getArchForConnectionId(deviceId),
-      })
-      data = await this.uninstallClientTool(item, deviceId)
-      this.setInstallStatus(item, 'client', deviceId, {
-        ...(data || {}),
-        installed: false,
-        loading: false,
-        error: '',
-      })
-      await this.loadClientCatalogStatuses(deviceId, false)
-    }
-
+    const deviceIds = this.getPackageTargetConnectionIds(item)
+    if (!deviceIds.length) throw new Error('Please select a device')
+    // 实际卸载只对当前选中的连接发命令；同 machine 多连接时，后端命令仍落在该机器本地路径。
+    const deviceId = this.normalizeDeviceId(deviceIds[0])
+    this.logExternalToolTarget('uninstall-client-package', item, {
+      request_client_id: deviceId,
+      request_platform: this.getPlatformForConnectionId(deviceId),
+      request_arch: this.getArchForConnectionId(deviceId),
+    })
+    const data = await this.uninstallClientTool(item, deviceId)
+    this.setInstallStatus(item, deviceId, {
+      ...(data || {}), installed: false, loading: false, error: '',
+    })
+    await this.loadClientCatalogStatuses(deviceId, false)
     ElMessage.success(data?.message || `Uninstalled: ${item.display_name || item.id}`)
   } catch (e) {
     ElMessage.error(e.message || 'Failed to uninstall package')
@@ -2351,9 +2091,6 @@ async uninstallPackage(item) {
   }
 },
 
-async uninstallServerTool(item) {
-  return externalToolsApi.uninstallServerTool(item.id, { params: {} })
-},
 
 async uninstallClientTool(item, deviceId) {
   const targetDeviceId = this.normalizeDeviceId(deviceId)
@@ -2383,36 +2120,24 @@ async uninstallClientTool(item, deviceId) {
     async clearPackageCache(item) {
       if (!item?.id) return
       if (!this.canUsePackageAction(item)) {
-        ElMessage.warning(this.getSelectedTargetSideForAction() === 'client' ? 'Please select a supported client first' : 'This package is not supported')
+        ElMessage.warning('Please select a supported client first')
         return
       }
-
       try {
         await ElMessageBox.confirm(
-          `Clear cached package archive for ${item.display_name || item.id} on ${this.getSelectedTargetSideForAction() === 'server' ? 'server' : 'this machine'}? Installed files will not be removed.`,
+          `Clear cached package archive for ${item.display_name || item.id} on this machine? Installed files will not be removed.`,
           'Clear Package Cache',
-          {
-            type: 'warning',
-            confirmButtonText: 'Clear Cache',
-            cancelButtonText: 'Cancel',
-          },
+          { type: 'warning', confirmButtonText: 'Clear Cache', cancelButtonText: 'Cancel' },
         )
       } catch (_) {
         return
       }
-
       try {
         this.installLoading = true
-        let data
-        const side = this.getSelectedTargetSideForAction()
-        const deviceId = side === 'server' ? '__server__' : this.getActionDeviceId(item)
-        if (side === 'server') {
-          data = await this.clearServerPackageCache(item)
-        } else {
-          if (!deviceId) throw new Error('Please select a device')
-          data = await this.clearClientPackageCache(item, deviceId)
-          await this.loadClientCatalogStatuses(deviceId, false)
-        }
+        const deviceId = this.getActionDeviceId(item)
+        if (!deviceId) throw new Error('Please select a device')
+        const data = await this.clearClientPackageCache(item, deviceId)
+        await this.loadClientCatalogStatuses(deviceId, false)
         ElMessage.success(data?.message || 'Package cache cleared')
       } catch (e) {
         ElMessage.error(e.message || 'Failed to clear package cache')
@@ -2421,9 +2146,6 @@ async uninstallClientTool(item, deviceId) {
       }
     },
 
-    async clearServerPackageCache(item) {
-      return externalToolsApi.clearServerPackageCache(item.id, { params: {} })
-    },
 
     async clearClientPackageCache(item, deviceId) {
       const targetDeviceId = this.normalizeDeviceId(deviceId)
@@ -2452,39 +2174,29 @@ async uninstallClientTool(item, deviceId) {
 
     async installOnly(item) {
       if (!this.canUsePackageAction(item)) {
-        ElMessage.warning(this.getSelectedTargetSideForAction() === 'client' ? 'Please select a supported client first' : 'This package is not supported')
+        ElMessage.warning('Please select a supported client first')
         return
       }
       try {
         this.installLoading = true
-        let data
-        const side = this.getSelectedTargetSideForAction()
-        const deviceId = side === 'server' ? '__server__' : this.getActionDeviceId(item)
-        if (side === 'server') {
-          data = await externalToolsApi.installServerTool(item.id, { params: {} })
-        } else {
-          if (!deviceId) throw new Error('Please select a target machine')
-          const requestPlatform = this.getPlatformForConnectionId(deviceId)
-          const requestArch = this.getArchForConnectionId(deviceId)
-          this.logExternalToolTarget('install-client-package', item, {
-            request_client_id: deviceId,
-            request_platform: requestPlatform,
-            request_arch: requestArch,
-          })
-          if (!requestPlatform || !requestArch) throw new Error(`Unable to resolve target platform/arch for client ${deviceId}`)
+        const deviceId = this.getActionDeviceId(item)
+        if (!deviceId) throw new Error('Please select a target machine')
+        const requestPlatform = this.getPlatformForConnectionId(deviceId)
+        const requestArch = this.getArchForConnectionId(deviceId)
+        this.logExternalToolTarget('install-client-package', item, {
+          request_client_id: deviceId,
+          request_platform: requestPlatform,
+          request_arch: requestArch,
+        })
+        if (!requestPlatform || !requestArch) throw new Error(`Unable to resolve target platform/arch for client ${deviceId}`)
 
-          data = await externalToolsApi.installClientTool(
-            deviceId,
-            item.id,
-            {
-              params: {},
-              platform: requestPlatform,
-              arch: requestArch,
-            },
-            this.buildJsonHeaders(),
-          )
-        }
-        this.setInstallStatus(item, side, deviceId, { ...data, loading: false, error: data.error || '' })
+        const data = await externalToolsApi.installClientTool(
+          deviceId,
+          item.id,
+          { params: {}, platform: requestPlatform, arch: requestArch },
+          this.buildJsonHeaders(),
+        )
+        this.setInstallStatus(item, deviceId, { ...data, loading: false, error: data.error || '' })
         const sourceLabel = data.used_cache
           ? 'Installed from cached package'
           : data.downloaded
@@ -2555,9 +2267,8 @@ async uninstallClientTool(item, deviceId) {
     },
 
     async getInstallStatusForAction(item) {
-      const side = this.getSelectedTargetSideForAction()
-      const deviceId = side === 'server' ? '__server__' : this.getActionDeviceId(item)
-      return this.fetchInstallStatus(item, side, deviceId, { silent: false, force: true })
+      const deviceId = this.getActionDeviceId(item)
+      return this.fetchInstallStatus(item, deviceId, { silent: false, force: true })
     },
 
     async showInstallStatus(item) {
@@ -2567,7 +2278,7 @@ async uninstallClientTool(item, deviceId) {
       const execsText = this.packageExecNames(item)
       this.showDetailDialog({
         title: `${item.display_name || item.id} install status`,
-        subtitle: `${item.id} / ${this.getSelectedTargetSideForAction()}`,
+        subtitle: `${item.id} / ${this.activeDeviceFilterLabel}`,
         copyText: this.formatCommandMap(data),
         sections: [
           {
@@ -2697,44 +2408,27 @@ async uninstallClientTool(item, deviceId) {
 
     async confirmStart() {
       const item = this.pendingItem
-      if (!item) {
-        this.resetStartDialog()
-        return
-      }
-
+      if (!item) return
       try {
         this.submitting = true
         const params = this.buildStartParams()
         if (this.isOneshotModule(item)) {
-          const result = this.pendingTargetSide === 'server'
-            ? await this.runServerOneshot(item, params)
-            : await this.runClientOneshot(item, params)
+          const result = await this.runClientOneshot(item, params)
           this.resetStartDialog()
           this.openOneshotResultDialog(item, result)
           return
         }
 
         const instanceId = this.deriveInstanceId(params)
-        if (this.pendingTargetSide === 'server') {
-          await this.startServerInstance(item, params, instanceId, false)
-        } else {
-          await this.startClientInstance(item, params, instanceId, false)
-        }
-        this.activeTab = 'instances'
+        await this.startClientInstance(item, params, instanceId, false)
         this.resetStartDialog()
       } catch (e) {
-        ElMessage.error(e.message || 'Failed to start external tool')
+        ElMessage.error(e.message || 'Failed to run external tool')
       } finally {
         this.submitting = false
       }
     },
 
-    async startServerInstance(item, params, instanceId, installIfNeeded = false) {
-      const data = await externalToolsApi.startServerInstance(item.id, { params, instance_id: instanceId, install_if_needed: false })
-      ElMessage.success(data?.message || 'Server instance started')
-      if (data?.install) this.setInstallStatus(this.getPackageForModule(item), 'server', '__server__', data.install)
-      await this.loadServerInstances(item.id, false)
-    },
 
     async startClientInstance(item, params, instanceId, installIfNeeded = false, deviceId = '') {
       const targetDeviceId = this.normalizeDeviceId(deviceId || this.getActionDeviceId(this.getPackageForModule(item)))
@@ -2762,17 +2456,10 @@ async uninstallClientTool(item, deviceId) {
         this.buildJsonHeaders(),
       )
       ElMessage.success(data?.message || 'Client instance started')
-      if (data?.install) this.setInstallStatus(this.getPackageForModule(item), 'client', targetDeviceId, data.install)
+      if (data?.install) this.setInstallStatus(this.getPackageForModule(item), targetDeviceId, data.install)
       await this.loadClientInstances(item.id, targetDeviceId, false)
     },
 
-    async runServerOneshot(item, params) {
-      this.logExternalToolTarget('run-server-oneshot', item, {
-        request_platform: this.serverPlatform,
-        request_arch: this.serverArch,
-      })
-      return externalToolsApi.runServerOneshot(item.id, { params }, this.buildJsonHeaders())
-    },
 
     async runClientOneshot(item, params, deviceId = '') {
       const targetDeviceId = this.normalizeDeviceId(deviceId || this.getActionDeviceId(this.getPackageForModule(item)))
@@ -2797,7 +2484,7 @@ async uninstallClientTool(item, deviceId) {
         },
         this.buildJsonHeaders(),
       )
-      if (data?.install) this.setInstallStatus(this.getPackageForModule(item), 'client', targetDeviceId, data.install)
+      if (data?.install) this.setInstallStatus(this.getPackageForModule(item), targetDeviceId, data.install)
       return data || {}
     },
 
@@ -2838,43 +2525,42 @@ async uninstallClientTool(item, deviceId) {
       }
     },
 
-    normalizeInstanceRow(item, instance, side, deviceId = '') {
+    normalizeInstanceRow(item, instance, deviceId = '') {
       const runtime = instance.runtime || {}
       const config = instance.config || {}
       const params = instance.params || {}
       const configPath = config.target || instance.config_file || ''
-      const normalizedDeviceId = side === 'server' ? '__server__' : this.normalizeDeviceId(deviceId)
-      const machineId = side === 'server' ? '__server__' : this.getMachineIdForConnectionId(normalizedDeviceId)
-      const hostname = side === 'server' ? '' : this.getHostnameForConnectionId(normalizedDeviceId)
+      const normalizedDeviceId = this.normalizeDeviceId(deviceId)
+      const machineId = this.getMachineIdForConnectionId(normalizedDeviceId)
+      const hostname = this.getHostnameForConnectionId(normalizedDeviceId)
       return {
-        row_key: `${side}:${normalizedDeviceId}:${item.id}:${instance.instance_id}`,
-        side,
+        row_key: `client:${normalizedDeviceId}:${item.id}:${instance.instance_id}`,
         device_id: normalizedDeviceId,
         connection_id: normalizedDeviceId,
         machine_id: machineId,
+        machine_label: this.getMachineLabel(machineId, normalizedDeviceId),
         hostname,
-        machine_label: this.getMachineLabel(machineId, side, normalizedDeviceId),
-        tool_id: item.id,
-        package_id: item.package_id || instance.package_id || '',
-        module_id: item.module_id || instance.module_id || '',
-        display_name: item.display_name || item.id,
+        tool_id: instance.tool_id || item.id,
+        package_id: instance.package_id || item.package_id || '',
+        module_id: instance.module_id || item.module_id || '',
+        display_name: instance.display_name || item.display_name || item.id,
         instance_id: instance.instance_id || 'default',
-        status: instance.status || '-',
+        status: instance.status || 'unknown',
         running: !!instance.running,
         pid: instance.pid || '',
-        pid_file: instance.pid_file || runtime.pid_file || '',
+        exec_path: instance.exec_path || instance.executable_path || runtime.argv?.[0] || '',
+        config_path: configPath,
         stdout: instance.stdout || runtime.stdout || '',
         stderr: instance.stderr || runtime.stderr || '',
+        pid_file: instance.pid_file || runtime.pid_file || '',
         state_file: instance.state_file || runtime.state_file || '',
-        config_path: configPath,
+        argv: instance.argv || runtime.argv || [],
+        cwd: instance.cwd || runtime.cwd || '',
         params,
         started_at: instance.started_at || '',
         stopped_at: instance.stopped_at || '',
-        exec_path: runtime.argv?.[0] || item.package?.executable_rel_path || '',
-        cwd: runtime.cwd || instance.cwd || '',
-        argv: runtime.argv || instance.argv || [],
-        raw: instance,
         module: item,
+        raw: instance,
       }
     },
 
@@ -2973,34 +2659,21 @@ async uninstallClientTool(item, deviceId) {
     async stopInstance(row) {
       try {
         await ElMessageBox.confirm(
-          `Stop ${row.side} instance ${row.tool_id}/${row.instance_id}?`,
+          `Stop instance ${row.tool_id}/${row.instance_id}?`,
           'Stop External Tool Instance',
-          {
-            type: 'warning',
-            confirmButtonText: 'Stop',
-            cancelButtonText: 'Cancel',
-          },
+          { type: 'warning', confirmButtonText: 'Stop', cancelButtonText: 'Cancel' },
         )
       } catch (_) {
         return
       }
-
       try {
-        if (row.side === 'server') {
-          await this.stopServerInstance(row)
-        } else {
-          await this.stopClientInstance(row)
-        }
+        await this.stopClientInstance(row)
         ElMessage.success(`Stop requested: ${row.instance_id}`)
       } catch (e) {
         ElMessage.error(e.message || 'Failed to stop instance')
       }
     },
 
-    async stopServerInstance(row) {
-      await externalToolsApi.stopServerInstance(row.tool_id, row.instance_id, { params: {} })
-      await this.loadServerInstances(row.tool_id, false)
-    },
 
     async stopClientInstance(row) {
       const deviceId = this.normalizeDeviceId(row.device_id)
@@ -3022,13 +2695,8 @@ async uninstallClientTool(item, deviceId) {
     async readLogs(row, openDialog = false) {
       try {
         this.logLoading = true
-        let data
-        if (row.side === 'server') {
-          data = await this.readServerLogs(row)
-        } else {
-          data = await this.readClientLogs(row)
-        }
-        this.logDialogTitle = `${row.side} ${row.tool_id}/${row.instance_id} logs`
+        const data = await this.readClientLogs(row)
+        this.logDialogTitle = `${row.tool_id}/${row.instance_id} logs`
         this.logFilePath = data.log_file || row.stdout || ''
         this.logContent = data.content || ''
         if (openDialog) this.logDialogVisible = true
@@ -3040,9 +2708,6 @@ async uninstallClientTool(item, deviceId) {
       }
     },
 
-    async readServerLogs(row) {
-      return externalToolsApi.readServerInstanceLogs(row.tool_id, row.instance_id, 65536)
-    },
 
     async readClientLogs(row) {
       const deviceId = this.normalizeDeviceId(row.device_id)
@@ -3068,149 +2733,27 @@ async uninstallClientTool(item, deviceId) {
   return window.location.hostname || '127.0.0.1'
 },
 
-getBrowserOrigin() {
-  if (typeof window === 'undefined' || !window.location) return ''
-  return window.location.origin || ''
-},
 
-getBrowserProtocol() {
-  if (typeof window === 'undefined' || !window.location) return 'http:'
-  return window.location.protocol || 'http:'
-},
 
-getModuleWebUrlTemplate(module) {
-  if (!module) return ''
 
-  if (module.web && typeof module.web === 'object' && module.web.url) {
-    return String(module.web.url || '').trim()
-  }
 
-  if (module.web_url) {
-    return String(module.web_url || '').trim()
-  }
 
-  return ''
-},
 
-getInstanceWebUrlTemplate(row) {
-  return this.getModuleWebUrlTemplate(row?.module)
-},
 
-canOpenWebInstance(row) {
-  if (!row || row.side !== 'server') return false
-  return !!this.getInstanceWebUrlTemplate(row)
-},
 
-buildInstanceUrlContext(row) {
-  const params = row?.params || {}
-  const browserHost = this.getBrowserAccessHost()
-  const browserOrigin = this.getBrowserOrigin()
-  const protocol = this.getBrowserProtocol()
-
-  const accessHost = params.access_host || params.public_host || params.external_host || browserHost
-
-  return {
-    ...params,
-
-    // 推荐给 meta 使用的访问变量。
-    access_host: accessHost,
-    public_host: params.public_host || accessHost,
-    external_host: params.external_host || accessHost,
-
-    // 浏览器上下文。
-    browser_host: browserHost,
-    browser_origin: browserOrigin,
-    browser_protocol: protocol,
-
-    // 监听地址相关变量。注意：这些不一定适合浏览器访问。
-    ip: params.ip || params.address || params.host || params.listen_addr || params.bind_addr || browserHost,
-    host: params.host || params.address || params.ip || params.listen_addr || params.bind_addr || browserHost,
-    address: params.address || params.ip || params.host || params.listen_addr || params.bind_addr || browserHost,
-    listen_host: params.listen_host || params.listen_addr || params.address || params.host || '0.0.0.0',
-
-    // 常见端口别名。
-    port: params.port || params.listen_port || params.http_port || params.web_port || params.ui_port || params.dashboard_port || '',
-    listen_port: params.listen_port || params.port || params.http_port || params.web_port || '',
-
-    // instance 上下文。
-    side: row?.side || '',
-    tool_id: row?.tool_id || '',
-    instance_id: row?.instance_id || '',
-    machine_id: row?.machine_id || '',
-    hostname: row?.hostname || '',
-    status: row?.status || '',
-    pid: row?.pid || '',
-  }
-},
-
-renderInstanceUrlTemplate(template, row) {
-  const context = this.buildInstanceUrlContext(row)
-  const missing = []
-
-  const url = String(template || '').replace(/{{\s*([A-Za-z_][A-Za-z0-9_]*)\s*}}/g, (match, key) => {
-    const value = context[key]
-
-    if (value === undefined || value === null || value === '') {
-      missing.push(key)
-      return ''
-    }
-
-    return String(value)
-  })
-
-  return {
-    url: this.normalizeOpenWebUrl(url, context),
-    missing,
-  }
-},
-
-normalizeOpenWebUrl(url, context = {}) {
-  const raw = String(url || '').trim()
-  if (!raw) return ''
-
-  try {
-    const parsed = new URL(raw, this.getBrowserOrigin() || undefined)
-
-    // 防呆：如果模板仍然用了 127.0.0.1 / 0.0.0.0 / localhost，
-    // server side 打开时自动换成 access_host。
-    const localHosts = new Set(['127.0.0.1', 'localhost', '0.0.0.0', '::1', '[::1]'])
-    if (localHosts.has(String(parsed.hostname || '').toLowerCase())) {
-      parsed.hostname = context.access_host || this.getBrowserAccessHost()
-    }
-
-    return parsed.toString()
-  } catch (_) {
-    return raw
-  }
-},
-
-openWebInstance(row) {
-  if (!this.canOpenWebInstance(row)) return
-
-  const template = this.getInstanceWebUrlTemplate(row)
-  const { url, missing } = this.renderInstanceUrlTemplate(template, row)
-
-  if (!url || missing.length) {
-    ElMessage.warning(`Web URL is incomplete. Missing: ${missing.join(', ')}`)
-    return
-  }
-
-  window.open(url, '_blank', 'noopener,noreferrer')
-},
 
 
     openInstanceInfo(row) {
       const runtime = row.raw?.runtime || {}
       const params = row.params || {}
       this.showDetailDialog({
-        title: `${row.side} ${row.tool_id}/${row.instance_id} info`,
-        subtitle: row.machine_label || row.side,
+        title: `${row.tool_id}/${row.instance_id} info`,
+        subtitle: row.machine_label || row.machine_id,
         copyText: row.exec_path || '',
         sections: [
           {
             title: 'Overview',
             rows: [
-              { label: 'Side', value: row.side },
               { label: 'Machine', value: row.machine_label || row.machine_id },
               { label: 'Machine ID', value: row.machine_id, mono: true },
               { label: 'Connection ID', value: row.connection_id || '-', mono: true },
@@ -3238,12 +2781,7 @@ openWebInstance(row) {
               { label: 'Argv', value: row.argv?.length ? row.argv : (runtime.argv || []), mono: true, multiline: true },
             ],
           },
-          {
-            title: 'Params',
-            rows: [
-              { label: 'Runtime params', value: params, mono: true, multiline: true },
-            ],
-          },
+          { title: 'Params', rows: [{ label: 'Runtime params', value: params, mono: true, multiline: true }] },
         ],
       })
     },
@@ -3262,7 +2800,6 @@ openWebInstance(row) {
 
     handleInstanceMoreCommand(command, row) {
       if (command === 'info') return this.openInstanceInfo(row)
-        if (command === 'open_web') return this.openWebInstance(row)
       if (command === 'restart') return this.restartInstance(row)
       if (command === 'clear_logs') return this.clearInstanceLogs(row)
       if (command === 'remove') return this.removeInstance(row)
@@ -3276,20 +2813,15 @@ openWebInstance(row) {
       }
       try {
         await ElMessageBox.confirm(
-          `Restart ${row.side} instance ${row.tool_id}/${row.instance_id} with the same params?`,
+          `Restart instance ${row.tool_id}/${row.instance_id} with the same params?`,
           'Restart External Tool Instance',
           { type: 'warning', confirmButtonText: 'Restart', cancelButtonText: 'Cancel' },
         )
       } catch (_) {
         return
       }
-
       try {
-        if (row.side === 'server') {
-          await this.startServerInstance(row.module, row.params || {}, row.instance_id, false)
-        } else {
-          await this.startClientInstance(row.module, row.params || {}, row.instance_id, false, row.connection_id || row.device_id)
-        }
+        await this.startClientInstance(row.module, row.params || {}, row.instance_id, false, row.connection_id || row.device_id)
         ElMessage.success(`Restarted: ${row.instance_id}`)
       } catch (e) {
         ElMessage.error(e.message || 'Failed to restart instance')
@@ -3303,30 +2835,21 @@ openWebInstance(row) {
       }
       try {
         await ElMessageBox.confirm(
-          `Remove runtime files for ${row.side} instance ${row.tool_id}/${row.instance_id}?`,
+          `Remove runtime files for instance ${row.tool_id}/${row.instance_id}?`,
           'Remove External Tool Instance',
           { type: 'warning', confirmButtonText: 'Remove', cancelButtonText: 'Cancel' },
         )
       } catch (_) {
         return
       }
-
       try {
-        if (row.side === 'server') {
-          await this.removeServerInstance(row)
-        } else {
-          await this.removeClientInstance(row)
-        }
+        await this.removeClientInstance(row)
         ElMessage.success(`Removed: ${row.instance_id}`)
       } catch (e) {
         ElMessage.error(e.message || 'Failed to remove instance')
       }
     },
 
-    async removeServerInstance(row) {
-      await externalToolsApi.removeServerInstance(row.tool_id, row.instance_id, {})
-      await this.loadServerInstances(row.tool_id, false)
-    },
 
     async removeClientInstance(row) {
       const deviceId = this.normalizeDeviceId(row.connection_id || row.device_id)
@@ -3342,20 +2865,15 @@ openWebInstance(row) {
       }
       try {
         await ElMessageBox.confirm(
-          `Clear log file for ${row.side} instance ${row.tool_id}/${row.instance_id}?`,
+          `Clear log file for instance ${row.tool_id}/${row.instance_id}?`,
           'Clear External Tool Logs',
           { type: 'warning', confirmButtonText: 'Clear Logs', cancelButtonText: 'Cancel' },
         )
       } catch (_) {
         return
       }
-
       try {
-        if (row.side === 'server') {
-          await this.clearServerInstanceLogs(row)
-        } else {
-          await this.clearClientInstanceLogs(row)
-        }
+        await this.clearClientInstanceLogs(row)
         if (this.currentLogRow?.row_key === row.row_key) {
           this.logContent = ''
           this.scrollLogsToBottom()
@@ -3366,9 +2884,6 @@ openWebInstance(row) {
       }
     },
 
-    async clearServerInstanceLogs(row) {
-      await externalToolsApi.clearServerInstanceLogs(row.tool_id, row.instance_id, {})
-    },
 
     async clearClientInstanceLogs(row) {
       const deviceId = this.normalizeDeviceId(row.connection_id || row.device_id)

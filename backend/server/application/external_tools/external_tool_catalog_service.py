@@ -2,7 +2,6 @@ import glob
 import json
 import logging
 import os
-import platform
 from copy import deepcopy
 from typing import Any
 
@@ -14,7 +13,6 @@ from core.external_tools.selector import (
     resolve_exec_rel_path,
     select_package_key,
 )
-from core.platform.platform_identity import detect_platform_alias
 
 
 logger = logging.getLogger(__name__)
@@ -96,8 +94,6 @@ class ExternalToolCatalogService:
         return {
             'items': self.list_packages(),
             'modules': self.list_tools(),
-            'server_platform': detect_platform_alias(),
-            'server_arch': self._normalize_arch(platform.machine()),
         }
 
     def get_package(self, package_id: str) -> dict:

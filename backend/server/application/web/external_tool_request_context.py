@@ -27,7 +27,7 @@ class ExternalToolRequestContextApi:
         self.catalog_service = catalog_service
         self.server = server
 
-    def server_payload(self, payload: Any) -> ExternalToolPayloadContext:
+    def payload(self, payload: Any) -> ExternalToolPayloadContext:
         normalized_payload, params = self._params_from_payload(payload)
         return ExternalToolPayloadContext(
             payload=normalized_payload,

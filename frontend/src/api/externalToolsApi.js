@@ -48,33 +48,12 @@ export function loadClientExternalToolCatalog(clientId, payload = {}, headers = 
   )
 }
 
-export function readServerInstallStatus(toolId, payload = {}) {
-  return postJson(
-    `/api/external-tools/${encodeURIComponent(toolId)}/server/install-status`,
-    payload,
-    {},
-    'Failed to read install status',
-  )
-}
-
-export function loadAllServerInstances() {
-  return externalToolRequest('/api/external-tools/server/instances', {}, 'Failed to load server instances')
-}
-
 export function loadAllClientInstances(clientId, headers = {}) {
   return postJson(
     `/api/connections/${encodeURIComponent(clientId)}/external-tools/instances`,
     {},
     headers,
     'Failed to load client instances',
-  )
-}
-
-export function loadServerInstances(toolId) {
-  return externalToolRequest(
-    `/api/external-tools/${encodeURIComponent(toolId)}/server/instances`,
-    {},
-    'Failed to load server instances',
   )
 }
 
@@ -87,30 +66,12 @@ export function loadClientInstances(clientId, toolId, headers = {}) {
   )
 }
 
-export function uninstallServerTool(toolId, payload = {}) {
-  return postJson(
-    `/api/external-tools/${encodeURIComponent(toolId)}/server/uninstall`,
-    payload,
-    {},
-    'Failed to uninstall server package',
-  )
-}
-
 export function uninstallClientTool(clientId, toolId, payload = {}, headers = {}) {
   return postJson(
     `/api/connections/${encodeURIComponent(clientId)}/external-tools/${encodeURIComponent(toolId)}/uninstall`,
     payload,
     headers,
     'Failed to uninstall client package',
-  )
-}
-
-export function clearServerPackageCache(toolId, payload = {}) {
-  return postJson(
-    `/api/external-tools/${encodeURIComponent(toolId)}/server/clear-cache`,
-    payload,
-    {},
-    'Failed to clear server package cache',
   )
 }
 
@@ -123,30 +84,12 @@ export function clearClientPackageCache(clientId, toolId, payload = {}, headers 
   )
 }
 
-export function installServerTool(toolId, payload = {}) {
-  return postJson(
-    `/api/external-tools/${encodeURIComponent(toolId)}/server/install`,
-    payload,
-    {},
-    'Failed to install package',
-  )
-}
-
 export function installClientTool(clientId, toolId, payload = {}, headers = {}) {
   return postJson(
     `/api/connections/${encodeURIComponent(clientId)}/external-tools/${encodeURIComponent(toolId)}/install`,
     payload,
     headers,
     'Failed to install package',
-  )
-}
-
-export function startServerInstance(toolId, payload = {}) {
-  return postJson(
-    `/api/external-tools/${encodeURIComponent(toolId)}/server/instances/start`,
-    payload,
-    {},
-    'Failed to start server tool',
   )
 }
 
@@ -159,30 +102,12 @@ export function startClientInstance(clientId, toolId, payload = {}, headers = {}
   )
 }
 
-export function runServerOneshot(toolId, payload = {}, headers = {}) {
-  return postJson(
-    `/api/external-tools/${encodeURIComponent(toolId)}/server/oneshot`,
-    payload,
-    headers,
-    'Failed to run server oneshot',
-  )
-}
-
 export function runClientOneshot(clientId, toolId, payload = {}, headers = {}) {
   return postJson(
     `/api/connections/${encodeURIComponent(clientId)}/external-tools/${encodeURIComponent(toolId)}/oneshot`,
     payload,
     headers,
     'Failed to run client oneshot',
-  )
-}
-
-export function stopServerInstance(toolId, instanceId, payload = {}) {
-  return postJson(
-    `/api/external-tools/${encodeURIComponent(toolId)}/server/instances/${encodeURIComponent(instanceId)}/stop`,
-    payload,
-    {},
-    'Failed to stop server instance',
   )
 }
 
@@ -195,14 +120,6 @@ export function stopClientInstance(clientId, toolId, instanceId, payload = {}, h
   )
 }
 
-export function readServerInstanceLogs(toolId, instanceId, bytes = 65536) {
-  return externalToolRequest(
-    `/api/external-tools/${encodeURIComponent(toolId)}/server/instances/${encodeURIComponent(instanceId)}/logs?bytes=${encodeURIComponent(bytes)}`,
-    {},
-    'Failed to read server logs',
-  )
-}
-
 export function readClientInstanceLogs(clientId, toolId, instanceId, payload = {}, headers = {}) {
   return postJson(
     `/api/connections/${encodeURIComponent(clientId)}/external-tools/${encodeURIComponent(toolId)}/instances/${encodeURIComponent(instanceId)}/logs`,
@@ -212,30 +129,12 @@ export function readClientInstanceLogs(clientId, toolId, instanceId, payload = {
   )
 }
 
-export function removeServerInstance(toolId, instanceId, payload = {}) {
-  return postJson(
-    `/api/external-tools/${encodeURIComponent(toolId)}/server/instances/${encodeURIComponent(instanceId)}/remove`,
-    payload,
-    {},
-    'Failed to remove server instance',
-  )
-}
-
 export function removeClientInstance(clientId, toolId, instanceId, payload = {}, headers = {}) {
   return postJson(
     `/api/connections/${encodeURIComponent(clientId)}/external-tools/${encodeURIComponent(toolId)}/instances/${encodeURIComponent(instanceId)}/remove`,
     payload,
     headers,
     'Failed to remove client instance',
-  )
-}
-
-export function clearServerInstanceLogs(toolId, instanceId, payload = {}) {
-  return postJson(
-    `/api/external-tools/${encodeURIComponent(toolId)}/server/instances/${encodeURIComponent(instanceId)}/clear-logs`,
-    payload,
-    {},
-    'Failed to clear server logs',
   )
 }
 

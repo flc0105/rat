@@ -1,6 +1,4 @@
 import logging
-import os
-import platform
 from typing import Any
 
 from core.external_tools.paths import (
@@ -24,33 +22,21 @@ logger = logging.getLogger(__name__)
 class ExternalToolRuntimeBase:
     """Constructor and low-level helpers shared by focused runtime mixins."""
 
-    DEFAULT_STOP_TIMEOUT_SEC = 5
     DEFAULT_LOG_TAIL_BYTES = 65536
 
     def __init__(
         self,
         catalog_service,
         command_execution_api,
-        install_root_dir: str,
-        runtime_root_dir: str,
         remote_execution_service=None,
     ):
         self.catalog_service = catalog_service
         self.command_execution_api = command_execution_api
         self.remote_execution_service = remote_execution_service
-        self.install_root_dir = os.path.abspath(install_root_dir)
-        self.runtime_root_dir = os.path.abspath(runtime_root_dir)
-        os.makedirs(self.install_root_dir, exist_ok=True)
-        os.makedirs(self.runtime_root_dir, exist_ok=True)
     def _normalize_platform(self, value: Any = '') -> str:
         return normalize_platform(value or '')
     def _normalize_arch(self, value: Any = '') -> str:
         return normalize_arch(value or '')
-    def _detect_arch(self) -> str:
-        value = self._normalize_arch(platform.machine())
-        if not value:
-            raise ValueError('server arch detection failed')
-        return value
     def _require_target(self, platform_alias: Any, arch: Any, context: str) -> tuple[str, str]:
         return require_external_tool_target(platform_alias, arch, context)
     def _context_get(self, context: dict, dotted_key: str) -> Any:
@@ -67,11 +53,6 @@ class ExternalToolRuntimeBase:
         return is_url_like(value)
     def _should_expand_argv_item(self, value: str, index: int) -> bool:
         return should_expand_argv_item(value, index)
-    def _safe_join_runtime(self, *parts: str) -> str:
-        path = os.path.abspath(os.path.join(self.runtime_root_dir, *[str(part or '') for part in parts]))
-        if os.path.commonpath([self.runtime_root_dir, path]) != self.runtime_root_dir:
-            raise ValueError('invalid runtime path')
-        return path
     def _sanitize_instance_id(self, value: Any) -> str:
         return sanitize_instance_id(value)
     def resolve_params(self, meta: dict, params: dict | None, require_required: bool = True) -> dict:

@@ -4,32 +4,11 @@ class WebExternalToolCatalogApi:
         self.runtime_service = runtime_service
 
     def list_catalog(self):
-        catalog = self.catalog_service.get_catalog()
-        server_platform = catalog.get('server_platform') or ''
-        server_arch = catalog.get('server_arch') or ''
-        if not server_platform or not server_arch:
-            raise ValueError(f'server platform and arch are required, got {server_platform or "unknown"}/{server_arch or "unknown"}')
-        for item in catalog.get('items') or []:
-            if item.get('error') or not self._package_supports_target(item, server_platform, server_arch):
-                continue
-            try:
-                item['install_status'] = self.runtime_service.package_runtime.server_install_status(item.get('id') or '', params={}, instance_id='')
-            except Exception as e:
-                item['install_status'] = {
-                    'tool_id': item.get('id') or '',
-                    'package_id': item.get('id') or '',
-                    'side': 'server',
-                    'installed': None,
-                    'error': str(e),
-                    'message': str(e),
-                }
-        return catalog
+        return self.catalog_service.get_catalog()
 
     def list_client_catalog(self, client_id: str, tab_id: str = '', platform_alias: str = '', arch: str = ''):
-        # Do not call list_catalog() here: that injects server install_status into
-        # package items. Client catalog status must be exclusively client FS state,
-        # otherwise a stale/failed client status read can leave the UI showing the
-        # server's Installed value for the selected client.
+        # Client catalog status must be exclusively client FS state.
+        # Keep the shared catalog metadata free of host-local install state.
         catalog = self.catalog_service.get_catalog()
         client_items = [item for item in (catalog.get('items') or []) if not item.get('error') and self._package_supports_target(item, platform_alias, arch)]
         for item in client_items:

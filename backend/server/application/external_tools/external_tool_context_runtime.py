@@ -4,11 +4,8 @@ from typing import Any
 
 from server.application.external_tools.external_tool_runtime_component import ExternalToolRuntimeComponent
 
-from core.platform.platform_identity import detect_platform_alias
-
-
 class ExternalToolContextRuntime(ExternalToolRuntimeComponent):
-    """Package/module context builders for server and client targets."""
+    """Package/module context builders for client targets."""
 
     def _derive_instance_id(self, meta: dict, params: dict | None, explicit: str = '') -> str:
         params = params if isinstance(params, dict) else {}
@@ -108,43 +105,6 @@ class ExternalToolContextRuntime(ExternalToolRuntimeComponent):
         context['instance_id'] = resolved_instance_id
         context['instance_runtime_dir'] = instance_runtime_dir
         context['state_file'] = os.path.join(instance_runtime_dir, 'state.json')
-        return context
-    def build_server_package_context(self, package: dict) -> dict:
-        context = self._package_base_context(
-            package,
-            install_root=self.install_root_dir,
-            runtime_root=self.runtime_root_dir,
-            platform_alias=detect_platform_alias(),
-            arch=self._detect_arch(),
-        )
-        for key in ('external_tools_root', 'external_tools_runtime', 'runtime_dir', 'install_dir'):
-            context[key] = self._expand_path(context[key])
-        rel_execs, abs_bins = self._resolved_exec_context(package, context['package_key'], context['install_dir'])
-        context['exec'] = rel_execs
-        context['bin'] = {name: self._expand_path(path) for name, path in abs_bins.items()}
-        for name, path in context['bin'].items():
-            safe = re.sub(r'[^A-Za-z0-9_]+', '_', name).strip('_')
-            context[f'bin_{safe}'] = path
-        return context
-    def build_server_context(self, meta: dict, params: dict, instance_id: str = '') -> dict:
-        context = self._module_base_context(
-            meta,
-            params,
-            install_root=self.install_root_dir,
-            runtime_root=self.runtime_root_dir,
-            instance_id=instance_id,
-            side='server',
-            platform_alias=detect_platform_alias(),
-            arch=self._detect_arch(),
-        )
-        for key in ('external_tools_root', 'external_tools_runtime', 'runtime_dir', 'tool_runtime_dir', 'instance_runtime_dir', 'state_file', 'install_dir'):
-            context[key] = self._expand_path(context[key])
-        rel_execs, abs_bins = self._resolved_exec_context(meta.get('package_meta') or self.catalog_service.get_package(meta.get('package_id') or ''), context['package_key'], context['install_dir'])
-        context['exec'] = rel_execs
-        context['bin'] = {name: self._expand_path(path) for name, path in abs_bins.items()}
-        for name, path in context['bin'].items():
-            safe = re.sub(r'[^A-Za-z0-9_]+', '_', name).strip('_')
-            context[f'bin_{safe}'] = path
         return context
     def build_client_package_context(self, package: dict, platform_alias: str, arch: str) -> dict:
         context = self._package_base_context(
