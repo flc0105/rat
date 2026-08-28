@@ -194,76 +194,38 @@ class ClipboardManager:
                 else []
             )
 
-            artifacts = []
+            files = []
 
             for path in paths:
-                if not path or not os.path.exists(path):
+                if not path:
                     continue
 
-                artifacts.append(
-                    self._upload_clipboard_path(path)
-                )
+                abs_path = os.path.abspath(path)
+                if not os.path.exists(abs_path):
+                    continue
+
+                is_directory = os.path.isdir(abs_path)
+                try:
+                    size = 0 if is_directory else int(os.path.getsize(abs_path))
+                except OSError:
+                    size = 0
+
+                files.append({
+                    'path': abs_path,
+                    'name': (
+                        os.path.basename(abs_path.rstrip(os.sep))
+                        or abs_path
+                    ),
+                    'size': size,
+                    'is_directory': is_directory,
+                })
 
             return {
                 'kind': 'files',
-                'artifacts': artifacts,
+                'files': files,
             }
 
         return {'kind': 'empty'}
-
-    def _upload_clipboard_path(self, path: str) -> dict:
-        abs_path = os.path.abspath(path)
-
-        cleanup_path = ''
-        upload_path = abs_path
-
-        display_name = (
-            os.path.basename(
-                abs_path.rstrip(os.sep)
-            )
-            or 'clipboard_file'
-        )
-
-        extra = {
-            'clipboard_kind': 'file',
-            'source_path': abs_path,
-            'source_is_directory': os.path.isdir(abs_path),
-        }
-
-        try:
-            if os.path.isdir(abs_path):
-                temp_dir = tempfile.mkdtemp(
-                    prefix='rch_clipboard_dir_'
-                )
-
-                archive_base = os.path.join(
-                    temp_dir,
-                    display_name,
-                )
-
-                upload_path = shutil.make_archive(
-                    archive_base,
-                    'zip',
-                    root_dir=os.path.dirname(abs_path),
-                    base_dir=os.path.basename(abs_path),
-                )
-
-                cleanup_path = temp_dir
-                display_name = f'{display_name}.zip'
-
-            return self._upload_file_artifact(
-                upload_path,
-                filename=display_name,
-                category='clipboard_file',
-                extra=extra,
-            )
-
-        finally:
-            if cleanup_path:
-                shutil.rmtree(
-                    cleanup_path,
-                    ignore_errors=True,
-                )
 
     def _upload_bytes_artifact(
         self,

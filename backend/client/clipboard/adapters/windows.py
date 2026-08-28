@@ -1,5 +1,6 @@
 import io
 import os
+from contextlib import contextmanager
 
 from PIL import Image
 
@@ -9,12 +10,14 @@ class WindowsClipboardAdapter:
         return {'text': True, 'image': True, 'files': True}
 
     def _imports(self):
+        import win32api
         import win32clipboard
         import win32con
-        return win32clipboard, win32con
+        import win32gui
+        return win32api, win32clipboard, win32con, win32gui
 
     def get_snapshot(self) -> dict:
-        win32clipboard, win32con = self._imports()
+        _, win32clipboard, win32con, _ = self._imports()
         win32clipboard.OpenClipboard()
         try:
             if win32clipboard.IsClipboardFormatAvailable(win32con.CF_HDROP):
@@ -47,30 +50,22 @@ class WindowsClipboardAdapter:
             win32clipboard.CloseClipboard()
 
     def set_text(self, text: str):
-        win32clipboard, win32con = self._imports()
-        win32clipboard.OpenClipboard()
-        try:
-            win32clipboard.EmptyClipboard()
-            win32clipboard.SetClipboardData(win32con.CF_UNICODETEXT, str(text or ''))
-        finally:
-            win32clipboard.CloseClipboard()
+        with self._open_clipboard_for_write() as (win32clipboard, win32con):
+            win32clipboard.SetClipboardText(
+                str(text or ''),
+                win32con.CF_UNICODETEXT,
+            )
 
     def set_image(self, image_path: str):
-        win32clipboard, win32con = self._imports()
         image = Image.open(image_path).convert('RGB')
         output = io.BytesIO()
         image.save(output, format='BMP')
         dib = output.getvalue()[14:]
 
-        win32clipboard.OpenClipboard()
-        try:
-            win32clipboard.EmptyClipboard()
+        with self._open_clipboard_for_write() as (win32clipboard, win32con):
             win32clipboard.SetClipboardData(win32con.CF_DIB, dib)
-        finally:
-            win32clipboard.CloseClipboard()
 
     def set_files(self, paths: list[str]):
-        win32clipboard, win32con = self._imports()
         normalized = [os.path.abspath(path) for path in paths if path]
         if not normalized:
             raise ValueError('No clipboard files were provided')
@@ -79,12 +74,38 @@ class WindowsClipboardAdapter:
         # DROPFILES: pFiles=20, pt=(0,0), fNC=0, fWide=1.
         header = (20).to_bytes(4, 'little') + (0).to_bytes(4, 'little') * 3 + (1).to_bytes(4, 'little')
 
-        win32clipboard.OpenClipboard()
-        try:
-            win32clipboard.EmptyClipboard()
+        with self._open_clipboard_for_write() as (win32clipboard, win32con):
             win32clipboard.SetClipboardData(win32con.CF_HDROP, header + payload)
+
+    @contextmanager
+    def _open_clipboard_for_write(self):
+        win32api, win32clipboard, win32con, win32gui = self._imports()
+
+        # EmptyClipboard 后 SetClipboardData 需要一个真实 HWND 作为 clipboard owner。
+        owner_hwnd = win32gui.CreateWindowEx(
+            0,
+            'STATIC',
+            'RCH Clipboard Owner',
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            win32api.GetModuleHandle(None),
+            None,
+        )
+
+        try:
+            win32clipboard.OpenClipboard(owner_hwnd)
+            try:
+                win32clipboard.EmptyClipboard()
+                yield win32clipboard, win32con
+            finally:
+                win32clipboard.CloseClipboard()
         finally:
-            win32clipboard.CloseClipboard()
+            win32gui.DestroyWindow(owner_hwnd)
 
     @staticmethod
     def _build_bmp_header(dib: bytes) -> bytes:

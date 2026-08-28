@@ -55,17 +55,23 @@
       </template>
 
       <template v-else-if="remoteKind === 'files'">
-        <div class="clipboard-section-label">Files · {{ remoteArtifacts.length }}</div>
-        <div v-if="remoteArtifacts.length" class="clipboard-file-list">
-          <div v-for="artifact in remoteArtifacts" :key="artifact.artifact_id" class="clipboard-file-row">
+        <div class="clipboard-section-label">Files · {{ remoteFiles.length }}</div>
+        <div v-if="remoteFiles.length" class="clipboard-file-list">
+          <div v-for="(file, index) in remoteFiles" :key="`${file.path}-${index}`" class="clipboard-file-row">
             <div class="clipboard-file-main">
-              <div class="clipboard-file-name">{{ artifact.original_name || artifact.stored_name || 'file' }}</div>
+              <div class="clipboard-file-name">{{ file.name || 'file' }}</div>
               <div class="clipboard-file-detail">
-                {{ formatBytes(artifact.size) }}
-                <span v-if="artifact.extra?.source_is_directory"> · directory archive</span>
+                <span v-if="file.is_directory">directory · downloaded as ZIP</span>
+                <span v-else>{{ formatBytes(file.size) }}</span>
               </div>
             </div>
-            <el-button size="small" @click="downloadArtifact(artifact)">Download</el-button>
+            <el-button
+              size="small"
+              :loading="!!remoteDownloadingPaths[file.path]"
+              @click="downloadRemoteFile(file)"
+            >
+              Download
+            </el-button>
           </div>
         </div>
         <el-empty v-else description="Clipboard file list is empty" :image-size="72" />
@@ -165,6 +171,8 @@
 import { ElMessage } from 'element-plus'
 import { Loading } from '@element-plus/icons-vue'
 import {
+  downloadRemoteClipboardDirectory,
+  downloadRemoteClipboardFile,
   getClipboardCapabilities,
   getRemoteClipboard,
   setRemoteClipboardFiles,
@@ -190,7 +198,8 @@ export default {
       remoteKind: '',
       remoteText: '',
       remoteImageArtifact: null,
-      remoteArtifacts: [],
+      remoteFiles: [],
+      remoteDownloadingPaths: {},
       remoteError: '',
       sendText: '',
       sendFiles: [],
@@ -222,13 +231,13 @@ export default {
       this.mode = 'get'
       this.visible = true
       this.resetRemotePayload()
+      this.remoteDownloadingPaths = {}
       this.clearComposer()
       await this.loadCapabilities()
       await this.loadRemoteClipboard()
     },
     async handleModeChange(tabName) {
       if (String(tabName || '') !== 'get') return
-      if (this.remoteKind || this.loading) return
       await this.loadRemoteClipboard()
     },
     async loadCapabilities() {
@@ -254,8 +263,7 @@ export default {
           this.remoteImageArtifact = payload.artifact || null
           if (this.remoteImageArtifact) this.$emit('artifacts-maybe-changed')
         } else if (this.remoteKind === 'files') {
-          this.remoteArtifacts = Array.isArray(payload.artifacts) ? payload.artifacts : []
-          if (this.remoteArtifacts.length) this.$emit('artifacts-maybe-changed')
+          this.remoteFiles = Array.isArray(payload.files) ? payload.files : []
         }
       } catch (e) {
         this.remoteKind = 'error'
@@ -265,49 +273,27 @@ export default {
         this.loading = false
       }
     },
-    // async sendClipboard() {
-    //   if (!this.selectedId || !this.canSend) return
-    //   this.sending = true
-    //   try {
-    //     if (this.sendFiles.length) {
-    //       const files = this.sendFiles.map((item) => item.file)
-    //       if (this.sendPayloadKind === 'image') {
-    //         await setRemoteClipboardImage(this.selectedId, files[0])
-    //       } else {
-    //         await setRemoteClipboardFiles(this.selectedId, files)
-    //       }
-    //     } else {
-    //       await setRemoteClipboardText(this.selectedId, this.sendText)
-    //     }
-    //     ElMessage.success('Target clipboard updated')
-    //     this.visible = false
-    //   } catch (e) {
-    //     ElMessage.error(e.message || 'Failed to update target clipboard')
-    //   } finally {
-    //     this.sending = false
-    //   }
-    // },
     async sendClipboard() {
-  if (!this.selectedId || !this.canSend) return
-  this.sending = true
-  try {
-    if (this.sendFiles.length) {
-      const files = this.sendFiles.map((item) => item.file)
-      if (this.sendPayloadKind === 'image') {
-        await setRemoteClipboardImage(this.selectedId, files[0])
-      } else {
-        await setRemoteClipboardFiles(this.selectedId, files)
+      if (!this.selectedId || !this.canSend) return
+      this.sending = true
+      try {
+        if (this.sendFiles.length) {
+          const files = this.sendFiles.map((item) => item.file)
+          if (this.sendPayloadKind === 'image') {
+            await setRemoteClipboardImage(this.selectedId, files[0])
+          } else {
+            await setRemoteClipboardFiles(this.selectedId, files)
+          }
+        } else {
+          await setRemoteClipboardText(this.selectedId, this.sendText)
+        }
+        ElMessage.success('Target clipboard updated')
+      } catch (e) {
+        ElMessage.error(e.message || 'Failed to update target clipboard')
+      } finally {
+        this.sending = false
       }
-    } else {
-      await setRemoteClipboardText(this.selectedId, this.sendText)
-    }
-    ElMessage.success('Target clipboard updated')
-  } catch (e) {
-    ElMessage.error(e.message || 'Failed to update target clipboard')
-  } finally {
-    this.sending = false
-  }
-},
+    },
     async copyRemoteTextLocal() {
       try {
         await navigator.clipboard.writeText(this.remoteText)
@@ -341,6 +327,27 @@ export default {
       document.body.appendChild(link)
       link.click()
       link.remove()
+    },
+    async downloadRemoteFile(file) {
+      const path = String(file?.path || '')
+      if (!this.selectedId || !path || this.remoteDownloadingPaths[path]) return
+
+      this.remoteDownloadingPaths[path] = true
+      try {
+        const result = file.is_directory
+          ? await downloadRemoteClipboardDirectory(this.selectedId, path)
+          : await downloadRemoteClipboardFile(this.selectedId, path)
+        const artifact = result?.artifact || result?.file || null
+        if (!artifact?.artifact_id) {
+          throw new Error('Download finished, but artifact was not found')
+        }
+        this.downloadArtifact(artifact)
+        this.$emit('artifacts-maybe-changed')
+      } catch (e) {
+        ElMessage.error(e.message || 'Download failed')
+      } finally {
+        delete this.remoteDownloadingPaths[path]
+      }
     },
     async readLocalClipboard() {
       if (!navigator.clipboard) {
@@ -409,13 +416,14 @@ export default {
       this.remoteKind = ''
       this.remoteText = ''
       this.remoteImageArtifact = null
-      this.remoteArtifacts = []
+      this.remoteFiles = []
       this.remoteError = ''
     },
     resetState() {
       this.loading = false
       this.sending = false
       this.resetRemotePayload()
+      this.remoteDownloadingPaths = {}
       this.clearComposer()
     },
     formatBytes(value) {
