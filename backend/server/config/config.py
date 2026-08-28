@@ -62,3 +62,4 @@ WEB_PUBLIC_BASE_URL = 'http://127.0.0.1:8085'
 HEARTBEAT_INTERVAL_SECONDS = 30
 
 RECENT_DEVICES_JSON_PATH = os.path.abspath(os.path.join('runtime', 'recent_devices.json'))
+TOOLBAR_PREFERENCES_JSON_PATH = os.path.abspath(os.path.join('runtime', 'toolbar_preferences.json'))

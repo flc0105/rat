@@ -25,6 +25,7 @@ from server.web.routes.scripts import create_script_blueprint
 from server.web.routes.stream_control import create_stream_control_blueprint
 from server.web.routes.system_inspection import create_system_inspection_blueprint
 from server.web.routes.terminal import create_terminal_blueprint
+from server.web.routes.toolbar_preferences import create_toolbar_preferences_blueprint
 from server.web.routes.screen_view import create_screen_view_blueprint
 from server.web.routes.clipboard import create_clipboard_blueprint
 
@@ -45,6 +46,7 @@ def create_app(server_instance):
 
     app.register_blueprint(create_auth_blueprint())
     app.register_blueprint(create_connections_blueprint(server_instance))
+    app.register_blueprint(create_toolbar_preferences_blueprint(server_instance))
     app.register_blueprint(create_command_execution_blueprint(server_instance))
     app.register_blueprint(create_stream_control_blueprint(server_instance))
     app.register_blueprint(create_background_job_blueprint(server_instance))

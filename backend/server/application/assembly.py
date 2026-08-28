@@ -18,6 +18,7 @@ from server.application.jobs.background_job_store import BackgroundJobStore
 from server.application.jobs.job_catalog_service import JobCatalogService
 from server.application.keychains.keychain_store import KeychainStore
 from server.application.pinned_paths.pinned_path_store import PinnedPathStore
+from server.application.preferences.toolbar_preference_store import ToolbarPreferenceStore
 from server.application.scripts.script_catalog_service import ScriptCatalogService
 from server.application.tasks.task_runner import WebTaskRunner
 from server.application.tasks.task_service import WebTaskService
@@ -40,6 +41,7 @@ from server.application.web.remote_file_api import WebRemoteFileApi
 from server.application.web.script_api import WebScriptApi
 from server.application.web.system_api import WebSystemInspectionApi
 from server.application.web.terminal_api import WebTerminalApi
+from server.application.web.toolbar_preferences_api import WebToolbarPreferencesApi
 from server.application.web.screen_view_api import WebScreenViewApi
 from server.application.web.clipboard_api import WebClipboardApi
 from server.config.config import (
@@ -48,6 +50,7 @@ from server.config.config import (
     EXTERNAL_TOOL_PARAM_PRESETS_ROOT_DIR,
     CONNECTION_HISTORY_ROOT_DIR,
     RECENT_DEVICES_JSON_PATH,
+    TOOLBAR_PREFERENCES_JSON_PATH,
     SCRIPT_JOBS_PATH,
     SCRIPT_PATH,
 )
@@ -96,6 +99,7 @@ class ServerApplicationAssembly:
         )
 
         self.recent_device_store = RecentDeviceStore(RECENT_DEVICES_JSON_PATH)
+        self.toolbar_preference_store = ToolbarPreferenceStore(TOOLBAR_PREFERENCES_JSON_PATH)
         self.connection_history_store = ConnectionHistoryStore(CONNECTION_HISTORY_ROOT_DIR)
         self.server.command_history.connection_history_store = self.connection_history_store
 
@@ -160,6 +164,10 @@ class ServerApplicationAssembly:
         # ------------------ web sub facades / apis ------------------ #
         self.connection_api = WebConnectionApi(
             connection_service=self.connection_service,
+        )
+
+        self.toolbar_preferences_api = WebToolbarPreferencesApi(
+            preference_store=self.toolbar_preference_store,
         )
 
         self.command_catalog_api = WebCommandCatalogApi(

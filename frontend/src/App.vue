@@ -106,8 +106,7 @@
                   @open-history="openCommandHistoryDialog"
                   @open-pty="openPtyDialog"
                   @open-screen-view="openScreenViewDialog"
-                  @open-clipboard-get="openClipboardGet"
-                  @open-clipboard-send="openClipboardSend"
+                  @open-clipboard="openClipboardDialog"
                   @open-processes="openProcessDialog"
                   @open-one-liners="openOneLinersDialog"
                   @clear="clearOutput"
@@ -437,12 +436,8 @@ export default {
       return this.$refs.screenViewDialogRef?.open()
     },
 
-    openClipboardGet() {
-      return this.$refs.clipboardDialogRef?.openGet()
-    },
-
-    openClipboardSend() {
-      return this.$refs.clipboardDialogRef?.openSend()
+    openClipboardDialog() {
+      return this.$refs.clipboardDialogRef?.open()
     },
 
     toggleConnectionInfo() {

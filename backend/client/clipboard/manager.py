@@ -12,17 +12,19 @@ from PIL import Image
 from client.clipboard.adapters.macos import MacOSClipboardAdapter
 from client.clipboard.adapters.unsupported import UnsupportedClipboardAdapter
 from client.clipboard.adapters.windows import WindowsClipboardAdapter
-from client.config.config import CLIPBOARD_STAGING_DIR
 from client.http.client_api import ClientApiClient
 from core.protocol.message_types import MSG_TYPE_CLIPBOARD_RESULT
 
 
 class ClipboardManager:
+    # Clipboard staging 是内部实现目录，不进入 client profile/config。
+    DEFAULT_STAGING_DIR = '~/.rch/clipboard_staging'
+
     def __init__(self, connection):
         self.connection = connection
         self.client_api = ClientApiClient()
         self._macos_console_identity = self._get_macos_console_identity()
-        self.staging_dir = self._resolve_staging_dir(CLIPBOARD_STAGING_DIR)
+        self.staging_dir = self._resolve_staging_dir(self.DEFAULT_STAGING_DIR)
         self.adapter = self._build_adapter()
         self._clear_staging_on_startup()
 
@@ -482,7 +484,7 @@ class ClipboardManager:
     ) -> str:
         configured = (
             str(configured_path or '').strip()
-            or '~/.rch/clipboard_staging'
+            or self.DEFAULT_STAGING_DIR
         )
 
         identity = self._macos_console_identity

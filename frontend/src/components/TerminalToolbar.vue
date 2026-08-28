@@ -62,88 +62,20 @@
     </div>
 
     <div class="terminal-tools">
-      <el-button
-        size="small"
-        class="tool-btn tool-btn-accent"
-        @click="$emit('open-remote-files')"
-        :disabled="deviceActionDisabled"
-      >
-        Remote Files
-      </el-button>
+      <template v-for="action in toolbarActions" :key="action.id">
+        <el-button
+          size="small"
+          :class="['tool-btn', 'ml-0', { 'tool-btn-accent': action.accent }]"
+          :disabled="isActionDisabled(action.id)"
+          @click="runAction(action.id)"
+        >
+          {{ action.label }}
+        </el-button>
+      </template>
 
-      <el-button
-        size="small"
-        class="tool-btn tool-btn-accent ml-0"
-        @click="$emit('open-artifacts')"
-      >
-        Artifacts
-      </el-button>
-
-
-
-      <el-button
-        size="small"
-        class="tool-btn ml-0"
-        @click="$emit('open-info')"
-      >
-        Info
-      </el-button>
-
-      <el-button
-        size="small"
-        class="tool-btn ml-0"
-        @click="$emit('open-scripts')"
-      >
-        Scripts
-      </el-button>
-
-      <el-button
-        size="small"
-        class="tool-btn ml-0"
-        @click="$emit('open-history')"
-      >
-        History
-      </el-button>
-
-      <el-button
-        size="small"
-        class="tool-btn ml-0"
-        :disabled="deviceActionDisabled"
-        @click="$emit('open-pty')"
-      >
-        PTY
-      </el-button>
-
-      <el-button
-        size="small"
-        class="tool-btn ml-0"
-        :disabled="deviceActionDisabled"
-        @click="$emit('open-screen-view')"
-      >
-        Screen View
-      </el-button>
-
-      <el-button
-        size="small"
-        class="tool-btn ml-0"
-        :disabled="deviceActionDisabled"
-        @click="$emit('open-clipboard-get')"
-      >
-        Get Clipboard
-      </el-button>
-
-      <el-button
-        size="small"
-        class="tool-btn ml-0"
-        :disabled="deviceActionDisabled"
-        @click="$emit('open-clipboard-send')"
-      >
-        Send Clipboard
-      </el-button>
-
-            <el-dropdown
+      <el-dropdown
         trigger="click"
-        @command="handleResourceCommand"
+        @command="handleMoreCommand"
       >
         <el-button
           size="small"
@@ -154,40 +86,21 @@
 
         <template #dropdown>
           <el-dropdown-menu>
+            <template v-for="action in moreActions" :key="action.id">
+              <el-dropdown-item
+                :command="`action:${action.id}`"
+                :disabled="isActionDisabled(action.id)"
+              >
+                {{ action.label }}
+              </el-dropdown-item>
+            </template>
 
-
-            <el-dropdown-item command="external-tools">External Tools</el-dropdown-item>
-            <el-dropdown-item command="jobs">Jobs</el-dropdown-item>
-            <el-dropdown-item command="agents">Agents</el-dropdown-item>
-            <el-dropdown-item command="processes" :disabled="deviceActionDisabled">Processes</el-dropdown-item>
-            <el-dropdown-item command="keychains">Keychains</el-dropdown-item>
-            <el-dropdown-item command="one-liners">One-liners</el-dropdown-item>
-
+            <el-dropdown-item command="manage-toolbar" :divided="moreActions.length > 0">
+              Manage Toolbar
+            </el-dropdown-item>
           </el-dropdown-menu>
         </template>
       </el-dropdown>
-
-<!--      <el-dropdown-->
-<!--        trigger="click"-->
-<!--        @command="handleOpsCommand"-->
-<!--      >-->
-<!--        <el-button-->
-<!--          size="small"-->
-<!--          class="tool-btn tool-btn-accent"-->
-<!--        >-->
-<!--          Ops-->
-<!--        </el-button>-->
-
-<!--        <template #dropdown>-->
-<!--          <el-dropdown-menu>-->
-<!--            <el-dropdown-item command="processes">Processes</el-dropdown-item>-->
-<!--&lt;!&ndash;            <el-dropdown-item divided disabled>HTTP Cmd</el-dropdown-item>&ndash;&gt;-->
-<!--<el-dropdown-item divided command="http-stop">HTTP Stop</el-dropdown-item>-->
-<!--<el-dropdown-item command="http-restart">HTTP Restart</el-dropdown-item>-->
-<!--<el-dropdown-item command="http-start">HTTP Start</el-dropdown-item>-->
-<!--          </el-dropdown-menu>-->
-<!--        </template>-->
-<!--      </el-dropdown>-->
 
       <el-button
         size="small"
@@ -217,11 +130,121 @@
       </el-button>
     </div>
   </div>
+
+  <el-dialog
+    v-model="manageToolbarVisible"
+    title="Manage Toolbar"
+    width="720px"
+    :close-on-click-modal="false"
+    append-to-body
+  >
+    <div class="toolbar-manager-note">
+      Order items inside each section. Move less-used actions to More.
+    </div>
+
+    <div class="toolbar-manager-grid">
+      <section class="toolbar-manager-section">
+        <div class="toolbar-manager-title">Toolbar</div>
+        <div class="toolbar-manager-list">
+          <div
+            v-for="(actionId, index) in draftPreferences.toolbar"
+            :key="`toolbar-${actionId}`"
+            class="toolbar-manager-row"
+          >
+            <span class="toolbar-manager-label">{{ actionLabel(actionId) }}</span>
+            <div class="toolbar-manager-actions">
+              <el-button size="small" text :disabled="index === 0" @click="moveDraftItem('toolbar', index, -1)">↑</el-button>
+              <el-button size="small" text :disabled="index === draftPreferences.toolbar.length - 1" @click="moveDraftItem('toolbar', index, 1)">↓</el-button>
+              <el-button size="small" @click="moveDraftItemAcross('toolbar', index)">To More</el-button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="toolbar-manager-section">
+        <div class="toolbar-manager-title">More</div>
+        <div class="toolbar-manager-list">
+          <div
+            v-for="(actionId, index) in draftPreferences.more"
+            :key="`more-${actionId}`"
+            class="toolbar-manager-row"
+          >
+            <span class="toolbar-manager-label">{{ actionLabel(actionId) }}</span>
+            <div class="toolbar-manager-actions">
+              <el-button size="small" text :disabled="index === 0" @click="moveDraftItem('more', index, -1)">↑</el-button>
+              <el-button size="small" text :disabled="index === draftPreferences.more.length - 1" @click="moveDraftItem('more', index, 1)">↓</el-button>
+              <el-button size="small" @click="moveDraftItemAcross('more', index)">To Toolbar</el-button>
+            </div>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <template #footer>
+      <div class="toolbar-manager-footer">
+        <el-button @click="resetDraftPreferences">Reset Default</el-button>
+        <span class="toolbar-manager-footer-spacer"></span>
+        <el-button @click="manageToolbarVisible = false">Cancel</el-button>
+        <el-button type="primary" :loading="savingToolbarPreferences" @click="saveManagedToolbar">
+          Save
+        </el-button>
+      </div>
+    </template>
+  </el-dialog>
 </template>
 
 <script>
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { killConnection as killConnectionApi } from '../api/connectionsApi.js'
+import {
+  loadToolbarPreferences,
+  saveToolbarPreferences,
+} from '../api/toolbarPreferencesApi.js'
+
+const ACTION_CATALOG = [
+  { id: 'remote-files', label: 'Remote Files', accent: true },
+  { id: 'artifacts', label: 'Artifacts', accent: true },
+  { id: 'info', label: 'Info' },
+  { id: 'scripts', label: 'Scripts' },
+  { id: 'history', label: 'History' },
+  { id: 'pty', label: 'PTY' },
+  { id: 'screen-view', label: 'Screen View' },
+  { id: 'clipboard', label: 'Clipboard' },
+  { id: 'external-tools', label: 'External Tools' },
+  { id: 'jobs', label: 'Jobs' },
+  { id: 'agents', label: 'Agents' },
+  { id: 'processes', label: 'Processes' },
+  { id: 'keychains', label: 'Keychains' },
+  { id: 'one-liners', label: 'One-liners' },
+]
+
+const DEFAULT_TOOLBAR_PREFERENCES = {
+  toolbar: [
+    'remote-files',
+    'artifacts',
+    'info',
+    'scripts',
+    'history',
+    'pty',
+    'screen-view',
+    'clipboard',
+  ],
+  more: [
+    'external-tools',
+    'jobs',
+    'agents',
+    'processes',
+    'keychains',
+    'one-liners',
+  ],
+}
+
+function cloneToolbarPreferences(preferences) {
+  return {
+    toolbar: [...(preferences?.toolbar || [])],
+    more: [...(preferences?.more || [])],
+  }
+}
 
 export default {
   name: 'TerminalToolbar',
@@ -260,21 +283,148 @@ export default {
     'open-history',
     'open-pty',
     'open-screen-view',
-    'open-clipboard-get',
-    'open-clipboard-send',
+    'open-clipboard',
     'open-processes',
     'open-one-liners',
     'clear',
     'bottom',
   ],
 
+  data() {
+    const preferences = cloneToolbarPreferences(DEFAULT_TOOLBAR_PREFERENCES)
+    return {
+      toolbarPreferences: preferences,
+      draftPreferences: cloneToolbarPreferences(preferences),
+      manageToolbarVisible: false,
+      savingToolbarPreferences: false,
+    }
+  },
+
   computed: {
     deviceActionDisabled() {
       return !this.selectedId || this.currentConnectionOffline
     },
+    toolbarActions() {
+      return this.actionsForIds(this.toolbarPreferences.toolbar)
+    },
+    moreActions() {
+      return this.actionsForIds(this.toolbarPreferences.more)
+    },
+  },
+
+  mounted() {
+    this.loadManagedToolbar()
   },
 
   methods: {
+    clonePreferences(preferences) {
+      return cloneToolbarPreferences(preferences)
+    },
+    normalizePreferences(preferences) {
+      const allowed = new Set(ACTION_CATALOG.map((item) => item.id))
+      const used = new Set()
+      const normalizeList = (value) => {
+        if (!Array.isArray(value)) return []
+        const result = []
+        value.forEach((item) => {
+          const id = String(item || '').trim()
+          if (!allowed.has(id) || used.has(id)) return
+          used.add(id)
+          result.push(id)
+        })
+        return result
+      }
+
+      const normalized = {
+        toolbar: normalizeList(preferences?.toolbar),
+        more: normalizeList(preferences?.more),
+      }
+
+      ACTION_CATALOG.forEach((action) => {
+        if (used.has(action.id)) return
+        const section = DEFAULT_TOOLBAR_PREFERENCES.toolbar.includes(action.id) ? 'toolbar' : 'more'
+        normalized[section].push(action.id)
+        used.add(action.id)
+      })
+
+      return normalized
+    },
+    actionsForIds(ids) {
+      const byId = new Map(ACTION_CATALOG.map((item) => [item.id, item]))
+      return (ids || []).map((id) => byId.get(id)).filter(Boolean)
+    },
+    actionLabel(actionId) {
+      return ACTION_CATALOG.find((item) => item.id === actionId)?.label || actionId
+    },
+    isActionDisabled(actionId) {
+      return [
+        'remote-files',
+        'pty',
+        'screen-view',
+        'clipboard',
+        'processes',
+      ].includes(actionId) && this.deviceActionDisabled
+    },
+    async loadManagedToolbar() {
+      try {
+        const preferences = this.normalizePreferences(await loadToolbarPreferences())
+        this.toolbarPreferences = preferences
+        this.draftPreferences = this.clonePreferences(preferences)
+      } catch (e) {
+        this.toolbarPreferences = this.clonePreferences(DEFAULT_TOOLBAR_PREFERENCES)
+        this.draftPreferences = this.clonePreferences(this.toolbarPreferences)
+        ElMessage.warning(e.message || 'Failed to load toolbar preferences; using defaults')
+      }
+    },
+    openManageToolbar() {
+      this.draftPreferences = this.clonePreferences(this.toolbarPreferences)
+      this.manageToolbarVisible = true
+    },
+    moveDraftItem(section, index, direction) {
+      const items = this.draftPreferences[section]
+      const targetIndex = index + direction
+      if (!Array.isArray(items) || targetIndex < 0 || targetIndex >= items.length) return
+      const next = [...items]
+      const [item] = next.splice(index, 1)
+      next.splice(targetIndex, 0, item)
+      this.draftPreferences = {
+        ...this.draftPreferences,
+        [section]: next,
+      }
+    },
+    moveDraftItemAcross(section, index) {
+      const targetSection = section === 'toolbar' ? 'more' : 'toolbar'
+      const sourceItems = [...(this.draftPreferences[section] || [])]
+      const targetItems = [...(this.draftPreferences[targetSection] || [])]
+      const [item] = sourceItems.splice(index, 1)
+      if (!item) return
+      targetItems.push(item)
+      this.draftPreferences = {
+        ...this.draftPreferences,
+        [section]: sourceItems,
+        [targetSection]: targetItems,
+      }
+    },
+    resetDraftPreferences() {
+      this.draftPreferences = this.clonePreferences(DEFAULT_TOOLBAR_PREFERENCES)
+    },
+    async saveManagedToolbar() {
+      if (this.savingToolbarPreferences) return
+      this.savingToolbarPreferences = true
+      try {
+        const saved = this.normalizePreferences(
+          await saveToolbarPreferences(this.draftPreferences),
+        )
+        this.toolbarPreferences = saved
+        this.draftPreferences = this.clonePreferences(saved)
+        this.manageToolbarVisible = false
+        ElMessage.success('Toolbar updated')
+      } catch (e) {
+        ElMessage.error(e.message || 'Failed to save toolbar preferences')
+      } finally {
+        this.savingToolbarPreferences = false
+      }
+    },
 
     async killConnection() {
       if (!this.selectedId) {
@@ -310,28 +460,50 @@ export default {
       this.$emit('layout-command', command)
     },
 
+    runAction(actionId) {
+      const normalizedAction = String(actionId || '').trim().toLowerCase()
+      const resourceActions = [
+        'external-tools',
+        'keychains',
+        'jobs',
+        'agents',
+        'processes',
+        'one-liners',
+      ]
+      if (resourceActions.includes(normalizedAction)) {
+        this.handleResourceCommand(normalizedAction)
+        return
+      }
 
-    // async killConnection() {
-    //   if (!this.selectedId) {
-    //     ElMessage.warning('Please select a device')
-    //     return
-    //   }
-    //
-    //   try {
-    //     const res = await fetch(`/api/connections/${encodeURIComponent(this.selectedId)}/kill`, {
-    //       method: 'POST',
-    //     })
-    //
-    //     const json = await res.json()
-    //     if (!res.ok || json.code !== 0) {
-    //       throw new Error(json.message || 'Disconnect failed')
-    //     }
-    //
-    //     ElMessage.success('Disconnect command sent')
-    //   } catch (e) {
-    //     ElMessage.error(e.message || 'Disconnect failed')
-    //   }
-    // },
+      const eventMap = {
+        'remote-files': 'open-remote-files',
+        artifacts: 'open-artifacts',
+        info: 'open-info',
+        scripts: 'open-scripts',
+        history: 'open-history',
+        pty: 'open-pty',
+        'screen-view': 'open-screen-view',
+        clipboard: 'open-clipboard',
+      }
+      const eventName = eventMap[normalizedAction]
+      if (!eventName) {
+        ElMessage.warning('Unknown toolbar action')
+        return
+      }
+      this.$emit(eventName)
+    },
+    handleMoreCommand(command) {
+      const normalizedCommand = String(command || '').trim().toLowerCase()
+      if (normalizedCommand === 'manage-toolbar') {
+        this.openManageToolbar()
+        return
+      }
+      if (normalizedCommand.startsWith('action:')) {
+        this.runAction(normalizedCommand.slice('action:'.length))
+        return
+      }
+      ElMessage.warning('Unknown toolbar action')
+    },
 
     // Resources 下拉只负责打开资源类弹窗，不承载执行控制逻辑。
     handleResourceCommand(command) {
@@ -358,11 +530,6 @@ export default {
     async handleOpsCommand(command) {
       const normalizedCommand = String(command || '').trim().toLowerCase()
 
-      // if (normalizedCommand === 'processes') {
-      //   this.$emit('open-processes')
-      //   return
-      // }
-
       const httpCommandMap = {
         'http-stop': 'stop',
         'http-restart': 'restart',
@@ -378,123 +545,6 @@ export default {
     },
   }
 }
-
-//     // add http control toolbar actions 2026-04-10 00:00
-//     async sendHttpControlCommand(command) {
-//       if (!this.selectedId) {
-//         ElMessage.warning('Please select a device')
-//         return
-//       }
-//
-//       const normalizedCommand = String(command || '').trim().toLowerCase()
-//       if (!normalizedCommand) {
-//         ElMessage.warning('Invalid control command')
-//         return
-//       }
-//
-//       const actionMap = {
-//         kill: 'Force Kill',
-//         spawn: 'Force Spawn',
-//         reset: 'Force Reset',
-//       }
-//       const actionLabel = actionMap[normalizedCommand]
-//
-//       try {
-//         await ElMessageBox.confirm(
-//           `Send ${actionLabel} to current device?\n\nThis action is delivered by polling and may take a short delay before the client receives it.`,
-//           'Control Confirmation',
-//           {
-//             type: 'warning',
-//             confirmButtonText: 'Confirm',
-//             cancelButtonText: 'Cancel',
-//           },
-//         )
-//
-//         const res = await fetch(`/api/connections/${encodeURIComponent(this.selectedId)}/control`, {
-//           method: 'POST',
-//           headers: { 'Content-Type': 'application/json' },
-//           body: JSON.stringify({ command: normalizedCommand }),
-//         })
-//
-//         const json = await res.json()
-//         if (!res.ok || json.code !== 0) {
-//           throw new Error(json.message || `${actionLabel} failed`)
-//         }
-//
-//         ElMessage.success(`${actionLabel} command queued. This may take a short delay because the client checks by polling.`)
-//       } catch (e) {
-//         if (e === 'cancel' || e === 'close' || e?.message === 'cancel') {
-//           return
-//         }
-//
-//         ElMessage.error(e.message || 'Control command failed')
-//       }
-//     },
-//   },
-// }
-//
-// async sendHttpControlCommand(action) {
-//   if (!this.selectedId) {
-//     ElMessage.warning('Please select a device')
-//     return
-//   }
-//
-//   const normalizedAction = String(action || '').trim().toLowerCase()
-//   const actionMap = {
-//     stop: {
-//       label: 'HTTP Stop',
-//       wireCommand: 'kill',
-//       description: 'stop the current client through the independent HTTP control channel',
-//     },
-//     restart: {
-//       label: 'HTTP Restart',
-//       wireCommand: 'reset',
-//       description: 'restart the current client through the independent HTTP control channel',
-//     },
-//     start: {
-//       label: 'HTTP Start',
-//       wireCommand: 'spawn',
-//       description: 'start a new client instance through the independent HTTP control channel',
-//     },
-//   }
-//
-//   const actionSpec = actionMap[normalizedAction]
-//   if (!actionSpec) {
-//     ElMessage.warning('Unsupported HTTP control action')
-//     return
-//   }
-//
-//   try {
-//     await ElMessageBox.confirm(
-//       `Send ${actionSpec.label} to current device?\n\nThis will ${actionSpec.description}. The client receives it through polling, so there may be a short delay.`,
-//       'HTTP Control Confirmation',
-//       {
-//         type: 'warning',
-//         confirmButtonText: 'Confirm',
-//         cancelButtonText: 'Cancel',
-//       },
-//     )
-//
-//     const res = await fetch(`/api/connections/${encodeURIComponent(this.selectedId)}/control`, {
-//       method: 'POST',
-//       headers: { 'Content-Type': 'application/json' },
-//       body: JSON.stringify({ command: actionSpec.wireCommand }),
-//     })
-//
-//     const json = await res.json()
-//     if (!res.ok || json.code !== 0) {
-//       throw new Error(json.message || `${actionSpec.label} failed`)
-//     }
-//
-//     ElMessage.success(`${actionSpec.label} queued through the HTTP control channel`)
-//   } catch (e) {
-//     if (e === 'cancel' || e === 'close' || e?.message === 'cancel') {
-//       return
-//     }
-//
-//     ElMessage.error(e.message || 'HTTP control action failed')
-//   }
-// },
 </script>
 
 <style scoped>
@@ -670,5 +720,75 @@ export default {
   background: rgba(220, 38, 38, 0.045) !important;
   border-color: rgba(248, 113, 113, 0.08) !important;
   color: rgba(254, 202, 202, 0.32) !important;
+}
+
+
+.toolbar-manager-note {
+  margin-bottom: 14px;
+  font-size: 12px;
+  opacity: .65;
+}
+
+.toolbar-manager-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 14px;
+}
+
+.toolbar-manager-section {
+  min-width: 0;
+  border: 1px solid var(--el-border-color-light);
+  border-radius: 9px;
+  overflow: hidden;
+}
+
+.toolbar-manager-title {
+  padding: 10px 12px;
+  font-size: 12px;
+  font-weight: 650;
+  border-bottom: 1px solid var(--el-border-color-lighter);
+  background: var(--el-fill-color-light);
+}
+
+.toolbar-manager-list {
+  min-height: 120px;
+}
+
+.toolbar-manager-row,
+.toolbar-manager-actions,
+.toolbar-manager-footer {
+  display: flex;
+  align-items: center;
+}
+
+.toolbar-manager-row {
+  min-height: 44px;
+  padding: 7px 10px 7px 12px;
+  gap: 8px;
+  border-bottom: 1px solid var(--el-border-color-lighter);
+}
+
+.toolbar-manager-row:last-child {
+  border-bottom: 0;
+}
+
+.toolbar-manager-label {
+  min-width: 0;
+  flex: 1;
+  font-size: 12px;
+}
+
+.toolbar-manager-actions {
+  gap: 2px;
+  flex: 0 0 auto;
+}
+
+.toolbar-manager-footer {
+  width: 100%;
+  gap: 8px;
+}
+
+.toolbar-manager-footer-spacer {
+  flex: 1;
 }
 </style>

@@ -10,14 +10,16 @@
     <template #header>
       <div class="clipboard-head">
         <div>
-          <div class="clipboard-title">{{ dialogTitle }}</div>
+          <div class="clipboard-title">Clipboard</div>
           <div class="clipboard-subtitle">{{ targetLabel }}</div>
         </div>
         <el-tag v-if="capabilityText" size="small" effect="plain">{{ capabilityText }}</el-tag>
       </div>
     </template>
 
-    <div v-if="mode === 'get'" class="clipboard-body">
+    <el-tabs v-model="mode" class="clipboard-tabs" @tab-change="handleModeChange">
+      <el-tab-pane label="Get" name="get">
+        <div class="clipboard-body">
       <div v-if="loading" class="clipboard-loading">
         <el-icon class="is-loading"><Loading /></el-icon>
         Reading target clipboard...
@@ -76,9 +78,11 @@
       />
     </div>
 
-    <div
-      v-else
-      class="clipboard-body"
+      </el-tab-pane>
+
+      <el-tab-pane label="Send" name="send">
+        <div
+          class="clipboard-body"
       @dragover.prevent
       @drop.prevent="handleDrop"
       @paste.capture="handlePaste"
@@ -89,7 +93,8 @@
         type="textarea"
         :rows="7"
         resize="vertical"
-        placeholder="Type or paste text here..."
+        :disabled="sendFiles.length > 0"
+        :placeholder="sendFiles.length ? 'Remove attached files/image to send text.' : 'Type or paste text here...'"
       />
 
       <div class="clipboard-composer-separator"><span>or</span></div>
@@ -123,10 +128,13 @@
         <el-button size="small" @click="readLocalClipboard">Read Local Clipboard</el-button>
         <el-button size="small" @click="clearComposer">Clear</el-button>
         <span class="clipboard-send-note">
-          {{ sendFiles.length ? 'Attached file/image takes priority over text.' : 'Browser clipboard access is optional; manual paste always works.' }}
+          {{ sendFiles.length ? 'Text is disabled while a file/image is attached.' : 'Browser clipboard access is optional; manual paste always works.' }}
         </span>
       </div>
     </div>
+
+      </el-tab-pane>
+    </el-tabs>
 
     <template #footer>
       <div class="clipboard-footer">
@@ -190,9 +198,6 @@ export default {
     }
   },
   computed: {
-    dialogTitle() {
-      return this.mode === 'get' ? 'Get Clipboard' : 'Send Clipboard'
-    },
     targetLabel() {
       const item = this.currentConnection || {}
       return item.hostname || item.machine_alias || item.client_id || String(this.selectedId || '')
@@ -213,18 +218,18 @@ export default {
     },
   },
   methods: {
-    async openGet() {
+    async open() {
       this.mode = 'get'
       this.visible = true
       this.resetRemotePayload()
+      this.clearComposer()
       await this.loadCapabilities()
       await this.loadRemoteClipboard()
     },
-    async openSend() {
-      this.mode = 'send'
-      this.visible = true
-      this.clearComposer()
-      await this.loadCapabilities()
+    async handleModeChange(tabName) {
+      if (String(tabName || '') !== 'get') return
+      if (this.remoteKind || this.loading) return
+      await this.loadRemoteClipboard()
     },
     async loadCapabilities() {
       if (!this.selectedId) return
@@ -470,6 +475,7 @@ export default {
 .clipboard-send-files > .clipboard-section-label { padding: 0 12px; }
 .clipboard-send-tools { margin-top: 14px; gap: 8px; }
 .clipboard-send-note { margin-left: auto; font-size: 11px; opacity: .55; text-align: right; }
+.clipboard-tabs { margin-top: -4px; }
 @media (max-width: 720px) {
   .clipboard-send-tools { align-items: flex-start; flex-wrap: wrap; }
   .clipboard-send-note { width: 100%; margin-left: 0; text-align: left; }
