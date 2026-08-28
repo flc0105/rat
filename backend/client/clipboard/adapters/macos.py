@@ -1,7 +1,40 @@
 import io
 import os
+import shutil
+import subprocess
+import sys
+import tempfile
 
 from PIL import Image
+
+
+_PACKAGED_FILE_CLIPBOARD_HELPER_SOURCE = r'''import os
+import sys
+
+from AppKit import NSPasteboard
+from Foundation import NSURL
+
+
+def main():
+    paths = [os.path.abspath(path) for path in sys.argv[1:] if path]
+    if not paths:
+        raise ValueError('No clipboard files were provided')
+
+    for path in paths:
+        if not os.path.exists(path):
+            raise FileNotFoundError(f'Clipboard file does not exist: {path}')
+
+    urls = [NSURL.fileURLWithPath_(path) for path in paths]
+    pasteboard = NSPasteboard.generalPasteboard()
+    pasteboard.clearContents()
+
+    if not pasteboard.writeObjects_(urls):
+        raise RuntimeError('Failed to write file URLs to macOS clipboard')
+
+
+if __name__ == '__main__':
+    main()
+'''
 
 
 class MacOSClipboardAdapter:
@@ -90,13 +123,70 @@ class MacOSClipboardAdapter:
             raise RuntimeError('Failed to write image to macOS clipboard')
 
     def set_files(self, paths: list[str]):
-        NSPasteboard, _, _, _, _, _, NSURL = self._imports()
-        urls = [NSURL.fileURLWithPath_(os.path.abspath(path)) for path in paths if path]
-        if not urls:
+        file_paths = [os.path.abspath(path) for path in paths if path]
+        if not file_paths:
             raise ValueError('No clipboard files were provided')
 
-        pasteboard = NSPasteboard.generalPasteboard()
-        pasteboard.clearContents()
+        for path in file_paths:
+            if not os.path.exists(path):
+                raise FileNotFoundError(f'Clipboard file does not exist: {path}')
 
-        if not pasteboard.writeObjects_(urls):
-            raise RuntimeError('Failed to write file URLs to macOS clipboard')
+        python_executable, helper_path, remove_helper = self._prepare_file_clipboard_helper()
+
+        try:
+            result = subprocess.run(
+                [python_executable, helper_path, *file_paths],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                timeout=15,
+                check=False,
+            )
+        except subprocess.TimeoutExpired as exc:
+            raise RuntimeError('macOS file clipboard helper timed out') from exc
+        finally:
+            if remove_helper:
+                try:
+                    os.remove(helper_path)
+                except OSError:
+                    pass
+
+        if result.returncode != 0:
+            message = (result.stderr or result.stdout or '').strip()
+            raise RuntimeError(message or 'Failed to write file URLs to macOS clipboard')
+
+    def _prepare_file_clipboard_helper(self) -> tuple[str, str, bool]:
+        if not getattr(sys, 'frozen', False):
+            # 源码运行直接执行项目里的固定 helper，不产生临时脚本。
+            helper_path = os.path.join(
+                os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                'macos_file_clipboard_helper.py',
+            )
+            if not os.path.isfile(helper_path):
+                raise RuntimeError(f'macOS clipboard helper not found: {helper_path}')
+
+            return os.path.realpath(sys.executable), helper_path, False
+
+        # 打包模式才动态生成 helper，并交给系统 Python 执行。
+        python_executable = shutil.which('python3')
+        if not python_executable:
+            raise RuntimeError(
+                'python3 is required for macOS file clipboard in packaged mode'
+            )
+
+        helper_fd, helper_path = tempfile.mkstemp(
+            prefix='rch_macos_clipboard_',
+            suffix='.py',
+        )
+
+        try:
+            with os.fdopen(helper_fd, 'w', encoding='utf-8') as helper_file:
+                helper_file.write(_PACKAGED_FILE_CLIPBOARD_HELPER_SOURCE)
+        except Exception:
+            try:
+                os.remove(helper_path)
+            except OSError:
+                pass
+            raise
+
+        return python_executable, helper_path, True
