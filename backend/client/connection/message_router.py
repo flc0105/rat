@@ -104,6 +104,22 @@ class ClientInboundMessageRouter(BaseMessageRouter):
         )
         return None
 
+    def handle_clipboard_get_message(self, data: dict):
+        # 显式读取目标机器当前剪贴板，不做自动同步。
+        self.connection.runtime.clipboard_manager.handle_get(
+            data.get('clipboard_request_id') or '',
+            mode=data.get('mode') or 'content',
+        )
+        return None
+
+    def handle_clipboard_set_message(self, data: dict):
+        # 文本、图片、文件统一交给 ClipboardManager 落到原生剪贴板。
+        self.connection.runtime.clipboard_manager.handle_set(
+            data.get('clipboard_request_id') or '',
+            data.get('payload') if isinstance(data.get('payload'), dict) else {},
+        )
+        return None
+
     def handle_pty_open_message(self, data: dict):
         self.connection.runtime.pty_manager.open_session(
             data.get('pty_session_id') or '',

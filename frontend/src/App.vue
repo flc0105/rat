@@ -106,6 +106,8 @@
                   @open-history="openCommandHistoryDialog"
                   @open-pty="openPtyDialog"
                   @open-screen-view="openScreenViewDialog"
+                  @open-clipboard-get="openClipboardGet"
+                  @open-clipboard-send="openClipboardSend"
                   @open-processes="openProcessDialog"
                   @open-one-liners="openOneLinersDialog"
                   @clear="clearOutput"
@@ -310,6 +312,13 @@
     :current-connection="currentConnection"
   />
 
+  <ClipboardDialog
+    ref="clipboardDialogRef"
+    :selected-id="selectedId"
+    :current-connection="currentConnection"
+    @artifacts-maybe-changed="refreshArtifactsIfOpen"
+  />
+
   <OneLinersDialog
     ref="oneLinersDialogRef"
   />
@@ -342,12 +351,14 @@ import PreviewDialog from './components/PreviewDialog.vue'
 import TerminalJsonDialog from './components/TerminalJsonDialog.vue'
 import PtyDialog from './components/PtyDialog.vue'
 import ScreenViewDialog from './components/ScreenViewDialog.vue'
+import ClipboardDialog from './components/ClipboardDialog.vue'
 import OneLinersDialog from './components/OneLinersDialog.vue'
 
 import { ArrowDown, ArrowUp } from '@element-plus/icons-vue'
 
 export default {
   components: {
+    ClipboardDialog,
     ScreenViewDialog,
     OneLinersDialog,
     ArrowDown,
@@ -424,6 +435,14 @@ export default {
 
     openScreenViewDialog() {
       return this.$refs.screenViewDialogRef?.open()
+    },
+
+    openClipboardGet() {
+      return this.$refs.clipboardDialogRef?.openGet()
+    },
+
+    openClipboardSend() {
+      return this.$refs.clipboardDialogRef?.openSend()
     },
 
     toggleConnectionInfo() {

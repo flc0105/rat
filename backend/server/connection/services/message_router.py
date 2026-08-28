@@ -89,3 +89,8 @@ class ServerInboundMessageRouter(BaseMessageRouter):
 
 
 
+
+    def handle_clipboard_result_message(self, data: dict) -> None:
+        callback = self.connection.context.on_clipboard_result
+        if callable(callback):
+            callback(data)

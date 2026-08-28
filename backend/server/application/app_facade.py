@@ -40,6 +40,7 @@ class ServerWebService:
         self.system_api = self.assembly.system_api
         self.terminal_api = self.assembly.terminal_api
         self.screen_view_api = self.assembly.screen_view_api
+        self.clipboard_api = self.assembly.clipboard_api
 
     @classmethod
     def from_server(cls, server):

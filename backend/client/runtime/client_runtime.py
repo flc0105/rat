@@ -2,6 +2,7 @@ from client.commands.runtime.executor import CommandExecutor
 from client.jobs.core.manager import JobManager
 from client.pty.manager import PtyManager
 from client.screen.manager import ScreenViewManager
+from client.clipboard.manager import ClipboardManager
 
 
 class ClientRuntime:
@@ -13,6 +14,7 @@ class ClientRuntime:
     - job_manager：后台任务运行态
     - pty_manager：交互式 PTY 会话
     - screen_view_manager：只读屏幕预览会话
+    - clipboard_manager：显式远程剪贴板桥接
     """
 
     def __init__(self, connection):
@@ -21,6 +23,7 @@ class ClientRuntime:
         self.job_manager = JobManager(connection)
         self.pty_manager = PtyManager(connection)
         self.screen_view_manager = ScreenViewManager(connection)
+        self.clipboard_manager = ClipboardManager(connection)
 
     def handle_connection_lost(self) -> list[str]:
         """

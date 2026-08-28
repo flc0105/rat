@@ -14,6 +14,7 @@ DEFAULT_CONFIG = {
     'server_web_host': '127.0.0.1',
     'server_web_port': 8085,
     'client_build_version': 'dev',
+    'clipboard_staging_dir': '~/.rch/clipboard_staging',
 }
 
 
@@ -61,3 +62,4 @@ SERVER_WEB_PORT = RUNTIME_CONFIG['server_web_port']
 UPLOAD_BASE_URL = f'{SERVER_WEB_SCHEME}://{SERVER_WEB_HOST}:{SERVER_WEB_PORT}'
 
 CLIENT_BUILD_VERSION = str(RUNTIME_CONFIG.get('client_build_version') or 'dev').strip() or 'dev'
+CLIPBOARD_STAGING_DIR = str(RUNTIME_CONFIG.get('clipboard_staging_dir') or '~/.rch/clipboard_staging').strip() or '~/.rch/clipboard_staging'

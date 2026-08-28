@@ -123,6 +123,24 @@
         Screen View
       </el-button>
 
+      <el-button
+        size="small"
+        class="tool-btn ml-0"
+        :disabled="deviceActionDisabled"
+        @click="$emit('open-clipboard-get')"
+      >
+        Get Clipboard
+      </el-button>
+
+      <el-button
+        size="small"
+        class="tool-btn ml-0"
+        :disabled="deviceActionDisabled"
+        @click="$emit('open-clipboard-send')"
+      >
+        Send Clipboard
+      </el-button>
+
             <el-dropdown
         trigger="click"
         @command="handleResourceCommand"
@@ -242,6 +260,8 @@ export default {
     'open-history',
     'open-pty',
     'open-screen-view',
+    'open-clipboard-get',
+    'open-clipboard-send',
     'open-processes',
     'open-one-liners',
     'clear',

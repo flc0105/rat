@@ -24,6 +24,7 @@ from server.application.tasks.task_service import WebTaskService
 from server.application.tasks.task_store import WebTaskStore
 from server.application.terminal.pty_session_service import PtySessionService
 from server.application.screen.screen_view_session_service import ScreenViewSessionService
+from server.application.clipboard.clipboard_session_service import ClipboardSessionService
 from server.application.web.agent_api import WebAgentApi
 from server.application.web.artifact_api import WebArtifactApi
 from server.application.web.command_catalog_api import WebCommandCatalogApi
@@ -40,6 +41,7 @@ from server.application.web.script_api import WebScriptApi
 from server.application.web.system_api import WebSystemInspectionApi
 from server.application.web.terminal_api import WebTerminalApi
 from server.application.web.screen_view_api import WebScreenViewApi
+from server.application.web.clipboard_api import WebClipboardApi
 from server.config.config import (
     EXTERNAL_TOOL_META_PATH,
     EXTERNAL_TOOL_PACKAGE_PATH,
@@ -146,6 +148,7 @@ class ServerApplicationAssembly:
         self.agent_bootstrap_script_service = AgentBootstrapScriptService()
         self.pty_session_service = PtySessionService(self.server, event_bus=self.event_bus)
         self.screen_view_session_service = ScreenViewSessionService(self.server, event_bus=self.event_bus)
+        self.clipboard_session_service = ClipboardSessionService(self.server)
 
         self.command_completion_service = ServerCommandCompletionService(
             server=self.server,
@@ -239,6 +242,11 @@ class ServerApplicationAssembly:
 
         self.screen_view_api = WebScreenViewApi(
             screen_view_session_service=self.screen_view_session_service,
+        )
+
+        self.clipboard_api = WebClipboardApi(
+            clipboard_session_service=self.clipboard_session_service,
+            artifact_service=self.artifact_service,
         )
 
         self._wire_cross_dependencies()

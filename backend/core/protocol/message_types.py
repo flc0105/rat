@@ -27,3 +27,7 @@ MSG_TYPE_SCREEN_FRAME = 'screen_frame'
 MSG_TYPE_SCREEN_CLOSED = 'screen_closed'
 MSG_TYPE_SCREEN_ERROR = 'screen_error'
 MSG_TYPE_SCREEN_INPUT_ERROR = 'screen_input_error'
+MSG_TYPE_CLIPBOARD_GET = 'clipboard_get'
+MSG_TYPE_CLIPBOARD_SET = 'clipboard_set'
+MSG_TYPE_CLIPBOARD_RESULT = 'clipboard_result'
+

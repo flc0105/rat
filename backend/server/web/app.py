@@ -26,6 +26,7 @@ from server.web.routes.stream_control import create_stream_control_blueprint
 from server.web.routes.system_inspection import create_system_inspection_blueprint
 from server.web.routes.terminal import create_terminal_blueprint
 from server.web.routes.screen_view import create_screen_view_blueprint
+from server.web.routes.clipboard import create_clipboard_blueprint
 
 
 def create_app(server_instance):
@@ -58,6 +59,7 @@ def create_app(server_instance):
     app.register_blueprint(create_script_blueprint(server_instance))
     app.register_blueprint(create_terminal_blueprint(server_instance))
     app.register_blueprint(create_screen_view_blueprint(server_instance))
+    app.register_blueprint(create_clipboard_blueprint(server_instance))
 
     @app.before_request
     def enforce_authentication():

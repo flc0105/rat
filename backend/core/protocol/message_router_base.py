@@ -23,6 +23,9 @@ from core.protocol.message_types import (
     MSG_TYPE_SCREEN_CLOSED,
     MSG_TYPE_SCREEN_ERROR,
     MSG_TYPE_SCREEN_INPUT_ERROR,
+    MSG_TYPE_CLIPBOARD_GET,
+    MSG_TYPE_CLIPBOARD_SET,
+    MSG_TYPE_CLIPBOARD_RESULT,
 )
 
 
@@ -110,6 +113,15 @@ class BaseMessageRouter:
         if message_type == MSG_TYPE_SCREEN_INPUT_ERROR:
             return self.handle_screen_input_error_message(data)
 
+        if message_type == MSG_TYPE_CLIPBOARD_GET:
+            return self.handle_clipboard_get_message(data)
+
+        if message_type == MSG_TYPE_CLIPBOARD_SET:
+            return self.handle_clipboard_set_message(data)
+
+        if message_type == MSG_TYPE_CLIPBOARD_RESULT:
+            return self.handle_clipboard_result_message(data)
+
         return self.handle_unknown_message(data)
 
     def handle_result_message(self, data: dict):
@@ -183,6 +195,15 @@ class BaseMessageRouter:
         return None
 
     def handle_screen_input_error_message(self, data: dict):
+        return None
+
+    def handle_clipboard_get_message(self, data: dict):
+        return None
+
+    def handle_clipboard_set_message(self, data: dict):
+        return None
+
+    def handle_clipboard_result_message(self, data: dict):
         return None
 
     def handle_unknown_message(self, data: dict):
