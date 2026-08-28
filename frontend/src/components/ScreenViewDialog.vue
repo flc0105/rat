@@ -57,6 +57,9 @@
             @change="handleControlToggle"
           />
 
+          <el-button size="small" @click="$emit('open-clipboard')">
+            Clipboard
+          </el-button>
           <el-button size="small" :loading="loading" @click="restartView">
             Restart
           </el-button>
@@ -65,6 +68,15 @@
           </el-button>
         </div>
       </div>
+
+      <el-alert
+        v-if="controlError"
+        :title="controlError"
+        type="warning"
+        show-icon
+        closable
+        @close="controlError = ''"
+      />
 
       <div
         ref="screenCanvas"
@@ -117,6 +129,7 @@ import * as screenViewApi from '../api/screenViewApi.js'
 
 export default {
   name: 'ScreenViewDialog',
+  emits: ['open-clipboard'],
 
   props: {
     selectedId: {

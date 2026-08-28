@@ -33,6 +33,7 @@ class ScreenViewManager:
         self._lock = threading.RLock()
         self._input_lock = threading.RLock()
         self._sessions = {}
+        self._windows_input_guard = None
 
     def open_session(self, screen_session_id: str, fps: int = 4, quality: int = 60):
         session_id = str(screen_session_id or '').strip()
@@ -203,6 +204,7 @@ class ScreenViewManager:
 
     def _apply_input_event(self, item: dict, action: str, payload: dict):
         if action == 'prepare':
+            self._ensure_windows_input_allowed(action)
             pyautogui = self._get_pyautogui()
             input_width, input_height = pyautogui.size()
 
@@ -228,12 +230,14 @@ class ScreenViewManager:
 
         if action == 'mouse_move':
             x, y = self._resolve_pointer(item, payload)
+            self._ensure_windows_input_allowed(action, x=x, y=y)
             pyautogui.moveTo(x, y, duration=0, _pause=False)
             return
 
         if action in ('mouse_down', 'mouse_up'):
             button = self._normalize_button(payload.get('button'))
             x, y = self._resolve_pointer(item, payload)
+            self._ensure_windows_input_allowed(action, x=x, y=y)
             if action == 'mouse_down':
                 pyautogui.mouseDown(x=x, y=y, button=button, _pause=False)
                 item['pressed_buttons'].add(button)
@@ -247,6 +251,7 @@ class ScreenViewManager:
             if not clicks:
                 return
             x, y = self._resolve_pointer(item, payload)
+            self._ensure_windows_input_allowed(action, x=x, y=y)
             pyautogui.moveTo(x, y, duration=0, _pause=False)
             pyautogui.scroll(clicks, _pause=False)
             return
@@ -255,6 +260,7 @@ class ScreenViewManager:
             key = self._normalize_key(payload.get('key'))
             if not key:
                 return
+            self._ensure_windows_input_allowed(action)
             if action == 'key_down':
                 is_repeat = bool(payload.get('repeat'))
                 if key in item['pressed_keys']:
@@ -350,6 +356,16 @@ class ScreenViewManager:
         y = origin_y + int(round(normalized_y * max(0, height - 1)))
 
         return x, y
+
+    def _ensure_windows_input_allowed(self, action: str, x=None, y=None):
+        if not sys.platform.startswith('win'):
+            return
+
+        if self._windows_input_guard is None:
+            from client.screen.windows_input_guard import WindowsScreenInputGuard
+            self._windows_input_guard = WindowsScreenInputGuard()
+
+        self._windows_input_guard.ensure_allowed(action=action, x=x, y=y)
 
     def _get_pyautogui(self):
         try:

@@ -309,6 +309,7 @@
     ref="screenViewDialogRef"
     :selected-id="selectedId"
     :current-connection="currentConnection"
+    @open-clipboard="openClipboardDialog"
   />
 
   <ClipboardDialog
