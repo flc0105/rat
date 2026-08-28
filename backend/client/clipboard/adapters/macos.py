@@ -94,7 +94,9 @@ class MacOSClipboardAdapter:
         urls = [NSURL.fileURLWithPath_(os.path.abspath(path)) for path in paths if path]
         if not urls:
             raise ValueError('No clipboard files were provided')
+
         pasteboard = NSPasteboard.generalPasteboard()
         pasteboard.clearContents()
+
         if not pasteboard.writeObjects_(urls):
             raise RuntimeError('Failed to write file URLs to macOS clipboard')
