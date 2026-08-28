@@ -1,0 +1,20 @@
+{
+  "toolbar": [
+    "remote-files",
+    "artifacts",
+    "pty",
+    "clipboard",
+    "screen-view"
+  ],
+  "more": [
+    "info",
+    "history",
+    "scripts",
+    "jobs",
+    "external-tools",
+    "agents",
+    "processes",
+    "keychains",
+    "one-liners"
+  ]
+}

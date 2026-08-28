@@ -106,8 +106,8 @@
       <div class="clipboard-composer-separator"><span>or</span></div>
 
       <div class="clipboard-dropzone" @click="openFilePicker">
-        <div class="clipboard-drop-title">Drop files here</div>
-        <div class="clipboard-drop-hint">Click to choose files, or paste an image/file into this dialog</div>
+        <div class="clipboard-drop-title">Drop files or folders here</div>
+        <div class="clipboard-drop-hint">Click to choose files, or paste/drop an image, file, or folder into this dialog</div>
       </div>
       <input
         ref="fileInputRef"
@@ -121,10 +121,13 @@
         <div class="clipboard-section-label">
           {{ sendPayloadKind === 'image' ? 'Image' : `Files · ${sendFiles.length}` }}
         </div>
-        <div v-for="(item, index) in sendFiles" :key="`${item.file.name}-${index}`" class="clipboard-file-row">
+        <div v-for="(item, index) in sendFiles" :key="`${item.name}-${index}`" class="clipboard-file-row">
           <div class="clipboard-file-main">
-            <div class="clipboard-file-name">{{ item.file.name }}</div>
-            <div class="clipboard-file-detail">{{ item.file.type || 'file' }} · {{ formatBytes(item.file.size) }}</div>
+            <div class="clipboard-file-name">{{ item.name }}</div>
+            <div class="clipboard-file-detail">
+              <span v-if="item.kind === 'directory'">directory · {{ item.files.length }} files</span>
+              <span v-else>{{ item.file.type || 'file' }} · {{ formatBytes(item.file.size) }}</span>
+            </div>
           </div>
           <el-button size="small" text type="danger" @click="removeSendFile(index)">Remove</el-button>
         </div>
@@ -278,11 +281,10 @@ export default {
       this.sending = true
       try {
         if (this.sendFiles.length) {
-          const files = this.sendFiles.map((item) => item.file)
           if (this.sendPayloadKind === 'image') {
-            await setRemoteClipboardImage(this.selectedId, files[0])
+            await setRemoteClipboardImage(this.selectedId, this.sendFiles[0].file)
           } else {
-            await setRemoteClipboardFiles(this.selectedId, files)
+            await setRemoteClipboardFiles(this.selectedId, this.sendFiles)
           }
         } else {
           await setRemoteClipboardText(this.selectedId, this.sendText)
@@ -362,7 +364,8 @@ export default {
             if (imageType) {
               const blob = await item.getType(imageType)
               const ext = imageType.split('/')[1] || 'png'
-              this.sendFiles = [{ file: new File([blob], `clipboard.${ext}`, { type: imageType }) }]
+              const file = new File([blob], `clipboard.${ext}`, { type: imageType })
+              this.sendFiles = [{ kind: 'file', name: file.name, file }]
               this.sendPayloadKind = 'image'
               return
             }
@@ -376,19 +379,115 @@ export default {
         ElMessage.warning('Browser clipboard read was blocked. Paste manually instead.')
       }
     },
-    handlePaste(event) {
-      const files = Array.from(event.clipboardData?.files || [])
-      if (!files.length) return
+    async handlePaste(event) {
+      const transfer = event.clipboardData
+      if (!this.hasFileTransferItems(transfer)) return
       event.preventDefault()
-      const singleImage = files.length === 1 && String(files[0].type || '').startsWith('image/')
-      this.sendFiles = files.map((file) => ({ file }))
-      this.sendPayloadKind = singleImage ? 'image' : 'files'
+      try {
+        const attachments = await this.collectTransferAttachments(transfer)
+        if (!attachments.length) return
+        this.sendFiles = attachments
+        this.sendPayloadKind = this.isSingleImageAttachment(attachments) ? 'image' : 'files'
+      } catch (e) {
+        ElMessage.error(e.message || 'Failed to read pasted files/folders')
+      }
     },
-    handleDrop(event) {
-      const files = Array.from(event.dataTransfer?.files || [])
-      if (!files.length) return
-      this.sendFiles = files.map((file) => ({ file }))
-      this.sendPayloadKind = 'files'
+    async handleDrop(event) {
+      const transfer = event.dataTransfer
+      if (!this.hasFileTransferItems(transfer)) return
+      try {
+        const attachments = await this.collectTransferAttachments(transfer)
+        if (!attachments.length) return
+        this.sendFiles = attachments
+        this.sendPayloadKind = 'files'
+      } catch (e) {
+        ElMessage.error(e.message || 'Failed to read dropped files/folders')
+      }
+    },
+    hasFileTransferItems(transfer) {
+      const items = Array.from(transfer?.items || [])
+      if (items.some((item) => item?.kind === 'file')) return true
+      return Array.from(transfer?.files || []).length > 0
+    },
+    isSingleImageAttachment(attachments) {
+      return attachments.length === 1
+        && attachments[0]?.kind === 'file'
+        && String(attachments[0]?.file?.type || '').startsWith('image/')
+    },
+    async collectTransferAttachments(transfer) {
+      const transferItems = Array.from(transfer?.items || []).filter((item) => item?.kind === 'file')
+      const entries = transferItems
+        .map((item) => (typeof item.webkitGetAsEntry === 'function' ? item.webkitGetAsEntry() : null))
+        .filter(Boolean)
+
+      if (entries.length) {
+        const attachments = []
+        for (const entry of entries) {
+          const attachment = await this.collectFileSystemEntry(entry)
+          if (attachment) attachments.push(attachment)
+        }
+        if (attachments.length) return attachments
+      }
+
+      return Array.from(transfer?.files || []).map((file) => ({
+        kind: 'file',
+        name: file.name,
+        file,
+      }))
+    },
+    async collectFileSystemEntry(entry) {
+      if (entry?.isFile) {
+        const file = await this.readFileSystemFile(entry)
+        return file ? { kind: 'file', name: file.name, file } : null
+      }
+
+      if (!entry?.isDirectory) return null
+
+      const directories = []
+      const files = []
+      const rootName = String(entry.name || 'folder')
+      await this.walkFileSystemDirectory(entry, rootName, directories, files)
+      return {
+        kind: 'directory',
+        name: rootName,
+        directories,
+        files,
+      }
+    },
+    async walkFileSystemDirectory(entry, relativePath, directories, files) {
+      directories.push(relativePath)
+      const children = await this.readFileSystemDirectoryEntries(entry)
+
+      for (const child of children) {
+        const childPath = `${relativePath}/${child.name}`
+        if (child.isDirectory) {
+          await this.walkFileSystemDirectory(child, childPath, directories, files)
+          continue
+        }
+        if (!child.isFile) continue
+
+        const file = await this.readFileSystemFile(child)
+        if (file) files.push({ file, relativePath: childPath })
+      }
+    },
+    readFileSystemFile(entry) {
+      return new Promise((resolve, reject) => {
+        entry.file(resolve, reject)
+      })
+    },
+    async readFileSystemDirectoryEntries(entry) {
+      const reader = entry.createReader()
+      const entries = []
+
+      while (true) {
+        const batch = await new Promise((resolve, reject) => {
+          reader.readEntries(resolve, reject)
+        })
+        if (!batch.length) break
+        entries.push(...batch)
+      }
+
+      return entries
     },
     openFilePicker() {
       const input = this.$refs.fileInputRef
@@ -399,7 +498,7 @@ export default {
     handleFileChoose(event) {
       const files = Array.from(event.target?.files || [])
       if (!files.length) return
-      this.sendFiles = files.map((file) => ({ file }))
+      this.sendFiles = files.map((file) => ({ kind: 'file', name: file.name, file }))
       this.sendPayloadKind = 'files'
     },
     removeSendFile(index) {

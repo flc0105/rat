@@ -112,9 +112,15 @@ class ClipboardManager:
                     if isinstance(normalized.get('items'), list)
                     else []
                 )
+                roots = (
+                    normalized.get('roots')
+                    if isinstance(normalized.get('roots'), list)
+                    else []
+                )
                 paths = self._download_staged_items(
                     request_id,
                     items,
+                    roots=roots,
                 )
 
                 if not paths:
@@ -326,6 +332,8 @@ class ClipboardManager:
         self,
         request_id: str,
         items: list[dict],
+        *,
+        roots: list[str] | None = None,
     ) -> list[str]:
         request_dir = os.path.join(
             self.staging_dir,
@@ -334,6 +342,74 @@ class ClipboardManager:
 
         # macOS 文件剪贴板必须让桌面登录用户能直接访问源文件。
         self._ensure_staging_directory(request_dir)
+
+        if roots is not None:
+            for item in items:
+                if not isinstance(item, dict):
+                    continue
+
+                relative_path = self._safe_relative_path(
+                    item.get('path')
+                    or item.get('name')
+                    or ''
+                )
+                if not relative_path:
+                    continue
+
+                target_path = os.path.join(
+                    request_dir,
+                    *relative_path.split('/'),
+                )
+                item_type = str(
+                    item.get('type') or 'file'
+                ).strip().lower()
+
+                if item_type == 'directory':
+                    self._ensure_staging_directory(target_path)
+                    continue
+
+                url = str(
+                    item.get('url') or ''
+                ).strip()
+                if not url:
+                    continue
+
+                self._ensure_staging_directory(
+                    os.path.dirname(target_path)
+                )
+                self.client_api.download_file(
+                    url,
+                    target_path,
+                    timeout=(15, 60 * 60),
+                )
+
+                # Client 可能由 root 启动，文件最终要交给 GUI 用户读取。
+                self._prepare_staged_path_for_console_user(
+                    target_path
+                )
+
+            root_paths = []
+            seen_roots = set()
+
+            for root in roots:
+                relative_root = self._safe_relative_path(root)
+                if not relative_root or relative_root in seen_roots:
+                    continue
+
+                seen_roots.add(relative_root)
+                root_path = os.path.join(
+                    request_dir,
+                    *relative_root.split('/'),
+                )
+                if not os.path.exists(root_path):
+                    continue
+
+                self._prepare_staged_path_for_console_user(
+                    root_path
+                )
+                root_paths.append(root_path)
+
+            return root_paths
 
         paths = []
         used_names = set()
@@ -642,6 +718,21 @@ class ClipboardManager:
         )
 
         return output.getvalue()
+
+    @classmethod
+    def _safe_relative_path(
+        cls,
+        value: str,
+    ) -> str:
+        parts = []
+
+        for component in str(value or '').replace('\\', '/').split('/'):
+            component = component.strip()
+            if not component or component in {'.', '..'}:
+                continue
+            parts.append(cls._safe_component(component))
+
+        return '/'.join(parts)
 
     @staticmethod
     def _safe_component(
