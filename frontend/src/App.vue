@@ -109,6 +109,7 @@
                   @open-clipboard="openClipboardDialog"
                   @open-processes="openProcessDialog"
                   @open-one-liners="openOneLinersDialog"
+                  @open-notification-settings="openNotificationPreferencesDialog"
                   @clear="clearOutput"
                   @bottom="scrollToBottom"
                 />
@@ -322,6 +323,11 @@
   <OneLinersDialog
     ref="oneLinersDialogRef"
   />
+
+  <NotificationPreferencesDialog
+    ref="notificationPreferencesDialogRef"
+    @saved="applySseNotificationPreferences"
+  />
 </template>
 
 <script>
@@ -353,11 +359,13 @@ import PtyDialog from './components/PtyDialog.vue'
 import ScreenViewDialog from './components/ScreenViewDialog.vue'
 import ClipboardDialog from './components/ClipboardDialog.vue'
 import OneLinersDialog from './components/OneLinersDialog.vue'
+import NotificationPreferencesDialog from './components/NotificationPreferencesDialog.vue'
 
 import { ArrowDown, ArrowUp } from '@element-plus/icons-vue'
 
 export default {
   components: {
+    NotificationPreferencesDialog,
     ClipboardDialog,
     ScreenViewDialog,
     OneLinersDialog,
@@ -541,6 +549,10 @@ export default {
       return this.$refs.oneLinersDialogRef?.open()
     },
 
+    openNotificationPreferencesDialog() {
+      return this.$refs.notificationPreferencesDialogRef?.open()
+    },
+
     openProcessDialog() {
       return this.$refs.processDialogRef?.open()
     },
@@ -634,9 +646,10 @@ export default {
     },
   },
 
-  mounted() {
+  async mounted() {
     this.ensureTabId()
     this.loadConnections()
+    await this.loadSseNotificationPreferences()
     this.initSSE()
 
     this.statusTickTimer = setInterval(() => {

@@ -95,7 +95,10 @@
               </el-dropdown-item>
             </template>
 
-            <el-dropdown-item command="manage-toolbar" :divided="moreActions.length > 0">
+            <el-dropdown-item command="notification-settings" :divided="moreActions.length > 0">
+              Notification Settings
+            </el-dropdown-item>
+            <el-dropdown-item command="manage-toolbar">
               Manage Toolbar
             </el-dropdown-item>
           </el-dropdown-menu>
@@ -286,6 +289,7 @@ export default {
     'open-clipboard',
     'open-processes',
     'open-one-liners',
+    'open-notification-settings',
     'clear',
     'bottom',
   ],
@@ -494,6 +498,10 @@ export default {
     },
     handleMoreCommand(command) {
       const normalizedCommand = String(command || '').trim().toLowerCase()
+      if (normalizedCommand === 'notification-settings') {
+        this.$emit('open-notification-settings')
+        return
+      }
       if (normalizedCommand === 'manage-toolbar') {
         this.openManageToolbar()
         return

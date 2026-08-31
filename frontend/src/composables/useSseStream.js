@@ -4,6 +4,12 @@ import {
     TERMINAL_FILE_READY_PREFIX,
 } from './terminalMarkers.js';
 import { openSseStream } from '../api/streamApi.js';
+import { loadNotificationPreferences } from '../api/notificationPreferencesApi.js';
+import {
+    DEFAULT_SSE_NOTIFICATION_PREFERENCES,
+    cloneSseNotificationPreferences,
+    normalizeSseNotificationPreferences,
+} from '../data/sseNotificationPreferences.js';
 
 export default {
     data() {
@@ -11,11 +17,34 @@ export default {
             tabId: '',
             eventSource: null,
             sseReady: false,
+            sseNotificationPreferences: cloneSseNotificationPreferences(DEFAULT_SSE_NOTIFICATION_PREFERENCES),
         }
     },
 
 
     methods: {
+        async loadSseNotificationPreferences() {
+            try {
+                const preferences = await loadNotificationPreferences();
+                this.applySseNotificationPreferences(preferences);
+            } catch (e) {
+                this.sseNotificationPreferences = cloneSseNotificationPreferences(DEFAULT_SSE_NOTIFICATION_PREFERENCES);
+                console.warn('Failed to load SSE notification preferences; using defaults', e);
+            }
+        },
+
+        applySseNotificationPreferences(preferences) {
+            this.sseNotificationPreferences = normalizeSseNotificationPreferences(preferences);
+        },
+
+        showSseNotification(notificationKey, options = {}) {
+            const preferences = this.sseNotificationPreferences || DEFAULT_SSE_NOTIFICATION_PREFERENCES;
+            if (preferences.enabled === false) return;
+            if (preferences.events?.[notificationKey] === false) return;
+
+            ElementPlus.ElNotification(options);
+        },
+
         initSSE() {
             if (this.eventSource) this.eventSource.close();
 
@@ -33,12 +62,17 @@ export default {
                 if (!this.sseReady) this.sseReady = true;
             });
 
+            es.addEventListener('notification_preferences_updated', (event) => {
+                const payload = JSON.parse(event.data || '{}');
+                this.applySseNotificationPreferences(payload);
+            });
+
             es.addEventListener('connection_online', (event) => {
                 const payload = JSON.parse(event.data);
                 const conn = payload.connection;
                 this.upsertConnection(conn);
 
-                ElementPlus.ElNotification({
+                this.showSseNotification('connection_online', {
                     title: 'Device Online',
                     message: `${conn.hostname || conn.client_id} is now available`,
                     type: 'success'
@@ -59,7 +93,7 @@ export default {
 
                 this.clearActiveTask(clientId);
 
-                ElementPlus.ElNotification({
+                this.showSseNotification('connection_offline', {
                     title: 'Device Offline',
                     message: `${(conn && conn.hostname) || clientId} went offline`,
                     type: 'warning'
@@ -187,7 +221,13 @@ this.appendOutput(payload.client_id, `${TERMINAL_BACKGROUND_PREFIX} ${payload.te
                     stateText = 'ended with error';
                 }
 
-                ElementPlus.ElNotification({
+                const notificationKey = {
+                    running: 'background_job_running',
+                    stopped: 'background_job_stopped',
+                    error: 'background_job_error',
+                }[state] || `background_job_${state || 'updated'}`;
+
+                this.showSseNotification(notificationKey, {
                     title,
                     message: `${jobName} ${stateText} on ${deviceName}`,
                     type,
@@ -217,7 +257,7 @@ this.appendOutput(payload.client_id, `${TERMINAL_BACKGROUND_PREFIX} ${payload.te
                 const deviceName = getConnectionLabel(payload.client_id);
 
                 if (state === 'opened') {
-                    ElementPlus.ElNotification({
+                    this.showSseNotification('pty_opened', {
                         title: 'PTY Started',
                         message: `PTY session started on ${deviceName}`,
                         type: 'success',
@@ -230,11 +270,23 @@ this.appendOutput(payload.client_id, `${TERMINAL_BACKGROUND_PREFIX} ${payload.te
                     const exitCode = payload.exit_code === null || payload.exit_code === undefined
                         ? ''
                         : `, exit=${payload.exit_code}`;
-                    ElementPlus.ElNotification({
+                    this.showSseNotification('pty_closed', {
                         title: 'PTY Stopped',
                         message: `PTY session stopped on ${deviceName}${exitCode}`,
                         type: 'warning',
                         duration: 4000,
+                    });
+                    return;
+                }
+
+                if (state === 'error') {
+                    this.showSseNotification('pty_error', {
+                        title: 'PTY Error',
+                        message: payload.error
+                            ? `PTY session ended on ${deviceName}: ${payload.error}`
+                            : `PTY session ended with an error on ${deviceName}`,
+                        type: 'error',
+                        duration: 5000,
                     });
                 }
             });
@@ -245,7 +297,7 @@ this.appendOutput(payload.client_id, `${TERMINAL_BACKGROUND_PREFIX} ${payload.te
                 const deviceName = getConnectionLabel(payload.client_id);
 
                 if (state === 'starting') {
-                    ElementPlus.ElNotification({
+                    this.showSseNotification('screen_view_starting', {
                         title: 'Screen View Starting',
                         message: `Screen view is starting on ${deviceName}`,
                         type: 'info',
@@ -255,7 +307,7 @@ this.appendOutput(payload.client_id, `${TERMINAL_BACKGROUND_PREFIX} ${payload.te
                 }
 
                 if (state === 'closed') {
-                    ElementPlus.ElNotification({
+                    this.showSseNotification('screen_view_closed', {
                         title: 'Screen View Stopped',
                         message: `Screen view stopped on ${deviceName}`,
                         type: 'warning',
@@ -265,7 +317,7 @@ this.appendOutput(payload.client_id, `${TERMINAL_BACKGROUND_PREFIX} ${payload.te
                 }
 
                 if (state === 'error') {
-                    ElementPlus.ElNotification({
+                    this.showSseNotification('screen_view_error', {
                         title: 'Screen View Error',
                         message: payload.error
                             ? `Screen view ended on ${deviceName}: ${payload.error}`
@@ -305,7 +357,7 @@ this.appendOutput(payload.client_id, `${TERMINAL_BACKGROUND_PREFIX} ${payload.te
                 }
 
                 if (!this.selectedId || payload.client_id === this.selectedId || !payload.client_id) {
-                    ElementPlus.ElNotification({
+                    this.showSseNotification('artifact_created', {
                         title: 'File Ready',
                         dangerouslyUseHTMLString: true,
                         message: `

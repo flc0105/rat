@@ -47,14 +47,28 @@ class PtySessionService:
         with self._lock:
             self._sessions[pty_id] = item
 
-        session.send({
-            'type': MSG_TYPE_PTY_OPEN,
-            'pty_session_id': pty_id,
-            'shell': item['shell'],
-            'cwd': item['cwd'],
-            'cols': item['cols'],
-            'rows': item['rows'],
-        })
+        try:
+            session.send({
+                'type': MSG_TYPE_PTY_OPEN,
+                'pty_session_id': pty_id,
+                'shell': item['shell'],
+                'cwd': item['cwd'],
+                'cols': item['cols'],
+                'rows': item['rows'],
+            })
+        except Exception as e:
+            event_item = None
+            with self._lock:
+                item['status'] = 'error'
+                item['error'] = str(e or 'PTY open failed')
+                item['closed_at'] = time.time()
+                if not item.get('close_notified'):
+                    item['close_notified'] = True
+                    event_item = dict(item)
+            if event_item:
+                self._publish_pty_lifecycle_event(event_item, state='error')
+            raise
+
         return {
             'pty_session_id': pty_id,
             'status': item['status'],
@@ -174,6 +188,7 @@ class PtySessionService:
             self._publish_pty_lifecycle_event(event_item, state='closed')
 
     def handle_client_error(self, pty_session_id: str, message: str):
+        event_item = None
         with self._lock:
             item = self._sessions.get(pty_session_id)
             if not item:
@@ -189,6 +204,12 @@ class PtySessionService:
             # item['chunks'].append({'seq': item['seq'], 'text': f"\n[PTY error] {item['error']}\n"})
             if len(item['chunks']) > self.max_chunks:
                 item['chunks'] = item['chunks'][-self.max_chunks:]
+            if not item.get('close_notified'):
+                item['close_notified'] = True
+                event_item = dict(item)
+
+        if event_item:
+            self._publish_pty_lifecycle_event(event_item, state='error')
 
     def authorize_ws(self, pty_session_id: str, token: str) -> bool:
         with self._lock:
@@ -211,6 +232,7 @@ class PtySessionService:
                 'shell': item.get('shell', ''),
                 'cwd': item.get('cwd', ''),
                 'exit_code': item.get('exit_code'),
+                'error': item.get('error', ''),
                 'time': datetime.now().isoformat(),
             })
         except Exception:
