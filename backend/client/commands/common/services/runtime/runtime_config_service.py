@@ -57,6 +57,46 @@ class RuntimeConfigService:
             items.append((key, value, default_value, source))
         return items
 
+    def build_config_payload(self, include_hidden: bool = False) -> dict:
+        self.prune_redundant_overrides()
+        items = []
+
+        for key, value, default_value, source in self.list_config_items(include_hidden=include_hidden):
+            meta = self.get_config_meta(key)
+            raw_choices = meta.get('choices')
+            choices = list(raw_choices) if isinstance(raw_choices, (list, tuple)) else []
+
+            items.append({
+                'key': key,
+                'value': value,
+                'default_value': default_value,
+                'source': source,
+                'group': self.get_config_group(key),
+                'desc': self.get_config_desc(key),
+                'value_type': self.get_value_type(value, default_value),
+                'choices': choices,
+                'editable': self.is_supported_key(key),
+            })
+
+        return {
+            'store_path': self.get_store_path(),
+            'items': items,
+        }
+
+    def get_value_type(self, value, default_value=None) -> str:
+        reference = default_value if default_value is not None else value
+        if isinstance(reference, bool):
+            return 'boolean'
+        if isinstance(reference, int) and not isinstance(reference, bool):
+            return 'integer'
+        if isinstance(reference, float):
+            return 'float'
+        if isinstance(reference, str):
+            return 'string'
+        if reference is None:
+            return 'null'
+        return type(reference).__name__
+
     def format_config_items(self, include_hidden: bool = False) -> str:
         items = self.list_config_items(include_hidden=include_hidden)
         if not items:

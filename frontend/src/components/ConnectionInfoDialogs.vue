@@ -11,55 +11,129 @@
       class="fixed-dialog-body connection-info-body"
       v-loading="loading"
     >
-      <div class="connection-info-stats-grid">
-        <div
-          v-for="item in connectionInfoCards"
-          :key="item.label"
-          class="connection-info-stat connection-info-stat-expandable"
-          @click="openConnectionInfoValueDialog(item)"
+      <el-tabs
+        v-model="activeTab"
+        class="connection-info-tabs"
+      >
+        <el-tab-pane
+          label="Basic Info"
+          name="basic"
+          class="connection-info-tab-pane"
         >
-          <div class="connection-info-stat-label">
-            {{ item.label }}
-          </div>
+          <div class="connection-info-tab-scroll">
+            <div class="connection-info-stats-grid">
+              <div
+                v-for="item in connectionInfoCards"
+                :key="item.label"
+                class="connection-info-stat connection-info-stat-expandable"
+                @click="openConnectionInfoValueDialog(item)"
+              >
+                <div class="connection-info-stat-label">
+                  {{ item.label }}
+                </div>
 
-          <div
-            class="connection-info-stat-value"
-            :class="{ mono: item.mono }"
-          >
-            {{ item.fullValue }}
-          </div>
-        </div>
-      </div>
-
-      <div class="connection-command-panel">
-        <div class="connection-command-panel-title">
-          Command List
-        </div>
-
-        <div class="connection-command-list">
-          <div
-            v-for="(item, index) in connectionInfoClientCommands"
-            :key="`${item.template}-${index}`"
-            class="connection-command-item"
-          >
-            <div class="connection-command-group">
-              <span v-if="item.group">{{ item.group }}</span>
-            </div>
-
-            <div class="connection-command-text">
-              <span class="mono">{{ item.name || item.template }}</span>
-              <span v-if="item.help"> — {{ item.help }}</span>
+                <div
+                  class="connection-info-stat-value"
+                  :class="{ mono: item.mono }"
+                >
+                  {{ item.fullValue }}
+                </div>
+              </div>
             </div>
           </div>
+        </el-tab-pane>
 
-          <div
-            v-if="!connectionInfoClientCommands.length"
-            class="empty-state compact"
-          >
-            No commands available
+        <el-tab-pane
+          label="Commands"
+          name="commands"
+          class="connection-info-tab-pane connection-info-command-tab"
+        >
+          <div class="connection-command-panel">
+            <div class="connection-command-panel-title">
+              Command List
+            </div>
+
+            <div class="connection-command-list">
+              <div
+                v-for="(item, index) in connectionInfoClientCommands"
+                :key="`${item.template}-${index}`"
+                class="connection-command-item"
+              >
+                <div class="connection-command-group">
+                  <span v-if="item.group">{{ item.group }}</span>
+                </div>
+
+                <div class="connection-command-text">
+                  <span class="mono">{{ item.name || item.template }}</span>
+                  <span v-if="item.help"> — {{ item.help }}</span>
+                </div>
+              </div>
+
+              <div
+                v-if="!connectionInfoClientCommands.length"
+                class="empty-state compact"
+              >
+                No commands available
+              </div>
+            </div>
           </div>
-        </div>
-      </div>
+        </el-tab-pane>
+
+        <el-tab-pane
+          label="Configuration"
+          name="configuration"
+          class="connection-info-tab-pane"
+        >
+          <div
+            class="connection-info-tab-scroll"
+            v-loading="runtimeConfigLoading"
+          >
+            <div
+              v-if="runtimeConfigError"
+              class="empty-state compact"
+            >
+              {{ runtimeConfigError }}
+            </div>
+
+            <div
+              v-else-if="runtimeConfigItems.length"
+              class="connection-info-stats-grid"
+            >
+              <div
+                v-for="item in runtimeConfigItems"
+                :key="item.key"
+                class="connection-info-stat connection-config-stat"
+                :class="{ 'connection-config-stat-editable': item.editable !== false }"
+                :title="item.editable !== false ? 'Double-click to edit' : ''"
+                @dblclick="openRuntimeConfigEditor(item)"
+              >
+                <div class="connection-config-stat-head">
+                  <div class="connection-info-stat-label">
+                    {{ item.key }}
+                  </div>
+                  <span
+                    v-if="item.source === 'override'"
+                    class="connection-config-override-badge"
+                  >
+                    override
+                  </span>
+                </div>
+
+                <div class="connection-info-stat-value">
+                  {{ formatRuntimeConfigValue(item.value) }}
+                </div>
+              </div>
+            </div>
+
+            <div
+              v-else-if="!runtimeConfigLoading"
+              class="empty-state compact"
+            >
+              No runtime configuration available
+            </div>
+          </div>
+        </el-tab-pane>
+      </el-tabs>
     </div>
   </el-dialog>
 
@@ -74,6 +148,118 @@
     <div class="fixed-dialog-body connection-info-value-body">
       <pre class="connection-info-full-value">{{ valueValue || '-' }}</pre>
     </div>
+  </el-dialog>
+
+  <el-dialog
+    v-model="runtimeConfigEditorVisible"
+    title="Edit Configuration"
+    width="560px"
+    top="14vh"
+    class="connection-config-editor-dialog"
+    modal-class="connection-config-editor-overlay"
+    :close-on-click-modal="false"
+  >
+    <div
+      v-if="runtimeConfigEditorItem"
+      class="connection-config-editor"
+    >
+      <div class="connection-config-editor-key-row">
+        <span class="connection-config-editor-key">
+          {{ runtimeConfigEditorItem.key }}
+        </span>
+        <span
+          v-if="runtimeConfigEditorItem.source === 'override'"
+          class="connection-config-override-badge"
+        >
+          override
+        </span>
+      </div>
+
+      <div
+        v-if="runtimeConfigEditorItem.desc"
+        class="connection-config-editor-desc"
+      >
+        {{ runtimeConfigEditorItem.desc }}
+      </div>
+
+      <div class="connection-config-editor-meta">
+        <div>
+          <span>Current</span>
+          <strong>{{ formatRuntimeConfigValue(runtimeConfigEditorItem.value) }}</strong>
+        </div>
+        <div>
+          <span>Default</span>
+          <strong>{{ formatRuntimeConfigValue(runtimeConfigEditorItem.default_value) }}</strong>
+        </div>
+      </div>
+
+      <div class="connection-config-editor-control">
+        <el-select
+          v-if="runtimeConfigEditorChoices.length"
+          v-model="runtimeConfigEditorValue"
+          style="width: 100%"
+        >
+          <el-option
+            v-for="choice in runtimeConfigEditorChoices"
+            :key="String(choice)"
+            :label="String(choice)"
+            :value="choice"
+          />
+        </el-select>
+
+        <el-switch
+          v-else-if="runtimeConfigEditorItem.value_type === 'boolean'"
+          v-model="runtimeConfigEditorValue"
+        />
+
+        <el-input-number
+          v-else-if="runtimeConfigEditorItem.value_type === 'integer'"
+          v-model="runtimeConfigEditorValue"
+          :step="1"
+          controls-position="right"
+          style="width: 100%"
+        />
+
+        <el-input-number
+          v-else-if="runtimeConfigEditorItem.value_type === 'float'"
+          v-model="runtimeConfigEditorValue"
+          controls-position="right"
+          style="width: 100%"
+        />
+
+        <el-input
+          v-else
+          v-model="runtimeConfigEditorValue"
+        />
+      </div>
+    </div>
+
+    <template #footer>
+      <div class="connection-config-editor-footer">
+        <el-button
+          :disabled="runtimeConfigSaving || runtimeConfigEditorItem?.source !== 'override'"
+          @click="resetRuntimeConfigEditorItem"
+        >
+          Reset Default
+        </el-button>
+
+        <div class="connection-config-editor-footer-right">
+          <el-button
+            :disabled="runtimeConfigSaving"
+            @click="runtimeConfigEditorVisible = false"
+          >
+            Cancel
+          </el-button>
+          <el-button
+            type="primary"
+            :loading="runtimeConfigSaving"
+            @click="saveRuntimeConfigEditorItem"
+          >
+            Save
+          </el-button>
+        </div>
+      </div>
+    </template>
   </el-dialog>
 </template>
 
@@ -109,6 +295,16 @@ export default {
       valueTitle: '',
       valueValue: '',
       connectionInfoClientCommands: [],
+      activeTab: 'basic',
+      runtimeConfigItems: [],
+      runtimeConfigStorePath: '',
+      runtimeConfigLoading: false,
+      runtimeConfigLoaded: false,
+      runtimeConfigError: '',
+      runtimeConfigEditorVisible: false,
+      runtimeConfigEditorItem: null,
+      runtimeConfigEditorValue: '',
+      runtimeConfigSaving: false,
     }
   },
 
@@ -159,6 +355,19 @@ export default {
         }
       })
     },
+
+    runtimeConfigEditorChoices() {
+      const choices = this.runtimeConfigEditorItem?.choices
+      return Array.isArray(choices) ? choices : []
+    },
+  },
+
+  watch: {
+    activeTab(value) {
+      if (value === 'configuration' && this.infoVisible && !this.runtimeConfigLoaded) {
+        this.loadRuntimeConfig(this.selectedId)
+      }
+    },
   },
 
   methods: {
@@ -175,6 +384,13 @@ export default {
       this.valueTitle = ''
       this.valueValue = ''
       this.connectionInfoClientCommands = []
+      this.activeTab = 'basic'
+      this.runtimeConfigItems = []
+      this.runtimeConfigStorePath = ''
+      this.runtimeConfigLoaded = false
+      this.runtimeConfigError = ''
+      this.runtimeConfigEditorVisible = false
+      this.runtimeConfigEditorItem = null
 
       try {
         await Promise.all([
@@ -207,6 +423,39 @@ export default {
       if (res.ok && json.code === 0 && Array.isArray(json.data)) {
         this.jobCount = json.data.length
       }
+    },
+
+    async loadRuntimeConfig(clientId) {
+      if (!clientId || this.runtimeConfigLoading) return
+
+      this.runtimeConfigLoading = true
+      this.runtimeConfigError = ''
+
+      try {
+        const res = await fetch(`/api/connections/${encodeURIComponent(clientId)}/runtime-config`)
+        const json = await res.json()
+
+        if (!res.ok || json.code !== 0) {
+          throw new Error(json.message || 'Failed to load runtime configuration')
+        }
+
+        this.applyRuntimeConfigPayload(json.data)
+        this.runtimeConfigLoaded = true
+      } catch (e) {
+        this.runtimeConfigItems = []
+        this.runtimeConfigLoaded = false
+        this.runtimeConfigError = e?.message || 'Failed to load runtime configuration'
+      } finally {
+        this.runtimeConfigLoading = false
+      }
+    },
+
+    applyRuntimeConfigPayload(payload) {
+      const data = payload && typeof payload === 'object' ? payload : {}
+      this.runtimeConfigStorePath = String(data.store_path || '')
+      this.runtimeConfigItems = Array.isArray(data.items)
+        ? data.items.filter(item => item && item.key)
+        : []
     },
 
     normalizeConnectionInfoCommand(item) {
@@ -312,6 +561,93 @@ export default {
       this.valueValue = item.fullValue || '-'
       this.valueVisible = true
     },
+
+    formatRuntimeConfigValue(value) {
+      if (value === null || value === undefined) return 'None'
+      if (typeof value === 'boolean') return value ? 'true' : 'false'
+      return String(value)
+    },
+
+    openRuntimeConfigEditor(item) {
+      if (!item || item.editable === false) return
+
+      this.runtimeConfigEditorItem = item
+      this.runtimeConfigEditorValue = this.normalizeRuntimeConfigEditorValue(item)
+      this.runtimeConfigEditorVisible = true
+    },
+
+    normalizeRuntimeConfigEditorValue(item) {
+      const valueType = String(item?.value_type || '')
+      const value = item?.value
+
+      if (valueType === 'boolean') return Boolean(value)
+      if (valueType === 'integer' || valueType === 'float') {
+        const numeric = Number(value)
+        return Number.isFinite(numeric) ? numeric : 0
+      }
+      if (value === null || value === undefined) return ''
+      return String(value)
+    },
+
+    async saveRuntimeConfigEditorItem() {
+      const item = this.runtimeConfigEditorItem
+      if (!item || !this.selectedId || this.runtimeConfigSaving) return
+
+      this.runtimeConfigSaving = true
+
+      try {
+        const res = await fetch(
+          `/api/connections/${encodeURIComponent(this.selectedId)}/runtime-config/${encodeURIComponent(item.key)}`,
+          {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ value: this.runtimeConfigEditorValue }),
+          },
+        )
+        const json = await res.json()
+
+        if (!res.ok || json.code !== 0) {
+          throw new Error(json.message || 'Failed to update runtime configuration')
+        }
+
+        this.applyRuntimeConfigPayload(json.data)
+        this.runtimeConfigLoaded = true
+        this.runtimeConfigEditorVisible = false
+        ElMessage.success(`${item.key} updated`)
+      } catch (e) {
+        ElMessage.error(e?.message || 'Failed to update runtime configuration')
+      } finally {
+        this.runtimeConfigSaving = false
+      }
+    },
+
+    async resetRuntimeConfigEditorItem() {
+      const item = this.runtimeConfigEditorItem
+      if (!item || !this.selectedId || item.source !== 'override' || this.runtimeConfigSaving) return
+
+      this.runtimeConfigSaving = true
+
+      try {
+        const res = await fetch(
+          `/api/connections/${encodeURIComponent(this.selectedId)}/runtime-config/${encodeURIComponent(item.key)}`,
+          { method: 'DELETE' },
+        )
+        const json = await res.json()
+
+        if (!res.ok || json.code !== 0) {
+          throw new Error(json.message || 'Failed to reset runtime configuration')
+        }
+
+        this.applyRuntimeConfigPayload(json.data)
+        this.runtimeConfigLoaded = true
+        this.runtimeConfigEditorVisible = false
+        ElMessage.success(`${item.key} reset to default`)
+      } catch (e) {
+        ElMessage.error(e?.message || 'Failed to reset runtime configuration')
+      } finally {
+        this.runtimeConfigSaving = false
+      }
+    },
   },
 }
 </script>
@@ -321,7 +657,41 @@ export default {
   display: flex;
   flex-direction: column;
   min-height: 0;
-  gap: 14px;
+}
+
+.connection-info-tabs {
+  height: 100%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.connection-info-tabs :deep(.el-tabs__header) {
+  flex: 0 0 auto;
+  margin-bottom: 12px;
+}
+
+.connection-info-tabs :deep(.el-tabs__content) {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.connection-info-tabs :deep(.el-tab-pane) {
+  height: 100%;
+  min-height: 0;
+}
+
+.connection-info-tab-pane {
+  height: 100%;
+  min-height: 0;
+}
+
+.connection-info-tab-scroll {
+  height: 100%;
+  min-height: 0;
+  overflow-y: auto;
+  padding-right: 2px;
 }
 
 .connection-info-stats-grid {
@@ -385,13 +755,54 @@ export default {
   transition: border-color 0.18s ease, background 0.18s ease, box-shadow 0.18s ease;
 }
 
-.connection-info-stat-expandable:hover {
+.connection-info-stat-expandable:hover,
+.connection-config-stat-editable:hover {
   background: #f3f7ff;
   border-color: rgba(37, 99, 235, 0.18);
   box-shadow: 0 0 0 1px rgba(37, 99, 235, 0.05);
 }
 
+.connection-config-stat-editable {
+  cursor: pointer;
+  transition: border-color 0.18s ease, background 0.18s ease, box-shadow 0.18s ease;
+}
+
+.connection-config-stat-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  min-width: 0;
+}
+
+.connection-config-stat-head .connection-info-stat-label {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.connection-config-override-badge {
+  flex: 0 0 auto;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: #fff7ed;
+  border: 1px solid #fed7aa;
+  color: #c2410c;
+  font-size: 10px;
+  line-height: 16px;
+  font-weight: 600;
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+.connection-info-command-tab {
+  display: flex;
+  flex-direction: column;
+}
+
 .connection-command-panel {
+  height: 100%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
   border: 1px solid rgba(15, 23, 42, 0.06);
   border-radius: 12px;
   background: #fafcff;
@@ -399,6 +810,7 @@ export default {
 }
 
 .connection-command-panel-title {
+  flex: 0 0 auto;
   padding: 10px 12px;
   font-size: 13px;
   font-weight: 700;
@@ -407,7 +819,8 @@ export default {
 }
 
 .connection-command-list {
-  max-height: 360px;
+  flex: 1 1 auto;
+  min-height: 0;
   overflow-y: auto;
   padding: 10px 12px;
   display: flex;
@@ -454,6 +867,85 @@ export default {
   font-size: 13px;
 }
 
+.connection-config-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.connection-config-editor-key-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.connection-config-editor-key {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.connection-config-editor-desc {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.connection-config-editor-meta {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.connection-config-editor-meta > div {
+  min-width: 0;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: #f8fafc;
+  border: 1px solid rgba(15, 23, 42, 0.06);
+}
+
+.connection-config-editor-meta span,
+.connection-config-editor-meta strong {
+  display: block;
+}
+
+.connection-config-editor-meta span {
+  color: var(--muted);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.connection-config-editor-meta strong {
+  margin-top: 4px;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 500;
+  overflow-wrap: anywhere;
+}
+
+.connection-config-editor-control {
+  min-height: 40px;
+  display: flex;
+  align-items: center;
+}
+
+.connection-config-editor-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.connection-config-editor-footer-right {
+  display: flex;
+  gap: 10px;
+}
+
 @media (max-width: 1200px) {
   .connection-info-stats-grid {
     grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -467,8 +959,18 @@ export default {
 }
 
 @media (max-width: 480px) {
-  .connection-info-stats-grid {
+  .connection-info-stats-grid,
+  .connection-config-editor-meta {
     grid-template-columns: repeat(1, minmax(0, 1fr));
+  }
+
+  .connection-config-editor-footer {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .connection-config-editor-footer-right {
+    justify-content: flex-end;
   }
 }
 </style>

@@ -1,3 +1,4 @@
+import json
 import shlex
 
 from client.commands.common.services.runtime.runtime_config_service import RuntimeConfigService
@@ -38,6 +39,9 @@ class CommandRuntimeConfigMixin:
         set --all
             按分组列出 runtime_config 下所有基础配置项和值
 
+        set --json
+            输出 expose=True 配置项的结构化 JSON，供 Web UI 动态渲染
+
         set KEY value
             修改 runtime_config.KEY。默认只允许修改 expose=True 的配置项。
             如果 value 和 runtime_config.py 默认值相同，则删除 JSON override。
@@ -60,6 +64,12 @@ class CommandRuntimeConfigMixin:
 
         if not parts:
             return 1, self._format_runtime_config_listing()
+
+        if parts[0] in ('--json', 'json'):
+            return 1, json.dumps(
+                self.runtime_config_service.build_config_payload(),
+                ensure_ascii=False,
+            )
 
         if parts[0] in ('--all', 'all'):
             return 1, self._format_runtime_config_listing(include_hidden=True)

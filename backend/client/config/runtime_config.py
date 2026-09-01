@@ -69,6 +69,7 @@ _RUNTIME_CONFIG_META = {
         'group': 'strategy',
         'expose': True,
         'desc': 'HTTP transfer implementation mode: legacy or cancelable.',
+        'choices': ['legacy', 'cancelable'],
     },
     'HTTP_UPLOAD_TIMEOUT': {
         'group': 'upload',
@@ -99,6 +100,7 @@ _RUNTIME_CONFIG_META = {
         'group': 'strategy',
         'expose': True,
         'desc': 'Python script execution mode: inproc or subprocess_pipe.',
+        'choices': ['inproc', 'subprocess_pipe'],
     },
     'RECONNECT_INTERVAL_SECONDS': {
         'group': 'connection',

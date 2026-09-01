@@ -1,3 +1,6 @@
+import shlex
+
+
 class WebCommandExecutionApi:
     """
     Web 命令执行子外观。
@@ -9,9 +12,10 @@ class WebCommandExecutionApi:
     - 为 CLI 等非路由调用方创建命令执行器
     """
 
-    def __init__(self, task_service, command_executor_factory=None):
+    def __init__(self, task_service, command_executor_factory=None, remote_execution_service=None):
         self.task_service = task_service
         self.command_executor_factory = command_executor_factory
+        self.remote_execution_service = remote_execution_service
 
     def _normalize_client_id(self, client_id: str) -> str:
         value = (client_id or '').strip()
@@ -66,6 +70,56 @@ class WebCommandExecutionApi:
             self._normalize_command(command),
             tab_id=(tab_id or '').strip(),
         )
+
+    def get_runtime_config(self, client_id: str):
+        if self.remote_execution_service is None:
+            raise RuntimeError('remote_execution_service is not available')
+        return self.remote_execution_service.run_foreground_json_command(
+            self._normalize_client_id(client_id),
+            'set --json',
+            task_type='runtime_config',
+            source='web_runtime_config',
+        )
+
+    def update_runtime_config(self, client_id: str, key: str, value):
+        if self.remote_execution_service is None:
+            raise RuntimeError('remote_execution_service is not available')
+
+        normalized_key = str(key or '').strip().upper()
+        if not normalized_key:
+            raise ValueError('config key is required')
+
+        value_text = self._format_runtime_config_value(value)
+        self.remote_execution_service.run_foreground_text_command(
+            self._normalize_client_id(client_id),
+            f'set {normalized_key} {shlex.quote(value_text)}',
+            task_type='runtime_config',
+            source='web_runtime_config',
+        )
+        return self.get_runtime_config(client_id)
+
+    def reset_runtime_config(self, client_id: str, key: str):
+        if self.remote_execution_service is None:
+            raise RuntimeError('remote_execution_service is not available')
+
+        normalized_key = str(key or '').strip().upper()
+        if not normalized_key:
+            raise ValueError('config key is required')
+
+        self.remote_execution_service.run_foreground_text_command(
+            self._normalize_client_id(client_id),
+            f'set --reset {normalized_key}',
+            task_type='runtime_config',
+            source='web_runtime_config',
+        )
+        return self.get_runtime_config(client_id)
+
+    def _format_runtime_config_value(self, value) -> str:
+        if isinstance(value, bool):
+            return 'true' if value else 'false'
+        if value is None:
+            return 'none'
+        return str(value)
 
     def cancel_web_task(self, task_id: str):
         return self.task_service.cancel_web_task(self._normalize_task_id(task_id))

@@ -188,6 +188,7 @@ class ServerApplicationAssembly:
         self.command_execution_api = WebCommandExecutionApi(
             task_service=self.task_service,
             command_executor_factory=self.command_executor_factory,
+            remote_execution_service=self.remote_execution_service,
         )
 
         self.external_tool_runtime_service = ExternalToolRuntimeService(

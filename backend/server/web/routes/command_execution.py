@@ -31,6 +31,34 @@ def create_command_execution_blueprint(server_instance):
 
         return responder.json_endpoint(_execute, default_error_status=500)
 
+    @blueprint.get('/api/connections/<client_id>/runtime-config')
+    def get_runtime_config(client_id):
+        return responder.json_endpoint(
+            lambda: command_execution_api.get_runtime_config(client_id),
+            default_error_status=500,
+        )
+
+    @blueprint.put('/api/connections/<client_id>/runtime-config/<key>')
+    def update_runtime_config(client_id, key):
+        def _execute():
+            payload = get_json_payload()
+            if 'value' not in payload:
+                raise ValueError('value is required')
+            return command_execution_api.update_runtime_config(
+                client_id,
+                key,
+                payload.get('value'),
+            )
+
+        return responder.json_endpoint(_execute, default_error_status=500)
+
+    @blueprint.delete('/api/connections/<client_id>/runtime-config/<key>')
+    def reset_runtime_config(client_id, key):
+        return responder.json_endpoint(
+            lambda: command_execution_api.reset_runtime_config(client_id, key),
+            default_error_status=500,
+        )
+
     @blueprint.post('/api/tasks/<task_id>/cancel')
     def cancel_task(task_id):
         return responder.json_endpoint(
