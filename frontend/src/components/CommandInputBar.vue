@@ -26,9 +26,9 @@ value-key="value"
               <div class="command-autocomplete-item-main">
                 <div
                   class="command-autocomplete-item-name"
-                  :title="item.template || item.value || '-'"
+                  :title="item.displayText || item.template || item.value || '-'"
                 >
-                  {{ item.template || item.value || '-' }}
+                  {{ item.displayText || item.template || item.value || '-' }}
                 </div>
 
                 <div
@@ -352,6 +352,13 @@ export default {
         this.setAutocompleteCandidateItems(list, effectiveQueryString)
         callback(list)
       }
+      const variableQuery = this.parseVariableCompletionQuery(effectiveQueryString)
+
+      if (variableQuery) {
+        emitCandidates(this.buildVariableCompletionCandidates(variableQuery))
+        return
+      }
+
       const completionQuery = this.parseCommandCompletionCandidateQuery(effectiveQueryString)
 
       if (completionQuery) {
@@ -371,6 +378,131 @@ export default {
       }
 
       emitCandidates(this.filterCandidatesByTitle(visibleCandidates, keyword))
+    },
+
+    parseVariableCompletionQuery(queryString) {
+      const rawText = String(queryString || '')
+      const match = rawText.match(/\$\{([^{}]*)$/)
+
+      if (!match) {
+        return null
+      }
+
+      const tokenText = String(match[1] || '')
+      const tokenStart = Number(match.index)
+
+      if (!Number.isInteger(tokenStart) || tokenStart < 0) {
+        return null
+      }
+
+      const normalizedToken = tokenText.replace('\\:', ':')
+      const separatorIndex = normalizedToken.indexOf(':')
+
+      return {
+        rawText,
+        tokenText,
+        tokenStart,
+        commandPrefix: rawText.slice(0, tokenStart),
+        namespaceText: separatorIndex >= 0
+          ? normalizedToken.slice(0, separatorIndex).trim().toLowerCase()
+          : normalizedToken.trim().toLowerCase(),
+        nameText: separatorIndex >= 0
+          ? normalizedToken.slice(separatorIndex + 1).trim().toLowerCase()
+          : '',
+        hasNamespaceSeparator: separatorIndex >= 0,
+      }
+    },
+
+    buildVariableCompletionCandidates(variableQuery) {
+      const manifest = Array.isArray(this.currentConnection?.variable_manifest)
+        ? this.currentConnection.variable_manifest
+        : []
+
+      if (!variableQuery?.hasNamespaceSeparator) {
+        return this.buildVariableNamespaceCandidates(variableQuery, manifest)
+      }
+
+      const namespace = String(variableQuery.namespaceText || '').trim().toLowerCase()
+      const nameKeyword = String(variableQuery.nameText || '').trim().toLowerCase()
+
+      if (!namespace) {
+        return []
+      }
+
+      return manifest
+        .filter(item => String(item?.namespace || '').trim().toLowerCase() === namespace)
+        .flatMap((item) => {
+          const candidateNames = Array.isArray(item?.candidates) && item.candidates.length
+            ? item.candidates
+            : [item?.name]
+
+          return candidateNames.map((candidateName) => {
+            const name = String(candidateName || '').trim()
+            if (!name) return null
+
+            const normalizedName = name.toLowerCase()
+            if (nameKeyword && !normalizedName.includes(nameKeyword)) {
+              return null
+            }
+
+            const variableTemplate = Array.isArray(item?.candidates) && item.candidates.length
+              ? '${' + namespace + ':' + name + '}'
+              : String(item?.template || '').trim()
+
+            if (!variableTemplate) return null
+
+            return {
+              name: variableTemplate,
+              value: `${variableQuery.commandPrefix}${variableTemplate}`,
+              template: `${variableQuery.commandPrefix}${variableTemplate}`,
+              displayText: variableTemplate,
+              help: String(item?.description || '').trim(),
+              source: 'variable',
+              group: `variable_${namespace}`,
+              groupLabel: namespace,
+              variableTemplate,
+              variableName: normalizedName,
+            }
+          })
+        })
+        .filter(Boolean)
+        .sort((left, right) => {
+          const leftName = String(left?.variableName || '').toLowerCase()
+          const rightName = String(right?.variableName || '').toLowerCase()
+          const leftPrefix = nameKeyword && leftName.startsWith(nameKeyword) ? 0 : 1
+          const rightPrefix = nameKeyword && rightName.startsWith(nameKeyword) ? 0 : 1
+          return leftPrefix - rightPrefix || leftName.localeCompare(rightName)
+        })
+    },
+
+    buildVariableNamespaceCandidates(variableQuery, manifest) {
+      const namespaceKeyword = String(variableQuery?.namespaceText || '').trim().toLowerCase()
+      const namespaces = []
+      const seen = new Set()
+
+      ;(Array.isArray(manifest) ? manifest : []).forEach((item) => {
+        const namespace = String(item?.namespace || '').trim().toLowerCase()
+        if (!namespace || seen.has(namespace)) return
+        seen.add(namespace)
+        namespaces.push(namespace)
+      })
+
+      return namespaces
+        .filter(namespace => !namespaceKeyword || namespace.startsWith(namespaceKeyword))
+        .map(namespace => {
+          const namespaceTemplate = '${' + namespace + ':'
+          return {
+            name: namespaceTemplate,
+            value: `${variableQuery.commandPrefix}${namespaceTemplate}`,
+            template: `${variableQuery.commandPrefix}${namespaceTemplate}`,
+            displayText: namespaceTemplate,
+            help: `Complete ${namespace} variables`,
+            source: 'variable_namespace',
+            group: 'variable_namespace',
+            groupLabel: 'variable',
+            continueAutocomplete: true,
+          }
+        })
     },
 
     parseCommandCompletionCandidateQuery(queryString) {
@@ -821,6 +953,7 @@ export default {
       // 右方向键只提交 preview，不执行命令、不刷新 provider、不关闭候选列表。
       // 继续输入 / 时，会按正常输入变更触发下一层 filesystem completion。
       const committedIndex = this.autocompleteNavigationIndex
+      const committedCandidate = this.autocompleteCandidateItems[committedIndex]
       this.autocompleteNavigationBaseText = ''
       this.autocompleteNavigationPreviewActive = false
       this.autocompleteNavigationIndex = committedIndex
@@ -828,6 +961,10 @@ export default {
       this.commandText = committedText
       this.highlightAutocompleteCandidate(committedIndex)
       this.focusInput()
+
+      if (committedCandidate?.continueAutocomplete) {
+        this.refreshAutocompleteSuggestionsForCurrentText()
+      }
     },
 
     refreshAutocompleteSuggestionsForCurrentText() {
@@ -948,6 +1085,10 @@ export default {
       this.clearAutocompleteNavigationState()
       this.commandText = text
       this.focusInput()
+
+      if (item?.continueAutocomplete) {
+        this.refreshAutocompleteSuggestionsForCurrentText()
+      }
     },
 
     getCandidateInsertText(item) {

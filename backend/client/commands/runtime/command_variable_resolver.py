@@ -114,7 +114,12 @@ class CommandVariableResolver:
             'template': '${env:NAME}',
             'description': 'Read NAME from the target Client process environment at execution time.',
             'dynamic': True,
+            'candidates': sorted(
+                [str(name).strip() for name in os.environ.keys() if str(name).strip()],
+                key=str.lower,
+            ),
         })
+
         return payload
 
     def _build_manifest_item(self, namespace: str, name: str, description: str) -> dict:
