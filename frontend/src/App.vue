@@ -90,6 +90,7 @@
             <section class="terminal-panel">
               <div class="terminal-frame">
                 <TerminalToolbar
+                  ref="terminalToolbarRef"
                   :selected-id="selectedId"
                   :current-connection-offline="isCurrentConnectionOffline"
                   :device-sidebar-collapsed="deviceSidebarCollapsed"
@@ -109,7 +110,7 @@
                   @open-clipboard="openClipboardDialog"
                   @open-processes="openProcessDialog"
                   @open-one-liners="openOneLinersDialog"
-                  @open-notification-settings="openNotificationPreferencesDialog"
+                  @open-settings="openSettingsDialog"
                   @clear="clearOutput"
                   @bottom="scrollToBottom"
                 />
@@ -324,9 +325,10 @@
     ref="oneLinersDialogRef"
   />
 
-  <NotificationPreferencesDialog
-    ref="notificationPreferencesDialogRef"
-    @saved="applySseNotificationPreferences"
+  <SettingsDialog
+    ref="settingsDialogRef"
+    @toolbar-saved="refreshToolbarPreferences"
+    @notification-saved="applySseNotificationPreferences"
   />
 </template>
 
@@ -359,13 +361,13 @@ import PtyDialog from './components/PtyDialog.vue'
 import ScreenViewDialog from './components/ScreenViewDialog.vue'
 import ClipboardDialog from './components/ClipboardDialog.vue'
 import OneLinersDialog from './components/OneLinersDialog.vue'
-import NotificationPreferencesDialog from './components/NotificationPreferencesDialog.vue'
+import SettingsDialog from './components/SettingsDialog.vue'
 
 import { ArrowDown, ArrowUp } from '@element-plus/icons-vue'
 
 export default {
   components: {
-    NotificationPreferencesDialog,
+    SettingsDialog,
     ClipboardDialog,
     ScreenViewDialog,
     OneLinersDialog,
@@ -549,8 +551,12 @@ export default {
       return this.$refs.oneLinersDialogRef?.open()
     },
 
-    openNotificationPreferencesDialog() {
-      return this.$refs.notificationPreferencesDialogRef?.open()
+    openSettingsDialog() {
+      return this.$refs.settingsDialogRef?.open()
+    },
+
+    refreshToolbarPreferences() {
+      return this.$refs.terminalToolbarRef?.loadManagedToolbar()
     },
 
     openProcessDialog() {

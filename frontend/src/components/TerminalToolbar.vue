@@ -95,11 +95,8 @@
               </el-dropdown-item>
             </template>
 
-            <el-dropdown-item command="notification-settings" :divided="moreActions.length > 0">
-              Notification Settings
-            </el-dropdown-item>
-            <el-dropdown-item command="manage-toolbar">
-              Manage Toolbar
+            <el-dropdown-item command="settings" :divided="moreActions.length > 0">
+              Settings
             </el-dropdown-item>
           </el-dropdown-menu>
         </template>
@@ -134,75 +131,12 @@
     </div>
   </div>
 
-  <el-dialog
-    v-model="manageToolbarVisible"
-    title="Manage Toolbar"
-    width="720px"
-    :close-on-click-modal="false"
-    append-to-body
-  >
-    <div class="toolbar-manager-note">
-      Order items inside each section. Move less-used actions to More.
-    </div>
-
-    <div class="toolbar-manager-grid">
-      <section class="toolbar-manager-section">
-        <div class="toolbar-manager-title">Toolbar</div>
-        <div class="toolbar-manager-list">
-          <div
-            v-for="(actionId, index) in draftPreferences.toolbar"
-            :key="`toolbar-${actionId}`"
-            class="toolbar-manager-row"
-          >
-            <span class="toolbar-manager-label">{{ actionLabel(actionId) }}</span>
-            <div class="toolbar-manager-actions">
-              <el-button size="small" text :disabled="index === 0" @click="moveDraftItem('toolbar', index, -1)">↑</el-button>
-              <el-button size="small" text :disabled="index === draftPreferences.toolbar.length - 1" @click="moveDraftItem('toolbar', index, 1)">↓</el-button>
-              <el-button size="small" @click="moveDraftItemAcross('toolbar', index)">To More</el-button>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <section class="toolbar-manager-section">
-        <div class="toolbar-manager-title">More</div>
-        <div class="toolbar-manager-list">
-          <div
-            v-for="(actionId, index) in draftPreferences.more"
-            :key="`more-${actionId}`"
-            class="toolbar-manager-row"
-          >
-            <span class="toolbar-manager-label">{{ actionLabel(actionId) }}</span>
-            <div class="toolbar-manager-actions">
-              <el-button size="small" text :disabled="index === 0" @click="moveDraftItem('more', index, -1)">↑</el-button>
-              <el-button size="small" text :disabled="index === draftPreferences.more.length - 1" @click="moveDraftItem('more', index, 1)">↓</el-button>
-              <el-button size="small" @click="moveDraftItemAcross('more', index)">To Toolbar</el-button>
-            </div>
-          </div>
-        </div>
-      </section>
-    </div>
-
-    <template #footer>
-      <div class="toolbar-manager-footer">
-        <el-button @click="resetDraftPreferences">Reset Default</el-button>
-        <span class="toolbar-manager-footer-spacer"></span>
-        <el-button @click="manageToolbarVisible = false">Cancel</el-button>
-        <el-button type="primary" :loading="savingToolbarPreferences" @click="saveManagedToolbar">
-          Save
-        </el-button>
-      </div>
-    </template>
-  </el-dialog>
 </template>
 
 <script>
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { killConnection as killConnectionApi } from '../api/connectionsApi.js'
-import {
-  loadToolbarPreferences,
-  saveToolbarPreferences,
-} from '../api/toolbarPreferencesApi.js'
+import { loadToolbarPreferences } from '../api/toolbarPreferencesApi.js'
 
 const ACTION_CATALOG = [
   { id: 'remote-files', label: 'Remote Files', accent: true },
@@ -289,18 +223,14 @@ export default {
     'open-clipboard',
     'open-processes',
     'open-one-liners',
-    'open-notification-settings',
+    'open-settings',
     'clear',
     'bottom',
   ],
 
   data() {
-    const preferences = cloneToolbarPreferences(DEFAULT_TOOLBAR_PREFERENCES)
     return {
-      toolbarPreferences: preferences,
-      draftPreferences: cloneToolbarPreferences(preferences),
-      manageToolbarVisible: false,
-      savingToolbarPreferences: false,
+      toolbarPreferences: cloneToolbarPreferences(DEFAULT_TOOLBAR_PREFERENCES),
     }
   },
 
@@ -357,9 +287,6 @@ export default {
       const byId = new Map(ACTION_CATALOG.map((item) => [item.id, item]))
       return (ids || []).map((id) => byId.get(id)).filter(Boolean)
     },
-    actionLabel(actionId) {
-      return ACTION_CATALOG.find((item) => item.id === actionId)?.label || actionId
-    },
     isActionDisabled(actionId) {
       return [
         'remote-files',
@@ -371,62 +298,10 @@ export default {
     },
     async loadManagedToolbar() {
       try {
-        const preferences = this.normalizePreferences(await loadToolbarPreferences())
-        this.toolbarPreferences = preferences
-        this.draftPreferences = this.clonePreferences(preferences)
+        this.toolbarPreferences = this.normalizePreferences(await loadToolbarPreferences())
       } catch (e) {
         this.toolbarPreferences = this.clonePreferences(DEFAULT_TOOLBAR_PREFERENCES)
-        this.draftPreferences = this.clonePreferences(this.toolbarPreferences)
         ElMessage.warning(e.message || 'Failed to load toolbar preferences; using defaults')
-      }
-    },
-    openManageToolbar() {
-      this.draftPreferences = this.clonePreferences(this.toolbarPreferences)
-      this.manageToolbarVisible = true
-    },
-    moveDraftItem(section, index, direction) {
-      const items = this.draftPreferences[section]
-      const targetIndex = index + direction
-      if (!Array.isArray(items) || targetIndex < 0 || targetIndex >= items.length) return
-      const next = [...items]
-      const [item] = next.splice(index, 1)
-      next.splice(targetIndex, 0, item)
-      this.draftPreferences = {
-        ...this.draftPreferences,
-        [section]: next,
-      }
-    },
-    moveDraftItemAcross(section, index) {
-      const targetSection = section === 'toolbar' ? 'more' : 'toolbar'
-      const sourceItems = [...(this.draftPreferences[section] || [])]
-      const targetItems = [...(this.draftPreferences[targetSection] || [])]
-      const [item] = sourceItems.splice(index, 1)
-      if (!item) return
-      targetItems.push(item)
-      this.draftPreferences = {
-        ...this.draftPreferences,
-        [section]: sourceItems,
-        [targetSection]: targetItems,
-      }
-    },
-    resetDraftPreferences() {
-      this.draftPreferences = this.clonePreferences(DEFAULT_TOOLBAR_PREFERENCES)
-    },
-    async saveManagedToolbar() {
-      if (this.savingToolbarPreferences) return
-      this.savingToolbarPreferences = true
-      try {
-        const saved = this.normalizePreferences(
-          await saveToolbarPreferences(this.draftPreferences),
-        )
-        this.toolbarPreferences = saved
-        this.draftPreferences = this.clonePreferences(saved)
-        this.manageToolbarVisible = false
-        ElMessage.success('Toolbar updated')
-      } catch (e) {
-        ElMessage.error(e.message || 'Failed to save toolbar preferences')
-      } finally {
-        this.savingToolbarPreferences = false
       }
     },
 
@@ -498,12 +373,8 @@ export default {
     },
     handleMoreCommand(command) {
       const normalizedCommand = String(command || '').trim().toLowerCase()
-      if (normalizedCommand === 'notification-settings') {
-        this.$emit('open-notification-settings')
-        return
-      }
-      if (normalizedCommand === 'manage-toolbar') {
-        this.openManageToolbar()
+      if (normalizedCommand === 'settings') {
+        this.$emit('open-settings')
         return
       }
       if (normalizedCommand.startsWith('action:')) {
@@ -731,72 +602,4 @@ export default {
 }
 
 
-.toolbar-manager-note {
-  margin-bottom: 14px;
-  font-size: 12px;
-  opacity: .65;
-}
-
-.toolbar-manager-grid {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  gap: 14px;
-}
-
-.toolbar-manager-section {
-  min-width: 0;
-  border: 1px solid var(--el-border-color-light);
-  border-radius: 9px;
-  overflow: hidden;
-}
-
-.toolbar-manager-title {
-  padding: 10px 12px;
-  font-size: 12px;
-  font-weight: 650;
-  border-bottom: 1px solid var(--el-border-color-lighter);
-  background: var(--el-fill-color-light);
-}
-
-.toolbar-manager-list {
-  min-height: 120px;
-}
-
-.toolbar-manager-row,
-.toolbar-manager-actions,
-.toolbar-manager-footer {
-  display: flex;
-  align-items: center;
-}
-
-.toolbar-manager-row {
-  min-height: 44px;
-  padding: 7px 10px 7px 12px;
-  gap: 8px;
-  border-bottom: 1px solid var(--el-border-color-lighter);
-}
-
-.toolbar-manager-row:last-child {
-  border-bottom: 0;
-}
-
-.toolbar-manager-label {
-  min-width: 0;
-  flex: 1;
-  font-size: 12px;
-}
-
-.toolbar-manager-actions {
-  gap: 2px;
-  flex: 0 0 auto;
-}
-
-.toolbar-manager-footer {
-  width: 100%;
-  gap: 8px;
-}
-
-.toolbar-manager-footer-spacer {
-  flex: 1;
-}
 </style>
