@@ -89,6 +89,10 @@ class CommandOutputArtifactService:
         prefix = self._get_prefix(normalized_category)
         timestamp = current_time.strftime(self.OUTPUT_TIME_FORMAT)
 
+        if normalized_category == self.JOB_CATEGORY:
+            label = self._clean_label_part(source_command)[:64].strip('_') or 'output'
+            return f'job_output_{timestamp}_{label}.json'
+
         if normalized_category == self.SCRIPT_CATEGORY:
             label = self._build_script_label(source_command)
         else:

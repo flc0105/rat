@@ -34,6 +34,16 @@
         <div class="background-job-card-head-right">
           <el-button
             size="small"
+            plain
+            :loading="saveOutputLoading"
+            :disabled="!safeMessages.length"
+            @click="saveOutputToArtifact"
+          >
+            Save Output
+          </el-button>
+
+          <el-button
+            size="small"
             type="danger"
             plain
             :disabled="!item.job_key || item.state === 'stopped'"
@@ -177,8 +187,16 @@
 </template>
 
 <script>
+import { ElMessage } from 'element-plus'
+
 export default {
   name: 'BackgroundJobDetailDialog',
+
+  data() {
+    return {
+      saveOutputLoading: false,
+    }
+  },
 
   props: {
     visible: {
@@ -233,6 +251,69 @@ export default {
 
     safeFiles() {
       return Array.isArray(this.files) ? this.files : []
+    },
+  },
+
+  methods: {
+    async saveOutputToArtifact() {
+      if (!this.item || !this.safeMessages.length || this.saveOutputLoading) return
+
+      const records = [...this.safeMessages]
+        .sort((a, b) => String(a?.time || '').localeCompare(String(b?.time || '')))
+        .map(message => ({
+          time: String(message?.time || ''),
+          message: String(message?.text || ''),
+        }))
+
+      const output = {
+        job: {
+          job_id: String(this.item.job_id || ''),
+          job_name: String(this.item.job_name || ''),
+          job_key: String(this.item.job_key || ''),
+          display_name: String(this.item.display_name || ''),
+          started_at: String(this.item.started_at || ''),
+          stopped_at: String(this.item.stopped_at || ''),
+        },
+        records,
+      }
+      const sourceCommand = String(
+        this.item.display_name || this.item.job_name || this.item.job_key || 'job'
+      ).trim()
+
+      this.saveOutputLoading = true
+      try {
+        const res = await fetch('/api/artifacts/command-output/save', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            content: JSON.stringify(output, null, 2),
+            category: 'job_output',
+            client_id: String(this.item.client_id || ''),
+            source: 'background_job_detail',
+            source_command: sourceCommand,
+            job_id: String(this.item.job_id || ''),
+            job_name: String(this.item.job_name || ''),
+            job_key: String(this.item.job_key || ''),
+            extra: {
+              format: 'json',
+              record_count: records.length,
+            },
+          }),
+        })
+
+        const json = await res.json()
+        if (!res.ok || json.code !== 0) {
+          throw new Error(json.message || 'Failed to save job output')
+        }
+
+        ElMessage.success('Job output saved to Command Output')
+      } catch (e) {
+        ElMessage.error(e.message || 'Failed to save job output')
+      } finally {
+        this.saveOutputLoading = false
+      }
     },
   },
 }
