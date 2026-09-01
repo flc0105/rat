@@ -122,6 +122,7 @@ class WebConnectionService:
             'python_execution_mode': info.get_extra('python_execution_mode'),
             'remote_watchdog_enabled': info.get_extra('remote_watchdog_enabled'),
             'local_watchdog_enabled': info.get_extra('local_watchdog_enabled'),
+            'variable_manifest': list(info.get_extra('variable_manifest') or []),
         }
 
     def _sync_recent_online_connections(self, active_connections: list[dict]):

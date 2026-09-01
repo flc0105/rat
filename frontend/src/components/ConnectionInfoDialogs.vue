@@ -133,6 +133,40 @@
             </div>
           </div>
         </el-tab-pane>
+
+        <el-tab-pane
+          label="Variables"
+          name="variables"
+          class="connection-info-tab-pane"
+        >
+          <div class="connection-info-tab-scroll">
+            <div
+              v-if="variableManifestItems.length"
+              class="connection-info-stats-grid"
+            >
+              <div
+                v-for="item in variableManifestItems"
+                :key="item.template"
+                class="connection-info-stat"
+              >
+                <div class="connection-info-stat-label connection-variable-template mono">
+                  {{ item.template }}
+                </div>
+
+                <div class="connection-info-stat-value connection-variable-description">
+                  {{ item.description || '-' }}
+                </div>
+              </div>
+            </div>
+
+            <div
+              v-else
+              class="empty-state compact"
+            >
+              No command variables available
+            </div>
+          </div>
+        </el-tab-pane>
       </el-tabs>
     </div>
   </el-dialog>
@@ -158,6 +192,7 @@
     class="connection-config-editor-dialog"
     modal-class="connection-config-editor-overlay"
     :close-on-click-modal="false"
+    @opened="handleRuntimeConfigEditorOpened"
   >
     <div
       v-if="runtimeConfigEditorItem"
@@ -196,13 +231,14 @@
       <div class="connection-config-editor-control">
         <el-select
           v-if="runtimeConfigEditorChoices.length"
-          :key="`${runtimeConfigEditorItem.key}:${formatRuntimeConfigValue(runtimeConfigEditorItem.value)}`"
+          :key="`${runtimeConfigEditorItem.key}:${runtimeConfigEditorSelectRevision}`"
           v-model="runtimeConfigEditorValue"
           style="width: 100%"
+          @visible-change="handleRuntimeConfigSelectVisibleChange"
         >
           <el-option
             v-for="choice in runtimeConfigEditorChoices"
-            :key="String(choice)"
+            :key="`${runtimeConfigEditorItem.key}:${String(choice)}`"
             :label="String(choice)"
             :value="choice"
           />
@@ -305,6 +341,7 @@ export default {
       runtimeConfigEditorVisible: false,
       runtimeConfigEditorItem: null,
       runtimeConfigEditorValue: '',
+      runtimeConfigEditorSelectRevision: 0,
       runtimeConfigSaving: false,
     }
   },
@@ -361,6 +398,21 @@ export default {
         choice,
         this.runtimeConfigEditorItem?.value_type,
       ))
+    },
+
+    variableManifestItems() {
+      const manifest = this.currentConnection?.variable_manifest
+      if (!Array.isArray(manifest)) return []
+
+      return manifest
+        .filter(item => item && item.template)
+        .map(item => ({
+          ...item,
+          template: String(item.template || '').trim(),
+          description: String(item.description || '').trim(),
+          namespace: String(item.namespace || '').trim(),
+          name: String(item.name || '').trim(),
+        }))
     },
   },
 
@@ -575,7 +627,36 @@ export default {
 
       this.runtimeConfigEditorItem = item
       this.runtimeConfigEditorValue = this.normalizeRuntimeConfigEditorValue(item)
+      this.runtimeConfigEditorSelectRevision += 1
       this.runtimeConfigEditorVisible = true
+
+      this.$nextTick(() => {
+        this.syncRuntimeConfigEditorChoiceFromCurrent()
+      })
+    },
+
+    handleRuntimeConfigEditorOpened() {
+      this.syncRuntimeConfigEditorChoiceFromCurrent()
+      this.runtimeConfigEditorSelectRevision += 1
+      this.$nextTick(() => {
+        this.syncRuntimeConfigEditorChoiceFromCurrent()
+      })
+    },
+
+    handleRuntimeConfigSelectVisibleChange(visible) {
+      if (!visible) return
+      this.$nextTick(() => {
+        this.syncRuntimeConfigEditorChoiceFromCurrent()
+      })
+    },
+
+    syncRuntimeConfigEditorChoiceFromCurrent() {
+      const item = this.runtimeConfigEditorItem
+      if (!item || !this.runtimeConfigEditorChoices.length) return
+
+      const currentValue = this.normalizeRuntimeConfigEditorValue(item)
+      const matchedChoice = this.runtimeConfigEditorChoices.find(choice => Object.is(choice, currentValue))
+      this.runtimeConfigEditorValue = matchedChoice !== undefined ? matchedChoice : currentValue
     },
 
     normalizeRuntimeConfigEditorValue(item) {
@@ -609,7 +690,7 @@ export default {
         return Number.isFinite(numeric) ? numeric : value
       }
       if (value === null || value === undefined) return ''
-      return String(value)
+      return String(value).trim()
     },
 
     async saveRuntimeConfigEditorItem() {
@@ -783,6 +864,16 @@ export default {
   background: #f3f7ff;
   border-color: rgba(37, 99, 235, 0.18);
   box-shadow: 0 0 0 1px rgba(37, 99, 235, 0.05);
+}
+
+.connection-variable-template {
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+.connection-variable-description {
+  white-space: normal;
+  word-break: break-word;
 }
 
 .connection-config-stat-editable {

@@ -70,6 +70,7 @@ class ClientInfoBuilder:
             'local_watchdog_enabled': LOCAL_WATCHDOG_ENABLED,
 
             'command_manifest': self._build_command_manifest(),
+            'variable_manifest': self._build_variable_manifest(),
             'system_paths': get_system_paths(),
         }
         return info
@@ -84,6 +85,17 @@ class ClientInfoBuilder:
         except Exception:
             command_manifest = []
         return command_manifest
+
+    def _build_variable_manifest(self):
+        variable_manifest = []
+        try:
+            if self.command_executor is not None:
+                getter = getattr(self.command_executor, 'get_command_variable_manifest', None)
+                if callable(getter):
+                    variable_manifest = getter()
+        except Exception:
+            variable_manifest = []
+        return variable_manifest
 
     def _build_process_info(self, platform_info):
         try:

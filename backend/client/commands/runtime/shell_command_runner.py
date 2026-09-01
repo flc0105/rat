@@ -1,6 +1,7 @@
 import inspect
 from typing import Any
 
+from client.commands.runtime.command_variable_resolver import CommandVariableResolutionError
 from client.commands.runtime.request import CommandExecutionRequest
 from core.utils.command_output import render_structured_result
 from core.utils.parsing import parse
@@ -52,8 +53,16 @@ class ShellCommandRunner:
         return func()
 
     def execute(self, request: CommandExecutionRequest, command):
+        try:
+            resolved_command = self.executor.command_variable_resolver.resolve(
+                command,
+                command_id=request.command_id,
+            )
+        except CommandVariableResolutionError as e:
+            return 0, f'Failed to resolve command variable: {e}'
+
         def _invoke(commands):
-            name, arg = parse(command)
+            name, arg = parse(resolved_command)
 
             builtin_command = self._resolve_builtin_command(commands, name)
             if builtin_command:
@@ -63,7 +72,7 @@ class ShellCommandRunner:
                     output_format=self._resolve_builtin_output_format(arg),
                 )
 
-            default_command = self._resolve_default_command(commands, command)
+            default_command = self._resolve_default_command(commands, resolved_command)
             return default_command()
 
         return self.executor.execute_bound_request(request, _invoke)

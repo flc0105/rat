@@ -2,12 +2,12 @@
   "toolbar": [
     "remote-files",
     "artifacts",
+    "info",
     "pty",
     "clipboard",
     "screen-view"
   ],
   "more": [
-    "info",
     "history",
     "scripts",
     "jobs",

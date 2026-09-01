@@ -2,6 +2,7 @@ from typing import Any, Callable
 
 from client.commands.runtime.acmd_runner import ArgumentCommandRunner
 from client.commands.runtime.catalog import CommandCatalog
+from client.commands.runtime.command_variable_resolver import CommandVariableResolver
 from client.commands.runtime.context_store import CommandExecutionContextStore
 from client.commands.runtime.request import CommandExecutionRequest
 from client.commands.runtime.script_runner import ScriptCommandRunner
@@ -22,6 +23,7 @@ class CommandExecutor:
         self.socket = socket
         self.catalog = CommandCatalog(socket)
         self.context_store = CommandExecutionContextStore()
+        self.command_variable_resolver = CommandVariableResolver(socket)
         self.shell_command_runner = ShellCommandRunner(self)
         self.argument_command_runner = ArgumentCommandRunner(self)
         self.script_command_runner = ScriptCommandRunner(self)
@@ -34,6 +36,12 @@ class CommandExecutor:
         if hasattr(commands, 'set_command_runtime'):
             commands.set_command_runtime(self)
         return commands
+
+    def get_command_variable_manifest(self):
+        """
+        获取普通 command 支持的 Client 动态变量清单。
+        """
+        return self.command_variable_resolver.get_manifest_payload()
 
     def get_argument_command_registry(self):
         """
