@@ -207,6 +207,10 @@ export default {
       type: Object,
       default: null,
     },
+    currentConnection: {
+      type: Object,
+      default: null,
+    },
     messages: {
       type: Array,
       default: () => [],
@@ -255,14 +259,22 @@ export default {
   },
 
   methods: {
+    formatJobOutputTime(value) {
+      const text = String(value || '').trim()
+      if (!text) return ''
+
+      // 与前端时间显示保持一致，但保留原始小数秒。
+      return text.replace('T', ' ')
+    },
+
     async saveOutputToArtifact() {
       if (!this.item || !this.safeMessages.length || this.saveOutputLoading) return
 
       const records = [...this.safeMessages]
         .sort((a, b) => String(a?.time || '').localeCompare(String(b?.time || '')))
         .map(message => ({
-          time: String(message?.time || ''),
-          message: String(message?.text || ''),
+          time: this.formatJobOutputTime(message?.time),
+          message: this.formatBackgroundJobMessageText(message?.text || ''),
         }))
 
       const output = {
@@ -271,8 +283,11 @@ export default {
           job_name: String(this.item.job_name || ''),
           job_key: String(this.item.job_key || ''),
           display_name: String(this.item.display_name || ''),
-          started_at: String(this.item.started_at || ''),
-          stopped_at: String(this.item.stopped_at || ''),
+          client_id: String(this.item.client_id || this.currentConnection?.client_id || ''),
+          hostname: String(this.currentConnection?.hostname || ''),
+          machine_id: String(this.currentConnection?.machine_id || ''),
+          started_at: this.formatJobOutputTime(this.item.started_at),
+          stopped_at: this.formatJobOutputTime(this.item.stopped_at),
         },
         records,
       }

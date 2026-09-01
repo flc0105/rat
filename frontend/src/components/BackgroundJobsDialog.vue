@@ -303,6 +303,7 @@
   <BackgroundJobDetailDialog
     v-model:visible="backgroundJobDetailDialogVisible"
     :item="selectedBackgroundJob"
+    :current-connection="currentConnection"
     :messages="selectedBackgroundJobMessagesDesc || []"
     :files="selectedBackgroundJob?.files || []"
     :build-background-job-state-tag-type="buildBackgroundJobStateTagType"
