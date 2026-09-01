@@ -92,6 +92,7 @@
                 <TerminalToolbar
                   ref="terminalToolbarRef"
                   :selected-id="selectedId"
+                  :current-connection="currentConnection"
                   :current-connection-offline="isCurrentConnectionOffline"
                   :device-sidebar-collapsed="deviceSidebarCollapsed"
                   :connection-info-collapsed="connectionInfoCollapsed"

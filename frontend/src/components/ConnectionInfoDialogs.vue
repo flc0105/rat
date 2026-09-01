@@ -196,6 +196,7 @@
       <div class="connection-config-editor-control">
         <el-select
           v-if="runtimeConfigEditorChoices.length"
+          :key="`${runtimeConfigEditorItem.key}:${formatRuntimeConfigValue(runtimeConfigEditorItem.value)}`"
           v-model="runtimeConfigEditorValue"
           style="width: 100%"
         >
@@ -338,10 +339,6 @@ export default {
         { label: 'Launch Command', value: conn.launch_command || '-' },
         { label: 'Username', value: conn.username || '-' },
         { label: 'Python Version', value: conn.python_ver || '-' },
-        { label: 'HTTP Transfer Mode', value: conn.http_transfer_mode || '-' },
-        { label: 'Python Execution Mode', value: conn.python_execution_mode || '-' },
-        { label: 'Remote Watchdog Enabled', value: conn.remote_watchdog_enabled },
-        { label: 'Local Watchdog Enabled', value: conn.local_watchdog_enabled },
         { label: 'Reported Jobs', value: this.jobCount },
         { label: 'Command Count', value: this.connectionInfoClientCommands.length },
       ]
@@ -358,7 +355,12 @@ export default {
 
     runtimeConfigEditorChoices() {
       const choices = this.runtimeConfigEditorItem?.choices
-      return Array.isArray(choices) ? choices : []
+      if (!Array.isArray(choices)) return []
+
+      return choices.map(choice => this.normalizeRuntimeConfigChoiceValue(
+        choice,
+        this.runtimeConfigEditorItem?.value_type,
+      ))
     },
   },
 
@@ -578,12 +580,33 @@ export default {
 
     normalizeRuntimeConfigEditorValue(item) {
       const valueType = String(item?.value_type || '')
-      const value = item?.value
+      const choices = Array.isArray(item?.choices) ? item.choices : []
+      const value = this.normalizeRuntimeConfigChoiceValue(item?.value, valueType)
+
+      if (choices.length) {
+        const matchedChoice = choices
+          .map(choice => this.normalizeRuntimeConfigChoiceValue(choice, valueType))
+          .find(choice => Object.is(choice, value))
+        if (matchedChoice !== undefined) return matchedChoice
+      }
 
       if (valueType === 'boolean') return Boolean(value)
       if (valueType === 'integer' || valueType === 'float') {
         const numeric = Number(value)
         return Number.isFinite(numeric) ? numeric : 0
+      }
+      if (value === null || value === undefined) return ''
+      return String(value)
+    },
+
+    normalizeRuntimeConfigChoiceValue(value, valueType) {
+      if (valueType === 'boolean') {
+        if (typeof value === 'string') return value.trim().toLowerCase() === 'true'
+        return Boolean(value)
+      }
+      if (valueType === 'integer' || valueType === 'float') {
+        const numeric = Number(value)
+        return Number.isFinite(numeric) ? numeric : value
       }
       if (value === null || value === undefined) return ''
       return String(value)
@@ -788,7 +811,7 @@ export default {
   color: #c2410c;
   font-size: 10px;
   line-height: 16px;
-  font-weight: 600;
+  font-weight: 400;
   text-transform: none;
   letter-spacing: 0;
 }
@@ -976,8 +999,25 @@ export default {
 </style>
 
 <style>
-/* ConnectionInfoDialogs: 信息卡和命令列表由组件内部管理滚动。 */
-.connection-info-overlay .el-dialog__body,
+/* ConnectionInfoDialogs: 主对话框固定高度，Tab 内容只在内部滚动。 */
+.connection-info-overlay .el-dialog {
+  height: 680px;
+  max-height: 88vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.connection-info-overlay .el-dialog__header {
+  flex: 0 0 auto;
+}
+
+.connection-info-overlay .el-dialog__body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden !important;
+}
+
 .connection-info-value-overlay .el-dialog__body {
   overflow: hidden !important;
 }

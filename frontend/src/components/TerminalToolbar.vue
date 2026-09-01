@@ -58,7 +58,7 @@
 
 
 
-      <span class="terminal-title">Interactive Shell</span>
+      <span class="terminal-title">{{ terminalIdentity }}</span>
     </div>
 
     <div class="terminal-tools">
@@ -191,6 +191,11 @@ export default {
       type: [String, Number],
       default: '',
     },
+    currentConnection: {
+      type: Object,
+      default: null,
+    },
+
     currentConnectionOffline: {
       type: Boolean,
       default: false,
@@ -235,6 +240,17 @@ export default {
   },
 
   computed: {
+    terminalIdentity() {
+      const connection = this.currentConnection || {}
+      const rawUsername = String(connection.username || '').trim()
+      const username = rawUsername.includes('\\')
+        ? rawUsername.split('\\').filter(Boolean).pop()
+        : rawUsername
+      const hostname = String(connection.hostname || '').trim()
+
+      if (username && hostname) return `${username}@${hostname}`
+      return username || hostname || 'Interactive Shell'
+    },
     deviceActionDisabled() {
       return !this.selectedId || this.currentConnectionOffline
     },
