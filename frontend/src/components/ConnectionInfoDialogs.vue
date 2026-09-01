@@ -192,7 +192,6 @@
     class="connection-config-editor-dialog"
     modal-class="connection-config-editor-overlay"
     :close-on-click-modal="false"
-    @opened="handleRuntimeConfigEditorOpened"
   >
     <div
       v-if="runtimeConfigEditorItem"
@@ -231,16 +230,14 @@
       <div class="connection-config-editor-control">
         <el-select
           v-if="runtimeConfigEditorChoices.length"
-          :key="`${runtimeConfigEditorItem.key}:${runtimeConfigEditorSelectRevision}`"
           v-model="runtimeConfigEditorValue"
           style="width: 100%"
-          @visible-change="handleRuntimeConfigSelectVisibleChange"
         >
           <el-option
             v-for="choice in runtimeConfigEditorChoices"
-            :key="`${runtimeConfigEditorItem.key}:${String(choice)}`"
-            :label="String(choice)"
-            :value="choice"
+            :key="`${runtimeConfigEditorItem.key}:${choice.value}`"
+            :label="choice.label"
+            :value="choice.value"
           />
         </el-select>
 
@@ -341,7 +338,6 @@ export default {
       runtimeConfigEditorVisible: false,
       runtimeConfigEditorItem: null,
       runtimeConfigEditorValue: '',
-      runtimeConfigEditorSelectRevision: 0,
       runtimeConfigSaving: false,
     }
   },
@@ -394,10 +390,13 @@ export default {
       const choices = this.runtimeConfigEditorItem?.choices
       if (!Array.isArray(choices)) return []
 
-      return choices.map(choice => this.normalizeRuntimeConfigChoiceValue(
-        choice,
-        this.runtimeConfigEditorItem?.value_type,
-      ))
+      return choices.map(choice => {
+        const value = this.normalizeRuntimeConfigSelectValue(choice)
+        return {
+          label: String(choice),
+          value,
+        }
+      })
     },
 
     variableManifestItems() {
@@ -627,50 +626,21 @@ export default {
 
       this.runtimeConfigEditorItem = item
       this.runtimeConfigEditorValue = this.normalizeRuntimeConfigEditorValue(item)
-      this.runtimeConfigEditorSelectRevision += 1
       this.runtimeConfigEditorVisible = true
-
-      this.$nextTick(() => {
-        this.syncRuntimeConfigEditorChoiceFromCurrent()
-      })
-    },
-
-    handleRuntimeConfigEditorOpened() {
-      this.syncRuntimeConfigEditorChoiceFromCurrent()
-      this.runtimeConfigEditorSelectRevision += 1
-      this.$nextTick(() => {
-        this.syncRuntimeConfigEditorChoiceFromCurrent()
-      })
-    },
-
-    handleRuntimeConfigSelectVisibleChange(visible) {
-      if (!visible) return
-      this.$nextTick(() => {
-        this.syncRuntimeConfigEditorChoiceFromCurrent()
-      })
-    },
-
-    syncRuntimeConfigEditorChoiceFromCurrent() {
-      const item = this.runtimeConfigEditorItem
-      if (!item || !this.runtimeConfigEditorChoices.length) return
-
-      const currentValue = this.normalizeRuntimeConfigEditorValue(item)
-      const matchedChoice = this.runtimeConfigEditorChoices.find(choice => Object.is(choice, currentValue))
-      this.runtimeConfigEditorValue = matchedChoice !== undefined ? matchedChoice : currentValue
     },
 
     normalizeRuntimeConfigEditorValue(item) {
-      const valueType = String(item?.value_type || '')
       const choices = Array.isArray(item?.choices) ? item.choices : []
-      const value = this.normalizeRuntimeConfigChoiceValue(item?.value, valueType)
-
       if (choices.length) {
+        const currentValue = this.normalizeRuntimeConfigSelectValue(item?.value)
         const matchedChoice = choices
-          .map(choice => this.normalizeRuntimeConfigChoiceValue(choice, valueType))
-          .find(choice => Object.is(choice, value))
-        if (matchedChoice !== undefined) return matchedChoice
+          .map(choice => this.normalizeRuntimeConfigSelectValue(choice))
+          .find(choice => choice === currentValue)
+        return matchedChoice !== undefined ? matchedChoice : currentValue
       }
 
+      const valueType = String(item?.value_type || '')
+      const value = item?.value
       if (valueType === 'boolean') return Boolean(value)
       if (valueType === 'integer' || valueType === 'float') {
         const numeric = Number(value)
@@ -680,15 +650,7 @@ export default {
       return String(value)
     },
 
-    normalizeRuntimeConfigChoiceValue(value, valueType) {
-      if (valueType === 'boolean') {
-        if (typeof value === 'string') return value.trim().toLowerCase() === 'true'
-        return Boolean(value)
-      }
-      if (valueType === 'integer' || valueType === 'float') {
-        const numeric = Number(value)
-        return Number.isFinite(numeric) ? numeric : value
-      }
+    normalizeRuntimeConfigSelectValue(value) {
       if (value === null || value === undefined) return ''
       return String(value).trim()
     },

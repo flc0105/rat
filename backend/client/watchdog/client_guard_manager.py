@@ -108,6 +108,9 @@ class ClientGuardManager:
         if self._local_watchdog_feeder is not None:
             self._local_watchdog_feeder.stop()
 
+        # 配置热更新后的 restart 必须按最新 runtime_config 重建 watchdog。
+        self._watchdog_process = None
+        self._local_watchdog_feeder = None
         self._started = False
 
 
