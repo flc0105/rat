@@ -31,3 +31,11 @@ MSG_TYPE_CLIPBOARD_GET = 'clipboard_get'
 MSG_TYPE_CLIPBOARD_SET = 'clipboard_set'
 MSG_TYPE_CLIPBOARD_RESULT = 'clipboard_result'
 
+MSG_TYPE_MONITOR_OPEN = 'monitor_open'
+MSG_TYPE_MONITOR_CONFIG = 'monitor_config'
+MSG_TYPE_MONITOR_CLOSE = 'monitor_close'
+MSG_TYPE_MONITOR_OPENED = 'monitor_opened'
+MSG_TYPE_MONITOR_SNAPSHOT = 'monitor_snapshot'
+MSG_TYPE_MONITOR_ERROR = 'monitor_error'
+MSG_TYPE_MONITOR_CLOSED = 'monitor_closed'
+

@@ -149,5 +149,27 @@ class ClientInboundMessageRouter(BaseMessageRouter):
         self.connection.runtime.pty_manager.close_session(data.get('pty_session_id') or '')
         return None
 
+    def handle_monitor_open_message(self, data: dict):
+        self.connection.runtime.device_monitor_manager.open_session(
+            data.get('monitor_session_id') or '',
+            channels=data.get('channels'),
+            intervals=data.get('intervals'),
+        )
+        return None
+
+    def handle_monitor_config_message(self, data: dict):
+        self.connection.runtime.device_monitor_manager.update_session(
+            data.get('monitor_session_id') or '',
+            channels=data.get('channels'),
+            intervals=data.get('intervals'),
+        )
+        return None
+
+    def handle_monitor_close_message(self, data: dict):
+        self.connection.runtime.device_monitor_manager.close_session(
+            data.get('monitor_session_id') or '',
+        )
+        return None
+
     def handle_heartbeat_ack_message(self, data: dict):
         return None

@@ -502,6 +502,12 @@ class WebConnectionService:
         session.context.on_clipboard_result = (
             lambda data: clipboard_service.handle_client_result(session.session_info.client_id, data)
         )
+
+        monitor_service = self.server.web_service.device_monitor_api.device_monitor_session_service
+        session.context.on_monitor_opened = monitor_service.handle_client_opened
+        session.context.on_monitor_snapshot = monitor_service.handle_client_snapshot
+        session.context.on_monitor_error = monitor_service.handle_client_error
+        session.context.on_monitor_closed = monitor_service.handle_client_closed
         return session
 
     def handle_connection_registered(self, session: ClientSession):
@@ -537,6 +543,12 @@ class WebConnectionService:
             pass
         try:
             self.server.web_service.clipboard_api.clipboard_session_service.handle_client_disconnected(
+                session.session_info.client_id
+            )
+        except Exception:
+            pass
+        try:
+            self.server.web_service.device_monitor_api.device_monitor_session_service.handle_client_disconnected(
                 session.session_info.client_id
             )
         except Exception:

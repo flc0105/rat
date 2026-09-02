@@ -26,6 +26,13 @@ from core.protocol.message_types import (
     MSG_TYPE_CLIPBOARD_GET,
     MSG_TYPE_CLIPBOARD_SET,
     MSG_TYPE_CLIPBOARD_RESULT,
+    MSG_TYPE_MONITOR_OPEN,
+    MSG_TYPE_MONITOR_CONFIG,
+    MSG_TYPE_MONITOR_CLOSE,
+    MSG_TYPE_MONITOR_OPENED,
+    MSG_TYPE_MONITOR_SNAPSHOT,
+    MSG_TYPE_MONITOR_ERROR,
+    MSG_TYPE_MONITOR_CLOSED,
 )
 
 
@@ -122,6 +129,27 @@ class BaseMessageRouter:
         if message_type == MSG_TYPE_CLIPBOARD_RESULT:
             return self.handle_clipboard_result_message(data)
 
+        if message_type == MSG_TYPE_MONITOR_OPEN:
+            return self.handle_monitor_open_message(data)
+
+        if message_type == MSG_TYPE_MONITOR_CONFIG:
+            return self.handle_monitor_config_message(data)
+
+        if message_type == MSG_TYPE_MONITOR_CLOSE:
+            return self.handle_monitor_close_message(data)
+
+        if message_type == MSG_TYPE_MONITOR_OPENED:
+            return self.handle_monitor_opened_message(data)
+
+        if message_type == MSG_TYPE_MONITOR_SNAPSHOT:
+            return self.handle_monitor_snapshot_message(data)
+
+        if message_type == MSG_TYPE_MONITOR_ERROR:
+            return self.handle_monitor_error_message(data)
+
+        if message_type == MSG_TYPE_MONITOR_CLOSED:
+            return self.handle_monitor_closed_message(data)
+
         return self.handle_unknown_message(data)
 
     def handle_result_message(self, data: dict):
@@ -204,6 +232,27 @@ class BaseMessageRouter:
         return None
 
     def handle_clipboard_result_message(self, data: dict):
+        return None
+
+    def handle_monitor_open_message(self, data: dict):
+        return None
+
+    def handle_monitor_config_message(self, data: dict):
+        return None
+
+    def handle_monitor_close_message(self, data: dict):
+        return None
+
+    def handle_monitor_opened_message(self, data: dict):
+        return None
+
+    def handle_monitor_snapshot_message(self, data: dict):
+        return None
+
+    def handle_monitor_error_message(self, data: dict):
+        return None
+
+    def handle_monitor_closed_message(self, data: dict):
         return None
 
     def handle_unknown_message(self, data: dict):

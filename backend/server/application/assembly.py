@@ -28,6 +28,7 @@ from server.application.tasks.task_store import WebTaskStore
 from server.application.terminal.pty_session_service import PtySessionService
 from server.application.screen.screen_view_session_service import ScreenViewSessionService
 from server.application.clipboard.clipboard_session_service import ClipboardSessionService
+from server.application.monitor.device_monitor_session_service import DeviceMonitorSessionService
 from server.application.web.agent_api import WebAgentApi
 from server.application.web.artifact_api import WebArtifactApi
 from server.application.web.command_catalog_api import WebCommandCatalogApi
@@ -48,6 +49,7 @@ from server.application.web.notification_preferences_api import WebNotificationP
 from server.application.web.notification_history_api import WebNotificationHistoryApi
 from server.application.web.screen_view_api import WebScreenViewApi
 from server.application.web.clipboard_api import WebClipboardApi
+from server.application.web.device_monitor_api import WebDeviceMonitorApi
 from server.config.config import (
     EXTERNAL_TOOL_META_PATH,
     EXTERNAL_TOOL_PACKAGE_PATH,
@@ -161,6 +163,7 @@ class ServerApplicationAssembly:
         self.pty_session_service = PtySessionService(self.server, event_bus=self.event_bus)
         self.screen_view_session_service = ScreenViewSessionService(self.server, event_bus=self.event_bus)
         self.clipboard_session_service = ClipboardSessionService(self.server)
+        self.device_monitor_session_service = DeviceMonitorSessionService(self.server, event_bus=self.event_bus)
 
         self.command_completion_service = ServerCommandCompletionService(
             server=self.server,
@@ -276,6 +279,10 @@ class ServerApplicationAssembly:
         self.clipboard_api = WebClipboardApi(
             clipboard_session_service=self.clipboard_session_service,
             artifact_service=self.artifact_service,
+        )
+
+        self.device_monitor_api = WebDeviceMonitorApi(
+            device_monitor_session_service=self.device_monitor_session_service,
         )
 
         self._wire_cross_dependencies()

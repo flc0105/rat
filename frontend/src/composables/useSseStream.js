@@ -394,6 +394,16 @@ export default {
                 }
             });
 
+            es.addEventListener('device_monitor_snapshot', (event) => {
+                const payload = JSON.parse(event.data || '{}');
+                this.$refs.connectionInfoDialogRef?.handleDeviceMonitorSnapshot?.(payload);
+            });
+
+            es.addEventListener('device_monitor_status', (event) => {
+                const payload = JSON.parse(event.data || '{}');
+                this.$refs.connectionInfoDialogRef?.handleDeviceMonitorStatus?.(payload);
+            });
+
             es.addEventListener('connection_online', (event) => {
                 const payload = JSON.parse(event.data);
                 const conn = payload.connection;

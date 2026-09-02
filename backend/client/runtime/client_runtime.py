@@ -3,6 +3,7 @@ from client.jobs.core.manager import JobManager
 from client.pty.manager import PtyManager
 from client.screen.manager import ScreenViewManager
 from client.clipboard.manager import ClipboardManager
+from client.monitor.manager import DeviceMonitorManager
 
 
 class ClientRuntime:
@@ -15,6 +16,7 @@ class ClientRuntime:
     - pty_manager：交互式 PTY 会话
     - screen_view_manager：只读屏幕预览会话
     - clipboard_manager：显式远程剪贴板桥接
+    - device_monitor_manager：按需实时设备监控会话
     """
 
     def __init__(self, connection):
@@ -24,6 +26,7 @@ class ClientRuntime:
         self.pty_manager = PtyManager(connection)
         self.screen_view_manager = ScreenViewManager(connection)
         self.clipboard_manager = ClipboardManager(connection)
+        self.device_monitor_manager = DeviceMonitorManager(connection)
 
     def handle_connection_lost(self) -> list[str]:
         """
@@ -32,4 +35,5 @@ class ClientRuntime:
         stopped_jobs = self.job_manager.handle_connection_lost()
         self.pty_manager.close_all_sessions(notify=False)
         self.screen_view_manager.close_all_sessions(notify=False)
+        self.device_monitor_manager.close_all_sessions(notify=False)
         return stopped_jobs

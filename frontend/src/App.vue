@@ -280,6 +280,7 @@
     :selected-id="selectedId"
     :current-connection="currentConnection"
     :status-now-tick="statusNowTick"
+    :tab-id="tabId"
   />
 
   <ProcessDialogs

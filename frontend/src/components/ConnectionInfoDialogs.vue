@@ -44,6 +44,197 @@
         </el-tab-pane>
 
         <el-tab-pane
+          label="Dashboard"
+          name="dashboard"
+          class="connection-info-tab-pane"
+        >
+          <div class="connection-info-tab-scroll monitor-dashboard-scroll">
+            <div class="monitor-dashboard-head">
+              <div>
+                <div class="monitor-dashboard-title">Device Dashboard</div>
+                <div class="monitor-dashboard-subtitle">
+                  {{ currentConnection?.hostname || selectedId || 'Device' }}
+                </div>
+              </div>
+
+              <div class="monitor-live-block">
+                <div
+                  class="monitor-live-badge"
+                  :class="`monitor-live-${monitorDisplayState}`"
+                >
+                  <span class="monitor-live-dot"></span>
+                  {{ monitorDisplayLabel }}
+                </div>
+                <div class="monitor-updated-text">
+                  {{ monitorUpdatedText }}
+                </div>
+              </div>
+            </div>
+
+            <div
+              v-if="monitorError"
+              class="monitor-dashboard-error"
+            >
+              {{ monitorError }}
+            </div>
+
+            <div class="monitor-overview-grid">
+              <div class="monitor-overview-card">
+                <div class="monitor-card-label">CPU</div>
+                <div class="monitor-card-value">{{ formatPercent(monitorSystem.cpu_percent) }}</div>
+                <el-progress
+                  :percentage="normalizePercent(monitorSystem.cpu_percent)"
+                  :show-text="false"
+                  :stroke-width="6"
+                />
+                <div class="monitor-card-meta">
+                  {{ Number(monitorSystem.cpu_count || 0) || '-' }} cores
+                </div>
+              </div>
+
+              <div class="monitor-overview-card">
+                <div class="monitor-card-label">Memory</div>
+                <div class="monitor-card-value">{{ formatPercent(monitorSystem.memory?.percent) }}</div>
+                <el-progress
+                  :percentage="normalizePercent(monitorSystem.memory?.percent)"
+                  :show-text="false"
+                  :stroke-width="6"
+                />
+                <div class="monitor-card-meta">
+                  {{ formatUsagePair(monitorSystem.memory?.used, monitorSystem.memory?.total) }}
+                </div>
+                <div class="monitor-card-meta monitor-card-meta-secondary">
+                  Swap {{ formatUsagePair(monitorSystem.swap?.used, monitorSystem.swap?.total) }}
+                </div>
+              </div>
+
+              <div class="monitor-overview-card">
+                <div class="monitor-card-label">Battery</div>
+                <template v-if="monitorBattery.available">
+                  <div class="monitor-card-value">{{ formatPercent(monitorBattery.percent) }}</div>
+                  <el-progress
+                    :percentage="normalizePercent(monitorBattery.percent)"
+                    :show-text="false"
+                    :stroke-width="6"
+                  />
+                  <div class="monitor-card-meta">
+                    {{ monitorBattery.plugged ? 'Charging / AC Power' : 'On Battery' }}
+                  </div>
+                </template>
+                <template v-else>
+                  <div class="monitor-card-value monitor-card-value-muted">—</div>
+                  <div class="monitor-card-empty-line"></div>
+                  <div class="monitor-card-meta">No battery</div>
+                </template>
+              </div>
+
+              <div class="monitor-overview-card">
+                <div class="monitor-card-label">Runtime</div>
+                <div class="monitor-card-value monitor-runtime-value">
+                  {{ formatUptime(monitorSystem.uptime_seconds) }}
+                </div>
+                <div class="monitor-runtime-row">
+                  <span>Processes</span>
+                  <strong>{{ Number(monitorSystem.process_count || 0) || '-' }}</strong>
+                </div>
+                <div class="monitor-runtime-row">
+                  <span>Sample</span>
+                  <strong>500 ms</strong>
+                </div>
+              </div>
+            </div>
+
+            <div class="monitor-section">
+              <div class="monitor-section-head">
+                <div>
+                  <div class="monitor-section-title">Network</div>
+                  <div class="monitor-section-subtitle">
+                    {{ monitorNetworkInterfaceText }}
+                  </div>
+                </div>
+              </div>
+
+              <div class="monitor-network-grid">
+                <div class="monitor-network-item">
+                  <span class="monitor-network-arrow">↓</span>
+                  <div>
+                    <div class="monitor-network-label">Download</div>
+                    <div class="monitor-network-value">
+                      {{ formatRate(monitorNetwork.rx_bytes_per_sec) }}
+                    </div>
+                  </div>
+                </div>
+
+                <div class="monitor-network-item">
+                  <span class="monitor-network-arrow">↑</span>
+                  <div>
+                    <div class="monitor-network-label">Upload</div>
+                    <div class="monitor-network-value">
+                      {{ formatRate(monitorNetwork.tx_bytes_per_sec) }}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="monitor-section monitor-storage-section">
+              <div class="monitor-section-head">
+                <div>
+                  <div class="monitor-section-title">Storage</div>
+                  <div class="monitor-section-subtitle">Mounted user-visible volumes</div>
+                </div>
+                <span class="monitor-volume-count">
+                  {{ monitorVolumes.length }} {{ monitorVolumes.length === 1 ? 'volume' : 'volumes' }}
+                </span>
+              </div>
+
+              <div
+                v-if="monitorVolumes.length"
+                class="monitor-storage-grid"
+              >
+                <div
+                  v-for="volume in monitorVolumes"
+                  :key="`${volume.device}-${volume.mountpoint}`"
+                  class="monitor-storage-card"
+                >
+                  <div class="monitor-storage-title-row">
+                    <div class="monitor-storage-title-wrap">
+                      <strong>{{ volume.name || volume.mountpoint || 'Volume' }}</strong>
+                      <span
+                        v-if="volume.system"
+                        class="monitor-storage-system-badge"
+                      >System</span>
+                    </div>
+                    <span>{{ formatPercent(volume.percent) }}</span>
+                  </div>
+
+                  <el-progress
+                    :percentage="normalizePercent(volume.percent)"
+                    :show-text="false"
+                    :stroke-width="7"
+                  />
+
+                  <div class="monitor-storage-usage">
+                    {{ formatBytes(volume.used) }} used · {{ formatBytes(volume.free) }} free · {{ formatBytes(volume.total) }} total
+                  </div>
+                  <div class="monitor-storage-meta">
+                    <span>{{ volume.mountpoint || '-' }}</span>
+                    <span>{{ formatVolumeMeta(volume) }}</span>
+                  </div>
+                </div>
+              </div>
+
+              <div
+                v-else
+                class="empty-state compact monitor-storage-empty"
+              >
+                {{ monitorStatus === 'opening' ? 'Waiting for storage data…' : 'No volumes available' }}
+              </div>
+            </div>
+          </div>
+        </el-tab-pane>
+
+        <el-tab-pane
           label="Commands"
           name="commands"
           class="connection-info-tab-pane connection-info-command-tab"
@@ -318,6 +509,11 @@ export default {
       type: Number,
       default: () => Date.now(),
     },
+
+    tabId: {
+      type: String,
+      default: '',
+    },
   },
 
   data() {
@@ -339,6 +535,17 @@ export default {
       runtimeConfigEditorItem: null,
       runtimeConfigEditorValue: '',
       runtimeConfigSaving: false,
+      monitorSessionId: '',
+      monitorStatus: 'idle',
+      monitorError: '',
+      monitorLastUpdatedAt: 0,
+      monitorStarting: false,
+      monitorChannels: {
+        system: {},
+        storage: { volumes: [] },
+        network: {},
+        battery: { available: false },
+      },
     }
   },
 
@@ -386,6 +593,61 @@ export default {
       })
     },
 
+    monitorSystem() {
+      return this.monitorChannels.system || {}
+    },
+
+    monitorNetwork() {
+      return this.monitorChannels.network || {}
+    },
+
+    monitorBattery() {
+      return this.monitorChannels.battery || { available: false }
+    },
+
+    monitorVolumes() {
+      const volumes = this.monitorChannels.storage?.volumes
+      return Array.isArray(volumes) ? volumes : []
+    },
+
+    monitorDisplayState() {
+      if (this.monitorError || this.monitorStatus === 'error') return 'error'
+      if (this.monitorStatus === 'open' || this.monitorStatus === 'live') return 'live'
+      if (this.monitorStatus === 'opening') return 'opening'
+      if (this.getConnectionDisplayState(this.currentConnection || {}) === 'offline') return 'offline'
+      return 'idle'
+    },
+
+    monitorDisplayLabel() {
+      const labels = {
+        live: 'LIVE · 500 ms',
+        opening: 'CONNECTING',
+        offline: 'OFFLINE',
+        error: 'ERROR',
+        idle: 'IDLE',
+      }
+      return labels[this.monitorDisplayState] || 'IDLE'
+    },
+
+    monitorUpdatedText() {
+      if (!this.monitorLastUpdatedAt) {
+        if (this.monitorStatus === 'opening') return 'Waiting for metrics…'
+        return 'No live data'
+      }
+
+      const ageMs = Math.max(Number(this.statusNowTick || Date.now()) - this.monitorLastUpdatedAt, 0)
+      if (ageMs < 1000) return 'Updated <1s ago'
+      if (ageMs < 60000) return `Updated ${Math.floor(ageMs / 1000)}s ago`
+      return `Updated ${Math.floor(ageMs / 60000)}m ago`
+    },
+
+    monitorNetworkInterfaceText() {
+      const name = String(this.monitorNetwork.interface || '').trim()
+      const ipv4 = String(this.monitorNetwork.ipv4 || '').trim()
+      if (name && ipv4) return `${name} · ${ipv4}`
+      return name || ipv4 || 'Active interface unavailable'
+    },
+
     runtimeConfigEditorChoices() {
       const choices = this.runtimeConfigEditorItem?.choices
       if (!Array.isArray(choices)) return []
@@ -416,11 +678,32 @@ export default {
   },
 
   watch: {
-    activeTab(value) {
+    activeTab(value, previousValue) {
       if (value === 'configuration' && this.infoVisible && !this.runtimeConfigLoaded) {
         this.loadRuntimeConfig(this.selectedId)
       }
+
+      if (value === 'dashboard' && this.infoVisible) {
+        void this.startDeviceMonitor()
+      } else if (previousValue === 'dashboard') {
+        void this.stopDeviceMonitor()
+      }
     },
+
+    infoVisible(value) {
+      if (!value) {
+        void this.stopDeviceMonitor()
+      }
+    },
+  },
+
+  mounted() {
+    window.addEventListener('pagehide', this.handleDeviceMonitorPageHide)
+  },
+
+  beforeUnmount() {
+    window.removeEventListener('pagehide', this.handleDeviceMonitorPageHide)
+    void this.stopDeviceMonitor()
   },
 
   methods: {
@@ -444,6 +727,7 @@ export default {
       this.runtimeConfigError = ''
       this.runtimeConfigEditorVisible = false
       this.runtimeConfigEditorItem = null
+      this.resetDeviceMonitorState()
 
       try {
         await Promise.all([
@@ -454,6 +738,202 @@ export default {
       } finally {
         this.loading = false
       }
+    },
+
+    resetDeviceMonitorState() {
+      this.monitorSessionId = ''
+      this.monitorStatus = 'idle'
+      this.monitorError = ''
+      this.monitorLastUpdatedAt = 0
+      this.monitorStarting = false
+      this.monitorChannels = {
+        system: {},
+        storage: { volumes: [] },
+        network: {},
+        battery: { available: false },
+      }
+    },
+
+    async startDeviceMonitor() {
+      if (!this.infoVisible || this.activeTab !== 'dashboard' || !this.selectedId) return
+      if (this.monitorSessionId || this.monitorStarting) return
+
+      this.monitorStarting = true
+      this.monitorStatus = 'opening'
+      this.monitorError = ''
+      this.monitorLastUpdatedAt = 0
+      this.monitorChannels = {
+        system: {},
+        storage: { volumes: [] },
+        network: {},
+        battery: { available: false },
+      }
+
+      try {
+        const headers = { 'Content-Type': 'application/json' }
+        if (this.tabId) headers['X-Tab-Id'] = this.tabId
+
+        const res = await fetch(
+          `/api/connections/${encodeURIComponent(this.selectedId)}/device-monitor/open`,
+          {
+            method: 'POST',
+            headers,
+            body: JSON.stringify({
+              channels: ['system', 'storage', 'network', 'battery'],
+              intervals: {
+                system: 0.5,
+                network: 0.5,
+                storage: 5,
+                battery: 5,
+              },
+            }),
+          },
+        )
+        const json = await res.json()
+        if (!res.ok || json.code !== 0) {
+          throw new Error(json.message || 'Failed to open device monitor')
+        }
+
+        const sessionId = String(json.data?.monitor_session_id || '').trim()
+        if (!sessionId) {
+          throw new Error('Device monitor did not return a session id')
+        }
+
+        this.monitorSessionId = sessionId
+        this.monitorStatus = String(json.data?.status || 'opening')
+
+        if (!this.infoVisible || this.activeTab !== 'dashboard') {
+          await this.stopDeviceMonitor()
+        }
+      } catch (e) {
+        this.monitorStatus = 'error'
+        this.monitorError = e?.message || 'Failed to open device monitor'
+      } finally {
+        this.monitorStarting = false
+      }
+    },
+
+    async stopDeviceMonitor(keepalive = false) {
+      const sessionId = String(this.monitorSessionId || '').trim()
+      this.monitorSessionId = ''
+      if (this.monitorStatus !== 'error') this.monitorStatus = 'idle'
+      if (!sessionId) return
+
+      try {
+        const headers = {}
+        if (this.tabId) headers['X-Tab-Id'] = this.tabId
+        await fetch(`/api/device-monitor/${encodeURIComponent(sessionId)}/close`, {
+          method: 'POST',
+          headers,
+          keepalive: Boolean(keepalive),
+        })
+      } catch (_e) {
+      }
+    },
+
+    handleDeviceMonitorPageHide() {
+      if (!this.monitorSessionId) return
+      void this.stopDeviceMonitor(true)
+    },
+
+    handleDeviceMonitorSnapshot(payload = {}) {
+      if (!this.infoVisible || this.activeTab !== 'dashboard') return
+      if (String(payload.monitor_session_id || '') !== String(this.monitorSessionId || '')) return
+      if (String(payload.client_id || '') !== String(this.selectedId || '')) return
+
+      const channel = String(payload.channel || '').trim().toLowerCase()
+      if (!['system', 'storage', 'network', 'battery'].includes(channel)) return
+
+      this.monitorChannels = {
+        ...this.monitorChannels,
+        [channel]: payload.data && typeof payload.data === 'object' ? payload.data : {},
+      }
+      this.monitorStatus = 'live'
+      this.monitorError = ''
+
+      const collectedAt = Number(payload.collected_at || 0)
+      this.monitorLastUpdatedAt = collectedAt > 0
+        ? collectedAt * 1000
+        : Date.now()
+    },
+
+    handleDeviceMonitorStatus(payload = {}) {
+      if (String(payload.monitor_session_id || '') !== String(this.monitorSessionId || '')) return
+      const state = String(payload.state || payload.status || '').trim().toLowerCase()
+
+      if (state === 'open') {
+        this.monitorStatus = 'open'
+        this.monitorError = ''
+        return
+      }
+
+      if (state === 'error') {
+        this.monitorStatus = 'error'
+        this.monitorError = String(payload.error || 'Device monitor failed')
+        return
+      }
+
+      if (state === 'closed') {
+        this.monitorStatus = 'idle'
+      }
+    },
+
+    normalizePercent(value) {
+      const numeric = Number(value)
+      if (!Number.isFinite(numeric)) return 0
+      return Math.max(0, Math.min(100, numeric))
+    },
+
+    formatPercent(value) {
+      const numeric = Number(value)
+      if (!Number.isFinite(numeric)) return '—'
+      return `${Math.round(numeric * 10) / 10}%`
+    },
+
+    formatBytes(value) {
+      const numeric = Number(value)
+      if (!Number.isFinite(numeric) || numeric < 0) return '—'
+      if (numeric === 0) return '0 B'
+
+      const units = ['B', 'KB', 'MB', 'GB', 'TB', 'PB']
+      const index = Math.min(Math.floor(Math.log(numeric) / Math.log(1024)), units.length - 1)
+      const scaled = numeric / (1024 ** index)
+      const digits = scaled >= 100 || index === 0 ? 0 : (scaled >= 10 ? 1 : 2)
+      return `${scaled.toFixed(digits)} ${units[index]}`
+    },
+
+    formatUsagePair(used, total) {
+      const usedNumber = Number(used)
+      const totalNumber = Number(total)
+      if (!Number.isFinite(usedNumber) || !Number.isFinite(totalNumber) || totalNumber <= 0) return '—'
+      return `${this.formatBytes(usedNumber)} / ${this.formatBytes(totalNumber)}`
+    },
+
+    formatRate(value) {
+      const text = this.formatBytes(value)
+      return text === '—' ? '—' : `${text}/s`
+    },
+
+    formatUptime(value) {
+      const seconds = Number(value)
+      if (!Number.isFinite(seconds) || seconds < 0) return '—'
+      const totalMinutes = Math.floor(seconds / 60)
+      const days = Math.floor(totalMinutes / 1440)
+      const hours = Math.floor((totalMinutes % 1440) / 60)
+      const minutes = totalMinutes % 60
+
+      if (days > 0) return `${days}d ${hours}h`
+      if (hours > 0) return `${hours}h ${minutes}m`
+      return `${minutes}m`
+    },
+
+    formatVolumeMeta(volume) {
+      const fstype = String(volume?.fstype || '').trim()
+      const kind = String(volume?.kind || '').trim()
+      const parts = []
+      if (fstype) parts.push(fstype.toUpperCase())
+      if (kind) parts.push(kind.charAt(0).toUpperCase() + kind.slice(1))
+      return parts.join(' · ') || 'Volume'
     },
 
     async loadConnectionInfoClientCommands(clientId) {
@@ -1020,6 +1500,374 @@ export default {
 .connection-config-editor-footer-right {
   display: flex;
   gap: 10px;
+}
+
+
+.monitor-dashboard-scroll {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.monitor-dashboard-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 2px 2px 0;
+}
+
+.monitor-dashboard-title {
+  color: var(--text);
+  font-size: 15px;
+  line-height: 22px;
+  font-weight: 700;
+}
+
+.monitor-dashboard-subtitle,
+.monitor-updated-text,
+.monitor-section-subtitle {
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.monitor-live-block {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 3px;
+}
+
+.monitor-live-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 24px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: #f8fafc;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 18px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.monitor-live-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #94a3b8;
+}
+
+.monitor-live-live {
+  color: #15803d;
+  background: #f0fdf4;
+  border-color: #bbf7d0;
+}
+
+.monitor-live-live .monitor-live-dot {
+  background: #22c55e;
+}
+
+.monitor-live-opening {
+  color: #1d4ed8;
+  background: #eff6ff;
+  border-color: #bfdbfe;
+}
+
+.monitor-live-opening .monitor-live-dot {
+  background: #3b82f6;
+}
+
+.monitor-live-error,
+.monitor-live-offline {
+  color: #b91c1c;
+  background: #fef2f2;
+  border-color: #fecaca;
+}
+
+.monitor-live-error .monitor-live-dot,
+.monitor-live-offline .monitor-live-dot {
+  background: #ef4444;
+}
+
+.monitor-dashboard-error {
+  padding: 9px 11px;
+  border-radius: 10px;
+  border: 1px solid #fecaca;
+  background: #fef2f2;
+  color: #b91c1c;
+  font-size: 12px;
+  line-height: 18px;
+  overflow-wrap: anywhere;
+}
+
+.monitor-overview-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.monitor-overview-card,
+.monitor-section,
+.monitor-storage-card {
+  min-width: 0;
+  border-radius: 12px;
+  border: 1px solid rgba(15, 23, 42, 0.06);
+  background: #f8fafc;
+}
+
+.monitor-overview-card {
+  min-height: 138px;
+  padding: 13px 14px;
+}
+
+.monitor-card-label,
+.monitor-network-label {
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 16px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.monitor-card-value {
+  margin: 7px 0 9px;
+  color: var(--text);
+  font-size: 25px;
+  line-height: 30px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.monitor-card-value-muted {
+  color: var(--muted);
+}
+
+.monitor-card-empty-line {
+  height: 6px;
+  margin-bottom: 14px;
+  border-radius: 999px;
+  background: #e5e7eb;
+}
+
+.monitor-card-meta {
+  margin-top: 8px;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 16px;
+  overflow-wrap: anywhere;
+}
+
+.monitor-card-meta-secondary {
+  margin-top: 2px;
+  color: var(--muted-2);
+}
+
+.monitor-runtime-value {
+  font-size: 22px;
+}
+
+.monitor-runtime-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 6px;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 17px;
+}
+
+.monitor-runtime-row strong {
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.monitor-section {
+  padding: 13px 14px;
+}
+
+.monitor-section-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.monitor-section-title {
+  color: var(--text);
+  font-size: 13px;
+  line-height: 19px;
+  font-weight: 700;
+}
+
+.monitor-network-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.monitor-network-item {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: #fff;
+  border: 1px solid rgba(15, 23, 42, 0.05);
+}
+
+.monitor-network-arrow {
+  flex: 0 0 auto;
+  width: 28px;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: #eff6ff;
+  color: #2563eb;
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.monitor-network-value {
+  margin-top: 2px;
+  color: var(--text);
+  font-size: 16px;
+  line-height: 22px;
+  font-weight: 700;
+}
+
+.monitor-storage-section {
+  margin-bottom: 2px;
+}
+
+.monitor-volume-count {
+  flex: 0 0 auto;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: #eef2ff;
+  color: #4338ca;
+  font-size: 10px;
+  line-height: 16px;
+  font-weight: 600;
+}
+
+.monitor-storage-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.monitor-storage-card {
+  padding: 11px 12px;
+  background: #fff;
+}
+
+.monitor-storage-title-row,
+.monitor-storage-title-wrap,
+.monitor-storage-meta {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+
+.monitor-storage-title-row {
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 8px;
+  color: var(--text);
+  font-size: 12px;
+}
+
+.monitor-storage-title-wrap {
+  gap: 6px;
+  overflow: hidden;
+}
+
+.monitor-storage-title-wrap strong {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 700;
+}
+
+.monitor-storage-system-badge {
+  flex: 0 0 auto;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: #f1f5f9;
+  color: #475569;
+  font-size: 9px;
+  line-height: 15px;
+  font-weight: 600;
+}
+
+.monitor-storage-usage {
+  margin-top: 8px;
+  color: var(--text);
+  font-size: 11px;
+  line-height: 17px;
+}
+
+.monitor-storage-meta {
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 16px;
+}
+
+.monitor-storage-meta span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.monitor-storage-empty {
+  padding: 16px 0 6px;
+}
+
+.monitor-overview-card :deep(.el-progress-bar__outer),
+.monitor-storage-card :deep(.el-progress-bar__outer) {
+  background: #e5e7eb;
+}
+
+@media (max-width: 900px) {
+  .monitor-overview-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 620px) {
+  .monitor-dashboard-head,
+  .monitor-section-head {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .monitor-live-block {
+    align-items: flex-start;
+  }
+
+  .monitor-overview-grid,
+  .monitor-network-grid,
+  .monitor-storage-grid {
+    grid-template-columns: repeat(1, minmax(0, 1fr));
+  }
 }
 
 @media (max-width: 1200px) {

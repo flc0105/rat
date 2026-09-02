@@ -94,3 +94,36 @@ class ServerInboundMessageRouter(BaseMessageRouter):
         callback = self.connection.context.on_clipboard_result
         if callable(callback):
             callback(data)
+
+    def handle_monitor_opened_message(self, data: dict) -> None:
+        callback = self.connection.context.on_monitor_opened
+        if callable(callback):
+            callback(
+                data.get('monitor_session_id') or '',
+                data.get('channels') if isinstance(data.get('channels'), list) else [],
+                data.get('intervals') if isinstance(data.get('intervals'), dict) else {},
+            )
+
+    def handle_monitor_snapshot_message(self, data: dict) -> None:
+        callback = self.connection.context.on_monitor_snapshot
+        if callable(callback):
+            callback(
+                data.get('monitor_session_id') or '',
+                data.get('seq') or 0,
+                data.get('channel') or '',
+                data.get('data') if isinstance(data.get('data'), dict) else {},
+                data.get('collected_at') or 0,
+            )
+
+    def handle_monitor_error_message(self, data: dict) -> None:
+        callback = self.connection.context.on_monitor_error
+        if callable(callback):
+            callback(
+                data.get('monitor_session_id') or '',
+                data.get('message') or '',
+            )
+
+    def handle_monitor_closed_message(self, data: dict) -> None:
+        callback = self.connection.context.on_monitor_closed
+        if callable(callback):
+            callback(data.get('monitor_session_id') or '')
