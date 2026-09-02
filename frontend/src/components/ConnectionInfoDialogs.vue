@@ -84,6 +84,7 @@
                 <div class="monitor-card-value">{{ formatPercent(monitorSystem.cpu_percent) }}</div>
                 <el-progress
                   :percentage="normalizePercent(monitorSystem.cpu_percent)"
+                  :color="monitorUsageProgressColor(monitorSystem.cpu_percent)"
                   :show-text="false"
                   :stroke-width="6"
                 />
@@ -97,6 +98,7 @@
                 <div class="monitor-card-value">{{ formatPercent(monitorSystem.memory?.percent) }}</div>
                 <el-progress
                   :percentage="normalizePercent(monitorSystem.memory?.percent)"
+                  :color="monitorUsageProgressColor(monitorSystem.memory?.percent)"
                   :show-text="false"
                   :stroke-width="6"
                 />
@@ -210,6 +212,7 @@
 
                   <el-progress
                     :percentage="normalizePercent(volume.percent)"
+                    :color="monitorUsageProgressColor(volume.percent)"
                     :show-text="false"
                     :stroke-width="7"
                   />
@@ -882,6 +885,14 @@ export default {
       const numeric = Number(value)
       if (!Number.isFinite(numeric)) return 0
       return Math.max(0, Math.min(100, numeric))
+    },
+
+    monitorUsageProgressColor(value) {
+      const percent = this.normalizePercent(value)
+      if (percent >= 95) return '#f56c6c'
+      if (percent >= 85) return '#e6a23c'
+      if (percent >= 70) return '#d6b93f'
+      return '#409eff'
     },
 
     formatPercent(value) {

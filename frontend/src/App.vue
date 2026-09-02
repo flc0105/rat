@@ -734,31 +734,26 @@ export default {
 
 <style scoped>
 .banner-notification-action {
-  width: 32px;
-  height: 32px;
   margin-right: 12px;
-  padding: 0;
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  border-radius: 50%;
-  background: rgba(255, 255, 255, 0.06);
-  color: rgba(238, 244, 255, 0.9);
+  padding: 4px 2px;
+  border: 0;
+  background: transparent;
+  color: rgba(238, 244, 255, 0.82);
   cursor: pointer;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   font-size: 16px;
-  transition: background 0.18s ease, border-color 0.18s ease, color 0.18s ease, transform 0.18s ease;
+  line-height: 1;
+  transition: color 0.18s ease, opacity 0.18s ease;
 }
 
 .banner-notification-action:hover {
-  background: rgba(255, 255, 255, 0.12);
-  border-color: rgba(255, 255, 255, 0.24);
   color: #ffffff;
-  transform: translateY(-1px);
 }
 
 .banner-notification-action:active {
-  transform: translateY(0);
+  opacity: 0.72;
 }
 
 /*connection info card*/
