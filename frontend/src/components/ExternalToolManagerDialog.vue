@@ -1098,6 +1098,76 @@ export default {
       return this.visible
     },
 
+    async openFromNotification(context = {}, options = {}) {
+      const clientId = this.normalizeDeviceId(context?.client_id || '')
+      const machineId = clientId ? this.getMachineIdForConnectionId(clientId) : ''
+      const toolId = String(context?.tool_id || context?.module_id || '').trim()
+      const packageId = String(context?.package_id || '').trim()
+      const instanceId = String(context?.instance_id || '').trim()
+      const viewLog = options?.viewLog === true
+      const wasOpen = this.visible
+
+      if (machineId) this.deviceFilter = machineId
+      if (!wasOpen) {
+        this.visible = true
+        await this.refreshAll()
+      } else if (machineId) {
+        await this.refreshInstallStatuses(false)
+        await this.refreshInstances(false)
+      }
+
+      const module = toolId
+        ? (this.allModules || []).find(item => String(item?.id || '').trim() === toolId)
+        : null
+      const pkg = packageId
+        ? this.getPackageById(packageId)
+        : (module ? this.getPackageForModule(module) : null)
+
+      if (pkg?.id) this.selectedPackageId = pkg.id
+      this.activeTab = (instanceId || viewLog) ? 'instances' : 'modules'
+
+      if (!viewLog) return
+
+      if (clientId && toolId && instanceId && module) {
+        await this.loadClientInstances(toolId, clientId, false)
+        const rawRows = this.clientInstances?.[clientId]?.[toolId] || []
+        const rawRow = rawRows.find(row => String(row?.instance_id || 'default') === instanceId)
+        if (rawRow) {
+          await this.readLogs(this.normalizeInstanceRow(module, rawRow, clientId), true)
+          return
+        }
+      }
+
+      this.showNotificationErrorLog(context)
+    },
+
+    showNotificationErrorLog(context = {}) {
+      const displayName = String(context?.display_name || context?.tool_id || context?.package_id || 'External Tool').trim()
+      const errorText = String(context?.error || 'No error text available.').trim()
+      const logExcerpt = String(context?.log_excerpt || '').trim()
+      const operation = String(context?.operation || context?.action || '').trim()
+      const state = String(context?.state || '').trim()
+      const deviceId = this.normalizeDeviceId(context?.client_id || '')
+      const machineId = deviceId ? this.getMachineIdForConnectionId(deviceId) : ''
+
+      this.showDetailDialog({
+        title: `${displayName} Error Log`,
+        subtitle: [this.getMachineLabel(machineId, deviceId), operation, state].filter(Boolean).join(' / '),
+        copyText: logExcerpt || errorText,
+        sections: [
+          {
+            title: 'Error',
+            rows: [
+              { label: 'Operation', value: operation || '-', mono: true },
+              { label: 'State', value: state || '-', mono: true },
+              { label: 'Error', value: errorText, mono: true, multiline: true },
+              ...(logExcerpt ? [{ label: 'Log excerpt', value: logExcerpt, mono: true, multiline: true }] : []),
+            ],
+          },
+        ],
+      })
+    },
+
     async refreshIfOpen() {
       if (!this.visible) return
       await this.refreshAll()

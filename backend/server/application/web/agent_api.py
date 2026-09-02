@@ -16,10 +16,11 @@ class WebAgentApi:
     - 提供 Go loader 上报落盘能力
     """
 
-    def __init__(self, agent_builder, agent_output_registry, bootstrap_script_service=None):
+    def __init__(self, agent_builder, agent_output_registry, bootstrap_script_service=None, event_bus=None):
         self.agent_builder = agent_builder
         self.agent_output_registry = agent_output_registry
         self.bootstrap_script_service = bootstrap_script_service
+        self.event_bus = event_bus
         self.logs_dir = os.path.abspath(os.path.join('runtime', 'logs'))
         os.makedirs(self.logs_dir, exist_ok=True)
 
@@ -35,33 +36,68 @@ class WebAgentApi:
         server_web_host: str = '',
         source: str = 'manual',
     ):
-        build_result = self.agent_builder.build_agent(
-            server_host=server_host,
-            server_port=server_port,
-            web_port=web_port,
-            target_os=target_os,
-            builder=builder,
-            target_arch=target_arch,
-            server_web_scheme=server_web_scheme,
-            server_web_host=server_web_host,
-        )
-        record = self.agent_output_registry.register_output(
-            build_result,
-            source=source,
-            request_payload={
-                'server_host': server_host,
-                'server_port': server_port,
-                'web_port': web_port,
-                'target_os': target_os,
-                'builder': builder,
-                'target_arch': target_arch,
-                'server_web_scheme': server_web_scheme,
-                'server_web_host': server_web_host,
-                'source': source,
-            },
-        )
+        lifecycle_context = {
+            'builder': str(builder or '').strip(),
+            'target_os': str(target_os or '').strip(),
+            'target_arch': str(target_arch or '').strip(),
+            'source': str(source or '').strip(),
+        }
+        if self.event_bus is not None:
+            self.event_bus.publish('agent_build_lifecycle', {
+                **lifecycle_context,
+                'state': 'started',
+            })
+
+        try:
+            build_result = self.agent_builder.build_agent(
+                server_host=server_host,
+                server_port=server_port,
+                web_port=web_port,
+                target_os=target_os,
+                builder=builder,
+                target_arch=target_arch,
+                server_web_scheme=server_web_scheme,
+                server_web_host=server_web_host,
+            )
+            record = self.agent_output_registry.register_output(
+                build_result,
+                source=source,
+                request_payload={
+                    'server_host': server_host,
+                    'server_port': server_port,
+                    'web_port': web_port,
+                    'target_os': target_os,
+                    'builder': builder,
+                    'target_arch': target_arch,
+                    'server_web_scheme': server_web_scheme,
+                    'server_web_host': server_web_host,
+                    'source': source,
+                },
+            )
+        except Exception as exc:
+            if self.event_bus is not None:
+                self.event_bus.publish('agent_build_lifecycle', {
+                    **lifecycle_context,
+                    'state': 'error',
+                    'error': str(exc),
+                })
+            raise
+
         record['work_dir'] = str(build_result.get('work_dir') or '').strip()
         record['warnings'] = build_result.get('warnings') or []
+
+        if self.event_bus is not None:
+            file_name = str(record.get('file_name') or '').strip()
+            self.event_bus.publish('agent_build_lifecycle', {
+                **lifecycle_context,
+                'state': 'completed',
+                'builder': str(record.get('builder') or lifecycle_context['builder']).strip(),
+                'target_os': str(record.get('target_os') or lifecycle_context['target_os']).strip(),
+                'target_arch': str(record.get('target_arch') or lifecycle_context['target_arch']).strip(),
+                'file_name': file_name,
+                'download_url': f'/api/agent/download/{file_name}' if file_name else '',
+            })
+
         return record
 
     def get_built_agent_file_path(self, filename: str):

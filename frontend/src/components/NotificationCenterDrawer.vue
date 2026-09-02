@@ -67,17 +67,28 @@
             </div>
 
             <div v-if="notification.actions?.length" class="notification-center-card-actions">
-              <a
+              <template
                 v-for="action in notification.actions"
                 :key="action.id || `${notification.id}-${action.type}-${action.label}`"
-                v-show="action.url"
-                class="notification-center-card-action"
-                :href="action.url"
-                target="_blank"
-                rel="noopener noreferrer"
               >
-                {{ action.label }}
-              </a>
+                <a
+                  v-if="action.url"
+                  class="notification-center-card-action"
+                  :href="action.url"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  {{ action.label }}
+                </a>
+                <button
+                  v-else
+                  class="notification-center-card-action notification-center-card-action-button"
+                  type="button"
+                  @click="emitNotificationAction(notification, action)"
+                >
+                  {{ action.label }}
+                </button>
+              </template>
             </div>
           </div>
 
@@ -141,6 +152,7 @@ export default {
   emits: [
     'notification-deleted',
     'notifications-cleared',
+    'notification-action',
   ],
 
   data() {
@@ -217,6 +229,11 @@ export default {
         ':',
         pad(date.getSeconds()),
       ].join('')
+    },
+
+    emitNotificationAction(notification, action) {
+      if (!notification || !action) return
+      this.$emit('notification-action', { notification, action })
     },
 
     async deleteOne(notificationId) {
@@ -445,6 +462,14 @@ export default {
   font-size: 12px;
   font-weight: 600;
   text-decoration: none;
+}
+
+.notification-center-card-action-button {
+  padding: 0;
+  border: none;
+  background: transparent;
+  font: inherit;
+  cursor: pointer;
 }
 
 .notification-center-card-action:hover {

@@ -14,6 +14,7 @@ class ExternalToolRuntimeService:
         catalog_service,
         command_execution_api,
         remote_execution_service=None,
+        event_bus=None,
     ):
         self.core = ExternalToolRuntimeBase(
             catalog_service=catalog_service,
@@ -32,4 +33,5 @@ class ExternalToolRuntimeService:
         self.client_lifecycle_runtime = ExternalToolClientLifecycleRuntime(
             self.core,
             payload_builder=self.payload_builder,
+            event_bus=event_bus,
         )

@@ -1,3 +1,4 @@
+import { h } from 'vue';
 import {
     formatTerminalCommandFinishedLine,
     TERMINAL_BACKGROUND_PREFIX,
@@ -119,12 +120,76 @@ export default {
             }
         },
 
+        buildSseNotificationMessage(message, actions = [], context = {}) {
+            const normalizedActions = Array.isArray(actions) ? actions.filter(action => action?.label) : [];
+            if (!normalizedActions.length) return message;
+
+            const actionNodes = normalizedActions.map((action) => {
+                const commonStyle = {
+                    color: '#409eff',
+                    cursor: 'pointer',
+                    fontSize: '12px',
+                    textDecoration: 'none',
+                };
+
+                if (action.url) {
+                    return h('a', {
+                        href: action.url,
+                        target: '_blank',
+                        rel: 'noopener noreferrer',
+                        style: commonStyle,
+                    }, action.label);
+                }
+
+                return h('button', {
+                    type: 'button',
+                    style: {
+                        ...commonStyle,
+                        padding: 0,
+                        border: 'none',
+                        background: 'transparent',
+                    },
+                    onClick: (event) => {
+                        event?.preventDefault?.();
+                        event?.stopPropagation?.();
+                        void this.handleSseNotificationAction?.(action, context);
+                    },
+                }, action.label);
+            });
+
+            return h('div', null, [
+                h('div', null, String(message || '')),
+                h('div', {
+                    style: {
+                        display: 'flex',
+                        flexWrap: 'wrap',
+                        gap: '10px',
+                        marginTop: '6px',
+                    },
+                }, actionNodes),
+            ]);
+        },
+
         showSseNotification(notificationKey, options = {}, recordContext = {}) {
             const preferences = this.sseNotificationPreferences || DEFAULT_SSE_NOTIFICATION_PREFERENCES;
             if (preferences.enabled === false) return;
             if (preferences.events?.[notificationKey] === false) return;
 
-            ElementPlus.ElNotification(options);
+            const notificationOptions = { ...options };
+            if (
+                !notificationOptions.dangerouslyUseHTMLString
+                && typeof notificationOptions.message === 'string'
+                && Array.isArray(recordContext.actions)
+                && recordContext.actions.length
+            ) {
+                notificationOptions.message = this.buildSseNotificationMessage(
+                    notificationOptions.message,
+                    recordContext.actions,
+                    recordContext.context || {},
+                );
+            }
+
+            ElementPlus.ElNotification(notificationOptions);
             void this.recordSseNotification(notificationKey, options, recordContext);
         },
 
@@ -153,6 +218,214 @@ export default {
             es.addEventListener('notification_center_updated', (event) => {
                 const payload = JSON.parse(event.data || '{}');
                 this.applySseNotificationCenterUpdate(payload);
+            });
+
+            es.addEventListener('external_tool_lifecycle', async (event) => {
+                const payload = JSON.parse(event.data || '{}');
+                const action = String(payload.action || '').trim().toLowerCase();
+                const state = String(payload.state || '').trim().toLowerCase();
+                const operation = String(payload.operation || '').trim().toLowerCase();
+                const deviceName = getConnectionLabel(payload.client_id);
+                const serviceName = payload.display_name || payload.tool_id || payload.package_id || 'external tool';
+                const instanceId = String(payload.instance_id || '').trim();
+                const instanceLabel = instanceId ? `/${instanceId}` : '';
+                const serviceLabel = `${serviceName}${instanceLabel}`;
+                const errorText = String(payload.error || payload.message || '').trim();
+                const duration = payload.duration_sec === null || payload.duration_sec === undefined
+                    ? ''
+                    : ` in ${payload.duration_sec}s`;
+
+                const notificationKey = {
+                    'daemon:started': 'external_tool_daemon_started',
+                    'daemon:stopped': 'external_tool_daemon_stopped',
+                    'daemon:error': 'external_tool_daemon_error',
+                    'oneshot:started': 'external_tool_oneshot_started',
+                    'oneshot:completed': 'external_tool_oneshot_completed',
+                    'oneshot:error': 'external_tool_oneshot_error',
+                    'install:completed': 'external_tool_install_completed',
+                    'install:failed': 'external_tool_install_failed',
+                    'uninstall:completed': 'external_tool_uninstall_completed',
+                    'uninstall:failed': 'external_tool_uninstall_failed',
+                }[`${action}:${state}`];
+
+                if (!notificationKey) {
+                    await this.refreshExternalToolsIfOpen?.();
+                    return;
+                }
+
+                const context = {
+                    client_id: payload.client_id || '',
+                    action,
+                    state,
+                    operation,
+                    tool_id: payload.tool_id || '',
+                    package_id: payload.package_id || '',
+                    module_id: payload.module_id || '',
+                    display_name: payload.display_name || '',
+                    instance_id: instanceId,
+                    status: payload.status || '',
+                    pid: payload.pid ?? null,
+                    returncode: payload.returncode ?? null,
+                    duration_sec: payload.duration_sec ?? null,
+                    error: payload.error || '',
+                    log_excerpt: payload.log_excerpt || '',
+                };
+                const actions = [
+                    {
+                        id: 'open-external-tools',
+                        type: 'open_external_tools',
+                        label: 'Open External Tools',
+                    },
+                ];
+                if (state === 'error' || state === 'failed') {
+                    actions.push({
+                        id: 'view-log',
+                        type: 'view_external_tool_log',
+                        label: 'View Log',
+                    });
+                }
+
+                let title = 'External Tool';
+                let type = 'info';
+                let message = `${deviceName} · ${serviceLabel} updated`;
+
+                if (action === 'daemon' && state === 'started') {
+                    title = 'External Tool Daemon Started';
+                    type = 'success';
+                    message = `${deviceName} · ${serviceLabel} daemon started successfully`;
+                } else if (action === 'daemon' && state === 'stopped') {
+                    title = 'External Tool Daemon Stopped';
+                    type = 'warning';
+                    message = `${deviceName} · ${serviceLabel} daemon stopped successfully`;
+                } else if (action === 'daemon' && state === 'error') {
+                    title = operation === 'stop' ? 'External Tool Daemon Stop Error' : 'External Tool Daemon Start Error';
+                    type = 'error';
+                    message = `${deviceName} · ${serviceLabel} daemon ${operation || 'operation'} failed${errorText ? `: ${errorText}` : ''}`;
+                } else if (action === 'oneshot' && state === 'started') {
+                    title = 'External Tool Oneshot Started';
+                    type = 'info';
+                    message = `${deviceName} · ${serviceName} oneshot started`;
+                } else if (action === 'oneshot' && state === 'completed') {
+                    title = 'External Tool Oneshot Completed';
+                    type = 'success';
+                    message = `${deviceName} · ${serviceName} oneshot completed successfully${duration}`;
+                } else if (action === 'oneshot' && state === 'error') {
+                    title = 'External Tool Oneshot Error';
+                    type = 'error';
+                    const exitText = payload.returncode === null || payload.returncode === undefined ? '' : ` (exit ${payload.returncode})`;
+                    message = `${deviceName} · ${serviceName} oneshot failed${exitText}${errorText ? `: ${errorText}` : ''}`;
+                } else if (action === 'install' && state === 'completed') {
+                    title = 'External Tool Install Completed';
+                    type = 'success';
+                    message = `${deviceName} · ${serviceName} install completed${payload.message ? `: ${payload.message}` : ' successfully'}`;
+                } else if (action === 'install' && state === 'failed') {
+                    title = 'External Tool Install Failed';
+                    type = 'error';
+                    message = `${deviceName} · ${serviceName} install failed${errorText ? `: ${errorText}` : ''}`;
+                } else if (action === 'uninstall' && state === 'completed') {
+                    title = 'External Tool Uninstall Completed';
+                    type = 'success';
+                    message = `${deviceName} · ${serviceName} uninstall completed${payload.message ? `: ${payload.message}` : ' successfully'}`;
+                } else if (action === 'uninstall' && state === 'failed') {
+                    title = 'External Tool Uninstall Failed';
+                    type = 'error';
+                    message = `${deviceName} · ${serviceName} uninstall failed${errorText ? `: ${errorText}` : ''}`;
+                }
+
+                this.showSseNotification(notificationKey, {
+                    title,
+                    message,
+                    type,
+                    duration: type === 'error' ? 7000 : 5000,
+                }, {
+                    eventId: event.lastEventId,
+                    context,
+                    actions,
+                });
+
+                await this.refreshExternalToolsIfOpen?.();
+            });
+
+            es.addEventListener('agent_build_lifecycle', async (event) => {
+                const payload = JSON.parse(event.data || '{}');
+                const state = String(payload.state || '').trim().toLowerCase();
+                const notificationKey = {
+                    started: 'agent_build_started',
+                    completed: 'agent_build_completed',
+                    error: 'agent_build_error',
+                }[state];
+                if (!notificationKey) return;
+
+                const osLabels = {
+                    win: 'Windows',
+                    windows: 'Windows',
+                    mac: 'macOS',
+                    darwin: 'macOS',
+                    linux: 'Linux',
+                    bundle: 'Bundle',
+                };
+                const targetOs = String(payload.target_os || '').trim();
+                const targetArch = String(payload.target_arch || '').trim();
+                const targetLabel = [osLabels[targetOs.toLowerCase()] || targetOs || 'Agent', targetArch].filter(Boolean).join(' ');
+                const builder = String(payload.builder || '').trim();
+                const buildLabel = [targetLabel, builder].filter(Boolean).join(' · ');
+                const fileName = String(payload.file_name || '').trim();
+                const errorText = String(payload.error || '').trim();
+                const context = {
+                    state,
+                    builder,
+                    target_os: targetOs,
+                    target_arch: targetArch,
+                    source: payload.source || '',
+                    file_name: fileName,
+                    error: errorText,
+                };
+                const actions = [];
+
+                if (state === 'completed' && payload.download_url) {
+                    actions.push({
+                        id: 'download',
+                        type: 'agent_download',
+                        label: 'Download',
+                        url: payload.download_url,
+                    });
+                }
+                actions.push({
+                    id: 'open-agents',
+                    type: 'open_agents',
+                    label: 'Open Agents',
+                });
+
+                let title = 'Agent Build';
+                let type = 'info';
+                let message = `Agent build updated · ${buildLabel}`;
+                if (state === 'started') {
+                    title = 'Agent Build Started';
+                    message = `Agent build started · ${buildLabel}`;
+                } else if (state === 'completed') {
+                    title = 'Agent Build Completed';
+                    type = 'success';
+                    message = `Agent build completed successfully · ${[buildLabel, fileName].filter(Boolean).join(' · ')}`;
+                } else if (state === 'error') {
+                    title = 'Agent Build Error';
+                    type = 'error';
+                    message = `Agent build failed · ${buildLabel}${errorText ? `: ${errorText}` : ''}`;
+                }
+
+                this.showSseNotification(notificationKey, {
+                    title,
+                    message,
+                    type,
+                    duration: state === 'error' ? 7000 : 5000,
+                }, {
+                    eventId: event.lastEventId,
+                    context,
+                    actions,
+                });
+
+                if (state === 'completed') {
+                    await this.refreshAgentOutputsIfOpen?.();
+                }
             });
 
             es.addEventListener('connection_online', (event) => {

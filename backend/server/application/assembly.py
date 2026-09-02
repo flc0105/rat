@@ -204,6 +204,7 @@ class ServerApplicationAssembly:
             catalog_service=self.external_tool_catalog_service,
             command_execution_api=self.command_execution_api,
             remote_execution_service=self.remote_execution_service,
+            event_bus=self.event_bus,
         )
 
         self.external_tool_api = WebExternalToolApi(
@@ -253,6 +254,7 @@ class ServerApplicationAssembly:
             agent_builder=self.agent_builder,
             agent_output_registry=self.agent_output_registry,
             bootstrap_script_service=self.agent_bootstrap_script_service,
+            event_bus=self.event_bus,
         )
 
         self.process_snapshot_cache = ProcessSnapshotCache()

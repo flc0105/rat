@@ -345,6 +345,7 @@
     :notifications="sseNotificationHistory"
     @notification-deleted="removeSseNotificationHistory"
     @notifications-cleared="clearSseNotificationHistory"
+    @notification-action="handleNotificationCenterAction"
   />
 </template>
 
@@ -506,7 +507,36 @@ export default {
     },
 
     openExternalToolManagerDialog() {
-      return this.$refs.externalToolManagerDialogRef?.open()
+      const dialog = this.$refs.externalToolManagerDialogRef
+      if (dialog?.isOpen?.()) return
+      return dialog?.open()
+    },
+
+    async handleSseNotificationAction(action = {}, context = {}) {
+      const actionType = String(action?.type || '').trim().toLowerCase()
+
+      if (actionType === 'open_external_tools') {
+        return this.$refs.externalToolManagerDialogRef?.openFromNotification?.(context)
+      }
+
+      if (actionType === 'view_external_tool_log') {
+        return this.$refs.externalToolManagerDialogRef?.openFromNotification?.(context, { viewLog: true })
+      }
+
+      if (actionType === 'open_agents') {
+        const dialog = this.$refs.agentOutputsDialogRef
+        if (dialog?.isOpen?.()) {
+          return dialog.refreshIfOpen?.({ silent: true })
+        }
+        return dialog?.open()
+      }
+    },
+
+    handleNotificationCenterAction(payload = {}) {
+      return this.handleSseNotificationAction(
+        payload?.action || {},
+        payload?.notification?.context || {},
+      )
     },
 
     openKeychainManagerDialog() {
