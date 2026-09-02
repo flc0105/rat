@@ -20,6 +20,7 @@ from server.application.keychains.keychain_store import KeychainStore
 from server.application.pinned_paths.pinned_path_store import PinnedPathStore
 from server.application.preferences.toolbar_preference_store import ToolbarPreferenceStore
 from server.application.preferences.notification_preference_store import NotificationPreferenceStore
+from server.application.preferences.notification_history_store import NotificationHistoryStore
 from server.application.scripts.script_catalog_service import ScriptCatalogService
 from server.application.tasks.task_runner import WebTaskRunner
 from server.application.tasks.task_service import WebTaskService
@@ -44,6 +45,7 @@ from server.application.web.system_api import WebSystemInspectionApi
 from server.application.web.terminal_api import WebTerminalApi
 from server.application.web.toolbar_preferences_api import WebToolbarPreferencesApi
 from server.application.web.notification_preferences_api import WebNotificationPreferencesApi
+from server.application.web.notification_history_api import WebNotificationHistoryApi
 from server.application.web.screen_view_api import WebScreenViewApi
 from server.application.web.clipboard_api import WebClipboardApi
 from server.config.config import (
@@ -54,6 +56,7 @@ from server.config.config import (
     RECENT_DEVICES_JSON_PATH,
     TOOLBAR_PREFERENCES_JSON_PATH,
     NOTIFICATION_PREFERENCES_JSON_PATH,
+    NOTIFICATION_CENTER_JSON_PATH,
     SCRIPT_JOBS_PATH,
     SCRIPT_PATH,
 )
@@ -104,6 +107,7 @@ class ServerApplicationAssembly:
         self.recent_device_store = RecentDeviceStore(RECENT_DEVICES_JSON_PATH)
         self.toolbar_preference_store = ToolbarPreferenceStore(TOOLBAR_PREFERENCES_JSON_PATH)
         self.notification_preference_store = NotificationPreferenceStore(NOTIFICATION_PREFERENCES_JSON_PATH)
+        self.notification_history_store = NotificationHistoryStore(NOTIFICATION_CENTER_JSON_PATH)
         self.connection_history_store = ConnectionHistoryStore(CONNECTION_HISTORY_ROOT_DIR)
         self.server.command_history.connection_history_store = self.connection_history_store
 
@@ -176,6 +180,11 @@ class ServerApplicationAssembly:
 
         self.notification_preferences_api = WebNotificationPreferencesApi(
             preference_store=self.notification_preference_store,
+            event_bus=self.event_bus,
+        )
+
+        self.notification_history_api = WebNotificationHistoryApi(
+            history_store=self.notification_history_store,
             event_bus=self.event_bus,
         )
 

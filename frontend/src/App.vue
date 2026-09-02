@@ -16,6 +16,14 @@
 
             <div class="banner-action-links">
               <button
+                class="banner-notification-action"
+                type="button"
+                title="Notifications"
+                @click="openNotificationCenter"
+              >
+                <el-icon><Bell /></el-icon>
+              </button>
+              <button
                 class="banner-inline-action"
                 type="button"
                 @click="openAgentBuilderDialog"
@@ -331,6 +339,13 @@
     @toolbar-saved="refreshToolbarPreferences"
     @notification-saved="applySseNotificationPreferences"
   />
+
+  <NotificationCenterDrawer
+    ref="notificationCenterDrawerRef"
+    :notifications="sseNotificationHistory"
+    @notification-deleted="removeSseNotificationHistory"
+    @notifications-cleared="clearSseNotificationHistory"
+  />
 </template>
 
 <script>
@@ -363,17 +378,20 @@ import ScreenViewDialog from './components/ScreenViewDialog.vue'
 import ClipboardDialog from './components/ClipboardDialog.vue'
 import OneLinersDialog from './components/OneLinersDialog.vue'
 import SettingsDialog from './components/SettingsDialog.vue'
+import NotificationCenterDrawer from './components/NotificationCenterDrawer.vue'
 
-import { ArrowDown, ArrowUp } from '@element-plus/icons-vue'
+import { ArrowDown, ArrowUp, Bell } from '@element-plus/icons-vue'
 
 export default {
   components: {
+    NotificationCenterDrawer,
     SettingsDialog,
     ClipboardDialog,
     ScreenViewDialog,
     OneLinersDialog,
     ArrowDown,
     ArrowUp,
+    Bell,
     PtyDialog,
     TerminalJsonDialog,
     PreviewDialog,
@@ -556,6 +574,11 @@ export default {
       return this.$refs.settingsDialogRef?.open()
     },
 
+    async openNotificationCenter() {
+      await this.loadSseNotificationHistory()
+      return this.$refs.notificationCenterDrawerRef?.open()
+    },
+
     refreshToolbarPreferences() {
       return this.$refs.terminalToolbarRef?.loadManagedToolbar()
     },
@@ -656,7 +679,10 @@ export default {
   async mounted() {
     this.ensureTabId()
     this.loadConnections()
-    await this.loadSseNotificationPreferences()
+    await Promise.all([
+      this.loadSseNotificationPreferences(),
+      this.loadSseNotificationHistory(),
+    ])
     this.initSSE()
 
     this.statusTickTimer = setInterval(() => {
@@ -676,6 +702,34 @@ export default {
 </script>
 
 <style scoped>
+.banner-notification-action {
+  width: 32px;
+  height: 32px;
+  margin-right: 12px;
+  padding: 0;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(238, 244, 255, 0.9);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  transition: background 0.18s ease, border-color 0.18s ease, color 0.18s ease, transform 0.18s ease;
+}
+
+.banner-notification-action:hover {
+  background: rgba(255, 255, 255, 0.12);
+  border-color: rgba(255, 255, 255, 0.24);
+  color: #ffffff;
+  transform: translateY(-1px);
+}
+
+.banner-notification-action:active {
+  transform: translateY(0);
+}
+
 /*connection info card*/
 .connection-info-toggle {
   position: absolute;

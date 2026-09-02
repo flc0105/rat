@@ -6,6 +6,10 @@ import {
 import { openSseStream } from '../api/streamApi.js';
 import { loadNotificationPreferences } from '../api/notificationPreferencesApi.js';
 import {
+    addNotificationHistory,
+    loadNotificationHistory,
+} from '../api/notificationHistoryApi.js';
+import {
     DEFAULT_SSE_NOTIFICATION_PREFERENCES,
     cloneSseNotificationPreferences,
     normalizeSseNotificationPreferences,
@@ -18,6 +22,7 @@ export default {
             eventSource: null,
             sseReady: false,
             sseNotificationPreferences: cloneSseNotificationPreferences(DEFAULT_SSE_NOTIFICATION_PREFERENCES),
+            sseNotificationHistory: [],
         }
     },
 
@@ -37,12 +42,90 @@ export default {
             this.sseNotificationPreferences = normalizeSseNotificationPreferences(preferences);
         },
 
-        showSseNotification(notificationKey, options = {}) {
+        async loadSseNotificationHistory() {
+            try {
+                const history = await loadNotificationHistory();
+                const notifications = Array.isArray(history?.notifications) ? history.notifications : [];
+                this.sseNotificationHistory = notifications;
+            } catch (e) {
+                console.warn('Failed to load notification history', e);
+            }
+        },
+
+        upsertSseNotificationHistory(notification) {
+            if (!notification || typeof notification !== 'object' || !notification.id) return;
+
+            const existing = Array.isArray(this.sseNotificationHistory)
+                ? this.sseNotificationHistory.filter(item => item?.id !== notification.id)
+                : [];
+
+            this.sseNotificationHistory = [notification, ...existing];
+        },
+
+        removeSseNotificationHistory(notificationId) {
+            const normalizedId = String(notificationId || '').trim();
+            if (!normalizedId) return;
+
+            this.sseNotificationHistory = (this.sseNotificationHistory || []).filter(
+                item => String(item?.id || '') !== normalizedId,
+            );
+        },
+
+        clearSseNotificationHistory() {
+            this.sseNotificationHistory = [];
+        },
+
+        applySseNotificationCenterUpdate(payload = {}) {
+            const action = String(payload.action || '').trim().toLowerCase();
+
+            if (action === 'added') {
+                this.upsertSseNotificationHistory(payload.notification);
+                return;
+            }
+
+            if (action === 'deleted') {
+                this.removeSseNotificationHistory(payload.id);
+                return;
+            }
+
+            if (action === 'cleared') {
+                this.clearSseNotificationHistory();
+            }
+        },
+
+        async recordSseNotification(notificationKey, options = {}, recordContext = {}) {
+            const fallbackMessage = options.dangerouslyUseHTMLString
+                ? ''
+                : String(options.message || '').trim();
+
+            const payload = {
+                event_id: String(recordContext.eventId || '').trim(),
+                notification_key: String(notificationKey || '').trim(),
+                type: String(options.type || 'info').trim().toLowerCase() || 'info',
+                title: String(options.title || 'Notification').trim() || 'Notification',
+                message: String(recordContext.message ?? fallbackMessage).trim(),
+                shown_at: new Date().toISOString(),
+                context: recordContext.context && typeof recordContext.context === 'object'
+                    ? recordContext.context
+                    : {},
+                actions: Array.isArray(recordContext.actions) ? recordContext.actions : [],
+            };
+
+            try {
+                const notification = await addNotificationHistory(payload);
+                this.upsertSseNotificationHistory(notification);
+            } catch (e) {
+                console.warn('Failed to persist SSE notification history', e);
+            }
+        },
+
+        showSseNotification(notificationKey, options = {}, recordContext = {}) {
             const preferences = this.sseNotificationPreferences || DEFAULT_SSE_NOTIFICATION_PREFERENCES;
             if (preferences.enabled === false) return;
             if (preferences.events?.[notificationKey] === false) return;
 
             ElementPlus.ElNotification(options);
+            void this.recordSseNotification(notificationKey, options, recordContext);
         },
 
         initSSE() {
@@ -67,6 +150,11 @@ export default {
                 this.applySseNotificationPreferences(payload);
             });
 
+            es.addEventListener('notification_center_updated', (event) => {
+                const payload = JSON.parse(event.data || '{}');
+                this.applySseNotificationCenterUpdate(payload);
+            });
+
             es.addEventListener('connection_online', (event) => {
                 const payload = JSON.parse(event.data);
                 const conn = payload.connection;
@@ -76,6 +164,12 @@ export default {
                     title: 'Device Online',
                     message: `${conn.hostname || conn.client_id} is now available`,
                     type: 'success'
+                }, {
+                    eventId: event.lastEventId,
+                    context: {
+                        client_id: conn.client_id || '',
+                        hostname: conn.hostname || '',
+                    },
                 });
             });
 
@@ -97,6 +191,12 @@ export default {
                     title: 'Device Offline',
                     message: `${(conn && conn.hostname) || clientId} went offline`,
                     type: 'warning'
+                }, {
+                    eventId: event.lastEventId,
+                    context: {
+                        client_id: clientId || '',
+                        hostname: conn?.hostname || '',
+                    },
                 });
             });
 
@@ -232,6 +332,15 @@ this.appendOutput(payload.client_id, `${TERMINAL_BACKGROUND_PREFIX} ${payload.te
                     message: `${jobName} ${stateText} on ${deviceName}`,
                     type,
                     duration: 5000,
+                }, {
+                    eventId: event.lastEventId,
+                    context: {
+                        client_id: payload.client_id || '',
+                        job_id: payload.job_id || '',
+                        job_key: payload.job_key || payload.job_name || '',
+                        display_name: payload.display_name || '',
+                        state,
+                    },
                 });
 
                 this.scheduleBackgroundJobsRefresh?.(payload.client_id);
@@ -262,6 +371,13 @@ this.appendOutput(payload.client_id, `${TERMINAL_BACKGROUND_PREFIX} ${payload.te
                         message: `PTY session started on ${deviceName}`,
                         type: 'success',
                         duration: 4000,
+                    }, {
+                        eventId: event.lastEventId,
+                        context: {
+                            client_id: payload.client_id || '',
+                            pty_session_id: payload.pty_session_id || '',
+                            state,
+                        },
                     });
                     return;
                 }
@@ -275,6 +391,14 @@ this.appendOutput(payload.client_id, `${TERMINAL_BACKGROUND_PREFIX} ${payload.te
                         message: `PTY session stopped on ${deviceName}${exitCode}`,
                         type: 'warning',
                         duration: 4000,
+                    }, {
+                        eventId: event.lastEventId,
+                        context: {
+                            client_id: payload.client_id || '',
+                            pty_session_id: payload.pty_session_id || '',
+                            state,
+                            exit_code: payload.exit_code ?? null,
+                        },
                     });
                     return;
                 }
@@ -287,6 +411,14 @@ this.appendOutput(payload.client_id, `${TERMINAL_BACKGROUND_PREFIX} ${payload.te
                             : `PTY session ended with an error on ${deviceName}`,
                         type: 'error',
                         duration: 5000,
+                    }, {
+                        eventId: event.lastEventId,
+                        context: {
+                            client_id: payload.client_id || '',
+                            pty_session_id: payload.pty_session_id || '',
+                            state,
+                            error: payload.error || '',
+                        },
                     });
                 }
             });
@@ -302,6 +434,13 @@ this.appendOutput(payload.client_id, `${TERMINAL_BACKGROUND_PREFIX} ${payload.te
                         message: `Screen view is starting on ${deviceName}`,
                         type: 'info',
                         duration: 4000,
+                    }, {
+                        eventId: event.lastEventId,
+                        context: {
+                            client_id: payload.client_id || '',
+                            screen_session_id: payload.screen_session_id || '',
+                            state,
+                        },
                     });
                     return;
                 }
@@ -312,6 +451,13 @@ this.appendOutput(payload.client_id, `${TERMINAL_BACKGROUND_PREFIX} ${payload.te
                         message: `Screen view stopped on ${deviceName}`,
                         type: 'warning',
                         duration: 4000,
+                    }, {
+                        eventId: event.lastEventId,
+                        context: {
+                            client_id: payload.client_id || '',
+                            screen_session_id: payload.screen_session_id || '',
+                            state,
+                        },
                     });
                     return;
                 }
@@ -324,6 +470,14 @@ this.appendOutput(payload.client_id, `${TERMINAL_BACKGROUND_PREFIX} ${payload.te
                             : `Screen view ended with an error on ${deviceName}`,
                         type: 'error',
                         duration: 5000,
+                    }, {
+                        eventId: event.lastEventId,
+                        context: {
+                            client_id: payload.client_id || '',
+                            screen_session_id: payload.screen_session_id || '',
+                            state,
+                            error: payload.error || '',
+                        },
                     });
                 }
             });
@@ -357,6 +511,7 @@ this.appendOutput(payload.client_id, `${TERMINAL_BACKGROUND_PREFIX} ${payload.te
                 }
 
                 if (!this.selectedId || payload.client_id === this.selectedId || !payload.client_id) {
+                    const downloadUrl = payload.download_url || `/api/artifacts/${encodeURIComponent(payload.artifact_id)}/download`;
                     this.showSseNotification('artifact_created', {
                         title: 'File Ready',
                         dangerouslyUseHTMLString: true,
@@ -364,7 +519,7 @@ this.appendOutput(payload.client_id, `${TERMINAL_BACKGROUND_PREFIX} ${payload.te
         <div>
           <div>${fileName} has been saved</div>
           <div style="margin-top:6px;">
-            <a href="${payload.download_url || `/api/artifacts/${encodeURIComponent(payload.artifact_id)}/download`}" target="_blank" style="color:#409eff;text-decoration:none;">
+            <a href="${downloadUrl}" target="_blank" style="color:#409eff;text-decoration:none;">
               Download now
             </a>
           </div>
@@ -372,6 +527,24 @@ this.appendOutput(payload.client_id, `${TERMINAL_BACKGROUND_PREFIX} ${payload.te
     `,
                         type: 'success',
                         duration: 6000
+                    }, {
+                        eventId: event.lastEventId,
+                        message: `${fileName} has been saved`,
+                        context: {
+                            client_id: payload.client_id || '',
+                            artifact_id: payload.artifact_id || '',
+                            artifact_type: payload.artifact_type || '',
+                            category: payload.category || '',
+                            original_name: payload.original_name || fileName,
+                        },
+                        actions: [
+                            {
+                                id: 'download',
+                                type: 'artifact_download',
+                                label: 'Download now',
+                                url: downloadUrl,
+                            },
+                        ],
                     });
                 }
 

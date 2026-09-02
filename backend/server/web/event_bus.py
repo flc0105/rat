@@ -1,5 +1,6 @@
 import queue
 import threading
+import uuid
 from typing import Dict, List
 
 
@@ -46,9 +47,11 @@ class WebEventBus:
         return subscriber_tab_id == normalized_target_tab_id
 
     def publish(self, event_type: str, data: Dict, target_tab_id: str = ''):
+        event_id = uuid.uuid4().hex
         event_item = {
+            'id': event_id,
             'event': event_type,
-            'data': data
+            'data': data,
         }
 
         with self._lock:
@@ -67,10 +70,4 @@ class WebEventBus:
             except Exception:
                 pass
 
-
-
-
-
-
-
-
+        return event_id

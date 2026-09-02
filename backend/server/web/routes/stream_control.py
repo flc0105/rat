@@ -52,6 +52,7 @@ def create_stream_control_blueprint(server_instance):
                 while True:
                     try:
                         item = q.get(timeout=15)
+                        yield f"id: {item['id']}\n"
                         yield f"event: {item['event']}\n"
                         yield f"data: {json.dumps(item['data'], ensure_ascii=False)}\n\n"
                     except queue.Empty:
