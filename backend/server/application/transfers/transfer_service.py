@@ -1,0 +1,261 @@
+import threading
+import time
+import uuid
+from datetime import datetime
+
+
+class TransferService:
+    """
+    Server 内存态文件传输状态中心。
+
+    只记录实际传输生命周期，不持久化到 runtime JSON。
+    Client -> Server 与 Server -> Client 共用同一份状态模型，并通过 SSE
+    定向同步给发起传输的浏览器 tab。
+    """
+
+    MAX_RECENT_COMPLETED = 50
+
+    def __init__(self, event_bus):
+        self.event_bus = event_bus
+        self._lock = threading.RLock()
+        self._items = {}
+        self._recent_ids = []
+
+    def create_transfer(
+        self,
+        *,
+        client_id: str,
+        direction: str,
+        filename: str = '',
+        hostname: str = '',
+        source_path: str = '',
+        destination_path: str = '',
+        tab_id: str = '',
+        stage: str = 'preparing',
+        metadata: dict | None = None,
+        total_bytes=None,
+    ) -> dict:
+        transfer_id = uuid.uuid4().hex
+        now_iso = datetime.now().isoformat()
+        now_mono = time.monotonic()
+
+        item = {
+            'transfer_id': transfer_id,
+            'client_id': str(client_id or '').strip(),
+            'direction': str(direction or '').strip(),
+            'filename': str(filename or '').strip(),
+            'hostname': str(hostname or '').strip(),
+            'source_path': str(source_path or '').strip(),
+            'destination_path': str(destination_path or '').strip(),
+            'tab_id': str(tab_id or '').strip(),
+            'state': 'running',
+            'stage': str(stage or 'preparing').strip() or 'preparing',
+            'total_bytes': self._normalize_int(total_bytes),
+            'transferred_bytes': 0,
+            'percent': None,
+            'speed_bytes_per_sec': 0,
+            'eta_seconds': None,
+            'progress_supported': True,
+            'artifact_id': '',
+            'error': '',
+            'metadata': dict(metadata or {}),
+            'started_at': now_iso,
+            'updated_at': now_iso,
+            'completed_at': '',
+            '_last_progress_bytes': 0,
+            '_last_progress_mono': now_mono,
+            '_speed_ema': 0.0,
+        }
+        self._refresh_derived_fields(item)
+
+        with self._lock:
+            self._items[transfer_id] = item
+
+        self._publish(item)
+        return self._public_item(item)
+
+    def update_transfer(self, transfer_id: str, *, client_id: str = '', **patch) -> dict | None:
+        normalized_id = str(transfer_id or '').strip()
+        if not normalized_id:
+            return None
+
+        with self._lock:
+            item = self._items.get(normalized_id)
+            if not item:
+                return None
+
+            normalized_client_id = str(client_id or '').strip()
+            if normalized_client_id and item.get('client_id') and item.get('client_id') != normalized_client_id:
+                return None
+
+            self._apply_patch(item, patch)
+            self._refresh_derived_fields(item)
+            self._remember_if_terminal(item)
+            snapshot = self._public_item(item)
+
+        self._publish(item)
+        return snapshot
+
+    def handle_client_update(self, client_id: str, payload: dict):
+        if not isinstance(payload, dict):
+            return None
+        transfer_id = str(payload.get('transfer_id') or '').strip()
+        if not transfer_id:
+            return None
+
+        allowed = {
+            'state',
+            'stage',
+            'filename',
+            'total_bytes',
+            'transferred_bytes',
+            'progress_supported',
+            'artifact_id',
+            'error',
+            'metadata',
+        }
+        patch = {key: payload.get(key) for key in allowed if key in payload}
+        return self.update_transfer(transfer_id, client_id=client_id, **patch)
+
+    def fail_transfer(self, transfer_id: str, error: str, *, client_id: str = ''):
+        return self.update_transfer(
+            transfer_id,
+            client_id=client_id,
+            state='failed',
+            stage='failed',
+            error=str(error or '').strip(),
+        )
+
+    def complete_transfer(self, transfer_id: str, *, client_id: str = '', artifact_id: str = ''):
+        patch = {
+            'state': 'completed',
+            'stage': 'completed',
+            'error': '',
+        }
+        if artifact_id:
+            patch['artifact_id'] = artifact_id
+        return self.update_transfer(transfer_id, client_id=client_id, **patch)
+
+    def list_transfers(self, tab_id: str = '') -> dict:
+        normalized_tab_id = str(tab_id or '').strip()
+        with self._lock:
+            items = [
+                self._public_item(item)
+                for item in self._items.values()
+                if not normalized_tab_id or str(item.get('tab_id') or '').strip() == normalized_tab_id
+            ]
+
+        items.sort(key=lambda item: item.get('started_at') or '', reverse=True)
+        active = [item for item in items if item.get('state') == 'running']
+        recent = [item for item in items if item.get('state') != 'running']
+        return {
+            'active': active,
+            'recent': recent[:self.MAX_RECENT_COMPLETED],
+            'items': active + recent[:self.MAX_RECENT_COMPLETED],
+        }
+
+    def _apply_patch(self, item: dict, patch: dict):
+        previous_bytes = self._normalize_int(item.get('transferred_bytes')) or 0
+        previous_mono = float(item.get('_last_progress_mono') or time.monotonic())
+
+        for key in (
+            'state', 'stage', 'filename', 'artifact_id', 'error',
+        ):
+            if key in patch and patch.get(key) is not None:
+                item[key] = str(patch.get(key) or '').strip()
+
+        if 'progress_supported' in patch and patch.get('progress_supported') is not None:
+            item['progress_supported'] = bool(patch.get('progress_supported'))
+
+        if 'total_bytes' in patch:
+            item['total_bytes'] = self._normalize_int(patch.get('total_bytes'))
+
+        if 'transferred_bytes' in patch:
+            next_bytes = self._normalize_int(patch.get('transferred_bytes'))
+            if next_bytes is not None:
+                item['transferred_bytes'] = max(0, next_bytes)
+
+        if isinstance(patch.get('metadata'), dict):
+            current_metadata = item.get('metadata') if isinstance(item.get('metadata'), dict) else {}
+            item['metadata'] = {**current_metadata, **patch.get('metadata')}
+
+        now_mono = time.monotonic()
+        current_bytes = self._normalize_int(item.get('transferred_bytes')) or 0
+        if current_bytes >= previous_bytes:
+            elapsed = now_mono - previous_mono
+            delta = current_bytes - previous_bytes
+            if elapsed > 0.05 and delta > 0:
+                instant_speed = delta / elapsed
+                previous_ema = float(item.get('_speed_ema') or 0.0)
+                speed_ema = instant_speed if previous_ema <= 0 else (0.35 * instant_speed + 0.65 * previous_ema)
+                item['_speed_ema'] = speed_ema
+                item['speed_bytes_per_sec'] = int(max(0.0, speed_ema))
+                item['_last_progress_bytes'] = current_bytes
+                item['_last_progress_mono'] = now_mono
+
+        item['updated_at'] = datetime.now().isoformat()
+
+        if item.get('state') in ('completed', 'failed', 'cancelled') and not item.get('completed_at'):
+            item['completed_at'] = item['updated_at']
+            item['speed_bytes_per_sec'] = 0
+            item['eta_seconds'] = 0 if item.get('state') == 'completed' else None
+
+    def _refresh_derived_fields(self, item: dict):
+        total = self._normalize_int(item.get('total_bytes'))
+        transferred = self._normalize_int(item.get('transferred_bytes')) or 0
+
+        if total and total > 0:
+            transferred = min(max(transferred, 0), total)
+            item['transferred_bytes'] = transferred
+            item['percent'] = round((transferred / total) * 100.0, 1)
+            speed = self._normalize_int(item.get('speed_bytes_per_sec')) or 0
+            if speed > 0 and item.get('state') == 'running':
+                item['eta_seconds'] = max(0, int((total - transferred) / speed))
+            elif item.get('state') == 'running':
+                item['eta_seconds'] = None
+        else:
+            item['percent'] = None
+            item['eta_seconds'] = None
+
+        if item.get('state') == 'completed' and total and transferred < total:
+            item['transferred_bytes'] = total
+            item['percent'] = 100.0
+
+    def _remember_if_terminal(self, item: dict):
+        if item.get('state') not in ('completed', 'failed', 'cancelled'):
+            return
+
+        transfer_id = item.get('transfer_id')
+        if transfer_id in self._recent_ids:
+            self._recent_ids.remove(transfer_id)
+        self._recent_ids.insert(0, transfer_id)
+
+        while len(self._recent_ids) > self.MAX_RECENT_COMPLETED:
+            stale_id = self._recent_ids.pop()
+            stale_item = self._items.get(stale_id)
+            if stale_item and stale_item.get('state') != 'running':
+                self._items.pop(stale_id, None)
+
+    def _publish(self, item: dict):
+        target_tab_id = str(item.get('tab_id') or '').strip()
+        snapshot = self._public_item(item)
+        self.event_bus.publish(
+            'transfer_updated',
+            snapshot,
+            target_tab_id=target_tab_id,
+        )
+
+    def _public_item(self, item: dict) -> dict:
+        return {
+            key: value
+            for key, value in dict(item or {}).items()
+            if not str(key).startswith('_') and key != 'tab_id'
+        }
+
+    def _normalize_int(self, value):
+        if value is None or value == '':
+            return None
+        try:
+            return max(0, int(value))
+        except Exception:
+            return None
