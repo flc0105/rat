@@ -1,7 +1,53 @@
 <template>
   <aside class="sidebar panel">
     <div class="panel-header">
-      <div class="panel-title">Devices</div>
+      <el-dropdown
+        class="device-group-switcher"
+        trigger="click"
+        placement="bottom-start"
+        @command="handleGroupFilterCommand"
+      >
+        <button
+          type="button"
+          class="device-group-switcher-trigger"
+          aria-label="Device group filter"
+          @click="closeDeviceContextMenu"
+        >
+          <span class="device-group-switcher-name">{{ selectedGroupLabel }}</span>
+          <span class="device-group-switcher-count">{{ selectedGroupMachineCount }}</span>
+          <span class="device-group-switcher-chevron" aria-hidden="true"></span>
+        </button>
+
+        <template #dropdown>
+          <el-dropdown-menu>
+            <el-dropdown-item command="__all_devices__">
+              <span class="device-group-dropdown-item">
+                <span
+                  class="device-group-dropdown-check"
+                  :class="{ visible: !selectedGroupId }"
+                >✓</span>
+                <span class="device-group-dropdown-name">All Devices</span>
+                <span class="device-group-dropdown-count">{{ getDeviceGroupCount('') }}</span>
+              </span>
+            </el-dropdown-item>
+
+            <el-dropdown-item
+              v-for="group in deviceGroups"
+              :key="group.group_id"
+              :command="group.group_id"
+            >
+              <span class="device-group-dropdown-item">
+                <span
+                  class="device-group-dropdown-check"
+                  :class="{ visible: selectedGroupId === group.group_id }"
+                >✓</span>
+                <span class="device-group-dropdown-name">{{ group.name }}</span>
+                <span class="device-group-dropdown-count">{{ getDeviceGroupCount(group.group_id) }}</span>
+              </span>
+            </el-dropdown-item>
+          </el-dropdown-menu>
+        </template>
+      </el-dropdown>
 
       <el-dropdown
         trigger="click"
@@ -11,7 +57,6 @@
         <el-button
           class="device-toolbar-more-btn"
           text
-          circle
           title="Device actions"
           aria-label="Device actions"
           @click="closeDeviceContextMenu"
@@ -27,6 +72,10 @@
 
             <el-dropdown-item command="toggle-hidden">
               {{ showHiddenDevices ? 'Hide hidden devices' : 'Show hidden devices' }}
+            </el-dropdown-item>
+
+            <el-dropdown-item divided command="manage-groups">
+              Manage groups
             </el-dropdown-item>
           </el-dropdown-menu>
         </template>
@@ -112,6 +161,38 @@
           Connection history
         </button>
 
+        <button
+          type="button"
+          class="device-context-menu-item device-context-menu-group-toggle"
+          :disabled="!contextMenuItem || !contextMenuItem.machine_id"
+          @click.stop="toggleContextGroupMenu"
+        >
+          <span>Set group</span>
+          <span class="device-context-menu-arrow">{{ contextGroupMenuVisible ? '▾' : '›' }}</span>
+        </button>
+
+        <div v-if="contextGroupMenuVisible" class="device-context-group-list">
+          <button
+            type="button"
+            class="device-context-menu-item device-context-group-item"
+            @click="assignContextMachineGroup('')"
+          >
+            <span>No group</span>
+            <span v-if="!contextMachineGroupId" class="device-context-group-check">✓</span>
+          </button>
+
+          <button
+            v-for="group in deviceGroups"
+            :key="group.group_id"
+            type="button"
+            class="device-context-menu-item device-context-group-item"
+            @click="assignContextMachineGroup(group.group_id)"
+          >
+            <span class="device-context-group-name">{{ group.name }}</span>
+            <span v-if="contextMachineGroupId === group.group_id" class="device-context-group-check">✓</span>
+          </button>
+        </div>
+
         <div class="device-context-menu-separator"></div>
 
         <button
@@ -185,6 +266,26 @@ export default {
       default: () => Date.now(),
     },
 
+    deviceGroups: {
+      type: Array,
+      default: () => [],
+    },
+
+    machineGroupAssignments: {
+      type: Object,
+      default: () => ({}),
+    },
+
+    selectedGroupId: {
+      type: String,
+      default: '',
+    },
+
+    deviceGroupCounts: {
+      type: Object,
+      default: () => ({}),
+    },
+
     showHiddenDevices: {
       type: Boolean,
       default: false,
@@ -197,6 +298,9 @@ export default {
     'toggle-hidden-devices',
     'toggle-client-hidden',
     'toggle-machine-hidden',
+    'group-filter-change',
+    'manage-groups',
+    'assign-machine-group',
     'rename-machine',
     'open-connection-history',
     'connection-removed',
@@ -210,6 +314,7 @@ export default {
       contextMenuItem: null,
       contextMenuX: 0,
       contextMenuY: 0,
+      contextGroupMenuVisible: false,
 
       touchMenuTimer: null,
       touchStartX: 0,
@@ -243,6 +348,26 @@ computed: {
   canRemoveContextConnection() {
     return Boolean(this.contextMenuItem && this.contextMenuItem.client_id)
   },
+
+  contextMachineGroupId() {
+    const machineKey = String(this.contextMenuItem?.machine_id || '').trim().toLowerCase()
+    if (!machineKey) return ''
+    return String(this.machineGroupAssignments?.[machineKey] || '').trim()
+  },
+
+  selectedGroupLabel() {
+    if (!this.selectedGroupId) return 'All Devices'
+
+    const group = (this.deviceGroups || []).find(item => {
+      return String(item?.group_id || '').trim() === String(this.selectedGroupId || '').trim()
+    })
+
+    return String(group?.name || '').trim() || 'All Devices'
+  },
+
+  selectedGroupMachineCount() {
+    return this.getDeviceGroupCount(this.selectedGroupId)
+  },
 },
 
   mounted() {
@@ -270,7 +395,37 @@ computed: {
 
       if (command === 'toggle-hidden') {
         this.$emit('toggle-hidden-devices')
+        return
       }
+
+      if (command === 'manage-groups') {
+        this.$emit('manage-groups')
+      }
+    },
+
+    handleGroupFilterCommand(command) {
+      this.closeDeviceContextMenu()
+      const groupId = command === '__all_devices__' ? '' : String(command || '').trim()
+      this.$emit('group-filter-change', groupId)
+    },
+
+    getDeviceGroupCount(groupId) {
+      const key = String(groupId || '').trim() || '__all__'
+      const count = Number(this.deviceGroupCounts?.[key] || 0)
+      return Number.isFinite(count) ? Math.max(0, Math.floor(count)) : 0
+    },
+
+    toggleContextGroupMenu() {
+      if (!this.contextMenuItem?.machine_id) return
+      this.contextGroupMenuVisible = !this.contextGroupMenuVisible
+      this.$nextTick(() => this.adjustDeviceContextMenuPosition())
+    },
+
+    assignContextMachineGroup(groupId) {
+      const item = this.contextMenuItem
+      if (!item?.machine_id) return
+      this.closeDeviceContextMenu()
+      this.$emit('assign-machine-group', item, String(groupId || '').trim())
     },
 
     handleDeviceClick(item, event) {
@@ -313,6 +468,7 @@ computed: {
       }
 
       this.contextMenuItem = item
+      this.contextGroupMenuVisible = false
       this.contextMenuClientId = String(item?.client_id || '')
       this.contextMenuX = x
       this.contextMenuY = y
@@ -402,6 +558,7 @@ computed: {
       this.contextMenuVisible = false
       this.contextMenuClientId = ''
       this.contextMenuItem = null
+      this.contextGroupMenuVisible = false
       this.ignoreNextDocumentClickUntil = 0
       this.ignoreNextScrollUntil = 0
       document.body.classList.remove('device-touch-callout-guard')
@@ -659,20 +816,120 @@ async removeConnectionPermanently(item) {
 }
 
 .panel-header {
-  padding: 16px 18px;
+  min-height: 54px;
+  padding: 11px 14px 10px 16px;
   border-bottom: 1px solid var(--line);
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 10px;
   flex-shrink: 0;
 }
 
-.panel-title {
+.device-group-switcher {
+  min-width: 0;
+  max-width: calc(100% - 38px);
+}
+
+.device-group-switcher-trigger {
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
+  max-width: 100%;
+  height: 32px;
+  gap: 7px;
+  padding: 0 7px 0 0;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.16s ease;
+}
+
+.device-group-switcher-trigger:hover,
+.device-group-switcher-trigger:focus-visible {
+  background: rgba(148, 163, 184, 0.08);
+  outline: none;
+}
+
+.device-group-switcher-name {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text);
   font-size: 15px;
   font-weight: 700;
+  letter-spacing: 0.005em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.device-group-switcher-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: rgba(148, 163, 184, 0.12);
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 18px;
+  font-variant-numeric: tabular-nums;
+}
+
+.device-group-switcher-chevron {
+  width: 6px;
+  height: 6px;
+  margin: -3px 1px 0 0;
+  border-right: 1.5px solid var(--muted-2);
+  border-bottom: 1.5px solid var(--muted-2);
+  transform: rotate(45deg);
+  flex-shrink: 0;
+}
+
+.device-group-dropdown-item {
+  display: grid;
+  grid-template-columns: 16px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  min-width: 190px;
+}
+
+.device-group-dropdown-check {
+  color: var(--el-color-primary);
+  font-size: 12px;
+  font-weight: 700;
+  visibility: hidden;
+}
+
+.device-group-dropdown-check.visible {
+  visibility: visible;
+}
+
+.device-group-dropdown-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.device-group-dropdown-count {
+  color: var(--el-text-color-secondary);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
 }
 
 .device-toolbar-more-btn {
+  min-width: 28px;
+  width: 28px;
+  height: 28px;
+  padding: 0;
   color: var(--muted);
 }
 
@@ -878,6 +1135,44 @@ body.device-touch-callout-guard * {
   height: 1px;
   margin: 6px 0;
   background-color: var(--el-border-color-light);
+}
+
+
+.device-context-menu-group-toggle {
+  justify-content: space-between;
+  gap: 18px;
+}
+
+.device-context-menu-arrow {
+  color: var(--el-text-color-secondary);
+  font-size: 12px;
+}
+
+.device-context-group-list {
+  max-height: 210px;
+  padding: 2px 0 4px 10px;
+  overflow-y: auto;
+}
+
+.device-context-group-item {
+  min-height: 31px;
+  padding-left: 20px;
+  padding-right: 16px;
+  font-size: 13px;
+}
+
+.device-context-group-name {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.device-context-group-check {
+  margin-left: auto;
+  color: var(--el-color-primary);
+  font-weight: 700;
 }
 
 .device-context-menu-item.is-danger {

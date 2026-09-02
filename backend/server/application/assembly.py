@@ -9,6 +9,7 @@ from server.application.completion.command_completion_service import ServerComma
 from server.application.connection.connection_history_store import ConnectionHistoryStore
 from server.application.connection.connection_service import WebConnectionService
 from server.application.connection.recent_device_store import RecentDeviceStore
+from server.application.connection.device_group_store import DeviceGroupStore
 from server.application.execution.remote_execution_service import RemoteExecutionService
 from server.application.external_tools.external_tool_catalog_service import ExternalToolCatalogService
 from server.application.external_tools.external_tool_runtime_service import ExternalToolRuntimeService
@@ -58,6 +59,7 @@ from server.config.config import (
     EXTERNAL_TOOL_PARAM_PRESETS_ROOT_DIR,
     CONNECTION_HISTORY_ROOT_DIR,
     RECENT_DEVICES_JSON_PATH,
+    DEVICE_GROUPS_JSON_PATH,
     TOOLBAR_PREFERENCES_JSON_PATH,
     NOTIFICATION_PREFERENCES_JSON_PATH,
     NOTIFICATION_CENTER_JSON_PATH,
@@ -112,6 +114,7 @@ class ServerApplicationAssembly:
         )
 
         self.recent_device_store = RecentDeviceStore(RECENT_DEVICES_JSON_PATH)
+        self.device_group_store = DeviceGroupStore(DEVICE_GROUPS_JSON_PATH)
         self.toolbar_preference_store = ToolbarPreferenceStore(TOOLBAR_PREFERENCES_JSON_PATH)
         self.notification_preference_store = NotificationPreferenceStore(NOTIFICATION_PREFERENCES_JSON_PATH)
         self.notification_history_store = NotificationHistoryStore(NOTIFICATION_CENTER_JSON_PATH)
@@ -181,6 +184,7 @@ class ServerApplicationAssembly:
         # ------------------ web sub facades / apis ------------------ #
         self.connection_api = WebConnectionApi(
             connection_service=self.connection_service,
+            device_group_store=self.device_group_store,
         )
 
         self.toolbar_preferences_api = WebToolbarPreferencesApi(

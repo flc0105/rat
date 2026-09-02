@@ -62,11 +62,18 @@
         :selected-id="selectedId"
         :status-now-tick="statusNowTick"
         :show-hidden-devices="showHiddenDevices"
+        :device-groups="deviceGroups"
+        :machine-group-assignments="machineGroupAssignments"
+        :selected-group-id="selectedDeviceGroupId"
+        :device-group-counts="deviceGroupMachineCounts"
         @refresh="loadConnections"
         @select="selectConnection"
         @toggle-hidden-devices="toggleShowHiddenDevices"
         @toggle-client-hidden="toggleClientHiddenFromSidebar"
         @toggle-machine-hidden="toggleMachineHiddenFromSidebar"
+        @group-filter-change="setSelectedDeviceGroup"
+        @manage-groups="openDeviceGroupManagerDialog"
+        @assign-machine-group="assignMachineGroupFromSidebar"
         @rename-machine="renameMachineFromSidebar"
         @open-connection-history="openMachineConnectionHistory"
         @connection-removed="forgetConnectionFromDeviceView"
@@ -346,6 +353,13 @@
     ref="oneLinersDialogRef"
   />
 
+  <DeviceGroupManagerDialog
+    ref="deviceGroupManagerDialogRef"
+    :groups="deviceGroups"
+    :machine-group-assignments="machineGroupAssignments"
+    @groups-changed="handleDeviceGroupsChanged"
+  />
+
   <SettingsDialog
     ref="settingsDialogRef"
     @toolbar-saved="refreshToolbarPreferences"
@@ -397,6 +411,7 @@ import PtyDialog from './components/PtyDialog.vue'
 import ScreenViewDialog from './components/ScreenViewDialog.vue'
 import ClipboardDialog from './components/ClipboardDialog.vue'
 import OneLinersDialog from './components/OneLinersDialog.vue'
+import DeviceGroupManagerDialog from './components/DeviceGroupManagerDialog.vue'
 import SettingsDialog from './components/SettingsDialog.vue'
 import NotificationCenterDrawer from './components/NotificationCenterDrawer.vue'
 import TransferCenterDrawer from './components/TransferCenterDrawer.vue'
@@ -407,6 +422,7 @@ export default {
   components: {
     TransferCenterDrawer,
     NotificationCenterDrawer,
+    DeviceGroupManagerDialog,
     SettingsDialog,
     ClipboardDialog,
     ScreenViewDialog,
@@ -629,6 +645,10 @@ export default {
       return this.$refs.oneLinersDialogRef?.open()
     },
 
+    openDeviceGroupManagerDialog() {
+      return this.$refs.deviceGroupManagerDialogRef?.open()
+    },
+
     openSettingsDialog() {
       return this.$refs.settingsDialogRef?.open()
     },
@@ -742,8 +762,9 @@ export default {
 
   async mounted() {
     this.ensureTabId()
-    this.loadConnections()
     await Promise.all([
+      this.loadConnections(),
+      this.loadDeviceGroups(),
       this.loadSseNotificationPreferences(),
       this.loadSseNotificationHistory(),
       this.loadTransferItems(),

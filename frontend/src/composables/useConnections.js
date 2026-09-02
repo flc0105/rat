@@ -1,5 +1,6 @@
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { listConnections, updateConnectionDeviceViewPrefs } from '../api/connectionsApi.js'
+import { assignMachineDeviceGroup, listDeviceGroups } from '../api/deviceGroupsApi.js'
 
 function emptyDeviceViewPrefs() {
     return {
@@ -19,6 +20,9 @@ export default {
             connections: [],
             selectedId: '',
             showHiddenDevices: false,
+            deviceGroups: [],
+            machineGroupAssignments: {},
+            selectedDeviceGroupId: '',
             deviceViewPrefs: emptyDeviceViewPrefs(),
             locallyRemovedConnections: {
                 clientIds: {},
@@ -47,6 +51,105 @@ export default {
 
         getConnectionMachineId(item) {
             return this.normalizeMachineId(item?.machine_id)
+        },
+
+        normalizeDeviceGroupId(value) {
+            return String(value || '').trim()
+        },
+
+        normalizeMachineGroupKey(value) {
+            return this.normalizeMachineId(value).toLowerCase()
+        },
+
+        applyDeviceGroupState(payload = {}) {
+            const groups = Array.isArray(payload?.groups)
+                ? payload.groups
+                    .map(item => ({
+                        group_id: this.normalizeDeviceGroupId(item?.group_id || item?.id),
+                        name: String(item?.name || '').trim(),
+                        created_at: String(item?.created_at || ''),
+                        updated_at: String(item?.updated_at || ''),
+                    }))
+                    .filter(item => item.group_id && item.name)
+                : []
+
+            const validGroupIds = new Set(groups.map(item => item.group_id))
+            const assignments = {}
+            const rawAssignments = payload?.machine_groups
+
+            if (rawAssignments && typeof rawAssignments === 'object' && !Array.isArray(rawAssignments)) {
+                Object.entries(rawAssignments).forEach(([machineId, groupId]) => {
+                    const machineKey = this.normalizeMachineGroupKey(machineId)
+                    const normalizedGroupId = this.normalizeDeviceGroupId(groupId)
+                    if (machineKey && validGroupIds.has(normalizedGroupId)) {
+                        assignments[machineKey] = normalizedGroupId
+                    }
+                })
+            }
+
+            this.deviceGroups = groups
+            this.machineGroupAssignments = assignments
+
+            if (this.selectedDeviceGroupId && !validGroupIds.has(this.selectedDeviceGroupId)) {
+                this.selectedDeviceGroupId = ''
+            }
+
+            this.ensureSelectedConnectionVisible()
+        },
+
+        async loadDeviceGroups() {
+            try {
+                const payload = await listDeviceGroups()
+                this.applyDeviceGroupState(payload)
+            } catch (e) {
+                ElMessage.error(e.message || 'Failed to load device groups')
+            }
+        },
+
+        getMachineDeviceGroupId(machineId) {
+            const machineKey = this.normalizeMachineGroupKey(machineId)
+            if (!machineKey) return ''
+            return this.normalizeDeviceGroupId(this.machineGroupAssignments?.[machineKey])
+        },
+
+        isConnectionInSelectedDeviceGroup(item) {
+            const selectedGroupId = this.normalizeDeviceGroupId(this.selectedDeviceGroupId)
+            if (!selectedGroupId) return true
+            return this.getMachineDeviceGroupId(item?.machine_id) === selectedGroupId
+        },
+
+        setSelectedDeviceGroup(groupId) {
+            const normalizedGroupId = this.normalizeDeviceGroupId(groupId)
+            const exists = !normalizedGroupId || (this.deviceGroups || []).some(item => item.group_id === normalizedGroupId)
+            this.selectedDeviceGroupId = exists ? normalizedGroupId : ''
+            this.ensureSelectedConnectionVisible()
+        },
+
+        handleDeviceGroupsChanged(payload = {}) {
+            this.applyDeviceGroupState(payload)
+        },
+
+        async assignMachineGroupFromSidebar(item, groupId = '') {
+            const machineId = this.getConnectionMachineId(item)
+            if (!machineId) {
+                ElMessage.warning('Invalid machine id')
+                return
+            }
+
+            try {
+                const payload = await assignMachineDeviceGroup(
+                    machineId,
+                    this.normalizeDeviceGroupId(groupId),
+                )
+                this.applyDeviceGroupState(payload)
+
+                const assignedGroup = (this.deviceGroups || []).find(group => {
+                    return group.group_id === this.getMachineDeviceGroupId(machineId)
+                })
+                ElMessage.success(assignedGroup ? `Moved machine to ${assignedGroup.name}` : 'Machine group cleared')
+            } catch (e) {
+                ElMessage.error(e.message || 'Failed to update machine group')
+            }
         },
 
         markConnectionLocallyRemoved(payload = {}) {
@@ -329,10 +432,14 @@ export default {
         },
 
         ensureSelectedConnectionVisible() {
-            if (this.showHiddenDevices) return
-
             const selected = this.connections.find(item => item.client_id === this.selectedId)
-            if (selected && !this.isConnectionHiddenByPrefs(selected)) return
+            if (
+                selected &&
+                this.isConnectionInSelectedDeviceGroup(selected) &&
+                (this.showHiddenDevices || !this.isConnectionHiddenByPrefs(selected))
+            ) {
+                return
+            }
 
             const next = this.deviceSidebarConnections[0]
             this.selectedId = next?.client_id || ''
@@ -747,8 +854,44 @@ export default {
 
         deviceSidebarConnections() {
             const decorated = (this.connections || []).map(item => this.decorateConnectionForDeviceView(item))
-            if (this.showHiddenDevices) return decorated
-            return decorated.filter(item => !item.device_hidden)
+            const grouped = decorated.filter(item => this.isConnectionInSelectedDeviceGroup(item))
+            if (this.showHiddenDevices) return grouped
+            return grouped.filter(item => !item.device_hidden)
+        },
+
+        deviceGroupMachineCounts() {
+            const allMachineKeys = new Set()
+            const groupMachineKeys = {}
+
+            ;(this.connections || []).forEach(item => {
+                const machineKey = this.normalizeMachineGroupKey(item?.machine_id)
+                const fallbackClientId = this.normalizeClientId(item?.client_id)
+                const deviceKey = machineKey || (fallbackClientId ? `client:${fallbackClientId}` : '')
+                if (!deviceKey) return
+
+                allMachineKeys.add(deviceKey)
+
+                if (!machineKey) return
+                const groupId = this.getMachineDeviceGroupId(machineKey)
+                if (!groupId) return
+
+                if (!groupMachineKeys[groupId]) {
+                    groupMachineKeys[groupId] = new Set()
+                }
+                groupMachineKeys[groupId].add(machineKey)
+            })
+
+            const counts = {
+                __all__: allMachineKeys.size,
+            }
+
+            ;(this.deviceGroups || []).forEach(group => {
+                const groupId = this.normalizeDeviceGroupId(group?.group_id)
+                if (!groupId) return
+                counts[groupId] = groupMachineKeys[groupId]?.size || 0
+            })
+
+            return counts
         },
 
         currentConnection() {

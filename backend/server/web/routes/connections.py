@@ -19,6 +19,44 @@ def create_connections_blueprint(server_instance):
             default_error_status=500,
         )
 
+    @blueprint.get('/api/device-groups')
+    def get_device_groups():
+        return responder.ok(connection_api.get_device_groups())
+
+    @blueprint.post('/api/device-groups')
+    def create_device_group():
+        def _execute():
+            body = request.get_json(silent=True) or {}
+            return connection_api.create_device_group(body.get('name'))
+
+        return responder.json_endpoint(_execute, default_error_status=400)
+
+    @blueprint.patch('/api/device-groups/<group_id>')
+    def rename_device_group(group_id):
+        def _execute():
+            body = request.get_json(silent=True) or {}
+            return connection_api.rename_device_group(group_id, body.get('name'))
+
+        return responder.json_endpoint(_execute, default_error_status=400)
+
+    @blueprint.delete('/api/device-groups/<group_id>')
+    def delete_device_group(group_id):
+        return responder.json_endpoint(
+            lambda: connection_api.delete_device_group(group_id),
+            default_error_status=400,
+        )
+
+    @blueprint.patch('/api/machines/<machine_id>/device-group')
+    def assign_machine_device_group(machine_id):
+        def _execute():
+            body = request.get_json(silent=True) or {}
+            return connection_api.assign_machine_device_group(
+                machine_id,
+                body.get('group_id') or '',
+            )
+
+        return responder.json_endpoint(_execute, default_error_status=400)
+
     @blueprint.post('/api/connections/<client_id>/kill')
     def kill_connection(client_id):
         def _execute():
