@@ -74,7 +74,13 @@
           </div>
 
           <div class="one-liner-code-row">
-            <pre class="one-liner-code"><code>{{ item.code }}</code></pre>
+            <pre
+              class="one-liner-code"
+              contenteditable="true"
+              spellcheck="false"
+              :aria-label="`${item.label} command`"
+              @blur="saveOneLinerEdit(item, $event)"
+            ><code>{{ item.code }}</code></pre>
 
             <el-button
               size="small"
@@ -103,6 +109,7 @@ export default {
     return {
       visible: false,
       oneLiners: terminalOneLiners,
+      oneLinerOverrides: {},
       serverForm: this.getDefaultServerForm(),
     }
   },
@@ -110,17 +117,23 @@ export default {
   computed: {
     normalizedOneLiners() {
       return this.oneLiners
-        .map((item, index) => ({
-          id: item.id || `${index}-${item.label || 'one-liner'}`,
-          label: String(item.label || '').trim(),
-          code: this.renderOneLinerCode(item.code),
-        }))
-        .filter(item => item.label && item.code)
+        .map((item, index) => {
+          const id = item.id || `${index}-${item.label || 'one-liner'}`
+          const renderedCode = this.renderOneLinerCode(item.code)
+          const hasOverride = Object.prototype.hasOwnProperty.call(this.oneLinerOverrides, id)
+          return {
+            id,
+            label: String(item.label || '').trim(),
+            code: hasOverride ? this.oneLinerOverrides[id] : renderedCode,
+          }
+        })
+        .filter(item => item.label)
     },
   },
 
   methods: {
     async open() {
+      this.oneLinerOverrides = {}
       this.serverForm = this.getDefaultServerForm()
       this.visible = true
       await this.loadServerPlatform()
@@ -178,6 +191,20 @@ export default {
         .replace(/{{\s*web_port\s*}}/g, replacements.web_port)
         .replace(/{{\s*file_transfer_port\s*}}/g, replacements.file_transfer_port)
         .trim()
+    },
+
+    saveOneLinerEdit(item, event) {
+      const itemId = String(item?.id || '').trim()
+      if (!itemId) return
+
+      const text = String(event?.currentTarget?.innerText ?? '')
+        .replace(/\r\n/g, '\n')
+        .replace(/\u00a0/g, ' ')
+
+      this.oneLinerOverrides = {
+        ...this.oneLinerOverrides,
+        [itemId]: text,
+      }
     },
 
     async copyOneLiner(item) {
@@ -321,6 +348,13 @@ export default {
   line-height: 1.55;
   white-space: pre-wrap;
   word-break: break-word;
+  cursor: text;
+  outline: none;
+}
+
+.one-liner-code:focus {
+  border-color: rgba(96, 165, 250, 0.72);
+  box-shadow: inset 0 0 0 1px rgba(96, 165, 250, 0.22);
 }
 
 .one-liner-copy-button.el-button {

@@ -429,6 +429,86 @@ export default {
                 this.upsertTransferItem(payload);
             });
 
+            es.addEventListener('file_transfer_lifecycle', (event) => {
+                const payload = JSON.parse(event.data || '{}');
+                const lifecycle = String(payload.lifecycle || '').trim().toLowerCase();
+                const state = String(payload.state || '').trim().toLowerCase();
+                const filename = String(payload.filename || 'File transfer').trim() || 'File transfer';
+                const deviceName = getConnectionLabel(payload.client_id);
+                const stage = String(payload.stage || '').trim().toLowerCase();
+                const direction = String(payload.direction || '').trim().toLowerCase();
+                const errorText = String(payload.error || '').trim();
+
+                let routeLabel = '';
+                if (stage === 'uploading_to_server') {
+                    routeLabel = 'Browser → Server';
+                } else if (direction === 'server_to_client') {
+                    routeLabel = `Server → ${deviceName}`;
+                } else {
+                    routeLabel = `${deviceName} → Server`;
+                }
+
+                const actions = [
+                    {
+                        id: 'open-transfers',
+                        type: 'open_transfers',
+                        label: 'Open Transfers',
+                    },
+                ];
+                const context = {
+                    transfer_id: payload.transfer_id || '',
+                    client_id: payload.client_id || '',
+                    filename,
+                    direction,
+                    state,
+                    stage,
+                };
+
+                if (lifecycle === 'started') {
+                    this.showSseNotification('file_transfer_started', {
+                        title: 'File Transfer Started',
+                        message: `${filename} · ${routeLabel}`,
+                        type: 'info',
+                        duration: 3500,
+                    }, {
+                        eventId: event.lastEventId,
+                        context,
+                        actions,
+                    });
+                    return;
+                }
+
+                if (lifecycle === 'stopped') {
+                    const cancelled = state === 'cancelled';
+                    this.showSseNotification('file_transfer_stopped', {
+                        title: cancelled ? 'File Transfer Stopped' : 'File Transfer Completed',
+                        message: cancelled
+                            ? `${filename} · Cancelled · ${routeLabel}`
+                            : `${filename} · Completed · ${routeLabel}`,
+                        type: cancelled ? 'warning' : 'success',
+                        duration: 4500,
+                    }, {
+                        eventId: event.lastEventId,
+                        context,
+                        actions,
+                    });
+                    return;
+                }
+
+                if (lifecycle === 'error') {
+                    this.showSseNotification('file_transfer_error', {
+                        title: 'File Transfer Error',
+                        message: `${filename} · ${routeLabel}${errorText ? `: ${errorText}` : ''}`,
+                        type: 'error',
+                        duration: 7000,
+                    }, {
+                        eventId: event.lastEventId,
+                        context: { ...context, error: errorText },
+                        actions,
+                    });
+                }
+            });
+
             es.addEventListener('connection_online', (event) => {
                 const payload = JSON.parse(event.data);
                 const conn = payload.connection;

@@ -68,16 +68,16 @@ export function setRemoteClipboardFiles(clientId, items = []) {
   return apiData(connectionPath(clientId, 'set-files'), { method: 'POST', body: form }, {})
 }
 
-export function downloadRemoteClipboardFile(clientId, path) {
+export function downloadRemoteClipboardFile(clientId, path, headers = {}) {
   const url = `/api/connections/${encodeURIComponent(clientId)}/remote-files/download?path=${encodeURIComponent(path)}`
-  return apiData(url, { method: 'POST' }, {})
+  return apiData(url, { method: 'POST', headers: { ...(headers || {}) } }, {})
 }
 
-export function downloadRemoteClipboardDirectory(clientId, path) {
+export function downloadRemoteClipboardDirectory(clientId, path, headers = {}) {
   const url = `/api/connections/${encodeURIComponent(clientId)}/remote-files/download-zip`
   return apiData(
     url,
-    jsonRequestOptions('POST', { paths: [path], archive_name: '' }),
+    jsonRequestOptions('POST', { paths: [path], archive_name: '' }, headers),
     {},
   )
 }

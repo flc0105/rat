@@ -189,6 +189,7 @@ export default {
   props: {
     selectedId: { type: [String, Number], default: '' },
     currentConnection: { type: Object, default: null },
+    getTabScopedHeaders: { type: Function, default: null },
   },
   emits: ['artifacts-maybe-changed'],
   data() {
@@ -336,9 +337,16 @@ export default {
 
       this.remoteDownloadingPaths[path] = true
       try {
+        ElMessage.success({
+          message: `Download started: ${file?.name || path.split(/[\\/]/).pop() || 'file'}`,
+          duration: 1800,
+        })
+        const headers = typeof this.getTabScopedHeaders === 'function'
+          ? this.getTabScopedHeaders()
+          : {}
         const result = file.is_directory
-          ? await downloadRemoteClipboardDirectory(this.selectedId, path)
-          : await downloadRemoteClipboardFile(this.selectedId, path)
+          ? await downloadRemoteClipboardDirectory(this.selectedId, path, headers)
+          : await downloadRemoteClipboardFile(this.selectedId, path, headers)
         const artifact = result?.artifact || result?.file || null
         if (!artifact?.artifact_id) {
           throw new Error('Download finished, but artifact was not found')

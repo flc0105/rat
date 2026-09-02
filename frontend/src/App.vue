@@ -337,6 +337,7 @@
     ref="clipboardDialogRef"
     :selected-id="selectedId"
     :current-connection="currentConnection"
+    :get-tab-scoped-headers="getTabScopedHeaders"
     @artifacts-maybe-changed="refreshArtifactsIfOpen"
   />
 
@@ -552,6 +553,10 @@ export default {
           return dialog.refreshIfOpen?.({ silent: true })
         }
         return dialog?.open()
+      }
+
+      if (actionType === 'open_transfers') {
+        return this.openTransferCenter()
       }
     },
 

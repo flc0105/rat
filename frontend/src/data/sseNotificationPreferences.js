@@ -5,6 +5,9 @@ export const DEFAULT_SSE_NOTIFICATION_PREFERENCES = {
     connection_online: true,
     connection_offline: true,
     artifact_created: true,
+    file_transfer_started: false,
+    file_transfer_stopped: false,
+    file_transfer_error: true,
     pty_opened: true,
     pty_closed: true,
     pty_error: true,
@@ -38,6 +41,9 @@ export const SSE_NOTIFICATION_GROUPS = [
     title: 'Files',
     items: [
       { key: 'artifact_created', label: 'File ready' },
+      { key: 'file_transfer_started', label: 'Transfer started' },
+      { key: 'file_transfer_stopped', label: 'Transfer stopped' },
+      { key: 'file_transfer_error', label: 'Transfer error' },
     ],
   },
   {

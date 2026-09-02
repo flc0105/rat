@@ -76,6 +76,7 @@ class TransferService:
             self._changed.notify_all()
 
         self._publish(item)
+        self._publish_lifecycle(item, 'started')
         return self._public_item(item)
 
     def update_transfer(
@@ -111,13 +112,20 @@ class TransferService:
             if item.get('state') in self.TERMINAL_STATES:
                 return self._public_item(item)
 
+            previous_state = str(item.get('state') or '').strip().lower()
             self._apply_patch(item, patch)
             self._refresh_derived_fields(item)
             self._remember_if_terminal(item)
             snapshot = self._public_item(item)
+            next_state = str(item.get('state') or '').strip().lower()
+            lifecycle = ''
+            if previous_state not in self.TERMINAL_STATES and next_state in self.TERMINAL_STATES:
+                lifecycle = 'error' if next_state == 'failed' else 'stopped'
             self._changed.notify_all()
 
         self._publish(item)
+        if lifecycle:
+            self._publish_lifecycle(item, lifecycle)
         return snapshot
 
     def update_progress(
@@ -514,6 +522,20 @@ class TransferService:
         self.event_bus.publish(
             'transfer_updated',
             snapshot,
+            target_tab_id=target_tab_id,
+        )
+
+    def _publish_lifecycle(self, item: dict, lifecycle: str):
+        normalized_lifecycle = str(lifecycle or '').strip().lower()
+        if normalized_lifecycle not in {'started', 'stopped', 'error'}:
+            return
+
+        target_tab_id = str(item.get('tab_id') or '').strip()
+        payload = self._public_item(item)
+        payload['lifecycle'] = normalized_lifecycle
+        self.event_bus.publish(
+            'file_transfer_lifecycle',
+            payload,
             target_tab_id=target_tab_id,
         )
 

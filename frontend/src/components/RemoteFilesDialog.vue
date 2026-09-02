@@ -1745,6 +1745,11 @@ export default {
 
         url.searchParams.set('path', row.path)
 
+        ElMessage.success({
+          message: `Download started: ${row.name || 'file'}`,
+          duration: 1800,
+        })
+
         const res = await fetch(url.pathname + url.search, {
           method: 'POST',
           headers: this.getTabScopedHeaders(),
@@ -1787,6 +1792,11 @@ export default {
       this.remoteZipDownloading = true
 
       try {
+        ElMessage.success({
+          message: `Download started: ${paths.length} selected item(s)`,
+          duration: 1800,
+        })
+
         const res = await fetch(`/api/connections/${encodeURIComponent(this.selectedId)}/remote-files/download-zip`, {
           method: 'POST',
           headers: {
