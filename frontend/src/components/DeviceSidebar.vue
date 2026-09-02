@@ -7,16 +7,26 @@
         placement="bottom-start"
         @command="handleGroupFilterCommand"
       >
+<!--        <button-->
+<!--          type="button"-->
+<!--          class="device-group-switcher-trigger"-->
+<!--          aria-label="Device group filter"-->
+<!--          @click="closeDeviceContextMenu"-->
+<!--        >-->
+<!--          <span class="device-group-switcher-name">{{ selectedGroupLabel }}</span>-->
+<!--          <span class="device-group-switcher-count">{{ selectedGroupMachineCount }}</span>-->
+<!--          <span class="device-group-switcher-chevron" aria-hidden="true"></span>-->
+<!--        </button>-->
+
         <button
-          type="button"
-          class="device-group-switcher-trigger"
-          aria-label="Device group filter"
-          @click="closeDeviceContextMenu"
-        >
-          <span class="device-group-switcher-name">{{ selectedGroupLabel }}</span>
-          <span class="device-group-switcher-count">{{ selectedGroupMachineCount }}</span>
-          <span class="device-group-switcher-chevron" aria-hidden="true"></span>
-        </button>
+  type="button"
+  class="device-group-switcher-trigger"
+  aria-label="Device group filter"
+  @click="closeDeviceContextMenu"
+>
+  <span class="device-group-switcher-name">{{ selectedGroupLabel }}</span>
+  <span class="device-group-switcher-chevron" aria-hidden="true"></span>
+</button>
 
         <template #dropdown>
           <el-dropdown-menu>
