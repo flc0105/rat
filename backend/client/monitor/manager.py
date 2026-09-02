@@ -191,8 +191,44 @@ class DeviceMonitorManager:
         swap = psutil.swap_memory()
         uptime_seconds = max(0.0, time.time() - float(psutil.boot_time()))
 
+        cpu_percent = round(float(psutil.cpu_percent(interval=None)), 1)
+
+        # macOS 下 psutil 的非阻塞 CPU 采样偶尔会出现单帧 0.0。
+        # 仅过滤孤立的 0% 毛刺；如果连续两帧都是 0%，则按真实 0% 显示。
+        if sys.platform == 'darwin':
+            now = time.monotonic()
+            state = getattr(self, '_mac_cpu_deglitch_state', None)
+
+            if not isinstance(state, dict):
+                state = {
+                    'last_valid': None,
+                    'last_valid_at': 0.0,
+                    'zero_pending': False,
+                }
+                self._mac_cpu_deglitch_state = state
+
+            if cpu_percent == 0.0:
+                last_valid = state.get('last_valid')
+                last_valid_at = float(state.get('last_valid_at') or 0.0)
+                last_valid_age = now - last_valid_at
+
+                if (
+                        not state.get('zero_pending')
+                        and last_valid is not None
+                        and float(last_valid) > 0.0
+                        and last_valid_age <= 1.5
+                ):
+                    cpu_percent = float(last_valid)
+                    state['zero_pending'] = True
+                else:
+                    state['zero_pending'] = True
+            else:
+                state['last_valid'] = cpu_percent
+                state['last_valid_at'] = now
+                state['zero_pending'] = False
+
         return {
-            'cpu_percent': round(float(psutil.cpu_percent(interval=None)), 1),
+            'cpu_percent': cpu_percent,
             'cpu_count': int(psutil.cpu_count(logical=True) or 0),
             'memory': {
                 'total': int(memory.total or 0),
@@ -209,6 +245,30 @@ class DeviceMonitorManager:
             'uptime_seconds': int(uptime_seconds),
             'process_count': len(psutil.pids()),
         }
+
+    # def _collect_system(self, psutil) -> dict:
+    #     memory = psutil.virtual_memory()
+    #     swap = psutil.swap_memory()
+    #     uptime_seconds = max(0.0, time.time() - float(psutil.boot_time()))
+    #
+    #     return {
+    #         'cpu_percent': round(float(psutil.cpu_percent(interval=None)), 1),
+    #         'cpu_count': int(psutil.cpu_count(logical=True) or 0),
+    #         'memory': {
+    #             'total': int(memory.total or 0),
+    #             'used': int(memory.used or 0),
+    #             'available': int(memory.available or 0),
+    #             'percent': round(float(memory.percent or 0), 1),
+    #         },
+    #         'swap': {
+    #             'total': int(swap.total or 0),
+    #             'used': int(swap.used or 0),
+    #             'free': int(swap.free or 0),
+    #             'percent': round(float(swap.percent or 0), 1),
+    #         },
+    #         'uptime_seconds': int(uptime_seconds),
+    #         'process_count': len(psutil.pids()),
+    #     }
 
     def _collect_storage(self, psutil) -> dict:
         volumes = []
