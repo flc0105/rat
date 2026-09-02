@@ -468,7 +468,7 @@ export default {
   padding: 0;
   border: none;
   background: transparent;
-  font: inherit;
+  font-family: inherit;
   cursor: pointer;
 }
 

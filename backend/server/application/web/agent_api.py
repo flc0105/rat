@@ -42,12 +42,6 @@ class WebAgentApi:
             'target_arch': str(target_arch or '').strip(),
             'source': str(source or '').strip(),
         }
-        if self.event_bus is not None:
-            self.event_bus.publish('agent_build_lifecycle', {
-                **lifecycle_context,
-                'state': 'started',
-            })
-
         try:
             build_result = self.agent_builder.build_agent(
                 server_host=server_host,

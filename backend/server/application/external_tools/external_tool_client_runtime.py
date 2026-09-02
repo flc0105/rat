@@ -147,39 +147,7 @@ class ExternalToolClientLifecycleRuntime(ExternalToolRuntimeComponent):
         meta = self.catalog_service.get_tool(tool_id)
         payload = self.payload_builder.build_client_oneshot_payload(meta, params=params, platform_alias=platform_alias, arch=arch)
         command = f'external_tool_oneshot {self.payload_builder.encode_payload_arg(payload)}'
-
-        self._publish_lifecycle(
-            client_id=client_id,
-            action='oneshot',
-            state='started',
-            operation='run',
-            meta=meta,
-        )
-
-        try:
-            result = self._run_client_lifecycle_command(client_id, command, tab_id=tab_id)
-        except Exception as exc:
-            self._publish_lifecycle(
-                client_id=client_id,
-                action='oneshot',
-                state='error',
-                operation='run',
-                meta=meta,
-                error=str(exc),
-            )
-            raise
-
-        success = bool(result.get('success')) if isinstance(result, dict) else False
-        self._publish_lifecycle(
-            client_id=client_id,
-            action='oneshot',
-            state='completed' if success else 'error',
-            operation='run',
-            meta=meta,
-            result=result if isinstance(result, dict) else None,
-            error='' if success else (result.get('message') or 'Oneshot failed'),
-        )
-        return result
+        return self._run_client_lifecycle_command(client_id, command, tab_id=tab_id)
 
     def install_client_tool(self, client_id: str, package_id: str, params: dict | None = None, tab_id: str = '', instance_id: str = '', platform_alias: str = '', arch: str = '') -> dict:
         del params, instance_id

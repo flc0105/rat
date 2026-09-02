@@ -231,17 +231,10 @@ export default {
                 const instanceLabel = instanceId ? `/${instanceId}` : '';
                 const serviceLabel = `${serviceName}${instanceLabel}`;
                 const errorText = String(payload.error || payload.message || '').trim();
-                const duration = payload.duration_sec === null || payload.duration_sec === undefined
-                    ? ''
-                    : ` in ${payload.duration_sec}s`;
-
                 const notificationKey = {
                     'daemon:started': 'external_tool_daemon_started',
                     'daemon:stopped': 'external_tool_daemon_stopped',
                     'daemon:error': 'external_tool_daemon_error',
-                    'oneshot:started': 'external_tool_oneshot_started',
-                    'oneshot:completed': 'external_tool_oneshot_completed',
-                    'oneshot:error': 'external_tool_oneshot_error',
                     'install:completed': 'external_tool_install_completed',
                     'install:failed': 'external_tool_install_failed',
                     'uninstall:completed': 'external_tool_uninstall_completed',
@@ -301,19 +294,6 @@ export default {
                     title = operation === 'stop' ? 'External Tool Daemon Stop Error' : 'External Tool Daemon Start Error';
                     type = 'error';
                     message = `${deviceName} · ${serviceLabel} daemon ${operation || 'operation'} failed${errorText ? `: ${errorText}` : ''}`;
-                } else if (action === 'oneshot' && state === 'started') {
-                    title = 'External Tool Oneshot Started';
-                    type = 'info';
-                    message = `${deviceName} · ${serviceName} oneshot started`;
-                } else if (action === 'oneshot' && state === 'completed') {
-                    title = 'External Tool Oneshot Completed';
-                    type = 'success';
-                    message = `${deviceName} · ${serviceName} oneshot completed successfully${duration}`;
-                } else if (action === 'oneshot' && state === 'error') {
-                    title = 'External Tool Oneshot Error';
-                    type = 'error';
-                    const exitText = payload.returncode === null || payload.returncode === undefined ? '' : ` (exit ${payload.returncode})`;
-                    message = `${deviceName} · ${serviceName} oneshot failed${exitText}${errorText ? `: ${errorText}` : ''}`;
                 } else if (action === 'install' && state === 'completed') {
                     title = 'External Tool Install Completed';
                     type = 'success';
@@ -350,25 +330,14 @@ export default {
                 const payload = JSON.parse(event.data || '{}');
                 const state = String(payload.state || '').trim().toLowerCase();
                 const notificationKey = {
-                    started: 'agent_build_started',
                     completed: 'agent_build_completed',
                     error: 'agent_build_error',
                 }[state];
                 if (!notificationKey) return;
 
-                const osLabels = {
-                    win: 'Windows',
-                    windows: 'Windows',
-                    mac: 'macOS',
-                    darwin: 'macOS',
-                    linux: 'Linux',
-                    bundle: 'Bundle',
-                };
                 const targetOs = String(payload.target_os || '').trim();
                 const targetArch = String(payload.target_arch || '').trim();
-                const targetLabel = [osLabels[targetOs.toLowerCase()] || targetOs || 'Agent', targetArch].filter(Boolean).join(' ');
                 const builder = String(payload.builder || '').trim();
-                const buildLabel = [targetLabel, builder].filter(Boolean).join(' · ');
                 const fileName = String(payload.file_name || '').trim();
                 const errorText = String(payload.error || '').trim();
                 const context = {
@@ -398,18 +367,15 @@ export default {
 
                 let title = 'Agent Build';
                 let type = 'info';
-                let message = `Agent build updated · ${buildLabel}`;
-                if (state === 'started') {
-                    title = 'Agent Build Started';
-                    message = `Agent build started · ${buildLabel}`;
-                } else if (state === 'completed') {
+                let message = '';
+                if (state === 'completed') {
                     title = 'Agent Build Completed';
                     type = 'success';
-                    message = `Agent build completed successfully · ${[buildLabel, fileName].filter(Boolean).join(' · ')}`;
+                    message = `Agent build completed successfully${fileName ? ` · ${fileName}` : ''}`;
                 } else if (state === 'error') {
                     title = 'Agent Build Error';
                     type = 'error';
-                    message = `Agent build failed · ${buildLabel}${errorText ? `: ${errorText}` : ''}`;
+                    message = `Agent build failed${errorText ? `: ${errorText}` : ''}`;
                 }
 
                 this.showSseNotification(notificationKey, {

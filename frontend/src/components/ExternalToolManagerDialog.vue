@@ -677,7 +677,13 @@
       >
         Preview Command
       </el-button>
-      <el-button size="small" type="primary" :loading="submitting" @click="confirmStart">
+      <el-button
+        size="small"
+        type="primary"
+        :loading="submitting"
+        :disabled="submitting"
+        @click="confirmStart"
+      >
         {{ isPendingOneshot ? 'Run Once' : 'Run' }}
       </el-button>
     </template>
@@ -2725,6 +2731,8 @@ async uninstallClientTool(item, deviceId) {
     },
 
     async confirmStart() {
+      if (this.submitting) return
+
       const item = this.pendingItem
       if (!item) return
       try {
