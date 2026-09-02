@@ -74,7 +74,15 @@ class TransferService:
         self._publish(item)
         return self._public_item(item)
 
-    def update_transfer(self, transfer_id: str, *, client_id: str = '', **patch) -> dict | None:
+    def update_transfer(
+        self,
+        transfer_id: str,
+        *,
+        client_id: str = '',
+        tab_id: str = '',
+        expected_stage: str = '',
+        **patch,
+    ) -> dict | None:
         normalized_id = str(transfer_id or '').strip()
         if not normalized_id:
             return None
@@ -88,9 +96,117 @@ class TransferService:
             if normalized_client_id and item.get('client_id') and item.get('client_id') != normalized_client_id:
                 return None
 
+            normalized_tab_id = str(tab_id or '').strip()
+            if normalized_tab_id and item.get('tab_id') and item.get('tab_id') != normalized_tab_id:
+                return None
+
+            normalized_expected_stage = str(expected_stage or '').strip()
+            if normalized_expected_stage and str(item.get('stage') or '').strip() != normalized_expected_stage:
+                return self._public_item(item)
+
             self._apply_patch(item, patch)
             self._refresh_derived_fields(item)
             self._remember_if_terminal(item)
+            snapshot = self._public_item(item)
+
+        self._publish(item)
+        return snapshot
+
+    def update_progress(
+        self,
+        transfer_id: str,
+        transferred_bytes,
+        *,
+        client_id: str = '',
+        tab_id: str = '',
+        stage: str = '',
+        total_bytes=None,
+        expected_stage: str = '',
+    ) -> dict | None:
+        normalized_id = str(transfer_id or '').strip()
+        if not normalized_id:
+            return None
+
+        with self._lock:
+            item = self._items.get(normalized_id)
+            if not item:
+                return None
+
+            normalized_client_id = str(client_id or '').strip()
+            if normalized_client_id and item.get('client_id') and item.get('client_id') != normalized_client_id:
+                return None
+
+            normalized_tab_id = str(tab_id or '').strip()
+            if normalized_tab_id and item.get('tab_id') and item.get('tab_id') != normalized_tab_id:
+                return None
+
+            normalized_expected_stage = str(expected_stage or '').strip()
+            if normalized_expected_stage and str(item.get('stage') or '').strip() != normalized_expected_stage:
+                return self._public_item(item)
+
+            incoming_bytes = self._normalize_int(transferred_bytes)
+            current_bytes = self._normalize_int(item.get('transferred_bytes')) or 0
+            patch = {
+                'transferred_bytes': max(current_bytes, incoming_bytes or 0),
+            }
+            if stage:
+                patch['stage'] = stage
+            if total_bytes is not None:
+                patch['total_bytes'] = total_bytes
+
+            self._apply_patch(item, patch)
+            self._refresh_derived_fields(item)
+            snapshot = self._public_item(item)
+
+        self._publish(item)
+        return snapshot
+
+    def reset_progress(
+        self,
+        transfer_id: str,
+        *,
+        client_id: str = '',
+        tab_id: str = '',
+        stage: str = '',
+        total_bytes=None,
+        **patch,
+    ) -> dict | None:
+        normalized_id = str(transfer_id or '').strip()
+        if not normalized_id:
+            return None
+
+        with self._lock:
+            item = self._items.get(normalized_id)
+            if not item:
+                return None
+
+            normalized_client_id = str(client_id or '').strip()
+            if normalized_client_id and item.get('client_id') and item.get('client_id') != normalized_client_id:
+                return None
+
+            normalized_tab_id = str(tab_id or '').strip()
+            if normalized_tab_id and item.get('tab_id') and item.get('tab_id') != normalized_tab_id:
+                return None
+
+            now_mono = time.monotonic()
+            item['transferred_bytes'] = 0
+            item['percent'] = None
+            item['speed_bytes_per_sec'] = 0
+            item['eta_seconds'] = None
+            item['_last_progress_bytes'] = 0
+            item['_last_progress_mono'] = now_mono
+            item['_speed_ema'] = 0.0
+
+            next_patch = dict(patch or {})
+            next_patch['state'] = 'running'
+            next_patch['error'] = ''
+            if stage:
+                next_patch['stage'] = stage
+            if total_bytes is not None:
+                next_patch['total_bytes'] = total_bytes
+
+            self._apply_patch(item, next_patch)
+            self._refresh_derived_fields(item)
             snapshot = self._public_item(item)
 
         self._publish(item)
@@ -160,6 +276,7 @@ class TransferService:
 
         for key in (
             'state', 'stage', 'filename', 'artifact_id', 'error',
+            'direction', 'hostname', 'source_path', 'destination_path',
         ):
             if key in patch and patch.get(key) is not None:
                 item[key] = str(patch.get(key) or '').strip()

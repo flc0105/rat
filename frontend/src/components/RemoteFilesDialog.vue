@@ -663,6 +663,11 @@ import {ElMessage, ElMessageBox} from 'element-plus'
 import RemotePinsDialog from './RemotePinsDialog.vue'
 import RemoteZipPeekDialog from './RemoteZipPeekDialog.vue'
 import { formatBytes as formatBytesValue } from '../utils/formatters.js'
+import {
+  buildBrowserUploadContentUrl,
+  createBrowserUploadTransfer,
+  updateBrowserUploadTransfer,
+} from '../api/transferApi.js'
 
 
 export default {
@@ -950,6 +955,40 @@ export default {
       this.$emit('request-upload')
     },
 
+    uploadRemoteFileRequest(url, body, headers) {
+      return new Promise((resolve, reject) => {
+        const xhr = new XMLHttpRequest()
+        xhr.open('POST', url, true)
+
+        Object.entries(headers || {}).forEach(([key, value]) => {
+          if (value != null && String(value).trim()) {
+            xhr.setRequestHeader(key, String(value))
+          }
+        })
+
+        xhr.addEventListener('load', () => {
+          let json = {}
+          try {
+            json = JSON.parse(xhr.responseText || '{}')
+          } catch (e) {
+            reject(new Error('Upload returned an invalid response'))
+            return
+          }
+
+          if (xhr.status < 200 || xhr.status >= 300 || json.code !== 0) {
+            reject(new Error(json.message || `Upload failed (${xhr.status || 'network error'})`))
+            return
+          }
+
+          resolve(json)
+        })
+
+        xhr.addEventListener('error', () => reject(new Error('Browser upload connection failed')))
+        xhr.addEventListener('abort', () => reject(new Error('Browser upload was cancelled')))
+        xhr.send(body)
+      })
+    },
+
     async handleUploadChange(event) {
       const file = event.target.files && event.target.files[0]
       if (!file) return
@@ -964,46 +1003,68 @@ export default {
         return
       }
 
-      const formData = new FormData()
-      formData.append('file', file)
-      formData.append('target_path', this.remoteFilesCurrentPath)
+      const clientId = this.selectedId
+      const targetPath = this.remoteFilesCurrentPath
+      const tabHeaders = this.getTabScopedHeaders()
+      let transferId = ''
 
       this.remoteUploadLoading = true
 
       this.$emit(
           'append-output',
-          this.selectedId,
-          `> [Remote Upload] ${file.name} -> ${this.remoteFilesCurrentPath}`,
+          clientId,
+          `> [Remote Upload] ${file.name} -> ${targetPath}`,
           'command'
       )
 
       try {
-        const res = await fetch(`/api/connections/${encodeURIComponent(this.selectedId)}/upload`, {
-          method: 'POST',
-          headers: this.getTabScopedHeaders(),
-          body: formData,
-        })
-
-        const json = await res.json()
-
-        if (!res.ok || json.code !== 0) {
-          throw new Error(json.message || 'Upload failed')
+        const transfer = await createBrowserUploadTransfer({
+          client_id: clientId,
+          filename: file.name,
+          total_bytes: file.size,
+          destination_path: targetPath,
+        }, tabHeaders)
+        transferId = String(transfer?.transfer_id || '').trim()
+        if (!transferId) {
+          throw new Error('Failed to initialize upload transfer')
         }
+
+        const browserUploadToken = String(transfer?.browser_upload_token || '').trim()
+        if (!browserUploadToken) {
+          throw new Error('Browser file transfer token is unavailable')
+        }
+        const browserUploadUrl = buildBrowserUploadContentUrl(transfer)
+
+        const json = await this.uploadRemoteFileRequest(
+            browserUploadUrl,
+            file,
+            {
+              'Content-Type': 'application/octet-stream',
+              'X-RCH-Transfer-Token': browserUploadToken,
+            },
+        )
 
         const taskId = json.data && json.data.task_id
 
-        this.$emit('set-active-task', this.selectedId, taskId || '')
+        this.$emit('set-active-task', clientId, taskId || '')
         this.$emit('upload-started', {
           taskId: taskId || '',
-          clientId: this.selectedId,
-          path: this.remoteFilesCurrentPath || '',
+          clientId,
+          path: targetPath || '',
         })
 
         ElMessage.success(`Upload started: ${file.name}`)
       } catch (e) {
+        if (transferId) {
+          updateBrowserUploadTransfer(transferId, {
+            state: 'failed',
+            error: e.message || 'Browser upload failed',
+          }, tabHeaders).catch(() => {})
+        }
+
         this.$emit(
             'append-output',
-            this.selectedId,
+            clientId,
             `[Upload failed] ${e.message || 'unknown error'}`,
             'error'
         )

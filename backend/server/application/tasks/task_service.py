@@ -178,7 +178,15 @@ class WebTaskService:
             'history_entry_id': cancel_info.get('history_entry_id') or '',
         }
 
-    def submit_web_upload(self, client_id: str, local_path: str, display_name: str, remote_path: str = '', tab_id: str = ''):
+    def submit_web_upload(
+        self,
+        client_id: str,
+        local_path: str,
+        display_name: str,
+        remote_path: str = '',
+        tab_id: str = '',
+        transfer_id: str = '',
+    ):
         command = f'upload {display_name}'
         return self._submit_request(
             WebExecutionTaskRequest(
@@ -193,6 +201,7 @@ class WebTaskService:
                     'display_name': display_name,
                     'remote_path': remote_path,
                     'upload_tmp_dir': getattr(self.file_service, 'upload_tmp_dir', ''),
+                    'transfer_id': (transfer_id or '').strip(),
                 },
             )
         )

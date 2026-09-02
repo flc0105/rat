@@ -124,7 +124,15 @@ class WebCommandExecutionApi:
     def cancel_web_task(self, task_id: str):
         return self.task_service.cancel_web_task(self._normalize_task_id(task_id))
 
-    def submit_web_upload(self, client_id: str, local_path: str, display_name: str, remote_path: str = '', tab_id: str = ''):
+    def submit_web_upload(
+        self,
+        client_id: str,
+        local_path: str,
+        display_name: str,
+        remote_path: str = '',
+        tab_id: str = '',
+        transfer_id: str = '',
+    ):
         upload_payload = self._normalize_upload_payload(local_path, display_name, remote_path)
         return self.task_service.submit_web_upload(
             self._normalize_client_id(client_id),
@@ -132,4 +140,5 @@ class WebCommandExecutionApi:
             upload_payload['display_name'],
             upload_payload['remote_path'],
             tab_id=(tab_id or '').strip(),
+            transfer_id=(transfer_id or '').strip(),
         )

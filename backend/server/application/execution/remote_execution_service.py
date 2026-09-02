@@ -258,6 +258,7 @@ class RemoteExecutionService:
         task_id: str = '',
         command: str = '',
         tab_id: str = '',
+        transfer_id: str = '',
     ):
         return self.upload_execution_service.iter_upload_events(
             target,
@@ -269,4 +270,5 @@ class RemoteExecutionService:
             task_id=task_id,
             command=command,
             tab_id=tab_id,
+            transfer_id=transfer_id,
         )

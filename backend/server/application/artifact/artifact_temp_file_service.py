@@ -33,6 +33,15 @@ class ArtifactTempFileService:
         upload.save(temp_path)
         return temp_path, safe_name
 
+    def create_upload_temp_path(self, filename: str) -> tuple[str, str]:
+        """
+        为原始 HTTP body 上传预分配临时落盘路径。
+        :return: (temp_path, safe_name)
+        """
+        safe_name = secure_filename(filename or '') or 'upload.bin'
+        temp_dir = self._build_temp_dir()
+        return os.path.join(temp_dir, safe_name), safe_name
+
     def stage_local_file(self, source_path: str, display_name: str = '') -> tuple[str, str]:
         """
         将服务端本地文件复制到 upload_tmp 暂存区，供 client 通过 HTTP 拉取

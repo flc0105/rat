@@ -187,6 +187,10 @@ export default {
 
     transferSubtitle(transfer) {
       const device = String(transfer?.hostname || transfer?.client_id || 'Device').trim() || 'Device'
+      const stage = String(transfer?.stage || '').toLowerCase()
+      if (stage === 'uploading_to_server') {
+        return `Browser → Server · for ${device}`
+      }
       if (transfer?.direction === 'server_to_client') {
         return transfer.destination_path
           ? `Server → ${device} · ${transfer.destination_path}`
@@ -197,10 +201,11 @@ export default {
 
     stageLabel(transfer) {
       const stage = String(transfer?.stage || '').toLowerCase()
+      if (stage === 'uploading_to_server') return 'Uploading to Server'
       if (stage === 'preparing') {
-        return transfer?.metadata?.source === 'remote_file_download_zip'
-          ? 'Preparing archive…'
-          : 'Preparing…'
+        if (transfer?.metadata?.source === 'remote_file_download_zip') return 'Preparing archive…'
+        if (transfer?.metadata?.source === 'remote_file_upload') return 'Preparing for Device…'
+        return 'Preparing…'
       }
       if (stage === 'staging') return 'Staging to Server'
       if (stage === 'transferring') return 'Sending to Device'

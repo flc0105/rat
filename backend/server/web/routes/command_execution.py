@@ -18,6 +18,7 @@ def create_command_execution_blueprint(server_instance):
     command_execution_api = web_service.command_execution_api
     command_catalog_api = web_service.command_catalog_api
     artifact_api = web_service.artifact_api
+    transfer_api = web_service.transfer_api
     responder = WebApiResponder()
 
     @blueprint.post('/api/connections/<client_id>/command')
@@ -94,15 +95,33 @@ def create_command_execution_blueprint(server_instance):
         def _execute():
             upload = get_required_upload()
             target_path = (request.form.get('target_path') or '').strip()
+            transfer_id = (request.form.get('transfer_id') or '').strip()
+            tab_id = get_optional_tab_id()
 
-            temp_path, safe_name = artifact_api.create_upload_temp_file(upload)
-            return command_execution_api.submit_web_upload(
-                client_id,
-                temp_path,
-                safe_name,
-                target_path,
-                tab_id=get_optional_tab_id(),
-            )
+            try:
+                temp_path, safe_name = artifact_api.create_upload_temp_file(upload)
+                if transfer_id:
+                    transfer_api.mark_browser_upload_staged(
+                        transfer_id,
+                        total_bytes=os.path.getsize(temp_path),
+                        tab_id=tab_id,
+                    )
+
+                return command_execution_api.submit_web_upload(
+                    client_id,
+                    temp_path,
+                    safe_name,
+                    target_path,
+                    tab_id=tab_id,
+                    transfer_id=transfer_id,
+                )
+            except Exception as exc:
+                if transfer_id:
+                    try:
+                        transfer_api.fail_upload_transfer(transfer_id, str(exc), tab_id=tab_id)
+                    except Exception:
+                        pass
+                raise
 
         return responder.json_endpoint(_execute, default_error_status=500)
 

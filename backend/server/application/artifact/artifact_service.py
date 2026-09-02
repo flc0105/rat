@@ -212,6 +212,9 @@ class WebArtifactService:
     def create_upload_temp_file(self, upload) -> tuple[str, str]:
         return self.temp_file_service.create_upload_temp_file(upload)
 
+    def create_upload_temp_path(self, filename: str) -> tuple[str, str]:
+        return self.temp_file_service.create_upload_temp_path(filename)
+
     def stage_local_file(self, source_path: str, display_name: str = '') -> tuple[str, str]:
         return self.temp_file_service.stage_local_file(source_path, display_name)
 

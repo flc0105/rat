@@ -13,7 +13,7 @@ class UploadExecutionService:
     - 负责 server -> client 上传链路的 staging / cleanup
     - 负责构建 receive_http_upload 命令负载
     - 负责把上传执行转换成结构化事件流
-    - 浏览器 -> Server 的初始上传不计入 Transfer；文件完成 Server staging 后才开始跟踪
+    - 浏览器 -> Server 与 Server -> Client 复用同一个 Transfer 生命周期
     """
 
     def __init__(self, server, command_stream_service, artifact_service=None, transfer_service=None):
@@ -60,6 +60,7 @@ class UploadExecutionService:
             task_id: str = '',
             command: str = '',
             tab_id: str = '',
+            transfer_id: str = '',
     ):
         """
         执行上传事件流。
@@ -74,7 +75,7 @@ class UploadExecutionService:
         artifact_service = None
         staged_path = ''
         safe_name = ''
-        transfer_id = ''
+        active_transfer_id = str(transfer_id or '').strip()
         ok = True
         last_error = ''
 
@@ -84,25 +85,45 @@ class UploadExecutionService:
             artifact_service, staged_path, safe_name, relative_url = self._stage_upload(local_path)
             session = self.get_connection(target)
             client_id = session.session_info.client_id
+            staged_size = os.path.getsize(staged_path)
+            transfer_metadata = {
+                'source': source,
+                'task_id': task_id,
+                'history_entry_id': history_entry_id,
+                'browser_stage': False,
+            }
 
             if self.transfer_service is not None and tab_id:
-                transfer = self.transfer_service.create_transfer(
-                    client_id=client_id,
-                    direction='server_to_client',
-                    filename=safe_name,
-                    hostname=getattr(session.session_info, 'hostname', '') or '',
-                    source_path=staged_path,
-                    destination_path=remote_path,
-                    tab_id=tab_id,
-                    stage='transferring',
-                    total_bytes=os.path.getsize(staged_path),
-                    metadata={
-                        'source': source,
-                        'task_id': task_id,
-                        'history_entry_id': history_entry_id,
-                    },
-                )
-                transfer_id = transfer.get('transfer_id') or ''
+                if active_transfer_id:
+                    updated = self.transfer_service.reset_progress(
+                        active_transfer_id,
+                        client_id=client_id,
+                        tab_id=tab_id,
+                        stage='transferring',
+                        total_bytes=staged_size,
+                        direction='server_to_client',
+                        filename=safe_name,
+                        hostname=getattr(session.session_info, 'hostname', '') or '',
+                        source_path=staged_path,
+                        destination_path=remote_path,
+                        metadata=transfer_metadata,
+                    )
+                    if updated is None:
+                        raise ValueError('transfer not found')
+                else:
+                    transfer = self.transfer_service.create_transfer(
+                        client_id=client_id,
+                        direction='server_to_client',
+                        filename=safe_name,
+                        hostname=getattr(session.session_info, 'hostname', '') or '',
+                        source_path=staged_path,
+                        destination_path=remote_path,
+                        tab_id=tab_id,
+                        stage='transferring',
+                        total_bytes=staged_size,
+                        metadata=transfer_metadata,
+                    )
+                    active_transfer_id = transfer.get('transfer_id') or ''
 
             yield CommandExecutionEvent.started(
                 effective_command,
@@ -111,7 +132,7 @@ class UploadExecutionService:
                     'task_id': task_id,
                     'history_entry_id': history_entry_id,
                     'filename': safe_name,
-                    'transfer_id': transfer_id,
+                    'transfer_id': active_transfer_id,
                 },
             )
 
@@ -122,7 +143,7 @@ class UploadExecutionService:
                     'task_id': task_id,
                     'history_entry_id': history_entry_id,
                     'filename': safe_name,
-                    'transfer_id': transfer_id,
+                    'transfer_id': active_transfer_id,
                 },
             )
 
@@ -130,7 +151,7 @@ class UploadExecutionService:
                 'relative_url': relative_url,
                 'filename': safe_name,
                 'save_dir': remote_path,
-                'transfer_id': transfer_id,
+                'transfer_id': active_transfer_id,
             })
 
             result_iter = self.command_stream_service.stream_command(
@@ -153,7 +174,7 @@ class UploadExecutionService:
                             'task_id': task_id,
                             'history_entry_id': history_entry_id,
                             'filename': safe_name,
-                            'transfer_id': transfer_id,
+                            'transfer_id': active_transfer_id,
                         },
                     )
                 else:
@@ -164,22 +185,22 @@ class UploadExecutionService:
                             'task_id': task_id,
                             'history_entry_id': history_entry_id,
                             'filename': safe_name,
-                            'transfer_id': transfer_id,
+                            'transfer_id': active_transfer_id,
                         },
                     )
 
         except Exception as exc:
             ok = False
             last_error = str(exc)
-            if transfer_id and self.transfer_service is not None:
-                self.transfer_service.fail_transfer(transfer_id, last_error)
+            if active_transfer_id and self.transfer_service is not None:
+                self.transfer_service.fail_transfer(active_transfer_id, last_error)
             yield CommandExecutionEvent.error(
                 str(exc),
                 payload={
                     'task_id': task_id,
                     'history_entry_id': history_entry_id,
                     'filename': safe_name,
-                    'transfer_id': transfer_id,
+                    'transfer_id': active_transfer_id,
                 },
             )
 
@@ -187,11 +208,11 @@ class UploadExecutionService:
             if artifact_service is not None and staged_path:
                 self._cleanup_staged_upload(artifact_service, staged_path)
 
-        if transfer_id and self.transfer_service is not None:
+        if active_transfer_id and self.transfer_service is not None:
             if ok:
-                self.transfer_service.complete_transfer(transfer_id)
+                self.transfer_service.complete_transfer(active_transfer_id)
             else:
-                self.transfer_service.fail_transfer(transfer_id, last_error or 'Upload failed')
+                self.transfer_service.fail_transfer(active_transfer_id, last_error or 'Upload failed')
 
         yield CommandExecutionEvent.completed(
             ok,
@@ -199,6 +220,6 @@ class UploadExecutionService:
                 'task_id': task_id,
                 'history_entry_id': history_entry_id,
                 'filename': safe_name,
-                'transfer_id': transfer_id,
+                'transfer_id': active_transfer_id,
             },
         )
