@@ -75,7 +75,7 @@ class AgentBuilder:
         return f'rchclient-source-bundle-{build_id}.zip'
 
     def build_agent(self, server_host: str, server_port: int,
-                    web_port: int, target_os: str = 'mac',
+                    web_port: int, file_transfer_port: int, target_os: str = 'mac',
                     builder: str = 'pyinstaller', target_arch: str = '',
                     server_web_scheme: str = 'http', server_web_host: str = '') -> dict:
         builder = (builder or 'pyinstaller').strip().lower()
@@ -102,6 +102,7 @@ class AgentBuilder:
                     server_host=server_host,
                     server_port=server_port,
                     web_port=web_port,
+                    file_transfer_port=file_transfer_port,
                     target_os=target_os,
                     build_id=build_id,
                     build_version=build_version,
@@ -114,6 +115,7 @@ class AgentBuilder:
                     server_host=server_host,
                     server_port=server_port,
                     web_port=web_port,
+                    file_transfer_port=file_transfer_port,
                     build_id=build_id,
                     build_version=build_version,
                     server_web_scheme=server_web_scheme,
@@ -125,6 +127,7 @@ class AgentBuilder:
                     server_host=server_host,
                     server_port=server_port,
                     web_port=web_port,
+                    file_transfer_port=file_transfer_port,
                     target_os=target_os,
                     target_arch=target_arch,
                     build_id=build_id,
@@ -138,6 +141,7 @@ class AgentBuilder:
                     server_host=server_host,
                     server_port=server_port,
                     web_port=web_port,
+                    file_transfer_port=file_transfer_port,
                     target_os=target_os,
                     target_arch=target_arch,
                     build_id=build_id,
@@ -179,6 +183,7 @@ class AgentBuilder:
         )
 
     def _inject_config(self, client_dir: str, server_host: str, server_port: int, web_port: int,
+                       file_transfer_port: int,
                        build_version: str, server_web_scheme: str = 'http', server_web_host: str = ''):
         config_path = os.path.join(client_dir, 'client', 'config', 'config.py')
         server_web_host = (server_web_host or server_host).strip() or server_host
@@ -191,7 +196,7 @@ SERVER_ADDR = (SERVER_HOST, SERVER_PORT)
 SERVER_WEB_SCHEME = "{server_web_scheme}"
 SERVER_WEB_HOST = "{server_web_host}"
 SERVER_WEB_PORT = {web_port}
-SERVER_FILE_TRANSFER_PORT = SERVER_WEB_PORT + 2
+SERVER_FILE_TRANSFER_PORT = {file_transfer_port}
 UPLOAD_BASE_URL = f"{{SERVER_WEB_SCHEME}}://{{SERVER_WEB_HOST}}:{{SERVER_WEB_PORT}}"
 FILE_TRANSFER_BASE_URL = f"{{SERVER_WEB_SCHEME}}://{{SERVER_WEB_HOST}}:{{SERVER_FILE_TRANSFER_PORT}}"
 
@@ -201,6 +206,7 @@ CLIENT_BUILD_VERSION = "{build_version}"
             f.write(template)
 
     def _inject_go_config(self, client_dir: str, server_host: str, server_port: int, web_port: int,
+                          file_transfer_port: int,
                           build_version: str, server_web_scheme: str = 'http', server_web_host: str = ''):
         config_path = os.path.join(client_dir, 'client-go', 'config', 'config.go')
         server_web_host = (server_web_host or server_host).strip() or server_host
@@ -210,13 +216,16 @@ var SERVER_ADDR = "{server_host}:{server_port}"
 var SERVER_WEB_SCHEME = "{server_web_scheme}"
 var SERVER_WEB_HOST = "{server_web_host}"
 var SERVER_WEB_PORT = {web_port}
+var SERVER_FILE_TRANSFER_PORT = {file_transfer_port}
 var UPLOAD_BASE_URL = SERVER_WEB_SCHEME + "://" + SERVER_WEB_HOST + ":" + "{web_port}"
+var FILE_TRANSFER_BASE_URL = SERVER_WEB_SCHEME + "://" + SERVER_WEB_HOST + ":" + "{file_transfer_port}"
 var CLIENT_BUILD_VERSION = "{build_version}"
 '''
         with open(config_path, 'w', encoding='utf-8') as f:
             f.write(template)
 
     def _inject_go_loader_config(self, client_dir: str, server_host: str, server_port: int, web_port: int,
+                                 file_transfer_port: int,
                                  build_version: str, server_web_scheme: str = 'http', server_web_host: str = ''):
         config_path = os.path.join(client_dir, 'go-loader', 'config', 'config.go')
         server_web_host = (server_web_host or server_host).strip() or server_host
@@ -227,6 +236,7 @@ const ServerSocketPort = {server_port}
 const ServerWebScheme = "{server_web_scheme}"
 const ServerWebHost = "{server_web_host}"
 const ServerWebPort = {web_port}
+const ServerFileTransferPort = {file_transfer_port}
 const LoaderBuildVersion = "{build_version}"
 const BundleBaseDirName = "client_bundle"
 const BundleBuildAPIPath = "/api/agent/build"
@@ -236,7 +246,7 @@ const BundleReportAPIPath = "/api/agent/loader/report"
             f.write(template)
 
     def _build_with_pyinstaller(self, work_dir: str, server_host: str, server_port: int,
-                                web_port: int, target_os: str,
+                                web_port: int, file_transfer_port: int, target_os: str,
                                 build_id: str = '', build_version: str = 'dev', server_web_scheme: str = 'http',
                                 server_web_host: str = '') -> dict:
         current_target = self._get_current_pyinstaller_target()
@@ -250,7 +260,16 @@ const BundleReportAPIPath = "/api/agent/loader/report"
         client_copy = os.path.join(work_dir, 'rat')
         self._copy_source_with_excludes(self.source_dir, client_copy)
         logger.info(f'Temporary workspace: {os.path.abspath(client_copy)}')
-        self._inject_config(client_copy, server_host, server_port, web_port, build_version, server_web_scheme, server_web_host)
+        self._inject_config(
+            client_copy,
+            server_host,
+            server_port,
+            web_port,
+            file_transfer_port,
+            build_version,
+            server_web_scheme,
+            server_web_host,
+        )
 
         if target_os == 'win':
             result = self._build_windows(client_copy, build_id=build_id, build_version=build_version)
@@ -265,7 +284,7 @@ const BundleReportAPIPath = "/api/agent/loader/report"
         return result
 
     def _build_with_go(self, work_dir: str, server_host: str, server_port: int,
-                       web_port: int, target_os: str, target_arch: str,
+                       web_port: int, file_transfer_port: int, target_os: str, target_arch: str,
                        build_id: str = '', build_version: str = 'dev', server_web_scheme: str = 'http',
                        server_web_host: str = '') -> dict:
         go_project_dir = os.path.join(self.source_dir, 'client-go')
@@ -275,7 +294,16 @@ const BundleReportAPIPath = "/api/agent/loader/report"
         client_copy = os.path.join(work_dir, 'rat')
         self._copy_source_with_excludes(self.source_dir, client_copy)
         logger.info(f'Temporary workspace: {os.path.abspath(client_copy)}')
-        self._inject_go_config(client_copy, server_host, server_port, web_port, build_version, server_web_scheme, server_web_host)
+        self._inject_go_config(
+            client_copy,
+            server_host,
+            server_port,
+            web_port,
+            file_transfer_port,
+            build_version,
+            server_web_scheme,
+            server_web_host,
+        )
 
         go_target = self.GO_TARGET_MAP[target_os]
         output_name = self._build_go_output_name(target_os, target_arch, build_id)
@@ -291,7 +319,7 @@ const BundleReportAPIPath = "/api/agent/loader/report"
         }
 
     def _build_with_go_loader(self, work_dir: str, server_host: str, server_port: int,
-                              web_port: int, target_os: str, target_arch: str,
+                              web_port: int, file_transfer_port: int, target_os: str, target_arch: str,
                               build_id: str = '', build_version: str = 'dev', server_web_scheme: str = 'http',
                               server_web_host: str = '') -> dict:
         go_project_dir = os.path.join(self.source_dir, 'go-loader')
@@ -301,7 +329,16 @@ const BundleReportAPIPath = "/api/agent/loader/report"
         client_copy = os.path.join(work_dir, 'rat')
         self._copy_source_with_excludes(self.source_dir, client_copy)
         logger.info(f'Temporary workspace: {os.path.abspath(client_copy)}')
-        self._inject_go_loader_config(client_copy, server_host, server_port, web_port, build_version, server_web_scheme, server_web_host)
+        self._inject_go_loader_config(
+            client_copy,
+            server_host,
+            server_port,
+            web_port,
+            file_transfer_port,
+            build_version,
+            server_web_scheme,
+            server_web_host,
+        )
 
         go_target = self.GO_TARGET_MAP[target_os]
         output_name = self._build_go_loader_output_name(target_os, target_arch, build_id)
@@ -329,7 +366,7 @@ const BundleReportAPIPath = "/api/agent/loader/report"
             os.chmod(output_path, 0o755)
 
     def _build_with_bundle(self, work_dir: str, server_host: str, server_port: int,
-                           web_port: int, build_id: str, build_version: str,
+                           web_port: int, file_transfer_port: int, build_id: str, build_version: str,
                            server_web_scheme: str = 'http', server_web_host: str = '') -> dict:
         staging_dir = os.path.join(work_dir, 'bundle')
         os.makedirs(staging_dir, exist_ok=True)
@@ -349,7 +386,16 @@ const BundleReportAPIPath = "/api/agent/loader/report"
                 os.makedirs(os.path.dirname(target_path), exist_ok=True)
                 shutil.copy2(source_path, target_path)
 
-        self._inject_config(staging_dir, server_host, server_port, web_port, build_version, server_web_scheme, server_web_host)
+        self._inject_config(
+            staging_dir,
+            server_host,
+            server_port,
+            web_port,
+            file_transfer_port,
+            build_version,
+            server_web_scheme,
+            server_web_host,
+        )
         bundle_name = self._build_bundle_output_name(build_id)
         bundle_path = os.path.join(work_dir, bundle_name)
 

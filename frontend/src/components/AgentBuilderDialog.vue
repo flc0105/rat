@@ -40,6 +40,14 @@
           />
         </el-form-item>
 
+        <el-form-item label="File Port" required>
+          <el-input
+              v-model.number="agentForm.file_transfer_port"
+              type="number"
+              placeholder="8087"
+          />
+        </el-form-item>
+
         <el-form-item label="Target OS">
           <el-radio-group
               v-model="agentForm.target_os"
@@ -127,6 +135,7 @@ export default {
         server_host: window.location.hostname || '127.0.0.1',
         server_port: 9999,
         web_port: 8085,
+        file_transfer_port: 8087,
         target_os: 'mac',
         builder: 'bundle',
         target_arch: 'arm64',
@@ -185,6 +194,7 @@ export default {
       this.agentForm.server_host = window.location.hostname || '127.0.0.1'
       this.agentForm.server_port = 9999
       this.agentForm.web_port = 8085
+      this.agentForm.file_transfer_port = 8087
 
       this.platformLoading = true
       try {
@@ -227,6 +237,15 @@ export default {
 
         const targetOs = String(json.data?.target_os || 'mac').trim() || 'mac'
         this.agentServerTargetOs = targetOs
+
+        const webPort = Number(json.data?.web_port || 0)
+        const fileTransferPort = Number(json.data?.file_transfer_port || 0)
+        if (webPort > 0) {
+          this.agentForm.web_port = webPort
+        }
+        if (fileTransferPort > 0) {
+          this.agentForm.file_transfer_port = fileTransferPort
+        }
       } catch (_error) {
         this.agentServerTargetOs = 'mac'
       }
@@ -282,6 +301,11 @@ export default {
 
       if (!this.agentForm.web_port) {
         ElMessage.warning('Please enter web port')
+        return
+      }
+
+      if (!this.agentForm.file_transfer_port) {
+        ElMessage.warning('Please enter file transfer port')
         return
       }
 
