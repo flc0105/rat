@@ -4,7 +4,7 @@
     title="Settings"
     width="920px"
     class="settings-dialog"
-    :close-on-click-modal="false"
+    :close-on-click-modal="true"
     append-to-body
   >
     <el-tabs v-model="activeTab" class="settings-tabs">

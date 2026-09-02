@@ -385,7 +385,7 @@
     top="14vh"
     class="connection-config-editor-dialog"
     modal-class="connection-config-editor-overlay"
-    :close-on-click-modal="false"
+    :close-on-click-modal="true"
   >
     <div
       v-if="runtimeConfigEditorItem"

@@ -288,6 +288,7 @@ class DeviceMonitorManager:
                 continue
 
             meta = self._volume_metadata(partition)
+            normalized_usage = self._normalize_volume_usage(partition, usage)
             volumes.append({
                 'name': meta['name'],
                 'mountpoint': mountpoint,
@@ -295,14 +296,39 @@ class DeviceMonitorManager:
                 'fstype': str(partition.fstype or ''),
                 'kind': meta['kind'],
                 'system': bool(meta['system']),
-                'total': int(usage.total or 0),
-                'used': int(usage.used or 0),
-                'free': int(usage.free or 0),
-                'percent': round(float(usage.percent or 0), 1),
+                'total': normalized_usage['total'],
+                'used': normalized_usage['used'],
+                'free': normalized_usage['free'],
+                'percent': normalized_usage['percent'],
             })
 
         volumes.sort(key=lambda item: (not item.get('system'), str(item.get('name') or '').casefold()))
         return {'volumes': volumes}
+
+    def _normalize_volume_usage(self, partition, usage) -> dict:
+        total = int(getattr(usage, 'total', 0) or 0)
+        used = int(getattr(usage, 'used', 0) or 0)
+        free = int(getattr(usage, 'free', 0) or 0)
+        percent = round(float(getattr(usage, 'percent', 0) or 0), 1)
+
+        mountpoint = str(getattr(partition, 'mountpoint', '') or '').strip()
+        fstype = str(getattr(partition, 'fstype', '') or '').strip().lower()
+
+        # macOS 的 APFS System Volume(/) 与 Data Volume 共用 container。
+        # psutil 对 / 的 used/percent 可能只反映 sealed System Volume，
+        # 但 total/free 又是共享 container 语义，导致三者无法相加。
+        # Dashboard 的系统盘卡片按 container 容量展示，保证 used + free = total。
+        if sys.platform == 'darwin' and mountpoint == '/' and fstype == 'apfs' and total > 0:
+            free = max(0, min(free, total))
+            used = max(0, total - free)
+            percent = round((used / total) * 100.0, 1)
+
+        return {
+            'total': total,
+            'used': used,
+            'free': free,
+            'percent': percent,
+        }
 
     def _collect_network(self, psutil, item: dict) -> dict:
         now = time.monotonic()
