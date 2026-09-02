@@ -3,12 +3,15 @@
 
 说明：
 - 不改动原有 client.config.config
-- 将 timeout / HTTP 传输模式等新能力集中到这里
+- 将 HTTP 传输模式、buffer 与 idle timeout 等新能力集中到这里
 - HTTP_TRANSFER_MODE:
   - legacy: 保留原版 requests files=... / iter_content() 行为，不支持取消
-  - cancelable: 使用可取消 / 可超时的流式实现
+  - cancelable: 使用可取消并支持实时进度的流式实现
 - 本文件只提供默认值；运行时 set 命令写入外部 runtime_config.json 覆盖文件，不修改本源码文件
 """
+
+from core import transfer_settings
+
 
 # ------------------ command runtime ------------------ #
 # 通用命令兜底超时：只在命令没有更具体的 fallback timeout 时生效。
@@ -21,12 +24,14 @@ COMMAND_DEFAULT_STREAM_TIMEOUT = 300
 # HTTP_TRANSFER_MODE = 'cancelable'
 HTTP_TRANSFER_MODE = 'legacy'
 
-# ------------------ http upload ------------------ #
-HTTP_UPLOAD_TIMEOUT = 120
+# ------------------ http file transfer ------------------ #
+# 所有 HTTP 文件传输统一使用同一个 buffer。
+HTTP_TRANSFER_BUFFER_SIZE = transfer_settings.DEFAULT_HTTP_TRANSFER_BUFFER_SIZE
 
-# ------------------ http download ------------------ #
-HTTP_DOWNLOAD_CONNECT_TIMEOUT = 15
-HTTP_DOWNLOAD_READ_TIMEOUT = 300
+# 不限制文件传输总时长；仅在启用后，对单次网络 I/O 长时间无推进进行停止。
+# 默认 6 小时，适合超大文件/弱网环境，仍可在 Configuration 中调整或关闭。
+HTTP_TRANSFER_IDLE_TIMEOUT_ENABLED = True
+HTTP_TRANSFER_IDLE_TIMEOUT_SECONDS = 6 * 60 * 60
 
 # ------------------ preview image compression ------------------ #
 # 只影响 preview_path 的 web 预览上传，不影响 download_path / 平台命令 / script 上传。
@@ -49,6 +54,13 @@ LOCAL_WATCHDOG_TIMEOUT_SECONDS = 15
 # expose=True 的配置会出现在普通 set 输出和 set 自动补全中，也允许通过 set KEY value 修改。
 # expose=False 的配置保留在本文件和 set --all 输出中，但默认不允许直接 set 修改。
 # 如果以后希望隐藏项也允许修改，把 RuntimeConfigService.is_supported_key() 改为调用 is_known_config_key() 即可。
+_RUNTIME_CONFIG_DEPRECATED_KEYS = {
+    'HTTP_UPLOAD_TIMEOUT',
+    'HTTP_DOWNLOAD_CONNECT_TIMEOUT',
+    'HTTP_DOWNLOAD_READ_TIMEOUT',
+}
+
+
 _RUNTIME_CONFIG_META = {
     'COMMAND_DEFAULT_TIMEOUT': {
         'group': 'command',
@@ -66,25 +78,31 @@ _RUNTIME_CONFIG_META = {
         'desc': 'Default timeout for stream command execution.',
     },
     'HTTP_TRANSFER_MODE': {
-        'group': 'strategy',
+        'group': 'transfer',
         'expose': True,
         'desc': 'HTTP transfer implementation mode: legacy or cancelable.',
         'choices': ['legacy', 'cancelable'],
     },
-    'HTTP_UPLOAD_TIMEOUT': {
-        'group': 'upload',
-        'expose': False,
-        'desc': 'HTTP upload timeout in seconds.',
+    'HTTP_TRANSFER_BUFFER_SIZE': {
+        'group': 'transfer',
+        'expose': True,
+        'desc': 'Shared HTTP file transfer buffer size in bytes.',
+        'min': transfer_settings.MIN_HTTP_TRANSFER_BUFFER_SIZE,
+        'max': transfer_settings.MAX_HTTP_TRANSFER_BUFFER_SIZE,
+        'step': transfer_settings.MIN_HTTP_TRANSFER_BUFFER_SIZE,
     },
-    'HTTP_DOWNLOAD_CONNECT_TIMEOUT': {
-        'group': 'download',
-        'expose': False,
-        'desc': 'HTTP download connect timeout in seconds.',
+    'HTTP_TRANSFER_IDLE_TIMEOUT_ENABLED': {
+        'group': 'transfer',
+        'expose': True,
+        'desc': 'Stop an HTTP file transfer when network I/O makes no progress for the configured idle timeout.',
     },
-    'HTTP_DOWNLOAD_READ_TIMEOUT': {
-        'group': 'download',
-        'expose': False,
-        'desc': 'HTTP download read timeout in seconds.',
+    'HTTP_TRANSFER_IDLE_TIMEOUT_SECONDS': {
+        'group': 'transfer',
+        'expose': True,
+        'desc': 'Maximum seconds without HTTP file transfer I/O progress. Default: 21600 seconds (6 hours).',
+        'min': 1,
+        'max': 604800,
+        'step': 60,
     },
     'PREVIEW_IMAGE_COMPRESS_ENABLED': {
         'group': 'preview',

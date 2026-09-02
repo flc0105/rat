@@ -35,6 +35,7 @@ class CommandHttpFileTransferService:
         artifact_type: str,
         category: str,
         extra: dict | None = None,
+        transfer_buffer_size: int | None = None,
     ) -> dict:
         client_id = getattr(self.owner.socket, 'client_id', '') or ''
 
@@ -47,6 +48,8 @@ class CommandHttpFileTransferService:
 
         if isinstance(extra, dict) and extra:
             payload['extra'] = json.dumps(extra, ensure_ascii=False)
+        if transfer_buffer_size is not None:
+            payload['transfer_buffer_size'] = max(int(transfer_buffer_size), 1)
 
         return payload
 
@@ -146,13 +149,14 @@ class CommandHttpFileTransferService:
         progress_callback=None,
     ):
         upload_url = self.client_api.build_file_upload_url()
+        strategy = self.get_transfer_strategy()
         form_data = self.build_http_upload_form_data(
             artifact_type=artifact_type,
             category=category,
             extra=extra,
+            transfer_buffer_size=strategy.get_buffer_size(),
         )
 
-        strategy = self.get_transfer_strategy()
         return strategy.upload_file(
             file_path,
             upload_url,
@@ -205,6 +209,7 @@ class CommandHttpFileTransferService:
             artifact_type=artifact_type,
             category=category,
             extra=extra,
+            transfer_buffer_size=strategy.get_buffer_size(),
         )
         progress_callback = (
             self._build_progress_callback(transfer_id, 'staging', filename)

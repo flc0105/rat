@@ -443,7 +443,9 @@
         <el-input-number
           v-else-if="runtimeConfigEditorItem.value_type === 'integer'"
           v-model="runtimeConfigEditorValue"
-          :step="1"
+          :min="runtimeConfigEditorNumberMin"
+          :max="runtimeConfigEditorNumberMax"
+          :step="runtimeConfigEditorNumberStep ?? 1"
           controls-position="right"
           style="width: 100%"
         />
@@ -451,6 +453,9 @@
         <el-input-number
           v-else-if="runtimeConfigEditorItem.value_type === 'float'"
           v-model="runtimeConfigEditorValue"
+          :min="runtimeConfigEditorNumberMin"
+          :max="runtimeConfigEditorNumberMax"
+          :step="runtimeConfigEditorNumberStep"
           controls-position="right"
           style="width: 100%"
         />
@@ -649,6 +654,21 @@ export default {
       const ipv4 = String(this.monitorNetwork.ipv4 || '').trim()
       if (name && ipv4) return `${name} · ${ipv4}`
       return name || ipv4 || 'Active interface unavailable'
+    },
+
+    runtimeConfigEditorNumberMin() {
+      const value = Number(this.runtimeConfigEditorItem?.min_value)
+      return Number.isFinite(value) ? value : undefined
+    },
+
+    runtimeConfigEditorNumberMax() {
+      const value = Number(this.runtimeConfigEditorItem?.max_value)
+      return Number.isFinite(value) ? value : undefined
+    },
+
+    runtimeConfigEditorNumberStep() {
+      const value = Number(this.runtimeConfigEditorItem?.step)
+      return Number.isFinite(value) && value > 0 ? value : undefined
     },
 
     runtimeConfigEditorChoices() {

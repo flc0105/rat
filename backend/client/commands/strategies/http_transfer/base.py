@@ -1,4 +1,29 @@
-from client.config.runtime_config import HTTP_TRANSFER_MODE
+import requests
+from requests.adapters import HTTPAdapter
+
+from client.config import runtime_config
+from core import transfer_settings
+
+
+class TransferBufferHttpAdapter(HTTPAdapter):
+    """
+    统一控制 urllib3 读取 request body 时使用的 blocksize。
+
+    requests/urllib3 默认 blocksize 较小；大文件上传时即使上层 stream
+    自己设置了更大的 chunk，也可能被底层反复以较小 size 调用 read()。
+    """
+
+    def __init__(self, buffer_size: int, *args, **kwargs):
+        self.buffer_size = max(int(buffer_size or 1), 1)
+        super().__init__(*args, **kwargs)
+
+    def init_poolmanager(self, connections, maxsize, block=False, **pool_kwargs):
+        pool_kwargs['blocksize'] = self.buffer_size
+        return super().init_poolmanager(connections, maxsize, block=block, **pool_kwargs)
+
+    def proxy_manager_for(self, proxy, **proxy_kwargs):
+        proxy_kwargs['blocksize'] = self.buffer_size
+        return super().proxy_manager_for(proxy, **proxy_kwargs)
 
 
 class HttpTransferStrategy:
@@ -25,11 +50,45 @@ class HttpTransferStrategy:
             message='Current HTTP transfer mode is legacy; download cancellation is not supported',
         )
 
-    def resolve_http_timeout(self, fallback_timeout=None):
-        timeout_value = self.owner._resolve_timeout(fallback_timeout)
-        if timeout_value is None:
+    def get_buffer_size(self) -> int:
+        try:
+            value = int(getattr(runtime_config, 'HTTP_TRANSFER_BUFFER_SIZE', transfer_settings.DEFAULT_HTTP_TRANSFER_BUFFER_SIZE) or 0)
+        except Exception:
+            value = transfer_settings.DEFAULT_HTTP_TRANSFER_BUFFER_SIZE
+        return max(value, 1)
+
+    def get_idle_timeout(self):
+        enabled = bool(getattr(runtime_config, 'HTTP_TRANSFER_IDLE_TIMEOUT_ENABLED', True))
+        if not enabled:
             return None
-        return max(float(timeout_value), 0.001)
+
+        try:
+            seconds = float(getattr(runtime_config, 'HTTP_TRANSFER_IDLE_TIMEOUT_SECONDS', 6 * 60 * 60) or 0)
+        except Exception:
+            seconds = float(6 * 60 * 60)
+
+        if seconds <= 0:
+            return None
+        return seconds
+
+    def create_http_session(self):
+        session = requests.Session()
+        adapter = TransferBufferHttpAdapter(self.get_buffer_size())
+        session.mount('http://', adapter)
+        session.mount('https://', adapter)
+        return session
+
+    def normalize_request_exception(self, exc: requests.RequestException):
+        idle_timeout = self.get_idle_timeout()
+        if idle_timeout is None:
+            return exc
+
+        text = str(exc or '').lower()
+        if isinstance(exc, requests.Timeout) or 'timed out' in text or 'timeout' in text:
+            return requests.Timeout(
+                f'HTTP file transfer made no network I/O progress for {idle_timeout:g}s'
+            )
+        return exc
 
     def upload_file(self, file_path: str, upload_url: str, form_data: dict, progress_callback=None):
         raise NotImplementedError
@@ -42,7 +101,7 @@ def normalize_http_transfer_mode(mode: str = '') -> str:
     normalized = str(mode or '').strip().lower()
     if normalized in ('legacy', 'cancelable'):
         return normalized
-    normalized_default = str(HTTP_TRANSFER_MODE or '').strip().lower()
+    normalized_default = str(runtime_config.HTTP_TRANSFER_MODE or '').strip().lower()
     if normalized_default in ('legacy', 'cancelable'):
         return normalized_default
     return 'cancelable'

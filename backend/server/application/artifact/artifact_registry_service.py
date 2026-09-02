@@ -7,6 +7,8 @@ from pathlib import Path
 
 from werkzeug.utils import secure_filename
 
+from core import transfer_settings
+
 
 class ArtifactRegistryService:
     """
@@ -18,6 +20,10 @@ class ArtifactRegistryService:
     - shared_files
     - command_output
     """
+
+    DEFAULT_TRANSFER_BUFFER_SIZE = transfer_settings.DEFAULT_HTTP_TRANSFER_BUFFER_SIZE
+    MIN_TRANSFER_BUFFER_SIZE = transfer_settings.MIN_HTTP_TRANSFER_BUFFER_SIZE
+    MAX_TRANSFER_BUFFER_SIZE = transfer_settings.MAX_HTTP_TRANSFER_BUFFER_SIZE
 
     ARTIFACT_TIME_FORMAT = '%Y-%m-%d %H:%M:%S'
 
@@ -275,12 +281,24 @@ class ArtifactRegistryService:
                 extra=extra,
             )
 
+    def _normalize_transfer_buffer_size(self, value) -> int:
+        try:
+            normalized = int(value)
+        except Exception:
+            normalized = self.DEFAULT_TRANSFER_BUFFER_SIZE
+
+        return min(
+            max(normalized, self.MIN_TRANSFER_BUFFER_SIZE),
+            self.MAX_TRANSFER_BUFFER_SIZE,
+        )
+
     def save_http_uploaded_file(self, file, artifact_type: str = '', category: str = '', client_id: str = '',
                                 hostname: str = '', machine_id: str = '', job_id: str = '', job_name: str = '',
                                 job_key: str = '',
                                 # source_type: str = '',
                                 source_command_id=None, addr: str = '',
                                 # related_path: str = '',
+                                transfer_buffer_size=None,
                                 extra: dict | None = None) -> dict:
         normalized_type = self._normalize_artifact_type(artifact_type or self.CATEGORY_FILES)
         normalized_category = (category or '').strip() or 'default'
@@ -303,7 +321,8 @@ class ArtifactRegistryService:
             category=normalized_category,
         )
         file_path = allocated['file_path']
-        file.save(file_path)
+        buffer_size = self._normalize_transfer_buffer_size(transfer_buffer_size)
+        file.save(file_path, buffer_size=buffer_size)
         return self.register_existing_artifact(
             artifact_type=normalized_type,
             category=normalized_category,

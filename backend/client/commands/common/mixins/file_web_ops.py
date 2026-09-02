@@ -7,12 +7,7 @@ from client.commands.runtime.context import CommandCancelledError, CommandTimeou
 from client.commands.runtime.interrupts import interruptible
 from client.commands.common.services.transfer.http_file_transfer_service import CommandHttpFileTransferService
 from client.commands.common.services.filesystem.preview_image_service import PreviewImageService
-from client.config.runtime_config import (
-    HTTP_DOWNLOAD_CONNECT_TIMEOUT,
-    HTTP_DOWNLOAD_READ_TIMEOUT,
-    HTTP_TRANSFER_MODE,
-    HTTP_UPLOAD_TIMEOUT,
-)
+from client.config.runtime_config import HTTP_TRANSFER_MODE
 from core.utils.decorator import desc
 
 
@@ -31,15 +26,10 @@ class CommandFileWebMixin:
       以便服务端正确分类并挂回 execution history
     - HTTP 传输支持两种模式：
       - legacy：保留原版 requests files=/iter_content 行为，不支持取消
-      - cancelable：支持取消 / timeout / context
+      - cancelable：支持取消 / 实时进度 / idle timeout
     """
 
     HTTP_TRANSFER_MODE = HTTP_TRANSFER_MODE
-    HTTP_UPLOAD_TIMEOUT = HTTP_UPLOAD_TIMEOUT
-    HTTP_DOWNLOAD_TIMEOUT = (
-        HTTP_DOWNLOAD_CONNECT_TIMEOUT,
-        HTTP_DOWNLOAD_READ_TIMEOUT,
-    )
 
     @property
     def http_file_transfer_service(self):
@@ -90,8 +80,10 @@ class CommandFileWebMixin:
             )
         except CommandCancelledError:
             return 0, 'Command cancelled'
-        except (CommandTimeoutError, requests.Timeout):
-            return 0, 'HTTP upload timed out'
+        except requests.Timeout:
+            return 0, 'HTTP transfer stopped after reaching the idle timeout'
+        except CommandTimeoutError:
+            return 0, 'Command timed out and was terminated'
         except Exception as e:
             return 0, f'Failed to download file via HTTP: {e}'
 
@@ -124,8 +116,10 @@ class CommandFileWebMixin:
             )
         except CommandCancelledError:
             return 0, 'Command cancelled'
-        except (CommandTimeoutError, requests.Timeout):
-            return 0, 'HTTP upload timed out'
+        except requests.Timeout:
+            return 0, 'HTTP transfer stopped after reaching the idle timeout'
+        except CommandTimeoutError:
+            return 0, 'Command timed out and was terminated'
         except Exception as e:
             return 0, f'Failed to download paths via HTTP: {e}'
 
@@ -253,8 +247,10 @@ class CommandFileWebMixin:
             )
         except CommandCancelledError:
             return 0, 'Command cancelled'
-        except (CommandTimeoutError, requests.Timeout):
-            return 0, 'HTTP upload timed out'
+        except requests.Timeout:
+            return 0, 'HTTP transfer stopped after reaching the idle timeout'
+        except CommandTimeoutError:
+            return 0, 'Command timed out and was terminated'
         except Exception as e:
             return 0, f'Failed to preview file via HTTP: {e}'
         finally:

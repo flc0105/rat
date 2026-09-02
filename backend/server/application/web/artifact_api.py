@@ -92,7 +92,7 @@ class WebArtifactApi:
                                 job_key: str = '',
                                 # source_type: str = 'client_upload',
                                 # related_path: str = '',
-                                source_command_id=None, extra=None):
+                                source_command_id=None, transfer_buffer_size=None, extra=None):
         resolved_hostname, resolved_machine_id, addr = self.resolve_client_context(client_id)
         hostname = hostname or resolved_hostname
         machine_id = machine_id or resolved_machine_id
@@ -110,6 +110,7 @@ class WebArtifactApi:
             source_command_id=source_command_id,
             addr=addr,
             # related_path=related_path,
+            transfer_buffer_size=transfer_buffer_size,
             extra=extra,
         )
         try:

@@ -90,6 +90,7 @@ class WebArtifactService:
                                 # source_type: str = '',
                                 source_command_id=None, addr: str = '',
                                 # related_path: str = '',
+                                transfer_buffer_size=None,
                                 extra: dict | None = None) -> dict:
         return self.registry_service.save_http_uploaded_file(
             file,
@@ -105,6 +106,7 @@ class WebArtifactService:
             source_command_id=source_command_id,
             addr=addr,
             # related_path=related_path,
+            transfer_buffer_size=transfer_buffer_size,
             extra=extra,
         )
 

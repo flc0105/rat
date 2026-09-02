@@ -3,18 +3,8 @@ import uuid
 
 import requests
 
-from client.commands.runtime.context import CommandCancelledError, CommandTimeoutError
+from client.commands.runtime.context import CommandCancelledError
 from client.commands.strategies.http_transfer.base import HttpTransferStrategy
-from client.config.runtime_config import (
-    HTTP_DOWNLOAD_CONNECT_TIMEOUT,
-    HTTP_DOWNLOAD_READ_TIMEOUT,
-    HTTP_UPLOAD_TIMEOUT,
-)
-
-
-# 固定分块大小，不再作为 runtime_config 暴露。
-HTTP_UPLOAD_CHUNK_SIZE = 128 * 1024
-HTTP_DOWNLOAD_CHUNK_SIZE = 64 * 1024
 
 
 class CancelableMultipartUploadStream:
@@ -22,11 +12,11 @@ class CancelableMultipartUploadStream:
     可取消的 multipart/form-data 流。
     """
 
-    def __init__(self, owner, file_path: str, form_data: dict, chunk_size: int | None = None, progress_callback=None):
+    def __init__(self, owner, file_path: str, form_data: dict, chunk_size: int, progress_callback=None):
         self.owner = owner
         self.file_path = file_path
         self.form_data = form_data or {}
-        self.chunk_size = max(int(chunk_size or HTTP_UPLOAD_CHUNK_SIZE), 1)
+        self.chunk_size = max(int(chunk_size or 1), 1)
         self.boundary = f'----ratboundary{uuid.uuid4().hex}'
         self.file_name = os.path.basename(file_path)
         self.file_size = os.path.getsize(file_path)
@@ -102,11 +92,9 @@ class CancelableMultipartUploadStream:
             return b''
 
         self._open_file_if_needed()
-        data = self.owner._read_interruptible(
-            self._opened_file,
-            size,
-            fallback_timeout=HTTP_UPLOAD_TIMEOUT,
-        )
+        self.owner._ensure_not_cancelled()
+        data = self._opened_file.read(size)
+        self.owner._ensure_not_cancelled()
         if data:
             self._file_bytes_read += len(data)
             if callable(self.progress_callback):
@@ -127,7 +115,7 @@ class CancelableMultipartUploadStream:
         return data
 
     def read(self, size: int = -1) -> bytes:
-        self.owner._ensure_not_interrupted(fallback_timeout=HTTP_UPLOAD_TIMEOUT)
+        self.owner._ensure_not_cancelled()
 
         if size is None or size < 0:
             size = self.chunk_size
@@ -139,7 +127,7 @@ class CancelableMultipartUploadStream:
         remaining = size
 
         while remaining > 0:
-            self.owner._ensure_not_interrupted(fallback_timeout=HTTP_UPLOAD_TIMEOUT)
+            self.owner._ensure_not_cancelled()
 
             chunk = self._read_from_prefix(remaining)
             if not chunk:
@@ -162,14 +150,14 @@ class CancelableHttpTransferStrategy(HttpTransferStrategy):
         return True
 
     def _create_session(self):
-        session = requests.Session()
+        session = self.create_http_session()
         self.owner._register_cancel_handler(lambda: session.close())
         self.owner._register_cleanup_handler(lambda: session.close())
         return session
 
     def upload_file(self, file_path: str, upload_url: str, form_data: dict, progress_callback=None):
         self.configure_context_for_upload()
-        self.owner._ensure_not_interrupted(fallback_timeout=HTTP_UPLOAD_TIMEOUT)
+        self.owner._ensure_not_cancelled()
 
         session = self._create_session()
         response = None
@@ -177,6 +165,7 @@ class CancelableHttpTransferStrategy(HttpTransferStrategy):
             self.owner,
             file_path,
             form_data,
+            chunk_size=self.get_buffer_size(),
             progress_callback=progress_callback,
         )
         self.owner._register_cancel_handler(stream.close)
@@ -190,17 +179,15 @@ class CancelableHttpTransferStrategy(HttpTransferStrategy):
                     'Content-Type': stream.content_type,
                     'Content-Length': str(stream.content_length),
                 },
-                timeout=self.resolve_http_timeout(HTTP_UPLOAD_TIMEOUT),
+                timeout=self.get_idle_timeout(),
             )
-            self.owner._ensure_not_interrupted(fallback_timeout=HTTP_UPLOAD_TIMEOUT)
+            self.owner._ensure_not_cancelled()
             return response
         except CommandCancelledError:
             raise
-        except CommandTimeoutError:
-            raise requests.Timeout('HTTP upload timed out')
         except requests.RequestException as e:
-            self.owner._ensure_not_interrupted(fallback_timeout=HTTP_UPLOAD_TIMEOUT)
-            raise e
+            self.owner._ensure_not_cancelled()
+            raise self.normalize_request_exception(e) from e
         finally:
             try:
                 stream.close()
@@ -215,7 +202,7 @@ class CancelableHttpTransferStrategy(HttpTransferStrategy):
 
     def download_file(self, url: str, target_path: str, progress_callback=None):
         self.configure_context_for_download()
-        self.owner._ensure_not_interrupted(fallback_timeout=HTTP_DOWNLOAD_READ_TIMEOUT)
+        self.owner._ensure_not_cancelled()
 
         session = self._create_session()
         response = None
@@ -224,10 +211,7 @@ class CancelableHttpTransferStrategy(HttpTransferStrategy):
             response = session.get(
                 url,
                 stream=True,
-                timeout=(
-                    HTTP_DOWNLOAD_CONNECT_TIMEOUT,
-                    self.resolve_http_timeout(HTTP_DOWNLOAD_READ_TIMEOUT),
-                ),
+                timeout=self.get_idle_timeout(),
             )
             response.raise_for_status()
 
@@ -242,10 +226,8 @@ class CancelableHttpTransferStrategy(HttpTransferStrategy):
             self.owner._register_cleanup_handler(lambda: file_obj.close())
             self.owner._register_cancel_handler(lambda: file_obj.close())
 
-            for chunk in self.owner._iter_interruptible(
-                response.iter_content(chunk_size=HTTP_DOWNLOAD_CHUNK_SIZE),
-                fallback_timeout=HTTP_DOWNLOAD_READ_TIMEOUT,
-            ):
+            for chunk in response.iter_content(chunk_size=self.get_buffer_size()):
+                self.owner._ensure_not_cancelled()
                 if not chunk:
                     continue
                 file_obj.write(chunk)
@@ -253,15 +235,14 @@ class CancelableHttpTransferStrategy(HttpTransferStrategy):
                 if callable(progress_callback):
                     progress_callback(transferred_bytes, total_bytes)
 
+            self.owner._ensure_not_cancelled()
             file_obj.close()
             file_obj = None
         except CommandCancelledError:
             raise
-        except CommandTimeoutError:
-            raise requests.Timeout('HTTP download timed out')
         except requests.RequestException as e:
-            self.owner._ensure_not_interrupted(fallback_timeout=HTTP_DOWNLOAD_READ_TIMEOUT)
-            raise e
+            self.owner._ensure_not_cancelled()
+            raise self.normalize_request_exception(e) from e
         finally:
             if file_obj is not None:
                 try:

@@ -75,6 +75,9 @@ class RuntimeConfigService:
                 'desc': self.get_config_desc(key),
                 'value_type': self.get_value_type(value, default_value),
                 'choices': choices,
+                'min_value': meta.get('min'),
+                'max_value': meta.get('max'),
+                'step': meta.get('step'),
                 'editable': self.is_supported_key(key),
             })
 
@@ -169,6 +172,7 @@ class RuntimeConfigService:
         default_value = defaults.get(normalized_key, old_value)
 
         new_value = self.coerce_value(raw_value, default_value)
+        self.validate_config_value(normalized_key, new_value)
         override_removed = False
 
         if normalized_key in defaults and new_value == default_value:
@@ -255,9 +259,14 @@ class RuntimeConfigService:
         overrides = load_runtime_overrides()
         defaults = self.get_default_values()
 
+        deprecated_keys = getattr(runtime_config, '_RUNTIME_CONFIG_DEPRECATED_KEYS', set())
+        if not isinstance(deprecated_keys, (set, list, tuple)):
+            deprecated_keys = set()
+        deprecated_keys = {str(key).strip().upper() for key in deprecated_keys if str(key).strip()}
+
         removed = []
         for key in list(overrides.keys()):
-            if key in defaults and overrides[key] == defaults[key]:
+            if key in deprecated_keys or (key in defaults and overrides[key] == defaults[key]):
                 overrides.pop(key, None)
                 removed.append(key)
 
@@ -342,6 +351,19 @@ class RuntimeConfigService:
             return self._coerce_string(text)
 
         raise TypeError(f'Unsupported config value type: {type(reference_value).__name__}')
+
+    def validate_config_value(self, key: str, value) -> None:
+        meta = self.get_config_meta(key)
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
+            return
+
+        min_value = meta.get('min')
+        max_value = meta.get('max')
+
+        if isinstance(min_value, (int, float)) and value < min_value:
+            raise ValueError(f'{key} must be >= {min_value}')
+        if isinstance(max_value, (int, float)) and value > max_value:
+            raise ValueError(f'{key} must be <= {max_value}')
 
     def _coerce_bool(self, text: str) -> bool:
         lowered = text.strip().lower()

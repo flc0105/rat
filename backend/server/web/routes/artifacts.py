@@ -127,6 +127,7 @@ def create_artifacts_blueprint(server_instance):
             # source_type = get_optional_form_text('source_type', 'client_upload')
             # related_path = get_optional_form_text('related_path', '')
             source_command_id = parse_optional_int_form('source_command_id')
+            transfer_buffer_size = parse_optional_int_form('transfer_buffer_size')
             extra = parse_optional_json_form('extra')
             return artifact_api.save_http_uploaded_file(
                 upload,
@@ -141,6 +142,7 @@ def create_artifacts_blueprint(server_instance):
                 # source_type=source_type,
                 # related_path=related_path,
                 source_command_id=source_command_id,
+                transfer_buffer_size=transfer_buffer_size,
                 extra=extra,
             )
         return responder.json_endpoint(_execute, default_error_status=500)
