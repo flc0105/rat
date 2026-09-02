@@ -291,6 +291,6 @@ class ProcessService:
         except psutil.NoSuchProcess:
             raise Exception(f'Process {pid} not found')
         except psutil.AccessDenied:
-            raise Exception(f'Access denied to kill process {pid}')
+            raise Exception(f'Access denied to terminate process {pid}')
         except Exception as e:
-            raise Exception(f'Failed to kill process {pid}: {e}')
+            raise Exception(f'Failed to terminate process {pid}: {e}')

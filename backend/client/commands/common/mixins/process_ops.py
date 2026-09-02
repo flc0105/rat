@@ -70,7 +70,7 @@ class CommandProcessMixin:
         except Exception as e:
             return 0, f'Failed to list apps: {e}'
 
-    @desc('Kill a process by PID', group='process', suggest=False)
+    @desc('Terminate a process by PID', group='process', suggest=False)
     def kill_process(self, pid: str):
         try:
             self._get_process_service().kill_process(pid)

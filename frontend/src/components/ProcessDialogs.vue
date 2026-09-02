@@ -22,7 +22,7 @@
 
           <el-input
             v-model="processFilterText"
-            placeholder="Filter by PID, name"
+            placeholder="Filter by PID, PPID, name, username"
             size="small"
             class="process-dialog-filter-input"
             clearable
@@ -53,27 +53,41 @@
               <el-table-column
                 prop="pid"
                 label="PID"
-                width="100"
+                width="90"
+                align="center"
+              />
+
+              <el-table-column
+                prop="ppid"
+                label="PPID"
+                width="90"
                 align="center"
               />
 
               <el-table-column
                 prop="name"
                 label="Name"
-                min-width="240"
+                min-width="220"
+                show-overflow-tooltip
+              />
+
+              <el-table-column
+                prop="username"
+                label="Username"
+                min-width="180"
                 show-overflow-tooltip
               />
 
               <el-table-column
                 prop="status"
                 label="Status"
-                width="160"
+                width="130"
                 align="center"
               />
 
               <el-table-column
                 label="Actions"
-                width="220"
+                width="180"
                 align="center"
                 fixed="right"
               >
@@ -94,7 +108,7 @@
                       type="danger"
                       @click="killProcess(row.pid, row.name)"
                     >
-                      Kill
+                      Terminate
                     </el-button>
                   </div>
                 </template>
@@ -138,7 +152,7 @@
 
               <el-table-column
                 label="Actions"
-                width="220"
+                width="180"
                 align="center"
                 fixed="right"
               >
@@ -159,7 +173,7 @@
                       type="danger"
                       @click="killApp(row.pid, row.name)"
                     >
-                      Kill
+                      Terminate
                     </el-button>
                   </div>
                 </template>
@@ -222,12 +236,11 @@
             Network Connections ({{ (processDetail.connections || []).length }})
           </div>
 
-          <div class="process-detail-table-shell process-detail-table-shell-network">
+          <div class="process-detail-table-shell">
             <el-table
               :data="processDetail.connections || []"
               stripe
               border
-              height="100%"
               empty-text="No network connections"
               table-layout="fixed"
             >
@@ -262,7 +275,7 @@
           </div>
         </section>
 
-        <section class="process-detail-section">
+        <section class="process-detail-section process-open-files-section">
           <div class="process-detail-section-title">
             Open Files ({{ (processDetail.open_files || []).length }})
           </div>
@@ -276,21 +289,28 @@
             </div>
 
             <div
-              v-for="(item, index) in (processDetail.open_files || [])"
-              :key="`${item.path || 'file'}-${item.fd ?? 'na'}-${index}`"
+              v-for="(item, index) in visibleOpenFiles"
+              :key="`${item.path || 'file'}-${index}`"
               class="process-open-file-row"
+              :title="item.path || ''"
             >
-              <span class="process-open-file-path mono" :title="item.path || ''">
-                {{ item.path || '-' }}
-              </span>
+              <div class="process-open-file-icon" aria-hidden="true">
+                <el-icon><Document /></el-icon>
+              </div>
 
-              <span
-                v-if="item.fd !== undefined && item.fd !== null && Number(item.fd) >= 0"
-                class="process-open-file-fd"
-              >
-                FD {{ item.fd }}
-              </span>
+              <div class="process-open-file-path mono">
+                {{ item.path || '-' }}
+              </div>
             </div>
+
+            <button
+              v-if="openFilesHiddenCount > 0 || openFilesExpanded"
+              type="button"
+              class="process-open-files-toggle"
+              @click="openFilesExpanded = !openFilesExpanded"
+            >
+              {{ openFilesExpanded ? 'Show less' : `Show ${openFilesHiddenCount} more` }}
+            </button>
           </div>
         </section>
       </template>
@@ -300,9 +320,12 @@
 
 <script>
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { Document } from '@element-plus/icons-vue'
 
 export default {
   name: 'ProcessDialogs',
+
+  components: { Document },
 
   props: {
     selectedId: {
@@ -339,6 +362,7 @@ export default {
       processDetailPid: 0,
       processDetailMonitorSessionId: '',
       processDetailMonitorStarting: false,
+      openFilesExpanded: false,
     }
   },
 
@@ -394,6 +418,7 @@ export default {
       const kw = this.processFilterText.toLowerCase()
       return this.processes.filter(p =>
         String(p.pid).includes(kw) ||
+        String(p.ppid ?? '').includes(kw) ||
         (p.name || '').toLowerCase().includes(kw) ||
         (p.username || '').toLowerCase().includes(kw)
       )
@@ -438,6 +463,18 @@ export default {
       const cmdline = (this.processDetail && this.processDetail.cmdline) || []
       if (!Array.isArray(cmdline) || !cmdline.length) return ''
       return cmdline.join(' ')
+    },
+
+    visibleOpenFiles() {
+      const items = (this.processDetail && this.processDetail.open_files) || []
+      if (!Array.isArray(items)) return []
+      return this.openFilesExpanded ? items : items.slice(0, 10)
+    },
+
+    openFilesHiddenCount() {
+      const items = (this.processDetail && this.processDetail.open_files) || []
+      if (!Array.isArray(items) || this.openFilesExpanded) return 0
+      return Math.max(0, items.length - 10)
     },
   },
 
@@ -708,6 +745,7 @@ export default {
       await this.stopProcessDetailMonitor()
       this.processDetailDialogVisible = true
       this.processDetailLoading = true
+      this.openFilesExpanded = false
       this.processDetailPid = Number(pid) || 0
       this.processDetail = {
         pid: this.processDetailPid,
@@ -722,6 +760,7 @@ export default {
       this.processDetail = null
       this.processDetailPid = 0
       this.processDetailLoading = false
+      this.openFilesExpanded = false
     },
 
     async startProcessDetailMonitor(pid) {
@@ -871,15 +910,19 @@ export default {
     async killProcess(pid, name) {
       try {
         await ElMessageBox.confirm(
-          `Kill "${name}" (PID: ${pid})?`,
-          'Confirm',
-          { type: 'warning' }
+          `Terminate process "${name}" (PID: ${pid})?`,
+          'Terminate Process',
+          {
+            type: 'warning',
+            confirmButtonText: 'Terminate',
+            cancelButtonText: 'Cancel',
+          }
         )
 
         const res = await fetch(`/api/connections/${encodeURIComponent(this.selectedId)}/processes/${encodeURIComponent(pid)}/kill`, { method: 'POST' })
         const json = await res.json()
         if (res.ok && json.code === 0) {
-          ElMessage.success(`Process ${pid} killed`)
+          ElMessage.success(`Process "${name}" (PID: ${pid}) terminated`)
           this.processes = this.processes.filter(item => Number(item.pid) !== Number(pid))
           this.apps = this.apps.filter(item => Number(item.pid) !== Number(pid))
           if (Number(this.processDetailPid) === Number(pid)) {
@@ -889,22 +932,26 @@ export default {
           throw new Error(json.message)
         }
       } catch (e) {
-        if (e !== 'cancel') ElMessage.error(e.message || 'Kill failed')
+        if (e !== 'cancel') ElMessage.error(`Unable to terminate process: ${e.message || 'Unknown error'}`)
       }
     },
 
     async killApp(pid, name) {
       try {
         await ElMessageBox.confirm(
-          `Force quit "${name}" (PID: ${pid})?`,
-          'Confirm',
-          { type: 'warning' }
+          `Terminate application "${name}" (PID: ${pid})?`,
+          'Terminate Application',
+          {
+            type: 'warning',
+            confirmButtonText: 'Terminate',
+            cancelButtonText: 'Cancel',
+          }
         )
 
         const res = await fetch(`/api/connections/${encodeURIComponent(this.selectedId)}/apps/${encodeURIComponent(pid)}/kill`, { method: 'POST' })
         const json = await res.json()
         if (res.ok && json.code === 0) {
-          ElMessage.success(`${name} force quit`)
+          ElMessage.success(`Application "${name}" (PID: ${pid}) terminated`)
           this.apps = this.apps.filter(item => Number(item.pid) !== Number(pid))
           this.processes = this.processes.filter(item => Number(item.pid) !== Number(pid))
           if (Number(this.processDetailPid) === Number(pid)) {
@@ -914,7 +961,7 @@ export default {
           throw new Error(json.message)
         }
       } catch (e) {
-        if (e !== 'cancel') ElMessage.error(e.message || 'Force quit failed')
+        if (e !== 'cancel') ElMessage.error(`Unable to terminate application: ${e.message || 'Unknown error'}`)
       }
     },
   },
@@ -1124,56 +1171,92 @@ export default {
   overflow: hidden;
 }
 
-.process-detail-table-shell-network {
-  height: 220px;
-}
-
 .process-detail-table-shell :deep(.el-table) {
   width: 100% !important;
-  height: 100% !important;
 }
 
 .process-open-files-list {
-  max-height: 240px;
-  overflow-y: auto;
-  border: 1px solid #ebeef5;
-  border-radius: 8px;
+  border: 1px solid #e4e7ed;
+  border-radius: 10px;
   background: #fff;
+  overflow: hidden;
 }
 
 .process-open-files-empty {
-  padding: 18px 14px;
+  padding: 18px 16px;
   color: #909399;
   text-align: center;
   font-size: 13px;
 }
 
 .process-open-file-row {
-  display: flex;
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr);
   align-items: center;
-  gap: 12px;
+  gap: 8px;
   min-width: 0;
-  padding: 9px 12px;
+  padding: 8px 12px;
   border-bottom: 1px solid #f0f2f5;
+  transition: background-color 0.16s ease, color 0.16s ease;
 }
 
-.process-open-file-row:last-child {
+.process-open-file-row:hover {
+  background: #f7f9fc;
+}
+
+.process-open-file-row:last-of-type {
   border-bottom: 0;
 }
 
-.process-open-file-path {
-  flex: 1 1 auto;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: 12px;
+.process-open-file-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  color: #a3adbd;
+  font-size: 14px;
 }
 
-.process-open-file-fd {
-  flex: 0 0 auto;
-  color: #909399;
-  font-size: 11px;
+.process-open-file-path {
+  min-width: 0;
+  overflow: hidden;
+  color: #4b5565;
+  font-size: 12px;
+  line-height: 1.45;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.process-open-file-row:hover .process-open-file-path {
+  color: #303846;
+}
+
+.process-open-files-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  min-height: 34px;
+  padding: 7px 12px;
+  border: 0;
+  border-top: 1px solid #f0f2f5;
+  background: #fff;
+  color: var(--el-color-primary);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.16s ease;
+}
+
+.process-open-files-toggle:hover {
+  background: #f7f9fc;
+}
+
+.process-open-files-toggle:focus-visible {
+  outline: 2px solid var(--el-color-primary-light-5);
+  outline-offset: -2px;
 }
 
 @media (max-width: 768px) {
