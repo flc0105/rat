@@ -21,12 +21,27 @@ class DeviceMonitorManager:
     不同 channel 使用各自采样周期，避免低频指标跟随 CPU / Network 高频刷新。
     """
 
-    SUPPORTED_CHANNELS = {'system', 'storage', 'network', 'battery'}
+    SUPPORTED_CHANNELS = {
+        'system',
+        'storage',
+        'network',
+        'battery',
+        'processes',
+        'apps',
+        'process_detail',
+        'process_connections',
+        'process_open_files',
+    }
     DEFAULT_INTERVALS = {
         'system': 0.5,
         'network': 0.5,
         'storage': 5.0,
         'battery': 5.0,
+        'processes': 1.0,
+        'apps': 1.0,
+        'process_detail': 1.0,
+        'process_connections': 2.0,
+        'process_open_files': 3.0,
     }
     MIN_INTERVAL_SECONDS = 0.25
     MAX_INTERVAL_SECONDS = 60.0
@@ -35,14 +50,16 @@ class DeviceMonitorManager:
         self.connection = connection
         self._lock = threading.RLock()
         self._sessions = {}
+        self._process_service = None
 
-    def open_session(self, monitor_session_id: str, channels=None, intervals=None):
+    def open_session(self, monitor_session_id: str, channels=None, intervals=None, options=None):
         monitor_session_id = str(monitor_session_id or '').strip()
         if not monitor_session_id:
             return
 
         normalized_channels = self._normalize_channels(channels)
         normalized_intervals = self._normalize_intervals(intervals, normalized_channels)
+        normalized_options = self._normalize_options(options)
 
         self.close_session(monitor_session_id, notify=False)
 
@@ -50,9 +67,12 @@ class DeviceMonitorManager:
             'monitor_session_id': monitor_session_id,
             'channels': normalized_channels,
             'intervals': normalized_intervals,
+            'options': normalized_options,
             'stop_event': threading.Event(),
             'notify_close': True,
             'network_baseline': None,
+            'process_cache': {},
+            'process_cpu_primed': set(),
             'seq': 0,
         }
         worker = threading.Thread(
@@ -68,7 +88,7 @@ class DeviceMonitorManager:
 
         worker.start()
 
-    def update_session(self, monitor_session_id: str, channels=None, intervals=None):
+    def update_session(self, monitor_session_id: str, channels=None, intervals=None, options=None):
         monitor_session_id = str(monitor_session_id or '').strip()
         with self._lock:
             item = self._sessions.get(monitor_session_id)
@@ -84,6 +104,12 @@ class DeviceMonitorManager:
             )
             item['channels'] = next_channels
             item['intervals'] = next_intervals
+            if options is not None:
+                previous_pid = self._read_process_pid_option(item)
+                item['options'] = self._normalize_options(options)
+                if self._read_process_pid_option(item) != previous_pid:
+                    item['process_cache'] = {}
+                    item['process_cpu_primed'] = set()
 
     def close_session(self, monitor_session_id: str, notify: bool = True):
         monitor_session_id = str(monitor_session_id or '').strip()
@@ -122,7 +148,15 @@ class DeviceMonitorManager:
             now = time.monotonic()
             next_due = {}
             for channel in item.get('channels') or []:
-                if channel in ('storage', 'battery'):
+                if channel in (
+                    'storage',
+                    'battery',
+                    'processes',
+                    'apps',
+                    'process_detail',
+                    'process_connections',
+                    'process_open_files',
+                ):
                     next_due[channel] = now
                 else:
                     next_due[channel] = now + float(item['intervals'].get(channel, 0.5))
@@ -140,6 +174,17 @@ class DeviceMonitorManager:
                         continue
 
                     data = self._collect_channel(channel, psutil, item)
+
+                    # 某些 collector（例如 macOS Apps 的 System Events）可能阻塞数秒。
+                    # 采集期间如果前端已经切换 channel，就丢弃这条晚到 snapshot，
+                    # 避免旧 channel 的结果或瞬时错误在切换后继续影响当前页面。
+                    with self._lock:
+                        current_channels = list(item.get('channels') or [])
+                        current_intervals = dict(item.get('intervals') or {})
+                    if item['stop_event'].is_set() or channel not in current_channels:
+                        next_due.pop(channel, None)
+                        continue
+
                     item['seq'] += 1
                     self._send({
                         'type': MSG_TYPE_MONITOR_SNAPSHOT,
@@ -149,7 +194,11 @@ class DeviceMonitorManager:
                         'data': data,
                         'collected_at': time.time(),
                     })
-                    next_due[channel] = now + float(intervals.get(channel, 1.0))
+                    # 从本次采集完成后重新计算周期。耗时 collector 超时/变慢后
+                    # 不应因为旧 due time 已经过期而立即连续重试。
+                    next_due[channel] = time.monotonic() + float(
+                        current_intervals.get(channel, intervals.get(channel, 1.0))
+                    )
 
                 for channel in list(next_due.keys()):
                     if channel not in channels:
@@ -184,7 +233,91 @@ class DeviceMonitorManager:
             return self._collect_network(psutil, item)
         if channel == 'battery':
             return self._collect_battery(psutil)
+        if channel == 'processes':
+            return self._collect_processes()
+        if channel == 'apps':
+            return self._collect_apps()
+        if channel == 'process_detail':
+            return self._collect_process_detail(psutil, item)
+        if channel == 'process_connections':
+            return self._collect_process_connections(psutil, item)
+        if channel == 'process_open_files':
+            return self._collect_process_open_files(psutil, item)
         return {}
+
+    def _get_process_service(self):
+        if self._process_service is None:
+            from client.commands.common.services.process.process_service import ProcessService
+            self._process_service = ProcessService(self)
+        return self._process_service
+
+    def _collect_processes(self) -> dict:
+        try:
+            return {'items': self._get_process_service().list_processes() or []}
+        except Exception as e:
+            return {'items': [], 'error': str(e) or 'Failed to list processes'}
+
+    def _collect_apps(self) -> dict:
+        service = self._get_process_service()
+        try:
+            if sys.platform.startswith('win'):
+                items = service.list_windows_apps()
+            elif sys.platform == 'darwin':
+                items = service.list_macos_app()
+            else:
+                raise Exception('Unsupported os:' + str(sys.platform))
+            return {'items': items or []}
+        except Exception as e:
+            return {'items': [], 'error': str(e) or 'Failed to list applications'}
+
+    def _read_process_pid_option(self, item: dict) -> int:
+        options = item.get('options') if isinstance(item.get('options'), dict) else {}
+        try:
+            pid = int(options.get('pid') or 0)
+        except Exception:
+            pid = 0
+        return pid
+
+    def _resolve_process_pid(self, item: dict) -> int:
+        pid = self._read_process_pid_option(item)
+        if pid <= 0:
+            raise ValueError('Process monitor requires a valid pid')
+        return pid
+
+    def _get_monitored_process(self, psutil, item: dict):
+        pid = self._resolve_process_pid(item)
+        cache = item.setdefault('process_cache', {})
+        proc = cache.get(pid)
+        if proc is None:
+            proc = psutil.Process(pid)
+            cache.clear()
+            cache[pid] = proc
+        return pid, proc
+
+    def _collect_process_detail(self, psutil, item: dict) -> dict:
+        pid, proc = self._get_monitored_process(psutil, item)
+        data = self._get_process_service().get_process_basic_detail(pid, proc=proc)
+
+        # psutil 的进程 CPU 百分比需要前一帧作为基线，第一帧不展示伪 0%。
+        primed = item.setdefault('process_cpu_primed', set())
+        if pid not in primed:
+            primed.add(pid)
+            data['cpu_percent'] = None
+        return data
+
+    def _collect_process_connections(self, psutil, item: dict) -> dict:
+        pid, proc = self._get_monitored_process(psutil, item)
+        return {
+            'pid': pid,
+            'items': self._get_process_service().get_process_connections(pid, proc=proc),
+        }
+
+    def _collect_process_open_files(self, psutil, item: dict) -> dict:
+        pid, proc = self._get_monitored_process(psutil, item)
+        return {
+            'pid': pid,
+            'items': self._get_process_service().get_process_open_files(pid, proc=proc),
+        }
 
     def _collect_system(self, psutil) -> dict:
         memory = psutil.virtual_memory()
@@ -547,6 +680,11 @@ class DeviceMonitorManager:
                 value = default
             result[channel] = max(self.MIN_INTERVAL_SECONDS, min(self.MAX_INTERVAL_SECONDS, value))
         return result
+
+    def _normalize_options(self, options) -> dict:
+        if not isinstance(options, dict):
+            return {}
+        return dict(options)
 
     def _send(self, payload: dict):
         self.connection.send(payload)

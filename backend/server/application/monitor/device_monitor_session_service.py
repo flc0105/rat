@@ -14,16 +14,32 @@ class DeviceMonitorSessionService:
     """
     Server 端轻量设备监控会话。
 
-    第一版按当前浏览器 Tab 定向转发监控 SSE，不参与 foreground command。
-    channel 模型保留 config 能力，后续 Processes / Services 可以复用同一会话协议。
+    按当前浏览器 Tab 定向转发监控 SSE，不参与 foreground command。
+    Dashboard、Processes / Apps 与 Process Detail 共用 channel 协议，允许同一 Tab
+    同时存在多个独立 monitor session，避免不同视图互相抢占采样周期。
     """
 
-    SUPPORTED_CHANNELS = {'system', 'storage', 'network', 'battery'}
+    SUPPORTED_CHANNELS = {
+        'system',
+        'storage',
+        'network',
+        'battery',
+        'processes',
+        'apps',
+        'process_detail',
+        'process_connections',
+        'process_open_files',
+    }
     DEFAULT_INTERVALS = {
         'system': 0.5,
         'network': 0.5,
         'storage': 5.0,
         'battery': 5.0,
+        'processes': 1.0,
+        'apps': 1.0,
+        'process_detail': 1.0,
+        'process_connections': 2.0,
+        'process_open_files': 3.0,
     }
     MIN_INTERVAL_SECONDS = 0.25
     MAX_INTERVAL_SECONDS = 60.0
@@ -34,18 +50,17 @@ class DeviceMonitorSessionService:
         self._lock = threading.RLock()
         self._sessions = {}
 
-    def create_session(self, client_id: str, tab_id: str, channels=None, intervals=None) -> dict:
+    def create_session(self, client_id: str, tab_id: str, channels=None, intervals=None, options=None) -> dict:
         client_id = str(client_id or '').strip()
         tab_id = str(tab_id or '').strip()
         if not tab_id:
             raise ValueError('X-Tab-Id is required for device monitor')
 
         session = self.server.get_target_connection_by_client_id(client_id)
-        self._close_existing_tab_sessions(tab_id)
-
         monitor_session_id = str(uuid.uuid4())
         normalized_channels = self._normalize_channels(channels)
         normalized_intervals = self._normalize_intervals(intervals, normalized_channels)
+        normalized_options = self._normalize_options(options)
         item = {
             'monitor_session_id': monitor_session_id,
             'client_id': client_id,
@@ -53,6 +68,7 @@ class DeviceMonitorSessionService:
             'status': 'opening',
             'channels': normalized_channels,
             'intervals': normalized_intervals,
+            'options': normalized_options,
             'created_at': time.time(),
             'opened_at': 0.0,
             'closed_at': 0.0,
@@ -69,6 +85,7 @@ class DeviceMonitorSessionService:
                 'monitor_session_id': monitor_session_id,
                 'channels': normalized_channels,
                 'intervals': normalized_intervals,
+                'options': normalized_options,
             })
         except Exception:
             with self._lock:
@@ -77,7 +94,7 @@ class DeviceMonitorSessionService:
 
         return self._serialize(item)
 
-    def update_session(self, monitor_session_id: str, tab_id: str, channels=None, intervals=None) -> dict:
+    def update_session(self, monitor_session_id: str, tab_id: str, channels=None, intervals=None, options=None) -> dict:
         item = self._get_required_for_tab(monitor_session_id, tab_id)
         with self._lock:
             next_channels = self._normalize_channels(item['channels'] if channels is None else channels)
@@ -87,6 +104,9 @@ class DeviceMonitorSessionService:
             )
             item['channels'] = next_channels
             item['intervals'] = next_intervals
+            if options is not None:
+                item['options'] = self._normalize_options(options)
+            next_options = dict(item.get('options') or {})
 
         session = self.server.get_target_connection_by_client_id(item['client_id'])
         session.send({
@@ -94,6 +114,7 @@ class DeviceMonitorSessionService:
             'monitor_session_id': item['monitor_session_id'],
             'channels': next_channels,
             'intervals': next_intervals,
+            'options': next_options,
         })
         return self._serialize(item)
 
@@ -234,6 +255,7 @@ class DeviceMonitorSessionService:
             'status': item.get('status', ''),
             'channels': list(item.get('channels') or []),
             'intervals': dict(item.get('intervals') or {}),
+            'options': dict(item.get('options') or {}),
             'created_at': item.get('created_at') or 0,
             'opened_at': item.get('opened_at') or 0,
             'closed_at': item.get('closed_at') or 0,
@@ -275,3 +297,8 @@ class DeviceMonitorSessionService:
                 value = default
             result[channel] = max(self.MIN_INTERVAL_SECONDS, min(self.MAX_INTERVAL_SECONDS, value))
         return result
+
+    def _normalize_options(self, options) -> dict:
+        if not isinstance(options, dict):
+            return {}
+        return dict(options)

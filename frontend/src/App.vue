@@ -295,6 +295,7 @@
   <ProcessDialogs
     ref="processDialogRef"
     :selected-id="selectedId"
+    :tab-id="tabId"
   />
 
   <AgentBuilderDialog

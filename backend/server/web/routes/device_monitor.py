@@ -24,6 +24,7 @@ def create_device_monitor_blueprint(server_instance):
                 _tab_id(),
                 channels=payload.get('channels'),
                 intervals=payload.get('intervals'),
+                options=payload.get('options'),
             )
 
         return responder.json_endpoint(_execute, default_error_status=500)
@@ -37,6 +38,7 @@ def create_device_monitor_blueprint(server_instance):
                 _tab_id(),
                 channels=payload.get('channels'),
                 intervals=payload.get('intervals'),
+                options=payload.get('options'),
             )
 
         return responder.json_endpoint(_execute, default_error_status=500)

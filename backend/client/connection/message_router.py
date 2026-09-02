@@ -154,6 +154,7 @@ class ClientInboundMessageRouter(BaseMessageRouter):
             data.get('monitor_session_id') or '',
             channels=data.get('channels'),
             intervals=data.get('intervals'),
+            options=data.get('options'),
         )
         return None
 
@@ -162,6 +163,7 @@ class ClientInboundMessageRouter(BaseMessageRouter):
             data.get('monitor_session_id') or '',
             channels=data.get('channels'),
             intervals=data.get('intervals'),
+            options=data.get('options'),
         )
         return None
 

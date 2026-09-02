@@ -178,6 +178,7 @@
     top="6vh"
     class="fixed-dialog process-detail-dialog"
     modal-class="process-detail-overlay"
+    @closed="handleProcessDetailClosed"
   >
     <div
       v-loading="processDetailLoading"
@@ -266,21 +267,30 @@
             Open Files ({{ (processDetail.open_files || []).length }})
           </div>
 
-          <div class="process-detail-table-shell process-detail-table-shell-files">
-            <el-table
-              :data="processDetail.open_files || []"
-              stripe
-              border
-              height="100%"
-              empty-text="No open files"
-              table-layout="fixed"
+          <div class="process-open-files-list">
+            <div
+              v-if="!(processDetail.open_files || []).length"
+              class="process-open-files-empty"
             >
-              <el-table-column
-                prop="path"
-                label="Path"
-                show-overflow-tooltip
-              />
-            </el-table>
+              No open files
+            </div>
+
+            <div
+              v-for="(item, index) in (processDetail.open_files || [])"
+              :key="`${item.path || 'file'}-${item.fd ?? 'na'}-${index}`"
+              class="process-open-file-row"
+            >
+              <span class="process-open-file-path mono" :title="item.path || ''">
+                {{ item.path || '-' }}
+              </span>
+
+              <span
+                v-if="item.fd !== undefined && item.fd !== null && Number(item.fd) >= 0"
+                class="process-open-file-fd"
+              >
+                FD {{ item.fd }}
+              </span>
+            </div>
           </div>
         </section>
       </template>
@@ -299,6 +309,10 @@ export default {
       type: [String, Number],
       default: '',
     },
+    tabId: {
+      type: String,
+      default: '',
+    },
   },
 
   data() {
@@ -308,16 +322,35 @@ export default {
       // 进程数据
       processes: [],
       processesLoading: false,
+      processesSnapshotReceived: false,
       // 应用数据
       apps: [],
       appsLoading: false,
+      appsSnapshotReceived: false,
       // 过滤
       processFilterText: '',
       refreshTimer: null,
+      processMonitorSessionId: '',
+      processMonitorStarting: false,
+      processMonitorError: '',
       processDetailDialogVisible: false,
       processDetailLoading: false,
       processDetail: null,
+      processDetailPid: 0,
+      processDetailMonitorSessionId: '',
+      processDetailMonitorStarting: false,
     }
+  },
+
+  watch: {
+    processActiveTab() {
+      if (!this.processDialogVisible) return
+      void this.updateProcessMonitorChannel()
+    },
+    selectedId() {
+      if (!this.processDialogVisible) return
+      void this.handleSelectedDeviceChanged()
+    },
   },
 
   computed: {
@@ -334,19 +367,24 @@ export default {
     },
 
     processManagerSummaryText() {
+      const liveSuffix = this.processMonitorSessionId ? ' · Live 1s' : ''
       if (this.processActiveTab === 'apps') {
-        return `Showing ${this.processManagerVisibleCount} / ${this.processManagerTotalCount} applications`
+        return `Showing ${this.processManagerVisibleCount} / ${this.processManagerTotalCount} applications${liveSuffix}`
       }
 
-      return `Showing ${this.processManagerVisibleCount} / ${this.processManagerTotalCount} processes`
+      return `Showing ${this.processManagerVisibleCount} / ${this.processManagerTotalCount} processes${liveSuffix}`
     },
 
     processTabLabel() {
-      return `All Processes (${this.filteredProcesses.length})`
+      return this.processesSnapshotReceived
+        ? `All Processes (${this.filteredProcesses.length})`
+        : 'All Processes'
     },
 
     appTabLabel() {
-      return `Applications (${this.filteredApps.length})`
+      return this.appsSnapshotReceived
+        ? `Applications (${this.filteredApps.length})`
+        : 'Applications'
     },
 
     filteredProcesses() {
@@ -403,8 +441,14 @@ export default {
     },
   },
 
+  mounted() {
+    window.addEventListener('pagehide', this.handleProcessMonitorPageHide)
+  },
+
   beforeUnmount() {
+    window.removeEventListener('pagehide', this.handleProcessMonitorPageHide)
     this.stopProcessAutoRefresh()
+    void this.stopProcessDetailMonitor()
   },
 
   methods: {
@@ -417,14 +461,10 @@ export default {
       this.processDialogVisible = true
       this.processes = []
       this.apps = []
+      this.processesSnapshotReceived = false
+      this.appsSnapshotReceived = false
       this.processDetail = null
       this.processFilterText = ''
-
-      // 串行加载
-      this.loadProcesses().then(() => {
-        this.loadApps()
-      })
-
       this.startProcessAutoRefresh()
     },
 
@@ -432,22 +472,26 @@ export default {
       this.closeProcessDialog()
     },
 
+    handleProcessMonitorPageHide() {
+      void this.stopProcessMonitor(true)
+      void this.stopProcessDetailMonitor(true)
+    },
+
+    async handleSelectedDeviceChanged() {
+      await this.stopProcessDetailMonitor()
+      await this.stopProcessMonitor()
+      this.processDetailDialogVisible = false
+      this.processDetail = null
+      this.processDetailPid = 0
+      this.processes = []
+      this.apps = []
+      this.processesSnapshotReceived = false
+      this.appsSnapshotReceived = false
+      if (this.selectedId) await this.startProcessMonitor()
+    },
+
     startProcessAutoRefresh() {
-      this.stopProcessAutoRefresh()
-
-      this.refreshTimer = setInterval(() => {
-        if (!this.processDialogVisible || this.processDetailDialogVisible || this.processDetailLoading) {
-          return
-        }
-
-        // 只刷新当前 tab，避免无意义地同时抢占前台查询槽。
-        if (this.processActiveTab === 'apps') {
-          this.loadAppsSilent()
-          return
-        }
-
-        this.loadProcessesSilent()
-      }, 5000)
+      void this.startProcessMonitor()
     },
 
     stopProcessAutoRefresh() {
@@ -455,20 +499,126 @@ export default {
         clearInterval(this.refreshTimer)
         this.refreshTimer = null
       }
+      void this.stopProcessMonitor()
     },
 
     closeProcessDialog() {
       this.processDialogVisible = false
       this.stopProcessAutoRefresh()
+      void this.stopProcessDetailMonitor()
     },
 
     async refreshProcessManager() {
-      if (this.processActiveTab === 'apps') {
-        await this.loadApps()
+      await this.restartProcessMonitor()
+    },
+
+    getMonitorHeaders(extra = {}) {
+      const headers = { ...extra }
+      if (this.tabId) headers['X-Tab-Id'] = this.tabId
+      return headers
+    },
+
+    processMonitorChannel() {
+      return this.processActiveTab === 'apps' ? 'apps' : 'processes'
+    },
+
+    async startProcessMonitor() {
+      if (!this.processDialogVisible || !this.selectedId) return
+      if (this.processMonitorSessionId || this.processMonitorStarting) return
+
+      const channel = this.processMonitorChannel()
+      this.processMonitorStarting = true
+      this.processMonitorError = ''
+      if (channel === 'apps') this.appsLoading = true
+      else this.processesLoading = true
+
+      try {
+        const res = await fetch(
+          `/api/connections/${encodeURIComponent(this.selectedId)}/device-monitor/open`,
+          {
+            method: 'POST',
+            headers: this.getMonitorHeaders({ 'Content-Type': 'application/json' }),
+            body: JSON.stringify({
+              channels: [channel],
+              intervals: { [channel]: 1 },
+            }),
+          },
+        )
+        const json = await res.json()
+        if (!res.ok || json.code !== 0) {
+          throw new Error(json.message || 'Failed to open process monitor')
+        }
+
+        const sessionId = String(json.data?.monitor_session_id || '').trim()
+        if (!sessionId) throw new Error('Process monitor did not return a session id')
+        this.processMonitorSessionId = sessionId
+
+        if (!this.processDialogVisible) {
+          await this.stopProcessMonitor()
+        } else if (this.processMonitorChannel() !== channel) {
+          await this.updateProcessMonitorChannel()
+        }
+      } catch (e) {
+        this.processMonitorError = e?.message || 'Failed to open process monitor'
+        this.processesLoading = false
+        this.appsLoading = false
+        ElMessage.error(this.processMonitorError)
+      } finally {
+        this.processMonitorStarting = false
+      }
+    },
+
+    async updateProcessMonitorChannel() {
+      const channel = this.processMonitorChannel()
+      if (channel === 'apps') this.appsLoading = true
+      else this.processesLoading = true
+
+      const sessionId = String(this.processMonitorSessionId || '').trim()
+      if (!sessionId) {
+        await this.startProcessMonitor()
         return
       }
 
-      await this.loadProcesses()
+      try {
+        const res = await fetch(`/api/device-monitor/${encodeURIComponent(sessionId)}/config`, {
+          method: 'POST',
+          headers: this.getMonitorHeaders({ 'Content-Type': 'application/json' }),
+          body: JSON.stringify({
+            channels: [channel],
+            intervals: { [channel]: 1 },
+          }),
+        })
+        const json = await res.json()
+        if (!res.ok || json.code !== 0) {
+          throw new Error(json.message || 'Failed to update process monitor')
+        }
+      } catch (e) {
+        this.processMonitorError = e?.message || 'Failed to update process monitor'
+        if (channel === 'apps') this.appsLoading = false
+        else this.processesLoading = false
+        ElMessage.error(this.processMonitorError)
+      }
+    },
+
+    async stopProcessMonitor(keepalive = false) {
+      const sessionId = String(this.processMonitorSessionId || '').trim()
+      this.processMonitorSessionId = ''
+      this.processMonitorStarting = false
+      if (!sessionId) return
+
+      try {
+        await fetch(`/api/device-monitor/${encodeURIComponent(sessionId)}/close`, {
+          method: 'POST',
+          headers: this.getMonitorHeaders(),
+          keepalive: Boolean(keepalive),
+        })
+      } catch (_e) {
+      }
+    },
+
+    async restartProcessMonitor() {
+      await this.stopProcessMonitor()
+      await this.startProcessMonitor()
     },
 
     async loadProcesses() {
@@ -554,24 +704,161 @@ export default {
 
     async openProcessDetail(pid) {
       // if (!this.selectedId || !pid) return;
-      if (!this.selectedId) return
+      if (!this.selectedId || !pid) return
+      await this.stopProcessDetailMonitor()
       this.processDetailDialogVisible = true
       this.processDetailLoading = true
+      this.processDetailPid = Number(pid) || 0
+      this.processDetail = {
+        pid: this.processDetailPid,
+        connections: [],
+        open_files: [],
+      }
+      await this.startProcessDetailMonitor(this.processDetailPid)
+    },
+
+    handleProcessDetailClosed() {
+      void this.stopProcessDetailMonitor()
       this.processDetail = null
+      this.processDetailPid = 0
+      this.processDetailLoading = false
+    },
+
+    async startProcessDetailMonitor(pid) {
+      if (!this.selectedId || !pid || this.processDetailMonitorStarting) return
+      this.processDetailMonitorStarting = true
 
       try {
-        const res = await fetch(`/api/connections/${encodeURIComponent(this.selectedId)}/processes/${encodeURIComponent(pid)}/detail`)
+        const res = await fetch(
+          `/api/connections/${encodeURIComponent(this.selectedId)}/device-monitor/open`,
+          {
+            method: 'POST',
+            headers: this.getMonitorHeaders({ 'Content-Type': 'application/json' }),
+            body: JSON.stringify({
+              channels: ['process_detail', 'process_connections', 'process_open_files'],
+              intervals: {
+                process_detail: 1,
+                process_connections: 2,
+                process_open_files: 3,
+              },
+              options: { pid: Number(pid) },
+            }),
+          },
+        )
         const json = await res.json()
-        if (res.ok && json.code === 0) {
-          this.processDetail = json.data || {}
-        } else {
-          throw new Error(json.message || 'Failed to load process detail')
+        if (!res.ok || json.code !== 0) {
+          throw new Error(json.message || 'Failed to open process detail monitor')
+        }
+
+        const sessionId = String(json.data?.monitor_session_id || '').trim()
+        if (!sessionId) throw new Error('Process detail monitor did not return a session id')
+        this.processDetailMonitorSessionId = sessionId
+
+        if (!this.processDetailDialogVisible) {
+          await this.stopProcessDetailMonitor()
         }
       } catch (e) {
-        ElMessage.error(e.message || 'Failed to load process detail')
+        ElMessage.error(e?.message || 'Failed to load process detail')
+        this.processDetailLoading = false
         this.processDetailDialogVisible = false
       } finally {
+        this.processDetailMonitorStarting = false
+      }
+    },
+
+    async stopProcessDetailMonitor(keepalive = false) {
+      const sessionId = String(this.processDetailMonitorSessionId || '').trim()
+      this.processDetailMonitorSessionId = ''
+      this.processDetailMonitorStarting = false
+      if (!sessionId) return
+
+      try {
+        await fetch(`/api/device-monitor/${encodeURIComponent(sessionId)}/close`, {
+          method: 'POST',
+          headers: this.getMonitorHeaders(),
+          keepalive: Boolean(keepalive),
+        })
+      } catch (_e) {
+      }
+    },
+
+    handleDeviceMonitorSnapshot(payload = {}) {
+      if (String(payload.client_id || '') !== String(this.selectedId || '')) return
+      const sessionId = String(payload.monitor_session_id || '')
+      const channel = String(payload.channel || '').trim().toLowerCase()
+      const data = payload.data && typeof payload.data === 'object' ? payload.data : {}
+
+      if (sessionId === String(this.processMonitorSessionId || '')) {
+        if (channel === 'processes') {
+          this.processes = Array.isArray(data.items) ? data.items : []
+          this.processesSnapshotReceived = true
+          this.processesLoading = false
+        } else if (channel === 'apps') {
+          this.apps = Array.isArray(data.items) ? data.items : []
+          this.appsSnapshotReceived = true
+          this.appsLoading = false
+        }
+
+        const errorText = String(data.error || '').trim()
+        if (errorText && errorText !== this.processMonitorError) {
+          this.processMonitorError = errorText
+          ElMessage.error(errorText)
+        } else if (!errorText) {
+          this.processMonitorError = ''
+        }
+        return
+      }
+
+      if (sessionId !== String(this.processDetailMonitorSessionId || '')) return
+      if (!this.processDetailDialogVisible) return
+
+      if (channel === 'process_detail') {
+        this.processDetail = {
+          ...(this.processDetail || {}),
+          ...data,
+        }
         this.processDetailLoading = false
+        return
+      }
+
+      if (Number(data.pid || 0) !== Number(this.processDetailPid || 0)) return
+      if (channel === 'process_connections') {
+        this.processDetail = {
+          ...(this.processDetail || {}),
+          connections: Array.isArray(data.items) ? data.items : [],
+        }
+      } else if (channel === 'process_open_files') {
+        this.processDetail = {
+          ...(this.processDetail || {}),
+          open_files: Array.isArray(data.items) ? data.items : [],
+        }
+      }
+    },
+
+    handleDeviceMonitorStatus(payload = {}) {
+      const sessionId = String(payload.monitor_session_id || '')
+      const state = String(payload.state || payload.status || '').trim().toLowerCase()
+
+      if (sessionId === String(this.processMonitorSessionId || '')) {
+        if (state === 'error') {
+          const message = String(payload.error || 'Process monitor failed')
+          this.processMonitorError = message
+          this.processesLoading = false
+          this.appsLoading = false
+          ElMessage.error(message)
+        } else if (state === 'closed') {
+          this.processMonitorSessionId = ''
+        }
+        return
+      }
+
+      if (sessionId !== String(this.processDetailMonitorSessionId || '')) return
+      if (state === 'error') {
+        ElMessage.error(String(payload.error || 'Process detail monitor failed'))
+        this.processDetailLoading = false
+        this.processDetailDialogVisible = false
+      } else if (state === 'closed') {
+        this.processDetailMonitorSessionId = ''
       }
     },
 
@@ -593,8 +880,11 @@ export default {
         const json = await res.json()
         if (res.ok && json.code === 0) {
           ElMessage.success(`Process ${pid} killed`)
-          this.loadProcesses()
-          this.loadAppsSilent()
+          this.processes = this.processes.filter(item => Number(item.pid) !== Number(pid))
+          this.apps = this.apps.filter(item => Number(item.pid) !== Number(pid))
+          if (Number(this.processDetailPid) === Number(pid)) {
+            this.processDetailDialogVisible = false
+          }
         } else {
           throw new Error(json.message)
         }
@@ -615,8 +905,11 @@ export default {
         const json = await res.json()
         if (res.ok && json.code === 0) {
           ElMessage.success(`${name} force quit`)
-          this.loadApps()
-          this.loadProcessesSilent()
+          this.apps = this.apps.filter(item => Number(item.pid) !== Number(pid))
+          this.processes = this.processes.filter(item => Number(item.pid) !== Number(pid))
+          if (Number(this.processDetailPid) === Number(pid)) {
+            this.processDetailDialogVisible = false
+          }
         } else {
           throw new Error(json.message)
         }
@@ -835,13 +1128,52 @@ export default {
   height: 220px;
 }
 
-.process-detail-table-shell-files {
-  height: 240px;
-}
-
 .process-detail-table-shell :deep(.el-table) {
   width: 100% !important;
   height: 100% !important;
+}
+
+.process-open-files-list {
+  max-height: 240px;
+  overflow-y: auto;
+  border: 1px solid #ebeef5;
+  border-radius: 8px;
+  background: #fff;
+}
+
+.process-open-files-empty {
+  padding: 18px 14px;
+  color: #909399;
+  text-align: center;
+  font-size: 13px;
+}
+
+.process-open-file-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  padding: 9px 12px;
+  border-bottom: 1px solid #f0f2f5;
+}
+
+.process-open-file-row:last-child {
+  border-bottom: 0;
+}
+
+.process-open-file-path {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+}
+
+.process-open-file-fd {
+  flex: 0 0 auto;
+  color: #909399;
+  font-size: 11px;
 }
 
 @media (max-width: 768px) {

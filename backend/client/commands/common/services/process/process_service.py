@@ -8,6 +8,7 @@ class ProcessService:
 
     def __init__(self, owner):
         self.owner = owner
+        self._last_macos_apps = []
 
     def list_processes(self):
         import psutil
@@ -35,26 +36,26 @@ class ProcessService:
         except Exception:
             return default
 
-    def get_process_detail(self, pid):
+    def _normalize_address(self, addr):
+        if not addr:
+            return ''
+        if isinstance(addr, tuple):
+            if len(addr) >= 2:
+                return f'{addr[0]}:{addr[1]}'
+            return str(addr)
+        ip = getattr(addr, 'ip', '')
+        port = getattr(addr, 'port', '')
+        if ip and port != '':
+            return f'{ip}:{port}'
+        if ip:
+            return str(ip)
+        return str(addr)
+
+    def get_process_basic_detail(self, pid, proc=None):
         import psutil
 
-        def _normalize_address(addr):
-            if not addr:
-                return ''
-            if isinstance(addr, tuple):
-                if len(addr) >= 2:
-                    return f'{addr[0]}:{addr[1]}'
-                return str(addr)
-            ip = getattr(addr, 'ip', '')
-            port = getattr(addr, 'port', '')
-            if ip and port != '':
-                return f'{ip}:{port}'
-            if ip:
-                return str(ip)
-            return str(addr)
-
         try:
-            proc = psutil.Process(pid)
+            proc = proc or psutil.Process(pid)
             with proc.oneshot():
                 name = self._safe_proc_value(proc.name, '') or ''
                 username = self._safe_proc_value(proc.username, '') or ''
@@ -70,6 +71,39 @@ class ProcessService:
                 num_fds = self._safe_proc_value(lambda: getattr(proc, 'num_fds')(), None)
                 num_handles = self._safe_proc_value(lambda: getattr(proc, 'num_handles')(), None)
 
+            create_time_text = ''
+            if create_time is not None:
+                try:
+                    create_time_text = datetime.fromtimestamp(create_time).strftime('%Y-%m-%d %H:%M:%S')
+                except Exception:
+                    create_time_text = ''
+
+            return {
+                'pid': int(pid),
+                'name': name,
+                'username': username,
+                'status': status,
+                'ppid': ppid,
+                'exe': exe,
+                'cwd': cwd,
+                'cmdline': cmdline,
+                'create_time': create_time_text,
+                'cpu_percent': round(float(cpu_percent), 1),
+                'memory_percent': round(float(memory_percent), 1),
+                'num_threads': num_threads,
+                'num_fds': num_fds,
+                'num_handles': num_handles,
+            }
+        except psutil.NoSuchProcess:
+            raise Exception(f'Process {pid} not found')
+        except Exception as e:
+            raise Exception(f'Failed to get process detail: {e}')
+
+    def get_process_open_files(self, pid, proc=None):
+        import psutil
+
+        try:
+            proc = proc or psutil.Process(pid)
             open_files = []
             for item in (self._safe_proc_value(proc.open_files, []) or []):
                 open_files.append({
@@ -79,7 +113,17 @@ class ProcessService:
                     # 'mode': getattr(item, 'mode', '') or '',
                     # 'flags': getattr(item, 'flags', None),
                 })
+            return open_files
+        except psutil.NoSuchProcess:
+            raise Exception(f'Process {pid} not found')
+        except Exception as e:
+            raise Exception(f'Failed to get process open files: {e}')
 
+    def get_process_connections(self, pid, proc=None):
+        import psutil
+
+        try:
+            proc = proc or psutil.Process(pid)
             connections = []
             net_connections = self._safe_proc_value(lambda: proc.net_connections(kind='inet'), None)
             if net_connections is None:
@@ -89,29 +133,24 @@ class ProcessService:
                     'fd': getattr(conn, 'fd', None),
                     'family': str(getattr(conn, 'family', '')),
                     'type': str(getattr(conn, 'type', '')),
-                    'local_address': _normalize_address(getattr(conn, 'laddr', None)),
-                    'remote_address': _normalize_address(getattr(conn, 'raddr', None)),
+                    'local_address': self._normalize_address(getattr(conn, 'laddr', None)),
+                    'remote_address': self._normalize_address(getattr(conn, 'raddr', None)),
                     'status': getattr(conn, 'status', '') or '',
                 })
+            return connections
+        except psutil.NoSuchProcess:
+            raise Exception(f'Process {pid} not found')
+        except Exception as e:
+            raise Exception(f'Failed to get process connections: {e}')
 
-            detail = {
-                'pid': pid,
-                'name': name,
-                'username': username,
-                'status': status,
-                'ppid': ppid,
-                'exe': exe,
-                'cwd': cwd,
-                'cmdline': cmdline,
-                'create_time': datetime.fromtimestamp(create_time).strftime('%Y-%m-%d %H:%M:%S'),
-                'cpu_percent': round(cpu_percent, 1),
-                'memory_percent': round(memory_percent, 1),
-                'num_threads': num_threads,
-                'num_fds': num_fds,
-                'num_handles': num_handles,
-                'open_files': open_files,
-                'connections': connections,
-            }
+    def get_process_detail(self, pid):
+        import psutil
+
+        try:
+            proc = psutil.Process(pid)
+            detail = self.get_process_basic_detail(pid, proc=proc)
+            detail['open_files'] = self.get_process_open_files(pid, proc=proc)
+            detail['connections'] = self.get_process_connections(pid, proc=proc)
             return detail
         except psutil.NoSuchProcess:
             raise Exception(f'Process {pid} not found')
@@ -219,15 +258,18 @@ class ProcessService:
                         'status': self._safe_proc_value(proc.status, '') or '',
                     })
 
-            if parsed_apps:
-                parsed_apps.sort(
-                    key=lambda item: (
-                        (item.get('name') or '').lower(),
-                        item.get('pid') or 0,
-                    )
+            parsed_apps.sort(
+                key=lambda item: (
+                    (item.get('name') or '').lower(),
+                    item.get('pid') or 0,
                 )
-                apps = parsed_apps
-                return apps
+            )
+            self._last_macos_apps = list(parsed_apps)
+            return parsed_apps
+        except subprocess.TimeoutExpired:
+            # System Events 偶尔会短暂卡住。实时 Apps monitor 允许丢一帧，
+            # 但不要因为单次 osascript 超时清空上一帧有效列表。
+            return list(self._last_macos_apps)
         except Exception:
             raise
 
