@@ -19,9 +19,10 @@ class WebRemoteFileService:
 
     RESULT_ARTIFACT_ID_PREFIX = 'Artifact ID:'
 
-    def __init__(self, remote_execution_service, artifact_service):
+    def __init__(self, remote_execution_service, artifact_service, transfer_service=None):
         self.remote_execution_service = remote_execution_service
         self.artifact_service = artifact_service
+        self.transfer_service = transfer_service
 
     def _encode_payload_arg(self, payload: dict) -> str:
         raw = json.dumps(payload, ensure_ascii=False).encode('utf-8')
@@ -213,27 +214,58 @@ class WebRemoteFileService:
             'message': result_text
         }
 
-    def download_file(self, client_id: str, path: str, history_entry_id: str = '') -> dict:
+    def download_file(self, client_id: str, path: str, history_entry_id: str = '', tab_id: str = '') -> dict:
         if not (path or '').strip():
             raise ValueError('path is required')
 
         normalized_path = path.strip()
-        command = self._build_command('download_path', {'path': normalized_path})
+        session = self.remote_execution_service.get_connection(client_id)
+        hostname = getattr(session.session_info, 'hostname', '') or ''
+        transfer_id = ''
+        if self.transfer_service is not None and tab_id:
+            transfer = self.transfer_service.create_transfer(
+                client_id=client_id,
+                direction='client_to_server',
+                filename=normalized_path.replace('\\', '/').rstrip('/').split('/')[-1],
+                hostname=hostname,
+                source_path=normalized_path,
+                destination_path='Artifacts',
+                tab_id=tab_id,
+                stage='preparing',
+                metadata={'source': 'remote_file_download'},
+            )
+            transfer_id = transfer.get('transfer_id') or ''
 
-        result_text = self.remote_execution_service.run_foreground_text_command(
-            client_id,
-            command,
-            history_entry_id=history_entry_id,
-            task_type='remote_file',
-            source='web_remote_file',
-        )
-        artifact = self._resolve_artifact_from_result_text(result_text)
-
-        return {
+        command = self._build_command('download_path', {
             'path': normalized_path,
-            'message': result_text,
-            'artifact': artifact,
-        }
+            'transfer_id': transfer_id,
+        })
+
+        try:
+            result_text = self.remote_execution_service.run_foreground_text_command(
+                client_id,
+                command,
+                history_entry_id=history_entry_id,
+                task_type='remote_file',
+                source='web_remote_file',
+            )
+            artifact = self._resolve_artifact_from_result_text(result_text)
+            if transfer_id and self.transfer_service is not None:
+                self.transfer_service.complete_transfer(
+                    transfer_id,
+                    client_id=client_id,
+                    artifact_id=artifact.get('artifact_id') or '',
+                )
+            return {
+                'path': normalized_path,
+                'message': result_text,
+                'artifact': artifact,
+                'transfer_id': transfer_id,
+            }
+        except Exception as exc:
+            if transfer_id and self.transfer_service is not None:
+                self.transfer_service.fail_transfer(transfer_id, str(exc), client_id=client_id)
+            raise
 
     def download_paths_as_zip(
             self,
@@ -241,6 +273,7 @@ class WebRemoteFileService:
             paths: list[str],
             archive_name: str = '',
             history_entry_id: str = '',
+            tab_id: str = '',
     ) -> dict:
         if not isinstance(paths, list) or not paths:
             raise ValueError('paths is required')
@@ -253,25 +286,57 @@ class WebRemoteFileService:
         if not normalized_paths:
             raise ValueError('paths is required')
 
+        session = self.remote_execution_service.get_connection(client_id)
+        hostname = getattr(session.session_info, 'hostname', '') or ''
+        transfer_id = ''
+        if self.transfer_service is not None and tab_id:
+            transfer = self.transfer_service.create_transfer(
+                client_id=client_id,
+                direction='client_to_server',
+                filename=archive_name or f'{len(normalized_paths)} items.zip',
+                hostname=hostname,
+                source_path=normalized_paths[0] if len(normalized_paths) == 1 else f'{len(normalized_paths)} selected paths',
+                destination_path='Artifacts',
+                tab_id=tab_id,
+                stage='preparing',
+                metadata={
+                    'source': 'remote_file_download_zip',
+                    'source_count': len(normalized_paths),
+                },
+            )
+            transfer_id = transfer.get('transfer_id') or ''
+
         command = self._build_command('download_paths', {
             'paths': normalized_paths,
             'archive_name': archive_name,
+            'transfer_id': transfer_id,
         })
 
-        result_text = self.remote_execution_service.run_foreground_text_command(
-            client_id,
-            command,
-            history_entry_id=history_entry_id,
-            task_type='remote_file',
-            source='web_remote_file',
-        )
-        artifact = self._resolve_artifact_from_result_text(result_text)
-
-        return {
-            'paths': normalized_paths,
-            'message': result_text,
-            'artifact': artifact,
-        }
+        try:
+            result_text = self.remote_execution_service.run_foreground_text_command(
+                client_id,
+                command,
+                history_entry_id=history_entry_id,
+                task_type='remote_file',
+                source='web_remote_file',
+            )
+            artifact = self._resolve_artifact_from_result_text(result_text)
+            if transfer_id and self.transfer_service is not None:
+                self.transfer_service.complete_transfer(
+                    transfer_id,
+                    client_id=client_id,
+                    artifact_id=artifact.get('artifact_id') or '',
+                )
+            return {
+                'paths': normalized_paths,
+                'message': result_text,
+                'artifact': artifact,
+                'transfer_id': transfer_id,
+            }
+        except Exception as exc:
+            if transfer_id and self.transfer_service is not None:
+                self.transfer_service.fail_transfer(transfer_id, str(exc), client_id=client_id)
+            raise
 
     def create_zip_from_paths(
             self,

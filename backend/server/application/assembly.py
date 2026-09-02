@@ -29,6 +29,7 @@ from server.application.terminal.pty_session_service import PtySessionService
 from server.application.screen.screen_view_session_service import ScreenViewSessionService
 from server.application.clipboard.clipboard_session_service import ClipboardSessionService
 from server.application.monitor.device_monitor_session_service import DeviceMonitorSessionService
+from server.application.transfers.transfer_service import TransferService
 from server.application.web.agent_api import WebAgentApi
 from server.application.web.artifact_api import WebArtifactApi
 from server.application.web.command_catalog_api import WebCommandCatalogApi
@@ -50,6 +51,7 @@ from server.application.web.notification_history_api import WebNotificationHisto
 from server.application.web.screen_view_api import WebScreenViewApi
 from server.application.web.clipboard_api import WebClipboardApi
 from server.application.web.device_monitor_api import WebDeviceMonitorApi
+from server.application.web.transfer_api import WebTransferApi
 from server.config.config import (
     EXTERNAL_TOOL_META_PATH,
     EXTERNAL_TOOL_PACKAGE_PATH,
@@ -86,6 +88,7 @@ class ServerApplicationAssembly:
         # ------------------ shared infrastructure ------------------ #
         self.event_bus = WebEventBus()
         self.task_store = WebTaskStore()
+        self.transfer_service = TransferService(self.event_bus)
 
         # ------------------ domain/application services ------------------ #
         self.artifact_service = WebArtifactService()
@@ -95,6 +98,7 @@ class ServerApplicationAssembly:
         self.remote_execution_service = RemoteExecutionService(
             self.server,
             artifact_service=self.artifact_service,
+            transfer_service=self.transfer_service,
         )
         self.command_executor_factory = CommandExecutorFactory(
             server=self.server,
@@ -104,6 +108,7 @@ class ServerApplicationAssembly:
         self.remote_file_service = WebRemoteFileService(
             remote_execution_service=self.remote_execution_service,
             artifact_service=self.artifact_service,
+            transfer_service=self.transfer_service,
         )
 
         self.recent_device_store = RecentDeviceStore(RECENT_DEVICES_JSON_PATH)
@@ -283,6 +288,10 @@ class ServerApplicationAssembly:
 
         self.device_monitor_api = WebDeviceMonitorApi(
             device_monitor_session_service=self.device_monitor_session_service,
+        )
+
+        self.transfer_api = WebTransferApi(
+            transfer_service=self.transfer_service,
         )
 
         self._wire_cross_dependencies()

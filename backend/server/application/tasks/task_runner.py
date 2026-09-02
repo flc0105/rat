@@ -229,6 +229,7 @@ class WebTaskRunner:
             source=context.source,
             task_id=context.task_id,
             command=context.command,
+            tab_id=self._get_task_tab_id(context),
         )
 
     def _release_task(self, context: TaskExecutionContext) -> None:

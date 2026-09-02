@@ -1,7 +1,7 @@
 from flask import Blueprint, request
 
 from server.web.api_response import WebApiResponder
-from server.web.request_parsers import get_json_payload, get_optional_remote_path, parse_paging_args
+from server.web.request_parsers import get_json_payload, get_optional_remote_path, get_optional_tab_id, parse_paging_args
 
 
 def create_remote_files_blueprint(server_instance):
@@ -71,7 +71,7 @@ def create_remote_files_blueprint(server_instance):
             path = get_optional_remote_path()
             if not path:
                 raise ValueError('path is required')
-            return remote_file_api.download_remote_file(client_id, path)
+            return remote_file_api.download_remote_file(client_id, path, tab_id=get_optional_tab_id())
 
         return responder.json_endpoint(_execute, default_error_status=500)
 
@@ -85,7 +85,12 @@ def create_remote_files_blueprint(server_instance):
             if not isinstance(paths, list) or not paths:
                 raise ValueError('paths is required')
 
-            return remote_file_api.download_remote_paths_as_zip(client_id, paths, archive_name)
+            return remote_file_api.download_remote_paths_as_zip(
+                client_id,
+                paths,
+                archive_name,
+                tab_id=get_optional_tab_id(),
+            )
 
         return responder.json_endpoint(_execute, default_error_status=500)
 

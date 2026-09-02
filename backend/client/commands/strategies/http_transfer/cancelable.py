@@ -22,7 +22,7 @@ class CancelableMultipartUploadStream:
     可取消的 multipart/form-data 流。
     """
 
-    def __init__(self, owner, file_path: str, form_data: dict, chunk_size: int | None = None):
+    def __init__(self, owner, file_path: str, form_data: dict, chunk_size: int | None = None, progress_callback=None):
         self.owner = owner
         self.file_path = file_path
         self.form_data = form_data or {}
@@ -30,6 +30,8 @@ class CancelableMultipartUploadStream:
         self.boundary = f'----ratboundary{uuid.uuid4().hex}'
         self.file_name = os.path.basename(file_path)
         self.file_size = os.path.getsize(file_path)
+        self.progress_callback = progress_callback
+        self._file_bytes_read = 0
 
         self._opened_file = None
         self._prefix = self._build_prefix_bytes()
@@ -106,6 +108,9 @@ class CancelableMultipartUploadStream:
             fallback_timeout=HTTP_UPLOAD_TIMEOUT,
         )
         if data:
+            self._file_bytes_read += len(data)
+            if callable(self.progress_callback):
+                self.progress_callback(self._file_bytes_read, self.file_size)
             return data
 
         self._file_finished = True
@@ -162,13 +167,18 @@ class CancelableHttpTransferStrategy(HttpTransferStrategy):
         self.owner._register_cleanup_handler(lambda: session.close())
         return session
 
-    def upload_file(self, file_path: str, upload_url: str, form_data: dict):
+    def upload_file(self, file_path: str, upload_url: str, form_data: dict, progress_callback=None):
         self.configure_context_for_upload()
         self.owner._ensure_not_interrupted(fallback_timeout=HTTP_UPLOAD_TIMEOUT)
 
         session = self._create_session()
         response = None
-        stream = CancelableMultipartUploadStream(self.owner, file_path, form_data)
+        stream = CancelableMultipartUploadStream(
+            self.owner,
+            file_path,
+            form_data,
+            progress_callback=progress_callback,
+        )
         self.owner._register_cancel_handler(stream.close)
         self.owner._register_cleanup_handler(stream.close)
 
@@ -203,7 +213,7 @@ class CancelableHttpTransferStrategy(HttpTransferStrategy):
                 pass
             session.close()
 
-    def download_file(self, url: str, target_path: str):
+    def download_file(self, url: str, target_path: str, progress_callback=None):
         self.configure_context_for_download()
         self.owner._ensure_not_interrupted(fallback_timeout=HTTP_DOWNLOAD_READ_TIMEOUT)
 
@@ -221,6 +231,13 @@ class CancelableHttpTransferStrategy(HttpTransferStrategy):
             )
             response.raise_for_status()
 
+            total_bytes = 0
+            try:
+                total_bytes = max(0, int(response.headers.get('Content-Length') or 0))
+            except Exception:
+                total_bytes = 0
+            transferred_bytes = 0
+
             file_obj = open(target_path, 'wb')
             self.owner._register_cleanup_handler(lambda: file_obj.close())
             self.owner._register_cancel_handler(lambda: file_obj.close())
@@ -232,6 +249,9 @@ class CancelableHttpTransferStrategy(HttpTransferStrategy):
                 if not chunk:
                     continue
                 file_obj.write(chunk)
+                transferred_bytes += len(chunk)
+                if callable(progress_callback):
+                    progress_callback(transferred_bytes, total_bytes)
 
             file_obj.close()
             file_obj = None

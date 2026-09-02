@@ -6,6 +6,7 @@ import {
 } from './terminalMarkers.js';
 import { openSseStream } from '../api/streamApi.js';
 import { loadNotificationPreferences } from '../api/notificationPreferencesApi.js';
+import { loadTransfers } from '../api/transferApi.js';
 import {
     addNotificationHistory,
     loadNotificationHistory,
@@ -24,6 +25,7 @@ export default {
             sseReady: false,
             sseNotificationPreferences: cloneSseNotificationPreferences(DEFAULT_SSE_NOTIFICATION_PREFERENCES),
             sseNotificationHistory: [],
+            transferItems: [],
         }
     },
 
@@ -51,6 +53,24 @@ export default {
             } catch (e) {
                 console.warn('Failed to load notification history', e);
             }
+        },
+
+        async loadTransferItems() {
+            try {
+                const payload = await loadTransfers(this.ensureTabId());
+                this.transferItems = Array.isArray(payload?.items) ? payload.items : [];
+            } catch (e) {
+                console.warn('Failed to load transfers', e);
+            }
+        },
+
+        upsertTransferItem(transfer) {
+            if (!transfer || typeof transfer !== 'object' || !transfer.transfer_id) return;
+
+            const existing = Array.isArray(this.transferItems)
+                ? this.transferItems.filter(item => item?.transfer_id !== transfer.transfer_id)
+                : [];
+            this.transferItems = [transfer, ...existing];
         },
 
         upsertSseNotificationHistory(notification) {
@@ -402,6 +422,11 @@ export default {
             es.addEventListener('device_monitor_status', (event) => {
                 const payload = JSON.parse(event.data || '{}');
                 this.$refs.connectionInfoDialogRef?.handleDeviceMonitorStatus?.(payload);
+            });
+
+            es.addEventListener('transfer_updated', (event) => {
+                const payload = JSON.parse(event.data || '{}');
+                this.upsertTransferItem(payload);
             });
 
             es.addEventListener('connection_online', (event) => {

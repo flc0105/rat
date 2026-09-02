@@ -31,10 +31,10 @@ class HttpTransferStrategy:
             return None
         return max(float(timeout_value), 0.001)
 
-    def upload_file(self, file_path: str, upload_url: str, form_data: dict):
+    def upload_file(self, file_path: str, upload_url: str, form_data: dict, progress_callback=None):
         raise NotImplementedError
 
-    def download_file(self, url: str, target_path: str):
+    def download_file(self, url: str, target_path: str, progress_callback=None):
         raise NotImplementedError
 
 

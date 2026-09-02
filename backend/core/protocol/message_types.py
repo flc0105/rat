@@ -39,3 +39,5 @@ MSG_TYPE_MONITOR_SNAPSHOT = 'monitor_snapshot'
 MSG_TYPE_MONITOR_ERROR = 'monitor_error'
 MSG_TYPE_MONITOR_CLOSED = 'monitor_closed'
 
+
+MSG_TYPE_TRANSFER_UPDATE = 'transfer_update'

@@ -33,6 +33,7 @@ from core.protocol.message_types import (
     MSG_TYPE_MONITOR_SNAPSHOT,
     MSG_TYPE_MONITOR_ERROR,
     MSG_TYPE_MONITOR_CLOSED,
+    MSG_TYPE_TRANSFER_UPDATE,
 )
 
 
@@ -150,6 +151,9 @@ class BaseMessageRouter:
         if message_type == MSG_TYPE_MONITOR_CLOSED:
             return self.handle_monitor_closed_message(data)
 
+        if message_type == MSG_TYPE_TRANSFER_UPDATE:
+            return self.handle_transfer_update_message(data)
+
         return self.handle_unknown_message(data)
 
     def handle_result_message(self, data: dict):
@@ -253,6 +257,9 @@ class BaseMessageRouter:
         return None
 
     def handle_monitor_closed_message(self, data: dict):
+        return None
+
+    def handle_transfer_update_message(self, data: dict):
         return None
 
     def handle_unknown_message(self, data: dict):

@@ -508,6 +508,11 @@ class WebConnectionService:
         session.context.on_monitor_snapshot = monitor_service.handle_client_snapshot
         session.context.on_monitor_error = monitor_service.handle_client_error
         session.context.on_monitor_closed = monitor_service.handle_client_closed
+
+        transfer_service = self.server.web_service.transfer_api.transfer_service
+        session.context.on_transfer_update = (
+            lambda data: transfer_service.handle_client_update(session.session_info.client_id, data)
+        )
         return session
 
     def handle_connection_registered(self, session: ClientSession):

@@ -1,8 +1,10 @@
 import json
 import os
+import time
 
 from client.commands.strategies.http_transfer.factory import build_http_transfer_strategy
 from client.http.client_api import ClientApiClient
+from core.protocol.message_types import MSG_TYPE_TRANSFER_UPDATE
 from core.utils.output_marker import info, success
 
 
@@ -15,6 +17,8 @@ class CommandHttpFileTransferService:
     - 显式承接 HTTP 传输策略、表单构造、响应解析等逻辑
     - 让命令 mixin 只保留“命令入口 + 参数组织”，减少横向隐式耦合
     """
+
+    PROGRESS_REPORT_INTERVAL_SECONDS = 0.25
 
     def __init__(self, owner, archive_service=None, client_api=None):
         self.owner = owner
@@ -79,6 +83,59 @@ class CommandHttpFileTransferService:
 
         return '\n'.join(lines)
 
+    def _send_transfer_update(self, transfer_id: str, **payload):
+        normalized_transfer_id = str(transfer_id or '').strip()
+        if not normalized_transfer_id:
+            return
+
+        data = {
+            'type': MSG_TYPE_TRANSFER_UPDATE,
+            'transfer_id': normalized_transfer_id,
+            **payload,
+        }
+        try:
+            self.owner.socket.send(data)
+        except Exception:
+            # 进度回报失败不能反过来中断实际文件传输。
+            pass
+
+    def _build_progress_callback(self, transfer_id: str, stage: str, filename: str = ''):
+        last_report_at = [0.0]
+        last_report_bytes = [-1]
+
+        def _callback(transferred_bytes, total_bytes):
+            try:
+                transferred = max(0, int(transferred_bytes or 0))
+            except Exception:
+                transferred = 0
+            try:
+                total = max(0, int(total_bytes or 0))
+            except Exception:
+                total = 0
+
+            now = time.monotonic()
+            is_final = bool(total > 0 and transferred >= total)
+            if (
+                not is_final
+                and last_report_bytes[0] >= 0
+                and now - last_report_at[0] < self.PROGRESS_REPORT_INTERVAL_SECONDS
+            ):
+                return
+
+            last_report_at[0] = now
+            last_report_bytes[0] = transferred
+            self._send_transfer_update(
+                transfer_id,
+                state='running',
+                stage=stage,
+                filename=filename,
+                transferred_bytes=transferred,
+                total_bytes=total or None,
+                progress_supported=True,
+            )
+
+        return _callback
+
     def upload_file_to_server_via_http(
         self,
         file_path: str,
@@ -86,6 +143,7 @@ class CommandHttpFileTransferService:
         artifact_type: str = 'files',
         category: str = 'default',
         extra: dict | None = None,
+        progress_callback=None,
     ):
         upload_url = self.client_api.build_file_upload_url()
         form_data = self.build_http_upload_form_data(
@@ -95,7 +153,12 @@ class CommandHttpFileTransferService:
         )
 
         strategy = self.get_transfer_strategy()
-        return strategy.upload_file(file_path, upload_url, form_data)
+        return strategy.upload_file(
+            file_path,
+            upload_url,
+            form_data,
+            progress_callback=progress_callback,
+        )
 
     def upload_single_file_to_server_result(
         self,
@@ -104,28 +167,104 @@ class CommandHttpFileTransferService:
         artifact_type: str = 'files',
         category: str = 'default',
         extra: dict | None = None,
+        transfer_id: str = '',
+        send_preparing: bool = True,
     ):
         file_size = os.path.getsize(file_path)
-
+        filename = os.path.basename(file_path)
+        strategy = self.get_transfer_strategy()
+        progress_supported = strategy.get_mode_name() != 'legacy'
 
         self.owner._send_info(f'Preparing HTTP upload: {file_path}', 0)
         self.owner._send_info(f'File size: {file_size} bytes', 0)
 
-        response = self.upload_file_to_server_via_http(
-            file_path,
+        if transfer_id and send_preparing:
+            self._send_transfer_update(
+                transfer_id,
+                state='running',
+                stage='preparing',
+                filename=filename,
+                total_bytes=file_size,
+                transferred_bytes=0,
+                progress_supported=progress_supported,
+            )
+
+        if transfer_id:
+            self._send_transfer_update(
+                transfer_id,
+                state='running',
+                stage='staging',
+                filename=filename,
+                total_bytes=file_size,
+                transferred_bytes=0,
+                progress_supported=progress_supported,
+            )
+
+        upload_url = self.client_api.build_file_upload_url()
+        form_data = self.build_http_upload_form_data(
             artifact_type=artifact_type,
             category=category,
             extra=extra,
         )
-        response.raise_for_status()
-
-        payload = self.parse_http_upload_response(response)
-        message = self.build_http_upload_success_message(
-            payload,
-            file_path=file_path,
-            fallback_message='HTTP upload completed',
+        progress_callback = (
+            self._build_progress_callback(transfer_id, 'staging', filename)
+            if transfer_id and progress_supported
+            else None
         )
-        return 1, message
+
+        try:
+            response = strategy.upload_file(
+                file_path,
+                upload_url,
+                form_data,
+                progress_callback=progress_callback,
+            )
+            response.raise_for_status()
+
+            if transfer_id:
+                self._send_transfer_update(
+                    transfer_id,
+                    state='running',
+                    stage='finalizing',
+                    filename=filename,
+                    total_bytes=file_size,
+                    transferred_bytes=file_size,
+                    progress_supported=progress_supported,
+                )
+
+            payload = self.parse_http_upload_response(response)
+            data = payload.get('data') if isinstance(payload, dict) and isinstance(payload.get('data'), dict) else {}
+            artifact_id = str(data.get('artifact_id') or '').strip()
+            if transfer_id:
+                self._send_transfer_update(
+                    transfer_id,
+                    state='completed',
+                    stage='completed',
+                    filename=filename,
+                    total_bytes=file_size,
+                    transferred_bytes=file_size,
+                    progress_supported=progress_supported,
+                    artifact_id=artifact_id,
+                )
+
+            message = self.build_http_upload_success_message(
+                payload,
+                file_path=file_path,
+                fallback_message='HTTP upload completed',
+            )
+            return 1, message
+        except Exception as exc:
+            if transfer_id:
+                self._send_transfer_update(
+                    transfer_id,
+                    state='failed',
+                    stage='failed',
+                    filename=filename,
+                    total_bytes=file_size,
+                    error=str(exc),
+                    progress_supported=progress_supported,
+                )
+            raise
 
     def upload_paths_as_zip_to_server_result(
         self,
@@ -135,12 +274,24 @@ class CommandHttpFileTransferService:
         artifact_type: str = 'files',
         category: str = 'default',
         extra: dict | None = None,
+        transfer_id: str = '',
     ):
         if self.archive_service is None:
             raise RuntimeError('archive_service is required')
 
         temp_archive_path = ''
         try:
+            if transfer_id:
+                self._send_transfer_update(
+                    transfer_id,
+                    state='running',
+                    stage='preparing',
+                    filename=archive_name or f'{len(resolved_paths)} items.zip',
+                    transferred_bytes=0,
+                    total_bytes=None,
+                    progress_supported=True,
+                )
+
             temp_archive_path = self.archive_service.create_zip_from_paths(
                 resolved_paths,
                 archive_name=archive_name,
@@ -150,7 +301,19 @@ class CommandHttpFileTransferService:
                 artifact_type=artifact_type,
                 category=category,
                 extra=extra,
+                transfer_id=transfer_id,
+                send_preparing=False,
             )
+        except Exception as exc:
+            if transfer_id:
+                self._send_transfer_update(
+                    transfer_id,
+                    state='failed',
+                    stage='failed',
+                    filename=(os.path.basename(temp_archive_path) if temp_archive_path else archive_name),
+                    error=str(exc),
+                )
+            raise
         finally:
             if temp_archive_path and os.path.isfile(temp_archive_path):
                 try:
@@ -158,9 +321,52 @@ class CommandHttpFileTransferService:
                 except Exception:
                     pass
 
-    def download_file_from_http(self, url: str, target_path: str):
+    def download_file_from_http(self, url: str, target_path: str, *, transfer_id: str = ''):
         strategy = self.get_transfer_strategy()
-        return strategy.download_file(
-            self.client_api.normalize_server_url(url),
-            target_path,
-        )
+        filename = os.path.basename(target_path)
+        progress_callback = self._build_progress_callback(
+            transfer_id,
+            'transferring',
+            filename,
+        ) if transfer_id else None
+
+        if transfer_id:
+            self._send_transfer_update(
+                transfer_id,
+                state='running',
+                stage='transferring',
+                filename=filename,
+                transferred_bytes=0,
+                total_bytes=None,
+                progress_supported=True,
+            )
+
+        try:
+            result = strategy.download_file(
+                self.client_api.normalize_server_url(url),
+                target_path,
+                progress_callback=progress_callback,
+            )
+            if transfer_id:
+                file_size = os.path.getsize(target_path)
+                self._send_transfer_update(
+                    transfer_id,
+                    state='completed',
+                    stage='completed',
+                    filename=filename,
+                    transferred_bytes=file_size,
+                    total_bytes=file_size,
+                    progress_supported=True,
+                )
+            return result
+        except Exception as exc:
+            if transfer_id:
+                self._send_transfer_update(
+                    transfer_id,
+                    state='failed',
+                    stage='failed',
+                    filename=filename,
+                    error=str(exc),
+                    progress_supported=True,
+                )
+            raise

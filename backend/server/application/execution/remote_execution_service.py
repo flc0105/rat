@@ -27,9 +27,10 @@ class RemoteExecutionService:
 
     HTTP_RECEIVE_COMMAND_NAME = 'receive_http_upload'
 
-    def __init__(self, server, artifact_service=None):
+    def __init__(self, server, artifact_service=None, transfer_service=None):
         self.server = server
         self.artifact_service = artifact_service
+        self.transfer_service = transfer_service
         self.history_orchestrator = getattr(server, 'command_history_orchestrator', None)
 
         self.command_stream_service = CommandStreamService(server)
@@ -40,6 +41,7 @@ class RemoteExecutionService:
             server,
             self.command_stream_service,
             artifact_service=self.artifact_service,
+            transfer_service=self.transfer_service,
         )
 
     def get_connection(self, target):
@@ -255,6 +257,7 @@ class RemoteExecutionService:
         source: str = 'web',
         task_id: str = '',
         command: str = '',
+        tab_id: str = '',
     ):
         return self.upload_execution_service.iter_upload_events(
             target,
@@ -265,4 +268,5 @@ class RemoteExecutionService:
             source=source,
             task_id=task_id,
             command=command,
+            tab_id=tab_id,
         )

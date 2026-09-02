@@ -16,6 +16,15 @@
 
             <div class="banner-action-links">
               <button
+                class="banner-transfer-action"
+                type="button"
+                title="Transfers"
+                @click="openTransferCenter"
+              >
+                <span class="banner-transfer-symbol">⇅</span>
+                <span v-if="activeTransferCount" class="banner-transfer-count">{{ activeTransferCount }}</span>
+              </button>
+              <button
                 class="banner-notification-action"
                 type="button"
                 title="Notifications"
@@ -348,6 +357,11 @@
     @notifications-cleared="clearSseNotificationHistory"
     @notification-action="handleNotificationCenterAction"
   />
+
+  <TransferCenterDrawer
+    ref="transferCenterDrawerRef"
+    :transfers="transferItems"
+  />
 </template>
 
 <script>
@@ -381,11 +395,13 @@ import ClipboardDialog from './components/ClipboardDialog.vue'
 import OneLinersDialog from './components/OneLinersDialog.vue'
 import SettingsDialog from './components/SettingsDialog.vue'
 import NotificationCenterDrawer from './components/NotificationCenterDrawer.vue'
+import TransferCenterDrawer from './components/TransferCenterDrawer.vue'
 
 import { ArrowDown, ArrowUp, Bell } from '@element-plus/icons-vue'
 
 export default {
   components: {
+    TransferCenterDrawer,
     NotificationCenterDrawer,
     SettingsDialog,
     ClipboardDialog,
@@ -441,6 +457,10 @@ export default {
     isCurrentConnectionOffline() {
       if (!this.currentConnection) return false
       return this.getConnectionDisplayState(this.currentConnection) === 'offline'
+    },
+
+    activeTransferCount() {
+      return (this.transferItems || []).filter(item => item?.state === 'running').length
     },
   },
 
@@ -605,6 +625,11 @@ export default {
       return this.$refs.settingsDialogRef?.open()
     },
 
+    async openTransferCenter() {
+      await this.loadTransferItems()
+      return this.$refs.transferCenterDrawerRef?.open()
+    },
+
     async openNotificationCenter() {
       await this.loadSseNotificationHistory()
       return this.$refs.notificationCenterDrawerRef?.open()
@@ -713,6 +738,7 @@ export default {
     await Promise.all([
       this.loadSseNotificationPreferences(),
       this.loadSseNotificationHistory(),
+      this.loadTransferItems(),
     ])
     this.initSSE()
 
@@ -733,6 +759,42 @@ export default {
 </script>
 
 <style scoped>
+
+.banner-transfer-action {
+  margin-right: 10px;
+  padding: 4px 2px;
+  border: 0;
+  background: transparent;
+  color: rgba(238, 244, 255, 0.82);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 15px;
+  line-height: 1;
+  transition: color 0.18s ease, opacity 0.18s ease;
+}
+
+.banner-transfer-action:hover {
+  color: #ffffff;
+}
+
+.banner-transfer-action:active {
+  opacity: 0.72;
+}
+
+.banner-transfer-symbol {
+  font-size: 16px;
+  line-height: 1;
+}
+
+.banner-transfer-count {
+  min-width: 12px;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
+}
+
 .banner-notification-action {
   margin-right: 12px;
   padding: 4px 2px;

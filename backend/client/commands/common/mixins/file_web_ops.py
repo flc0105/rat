@@ -73,11 +73,20 @@ class CommandFileWebMixin:
                     supported=False,
                     message='Current HTTP transfer mode is legacy; download cancellation is not supported')
 
-            file_path = self.path_resolver.require_existing_file_from_arg(path)
+            payload = self.structured_arg_codec.decode(path)
+            if isinstance(payload, dict):
+                transfer_id = str(payload.get('transfer_id') or '').strip()
+                source_path = payload.get('path', '')
+            else:
+                transfer_id = ''
+                source_path = path
+
+            file_path = self.path_resolver.require_existing_file_from_arg(source_path)
             return self.http_file_transfer_service.upload_single_file_to_server_result(
                 file_path,
                 artifact_type='files',
                 category='download',
+                transfer_id=transfer_id,
             )
         except CommandCancelledError:
             return 0, 'Command cancelled'
@@ -99,6 +108,7 @@ class CommandFileWebMixin:
 
             raw_paths = payload.get('paths') or []
             archive_name = (payload.get('archive_name') or '').strip()
+            transfer_id = str(payload.get('transfer_id') or '').strip()
 
             if not isinstance(raw_paths, list) or not raw_paths:
                 return 0, 'paths is required'
@@ -110,6 +120,7 @@ class CommandFileWebMixin:
                 archive_name=archive_name,
                 artifact_type='files',
                 category='bundle',
+                transfer_id=transfer_id,
             )
         except CommandCancelledError:
             return 0, 'Command cancelled'

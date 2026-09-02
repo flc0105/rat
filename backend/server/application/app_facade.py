@@ -45,6 +45,7 @@ class ServerWebService:
         self.screen_view_api = self.assembly.screen_view_api
         self.clipboard_api = self.assembly.clipboard_api
         self.device_monitor_api = self.assembly.device_monitor_api
+        self.transfer_api = self.assembly.transfer_api
 
     @classmethod
     def from_server(cls, server):

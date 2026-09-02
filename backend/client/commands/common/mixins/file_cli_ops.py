@@ -57,6 +57,7 @@ class CommandFileCliMixin:
             url = str(payload.get('url') or '').strip()
             filename = str(payload.get('filename') or '').strip()
             save_dir = str(payload.get('save_dir') or '').strip()
+            transfer_id = str(payload.get('transfer_id') or '').strip()
 
             if not url:
                 if not relative_url:
@@ -76,7 +77,11 @@ class CommandFileCliMixin:
             target_path = os.path.join(target_dir, os.path.basename(filename))
 
             self._send_info(f'Preparing HTTP download: {url}', 0)
-            self.http_file_transfer_service.download_file_from_http(url, target_path)
+            self.http_file_transfer_service.download_file_from_http(
+                url,
+                target_path,
+                transfer_id=transfer_id,
+            )
             file_size = os.path.getsize(target_path)
 
             lines = [

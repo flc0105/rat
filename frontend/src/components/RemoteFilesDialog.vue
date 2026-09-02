@@ -1684,7 +1684,10 @@ export default {
 
         url.searchParams.set('path', row.path)
 
-        const res = await fetch(url.pathname + url.search, {method: 'POST'})
+        const res = await fetch(url.pathname + url.search, {
+          method: 'POST',
+          headers: this.getTabScopedHeaders(),
+        })
         const json = await res.json()
 
         if (!res.ok || json.code !== 0) {
@@ -1725,7 +1728,10 @@ export default {
       try {
         const res = await fetch(`/api/connections/${encodeURIComponent(this.selectedId)}/remote-files/download-zip`, {
           method: 'POST',
-          headers: {'Content-Type': 'application/json'},
+          headers: {
+            ...this.getTabScopedHeaders(),
+            'Content-Type': 'application/json',
+          },
           body: JSON.stringify({
             paths,
             archive_name: '',
