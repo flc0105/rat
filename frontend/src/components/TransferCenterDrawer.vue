@@ -74,11 +74,25 @@
           >
             Legacy HTTP mode · byte progress unavailable
           </div>
+
+          <div class="transfer-card-actions">
+            <button
+              class="transfer-text-action is-danger"
+              type="button"
+              :disabled="transfer.cancel_supported === false || transfer.stage === 'cancelling'"
+              @click="cancelActiveTransfer(transfer)"
+            >
+              {{ transfer.stage === 'cancelling' ? 'Cancelling…' : 'Cancel' }}
+            </button>
+          </div>
         </article>
       </section>
 
       <section v-if="recentTransfers.length" class="transfer-center-section transfer-center-recent">
-        <div class="transfer-center-section-title">Recent</div>
+        <div class="transfer-center-section-heading">
+          <div class="transfer-center-section-title">Recent</div>
+          <button class="transfer-text-action" type="button" @click="clearRecent">Clear Recent</button>
+        </div>
 
         <article
           v-for="transfer in recentTransfers"
@@ -87,10 +101,10 @@
         >
           <div
             class="transfer-recent-icon"
-            :class="transfer.state === 'failed' ? 'is-failed' : 'is-completed'"
+            :class="transfer.state === 'failed' ? 'is-failed' : (transfer.state === 'cancelled' ? 'is-cancelled' : 'is-completed')"
           >
             <el-icon>
-              <CircleCloseFilled v-if="transfer.state === 'failed'" />
+              <CircleCloseFilled v-if="transfer.state === 'failed' || transfer.state === 'cancelled'" />
               <CircleCheckFilled v-else />
             </el-icon>
           </div>
@@ -102,8 +116,16 @@
             </div>
           </div>
 
-          <div class="transfer-recent-state">
-            {{ transfer.state === 'failed' ? 'Failed' : 'Completed' }}
+          <div class="transfer-recent-actions">
+            <div class="transfer-recent-state">{{ recentStateLabel(transfer) }}</div>
+            <button
+              class="transfer-text-action"
+              type="button"
+              title="Delete transfer record"
+              @click="deleteRecent(transfer)"
+            >
+              Delete
+            </button>
           </div>
         </article>
       </section>
@@ -125,6 +147,12 @@ import {
   CircleCloseFilled,
   Close,
 } from '@element-plus/icons-vue'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import {
+  cancelTransfer,
+  clearRecentTransfers,
+  deleteRecentTransfer,
+} from '../api/transferApi.js'
 
 export default {
   components: {
@@ -138,7 +166,13 @@ export default {
       type: Array,
       default: () => [],
     },
+    tabId: {
+      type: String,
+      default: '',
+    },
   },
+
+  emits: ['transfers-changed'],
 
   data() {
     return {
@@ -161,6 +195,52 @@ export default {
   methods: {
     open() {
       this.visible = true
+    },
+
+    async cancelActiveTransfer(transfer) {
+      const transferId = String(transfer?.transfer_id || '').trim()
+      if (!transferId) return
+      try {
+        await cancelTransfer(transferId, this.tabId)
+      } catch (e) {
+        ElMessage.error(e.message || 'Failed to cancel transfer')
+      }
+    },
+
+    async deleteRecent(transfer) {
+      const transferId = String(transfer?.transfer_id || '').trim()
+      if (!transferId) return
+      try {
+        await deleteRecentTransfer(transferId, this.tabId)
+        this.$emit('transfers-changed')
+      } catch (e) {
+        ElMessage.error(e.message || 'Failed to delete transfer')
+      }
+    },
+
+    async clearRecent() {
+      try {
+        await ElMessageBox.confirm(
+          'Clear all recent transfer records?',
+          'Clear Recent Transfers',
+          { type: 'warning' },
+        )
+      } catch (_) {
+        return
+      }
+
+      try {
+        await clearRecentTransfers(this.tabId)
+        this.$emit('transfers-changed')
+      } catch (e) {
+        ElMessage.error(e.message || 'Failed to clear recent transfers')
+      }
+    },
+
+    recentStateLabel(transfer) {
+      if (transfer?.state === 'failed') return 'Failed'
+      if (transfer?.state === 'cancelled') return 'Cancelled'
+      return 'Completed'
     },
 
     hasProgress(transfer) {
@@ -210,6 +290,8 @@ export default {
       if (stage === 'staging') return 'Staging to Server'
       if (stage === 'transferring') return 'Sending to Device'
       if (stage === 'finalizing') return 'Finalizing…'
+      if (stage === 'cancelling') return 'Cancelling…'
+      if (stage === 'cancelled') return 'Cancelled'
       if (stage === 'failed') return 'Failed'
       if (stage === 'completed') return 'Completed'
       return 'Transferring…'
@@ -296,6 +378,52 @@ export default {
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
+}
+
+
+.transfer-center-section-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 0 2px 9px;
+}
+
+.transfer-center-section-heading .transfer-center-section-title {
+  margin: 0;
+}
+
+.transfer-card-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 8px;
+}
+
+.transfer-text-action {
+  border: 0;
+  padding: 2px 0;
+  background: transparent;
+  color: var(--primary);
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.transfer-text-action.is-danger {
+  color: var(--danger);
+}
+
+.transfer-text-action:disabled {
+  color: var(--muted);
+  cursor: default;
+  opacity: 0.65;
+}
+
+.transfer-recent-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 3px;
 }
 
 .transfer-card {
@@ -404,6 +532,10 @@ export default {
 
 .transfer-recent-icon.is-failed {
   color: var(--danger);
+}
+
+.transfer-recent-icon.is-cancelled {
+  color: var(--muted);
 }
 
 .transfer-recent-state {

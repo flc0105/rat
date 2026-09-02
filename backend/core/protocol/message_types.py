@@ -40,4 +40,6 @@ MSG_TYPE_MONITOR_ERROR = 'monitor_error'
 MSG_TYPE_MONITOR_CLOSED = 'monitor_closed'
 
 
+MSG_TYPE_TRANSFER_START = 'transfer_start'
+MSG_TYPE_TRANSFER_CANCEL = 'transfer_cancel'
 MSG_TYPE_TRANSFER_UPDATE = 'transfer_update'

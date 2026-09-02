@@ -164,6 +164,7 @@ class WebTaskRunner:
             return
 
         if event.event_type == CommandExecutionEvent.CANCELLED:
+            self.task_store.request_cancel(context.task_id)
             if event.payload.get('terminal'):
                 return
             self._record_stream_chunk(context, 0, event.text or 'cancelled', summary)
@@ -231,6 +232,7 @@ class WebTaskRunner:
             command=context.command,
             tab_id=self._get_task_tab_id(context),
             transfer_id=context.metadata.get('transfer_id') or '',
+            use_transfer_manager=True,
         )
 
     def _release_task(self, context: TaskExecutionContext) -> None:
@@ -287,5 +289,5 @@ class WebTaskRunner:
         try:
             self._run_task_events(context, self._iter_upload_events(context))
         finally:
-            self._release_task(context)
+            # Web upload 已迁到 Client TransferManager，不占 foreground task。
             self._cleanup_upload_local_temp(context)

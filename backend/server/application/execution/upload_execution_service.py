@@ -1,5 +1,6 @@
 import os
 
+from core.protocol.message_types import MSG_TYPE_TRANSFER_START
 from core.utils.output_marker import success
 from server.application.command.command_types import COMMAND_TYPE_COMMAND
 from server.application.command.command_execution_event import CommandExecutionEvent
@@ -48,6 +49,161 @@ class UploadExecutionService:
         except Exception:
             pass
 
+    def _iter_transfer_manager_upload_events(
+            self,
+            target,
+            local_path: str,
+            *,
+            remote_path: str = '',
+            history_entry_id: str = '',
+            source: str = 'web',
+            task_id: str = '',
+            command: str = '',
+            tab_id: str = '',
+            transfer_id: str = '',
+    ):
+        artifact_service = None
+        staged_path = ''
+        safe_name = ''
+        active_transfer_id = str(transfer_id or '').strip()
+        effective_command = (command or f'upload {os.path.basename(local_path)}').strip()
+
+        try:
+            artifact_service, staged_path, safe_name, relative_url = self._stage_upload(local_path)
+            session = self.get_connection(target)
+            client_id = session.session_info.client_id
+            staged_size = os.path.getsize(staged_path)
+            transfer_metadata = {
+                'source': source,
+                'task_id': task_id,
+                'history_entry_id': history_entry_id,
+                'browser_stage': False,
+                'transport': 'client_transfer_manager',
+            }
+
+            if self.transfer_service is None:
+                raise RuntimeError('transfer_service is not available')
+
+            if active_transfer_id:
+                updated = self.transfer_service.reset_progress(
+                    active_transfer_id,
+                    client_id=client_id,
+                    tab_id=tab_id,
+                    stage='transferring',
+                    total_bytes=staged_size,
+                    direction='server_to_client',
+                    filename=safe_name,
+                    hostname=getattr(session.session_info, 'hostname', '') or '',
+                    source_path=staged_path,
+                    destination_path=remote_path,
+                    metadata=transfer_metadata,
+                )
+                if updated is None:
+                    raise ValueError('transfer not found')
+                if updated.get('state') != 'running':
+                    if updated.get('state') == 'cancelled':
+                        payload = {
+                            'source': source,
+                            'task_id': task_id,
+                            'history_entry_id': history_entry_id,
+                            'filename': safe_name,
+                            'transfer_id': active_transfer_id,
+                        }
+                        yield CommandExecutionEvent.cancelled('cancelled', payload=payload)
+                        yield CommandExecutionEvent.completed(False, payload=payload)
+                        return
+                    raise RuntimeError(updated.get('error') or 'Transfer is no longer active')
+            else:
+                transfer = self.transfer_service.create_transfer(
+                    client_id=client_id,
+                    direction='server_to_client',
+                    filename=safe_name,
+                    hostname=getattr(session.session_info, 'hostname', '') or '',
+                    source_path=staged_path,
+                    destination_path=remote_path,
+                    tab_id=tab_id,
+                    stage='transferring',
+                    total_bytes=staged_size,
+                    metadata=transfer_metadata,
+                )
+                active_transfer_id = transfer.get('transfer_id') or ''
+
+            payload = {
+                'source': source,
+                'task_id': task_id,
+                'history_entry_id': history_entry_id,
+                'filename': safe_name,
+                'transfer_id': active_transfer_id,
+            }
+            yield CommandExecutionEvent.started(effective_command, payload=payload)
+            yield CommandExecutionEvent.progress(
+                success(f'Staged upload file: {safe_name}'),
+                payload={**payload, 'stage': 'staged'},
+            )
+
+            session.send({
+                'type': MSG_TYPE_TRANSFER_START,
+                'transfer_id': active_transfer_id,
+                'operation': 'server_to_client_file',
+                'payload': {
+                    'relative_url': relative_url,
+                    'filename': safe_name,
+                    'save_dir': remote_path,
+                },
+            })
+
+            terminal = self.transfer_service.wait_for_terminal(active_transfer_id)
+            if not terminal:
+                raise RuntimeError('Transfer disappeared before completion')
+
+            state = str(terminal.get('state') or '').strip().lower()
+            if state == 'completed':
+                yield CommandExecutionEvent.chunk(
+                    1,
+                    success(f'File transferred successfully: {safe_name}'),
+                    payload=payload,
+                )
+                yield CommandExecutionEvent.completed(True, payload=payload)
+                return
+
+            if state == 'cancelled':
+                yield CommandExecutionEvent.cancelled('cancelled', payload=payload)
+                yield CommandExecutionEvent.completed(False, payload=payload)
+                return
+
+            yield CommandExecutionEvent.error(
+                terminal.get('error') or 'Upload failed',
+                payload=payload,
+            )
+            yield CommandExecutionEvent.completed(False, payload=payload)
+
+        except Exception as exc:
+            if active_transfer_id and self.transfer_service is not None:
+                current = self.transfer_service.get_transfer(active_transfer_id)
+                if current and current.get('state') == 'running':
+                    self.transfer_service.fail_transfer(active_transfer_id, str(exc))
+            yield CommandExecutionEvent.error(
+                str(exc),
+                payload={
+                    'task_id': task_id,
+                    'history_entry_id': history_entry_id,
+                    'filename': safe_name,
+                    'transfer_id': active_transfer_id,
+                },
+            )
+            yield CommandExecutionEvent.completed(
+                False,
+                payload={
+                    'task_id': task_id,
+                    'history_entry_id': history_entry_id,
+                    'filename': safe_name,
+                    'transfer_id': active_transfer_id,
+                },
+            )
+        finally:
+            if artifact_service is not None and staged_path:
+                self._cleanup_staged_upload(artifact_service, staged_path)
+
     def iter_upload_events(
             self,
             target,
@@ -61,6 +217,7 @@ class UploadExecutionService:
             command: str = '',
             tab_id: str = '',
             transfer_id: str = '',
+            use_transfer_manager: bool = False,
     ):
         """
         执行上传事件流。
@@ -72,6 +229,20 @@ class UploadExecutionService:
         - error
         - completed
         """
+        if use_transfer_manager:
+            yield from self._iter_transfer_manager_upload_events(
+                target,
+                local_path,
+                remote_path=remote_path,
+                history_entry_id=history_entry_id,
+                source=source,
+                task_id=task_id,
+                command=command,
+                tab_id=tab_id,
+                transfer_id=transfer_id,
+            )
+            return
+
         artifact_service = None
         staged_path = ''
         safe_name = ''

@@ -1,6 +1,8 @@
 import base64
 import json
 
+from core.protocol.message_types import MSG_TYPE_TRANSFER_START
+
 
 class WebRemoteFileService:
     """
@@ -15,6 +17,8 @@ class WebRemoteFileService:
     规则：
     - 所有这里发往 client 且同步等待结果流的前台请求
       统一通过 foreground task 槽保护
+    - Remote File Browser 的 download/download-as-zip 例外：文件搬运由 Client TransferManager
+      独立执行，不占 command foreground slot；其他同步文件操作仍保持原有 foreground 规则
     """
 
     RESULT_ARTIFACT_ID_PREFIX = 'Artifact ID:'
@@ -214,56 +218,83 @@ class WebRemoteFileService:
             'message': result_text
         }
 
+    def _start_client_transfer(self, session, transfer_id: str, operation: str, payload: dict):
+        session.send({
+            'type': MSG_TYPE_TRANSFER_START,
+            'transfer_id': str(transfer_id or '').strip(),
+            'operation': str(operation or '').strip(),
+            'payload': dict(payload or {}),
+        })
+
+    def _wait_for_transfer_artifact(self, transfer_id: str) -> tuple[dict, dict]:
+        if self.transfer_service is None:
+            raise RuntimeError('transfer_service is not available')
+
+        terminal = self.transfer_service.wait_for_terminal(transfer_id)
+        if not terminal:
+            raise RuntimeError('Transfer disappeared before completion')
+
+        state = str(terminal.get('state') or '').strip().lower()
+        if state == 'cancelled':
+            raise RuntimeError('Transfer cancelled')
+        if state != 'completed':
+            raise RuntimeError(terminal.get('error') or 'Remote file transfer failed')
+
+        artifact_id = str(terminal.get('artifact_id') or '').strip()
+        if not artifact_id:
+            raise RuntimeError('Remote file transfer completed, but artifact_id is missing')
+
+        artifact = self.artifact_service.get_artifact_by_id(artifact_id)
+        if not isinstance(artifact, dict) or not artifact.get('artifact_id'):
+            raise RuntimeError('Artifact was not found after HTTP upload completed')
+        return terminal, artifact
+
     def download_file(self, client_id: str, path: str, history_entry_id: str = '', tab_id: str = '') -> dict:
         if not (path or '').strip():
             raise ValueError('path is required')
+        if self.transfer_service is None:
+            raise RuntimeError('transfer_service is not available')
 
         normalized_path = path.strip()
         session = self.remote_execution_service.get_connection(client_id)
         hostname = getattr(session.session_info, 'hostname', '') or ''
-        transfer_id = ''
-        if self.transfer_service is not None and tab_id:
-            transfer = self.transfer_service.create_transfer(
-                client_id=client_id,
-                direction='client_to_server',
-                filename=normalized_path.replace('\\', '/').rstrip('/').split('/')[-1],
-                hostname=hostname,
-                source_path=normalized_path,
-                destination_path='Artifacts',
-                tab_id=tab_id,
-                stage='preparing',
-                metadata={'source': 'remote_file_download'},
-            )
-            transfer_id = transfer.get('transfer_id') or ''
-
-        command = self._build_command('download_path', {
-            'path': normalized_path,
-            'transfer_id': transfer_id,
-        })
+        transfer = self.transfer_service.create_transfer(
+            client_id=client_id,
+            direction='client_to_server',
+            filename=normalized_path.replace('\\', '/').rstrip('/').split('/')[-1],
+            hostname=hostname,
+            source_path=normalized_path,
+            destination_path='Artifacts',
+            tab_id=tab_id,
+            stage='preparing',
+            metadata={
+                'source': 'remote_file_download',
+                'transport': 'client_transfer_manager',
+            },
+        )
+        transfer_id = transfer.get('transfer_id') or ''
 
         try:
-            result_text = self.remote_execution_service.run_foreground_text_command(
-                client_id,
-                command,
-                history_entry_id=history_entry_id,
-                task_type='remote_file',
-                source='web_remote_file',
+            self._start_client_transfer(
+                session,
+                transfer_id,
+                'client_to_server_file',
+                {
+                    'path': normalized_path,
+                    'artifact_type': 'files',
+                    'category': 'download',
+                },
             )
-            artifact = self._resolve_artifact_from_result_text(result_text)
-            if transfer_id and self.transfer_service is not None:
-                self.transfer_service.complete_transfer(
-                    transfer_id,
-                    client_id=client_id,
-                    artifact_id=artifact.get('artifact_id') or '',
-                )
+            _, artifact = self._wait_for_transfer_artifact(transfer_id)
             return {
                 'path': normalized_path,
-                'message': result_text,
+                'message': 'Remote file transfer completed',
                 'artifact': artifact,
                 'transfer_id': transfer_id,
             }
         except Exception as exc:
-            if transfer_id and self.transfer_service is not None:
+            current = self.transfer_service.get_transfer(transfer_id)
+            if current and current.get('state') == 'running':
                 self.transfer_service.fail_transfer(transfer_id, str(exc), client_id=client_id)
             raise
 
@@ -277,6 +308,8 @@ class WebRemoteFileService:
     ) -> dict:
         if not isinstance(paths, list) or not paths:
             raise ValueError('paths is required')
+        if self.transfer_service is None:
+            raise RuntimeError('transfer_service is not available')
 
         normalized_paths = [
             str(item or '').strip()
@@ -288,53 +321,45 @@ class WebRemoteFileService:
 
         session = self.remote_execution_service.get_connection(client_id)
         hostname = getattr(session.session_info, 'hostname', '') or ''
-        transfer_id = ''
-        if self.transfer_service is not None and tab_id:
-            transfer = self.transfer_service.create_transfer(
-                client_id=client_id,
-                direction='client_to_server',
-                filename=archive_name or f'{len(normalized_paths)} items.zip',
-                hostname=hostname,
-                source_path=normalized_paths[0] if len(normalized_paths) == 1 else f'{len(normalized_paths)} selected paths',
-                destination_path='Artifacts',
-                tab_id=tab_id,
-                stage='preparing',
-                metadata={
-                    'source': 'remote_file_download_zip',
-                    'source_count': len(normalized_paths),
-                },
-            )
-            transfer_id = transfer.get('transfer_id') or ''
-
-        command = self._build_command('download_paths', {
-            'paths': normalized_paths,
-            'archive_name': archive_name,
-            'transfer_id': transfer_id,
-        })
+        transfer = self.transfer_service.create_transfer(
+            client_id=client_id,
+            direction='client_to_server',
+            filename=archive_name or f'{len(normalized_paths)} items.zip',
+            hostname=hostname,
+            source_path=normalized_paths[0] if len(normalized_paths) == 1 else f'{len(normalized_paths)} selected paths',
+            destination_path='Artifacts',
+            tab_id=tab_id,
+            stage='preparing',
+            metadata={
+                'source': 'remote_file_download_zip',
+                'source_count': len(normalized_paths),
+                'transport': 'client_transfer_manager',
+            },
+        )
+        transfer_id = transfer.get('transfer_id') or ''
 
         try:
-            result_text = self.remote_execution_service.run_foreground_text_command(
-                client_id,
-                command,
-                history_entry_id=history_entry_id,
-                task_type='remote_file',
-                source='web_remote_file',
+            self._start_client_transfer(
+                session,
+                transfer_id,
+                'client_to_server_zip',
+                {
+                    'paths': normalized_paths,
+                    'archive_name': archive_name,
+                    'artifact_type': 'files',
+                    'category': 'bundle',
+                },
             )
-            artifact = self._resolve_artifact_from_result_text(result_text)
-            if transfer_id and self.transfer_service is not None:
-                self.transfer_service.complete_transfer(
-                    transfer_id,
-                    client_id=client_id,
-                    artifact_id=artifact.get('artifact_id') or '',
-                )
+            _, artifact = self._wait_for_transfer_artifact(transfer_id)
             return {
                 'paths': normalized_paths,
-                'message': result_text,
+                'message': 'Remote ZIP transfer completed',
                 'artifact': artifact,
                 'transfer_id': transfer_id,
             }
         except Exception as exc:
-            if transfer_id and self.transfer_service is not None:
+            current = self.transfer_service.get_transfer(transfer_id)
+            if current and current.get('state') == 'running':
                 self.transfer_service.fail_transfer(transfer_id, str(exc), client_id=client_id)
             raise
 

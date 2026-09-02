@@ -1,4 +1,6 @@
 import threading
+
+from core.protocol.message_types import MSG_TYPE_TRANSFER_CANCEL
 from dataclasses import dataclass, field
 
 from server.application.execution.execution_context import TaskExecutionContext
@@ -22,6 +24,7 @@ class WebExecutionTaskRequest:
     tab_id: str = ''
     source: str = 'web'
     metadata: dict = field(default_factory=dict)
+    use_foreground_guard: bool = True
 
 
 class WebTaskService:
@@ -32,13 +35,15 @@ class WebTaskService:
     - 提交并登记 Web 命令 / 上传任务
     - 占用前台执行槽
     - 启动 runner 真正执行
+    - Web upload 使用独立 TransferManager 时不占 foreground；普通 Web command 保持原规则
     """
 
-    def __init__(self, server, task_store, file_service, task_runner):
+    def __init__(self, server, task_store, file_service, task_runner, transfer_service=None):
         self.server = server
         self.task_store = task_store
         self.file_service = file_service
         self.task_runner = task_runner
+        self.transfer_service = transfer_service
         self.history_orchestrator = self.server.command_history_orchestrator
 
     def _create_task_with_history(
@@ -143,7 +148,8 @@ class WebTaskService:
         context = self._build_task_context(conn, task, request)
         runner = self._resolve_runner(request.runner_name)
 
-        self._acquire_task(context)
+        if request.use_foreground_guard:
+            self._acquire_task(context)
         self._start_task_thread(runner, context)
 
         return {
@@ -165,7 +171,38 @@ class WebTaskService:
         )
 
     def cancel_web_task(self, task_id: str):
-        task, conn = self._resolve_cancellable_task(task_id)
+        try:
+            task, conn = self._resolve_cancellable_task(task_id)
+        except ValueError:
+            task = self.task_store.get_task(task_id)
+            transfer = (
+                self.transfer_service.find_active_transfer_by_task_id(task_id)
+                if self.transfer_service is not None
+                else None
+            )
+            if not task or not transfer:
+                raise
+
+            if transfer.get('cancel_supported') is False:
+                raise ValueError('current transfer mode does not support cancellation')
+
+            client_id = task.get('client_id') or transfer.get('client_id') or ''
+            conn = self.server.get_target_connection_by_client_id(client_id)
+            self.task_store.request_cancel(task_id)
+            self.transfer_service.mark_cancelling(transfer.get('transfer_id') or '')
+            conn.send({
+                'type': MSG_TYPE_TRANSFER_CANCEL,
+                'transfer_id': transfer.get('transfer_id') or '',
+            })
+            return {
+                'task_id': task_id,
+                'client_id': client_id,
+                'status': 'cancelling',
+                'command_id': None,
+                'history_entry_id': task.get('history_entry_id') or '',
+                'transfer_id': transfer.get('transfer_id') or '',
+            }
+
         client_id = task.get('client_id') or ''
         cancel_info = self._request_task_cancel(conn, task_id)
         command_id = cancel_info.get('command_id')
@@ -203,5 +240,6 @@ class WebTaskService:
                     'upload_tmp_dir': getattr(self.file_service, 'upload_tmp_dir', ''),
                     'transfer_id': (transfer_id or '').strip(),
                 },
+                use_foreground_guard=False,
             )
         )

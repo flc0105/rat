@@ -558,6 +558,12 @@ class WebConnectionService:
             )
         except Exception:
             pass
+        try:
+            self.server.web_service.transfer_api.handle_client_disconnected(
+                session.session_info.client_id
+            )
+        except Exception:
+            pass
         self.publish_connection_offline(session)
 
     # ------------------ event publish ------------------ #

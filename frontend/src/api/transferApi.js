@@ -62,3 +62,41 @@ export async function updateBrowserUploadTransfer(transferId, payload = {}, head
 
   return parseApiResponse(res, 'Failed to update upload transfer')
 }
+
+
+function buildTabHeaders(tabId = '', headers = {}) {
+  const result = normalizeHeaders(headers)
+  const normalizedTabId = String(tabId || '').trim()
+  if (normalizedTabId) result['X-Tab-Id'] = normalizedTabId
+  return result
+}
+
+export async function cancelTransfer(transferId, tabId = '') {
+  const normalizedTransferId = String(transferId || '').trim()
+  if (!normalizedTransferId) throw new Error('transfer_id is required')
+
+  const res = await fetch(`/api/transfers/${encodeURIComponent(normalizedTransferId)}/cancel`, {
+    method: 'POST',
+    headers: buildTabHeaders(tabId),
+  })
+  return parseApiResponse(res, 'Failed to cancel transfer')
+}
+
+export async function deleteRecentTransfer(transferId, tabId = '') {
+  const normalizedTransferId = String(transferId || '').trim()
+  if (!normalizedTransferId) throw new Error('transfer_id is required')
+
+  const res = await fetch(`/api/transfers/${encodeURIComponent(normalizedTransferId)}`, {
+    method: 'DELETE',
+    headers: buildTabHeaders(tabId),
+  })
+  return parseApiResponse(res, 'Failed to delete transfer')
+}
+
+export async function clearRecentTransfers(tabId = '') {
+  const res = await fetch('/api/transfers/recent', {
+    method: 'DELETE',
+    headers: buildTabHeaders(tabId),
+  })
+  return parseApiResponse(res, 'Failed to clear recent transfers')
+}

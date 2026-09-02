@@ -86,9 +86,15 @@ def create_file_transfer_app(server_instance):
 
                 with open(temp_path, 'wb', buffering=DEFAULT_HTTP_TRANSFER_BUFFER_SIZE) as output_file:
                     while True:
+                        if transfer_api.is_browser_upload_cancel_requested(transfer_id):
+                            raise RuntimeError('Browser upload cancelled')
+
                         chunk = request.stream.read(DEFAULT_HTTP_TRANSFER_BUFFER_SIZE)
                         if not chunk:
                             break
+
+                        if transfer_api.is_browser_upload_cancel_requested(transfer_id):
+                            raise RuntimeError('Browser upload cancelled')
 
                         output_file.write(chunk)
                         received_bytes += len(chunk)
@@ -120,6 +126,11 @@ def create_file_transfer_app(server_instance):
                     total_bytes=received_bytes,
                     tab_id=tab_id,
                 )
+                transfer_api.clear_browser_upload_runtime(transfer_id)
+
+                current_transfer = transfer_api.transfer_service.get_transfer(transfer_id, tab_id=tab_id)
+                if not current_transfer or current_transfer.get('state') != 'running':
+                    raise RuntimeError('Browser upload cancelled')
 
                 return command_execution_api.submit_web_upload(
                     client_id,
@@ -130,6 +141,7 @@ def create_file_transfer_app(server_instance):
                     transfer_id=transfer_id,
                 )
             except Exception as exc:
+                transfer_api.clear_browser_upload_runtime(transfer_id)
                 if temp_path:
                     artifact_api.cleanup_upload_temp_file(temp_path)
                 try:

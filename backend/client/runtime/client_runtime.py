@@ -4,6 +4,7 @@ from client.pty.manager import PtyManager
 from client.screen.manager import ScreenViewManager
 from client.clipboard.manager import ClipboardManager
 from client.monitor.manager import DeviceMonitorManager
+from client.transfers.manager import ClientTransferManager
 
 
 class ClientRuntime:
@@ -17,6 +18,7 @@ class ClientRuntime:
     - screen_view_manager：只读屏幕预览会话
     - clipboard_manager：显式远程剪贴板桥接
     - device_monitor_manager：按需实时设备监控会话
+    - transfer_manager：独立文件传输任务，不占 command foreground slot
     """
 
     def __init__(self, connection):
@@ -27,6 +29,7 @@ class ClientRuntime:
         self.screen_view_manager = ScreenViewManager(connection)
         self.clipboard_manager = ClipboardManager(connection)
         self.device_monitor_manager = DeviceMonitorManager(connection)
+        self.transfer_manager = ClientTransferManager(connection)
 
     def handle_connection_lost(self) -> list[str]:
         """
@@ -36,4 +39,5 @@ class ClientRuntime:
         self.pty_manager.close_all_sessions(notify=False)
         self.screen_view_manager.close_all_sessions(notify=False)
         self.device_monitor_manager.close_all_sessions(notify=False)
+        self.transfer_manager.cancel_all(notify=False)
         return stopped_jobs

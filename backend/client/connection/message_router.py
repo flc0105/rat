@@ -171,5 +171,19 @@ class ClientInboundMessageRouter(BaseMessageRouter):
         )
         return None
 
+    def handle_transfer_start_message(self, data: dict):
+        self.connection.runtime.transfer_manager.start_transfer(
+            data.get('transfer_id') or '',
+            data.get('operation') or '',
+            payload=data.get('payload') if isinstance(data.get('payload'), dict) else {},
+        )
+        return None
+
+    def handle_transfer_cancel_message(self, data: dict):
+        self.connection.runtime.transfer_manager.cancel_transfer(
+            data.get('transfer_id') or '',
+        )
+        return None
+
     def handle_heartbeat_ack_message(self, data: dict):
         return None

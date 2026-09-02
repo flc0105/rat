@@ -140,6 +140,7 @@ class ServerApplicationAssembly:
             task_store=self.task_store,
             file_service=self.file_service,
             task_runner=self.task_runner,
+            transfer_service=self.transfer_service,
         )
 
         self.background_job_store = BackgroundJobStore()
@@ -292,6 +293,7 @@ class ServerApplicationAssembly:
 
         self.transfer_api = WebTransferApi(
             transfer_service=self.transfer_service,
+            server=self.server,
         )
 
         self._wire_cross_dependencies()

@@ -14,10 +14,12 @@ class TransferService:
     """
 
     MAX_RECENT_COMPLETED = 50
+    TERMINAL_STATES = {'completed', 'failed', 'cancelled'}
 
     def __init__(self, event_bus):
         self.event_bus = event_bus
         self._lock = threading.RLock()
+        self._changed = threading.Condition(self._lock)
         self._items = {}
         self._recent_ids = []
 
@@ -56,6 +58,7 @@ class TransferService:
             'speed_bytes_per_sec': 0,
             'eta_seconds': None,
             'progress_supported': True,
+            'cancel_supported': True,
             'artifact_id': '',
             'error': '',
             'metadata': dict(metadata or {}),
@@ -68,8 +71,9 @@ class TransferService:
         }
         self._refresh_derived_fields(item)
 
-        with self._lock:
+        with self._changed:
             self._items[transfer_id] = item
+            self._changed.notify_all()
 
         self._publish(item)
         return self._public_item(item)
@@ -104,10 +108,14 @@ class TransferService:
             if normalized_expected_stage and str(item.get('stage') or '').strip() != normalized_expected_stage:
                 return self._public_item(item)
 
+            if item.get('state') in self.TERMINAL_STATES:
+                return self._public_item(item)
+
             self._apply_patch(item, patch)
             self._refresh_derived_fields(item)
             self._remember_if_terminal(item)
             snapshot = self._public_item(item)
+            self._changed.notify_all()
 
         self._publish(item)
         return snapshot
@@ -144,6 +152,9 @@ class TransferService:
             if normalized_expected_stage and str(item.get('stage') or '').strip() != normalized_expected_stage:
                 return self._public_item(item)
 
+            if item.get('state') in self.TERMINAL_STATES:
+                return self._public_item(item)
+
             incoming_bytes = self._normalize_int(transferred_bytes)
             current_bytes = self._normalize_int(item.get('transferred_bytes')) or 0
             patch = {
@@ -157,6 +168,7 @@ class TransferService:
             self._apply_patch(item, patch)
             self._refresh_derived_fields(item)
             snapshot = self._public_item(item)
+            self._changed.notify_all()
 
         self._publish(item)
         return snapshot
@@ -188,6 +200,9 @@ class TransferService:
             if normalized_tab_id and item.get('tab_id') and item.get('tab_id') != normalized_tab_id:
                 return None
 
+            if item.get('state') in self.TERMINAL_STATES:
+                return self._public_item(item)
+
             now_mono = time.monotonic()
             item['transferred_bytes'] = 0
             item['percent'] = None
@@ -208,6 +223,7 @@ class TransferService:
             self._apply_patch(item, next_patch)
             self._refresh_derived_fields(item)
             snapshot = self._public_item(item)
+            self._changed.notify_all()
 
         self._publish(item)
         return snapshot
@@ -226,6 +242,7 @@ class TransferService:
             'total_bytes',
             'transferred_bytes',
             'progress_supported',
+            'cancel_supported',
             'artifact_id',
             'error',
             'metadata',
@@ -251,6 +268,141 @@ class TransferService:
         if artifact_id:
             patch['artifact_id'] = artifact_id
         return self.update_transfer(transfer_id, client_id=client_id, **patch)
+
+    def find_active_transfer_by_task_id(self, task_id: str) -> dict | None:
+        normalized_task_id = str(task_id or '').strip()
+        if not normalized_task_id:
+            return None
+        with self._lock:
+            for item in self._items.values():
+                metadata = item.get('metadata') if isinstance(item.get('metadata'), dict) else {}
+                if item.get('state') == 'running' and str(metadata.get('task_id') or '').strip() == normalized_task_id:
+                    return self._public_item(item)
+        return None
+
+    def list_active_transfers_for_client(self, client_id: str) -> list[dict]:
+        normalized_client_id = str(client_id or '').strip()
+        if not normalized_client_id:
+            return []
+        with self._lock:
+            return [
+                self._public_item(item)
+                for item in self._items.values()
+                if item.get('state') == 'running'
+                and str(item.get('client_id') or '').strip() == normalized_client_id
+            ]
+
+    def fail_active_transfers_for_client(self, client_id: str, error: str = 'Client disconnected') -> int:
+        active = self.list_active_transfers_for_client(client_id)
+        failed = 0
+        for item in active:
+            transfer_id = item.get('transfer_id') or ''
+            updated = self.fail_transfer(
+                transfer_id,
+                str(error or 'Client disconnected'),
+                client_id=str(client_id or '').strip(),
+            )
+            if updated and updated.get('state') == 'failed':
+                failed += 1
+        return failed
+
+    def get_transfer(self, transfer_id: str, *, tab_id: str = '') -> dict | None:
+        normalized_id = str(transfer_id or '').strip()
+        normalized_tab_id = str(tab_id or '').strip()
+        if not normalized_id:
+            return None
+
+        with self._lock:
+            item = self._items.get(normalized_id)
+            if not item:
+                return None
+            if normalized_tab_id and item.get('tab_id') and item.get('tab_id') != normalized_tab_id:
+                return None
+            return self._public_item(item)
+
+    def wait_for_terminal(self, transfer_id: str, timeout: float | None = None) -> dict | None:
+        normalized_id = str(transfer_id or '').strip()
+        if not normalized_id:
+            return None
+
+        deadline = None
+        if timeout is not None:
+            try:
+                normalized_timeout = max(0.0, float(timeout))
+            except Exception:
+                normalized_timeout = 0.0
+            deadline = time.monotonic() + normalized_timeout
+
+        with self._changed:
+            while True:
+                item = self._items.get(normalized_id)
+                if not item:
+                    return None
+                if item.get('state') in self.TERMINAL_STATES:
+                    return self._public_item(item)
+
+                if deadline is None:
+                    self._changed.wait()
+                    continue
+
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    return self._public_item(item)
+                self._changed.wait(remaining)
+
+    def mark_cancelling(self, transfer_id: str, *, tab_id: str = '') -> dict | None:
+        return self.update_transfer(
+            transfer_id,
+            tab_id=str(tab_id or '').strip(),
+            stage='cancelling',
+        )
+
+    def cancel_transfer(self, transfer_id: str, *, tab_id: str = '') -> dict | None:
+        return self.update_transfer(
+            transfer_id,
+            tab_id=str(tab_id or '').strip(),
+            state='cancelled',
+            stage='cancelled',
+            error='',
+        )
+
+    def delete_recent_transfer(self, transfer_id: str, *, tab_id: str = '') -> bool:
+        normalized_id = str(transfer_id or '').strip()
+        normalized_tab_id = str(tab_id or '').strip()
+        if not normalized_id:
+            return False
+
+        with self._changed:
+            item = self._items.get(normalized_id)
+            if not item:
+                return False
+            if normalized_tab_id and item.get('tab_id') and item.get('tab_id') != normalized_tab_id:
+                return False
+            if item.get('state') not in self.TERMINAL_STATES:
+                raise ValueError('active transfer cannot be deleted; cancel it first')
+
+            self._items.pop(normalized_id, None)
+            if normalized_id in self._recent_ids:
+                self._recent_ids.remove(normalized_id)
+            self._changed.notify_all()
+            return True
+
+    def clear_recent_transfers(self, *, tab_id: str = '') -> int:
+        normalized_tab_id = str(tab_id or '').strip()
+        removed = 0
+        with self._changed:
+            for transfer_id, item in list(self._items.items()):
+                if item.get('state') not in self.TERMINAL_STATES:
+                    continue
+                if normalized_tab_id and item.get('tab_id') and item.get('tab_id') != normalized_tab_id:
+                    continue
+                self._items.pop(transfer_id, None)
+                if transfer_id in self._recent_ids:
+                    self._recent_ids.remove(transfer_id)
+                removed += 1
+            if removed:
+                self._changed.notify_all()
+        return removed
 
     def list_transfers(self, tab_id: str = '') -> dict:
         normalized_tab_id = str(tab_id or '').strip()
@@ -283,6 +435,9 @@ class TransferService:
 
         if 'progress_supported' in patch and patch.get('progress_supported') is not None:
             item['progress_supported'] = bool(patch.get('progress_supported'))
+
+        if 'cancel_supported' in patch and patch.get('cancel_supported') is not None:
+            item['cancel_supported'] = bool(patch.get('cancel_supported'))
 
         if 'total_bytes' in patch:
             item['total_bytes'] = self._normalize_int(patch.get('total_bytes'))
@@ -339,7 +494,7 @@ class TransferService:
             item['percent'] = 100.0
 
     def _remember_if_terminal(self, item: dict):
-        if item.get('state') not in ('completed', 'failed', 'cancelled'):
+        if item.get('state') not in self.TERMINAL_STATES:
             return
 
         transfer_id = item.get('transfer_id')

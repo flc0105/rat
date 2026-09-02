@@ -33,6 +33,8 @@ from core.protocol.message_types import (
     MSG_TYPE_MONITOR_SNAPSHOT,
     MSG_TYPE_MONITOR_ERROR,
     MSG_TYPE_MONITOR_CLOSED,
+    MSG_TYPE_TRANSFER_START,
+    MSG_TYPE_TRANSFER_CANCEL,
     MSG_TYPE_TRANSFER_UPDATE,
 )
 
@@ -151,6 +153,12 @@ class BaseMessageRouter:
         if message_type == MSG_TYPE_MONITOR_CLOSED:
             return self.handle_monitor_closed_message(data)
 
+        if message_type == MSG_TYPE_TRANSFER_START:
+            return self.handle_transfer_start_message(data)
+
+        if message_type == MSG_TYPE_TRANSFER_CANCEL:
+            return self.handle_transfer_cancel_message(data)
+
         if message_type == MSG_TYPE_TRANSFER_UPDATE:
             return self.handle_transfer_update_message(data)
 
@@ -257,6 +265,12 @@ class BaseMessageRouter:
         return None
 
     def handle_monitor_closed_message(self, data: dict):
+        return None
+
+    def handle_transfer_start_message(self, data: dict):
+        return None
+
+    def handle_transfer_cancel_message(self, data: dict):
         return None
 
     def handle_transfer_update_message(self, data: dict):

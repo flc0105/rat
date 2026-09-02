@@ -30,6 +30,33 @@ def create_transfers_blueprint(server_instance):
 
         return responder.json_endpoint(_execute, default_error_status=500)
 
+    @blueprint.post('/api/transfers/<transfer_id>/cancel')
+    def cancel_transfer(transfer_id):
+        return responder.json_endpoint(
+            lambda: transfer_api.cancel_transfer(
+                transfer_id,
+                tab_id=get_optional_tab_id(),
+            ),
+            default_error_status=500,
+        )
+
+    @blueprint.delete('/api/transfers/recent')
+    def clear_recent_transfers():
+        return responder.json_endpoint(
+            lambda: transfer_api.clear_recent_transfers(tab_id=get_optional_tab_id()),
+            default_error_status=500,
+        )
+
+    @blueprint.delete('/api/transfers/<transfer_id>')
+    def delete_recent_transfer(transfer_id):
+        return responder.json_endpoint(
+            lambda: transfer_api.delete_recent_transfer(
+                transfer_id,
+                tab_id=get_optional_tab_id(),
+            ),
+            default_error_status=500,
+        )
+
     @blueprint.patch('/api/transfers/<transfer_id>/browser-upload')
     def update_browser_upload_transfer(transfer_id):
         def _execute():

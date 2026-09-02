@@ -361,6 +361,8 @@
   <TransferCenterDrawer
     ref="transferCenterDrawerRef"
     :transfers="transferItems"
+    :tab-id="tabId"
+    @transfers-changed="loadTransferItems"
   />
 </template>
 

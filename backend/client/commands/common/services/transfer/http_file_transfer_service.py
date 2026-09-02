@@ -2,6 +2,7 @@ import json
 import os
 import time
 
+from client.commands.runtime.context import CommandCancelledError
 from client.commands.strategies.http_transfer.factory import build_http_transfer_strategy
 from client.http.client_api import ClientApiClient
 from core.protocol.message_types import MSG_TYPE_TRANSFER_UPDATE
@@ -101,6 +102,25 @@ class CommandHttpFileTransferService:
         except Exception:
             # 进度回报失败不能反过来中断实际文件传输。
             pass
+
+    def _send_transfer_failure(self, transfer_id: str, exc: Exception, **payload):
+        if isinstance(exc, CommandCancelledError):
+            self._send_transfer_update(
+                transfer_id,
+                state='cancelled',
+                stage='cancelled',
+                error='',
+                **payload,
+            )
+            return
+
+        self._send_transfer_update(
+            transfer_id,
+            state='failed',
+            stage='failed',
+            error=str(exc),
+            **payload,
+        )
 
     def _build_progress_callback(self, transfer_id: str, stage: str, filename: str = ''):
         last_report_at = [0.0]
@@ -260,13 +280,11 @@ class CommandHttpFileTransferService:
             return 1, message
         except Exception as exc:
             if transfer_id:
-                self._send_transfer_update(
+                self._send_transfer_failure(
                     transfer_id,
-                    state='failed',
-                    stage='failed',
+                    exc,
                     filename=filename,
                     total_bytes=file_size,
-                    error=str(exc),
                     progress_supported=progress_supported,
                 )
             raise
@@ -311,12 +329,10 @@ class CommandHttpFileTransferService:
             )
         except Exception as exc:
             if transfer_id:
-                self._send_transfer_update(
+                self._send_transfer_failure(
                     transfer_id,
-                    state='failed',
-                    stage='failed',
+                    exc,
                     filename=(os.path.basename(temp_archive_path) if temp_archive_path else archive_name),
-                    error=str(exc),
                 )
             raise
         finally:
@@ -366,12 +382,10 @@ class CommandHttpFileTransferService:
             return result
         except Exception as exc:
             if transfer_id:
-                self._send_transfer_update(
+                self._send_transfer_failure(
                     transfer_id,
-                    state='failed',
-                    stage='failed',
+                    exc,
                     filename=filename,
-                    error=str(exc),
                     progress_supported=True,
                 )
             raise
