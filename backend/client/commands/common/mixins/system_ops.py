@@ -173,6 +173,40 @@ class CommandSystemMixin:
 
         return 1, f"Boot time: {boot_dt.strftime('%Y-%m-%d %H:%M:%S')}\nUptime: {days}d {hours}h {minutes}m"
 
+    @desc('List installed third-party Python packages', group='system')
+    @interruptible()
+    def piplist(self, arg=''):
+        """列出当前 Python 环境已安装的第三方包和版本"""
+        try:
+            from importlib import metadata
+            from core.utils.command_output import StructuredCommandResult
+
+            packages = {}
+
+            for distribution in metadata.distributions():
+                name = str(distribution.metadata.get('Name') or '').strip()
+                if not name:
+                    continue
+
+                packages[name.casefold()] = {
+                    'Package': name,
+                    'Version': str(distribution.version or 'unknown'),
+                }
+
+            rows = sorted(
+                packages.values(),
+                key=lambda item: item['Package'].casefold(),
+            )
+
+            return StructuredCommandResult(
+                status=1,
+                data=rows,
+                shape='table',
+            )
+
+        except Exception as e:
+            return 0, f'Failed to list Python packages: {e}'
+
     def _get_network_interface_service(self):
         service = getattr(self, '_network_interface_service', None)
 
