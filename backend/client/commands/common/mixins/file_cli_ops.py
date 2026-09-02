@@ -62,9 +62,9 @@ class CommandFileCliMixin:
             if not url:
                 if not relative_url:
                     return 0, error('url or relative_url is required')
-                url = self.client_api.normalize_server_url(relative_url)
+                url = self.client_api.normalize_file_transfer_url(relative_url)
             else:
-                url = self.client_api.normalize_server_url(url)
+                url = self.client_api.normalize_file_transfer_url(url)
 
             if not filename:
                 return 0, error('filename is required')

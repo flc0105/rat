@@ -348,7 +348,7 @@ class CommandHttpFileTransferService:
 
         try:
             result = strategy.download_file(
-                self.client_api.normalize_server_url(url),
+                self.client_api.normalize_file_transfer_url(url),
                 target_path,
                 progress_callback=progress_callback,
             )

@@ -3,7 +3,7 @@ from urllib.parse import quote
 
 import requests
 
-from client.config.config import UPLOAD_BASE_URL
+from client.config.config import FILE_TRANSFER_BASE_URL, UPLOAD_BASE_URL
 # from client.runtime.sdk.context import get_script_grant_token
 
 
@@ -39,8 +39,9 @@ class ClientApiClient:
 
     DEFAULT_TIMEOUT = 30
 
-    def __init__(self, base_url: str = ''):
+    def __init__(self, base_url: str = '', file_transfer_base_url: str = ''):
         self.base_url = (base_url or UPLOAD_BASE_URL).rstrip('/')
+        self.file_transfer_base_url = (file_transfer_base_url or FILE_TRANSFER_BASE_URL).rstrip('/')
 
     def build_url(self, path_or_url: str) -> str:
         value = str(path_or_url or '').strip()
@@ -52,6 +53,17 @@ class ClientApiClient:
 
     def normalize_server_url(self, path_or_url: str) -> str:
         return self.build_url(path_or_url)
+
+    def build_file_transfer_url(self, path_or_url: str) -> str:
+        value = str(path_or_url or '').strip()
+        if value.startswith('http://') or value.startswith('https://'):
+            return value
+        if value.startswith('/'):
+            return self.file_transfer_base_url + value
+        return self.file_transfer_base_url + '/' + value.lstrip('/')
+
+    def normalize_file_transfer_url(self, path_or_url: str) -> str:
+        return self.build_file_transfer_url(path_or_url)
 
     def _should_attach_script_grant(self, url: str) -> bool:
         base_url = (self.base_url or '').rstrip('/')
@@ -67,7 +79,7 @@ class ClientApiClient:
         return merged
 
     def build_file_upload_url(self) -> str:
-        return self.build_url('/api/files/upload')
+        return self.build_file_transfer_url('/api/files/upload')
 
     def try_parse_json(self, response):
         try:
