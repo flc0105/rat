@@ -4,6 +4,10 @@ export function listConnections() {
   return apiData('/api/connections', {}, [])
 }
 
+export function getConnectionRevisionStatus(clientId) {
+  return apiData(`/api/connections/${encodeURIComponent(clientId)}/revision-status`, {}, {})
+}
+
 export function killConnection(clientId) {
   return apiFetch(`/api/connections/${encodeURIComponent(clientId)}/kill`, {
     method: 'POST',

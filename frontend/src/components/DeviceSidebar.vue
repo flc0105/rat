@@ -120,11 +120,11 @@
                 {{ formatDeviceName(item) }}
               </div>
               <el-icon
-                v-if="item.client_revision_state === 'outdated'"
+                v-if="getConnectionDisplayState(item) === 'online' && item.client_revision_state === 'outdated'"
                 class="device-update-indicator"
                 title="Client update available"
               >
-                <RefreshRight />
+                <CaretTop />
               </el-icon>
             </div>
             <div class="device-os">
@@ -261,7 +261,7 @@
 <script>
 
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { RefreshRight } from '@element-plus/icons-vue'
+import {CaretTop} from '@element-plus/icons-vue'
 import {
   killConnection as killConnectionApi,
   removeConnection as removeConnectionApi,
@@ -271,7 +271,7 @@ export default {
   name: 'DeviceSidebar',
 
   components: {
-    RefreshRight,
+    CaretTop,
   },
 
   props: {
@@ -1046,9 +1046,9 @@ async removeConnectionPermanently(item) {
 
 .device-update-indicator {
   flex: 0 0 auto;
-  font-size: 13px;
+  font-size: 12px;
   color: var(--muted-2);
-  opacity: 0.72;
+  opacity: 0.58;
 }
 
 .device-os {

@@ -162,6 +162,15 @@
             </a>
 
             <a
+                v-if="getClientRevisionDetails(entry.line)"
+                href="#"
+                class="table-action-link-aux terminal-text terminal-action-link-spaced"
+                @click.prevent.stop="openClientRevisionDetails(entry.line)"
+            >
+              [ Details ]
+            </a>
+
+            <a
                 v-for="(actionItem, actionIndex) in getTerminalInlineActionItems(lines, entry.index)"
                 :key="actionItem.key"
                 href="#"
@@ -175,6 +184,77 @@
         </template>
       </div>
     </template>
+
+    <el-dialog
+        v-model="revisionDetailsVisible"
+        title="Client Revision Details"
+        width="760px"
+        top="8vh"
+        append-to-body
+        class="fixed-dialog client-revision-details-dialog"
+        modal-class="client-revision-details-overlay"
+    >
+      <div class="fixed-dialog-body client-revision-details-body">
+        <div class="client-revision-info">
+          <div class="client-revision-info-row">
+            <div class="client-revision-info-label">Current Revision</div>
+            <div class="client-revision-info-value mono">
+              {{ revisionDetails.current_revision || 'unknown' }}
+            </div>
+          </div>
+          <div class="client-revision-info-row">
+            <div class="client-revision-info-label">Server Revision</div>
+            <div class="client-revision-info-value mono">
+              {{ revisionDetails.server_revision || 'unknown' }}
+            </div>
+          </div>
+        </div>
+
+        <div class="client-revision-section-title">Changed Files</div>
+
+        <el-table
+            v-if="revisionDetails.changed_files_available && revisionDetails.changed_files.length"
+            :data="revisionDetails.changed_files"
+            stripe
+            border
+            size="small"
+            max-height="360"
+            table-layout="fixed"
+            empty-text="No changed files"
+        >
+          <el-table-column
+              prop="change"
+              label="Change"
+              width="120"
+          >
+            <template #default="{ row }">
+              {{ String(row.change || 'modified').toUpperCase() }}
+            </template>
+          </el-table-column>
+          <el-table-column
+              prop="path"
+              label="Path"
+              min-width="480"
+          >
+            <template #default="{ row }">
+              <span class="client-revision-path mono">{{ row.path }}</span>
+            </template>
+          </el-table-column>
+        </el-table>
+
+        <el-empty
+            v-else-if="!revisionDetails.changed_files_available"
+            :image-size="64"
+            description="File-level details are unavailable for this client build."
+        />
+
+        <el-empty
+            v-else
+            :image-size="64"
+            description="No file-level differences were reported."
+        />
+      </div>
+    </el-dialog>
   </div>
 </template>
 
@@ -218,6 +298,13 @@ export default {
     return {
       savingOutputBlockKeys: {},
       collapsedTerminalBlockKeys: {},
+      revisionDetailsVisible: false,
+      revisionDetails: {
+        current_revision: '',
+        server_revision: '',
+        changed_files: [],
+        changed_files_available: false,
+      },
     }
   },
 
@@ -426,6 +513,32 @@ export default {
       const action = this.getSuggestedCommandAction(line)
       if (!action) return
       this.$emit('suggest-command', action.command)
+    },
+
+    getClientRevisionDetails(line) {
+      const details = line?.meta?.clientRevisionDetails
+      if (!details || typeof details !== 'object') return null
+      return details
+    },
+
+    openClientRevisionDetails(line) {
+      const details = this.getClientRevisionDetails(line)
+      if (!details) return
+
+      this.revisionDetails = {
+        current_revision: String(details.current_revision || '').trim(),
+        server_revision: String(details.server_revision || '').trim(),
+        changed_files: Array.isArray(details.changed_files)
+          ? details.changed_files
+              .map(item => ({
+                path: String(item?.path || '').trim(),
+                change: String(item?.change || 'modified').trim() || 'modified',
+              }))
+              .filter(item => item.path)
+          : [],
+        changed_files_available: details.changed_files_available === true,
+      }
+      this.revisionDetailsVisible = true
     },
 
     handleTerminalActionClick(actionItem) {
@@ -1206,6 +1319,62 @@ export default {
 
 .line-default .terminal-text {
   color: var(--terminal-text);
+}
+
+.client-revision-details-body {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  max-height: 72vh;
+  overflow: auto;
+}
+
+.client-revision-info {
+  border-top: 1px solid #ebeef5;
+}
+
+.client-revision-info-row {
+  display: grid;
+  grid-template-columns: 180px minmax(0, 1fr);
+  gap: 12px;
+  padding: 9px 0;
+  border-bottom: 1px solid #ebeef5;
+}
+
+.client-revision-info-label {
+  color: #606266;
+  font-weight: 500;
+}
+
+.client-revision-info-value {
+  min-width: 0;
+  color: #303133;
+  word-break: break-word;
+}
+
+.client-revision-section-title {
+  color: #303133;
+  font-weight: 600;
+}
+
+.client-revision-path {
+  word-break: break-all;
+}
+
+:global(.client-revision-details-overlay .el-overlay-dialog) {
+  overflow: auto;
+}
+
+@media (max-width: 768px) {
+  .client-revision-info-row {
+    grid-template-columns: 118px minmax(0, 1fr);
+  }
+
+  :global(.client-revision-details-overlay .el-dialog) {
+    width: calc(100vw - 24px) !important;
+    max-width: calc(100vw - 24px) !important;
+    margin-top: 4vh !important;
+  }
 }
 
 @media (max-width: 960px) {

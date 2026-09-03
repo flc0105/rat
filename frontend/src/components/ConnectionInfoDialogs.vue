@@ -576,15 +576,6 @@ export default {
         { label: 'Integrity', value: conn.integrity || '-' },
         { label: 'Build Version', value: conn.build_version || '-' },
         { label: 'Client Revision', value: conn.client_revision || '-', mono: true },
-        { label: 'Server Client Revision', value: conn.server_client_revision || '-', mono: true },
-        { label: 'Revision Status', value: conn.client_revision_state || 'unknown' },
-        {
-          label: 'Changed Areas',
-          value: Array.isArray(conn.client_revision_changed_parts) && conn.client_revision_changed_parts.length
-            ? conn.client_revision_changed_parts.join(', ')
-            : '-',
-          mono: true,
-        },
         { label: 'Machine ID', value: conn.machine_id || '-', mono: true },
         { label: 'Fingerprint Basis', value: conn.machine_fingerprint_basis || '-', mono: true },
         { label: 'Last Seen', value: this.formatLastSeenText(conn) },

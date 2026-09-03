@@ -12,6 +12,13 @@ def create_connections_blueprint(server_instance):
     def get_connections():
         return responder.ok(connection_api.get_connections_payload())
 
+    @blueprint.get('/api/connections/<client_id>/revision-status')
+    def get_client_revision_status(client_id):
+        return responder.json_endpoint(
+            lambda: connection_api.get_client_revision_status(client_id),
+            default_error_status=500,
+        )
+
     @blueprint.get('/api/machines/<machine_id>/connection-history')
     def get_machine_connection_history(machine_id):
         return responder.json_endpoint(

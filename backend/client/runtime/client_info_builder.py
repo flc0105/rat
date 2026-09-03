@@ -7,6 +7,7 @@ from client.config.config import (
     CLIENT_BUILD_VERSION,
     CLIENT_SOURCE_REVISION,
     CLIENT_SOURCE_REVISION_PARTS,
+    CLIENT_SOURCE_REVISION_FILES,
 )
 from client.config.runtime_config import (
     HTTP_TRANSFER_MODE,
@@ -33,6 +34,7 @@ def _get_client_revision_manifest() -> dict:
         return {
             'revision': str(CLIENT_SOURCE_REVISION),
             'parts': dict(CLIENT_SOURCE_REVISION_PARTS or {}),
+            'files': dict(CLIENT_SOURCE_REVISION_FILES or {}),
         }
 
     if _CLIENT_REVISION_MANIFEST is None:
@@ -81,6 +83,7 @@ class ClientInfoBuilder:
             'build_version': CLIENT_BUILD_VERSION,
             'client_revision': revision_manifest.get('revision') or '',
             'client_revision_parts': dict(revision_manifest.get('parts') or {}),
+            'client_revision_files': dict(revision_manifest.get('files') or {}),
 
             'process_id': os.getpid(),
             'launch_command': get_executable_path(),

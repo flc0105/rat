@@ -33,7 +33,6 @@ class WebConnectionService:
         self.recent_device_store = recent_device_store
         self.connection_history_store = connection_history_store
         self.script_grant_service = script_grant_service
-        self.client_revision_manifest = build_client_revision_manifest()
 
     def _now(self):
         return datetime.now()
@@ -66,42 +65,64 @@ class WebConnectionService:
         return str(machine_id or '').strip().lower()
 
 
-    def _decorate_connection_with_client_revision(self, payload: dict) -> dict:
+    def _get_revision_state(self, client_revision: str, server_revision: str) -> str:
+        client_revision_text = str(client_revision or '').strip()
+        server_revision_text = str(server_revision or '').strip()
+        if not client_revision_text or not server_revision_text:
+            return 'unknown'
+        if client_revision_text == server_revision_text:
+            return 'current'
+        return 'outdated'
+
+    def _build_changed_revision_files(self, client_files: dict, server_files: dict) -> list[dict]:
+        if not client_files or not server_files:
+            return []
+
+        results = []
+        all_paths = sorted(set(client_files.keys()) | set(server_files.keys()))
+        for relative_path in all_paths:
+            client_digest = str(client_files.get(relative_path) or '')
+            server_digest = str(server_files.get(relative_path) or '')
+            if client_digest == server_digest:
+                continue
+
+            if relative_path not in client_files:
+                change_type = 'added'
+            elif relative_path not in server_files:
+                change_type = 'removed'
+            else:
+                change_type = 'modified'
+
+            results.append({
+                'path': relative_path,
+                'change': change_type,
+            })
+        return results
+
+    def _decorate_connection_with_client_revision(self, payload: dict, server_manifest: dict = None) -> dict:
         if not isinstance(payload, dict):
             return payload
 
         result = dict(payload)
-        server_revision = str(self.client_revision_manifest.get('revision') or '')
-        server_parts = dict(self.client_revision_manifest.get('parts') or {})
-        client_revision = str(result.get('client_revision') or '').strip()
-        raw_client_parts = result.get('client_revision_parts')
-        client_parts = dict(raw_client_parts) if isinstance(raw_client_parts, dict) else {}
+        if str(result.get('connection_state') or '').strip() != 'online':
+            result['client_revision_state'] = ''
+            return result
 
-        if not client_revision:
-            revision_state = 'unknown'
-        elif client_revision == server_revision:
-            revision_state = 'current'
-        else:
-            revision_state = 'outdated'
+        if not isinstance(server_manifest, dict):
+            return result
 
-        changed_parts = []
-        if revision_state == 'outdated' and client_parts:
-            changed_parts = [
-                relative_path
-                for relative_path, expected_digest in server_parts.items()
-                if str(client_parts.get(relative_path) or '') != str(expected_digest or '')
-            ]
-
-        result['server_client_revision'] = server_revision
-        result['client_revision_state'] = revision_state
-        result['client_revision_changed_parts'] = changed_parts
+        server_revision = str(server_manifest.get('revision') or '')
+        result['client_revision_state'] = self._get_revision_state(
+            result.get('client_revision'),
+            server_revision,
+        )
         return result
 
-    def _decorate_connection_with_device_view_prefs(self, payload: dict) -> dict:
+    def _decorate_connection_with_device_view_prefs(self, payload: dict, server_manifest: dict = None) -> dict:
         if not isinstance(payload, dict):
             return payload
 
-        result = self._decorate_connection_with_client_revision(payload)
+        result = self._decorate_connection_with_client_revision(payload, server_manifest=server_manifest)
         if not self.recent_device_store:
             result.setdefault('machine_alias', '')
             result.setdefault('device_alias', '')
@@ -237,10 +258,51 @@ class WebConnectionService:
         session = self.server.get_target_connection_by_client_id(str(client_id or '').strip())
         return session.session_info.system_paths
 
+    def get_client_revision_status(self, client_id: str) -> dict:
+        client_id_text = str(client_id or '').strip()
+        if not client_id_text:
+            raise ValueError('Invalid client id')
+
+        session = self.server.get_target_connection_by_client_id(client_id_text)
+        connection_state = self._build_connection_state(session)
+        if connection_state != 'online':
+            return {
+                'client_id': client_id_text,
+                'state': 'offline',
+                'changed_files': [],
+                'changed_files_available': False,
+            }
+
+        # 每次查询都基于当前磁盘源码重新计算，Server 无需重启即可反映最新 revision。
+        server_manifest = build_client_revision_manifest(include_parts=False, include_files=True)
+        info = session.session_info
+        client_revision = str(info.client_revision or '').strip()
+        server_revision = str(server_manifest.get('revision') or '').strip()
+        revision_state = self._get_revision_state(client_revision, server_revision)
+        client_files = dict(info.client_revision_files or {})
+        server_files = dict(server_manifest.get('files') or {})
+        changed_files_available = bool(client_files)
+        changed_files = []
+        if revision_state == 'outdated' and changed_files_available:
+            changed_files = self._build_changed_revision_files(client_files, server_files)
+
+        return {
+            'client_id': client_id_text,
+            'state': revision_state,
+            'current_revision': client_revision,
+            'server_revision': server_revision,
+            'changed_files': changed_files,
+            'changed_files_available': changed_files_available,
+        }
+
     def get_connections_payload(self):
         active_connections = [self.serialize_connection(session) for session in self.server.connections.all()]
         self._sync_recent_online_connections(active_connections)
-        active_connections = [self._decorate_connection_with_device_view_prefs(item) for item in active_connections]
+        server_manifest = build_client_revision_manifest(include_parts=False, include_files=False) if active_connections else {}
+        active_connections = [
+            self._decorate_connection_with_device_view_prefs(item, server_manifest=server_manifest)
+            for item in active_connections
+        ]
         recent_offline = self._build_recent_offline_entries(active_connections)
         return active_connections + recent_offline
 
@@ -615,8 +677,12 @@ class WebConnectionService:
 
     # ------------------ event publish ------------------ #
     def publish_connection_online(self, session: ClientSession):
+        server_manifest = build_client_revision_manifest(include_parts=False, include_files=False)
         self.event_bus.publish('connection_online', {
-            'connection': self._decorate_connection_with_device_view_prefs(self.serialize_connection(session)),
+            'connection': self._decorate_connection_with_device_view_prefs(
+                self.serialize_connection(session),
+                server_manifest=server_manifest,
+            ),
             'time': datetime.now().isoformat()
         })
 

@@ -8,7 +8,7 @@ import zipfile
 from datetime import datetime
 from uuid import uuid4
 
-from core.client_revision import build_client_revision_manifest
+from core.client_revision import CLIENT_BUNDLE_SOURCE_PATHS, build_client_revision_manifest
 from core.utils.logger import logger
 
 
@@ -16,7 +16,7 @@ class AgentBuilder:
 
     EXCLUDE_DIRS = {'venv', '__pycache__', '.git', 'node_modules', 'dist', 'build', '.idea', '.vscode' } #'runtime'
     EXCLUDE_EXTENSIONS = {'.pyc', '.pyo', '.pyd'}
-    BUNDLE_INCLUDE_PATHS = ('client', 'core', 'rchclient.py')
+    BUNDLE_INCLUDE_PATHS = CLIENT_BUNDLE_SOURCE_PATHS
     SUPPORTED_TARGETS = {'win', 'mac', 'linux'}
     SUPPORTED_BUILDERS = {'pyinstaller', 'go', 'go_loader', 'bundle'}
     SUPPORTED_GO_ARCHES = {'amd64', 'arm64'}
@@ -192,6 +192,7 @@ class AgentBuilder:
         revision_manifest = build_client_revision_manifest(self.source_dir)
         client_revision = str(revision_manifest.get('revision') or '')
         client_revision_parts = json.dumps(revision_manifest.get('parts') or {}, ensure_ascii=False, sort_keys=True)
+        client_revision_files = json.dumps(revision_manifest.get('files') or {}, ensure_ascii=False, sort_keys=True)
         template = f'''import os
 
 SERVER_HOST = "{server_host}"
@@ -208,6 +209,7 @@ FILE_TRANSFER_BASE_URL = f"{{SERVER_WEB_SCHEME}}://{{SERVER_WEB_HOST}}:{{SERVER_
 CLIENT_BUILD_VERSION = "{build_version}"
 CLIENT_SOURCE_REVISION = "{client_revision}"
 CLIENT_SOURCE_REVISION_PARTS = {client_revision_parts}
+CLIENT_SOURCE_REVISION_FILES = {client_revision_files}
 '''
         with open(config_path, 'w', encoding='utf-8') as f:
             f.write(template)

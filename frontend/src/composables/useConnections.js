@@ -1,5 +1,5 @@
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { listConnections, updateConnectionDeviceViewPrefs } from '../api/connectionsApi.js'
+import { getConnectionRevisionStatus, listConnections, updateConnectionDeviceViewPrefs } from '../api/connectionsApi.js'
 import { assignMachineDeviceGroup, listDeviceGroups } from '../api/deviceGroupsApi.js'
 
 const LAST_SELECTED_MACHINE_STORAGE_KEY = 'rch:last_selected_machine_id'
@@ -30,6 +30,7 @@ export default {
                 clientIds: {},
                 offlineMachineIds: {},
             },
+            clientRevisionCheckSerial: {},
         }
     },
 
@@ -482,7 +483,7 @@ export default {
 
             if (next && next.client_id !== previousSelectedId) {
                 this.ensureOutputBucket?.(next.client_id)
-                this.appendClientRevisionNotice(next)
+                this.refreshClientRevisionStatus(next)
             }
         },
 
@@ -670,7 +671,19 @@ export default {
 
                 this.connections = this.dedupeConnections(nextItems)
 
+                const selectedIdBeforeVisibilityCheck = this.selectedId
                 this.ensureSelectedConnectionVisible()
+
+                if (this.selectedId && this.selectedId === selectedIdBeforeVisibilityCheck) {
+                    const selected = this.connections.find(item => item.client_id === this.selectedId)
+                    if (!selected || this.getConnectionDisplayState(selected) !== 'online') {
+                        this.clearClientRevisionNotice(this.selectedId)
+                    } else if (String(selected.client_revision_state || '').trim() === 'current') {
+                        this.clearClientRevisionNotice(this.selectedId)
+                    } else if (!this.hasClientRevisionNotice(this.selectedId)) {
+                        this.refreshClientRevisionStatus(selected)
+                    }
+                }
 
                 if (this.selectedId) {
                     await this.reloadCommandCandidatesFromRuntime?.({
@@ -842,33 +855,113 @@ export default {
             return fa.localeCompare(fb)
         },
 
-        appendClientRevisionNotice(item) {
-            if (!item) return
+        clearClientRevisionNotice(clientId) {
+            const normalizedClientId = this.normalizeClientId(clientId)
+            if (!normalizedClientId) return
 
+            this.ensureOutputBucket?.(normalizedClientId)
+            const lines = Array.isArray(this.outputs?.[normalizedClientId]) ? this.outputs[normalizedClientId] : []
+            this.outputs[normalizedClientId] = lines.filter(line => line?.meta?.clientRevisionNotice !== true)
+        },
+
+        hasClientRevisionNotice(clientId) {
+            const normalizedClientId = this.normalizeClientId(clientId)
+            if (!normalizedClientId) return false
+            const lines = Array.isArray(this.outputs?.[normalizedClientId]) ? this.outputs[normalizedClientId] : []
+            return lines.some(line => line?.meta?.clientRevisionNotice === true)
+        },
+
+        appendClientRevisionNotice(item, revisionStatus = null) {
+            const clientId = this.getConnectionClientId(item)
+            if (!clientId) return
+
+            this.clearClientRevisionNotice(clientId)
+            if (!item || this.getConnectionDisplayState(item) !== 'online') return
+
+            const status = revisionStatus && typeof revisionStatus === 'object'
+                ? revisionStatus
+                : { state: item.client_revision_state || '' }
+            const revisionState = String(status.state || '').trim()
             const commandManifest = Array.isArray(item.command_manifest) ? item.command_manifest : []
             const supportsUpdate = commandManifest.some(entry => String(entry?.name || '').trim() === 'update')
-            const revisionState = String(item.client_revision_state || '').trim()
-            const serverRevision = String(item.server_client_revision || '').trim() || 'unknown'
+            const buildVersion = String(item.build_version || '').trim().toLowerCase()
+            const isDevBuild = buildVersion === 'dev'
             let message = ''
+            let suggestedCommand = ''
 
             if (revisionState === 'outdated') {
-                const currentRevision = String(item.client_revision || '').trim() || 'unknown'
-                message = `[!] Client is not up to date. Current revision: ${currentRevision} · Server revision: ${serverRevision}. Please run update.`
+                if (isDevBuild) {
+                    message = '[!] Client code is outdated. Restart from IDE/source.'
+                } else {
+                    message = '[!] Client code is outdated. Please run update.'
+                    suggestedCommand = 'update'
+                }
             } else if (revisionState === 'unknown' && supportsUpdate) {
-                message = `[!] Client revision cannot be verified against server revision ${serverRevision}. Please run update once.`
+                if (isDevBuild) {
+                    message = '[!] Client revision is unavailable. Restart from IDE/source after code changes.'
+                } else {
+                    message = '[!] Client revision is unavailable. Please run update once.'
+                    suggestedCommand = 'update'
+                }
             }
 
             if (!message) return
 
             this.appendOutput?.(
-                item.client_id,
+                clientId,
                 message,
                 'warning',
                 {
-                    suggestedCommand: 'update',
-                    suggestedCommandLabel: 'update',
+                    clientRevisionNotice: true,
+                    ...(revisionState === 'outdated' ? {
+                        clientRevisionDetails: {
+                            current_revision: String(status.current_revision || item.client_revision || '').trim(),
+                            server_revision: String(status.server_revision || '').trim(),
+                            changed_files: Array.isArray(status.changed_files) ? status.changed_files : [],
+                            changed_files_available: status.changed_files_available === true,
+                        },
+                    } : {}),
+                    ...(suggestedCommand ? {
+                        suggestedCommand,
+                        suggestedCommandLabel: suggestedCommand,
+                    } : {}),
                 },
             )
+        },
+
+        async refreshClientRevisionStatus(item) {
+            const clientId = this.getConnectionClientId(item)
+            if (!clientId) return
+
+            if (!item || this.getConnectionDisplayState(item) !== 'online') {
+                this.clearClientRevisionNotice(clientId)
+                return
+            }
+
+            const serial = Number(this.clientRevisionCheckSerial?.[clientId] || 0) + 1
+            this.clientRevisionCheckSerial = {
+                ...(this.clientRevisionCheckSerial || {}),
+                [clientId]: serial,
+            }
+
+            try {
+                const status = await getConnectionRevisionStatus(clientId)
+                if (Number(this.clientRevisionCheckSerial?.[clientId] || 0) !== serial) return
+
+                const current = this.connections.find(entry => this.getConnectionClientId(entry) === clientId)
+                if (!current || this.getConnectionDisplayState(current) !== 'online') {
+                    this.clearClientRevisionNotice(clientId)
+                    return
+                }
+
+                current.client_revision_state = String(status?.state || '')
+                if (this.selectedId === clientId) {
+                    this.appendClientRevisionNotice(current, status)
+                }
+            } catch (e) {
+                if (Number(this.clientRevisionCheckSerial?.[clientId] || 0) !== serial) return
+                this.clearClientRevisionNotice(clientId)
+            }
         },
 
         compareSidebarConnectionOrder(a, b) {
@@ -906,7 +999,7 @@ export default {
             const selected = this.connections.find(item => item.client_id === clientId)
             this.rememberSelectedMachineId(this.getConnectionMachineId(selected))
             this.ensureOutputBucket(clientId)
-            this.appendClientRevisionNotice(selected)
+            this.refreshClientRevisionStatus(selected)
             this.commandHistoryItems = []
             this.commandExecutionItems = []
             this.reloadCommandCandidatesFromRuntime?.({

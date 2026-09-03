@@ -16,6 +16,9 @@ class WebConnectionApi:
     def get_connections_payload(self):
         return self.connection_service.get_connections_payload()
 
+    def get_client_revision_status(self, client_id: str):
+        return self.connection_service.get_client_revision_status(client_id)
+
     def get_system_paths(self, client_id: str):
         return self.connection_service.get_system_paths(client_id)
 

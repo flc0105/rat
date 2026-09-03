@@ -28,6 +28,7 @@ def _write_update_ready_marker(file_path: str, client: Client):
         return
 
     os.makedirs(os.path.dirname(target_path), exist_ok=True)
+    
     temp_path = f'{target_path}.tmp'
     payload = {
         'pid': os.getpid(),
@@ -61,4 +62,3 @@ def main():
 
 if __name__ == '__main__':
     main()
-
