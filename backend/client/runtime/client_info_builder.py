@@ -3,19 +3,42 @@ import platform
 import socket
 
 from client.commands.platform.utils.ios_util import get_ios_process_info
-from client.config.config import CLIENT_BUILD_VERSION
+from client.config.config import (
+    CLIENT_BUILD_VERSION,
+    CLIENT_SOURCE_REVISION,
+    CLIENT_SOURCE_REVISION_PARTS,
+)
 from client.config.runtime_config import (
     HTTP_TRANSFER_MODE,
     LOCAL_WATCHDOG_ENABLED,
     PYTHON_EXECUTION_MODE,
     REMOTE_HTTP_WATCHDOG_ENABLED,
 )
+from core.client_revision import build_client_revision_manifest
 from core.device.machine_identity import (
     _detect_machine_identity_components,
     build_machine_identity_payload,
 )
 from core.platform.platform_identity import detect_platform_info
 from client.runtime.client_util import check_privilege, get_executable_path, get_system_paths
+
+
+_CLIENT_REVISION_MANIFEST = None
+
+
+def _get_client_revision_manifest() -> dict:
+    global _CLIENT_REVISION_MANIFEST
+
+    if CLIENT_SOURCE_REVISION:
+        return {
+            'revision': str(CLIENT_SOURCE_REVISION),
+            'parts': dict(CLIENT_SOURCE_REVISION_PARTS or {}),
+        }
+
+    if _CLIENT_REVISION_MANIFEST is None:
+        _CLIENT_REVISION_MANIFEST = build_client_revision_manifest()
+
+    return dict(_CLIENT_REVISION_MANIFEST)
 
 
 class ClientInfoBuilder:
@@ -35,6 +58,7 @@ class ClientInfoBuilder:
         machine_identity = build_machine_identity_payload()
         machine_info = _detect_machine_identity_components()
         process_info = self._build_process_info(platform_info)
+        revision_manifest = _get_client_revision_manifest()
 
         info = {
             'id': self.client_id,
@@ -55,6 +79,8 @@ class ClientInfoBuilder:
             'machine_id': machine_identity['machine_id_hash'],
             'machine_fingerprint_basis': machine_identity['fingerprint_basis'],
             'build_version': CLIENT_BUILD_VERSION,
+            'client_revision': revision_manifest.get('revision') or '',
+            'client_revision_parts': dict(revision_manifest.get('parts') or {}),
 
             'process_id': os.getpid(),
             'launch_command': get_executable_path(),

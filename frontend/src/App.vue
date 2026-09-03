@@ -167,6 +167,7 @@
                   @open-json="$refs.terminalJsonDialogRef?.open($event)"
                   @artifact-saved="refreshArtifactsIfOpen"
                   @rerun-terminal-block="rerunTerminalBlock"
+                  @suggest-command="applyTerminalSuggestedCommand"
                 />
               </div>
             </section>
@@ -749,6 +750,10 @@ export default {
       if (!row || !row.command) return
 
       this.$refs.commandInputBarRef?.setCommandText(row.command)
+    },
+
+    applyTerminalSuggestedCommand(command) {
+      this.$refs.commandInputBarRef?.setCommandText(command)
     },
 
     async reloadCommandCandidatesFromHistory(options = {}) {

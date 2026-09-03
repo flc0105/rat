@@ -37,6 +37,11 @@
       <div class="info-value">{{ connection.client_id || '-' }}</div>
     </div>
 
+    <div class="info-card">
+      <div class="info-label">Client Revision</div>
+      <div class="info-value mono">{{ connection.client_revision || '-' }}</div>
+    </div>
+
     <div class="info-card info-card-wide-2">
       <div class="info-label">Working Directory</div>
       <div class="info-value mono">{{ connection.cwd || '-' }}</div>

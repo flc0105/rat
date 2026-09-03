@@ -281,7 +281,7 @@ def _resolve_python_command_for_source_bundle() -> list[str]:
     return candidates[0]
 
 
-def spawn_detached_python_script(script_path: str, cwd: str = '', args=None):
+def spawn_detached_python_script(script_path: str, cwd: str = '', args=None, stderr_path: str = ''):
     script_path = os.path.abspath(script_path)
     launch_cwd = os.path.abspath(cwd) if cwd else os.path.dirname(script_path)
     command = _resolve_python_command_for_source_bundle() + [script_path]
@@ -289,26 +289,34 @@ def spawn_detached_python_script(script_path: str, cwd: str = '', args=None):
     if args:
         command.extend(str(item) for item in args)
 
+    stderr_file = None
+    if stderr_path:
+        stderr_file = open(os.path.abspath(stderr_path), 'ab')
+
     popen_kwargs = {
         'cwd': launch_cwd,
         'env': dict(os.environ),
         'stdin': subprocess.DEVNULL,
         'stdout': subprocess.DEVNULL,
-        'stderr': subprocess.DEVNULL,
+        'stderr': stderr_file or subprocess.DEVNULL,
         'close_fds': True,
         'shell': False,
     }
 
-    if os.name == 'nt':
-        creationflags = 0
-        creationflags |= getattr(subprocess, 'CREATE_NEW_PROCESS_GROUP', 0)
-        creationflags |= getattr(subprocess, 'DETACHED_PROCESS', 0)
-        return subprocess.Popen(command, creationflags=creationflags, **popen_kwargs)
+    try:
+        if os.name == 'nt':
+            creationflags = 0
+            creationflags |= getattr(subprocess, 'CREATE_NEW_PROCESS_GROUP', 0)
+            creationflags |= getattr(subprocess, 'DETACHED_PROCESS', 0)
+            return subprocess.Popen(command, creationflags=creationflags, **popen_kwargs)
 
-    if os.name == 'posix':
-        return subprocess.Popen(command, start_new_session=True, **popen_kwargs)
+        if os.name == 'posix':
+            return subprocess.Popen(command, start_new_session=True, **popen_kwargs)
 
-    raise RuntimeError(f'Unsupported os.name: {os.name}')
+        raise RuntimeError(f'Unsupported os.name: {os.name}')
+    finally:
+        if stderr_file is not None:
+            stderr_file.close()
 
 
 def is_process_alive(pid: int) -> bool:

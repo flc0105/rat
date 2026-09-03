@@ -1,7 +1,12 @@
+import json
 import os
+import shlex
 import shutil
 import sys
 import tempfile
+import threading
+import time
+from uuid import uuid4
 
 from client.commands.platform.utils.ios_util import spawn
 from client.commands.runtime.interrupts import interruptible
@@ -28,6 +33,10 @@ class CommandUpdateMixin:
     BUILD_API_TIMEOUT = (15, 600)
     DOWNLOAD_TIMEOUT = (15, 600)
     DOWNLOAD_CHUNK_SIZE = 64 * 1024
+    UPDATE_READY_TIMEOUT_SECONDS = 10
+    UPDATE_READY_STABILIZE_SECONDS = 2
+    UPDATE_READY_POLL_INTERVAL_SECONDS = 0.25
+    UPDATE_EXIT_DELAY_SECONDS = 0.5
 
     def _build_update_request_payload(self) -> dict:
         # update 固定走 bundle 构建，不再依赖前台选择
@@ -241,10 +250,137 @@ class CommandUpdateMixin:
             shutil.rmtree(temp_dir, ignore_errors=True)
             raise
 
-    @desc('Build, download, extract and launch the latest client bundle', group='session')
+    def _parse_update_options(self, arg='') -> dict:
+        tokens = shlex.split(str(arg or ''))
+        keep_old = False
+
+        for token in tokens:
+            if token == '--keep-old':
+                keep_old = True
+                continue
+            raise ValueError(f'Unsupported update option: {token}. Usage: update [--keep-old]')
+
+        return {
+            'keep_old': keep_old,
+        }
+
+    def _build_update_ready_paths(self, release_dir: str) -> tuple[str, str]:
+        token = uuid4().hex
+        return (
+            os.path.join(release_dir, f'.update_ready_{token}.json'),
+            os.path.join(release_dir, f'.update_startup_{token}.log'),
+        )
+
+    def _read_update_startup_error(self, error_path: str) -> str:
+        if not error_path or not os.path.isfile(error_path):
+            return ''
+        try:
+            with open(error_path, 'r', encoding='utf-8', errors='replace') as file_obj:
+                text = file_obj.read().strip()
+            if not text:
+                return ''
+            lines = [line.strip() for line in text.splitlines() if line.strip()]
+            return lines[-1] if lines else text
+        except Exception:
+            return ''
+
+    def _stop_failed_update_process(self, process):
+        if process is None or process.poll() is not None:
+            return
+        try:
+            process.terminate()
+            process.wait(timeout=2)
+            return
+        except Exception:
+            pass
+        try:
+            process.kill()
+        except Exception:
+            pass
+
+    def _wait_for_updated_client_ready(self, process, ready_path: str, error_path: str) -> dict:
+        deadline = time.time() + self.UPDATE_READY_TIMEOUT_SECONDS
+
+        while time.time() < deadline:
+            self._ensure_not_interrupted()
+
+            if os.path.isfile(ready_path):
+                with open(ready_path, 'r', encoding='utf-8') as file_obj:
+                    payload = json.load(file_obj)
+                if int(payload.get('pid') or 0) == int(process.pid):
+                    stabilize_deadline = time.time() + self.UPDATE_READY_STABILIZE_SECONDS
+                    while time.time() < stabilize_deadline:
+                        self._ensure_not_interrupted()
+                        return_code = process.poll()
+                        if return_code is not None:
+                            detail = self._read_update_startup_error(error_path)
+                            message = f'Updated client exited during startup verification, return code: {return_code}'
+                            if detail:
+                                message = f'{message}. {detail}'
+                            raise RuntimeError(message)
+                        time.sleep(self.UPDATE_READY_POLL_INTERVAL_SECONDS)
+                    return payload
+
+            return_code = process.poll()
+            if return_code is not None:
+                detail = self._read_update_startup_error(error_path)
+                message = f'Updated client exited before handshake, return code: {return_code}'
+                if detail:
+                    message = f'{message}. {detail}'
+                raise RuntimeError(message)
+
+            time.sleep(self.UPDATE_READY_POLL_INTERVAL_SECONDS)
+
+        self._stop_failed_update_process(process)
+        detail = self._read_update_startup_error(error_path)
+        message = f'Updated client did not complete handshake within {self.UPDATE_READY_TIMEOUT_SECONDS} seconds'
+        if detail:
+            message = f'{message}. {detail}'
+        raise RuntimeError(message)
+
+    def _cleanup_update_probe_files(self, *paths):
+        for path in paths:
+            if not path:
+                continue
+            try:
+                if os.path.isfile(path):
+                    os.remove(path)
+            except Exception:
+                pass
+
+    def _schedule_exit_after_update(self):
+        guard_manager = getattr(self.socket, 'guard_manager', None)
+        if guard_manager is not None:
+            try:
+                guard_manager.stop()
+            except Exception:
+                pass
+
+        def _exit_current_client():
+            time.sleep(self.UPDATE_EXIT_DELAY_SECONDS)
+            try:
+                self.socket.close()
+            except Exception:
+                pass
+            os._exit(0)
+
+        threading.Thread(
+            target=_exit_current_client,
+            name='ClientUpdateExit',
+            daemon=True,
+        ).start()
+
+    @desc('Build, download, extract and launch the latest client bundle; use --keep-old to retain current client', group='session')
     @interruptible()
     def update(self, arg=''):
+        ready_path = ''
+        error_path = ''
+        process = None
+        update_ready = False
+
         try:
+            options = self._parse_update_options(arg)
+
             self._send_info('Bundle building requested', 0)
             bundle_meta = self._request_update_bundle()
             self._send_success('Bundle building completed', 0)
@@ -254,12 +390,12 @@ class CommandUpdateMixin:
             extract_dir = build_bundle_extract_dir(release_dir, bundle_meta['file_name'])
 
             self._send_info(f'Bundle downloading: {bundle_meta["file_name"]}', 0)
-            self._download_bundle_archive(bundle_meta["download_url"], archive_path)
+            self._download_bundle_archive(bundle_meta['download_url'], archive_path)
             self._send_success(f'Bundled downloaded successfully: {archive_path}', 0)
 
             current_bundle_dir = self._get_current_bundle_release_dir(release_dir)
 
-            self._send_info(f'Bundle extracting...', 0)
+            self._send_info('Bundle extracting...', 0)
             extract_dir = self._extract_update_bundle_safely(
                 archive_path,
                 extract_dir,
@@ -270,16 +406,43 @@ class CommandUpdateMixin:
             rchclient_path = os.path.join(extract_dir, 'rchclient.py')
             self._send_info(f'Preparing to launch script: {rchclient_path}', 0)
 
-
             if detect_platform_alias() == 'ios':
-                self._send_success(f'iOS detected, please restart Pythonista app and manually run script: {rchclient_path}', eof=1)
+                self._send_success(
+                    f'iOS detected, please restart Pythonista app and manually run script: {rchclient_path}',
+                    eof=1,
+                )
+                return
 
+            ready_path, error_path = self._build_update_ready_paths(release_dir)
+            process = spawn_detached_python_script(
+                rchclient_path,
+                cwd=extract_dir,
+                args=['--update-ready-file', ready_path],
+                stderr_path=error_path,
+            )
+            ready_payload = self._wait_for_updated_client_ready(process, ready_path, error_path)
+            update_ready = True
 
-            else:
-                process = spawn_detached_python_script(rchclient_path, cwd=extract_dir)
-                self._send_success(f'Script launched successfully, PID: {process.pid}', eof=1)
+            new_client_id = str(ready_payload.get('client_id') or '').strip()
+            new_revision = str(ready_payload.get('client_revision') or '').strip()
+            result_text = f'Updated client connected successfully, PID: {process.pid}'
+            if new_client_id:
+                result_text = f'{result_text}, Client ID: {new_client_id}'
+            if new_revision:
+                result_text = f'{result_text}, Revision: {new_revision}'
+
+            if options.get('keep_old'):
+                self._send_success(f'{result_text}. Current client kept alive by --keep-old.', eof=1)
+                return
+
+            self._send_success(f'{result_text}. Current client will exit.', eof=1)
+            self._schedule_exit_after_update()
         except Exception as e:
+            if process is not None and process.poll() is None and not update_ready:
+                self._stop_failed_update_process(process)
             self._send_error(f'Failed to update client bundle: {e}', eof=1)
+        finally:
+            self._cleanup_update_probe_files(ready_path, error_path)
 
     @desc('Clean outdated client bundle release directories and ZIP files', group='session')
     @interruptible()

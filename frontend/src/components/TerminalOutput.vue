@@ -153,6 +153,15 @@
 </span>
 
             <a
+                v-if="getSuggestedCommandAction(entry.line)"
+                href="#"
+                class="table-action-link-aux terminal-text terminal-action-link-spaced"
+                @click.prevent.stop="handleSuggestedCommandClick(entry.line)"
+            >
+              [ {{ getSuggestedCommandAction(entry.line).label }} ]
+            </a>
+
+            <a
                 v-for="(actionItem, actionIndex) in getTerminalInlineActionItems(lines, entry.index)"
                 :key="actionItem.key"
                 href="#"
@@ -203,7 +212,7 @@ export default {
     },
   },
 
-  emits: ['preview-artifact', 'open-json', 'artifact-saved', 'rerun-terminal-block'],
+  emits: ['preview-artifact', 'open-json', 'artifact-saved', 'rerun-terminal-block', 'suggest-command'],
 
   data() {
     return {
@@ -401,6 +410,22 @@ export default {
       })
 
       return result
+    },
+
+    getSuggestedCommandAction(line) {
+      const command = String(line?.meta?.suggestedCommand || '').trim()
+      if (!command) return null
+
+      return {
+        command,
+        label: String(line?.meta?.suggestedCommandLabel || command).trim() || command,
+      }
+    },
+
+    handleSuggestedCommandClick(line) {
+      const action = this.getSuggestedCommandAction(line)
+      if (!action) return
+      this.$emit('suggest-command', action.command)
     },
 
     handleTerminalActionClick(actionItem) {

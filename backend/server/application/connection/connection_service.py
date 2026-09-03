@@ -1,5 +1,6 @@
 from datetime import datetime
 
+from core.client_revision import build_client_revision_manifest
 from server.connection.client_session import ClientSession
 from server.connection.transport.client_transport import ClientTransport
 
@@ -32,6 +33,7 @@ class WebConnectionService:
         self.recent_device_store = recent_device_store
         self.connection_history_store = connection_history_store
         self.script_grant_service = script_grant_service
+        self.client_revision_manifest = build_client_revision_manifest()
 
     def _now(self):
         return datetime.now()
@@ -64,11 +66,42 @@ class WebConnectionService:
         return str(machine_id or '').strip().lower()
 
 
-    def _decorate_connection_with_device_view_prefs(self, payload: dict) -> dict:
+    def _decorate_connection_with_client_revision(self, payload: dict) -> dict:
         if not isinstance(payload, dict):
             return payload
 
         result = dict(payload)
+        server_revision = str(self.client_revision_manifest.get('revision') or '')
+        server_parts = dict(self.client_revision_manifest.get('parts') or {})
+        client_revision = str(result.get('client_revision') or '').strip()
+        raw_client_parts = result.get('client_revision_parts')
+        client_parts = dict(raw_client_parts) if isinstance(raw_client_parts, dict) else {}
+
+        if not client_revision:
+            revision_state = 'unknown'
+        elif client_revision == server_revision:
+            revision_state = 'current'
+        else:
+            revision_state = 'outdated'
+
+        changed_parts = []
+        if revision_state == 'outdated' and client_parts:
+            changed_parts = [
+                relative_path
+                for relative_path, expected_digest in server_parts.items()
+                if str(client_parts.get(relative_path) or '') != str(expected_digest or '')
+            ]
+
+        result['server_client_revision'] = server_revision
+        result['client_revision_state'] = revision_state
+        result['client_revision_changed_parts'] = changed_parts
+        return result
+
+    def _decorate_connection_with_device_view_prefs(self, payload: dict) -> dict:
+        if not isinstance(payload, dict):
+            return payload
+
+        result = self._decorate_connection_with_client_revision(payload)
         if not self.recent_device_store:
             result.setdefault('machine_alias', '')
             result.setdefault('device_alias', '')
@@ -113,6 +146,8 @@ class WebConnectionService:
             'stale_after_seconds': self.STALE_AFTER_SECONDS,
             'connection_state': self._build_connection_state(session),
             'build_version': info.build_version,
+            'client_revision': info.client_revision,
+            'client_revision_parts': dict(info.client_revision_parts),
             'python_ver': info.get_extra('python_ver'),
             'process_id': info.get_extra('process_id'),
             'launch_command': info.get_extra('launch_command'),
@@ -181,6 +216,8 @@ class WebConnectionService:
                 'stale_after_seconds': item.get('stale_after_seconds') or self.STALE_AFTER_SECONDS,
                 'connection_state': 'offline',
                 'build_version': item.get('build_version') or '',
+                'client_revision': item.get('client_revision') or '',
+                'client_revision_parts': dict(item.get('client_revision_parts')) if isinstance(item.get('client_revision_parts'), dict) else {},
                 'python_ver': item.get('python_ver') or '',
                 'process_id': item.get('process_id') or '',
                 'launch_command': item.get('launch_command') or '',

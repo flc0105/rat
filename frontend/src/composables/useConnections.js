@@ -2,6 +2,8 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { listConnections, updateConnectionDeviceViewPrefs } from '../api/connectionsApi.js'
 import { assignMachineDeviceGroup, listDeviceGroups } from '../api/deviceGroupsApi.js'
 
+const LAST_SELECTED_MACHINE_STORAGE_KEY = 'rch:last_selected_machine_id'
+
 function emptyDeviceViewPrefs() {
     return {
         machineAliases: {},
@@ -51,6 +53,37 @@ export default {
 
         getConnectionMachineId(item) {
             return this.normalizeMachineId(item?.machine_id)
+        },
+
+        getStoredSelectedMachineId() {
+            try {
+                return this.normalizeMachineId(window.sessionStorage.getItem(LAST_SELECTED_MACHINE_STORAGE_KEY))
+            } catch (e) {
+                return ''
+            }
+        },
+
+        rememberSelectedMachineId(machineId) {
+            const normalizedMachineId = this.normalizeMachineId(machineId)
+            try {
+                if (normalizedMachineId) {
+                    window.sessionStorage.setItem(LAST_SELECTED_MACHINE_STORAGE_KEY, normalizedMachineId)
+                } else {
+                    window.sessionStorage.removeItem(LAST_SELECTED_MACHINE_STORAGE_KEY)
+                }
+            } catch (e) {
+                // sessionStorage 不可用时只影响刷新后的恢复，不影响当前连接选择。
+            }
+        },
+
+        findPreferredConnectionForMachine(machineId, items = null) {
+            const normalizedMachineId = this.normalizeMachineId(machineId)
+            if (!normalizedMachineId) return null
+
+            const candidates = Array.isArray(items) ? items : this.deviceSidebarConnections
+            return candidates.find(item => {
+                return this.getConnectionMachineId(item) === normalizedMachineId
+            }) || null
         },
 
         normalizeDeviceGroupId(value) {
@@ -438,11 +471,19 @@ export default {
                 this.isConnectionInSelectedDeviceGroup(selected) &&
                 (this.showHiddenDevices || !this.isConnectionHiddenByPrefs(selected))
             ) {
+                this.rememberSelectedMachineId(this.getConnectionMachineId(selected))
                 return
             }
 
-            const next = this.deviceSidebarConnections[0]
+            const preferredMachineId = this.getConnectionMachineId(selected) || this.getStoredSelectedMachineId()
+            const next = this.findPreferredConnectionForMachine(preferredMachineId)
+            const previousSelectedId = this.selectedId
             this.selectedId = next?.client_id || ''
+
+            if (next && next.client_id !== previousSelectedId) {
+                this.ensureOutputBucket?.(next.client_id)
+                this.appendClientRevisionNotice(next)
+            }
         },
 
         async renameMachineFromSidebar(item) {
@@ -629,14 +670,6 @@ export default {
 
                 this.connections = this.dedupeConnections(nextItems)
 
-                if (!this.selectedId && this.deviceSidebarConnections.length > 0) {
-                    this.selectedId = this.deviceSidebarConnections[0].client_id
-                }
-
-                if (this.selectedId && !this.connections.find(item => item.client_id === this.selectedId)) {
-                    this.selectedId = this.deviceSidebarConnections.length > 0 ? this.deviceSidebarConnections[0].client_id : ''
-                }
-
                 this.ensureSelectedConnectionVisible()
 
                 if (this.selectedId) {
@@ -765,7 +798,7 @@ export default {
             })
 
             if (!selectedStillExists) {
-                this.selectedId = this.deviceSidebarConnections[0]?.client_id || ''
+                this.selectedId = ''
             }
 
             this.ensureSelectedConnectionVisible()
@@ -809,9 +842,71 @@ export default {
             return fa.localeCompare(fb)
         },
 
+        appendClientRevisionNotice(item) {
+            if (!item) return
+
+            const commandManifest = Array.isArray(item.command_manifest) ? item.command_manifest : []
+            const supportsUpdate = commandManifest.some(entry => String(entry?.name || '').trim() === 'update')
+            const revisionState = String(item.client_revision_state || '').trim()
+            const serverRevision = String(item.server_client_revision || '').trim() || 'unknown'
+            let message = ''
+
+            if (revisionState === 'outdated') {
+                const currentRevision = String(item.client_revision || '').trim() || 'unknown'
+                message = `[!] Client is not up to date. Current revision: ${currentRevision} · Server revision: ${serverRevision}. Please run update.`
+            } else if (revisionState === 'unknown' && supportsUpdate) {
+                message = `[!] Client revision cannot be verified against server revision ${serverRevision}. Please run update once.`
+            }
+
+            if (!message) return
+
+            this.appendOutput?.(
+                item.client_id,
+                message,
+                'warning',
+                {
+                    suggestedCommand: 'update',
+                    suggestedCommandLabel: 'update',
+                },
+            )
+        },
+
+        compareSidebarConnectionOrder(a, b) {
+            const rawOrderA = a?.machine_order
+            const rawOrderB = b?.machine_order
+            const orderA = rawOrderA === null || rawOrderA === undefined || rawOrderA === '' ? NaN : Number(rawOrderA)
+            const orderB = rawOrderB === null || rawOrderB === undefined || rawOrderB === '' ? NaN : Number(rawOrderB)
+            const normalizedOrderA = Number.isFinite(orderA) ? orderA : Number.MAX_SAFE_INTEGER
+            const normalizedOrderB = Number.isFinite(orderB) ? orderB : Number.MAX_SAFE_INTEGER
+
+            if (normalizedOrderA !== normalizedOrderB) {
+                return normalizedOrderA - normalizedOrderB
+            }
+
+            const machineA = this.getConnectionMachineId(a)
+            const machineB = this.getConnectionMachineId(b)
+            if (machineA !== machineB) {
+                return machineA.localeCompare(machineB)
+            }
+
+            const connectedA = Date.parse(String(a?.connected_at || '').trim())
+            const connectedB = Date.parse(String(b?.connected_at || '').trim())
+            const timeA = Number.isFinite(connectedA) ? connectedA : Number.NEGATIVE_INFINITY
+            const timeB = Number.isFinite(connectedB) ? connectedB : Number.NEGATIVE_INFINITY
+
+            if (timeA !== timeB) {
+                return timeB > timeA ? 1 : -1
+            }
+
+            return this.getConnectionClientId(a).localeCompare(this.getConnectionClientId(b))
+        },
+
         selectConnection(clientId) {
             this.selectedId = clientId
+            const selected = this.connections.find(item => item.client_id === clientId)
+            this.rememberSelectedMachineId(this.getConnectionMachineId(selected))
             this.ensureOutputBucket(clientId)
+            this.appendClientRevisionNotice(selected)
             this.commandHistoryItems = []
             this.commandExecutionItems = []
             this.reloadCommandCandidatesFromRuntime?.({
@@ -855,8 +950,10 @@ export default {
         deviceSidebarConnections() {
             const decorated = (this.connections || []).map(item => this.decorateConnectionForDeviceView(item))
             const grouped = decorated.filter(item => this.isConnectionInSelectedDeviceGroup(item))
-            if (this.showHiddenDevices) return grouped
-            return grouped.filter(item => !item.device_hidden)
+            const visible = this.showHiddenDevices
+                ? grouped
+                : grouped.filter(item => !item.device_hidden)
+            return visible.slice().sort(this.compareSidebarConnectionOrder)
         },
 
         deviceGroupMachineCounts() {

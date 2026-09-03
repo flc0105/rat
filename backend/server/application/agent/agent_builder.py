@@ -1,3 +1,4 @@
+import json
 import os
 import platform
 import shutil
@@ -7,6 +8,7 @@ import zipfile
 from datetime import datetime
 from uuid import uuid4
 
+from core.client_revision import build_client_revision_manifest
 from core.utils.logger import logger
 
 
@@ -187,6 +189,9 @@ class AgentBuilder:
                        build_version: str, server_web_scheme: str = 'http', server_web_host: str = ''):
         config_path = os.path.join(client_dir, 'client', 'config', 'config.py')
         server_web_host = (server_web_host or server_host).strip() or server_host
+        revision_manifest = build_client_revision_manifest(self.source_dir)
+        client_revision = str(revision_manifest.get('revision') or '')
+        client_revision_parts = json.dumps(revision_manifest.get('parts') or {}, ensure_ascii=False, sort_keys=True)
         template = f'''import os
 
 SERVER_HOST = "{server_host}"
@@ -201,6 +206,8 @@ UPLOAD_BASE_URL = f"{{SERVER_WEB_SCHEME}}://{{SERVER_WEB_HOST}}:{{SERVER_WEB_POR
 FILE_TRANSFER_BASE_URL = f"{{SERVER_WEB_SCHEME}}://{{SERVER_WEB_HOST}}:{{SERVER_FILE_TRANSFER_PORT}}"
 
 CLIENT_BUILD_VERSION = "{build_version}"
+CLIENT_SOURCE_REVISION = "{client_revision}"
+CLIENT_SOURCE_REVISION_PARTS = {client_revision_parts}
 '''
         with open(config_path, 'w', encoding='utf-8') as f:
             f.write(template)

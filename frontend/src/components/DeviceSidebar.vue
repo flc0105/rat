@@ -115,8 +115,17 @@
       >
         <div class="device-item-top">
           <div class="device-text">
-            <div class="device-name">
-              {{ formatDeviceName(item) }}
+            <div class="device-name-row">
+              <div class="device-name">
+                {{ formatDeviceName(item) }}
+              </div>
+              <el-icon
+                v-if="item.client_revision_state === 'outdated'"
+                class="device-update-indicator"
+                title="Client update available"
+              >
+                <RefreshRight />
+              </el-icon>
             </div>
             <div class="device-os">
               {{ formatOsLabel(item.os_type, item.os_ver) }}
@@ -252,6 +261,7 @@
 <script>
 
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { RefreshRight } from '@element-plus/icons-vue'
 import {
   killConnection as killConnectionApi,
   removeConnection as removeConnectionApi,
@@ -259,6 +269,10 @@ import {
 
 export default {
   name: 'DeviceSidebar',
+
+  components: {
+    RefreshRight,
+  },
 
   props: {
     connections: {
@@ -1013,13 +1027,28 @@ async removeConnectionPermanently(item) {
   flex: 1;
 }
 
+.device-name-row {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+}
+
 .device-name {
+  min-width: 0;
   font-size: 14px;
   font-weight: 700;
   color: var(--text);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.device-update-indicator {
+  flex: 0 0 auto;
+  font-size: 13px;
+  color: var(--muted-2);
+  opacity: 0.72;
 }
 
 .device-os {

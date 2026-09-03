@@ -23,6 +23,7 @@ class RecentDeviceStore:
         os.makedirs(os.path.dirname(self.file_path), exist_ok=True)
         self._lock = threading.RLock()
         self._forgotten_machine_keys = set()
+        self._ensure_persisted_machine_orders()
 
     def _normalize_machine_id_key(self, machine_id: str) -> str:
         value = str(machine_id or '').strip()
@@ -33,6 +34,47 @@ class RecentDeviceStore:
 
     def _now_iso(self) -> str:
         return datetime.now().isoformat()
+
+    def _normalize_machine_order(self, value):
+        try:
+            order = int(value)
+        except Exception:
+            return None
+        return order if order >= 0 else None
+
+    def _next_machine_order_unlocked(self, current: dict) -> int:
+        orders = [
+            self._normalize_machine_order(record.get('machine_order'))
+            for record in current.values()
+            if isinstance(record, dict)
+        ]
+        valid_orders = [order for order in orders if order is not None]
+        return (max(valid_orders) + 1) if valid_orders else 0
+
+    def _ensure_persisted_machine_orders(self):
+        """
+        为旧 recent_devices.json 补一次稳定 machine 顺序。
+        已存在的 machine_order 永远保留，方便手工修改 JSON 调整顺序。
+        """
+        with self._lock:
+            current = self._read_all_unlocked()
+            if not current:
+                return
+
+            next_order = self._next_machine_order_unlocked(current)
+            changed = False
+
+            for record in current.values():
+                if not isinstance(record, dict):
+                    continue
+                if self._normalize_machine_order(record.get('machine_order')) is not None:
+                    continue
+                record['machine_order'] = next_order
+                next_order += 1
+                changed = True
+
+            if changed:
+                self._write_all_unlocked(current)
 
     def _read_all_unlocked(self) -> dict:
         if not os.path.isfile(self.file_path):
@@ -116,6 +158,7 @@ class RecentDeviceStore:
                 'device_hidden': False,
                 'device_hidden_by_client': False,
                 'device_hidden_by_machine': False,
+                'machine_order': None,
             }
 
         target_client_key = self._normalize_client_id_key(client_id or record.get('client_id'))
@@ -130,6 +173,7 @@ class RecentDeviceStore:
             'device_hidden': hidden_by_client or hidden_by_machine,
             'device_hidden_by_client': hidden_by_client,
             'device_hidden_by_machine': hidden_by_machine,
+            'machine_order': self._normalize_machine_order(record.get('machine_order')),
         }
 
     def upsert_from_connection(self, connection_payload: dict):
@@ -156,10 +200,14 @@ class RecentDeviceStore:
 
             current = self._read_all_unlocked()
             previous = current.get(key, {}) if isinstance(current.get(key), dict) else {}
+            machine_order = self._normalize_machine_order(previous.get('machine_order'))
+            if machine_order is None:
+                machine_order = self._next_machine_order_unlocked(current)
 
             record = {
                 'recent_device_key': key,
                 'machine_id': machine_id,
+                'machine_order': machine_order,
                 # 'machine_id_version': str(connection_payload.get('machine_id_version') or previous.get('machine_id_version') or ''),
                 'machine_fingerprint_basis': str(connection_payload.get('machine_fingerprint_basis') or previous.get('machine_fingerprint_basis') or ''),
                 'hostname': str(connection_payload.get('hostname') or previous.get('hostname') or ''),
@@ -179,6 +227,14 @@ class RecentDeviceStore:
                 'integrity': str(connection_payload.get('integrity') or previous.get('integrity') or ''),
                 'cwd': str(connection_payload.get('cwd') or previous.get('cwd') or ''),
                 'build_version': str(connection_payload.get('build_version') or previous.get('build_version') or ''),
+                'client_revision': str(connection_payload.get('client_revision') or previous.get('client_revision') or ''),
+                'client_revision_parts': dict(
+                    connection_payload.get('client_revision_parts')
+                    if isinstance(connection_payload.get('client_revision_parts'), dict)
+                    else previous.get('client_revision_parts')
+                    if isinstance(previous.get('client_revision_parts'), dict)
+                    else {}
+                ),
                 'python_ver': connection_payload.get('python_ver') or previous.get('python_ver') or '',
                 'process_id': connection_payload.get('process_id') or previous.get('process_id') or '',
                 'launch_command': connection_payload.get('launch_command') or previous.get('launch_command') or '',
@@ -317,6 +373,7 @@ class RecentDeviceStore:
                 record = {
                     'recent_device_key': record_key,
                     'machine_id': target_machine_id,
+                    'machine_order': self._next_machine_order_unlocked(current),
                     'client_id': target_client_id,
                     'recent_cached': True,
                 }
