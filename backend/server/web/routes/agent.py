@@ -1,8 +1,17 @@
+import os
+
 from flask import Blueprint, send_file
 
 from server.web.api_response import WebApiResponder
 from server.web.auth_guard import allow_anonymous
 from server.web.request_parsers import get_json_payload
+
+def _remove_temp_file(file_path: str):
+    try:
+        if file_path and os.path.isfile(file_path):
+            os.remove(file_path)
+    except OSError:
+        pass
 
 
 def create_agent_blueprint(server_instance):
@@ -128,29 +137,39 @@ def create_agent_blueprint(server_instance):
     @blueprint.post('/api/agent/bootstrap')
     @allow_anonymous
     def generate_bootstrap():
+        file_info = None
         try:
             file_info = agent_api.generate_bootstrap_file(get_json_payload())
-            return send_file(
+            response = send_file(
                 file_info['file_path'],
                 as_attachment=True,
                 download_name=file_info['download_name'],
                 mimetype=file_info['mimetype'],
             )
+            response.call_on_close(lambda: _remove_temp_file(file_info['file_path']))
+            return response
         except Exception as e:
+            if file_info:
+                _remove_temp_file(file_info.get('file_path') or '')
             return responder.map_common_error(e)
 
     @blueprint.post('/api/agent/bootstrap/ps1')
     @allow_anonymous
     def generate_bootstrap_ps1():
+        file_info = None
         try:
             file_info = agent_api.generate_bootstrap_ps1_file(get_json_payload())
-            return send_file(
+            response = send_file(
                 file_info['file_path'],
                 as_attachment=True,
                 download_name=file_info['download_name'],
                 mimetype=file_info['mimetype'],
             )
+            response.call_on_close(lambda: _remove_temp_file(file_info['file_path']))
+            return response
         except Exception as e:
+            if file_info:
+                _remove_temp_file(file_info.get('file_path') or '')
             return responder.map_common_error(e)
 
     return blueprint

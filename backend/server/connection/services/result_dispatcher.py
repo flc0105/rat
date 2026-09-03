@@ -1,8 +1,4 @@
-from core.utils.logger import get_file_logger, logger
-from server.config.config import BACKGROUND_MESSAGE_LOG_FILE, BACKGROUND_MESSAGE_OUTPUT_TO_FILE
-
-if BACKGROUND_MESSAGE_OUTPUT_TO_FILE:
-    file_logger = get_file_logger(BACKGROUND_MESSAGE_LOG_FILE)
+from core.utils.logger import logger
 
 
 class ServerResultDispatcher:
@@ -49,29 +45,17 @@ class ServerResultDispatcher:
         if callable(callback):
             try:
                 callback(status, text, end)
+                return
             except Exception:
                 pass
 
         # 如果交互态 且开启了背景消息写文件
+        # session_messages.log 已移除；没有上层 callback 时直接输出到控制台。
         if self.session.context.is_interactive:
-            if BACKGROUND_MESSAGE_OUTPUT_TO_FILE:
-                file_logger.info(f'Message from {self.session.address}: {text}')
-            else:
-                logger.info(text)
+            logger.info(text)
             return
 
         # 非交互态开了背景消息写文件 就只记录到文件 不存未读消息
-        if BACKGROUND_MESSAGE_OUTPUT_TO_FILE:
-            file_logger.info(f'Message from {self.session.address}: {text}')
-            return
-
+        # 文件日志已移除；没有上层 callback 时继续沿用未读消息队列兜底。
         # 如果非交互态 没开背景消息 收到消息 直接存储到未读消息
         self.session.runtime.message_queue.put(status, text, end)
-
-
-
-
-
-
-
-

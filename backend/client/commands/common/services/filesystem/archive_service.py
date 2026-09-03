@@ -99,12 +99,15 @@ class ArchiveService:
         temp_dir = tempfile.mkdtemp()
         archive_path = os.path.join(temp_dir, final_name)
 
-        used_names = set()
-        with zipfile.ZipFile(archive_path, mode='w', compression=zipfile.ZIP_DEFLATED) as archive:
-            for path in self._iter(paths, check_interval=64):
-                self.write_path_to_zip(archive, path, used_names)
-
-        return archive_path
+        try:
+            used_names = set()
+            with zipfile.ZipFile(archive_path, mode='w', compression=zipfile.ZIP_DEFLATED) as archive:
+                for path in self._iter(paths, check_interval=64):
+                    self.write_path_to_zip(archive, path, used_names)
+            return archive_path
+        except Exception:
+            shutil.rmtree(temp_dir, ignore_errors=True)
+            raise
 
     def extract_archive_to_cwd(self, archive_path: str):
         shutil.unpack_archive(archive_path, os.getcwd())

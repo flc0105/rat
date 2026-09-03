@@ -545,6 +545,12 @@ class WebConnectionService:
         except Exception:
             pass
         try:
+            self.server.web_service.terminal_api.pty_session_service.handle_client_disconnected(
+                session.session_info.client_id
+            )
+        except Exception:
+            pass
+        try:
             self.server.web_service.screen_view_api.screen_view_session_service.handle_client_disconnected(
                 session.session_info.client_id
             )

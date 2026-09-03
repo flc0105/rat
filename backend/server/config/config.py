@@ -34,9 +34,9 @@ EXTERNAL_TOOL_PACKAGE_PATH = os.path.join(EXTERNAL_TOOLS_ROOT, 'packages')
 EXTERNAL_TOOL_PARAM_PRESETS_ROOT_DIR = os.path.abspath(os.path.join('runtime', 'external_tool_param_presets'))
 
 # ------------------ logging ------------------ #
-BACKGROUND_MESSAGE_OUTPUT_TO_FILE = True
+# session_messages.log 已移除，background message 不再单独落盘。
+# ------------------ runtime ------------------ #
 os.makedirs('runtime', exist_ok=True)
-BACKGROUND_MESSAGE_LOG_FILE = os.path.abspath(os.path.join('runtime', 'session_messages.log'))
 
 # ------------------ history ------------------ #
 COMMAND_HISTORY_ROOT_DIR = os.path.abspath(os.path.join('runtime', 'command_history'))

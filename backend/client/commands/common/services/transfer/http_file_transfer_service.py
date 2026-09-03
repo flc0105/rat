@@ -1,5 +1,6 @@
 import json
 import os
+import shutil
 import time
 
 from client.commands.runtime.context import CommandCancelledError
@@ -336,11 +337,10 @@ class CommandHttpFileTransferService:
                 )
             raise
         finally:
-            if temp_archive_path and os.path.isfile(temp_archive_path):
-                try:
-                    os.remove(temp_archive_path)
-                except Exception:
-                    pass
+            if temp_archive_path:
+                temp_archive_dir = os.path.dirname(temp_archive_path)
+                if temp_archive_dir:
+                    shutil.rmtree(temp_archive_dir, ignore_errors=True)
 
     def download_file_from_http(self, url: str, target_path: str, *, transfer_id: str = ''):
         strategy = self.get_transfer_strategy()

@@ -14,6 +14,8 @@ from core.protocol.message_types import (
 
 
 class PtySessionService:
+    TERMINAL_SESSION_RETENTION_SECONDS = 300
+
     def __init__(self, server, event_bus=None):
         self.server = server
         self.event_bus = event_bus
@@ -67,6 +69,7 @@ class PtySessionService:
                     event_item = dict(item)
             if event_item:
                 self._publish_pty_lifecycle_event(event_item, state='error')
+            self._schedule_terminal_session_cleanup(pty_id)
             raise
 
         return {
@@ -119,6 +122,7 @@ class PtySessionService:
             })
         except Exception:
             pass
+        self._schedule_terminal_session_cleanup(pty_session_id)
         return {'ok': True}
 
     def get_updates(self, pty_session_id: str, after_seq: int = 0) -> dict:
@@ -186,6 +190,7 @@ class PtySessionService:
 
         if event_item:
             self._publish_pty_lifecycle_event(event_item, state='closed')
+        self._schedule_terminal_session_cleanup(pty_session_id)
 
     def handle_client_error(self, pty_session_id: str, message: str):
         event_item = None
@@ -210,6 +215,34 @@ class PtySessionService:
 
         if event_item:
             self._publish_pty_lifecycle_event(event_item, state='error')
+        self._schedule_terminal_session_cleanup(pty_session_id)
+
+    def handle_client_disconnected(self, client_id: str):
+        client_id = str(client_id or '').strip()
+        now = time.time()
+        event_items = []
+        session_ids = []
+
+        with self._lock:
+            for item in self._sessions.values():
+                if item.get('client_id') != client_id:
+                    continue
+                if item.get('status') in ('closed', 'error'):
+                    continue
+
+                item['status'] = 'closed'
+                item['closed_at'] = now
+                item['error'] = 'Client disconnected'
+                session_ids.append(item['pty_session_id'])
+
+                if item.get('open_notified') and not item.get('close_notified'):
+                    item['close_notified'] = True
+                    event_items.append(dict(item))
+
+        for event_item in event_items:
+            self._publish_pty_lifecycle_event(event_item, state='closed')
+        for pty_session_id in session_ids:
+            self._schedule_terminal_session_cleanup(pty_session_id)
 
     def authorize_ws(self, pty_session_id: str, token: str) -> bool:
         with self._lock:
@@ -237,6 +270,20 @@ class PtySessionService:
             })
         except Exception:
             pass
+
+    def _schedule_terminal_session_cleanup(self, pty_session_id: str):
+        def cleanup():
+            with self._lock:
+                item = self._sessions.get(str(pty_session_id))
+                if not item:
+                    return
+                if item.get('status') not in ('closing', 'closed', 'error'):
+                    return
+                self._sessions.pop(str(pty_session_id), None)
+
+        timer = threading.Timer(self.TERMINAL_SESSION_RETENTION_SECONDS, cleanup)
+        timer.daemon = True
+        timer.start()
 
     def _get_required(self, pty_session_id: str) -> dict:
         with self._lock:
