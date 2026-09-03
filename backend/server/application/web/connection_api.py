@@ -16,6 +16,9 @@ class WebConnectionApi:
     def get_connections_payload(self):
         return self.connection_service.get_connections_payload()
 
+    def get_system_paths(self, client_id: str):
+        return self.connection_service.get_system_paths(client_id)
+
     def serialize_connection(self, session):
         return self.connection_service.serialize_connection(session)
 

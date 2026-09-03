@@ -41,10 +41,9 @@ from server.application.web.connection_api import WebConnectionApi
 from server.application.web.job_api import WebJobApi
 from server.application.web.keychain_api import WebKeychainApi
 from server.application.web.pinned_path_api import PinnedPathApi
-from server.application.web.process_snapshot_cache import ProcessSnapshotCache
 from server.application.web.remote_file_api import WebRemoteFileApi
 from server.application.web.script_api import WebScriptApi
-from server.application.web.system_api import WebSystemInspectionApi
+from server.application.web.process_control_api import WebProcessControlApi
 from server.application.web.terminal_api import WebTerminalApi
 from server.application.web.toolbar_preferences_api import WebToolbarPreferencesApi
 from server.application.web.notification_preferences_api import WebNotificationPreferencesApi
@@ -270,12 +269,9 @@ class ServerApplicationAssembly:
             event_bus=self.event_bus,
         )
 
-        self.process_snapshot_cache = ProcessSnapshotCache()
-
-        self.system_api = WebSystemInspectionApi(
+        self.process_control_api = WebProcessControlApi(
             server=self.server,
             remote_execution_service=self.remote_execution_service,
-            process_snapshot_cache=self.process_snapshot_cache,
         )
 
         self.terminal_api = WebTerminalApi(

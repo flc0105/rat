@@ -196,6 +196,10 @@ class WebConnectionService:
 
         return results
 
+    def get_system_paths(self, client_id: str):
+        session = self.server.get_target_connection_by_client_id(str(client_id or '').strip())
+        return session.session_info.system_paths
+
     def get_connections_payload(self):
         active_connections = [self.serialize_connection(session) for session in self.server.connections.all()]
         self._sync_recent_online_connections(active_connections)

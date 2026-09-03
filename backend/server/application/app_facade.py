@@ -40,7 +40,7 @@ class ServerWebService:
         self.pinned_path_api = self.assembly.pinned_path_api
         self.keychain_api = self.assembly.keychain_api
         self.agent_api = self.assembly.agent_api
-        self.system_api = self.assembly.system_api
+        self.process_control_api = self.assembly.process_control_api
         self.terminal_api = self.assembly.terminal_api
         self.screen_view_api = self.assembly.screen_view_api
         self.clipboard_api = self.assembly.clipboard_api

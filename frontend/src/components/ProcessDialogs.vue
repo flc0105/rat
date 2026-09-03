@@ -352,7 +352,6 @@ export default {
       appsSnapshotReceived: false,
       // 过滤
       processFilterText: '',
-      refreshTimer: null,
       processMonitorSessionId: '',
       processMonitorStarting: false,
       processMonitorError: '',
@@ -484,7 +483,7 @@ export default {
 
   beforeUnmount() {
     window.removeEventListener('pagehide', this.handleProcessMonitorPageHide)
-    this.stopProcessAutoRefresh()
+    void this.stopProcessMonitor()
     void this.stopProcessDetailMonitor()
   },
 
@@ -502,7 +501,7 @@ export default {
       this.appsSnapshotReceived = false
       this.processDetail = null
       this.processFilterText = ''
-      this.startProcessAutoRefresh()
+      void this.startProcessMonitor()
     },
 
     handleProcessDialogClosed() {
@@ -525,24 +524,6 @@ export default {
       this.processesSnapshotReceived = false
       this.appsSnapshotReceived = false
       if (this.selectedId) await this.startProcessMonitor()
-    },
-
-    startProcessAutoRefresh() {
-      void this.startProcessMonitor()
-    },
-
-    stopProcessAutoRefresh() {
-      if (this.refreshTimer) {
-        clearInterval(this.refreshTimer)
-        this.refreshTimer = null
-      }
-      void this.stopProcessMonitor()
-    },
-
-    closeProcessDialog() {
-      this.processDialogVisible = false
-      this.stopProcessAutoRefresh()
-      void this.stopProcessDetailMonitor()
     },
 
     async refreshProcessManager() {
@@ -656,87 +637,6 @@ export default {
     async restartProcessMonitor() {
       await this.stopProcessMonitor()
       await this.startProcessMonitor()
-    },
-
-    async loadProcesses() {
-      if (!this.selectedId) return
-      this.processesLoading = true
-
-      try {
-        const res = await fetch(`/api/connections/${encodeURIComponent(this.selectedId)}/processes`)
-        const json = await res.json()
-
-        if (res.ok && json.code === 0) {
-          this.processes = json.data || []
-          return
-        }
-
-        this.processes = []
-        ElMessage.error(
-          json?.message || `Error while fetching processes (HTTP ${res.status})`
-        )
-      } catch (e) {
-        this.processes = []
-        ElMessage.error('Error while fetching processes: ' + e.message)
-        console.error(e)
-      } finally {
-        this.processesLoading = false
-      }
-    },
-
-    async loadProcessesSilent() {
-      if (!this.selectedId || this.processesLoading) return
-
-      try {
-        const res = await fetch(`/api/connections/${encodeURIComponent(this.selectedId)}/processes`)
-        const json = await res.json()
-        if (res.ok && json.code === 0) {
-          this.processes = json.data || []
-        }
-      } catch (e) {
-        ElMessage.error('Error while fetching processes: ' + e.message)
-        console.error(e)
-      }
-    },
-
-    async loadApps() {
-      if (!this.selectedId) return
-      this.appsLoading = true
-
-      try {
-        const res = await fetch(`/api/connections/${encodeURIComponent(this.selectedId)}/apps`)
-        const json = await res.json()
-        if (res.ok && json.code === 0) {
-          this.apps = json.data || []
-          return
-        }
-
-        this.apps = []
-        ElMessage.error(
-          json?.message || `Error while fetching processes (HTTP ${res.status})`
-        )
-      } catch (e) {
-        console.error(e)
-        this.apps = []
-        ElMessage.error('Error while fetching processes: ' + e.message)
-      } finally {
-        this.appsLoading = false
-      }
-    },
-
-    async loadAppsSilent() {
-      if (!this.selectedId || this.appsLoading) return
-
-      try {
-        const res = await fetch(`/api/connections/${encodeURIComponent(this.selectedId)}/apps`)
-        const json = await res.json()
-        if (res.ok && json.code === 0) {
-          this.apps = json.data || []
-        }
-      } catch (e) {
-        console.error(e)
-        ElMessage.error('Error while fetching processes: ' + e.message)
-      }
     },
 
     async openProcessDetail(pid) {
