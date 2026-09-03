@@ -8,23 +8,6 @@ from client.commands.strategies.http_transfer.base import HttpTransferStrategy
 class LegacyHttpTransferStrategy(HttpTransferStrategy):
     MODE_NAME = 'legacy'
 
-    # # TODO 这个方法上传4GB文件会报错
-    # def upload_file(self, file_path: str, upload_url: str, form_data: dict, progress_callback=None):
-    #     self.configure_context_for_upload()
-    #     session = self.create_http_session()
-    #     try:
-    #         with open(file_path, 'rb') as file_obj:
-    #             return session.post(
-    #                 upload_url,
-    #                 files={'file': (os.path.basename(file_path), file_obj)},
-    #                 data=form_data,
-    #                 timeout=self.get_idle_timeout(),
-    #             )
-    #     except requests.RequestException as e:
-    #         raise self.normalize_request_exception(e) from e
-    #     finally:
-    #         session.close()
-
     def upload_file(self, file_path: str, upload_url: str, form_data: dict, progress_callback=None):
         file_size = os.path.getsize(file_path)
         if file_size > 1024 * 1024 * 1024:
