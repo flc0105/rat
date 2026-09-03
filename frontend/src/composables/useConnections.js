@@ -923,7 +923,7 @@ export default {
                     } : {}),
                     ...(suggestedCommand ? {
                         suggestedCommand,
-                        suggestedCommandLabel: suggestedCommand,
+                        suggestedCommandLabel: 'Update',
                     } : {}),
                 },
             )
