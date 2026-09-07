@@ -964,35 +964,80 @@ export default {
             }
         },
 
+        // compareSidebarConnectionOrder(a, b) {
+        //     const rawOrderA = a?.machine_order
+        //     const rawOrderB = b?.machine_order
+        //     const orderA = rawOrderA === null || rawOrderA === undefined || rawOrderA === '' ? NaN : Number(rawOrderA)
+        //     const orderB = rawOrderB === null || rawOrderB === undefined || rawOrderB === '' ? NaN : Number(rawOrderB)
+        //     const normalizedOrderA = Number.isFinite(orderA) ? orderA : Number.MAX_SAFE_INTEGER
+        //     const normalizedOrderB = Number.isFinite(orderB) ? orderB : Number.MAX_SAFE_INTEGER
+        //
+        //     if (normalizedOrderA !== normalizedOrderB) {
+        //         return normalizedOrderA - normalizedOrderB
+        //     }
+        //
+        //     const machineA = this.getConnectionMachineId(a)
+        //     const machineB = this.getConnectionMachineId(b)
+        //     if (machineA !== machineB) {
+        //         return machineA.localeCompare(machineB)
+        //     }
+        //
+        //     const connectedA = Date.parse(String(a?.connected_at || '').trim())
+        //     const connectedB = Date.parse(String(b?.connected_at || '').trim())
+        //     const timeA = Number.isFinite(connectedA) ? connectedA : Number.NEGATIVE_INFINITY
+        //     const timeB = Number.isFinite(connectedB) ? connectedB : Number.NEGATIVE_INFINITY
+        //
+        //     if (timeA !== timeB) {
+        //         return timeB > timeA ? 1 : -1
+        //     }
+        //
+        //     return this.getConnectionClientId(a).localeCompare(this.getConnectionClientId(b))
+        // },
+
+
         compareSidebarConnectionOrder(a, b) {
-            const rawOrderA = a?.machine_order
-            const rawOrderB = b?.machine_order
-            const orderA = rawOrderA === null || rawOrderA === undefined || rawOrderA === '' ? NaN : Number(rawOrderA)
-            const orderB = rawOrderB === null || rawOrderB === undefined || rawOrderB === '' ? NaN : Number(rawOrderB)
-            const normalizedOrderA = Number.isFinite(orderA) ? orderA : Number.MAX_SAFE_INTEGER
-            const normalizedOrderB = Number.isFinite(orderB) ? orderB : Number.MAX_SAFE_INTEGER
+    // online 固定在前，offline 固定在后，其他状态保持在中间。
+    const stateRank = item => {
+        const state = this.getConnectionDisplayState(item)
+        if (state === 'online') return 0
+        if (state === 'offline') return 2
+        return 1
+    }
+    const stateRankA = stateRank(a)
+    const stateRankB = stateRank(b)
 
-            if (normalizedOrderA !== normalizedOrderB) {
-                return normalizedOrderA - normalizedOrderB
-            }
+    if (stateRankA !== stateRankB) {
+        return stateRankA - stateRankB
+    }
 
-            const machineA = this.getConnectionMachineId(a)
-            const machineB = this.getConnectionMachineId(b)
-            if (machineA !== machineB) {
-                return machineA.localeCompare(machineB)
-            }
+    const rawOrderA = a?.machine_order
+    const rawOrderB = b?.machine_order
+    const orderA = rawOrderA === null || rawOrderA === undefined || rawOrderA === '' ? NaN : Number(rawOrderA)
+    const orderB = rawOrderB === null || rawOrderB === undefined || rawOrderB === '' ? NaN : Number(rawOrderB)
+    const normalizedOrderA = Number.isFinite(orderA) ? orderA : Number.MAX_SAFE_INTEGER
+    const normalizedOrderB = Number.isFinite(orderB) ? orderB : Number.MAX_SAFE_INTEGER
 
-            const connectedA = Date.parse(String(a?.connected_at || '').trim())
-            const connectedB = Date.parse(String(b?.connected_at || '').trim())
-            const timeA = Number.isFinite(connectedA) ? connectedA : Number.NEGATIVE_INFINITY
-            const timeB = Number.isFinite(connectedB) ? connectedB : Number.NEGATIVE_INFINITY
+    if (normalizedOrderA !== normalizedOrderB) {
+        return normalizedOrderA - normalizedOrderB
+    }
 
-            if (timeA !== timeB) {
-                return timeB > timeA ? 1 : -1
-            }
+    const machineA = this.getConnectionMachineId(a)
+    const machineB = this.getConnectionMachineId(b)
+    if (machineA !== machineB) {
+        return machineA.localeCompare(machineB)
+    }
 
-            return this.getConnectionClientId(a).localeCompare(this.getConnectionClientId(b))
-        },
+    const connectedA = Date.parse(String(a?.connected_at || '').trim())
+    const connectedB = Date.parse(String(b?.connected_at || '').trim())
+    const timeA = Number.isFinite(connectedA) ? connectedA : Number.NEGATIVE_INFINITY
+    const timeB = Number.isFinite(connectedB) ? connectedB : Number.NEGATIVE_INFINITY
+
+    if (timeA !== timeB) {
+        return timeB > timeA ? 1 : -1
+    }
+
+    return this.getConnectionClientId(a).localeCompare(this.getConnectionClientId(b))
+},
 
         selectConnection(clientId) {
             this.selectedId = clientId
