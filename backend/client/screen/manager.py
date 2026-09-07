@@ -253,7 +253,15 @@ class ScreenViewManager:
             x, y = self._resolve_pointer(item, payload)
             self._ensure_windows_input_allowed(action, x=x, y=y)
             pyautogui.moveTo(x, y, duration=0, _pause=False)
-            pyautogui.scroll(clicks, _pause=False)
+
+            if sys.platform.startswith('win'):
+                # Win32 一格滚轮需要 WHEEL_DELTA(120)，绕过 PyAutoGUI Windows 的原始 delta 注入问题。
+                import win32api
+                import win32con
+                win32api.mouse_event(win32con.MOUSEEVENTF_WHEEL, 0, 0, clicks * win32con.WHEEL_DELTA, 0)
+            else:
+                pyautogui.scroll(clicks, _pause=False)
+            # pyautogui.scroll(clicks, _pause=False)
             return
 
         if action in ('key_down', 'key_up'):
