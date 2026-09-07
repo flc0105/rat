@@ -7,6 +7,9 @@
 - HTTP_TRANSFER_MODE:
   - legacy: 保留原版 requests files=... / iter_content() 行为，不支持取消
   - cancelable: 使用可取消并支持实时进度的流式实现
+- SCREEN_FRAME_STRATEGY:
+  - full_jpeg: 保留原有整屏 JPEG Screen View
+  - keyframe_delta: 使用 Keyframe + 自包含差分帧
 - 本文件只提供默认值；运行时 set 命令写入外部 runtime_config.json 覆盖文件，不修改本源码文件
 """
 
@@ -40,6 +43,10 @@ PREVIEW_IMAGE_COMPRESS_QUALITY = 75
 
 # PYTHON_EXECUTION_MODE = 'subprocess_pipe'
 PYTHON_EXECUTION_MODE = 'inproc'
+
+# ------------------ screen view strategy ------------------ #
+# SCREEN_FRAME_STRATEGY = 'keyframe_delta'
+SCREEN_FRAME_STRATEGY = 'full_jpeg'
 
 
 RECONNECT_INTERVAL_SECONDS = 5
@@ -119,6 +126,12 @@ _RUNTIME_CONFIG_META = {
         'expose': True,
         'desc': 'Python script execution mode: inproc or subprocess_pipe.',
         'choices': ['inproc', 'subprocess_pipe'],
+    },
+    'SCREEN_FRAME_STRATEGY': {
+        'group': 'strategy',
+        'expose': True,
+        'desc': 'Screen View frame strategy: full_jpeg or keyframe_delta. Applies to new screen sessions.',
+        'choices': ['full_jpeg', 'keyframe_delta'],
     },
     'RECONNECT_INTERVAL_SECONDS': {
         'group': 'connection',

@@ -51,6 +51,7 @@ class ServerInboundMessageRouter(BaseMessageRouter):
                 data.get('screen_session_id') or '',
                 data.get('fps'),
                 data.get('quality'),
+                data.get('frame_strategy') or '',
             )
 
     def handle_screen_frame_message(self, data: dict) -> None:
@@ -63,6 +64,14 @@ class ServerInboundMessageRouter(BaseMessageRouter):
                 data.get('height') or 0,
                 data.get('bytes') or 0,
                 data.get('captured_at') or 0,
+                data.get('frame_strategy') or '',
+                data.get('frame_type') or '',
+                data.get('frame_seq') or 0,
+                data.get('base_seq') or 0,
+                data.get('patch_x') or 0,
+                data.get('patch_y') or 0,
+                data.get('patch_width') or 0,
+                data.get('patch_height') or 0,
             )
 
     def handle_screen_closed_message(self, data: dict) -> None:

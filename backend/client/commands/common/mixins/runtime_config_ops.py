@@ -204,6 +204,9 @@ class CommandRuntimeConfigMixin:
             except Exception as e:
                 logger.warning(f'Failed to apply stream timeout runtime update: {e}')
 
+        if key == 'SCREEN_FRAME_STRATEGY':
+            effects.append(warning('Applies to new Screen View sessions; restart the current Screen View to switch mode'))
+
         if key in self.WATCHDOG_CONFIG_KEYS:
             if self._restart_guard_manager():
                 effects.append(success('Applied: watchdog runtime restarted'))

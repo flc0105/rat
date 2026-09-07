@@ -17,10 +17,11 @@ class ScreenViewSessionService:
     Server 端只读屏幕预览会话。
 
     只保留每个会话的最新一帧，避免实时预览产生无意义的帧积压。
+    Delta 模式额外保留当前 Keyframe，以便丢弃中间 Delta 后仍能恢复最新画面。
     """
 
     MIN_FPS = 1
-    MAX_FPS = 10
+    MAX_FPS = 30
     MIN_QUALITY = 20
     MAX_QUALITY = 95
 
@@ -47,7 +48,9 @@ class ScreenViewSessionService:
             'fps': self._normalize_fps(fps),
             'quality': self._normalize_quality(quality),
             'seq': 0,
-            'frame': '',
+            'frame_strategy': '',
+            'base_frame': None,
+            'latest_frame': None,
             'width': 0,
             'height': 0,
             'frame_bytes': 0,
@@ -90,6 +93,7 @@ class ScreenViewSessionService:
             'status': item['status'],
             'fps': item['fps'],
             'quality': item['quality'],
+            'frame_strategy': item['frame_strategy'],
             'ws_token': item['ws_token'],
         }
 
@@ -153,12 +157,13 @@ class ScreenViewSessionService:
         item = self._get_required(screen_session_id)
         with self._lock:
             seq = int(item.get('seq') or 0)
-            frame = item.get('frame') or '' if seq > int(after_seq or 0) else ''
+            frames = self._build_frame_updates(item, int(after_seq or 0))
             return {
                 'screen_session_id': item['screen_session_id'],
                 'status': item.get('status') or '',
                 'seq': seq,
-                'frame': frame,
+                'frames': frames,
+                'frame_strategy': item.get('frame_strategy') or '',
                 'width': int(item.get('width') or 0),
                 'height': int(item.get('height') or 0),
                 'frame_bytes': int(item.get('frame_bytes') or 0),
@@ -170,32 +175,87 @@ class ScreenViewSessionService:
                 'control_error': item.get('control_error') or '',
             }
 
-    def handle_client_opened(self, screen_session_id: str, fps=None, quality=None):
+    def handle_client_opened(self, screen_session_id: str, fps=None, quality=None, frame_strategy=''):
         with self._lock:
             item = self._sessions.get(str(screen_session_id or ''))
             if not item:
                 return
             item['status'] = 'open'
             item['opened_at'] = time.time()
+            item['frame_strategy'] = self._normalize_frame_strategy(frame_strategy)
             if fps is not None:
                 item['fps'] = self._normalize_fps(fps)
             if quality is not None:
                 item['quality'] = self._normalize_quality(quality)
 
-    def handle_client_frame(self, screen_session_id: str, data: str, width=0, height=0, frame_bytes=0, captured_at=0):
+    def handle_client_frame(
+        self,
+        screen_session_id: str,
+        data: str,
+        width=0,
+        height=0,
+        frame_bytes=0,
+        captured_at=0,
+        frame_strategy='',
+        frame_type='',
+        frame_seq=0,
+        base_seq=0,
+        patch_x=0,
+        patch_y=0,
+        patch_width=0,
+        patch_height=0,
+    ):
         if not data:
             return
+
+        strategy = self._normalize_frame_strategy(frame_strategy)
+        if not strategy:
+            return
+        packet = self._build_frame_packet(
+            data=data,
+            strategy=strategy,
+            frame_type=frame_type,
+            frame_seq=frame_seq,
+            base_seq=base_seq,
+            width=width,
+            height=height,
+            patch_x=patch_x,
+            patch_y=patch_y,
+            patch_width=patch_width,
+            patch_height=patch_height,
+            frame_bytes=frame_bytes,
+            captured_at=captured_at,
+        )
+        if packet is None:
+            return
+
         with self._lock:
             item = self._sessions.get(str(screen_session_id or ''))
             if not item:
                 return
+            if packet['seq'] <= int(item.get('seq') or 0):
+                return
+
+            if strategy == 'keyframe_delta':
+                if packet['frame_type'] == 'keyframe':
+                    item['base_frame'] = packet
+                elif packet['frame_type'] == 'delta':
+                    base_frame = item.get('base_frame')
+                    if not base_frame or int(base_frame.get('seq') or 0) != packet['base_seq']:
+                        return
+                else:
+                    return
+            elif packet['frame_type'] != 'full':
+                return
+
             item['status'] = 'open'
-            item['seq'] += 1
-            item['frame'] = str(data)
-            item['width'] = int(width or 0)
-            item['height'] = int(height or 0)
-            item['frame_bytes'] = int(frame_bytes or 0)
-            item['captured_at'] = captured_at or time.time()
+            item['frame_strategy'] = strategy
+            item['seq'] = packet['seq']
+            item['latest_frame'] = packet
+            item['width'] = packet['width']
+            item['height'] = packet['height']
+            item['frame_bytes'] = packet['frame_bytes']
+            item['captured_at'] = packet['captured_at']
 
     def handle_client_closed(self, screen_session_id: str):
         event_item = None
@@ -351,6 +411,7 @@ class ScreenViewSessionService:
                 'status': item.get('status', ''),
                 'fps': item.get('fps'),
                 'quality': item.get('quality'),
+                'frame_strategy': item.get('frame_strategy', ''),
                 'error': item.get('error', ''),
                 'time': datetime.now().isoformat(),
             })
@@ -374,6 +435,107 @@ class ScreenViewSessionService:
             if item is not None:
                 return item
         raise KeyError('Screen view session not found')
+
+    def _build_frame_updates(self, item: dict, after_seq: int) -> list:
+        latest_frame = item.get('latest_frame')
+        if not latest_frame or int(latest_frame.get('seq') or 0) <= after_seq:
+            return []
+
+        if item.get('frame_strategy') != 'keyframe_delta':
+            return [dict(latest_frame)]
+
+        base_frame = item.get('base_frame')
+        if not base_frame:
+            return []
+
+        frames = []
+        base_seq = int(base_frame.get('seq') or 0)
+        if after_seq < base_seq:
+            frames.append(dict(base_frame))
+
+        if int(latest_frame.get('seq') or 0) != base_seq:
+            frames.append(dict(latest_frame))
+
+        return frames
+
+    def _build_frame_packet(
+        self,
+        *,
+        data,
+        strategy,
+        frame_type,
+        frame_seq,
+        base_seq,
+        width,
+        height,
+        patch_x,
+        patch_y,
+        patch_width,
+        patch_height,
+        frame_bytes,
+        captured_at,
+    ):
+        try:
+            seq = int(frame_seq)
+            base = int(base_seq)
+            frame_width = int(width)
+            frame_height = int(height)
+            next_patch_x = int(patch_x)
+            next_patch_y = int(patch_y)
+            next_patch_width = int(patch_width)
+            next_patch_height = int(patch_height)
+        except Exception:
+            return None
+
+        normalized_type = str(frame_type or '').strip().lower()
+        if seq <= 0 or frame_width <= 0 or frame_height <= 0:
+            return None
+        if strategy == 'full_jpeg':
+            normalized_type = 'full'
+            base = seq
+            next_patch_x = 0
+            next_patch_y = 0
+            next_patch_width = frame_width
+            next_patch_height = frame_height
+        elif normalized_type == 'keyframe':
+            base = seq
+            next_patch_x = 0
+            next_patch_y = 0
+            next_patch_width = frame_width
+            next_patch_height = frame_height
+        elif normalized_type == 'delta':
+            if base <= 0 or next_patch_width <= 0 or next_patch_height <= 0:
+                return None
+            if next_patch_x < 0 or next_patch_y < 0:
+                return None
+            if next_patch_x + next_patch_width > frame_width:
+                return None
+            if next_patch_y + next_patch_height > frame_height:
+                return None
+        else:
+            return None
+
+        return {
+            'strategy': strategy,
+            'frame_type': normalized_type,
+            'seq': seq,
+            'base_seq': base,
+            'frame': str(data),
+            'width': frame_width,
+            'height': frame_height,
+            'patch_x': next_patch_x,
+            'patch_y': next_patch_y,
+            'patch_width': next_patch_width,
+            'patch_height': next_patch_height,
+            'frame_bytes': int(frame_bytes or 0),
+            'captured_at': captured_at or time.time(),
+        }
+
+    def _normalize_frame_strategy(self, value) -> str:
+        strategy = str(value or '').strip().lower()
+        if strategy in ('full_jpeg', 'keyframe_delta'):
+            return strategy
+        return ''
 
     def _normalize_fps(self, value) -> int:
         try:

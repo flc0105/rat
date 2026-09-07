@@ -1,9 +1,9 @@
 import base64
-import io
 import sys
 import threading
 import time
 
+from client.screen.frame_strategies.factory import build_screen_frame_strategy
 from core.protocol.message_types import (
     MSG_TYPE_SCREEN_CLOSED,
     MSG_TYPE_SCREEN_ERROR,
@@ -23,7 +23,7 @@ class ScreenViewManager:
     """
 
     MIN_FPS = 1
-    MAX_FPS = 10
+    MAX_FPS = 30
     MIN_QUALITY = 20
     MAX_QUALITY = 95
     INPUT_BUTTONS = {'left', 'middle', 'right'}
@@ -41,11 +41,14 @@ class ScreenViewManager:
             return False
 
         self.close_session(session_id, notify=False)
+        frame_strategy = build_screen_frame_strategy()
 
         item = {
             'screen_session_id': session_id,
             'fps': self._normalize_fps(fps),
             'quality': self._normalize_quality(quality),
+            'frame_strategy': frame_strategy,
+            'frame_strategy_name': frame_strategy.name,
             'stop_event': threading.Event(),
             'notify_on_close': True,
             'thread': None,
@@ -74,6 +77,7 @@ class ScreenViewManager:
             'screen_session_id': session_id,
             'fps': item['fps'],
             'quality': item['quality'],
+            'frame_strategy': item['frame_strategy_name'],
         })
         worker.start()
         return True
@@ -141,14 +145,17 @@ class ScreenViewManager:
                     stop_event = item['stop_event']
                     fps = item['fps']
                     quality = item['quality']
+                    frame_strategy = item['frame_strategy']
 
                 if stop_event.is_set():
                     break
 
                 started_at = time.monotonic()
                 image = self._capture_image()
-                frame_bytes, width, height = self._encode_jpeg(image, quality)
+                frame = frame_strategy.encode(image, quality)
                 origin_x, origin_y = self._capture_origin(image)
+                width = int(image.width)
+                height = int(image.height)
 
                 with self._lock:
                     current = self._sessions.get(screen_session_id)
@@ -158,15 +165,25 @@ class ScreenViewManager:
                         current['origin_x'] = int(origin_x)
                         current['origin_y'] = int(origin_y)
 
-                self.connection.send({
-                    'type': MSG_TYPE_SCREEN_FRAME,
-                    'screen_session_id': screen_session_id,
-                    'data': base64.b64encode(frame_bytes).decode('ascii'),
-                    'width': int(width),
-                    'height': int(height),
-                    'bytes': len(frame_bytes),
-                    'captured_at': time.time(),
-                })
+                if frame:
+                    frame_bytes = frame['data']
+                    self.connection.send({
+                        'type': MSG_TYPE_SCREEN_FRAME,
+                        'screen_session_id': screen_session_id,
+                        'frame_strategy': frame['strategy'],
+                        'frame_type': frame['frame_type'],
+                        'frame_seq': int(frame['frame_seq']),
+                        'base_seq': int(frame['base_seq']),
+                        'data': base64.b64encode(frame_bytes).decode('ascii'),
+                        'width': int(frame['width']),
+                        'height': int(frame['height']),
+                        'patch_x': int(frame['patch_x']),
+                        'patch_y': int(frame['patch_y']),
+                        'patch_width': int(frame['patch_width']),
+                        'patch_height': int(frame['patch_height']),
+                        'bytes': len(frame_bytes),
+                        'captured_at': time.time(),
+                    })
 
                 elapsed = time.monotonic() - started_at
                 delay = max(0.0, (1.0 / max(1, fps)) - elapsed)
@@ -253,7 +270,6 @@ class ScreenViewManager:
             x, y = self._resolve_pointer(item, payload)
             self._ensure_windows_input_allowed(action, x=x, y=y)
             pyautogui.moveTo(x, y, duration=0, _pause=False)
-
             if sys.platform.startswith('win'):
                 # Win32 一格滚轮需要 WHEEL_DELTA(120)，绕过 PyAutoGUI Windows 的原始 delta 注入问题。
                 import win32api
@@ -261,7 +277,6 @@ class ScreenViewManager:
                 win32api.mouse_event(win32con.MOUSEEVENTF_WHEEL, 0, 0, clicks * win32con.WHEEL_DELTA, 0)
             else:
                 pyautogui.scroll(clicks, _pause=False)
-            # pyautogui.scroll(clicks, _pause=False)
             return
 
         if action in ('key_down', 'key_up'):
@@ -466,22 +481,6 @@ class ScreenViewManager:
         except Exception:
             pass
         return 0, 0
-
-    def _encode_jpeg(self, image, quality: int):
-        if image is None:
-            raise RuntimeError('Screen capture returned no image')
-
-        if getattr(image, 'mode', '') != 'RGB':
-            image = image.convert('RGB')
-
-        buffer = io.BytesIO()
-        image.save(
-            buffer,
-            format='JPEG',
-            quality=self._normalize_quality(quality),
-            optimize=False,
-        )
-        return buffer.getvalue(), image.width, image.height
 
     def _normalize_fps(self, value) -> int:
         try:

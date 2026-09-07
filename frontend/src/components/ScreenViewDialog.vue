@@ -15,6 +15,7 @@
         <div class="screen-view-toolbar-left">
           <span class="screen-view-target" :title="targetLabel">{{ targetLabel }}</span>
           <el-tag size="small" :type="statusTagType">{{ displayStatus }}</el-tag>
+          <el-tag size="small" type="info" effect="plain">Mode · {{ displayFrameStrategy }}</el-tag>
           <span v-if="frameWidth && frameHeight" class="screen-view-meta">
             {{ frameWidth }}×{{ frameHeight }}
           </span>
@@ -30,7 +31,7 @@
             :disabled="!screenSessionId || settingsSaving"
             @change="applySettings"
           >
-            <el-option v-for="value in fpsOptions" :key="value" :label="`${value} fps`" :value="value" />
+            <el-option v-for="value in fpsOptions" :key="value" :label="formatFpsOption(value)" :value="value" />
           </el-select>
 
           <span class="screen-view-control-label">Quality</span>
@@ -83,7 +84,7 @@
         class="screen-view-canvas"
         :class="{ 'screen-view-canvas-control': controlEnabled }"
         :tabindex="controlEnabled ? 0 : -1"
-        v-loading="loading && !frameSrc"
+        v-loading="loading && !frameReady"
         @pointermove="handlePointerMove"
         @pointerdown="handlePointerDown"
         @pointerup="handlePointerUp"
@@ -94,15 +95,17 @@
         @blur="handleCanvasBlur"
         @contextmenu="handleContextMenu"
       >
-        <img
-          v-if="frameSrc"
+        <FullJpegScreenRenderer
+          v-if="frameStrategy === 'full_jpeg' && frameSrc"
           :src="frameSrc"
-          alt="Remote screen preview"
-          class="screen-view-image"
-          draggable="false"
-        >
+        />
 
-        <div v-else-if="screenError" class="screen-view-empty screen-view-error">
+        <KeyframeDeltaScreenRenderer
+          v-show="frameStrategy === 'keyframe_delta'"
+          ref="deltaRenderer"
+        />
+
+        <div v-if="!frameReady && screenError" class="screen-view-empty screen-view-error">
           <div class="screen-view-empty-title">Screen preview unavailable</div>
           <div class="screen-view-empty-text">{{ screenError }}</div>
           <div class="screen-view-empty-hint">
@@ -110,7 +113,7 @@
           </div>
         </div>
 
-        <div v-else class="screen-view-empty">
+        <div v-else-if="!frameReady" class="screen-view-empty">
           <div class="screen-view-empty-title">Waiting for screen frames…</div>
           <div class="screen-view-empty-text">View mode is active. Enable Control to send mouse and keyboard input.</div>
         </div>
@@ -126,9 +129,15 @@
 <script>
 import { ElMessage } from 'element-plus'
 import * as screenViewApi from '../api/screenViewApi.js'
+import FullJpegScreenRenderer from './screen/FullJpegScreenRenderer.vue'
+import KeyframeDeltaScreenRenderer from './screen/KeyframeDeltaScreenRenderer.vue'
 
 export default {
   name: 'ScreenViewDialog',
+  components: {
+    FullJpegScreenRenderer,
+    KeyframeDeltaScreenRenderer,
+  },
   emits: ['open-clipboard'],
 
   props: {
@@ -154,6 +163,8 @@ export default {
       screenWsReady: false,
       screenStatus: 'idle',
       screenError: '',
+      frameStrategy: '',
+      frameReady: false,
       frameSrc: '',
       frameSeq: 0,
       frameWidth: 0,
@@ -170,7 +181,7 @@ export default {
       targetLabel: '-',
       userClosing: false,
       fallbackPollTimer: null,
-      fpsOptions: [1, 2, 4, 6, 10],
+      fpsOptions: [1, 2, 4, 6, 10, 15, 20, 24, 30],
       qualityOptions: [
         { value: 30, label: 'Low · 30' },
         { value: 45, label: 'Medium · 45' },
@@ -203,8 +214,14 @@ export default {
         this.screenSessionId &&
         this.screenWsReady &&
         this.screenStatus === 'open' &&
-        this.frameSrc
+        this.frameReady
       )
+    },
+
+    displayFrameStrategy() {
+      if (this.frameStrategy === 'full_jpeg') return 'Full JPEG'
+      if (this.frameStrategy === 'keyframe_delta') return 'Keyframe Delta'
+      return 'Detecting…'
     },
 
     displayStatus() {
@@ -257,6 +274,8 @@ export default {
       this.userClosing = false
       this.screenError = ''
       this.screenStatus = 'opening'
+      this.frameStrategy = ''
+      this.frameReady = false
       this.frameSrc = ''
       this.frameSeq = 0
       this.frameWidth = 0
@@ -269,6 +288,7 @@ export default {
       this.clearPointerMoveTimer()
       this.stopFallbackPolling()
       this.closeScreenSocket()
+      this.$refs.deltaRenderer?.reset?.()
 
       try {
         const result = await screenViewApi.openScreenView(this.targetClientId, {
@@ -638,22 +658,53 @@ export default {
     applyScreenPayload(payload = {}) {
       const type = String(payload.type || '').trim().toLowerCase()
       this.applyControlPayload(payload)
-      if (type === 'frame') {
+      if (payload.frame_strategy) {
+        this.frameStrategy = String(payload.frame_strategy || '').trim().toLowerCase()
+      }
+
+      if (type === 'frames') {
         this.screenStatus = payload.status || 'open'
         this.screenError = payload.error || ''
         this.frameSeq = Number(payload.seq || this.frameSeq || 0)
         this.frameWidth = Number(payload.width || 0)
         this.frameHeight = Number(payload.height || 0)
         this.frameBytes = Number(payload.frame_bytes || 0)
-        if (payload.frame) {
-          this.frameSrc = `data:image/jpeg;base64,${payload.frame}`
-        }
+        const frames = Array.isArray(payload.frames) ? payload.frames : []
+        frames.forEach(frame => this.applyFramePacket(frame))
         return
       }
 
       if (type === 'status') {
         this.screenStatus = payload.status || this.screenStatus
         this.screenError = payload.error || ''
+      }
+    },
+
+    applyFramePacket(frame = {}) {
+      const strategy = String(frame.strategy || this.frameStrategy || '').trim().toLowerCase()
+      if (strategy) this.frameStrategy = strategy
+
+      this.frameWidth = Number(frame.width || this.frameWidth || 0)
+      this.frameHeight = Number(frame.height || this.frameHeight || 0)
+      this.frameBytes = Number(frame.frame_bytes || 0)
+
+      if (strategy === 'full_jpeg') {
+        if (!frame.frame) return
+        this.frameSrc = `data:image/jpeg;base64,${frame.frame}`
+        this.frameReady = true
+        return
+      }
+
+      if (strategy === 'keyframe_delta') {
+        this.frameSrc = ''
+        this.$nextTick(() => {
+          const renderResult = this.$refs.deltaRenderer?.applyFrame?.(frame)
+          if (renderResult && typeof renderResult.then === 'function') {
+            renderResult.then(rendered => {
+              if (rendered) this.frameReady = true
+            })
+          }
+        })
       }
     },
 
@@ -683,8 +734,8 @@ export default {
         }
         try {
           const payload = await screenViewApi.pollScreenView(this.screenSessionId, this.frameSeq)
-          if (payload.frame) {
-            this.applyScreenPayload({ type: 'frame', ...payload })
+          if (Array.isArray(payload.frames) && payload.frames.length) {
+            this.applyScreenPayload({ type: 'frames', ...payload })
           } else if (payload.status) {
             this.applyScreenPayload({ type: 'status', ...payload })
           }
@@ -731,6 +782,8 @@ export default {
       this.screenWsReady = false
       this.screenStatus = 'idle'
       this.screenError = ''
+      this.frameStrategy = ''
+      this.frameReady = false
       this.frameSrc = ''
       this.frameSeq = 0
       this.frameWidth = 0
@@ -742,6 +795,14 @@ export default {
       this.clearPointerMoveTimer()
       this.targetClientId = ''
       this.targetLabel = '-'
+      this.$refs.deltaRenderer?.reset?.()
+    },
+
+    formatFpsOption(value) {
+      if (Number(value) === 30 && this.frameStrategy === 'full_jpeg') {
+        return '30 fps · not recommended'
+      }
+      return `${value} fps`
     },
 
     formatFrameBytes(value) {

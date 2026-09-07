@@ -157,16 +157,17 @@ def create_asgi_app(server_instance):
                 status = payload.get('status') or ''
                 error = payload.get('error') or ''
                 seq = int(payload.get('seq') or after_seq or 0)
-                frame = payload.get('frame') or ''
+                frames = payload.get('frames') if isinstance(payload.get('frames'), list) else []
 
-                if seq > after_seq and frame:
+                if seq > after_seq and frames:
                     after_seq = seq
                     await websocket.send_text(json.dumps({
-                        'type': 'frame',
+                        'type': 'frames',
                         'status': status,
                         'error': error,
                         'seq': seq,
-                        'frame': frame,
+                        'frames': frames,
+                        'frame_strategy': payload.get('frame_strategy') or '',
                         'width': payload.get('width') or 0,
                         'height': payload.get('height') or 0,
                         'frame_bytes': payload.get('frame_bytes') or 0,
@@ -184,6 +185,7 @@ def create_asgi_app(server_instance):
                             'status': status,
                             'error': error,
                             'seq': seq,
+                            'frame_strategy': payload.get('frame_strategy') or '',
                             'control_enabled': bool(payload.get('control_enabled')),
                             'control_error': payload.get('control_error') or '',
                         }, ensure_ascii=False))
