@@ -18,6 +18,10 @@
           <el-tag v-if="displayFrameStrategy" size="small" type="info" effect="plain" :title="frameMetaTitle">
             {{ displayFrameStrategy }}
           </el-tag>
+<span v-if="frameWidth && frameHeight" class="screen-view-meta">
+  {{ frameWidth }}×{{ frameHeight }}
+</span>
+<span v-if="frameBytes" class="screen-view-meta">{{ formatFrameBytes(frameBytes) }}/frame</span>
         </div>
 
         <div class="screen-view-toolbar-right">
@@ -966,6 +970,7 @@ export default {
   color: #334155;
 }
 
+.screen-view-meta,
 .screen-view-control-label {
   color: #64748b;
   font-size: 12px;
