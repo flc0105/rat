@@ -63,6 +63,7 @@
             <template #dropdown>
               <el-dropdown-menu>
                 <el-dropdown-item command="clipboard">Clipboard</el-dropdown-item>
+                <el-dropdown-item command="screenshot" :disabled="!frameReady">Screenshot</el-dropdown-item>
                 <el-dropdown-item command="restart" :disabled="loading">Restart</el-dropdown-item>
                 <el-dropdown-item command="fullscreen">
                   {{ fullscreen ? 'Exit Fullscreen' : 'Fullscreen' }}
@@ -341,19 +342,103 @@ export default {
       this.fullscreen = !this.fullscreen
     },
 
+
     async handleMoreCommand(command) {
-      if (command === 'clipboard') {
-        this.$emit('open-clipboard')
-        return
+  if (command === 'screenshot') {
+    if (!this.frameReady) {
+      ElMessage.warning('No screen frame is available yet')
+      return
+    }
+
+    try {
+      const screenCanvas = this.$refs.screenCanvas
+      let source = null
+      let width = 0
+      let height = 0
+
+      if (this.frameStrategy === 'keyframe_delta') {
+        source = screenCanvas?.querySelector?.('canvas.screen-view-delta-canvas') || null
+        width = Number(source?.width || 0)
+        height = Number(source?.height || 0)
+      } else if (this.frameStrategy === 'full_jpeg') {
+        source = screenCanvas?.querySelector?.('img.screen-view-image') || null
+        width = Number(source?.naturalWidth || 0)
+        height = Number(source?.naturalHeight || 0)
       }
-      if (command === 'restart') {
-        await this.restartView()
-        return
+
+      if (!source || !width || !height) {
+        throw new Error('Current screen frame is not ready')
       }
-      if (command === 'fullscreen') {
-        this.toggleFullscreen()
-      }
-    },
+
+      // 截当前 ScreenView 已渲染画面，避免重新执行远端 screenshot 命令导致画面不一致。
+      const canvas = document.createElement('canvas')
+      canvas.width = width
+      canvas.height = height
+      const context = canvas.getContext('2d')
+      if (!context) throw new Error('Browser canvas is unavailable')
+      context.drawImage(source, 0, 0, width, height)
+
+      const jpegQuality = Math.max(0.01, Math.min(1, Number(this.quality || 60) / 100))
+      const blob = await new Promise((resolve, reject) => {
+        canvas.toBlob(
+          value => value ? resolve(value) : reject(new Error('Failed to encode screenshot')),
+          'image/jpeg',
+          jpegQuality,
+        )
+      })
+
+      const connection = this.currentConnection || {}
+      const hostname = String(connection.hostname || '').trim()
+      const machineId = String(connection.machine_id || '').trim()
+      const safeTarget = this.shortenMachineId(machineId) || String(this.targetClientId || 'screen')
+      const timestamp = new Date().toISOString().replace(/[-:]/g, '').replace(/\.\d{3}Z$/, 'Z')
+      const artifact = await screenViewApi.uploadScreenViewScreenshot(blob, {
+        filename: `screenview_${safeTarget}_${timestamp}.jpg`,
+        clientId: this.targetClientId,
+        hostname,
+        machineId,
+        screenSessionId: this.screenSessionId,
+        frameStrategy: this.frameStrategy,
+        quality: this.quality,
+        width,
+        height,
+      })
+
+      const artifactId = String(artifact?.artifact_id || '').trim()
+      ElMessage.success(artifactId ? `Screenshot saved · ${artifactId}` : 'Screenshot saved')
+    } catch (e) {
+      ElMessage.error(e?.message || 'Failed to save screenshot')
+    }
+    return
+  }
+
+  if (command === 'clipboard') {
+    this.$emit('open-clipboard')
+    return
+  }
+
+  if (command === 'restart') {
+    await this.restartView()
+    return
+  }
+
+  if (command === 'fullscreen') {
+    this.toggleFullscreen()
+  }
+},
+    // async handleMoreCommand(command) {
+    //   if (command === 'clipboard') {
+    //     this.$emit('open-clipboard')
+    //     return
+    //   }
+    //   if (command === 'restart') {
+    //     await this.restartView()
+    //     return
+    //   }
+    //   if (command === 'fullscreen') {
+    //     this.toggleFullscreen()
+    //   }
+    // },
 
     async handleControlToggle(enabled) {
       if (!enabled) {
