@@ -9,6 +9,7 @@ from pathlib import Path
 import requests
 from PIL import Image
 
+from client.clipboard.adapters.ios import iOSClipboardAdapter
 from client.clipboard.adapters.macos import MacOSClipboardAdapter
 from client.clipboard.adapters.unsupported import UnsupportedClipboardAdapter
 from client.clipboard.adapters.windows import WindowsClipboardAdapter
@@ -33,6 +34,8 @@ class ClipboardManager:
             return WindowsClipboardAdapter()
         if sys.platform == 'darwin':
             return MacOSClipboardAdapter()
+        if sys.platform == 'ios':
+            return iOSClipboardAdapter()
         return UnsupportedClipboardAdapter(sys.platform)
 
     def get_capabilities(self) -> dict:
