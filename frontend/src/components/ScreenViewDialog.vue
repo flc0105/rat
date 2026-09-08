@@ -627,40 +627,104 @@ export default {
     },
 
     normalizeKeyboardKey(value, code = '') {
-      const original = String(value || '')
-      // Shift 作为独立修饰键发送，Shift+Minus 只传未修饰的 Minus 键。
-      if (original === '_' && code === 'Minus') return '-'
-      const aliases = {
-        ' ': 'space',
-        Control: 'ctrl',
-        Shift: 'shift',
-        Alt: 'alt',
-        Meta: 'meta',
-        Enter: 'enter',
-        Backspace: 'backspace',
-        Tab: 'tab',
-        Escape: 'esc',
-        Delete: 'delete',
-        Insert: 'insert',
-        Home: 'home',
-        End: 'end',
-        PageUp: 'pgup',
-        PageDown: 'pgdn',
-        ArrowUp: 'up',
-        ArrowDown: 'down',
-        ArrowLeft: 'left',
-        ArrowRight: 'right',
-        CapsLock: 'capslock',
-        NumLock: 'numlock',
-        ScrollLock: 'scrolllock',
-        PrintScreen: 'printscreen',
-        Pause: 'pause',
-      }
-      if (aliases[original]) return aliases[original]
-      if (/^F\d{1,2}$/i.test(original)) return original.toLowerCase()
-      if (original.length === 1 && /^[\x20-\x7E]$/.test(original)) return original.toLowerCase()
-      return ''
-    },
+  const original = String(value || '')
+  const baseKeysByCode = {
+    Backquote: '`',
+    Digit1: '1',
+    Digit2: '2',
+    Digit3: '3',
+    Digit4: '4',
+    Digit5: '5',
+    Digit6: '6',
+    Digit7: '7',
+    Digit8: '8',
+    Digit9: '9',
+    Digit0: '0',
+    Minus: '-',
+    Equal: '=',
+    BracketLeft: '[',
+    BracketRight: ']',
+    Backslash: '\\',
+    Semicolon: ';',
+    Quote: "'",
+    Comma: ',',
+    Period: '.',
+    Slash: '/',
+  }
+
+  // Shift 已独立发送；符号键只发送对应的未修饰基础键。
+  if (original.length === 1 && '~!@#$%^&*()_+{}|:"<>?'.includes(original)) {
+    const baseKey = baseKeysByCode[code]
+    if (baseKey) return baseKey
+  }
+
+  const aliases = {
+    ' ': 'space',
+    Control: 'ctrl',
+    Shift: 'shift',
+    Alt: 'alt',
+    Meta: 'meta',
+    Enter: 'enter',
+    Backspace: 'backspace',
+    Tab: 'tab',
+    Escape: 'esc',
+    Delete: 'delete',
+    Insert: 'insert',
+    Home: 'home',
+    End: 'end',
+    PageUp: 'pgup',
+    PageDown: 'pgdn',
+    ArrowUp: 'up',
+    ArrowDown: 'down',
+    ArrowLeft: 'left',
+    ArrowRight: 'right',
+    CapsLock: 'capslock',
+    NumLock: 'numlock',
+    ScrollLock: 'scrolllock',
+    PrintScreen: 'printscreen',
+    Pause: 'pause',
+  }
+  if (aliases[original]) return aliases[original]
+  if (/^F\d{1,2}$/i.test(original)) return original.toLowerCase()
+  if (original.length === 1 && /^[\x20-\x7E]$/.test(original)) return original.toLowerCase()
+  return ''
+},
+
+    // normalizeKeyboardKey(value, code = '') {
+    //   const original = String(value || '')
+    //   // Shift 作为独立修饰键发送，Shift+Minus 只传未修饰的 Minus 键。
+    //   if (original === '_' && code === 'Minus') return '-'
+    //   const aliases = {
+    //     ' ': 'space',
+    //     Control: 'ctrl',
+    //     Shift: 'shift',
+    //     Alt: 'alt',
+    //     Meta: 'meta',
+    //     Enter: 'enter',
+    //     Backspace: 'backspace',
+    //     Tab: 'tab',
+    //     Escape: 'esc',
+    //     Delete: 'delete',
+    //     Insert: 'insert',
+    //     Home: 'home',
+    //     End: 'end',
+    //     PageUp: 'pgup',
+    //     PageDown: 'pgdn',
+    //     ArrowUp: 'up',
+    //     ArrowDown: 'down',
+    //     ArrowLeft: 'left',
+    //     ArrowRight: 'right',
+    //     CapsLock: 'capslock',
+    //     NumLock: 'numlock',
+    //     ScrollLock: 'scrolllock',
+    //     PrintScreen: 'printscreen',
+    //     Pause: 'pause',
+    //   }
+    //   if (aliases[original]) return aliases[original]
+    //   if (/^F\d{1,2}$/i.test(original)) return original.toLowerCase()
+    //   if (original.length === 1 && /^[\x20-\x7E]$/.test(original)) return original.toLowerCase()
+    //   return ''
+    // },
 
     normalizePointerButton(value) {
       if (value === 0) return 'left'
