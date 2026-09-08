@@ -93,6 +93,9 @@ class CommandIntrospectionMixin:
         grouped = {}
 
         for name, method in methods.items():
+            # suggest=False 的内部命令不在 help 中展示，但仍保留执行能力。
+            if not getattr(method, 'suggest', True):
+                continue
             group = getattr(method, 'group', 'general')
             grouped.setdefault(group, []).append((name, method.help))
 
