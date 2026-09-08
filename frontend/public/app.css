@@ -1694,3 +1694,14 @@ body {
 .ml-0 {
   margin-left: 0 !important;
 }
+
+/* Hidden devices 密码框保持与 MessageBox 内容区等宽。 */
+.hidden-devices-password-message-box .el-message-box__message {
+  width: 100%;
+  min-width: 0;
+}
+
+.hidden-devices-password-message-box .el-message-box__message form,
+.hidden-devices-password-message-box .el-message-box__message .el-input {
+  width: 100%;
+}
