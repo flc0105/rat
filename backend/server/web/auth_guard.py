@@ -3,7 +3,12 @@ from functools import wraps
 
 from flask import current_app, request, session
 
-from server.config.config import ADMIN_API_TOKEN
+from server.config.config import (
+    ADMIN_API_TOKEN,
+    ADMIN_PASSWORD,
+    ADMIN_USERNAME,
+    WEB_SESSION_SECRET,
+)
 
 
 PUBLIC_ENDPOINT_ATTR = '__rat_allow_anonymous__'
@@ -34,6 +39,7 @@ def _unwrap_view_func(view_func):
 class WebAuthGuard:
     SESSION_AUTH_FLAG = 'rat_admin_authenticated'
     SESSION_USER_KEY = 'rat_admin_username'
+    SESSION_CREDENTIAL_VERSION_KEY = 'rch_admin_credential_version'
 
     def __init__(self, script_grant_service=None):
         self.script_grant_service = script_grant_service
@@ -60,8 +66,24 @@ class WebAuthGuard:
             return False
         return hmac.compare_digest(provided, expected)
 
+    def _current_session_credential_version(self) -> str:
+        # Session is bound to the current configured admin credentials.
+        secret = str(WEB_SESSION_SECRET or '').encode('utf-8')
+        payload = f'{ADMIN_USERNAME}\0{ADMIN_PASSWORD}'.encode('utf-8')
+        return hmac.new(secret, payload, 'sha256').hexdigest()
+
     def has_valid_session(self) -> bool:
-        return bool(session.get(self.SESSION_AUTH_FLAG))
+        if not bool(session.get(self.SESSION_AUTH_FLAG)):
+            return False
+
+        stored_version = str(session.get(self.SESSION_CREDENTIAL_VERSION_KEY) or '')
+        current_version = self._current_session_credential_version()
+        if stored_version and hmac.compare_digest(stored_version, current_version):
+            return True
+
+        # Credentials changed (or this is an old session): invalidate it immediately.
+        self.logout_user()
+        return False
 
     def has_valid_script_grant(self) -> bool:
         if self.script_grant_service is None:
@@ -82,6 +104,7 @@ class WebAuthGuard:
         session.permanent = True
         session[self.SESSION_AUTH_FLAG] = True
         session[self.SESSION_USER_KEY] = str(username or '').strip()
+        session[self.SESSION_CREDENTIAL_VERSION_KEY] = self._current_session_credential_version()
 
     def logout_user(self):
         session.pop(self.SESSION_AUTH_FLAG, None)

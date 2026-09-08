@@ -844,12 +844,12 @@ The web app includes a lightweight auth layer designed for simple public deploym
 
 ### Relevant config entries
 
-- `RAT_WEB_SESSION_SECRET`
-- `RAT_ADMIN_USERNAME`
-- `RAT_ADMIN_PASSWORD`
-- `RAT_ADMIN_API_TOKEN`
-- `RAT_WEB_AUTH_SESSION_DAYS`
-- `RAT_WEB_SESSION_COOKIE_NAME`
+- `RCH_WEB_SESSION_SECRET`
+- `RCH_ADMIN_USERNAME`
+- `RCH_ADMIN_PASSWORD`
+- `RCH_ADMIN_API_TOKEN`
+- `RCH_WEB_AUTH_SESSION_DAYS`
+- `RCH_WEB_SESSION_COOKIE_NAME`
 
 ---
 

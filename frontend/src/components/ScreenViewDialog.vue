@@ -13,13 +13,11 @@
     <div class="screen-view-body">
       <div class="screen-view-toolbar">
         <div class="screen-view-toolbar-left">
-          <span class="screen-view-target" :title="targetLabel">{{ targetLabel }}</span>
+          <span class="screen-view-target" :title="targetTitle">{{ targetLabel }}</span>
           <el-tag size="small" :type="statusTagType">{{ displayStatus }}</el-tag>
-          <el-tag size="small" type="info" effect="plain">Mode · {{ displayFrameStrategy }}</el-tag>
-          <span v-if="frameWidth && frameHeight" class="screen-view-meta">
-            {{ frameWidth }}×{{ frameHeight }}
-          </span>
-          <span v-if="frameBytes" class="screen-view-meta">{{ formatFrameBytes(frameBytes) }}/frame</span>
+          <el-tag v-if="displayFrameStrategy" size="small" type="info" effect="plain" :title="frameMetaTitle">
+            {{ displayFrameStrategy }}
+          </el-tag>
         </div>
 
         <div class="screen-view-toolbar-right">
@@ -31,7 +29,7 @@
             :disabled="!screenSessionId || settingsSaving"
             @change="applySettings"
           >
-            <el-option v-for="value in fpsOptions" :key="value" :label="formatFpsOption(value)" :value="value" />
+            <el-option v-for="value in fpsOptions" :key="value" :label="String(value)" :value="value" />
           </el-select>
 
           <span class="screen-view-control-label">Quality</span>
@@ -45,9 +43,11 @@
             <el-option
               v-for="item in qualityOptions"
               :key="item.value"
-              :label="item.label"
+              :label="String(item.value)"
               :value="item.value"
-            />
+            >
+              <span>{{ item.label }}</span>
+            </el-option>
           </el-select>
 
           <span class="screen-view-control-label">Control</span>
@@ -58,15 +58,18 @@
             @change="handleControlToggle"
           />
 
-          <el-button size="small" @click="$emit('open-clipboard')">
-            Clipboard
-          </el-button>
-          <el-button size="small" :loading="loading" @click="restartView">
-            Restart
-          </el-button>
-          <el-button size="small" @click="toggleFullscreen">
-            {{ fullscreen ? 'Exit Fullscreen' : 'Fullscreen' }}
-          </el-button>
+          <el-dropdown trigger="click" @command="handleMoreCommand">
+            <el-button size="small">More</el-button>
+            <template #dropdown>
+              <el-dropdown-menu>
+                <el-dropdown-item command="clipboard">Clipboard</el-dropdown-item>
+                <el-dropdown-item command="restart" :disabled="loading">Restart</el-dropdown-item>
+                <el-dropdown-item command="fullscreen">
+                  {{ fullscreen ? 'Exit Fullscreen' : 'Fullscreen' }}
+                </el-dropdown-item>
+              </el-dropdown-menu>
+            </template>
+          </el-dropdown>
         </div>
       </div>
 
@@ -218,10 +221,25 @@ export default {
       )
     },
 
+    targetTitle() {
+      const connection = this.currentConnection || {}
+      const hostname = String(connection.hostname || '').trim()
+      const machineId = String(connection.machine_id || '').trim()
+      if (hostname && machineId) return `${hostname} · ${machineId}`
+      return hostname || machineId || String(this.selectedId || '').trim() || '-'
+    },
+
+    frameMetaTitle() {
+      const parts = []
+      if (this.frameWidth && this.frameHeight) parts.push(`${this.frameWidth}×${this.frameHeight}`)
+      if (this.frameBytes) parts.push(`${this.formatFrameBytes(this.frameBytes)}/frame`)
+      return parts.join(' · ')
+    },
+
     displayFrameStrategy() {
       if (this.frameStrategy === 'full_jpeg') return 'Full JPEG'
-      if (this.frameStrategy === 'keyframe_delta') return 'Keyframe Delta'
-      return 'Detecting…'
+      if (this.frameStrategy === 'keyframe_delta') return 'Delta'
+      return ''
     },
 
     displayStatus() {
@@ -260,10 +278,16 @@ export default {
       await this.startView()
     },
 
+    shortenMachineId(machineId) {
+      const value = String(machineId || '').trim()
+      if (!value) return ''
+      return value.length > 12 ? value.slice(0, 12) : value
+    },
+
     buildTargetLabel() {
       const connection = this.currentConnection || {}
       const hostname = String(connection.hostname || '').trim()
-      const machineId = String(connection.machine_id || '').trim()
+      const machineId = this.shortenMachineId(connection.machine_id)
       if (hostname && machineId) return `${hostname} · ${machineId}`
       return hostname || machineId || String(this.selectedId || '').trim() || '-'
     },
@@ -315,6 +339,20 @@ export default {
 
     toggleFullscreen() {
       this.fullscreen = !this.fullscreen
+    },
+
+    async handleMoreCommand(command) {
+      if (command === 'clipboard') {
+        this.$emit('open-clipboard')
+        return
+      }
+      if (command === 'restart') {
+        await this.restartView()
+        return
+      }
+      if (command === 'fullscreen') {
+        this.toggleFullscreen()
+      }
     },
 
     async handleControlToggle(enabled) {
@@ -798,13 +836,6 @@ export default {
       this.$refs.deltaRenderer?.reset?.()
     },
 
-    formatFpsOption(value) {
-      if (Number(value) === 30 && this.frameStrategy === 'full_jpeg') {
-        return '30 fps · not recommended'
-      }
-      return `${value} fps`
-    },
-
     formatFrameBytes(value) {
       const bytes = Number(value || 0)
       if (!bytes) return '0 B'
@@ -812,6 +843,7 @@ export default {
       if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
       return `${(bytes / (1024 * 1024)).toFixed(2)} MB`
     },
+
   },
 }
 </script>
@@ -849,18 +881,17 @@ export default {
   color: #334155;
 }
 
-.screen-view-meta,
 .screen-view-control-label {
   color: #64748b;
   font-size: 12px;
 }
 
 .screen-view-fps-select {
-  width: 92px;
+  width: 68px;
 }
 
 .screen-view-quality-select {
-  width: 140px;
+  width: 76px;
 }
 
 .screen-view-canvas {
