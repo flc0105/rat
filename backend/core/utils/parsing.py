@@ -19,9 +19,24 @@ class SafeArgumentParser(argparse.ArgumentParser):
 
 
 class CommandParser:
+    # @staticmethod
+    # def parse_command(command: str) -> Tuple[str, str]:
+    #     normalized = command.replace('\\', '/').strip()
+    #     if not normalized:
+    #         return '', ''
+    #
+    #     parts = shlex.split(normalized)
+    #     if not parts:
+    #         return '', ''
+    #
+    #     command_name = parts[0]
+    #     command_arg = normalized[len(command_name):].strip()
+    #     return command_name, command_arg
+
     @staticmethod
     def parse_command(command: str) -> Tuple[str, str]:
-        normalized = command.replace('\\', '/').strip()
+        raw_command = command.strip()
+        normalized = raw_command.replace('\\', '/')
         if not normalized:
             return '', ''
 
@@ -30,9 +45,9 @@ class CommandParser:
             return '', ''
 
         command_name = parts[0]
-        command_arg = normalized[len(command_name):].strip()
+        # 仅规范化命令名；参数必须保留 shell 原始转义字符，例如 \n。
+        command_arg = raw_command[len(command_name):].strip()
         return command_name, command_arg
-
 
 def parse(cmd: str) -> Tuple[str, str]:
     return CommandParser.parse_command(cmd)

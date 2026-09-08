@@ -46,7 +46,8 @@
     "gatekeeper_off": "sudo spctl --master-disable",
     "gatekeeper_on": "sudo spctl --master-enable",
     "file_tags": "xattr -l <path>",
-    "allow_file": "xattr -d com.apple.quarantine <path>"
+    "allow_file": "xattr -d com.apple.quarantine <path>",
+    "path": "echo $PATH | tr ':' '\\n' | head -20"
   },
   "linux": {},
   "ios": {}
