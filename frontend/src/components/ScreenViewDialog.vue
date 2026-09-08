@@ -606,66 +606,122 @@ export default {
       event.preventDefault()
     },
 
+    // handleKeyDown(event) {
+    //   if (!this.controlEnabled || event.isComposing) return
+    //   event.preventDefault()
+    //   const key = this.normalizeKeyboardKey(event.key)
+    //   if (!key) return
+    //   this.sendScreenInput({
+    //     action: 'key_down',
+    //     key,
+    //     repeat: !!event.repeat,
+    //   })
+    // },
+    //
+    // handleKeyUp(event) {
+    //   if (!this.controlEnabled || event.isComposing) return
+    //   event.preventDefault()
+    //   const key = this.normalizeKeyboardKey(event.key)
+    //   if (!key) return
+    //   this.sendScreenInput({ action: 'key_up', key })
+    // },
+    //
+    // normalizeKeyboardKey(value) {
+    //   const original = String(value || '')
+    //   const aliases = {
+    //     ' ': 'space',
+    //     Control: 'ctrl',
+    //     Shift: 'shift',
+    //     Alt: 'alt',
+    //     Meta: 'meta',
+    //     Enter: 'enter',
+    //     Backspace: 'backspace',
+    //     Tab: 'tab',
+    //     Escape: 'esc',
+    //     Delete: 'delete',
+    //     Insert: 'insert',
+    //     Home: 'home',
+    //     End: 'end',
+    //     PageUp: 'pgup',
+    //     PageDown: 'pgdn',
+    //     ArrowUp: 'up',
+    //     ArrowDown: 'down',
+    //     ArrowLeft: 'left',
+    //     ArrowRight: 'right',
+    //     CapsLock: 'capslock',
+    //     NumLock: 'numlock',
+    //     ScrollLock: 'scrolllock',
+    //     PrintScreen: 'printscreen',
+    //     Pause: 'pause',
+    //   }
+    //   if (aliases[original]) return aliases[original]
+    //   if (/^F\d{1,2}$/i.test(original)) return original.toLowerCase()
+    //   if (original.length === 1 && /^[\x20-\x7E]$/.test(original)) return original.toLowerCase()
+    //   return ''
+    // },
+    //
+    // normalizePointerButton(value) {
+    //   if (value === 0) return 'left'
+    //   if (value === 1) return 'middle'
+    //   if (value === 2) return 'right'
+    //   return ''
+    // },
+
     handleKeyDown(event) {
-      if (!this.controlEnabled || event.isComposing) return
-      event.preventDefault()
-      const key = this.normalizeKeyboardKey(event.key)
-      if (!key) return
-      this.sendScreenInput({
-        action: 'key_down',
-        key,
-        repeat: !!event.repeat,
-      })
-    },
+  if (!this.controlEnabled || event.isComposing) return
+  event.preventDefault()
+  const key = this.normalizeKeyboardKey(event.key, event.code)
+  if (!key) return
+  this.sendScreenInput({
+    action: 'key_down',
+    key,
+    repeat: !!event.repeat,
+  })
+},
 
-    handleKeyUp(event) {
-      if (!this.controlEnabled || event.isComposing) return
-      event.preventDefault()
-      const key = this.normalizeKeyboardKey(event.key)
-      if (!key) return
-      this.sendScreenInput({ action: 'key_up', key })
-    },
+handleKeyUp(event) {
+  if (!this.controlEnabled || event.isComposing) return
+  event.preventDefault()
+  const key = this.normalizeKeyboardKey(event.key, event.code)
+  if (!key) return
+  this.sendScreenInput({ action: 'key_up', key })
+},
 
-    normalizeKeyboardKey(value) {
-      const original = String(value || '')
-      const aliases = {
-        ' ': 'space',
-        Control: 'ctrl',
-        Shift: 'shift',
-        Alt: 'alt',
-        Meta: 'meta',
-        Enter: 'enter',
-        Backspace: 'backspace',
-        Tab: 'tab',
-        Escape: 'esc',
-        Delete: 'delete',
-        Insert: 'insert',
-        Home: 'home',
-        End: 'end',
-        PageUp: 'pgup',
-        PageDown: 'pgdn',
-        ArrowUp: 'up',
-        ArrowDown: 'down',
-        ArrowLeft: 'left',
-        ArrowRight: 'right',
-        CapsLock: 'capslock',
-        NumLock: 'numlock',
-        ScrollLock: 'scrolllock',
-        PrintScreen: 'printscreen',
-        Pause: 'pause',
-      }
-      if (aliases[original]) return aliases[original]
-      if (/^F\d{1,2}$/i.test(original)) return original.toLowerCase()
-      if (original.length === 1 && /^[\x20-\x7E]$/.test(original)) return original.toLowerCase()
-      return ''
-    },
-
-    normalizePointerButton(value) {
-      if (value === 0) return 'left'
-      if (value === 1) return 'middle'
-      if (value === 2) return 'right'
-      return ''
-    },
+normalizeKeyboardKey(value, code = '') {
+  const original = String(value || '')
+  // Shift 作为独立修饰键发送，Shift+Minus 只传未修饰的 Minus 键。
+  if (original === '_' && code === 'Minus') return '-'
+  const aliases = {
+    ' ': 'space',
+    Control: 'ctrl',
+    Shift: 'shift',
+    Alt: 'alt',
+    Meta: 'meta',
+    Enter: 'enter',
+    Backspace: 'backspace',
+    Tab: 'tab',
+    Escape: 'esc',
+    Delete: 'delete',
+    Insert: 'insert',
+    Home: 'home',
+    End: 'end',
+    PageUp: 'pgup',
+    PageDown: 'pgdn',
+    ArrowUp: 'up',
+    ArrowDown: 'down',
+    ArrowLeft: 'left',
+    ArrowRight: 'right',
+    CapsLock: 'capslock',
+    NumLock: 'numlock',
+    ScrollLock: 'scrolllock',
+    PrintScreen: 'printscreen',
+    Pause: 'pause',
+  }
+  if (aliases[original]) return aliases[original]
+  if (/^F\d{1,2}$/i.test(original)) return original.toLowerCase()
+  if (original.length === 1 && /^[\x20-\x7E]$/.test(original)) return original.toLowerCase()
+  return ''
+},
 
     resolveRemotePointer(event, allowClamp = false) {
       if (!this.frameWidth || !this.frameHeight) return null
