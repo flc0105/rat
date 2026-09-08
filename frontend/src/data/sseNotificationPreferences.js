@@ -11,7 +11,7 @@ export const DEFAULT_SSE_NOTIFICATION_PREFERENCES = {
     pty_opened: true,
     pty_closed: true,
     pty_error: true,
-    screen_view_starting: true,
+    screen_view_started: true,
     screen_view_closed: true,
     screen_view_error: true,
     background_job_running: true,
@@ -57,7 +57,7 @@ export const SSE_NOTIFICATION_GROUPS = [
   {
     title: 'Screen View',
     items: [
-      { key: 'screen_view_starting', label: 'Screen View starting' },
+      { key: 'screen_view_started', label: 'Screen View started' },
       { key: 'screen_view_closed', label: 'Screen View stopped' },
       { key: 'screen_view_error', label: 'Screen View error' },
     ],

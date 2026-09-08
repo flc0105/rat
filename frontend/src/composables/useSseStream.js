@@ -784,11 +784,11 @@ this.appendOutput(payload.client_id, `${TERMINAL_BACKGROUND_PREFIX} ${payload.te
                 const state = String(payload.state || '').trim().toLowerCase();
                 const deviceName = getConnectionLabel(payload.client_id);
 
-                if (state === 'starting') {
-                    this.showSseNotification('screen_view_starting', {
-                        title: 'Screen View Starting',
-                        message: `Screen view is starting on ${deviceName}`,
-                        type: 'info',
+                if (state === 'started') {
+                    this.showSseNotification('screen_view_started', {
+                        title: 'Screen View Started',
+                        message: `Screen view started on ${deviceName}`,
+                        type: 'success',
                         duration: 4000,
                     }, {
                         eventId: event.lastEventId,

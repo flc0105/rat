@@ -19,7 +19,7 @@ DEFAULT_NOTIFICATION_PREFERENCES = {
         'pty_opened': True,
         'pty_closed': True,
         'pty_error': True,
-        'screen_view_starting': True,
+        'screen_view_started': True,
         'screen_view_closed': True,
         'screen_view_error': True,
         'background_job_running': True,

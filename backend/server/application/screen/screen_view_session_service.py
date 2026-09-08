@@ -58,15 +58,12 @@ class ScreenViewSessionService:
             'error': '',
             'control_enabled': False,
             'control_error': '',
+            'open_notified': False,
             'close_notified': False,
             'ws_token': secrets.token_urlsafe(24),
         }
         with self._lock:
             self._sessions[screen_session_id] = item
-            start_event = dict(item)
-
-        # 必须先发 SSE，再真正要求 Client 启动屏幕采集。
-        self._publish_screen_lifecycle_event(start_event, state='starting')
 
         try:
             session.send({
@@ -176,6 +173,7 @@ class ScreenViewSessionService:
             }
 
     def handle_client_opened(self, screen_session_id: str, fps=None, quality=None, frame_strategy=''):
+        event_item = None
         with self._lock:
             item = self._sessions.get(str(screen_session_id or ''))
             if not item:
@@ -187,6 +185,12 @@ class ScreenViewSessionService:
                 item['fps'] = self._normalize_fps(fps)
             if quality is not None:
                 item['quality'] = self._normalize_quality(quality)
+            if not item.get('open_notified'):
+                item['open_notified'] = True
+                event_item = dict(item)
+
+        if event_item:
+            self._publish_screen_lifecycle_event(event_item, state='started')
 
     def handle_client_frame(
         self,
@@ -266,7 +270,7 @@ class ScreenViewSessionService:
             item['status'] = 'closed'
             item['closed_at'] = time.time()
             item['control_enabled'] = False
-            if not item.get('close_notified'):
+            if item.get('open_notified') and not item.get('close_notified'):
                 item['close_notified'] = True
                 event_item = dict(item)
 
@@ -312,7 +316,7 @@ class ScreenViewSessionService:
                 item['closed_at'] = now
                 item['error'] = 'Client disconnected'
                 item['control_enabled'] = False
-                if not item.get('close_notified'):
+                if item.get('open_notified') and not item.get('close_notified'):
                     item['close_notified'] = True
                     event_items.append(dict(item))
 

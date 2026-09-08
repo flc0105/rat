@@ -28,19 +28,33 @@
           {{ notifications.length }} {{ notifications.length === 1 ? 'notification' : 'notifications' }}
         </span>
 
-        <button
-          class="notification-center-clear"
-          type="button"
-          :disabled="notifications.length === 0 || clearing"
-          @click="clearAll"
-        >
-          Clear All
-        </button>
+        <div class="notification-center-toolbar-actions">
+          <select
+            v-model="typeFilter"
+            class="notification-center-filter"
+            aria-label="Filter notifications by type"
+          >
+            <option value="all">All</option>
+            <option value="success">Success</option>
+            <option value="info">Info</option>
+            <option value="warning">Warning</option>
+            <option value="error">Error</option>
+          </select>
+
+          <button
+            class="notification-center-clear"
+            type="button"
+            :disabled="notifications.length === 0 || clearing"
+            @click="clearAll"
+          >
+            Clear All
+          </button>
+        </div>
       </div>
 
-      <div v-if="notifications.length" class="notification-center-list">
+      <div v-if="filteredNotifications.length" class="notification-center-list">
         <article
-          v-for="notification in notifications"
+          v-for="notification in filteredNotifications"
           :key="notification.id"
           class="notification-center-card"
         >
@@ -106,9 +120,13 @@
 
       <div v-else class="notification-center-empty">
         <el-icon class="notification-center-empty-icon"><Bell /></el-icon>
-        <div class="notification-center-empty-title">No notifications</div>
+        <div class="notification-center-empty-title">
+          {{ notifications.length ? 'No matching notifications' : 'No notifications' }}
+        </div>
         <div class="notification-center-empty-text">
-          SSE notifications you receive will appear here.
+          {{ notifications.length
+            ? 'Try another notification type.'
+            : 'SSE notifications you receive will appear here.' }}
         </div>
       </div>
     </div>
@@ -162,12 +180,19 @@ export default {
       clockTimer: null,
       deletingId: '',
       clearing: false,
+      typeFilter: 'all',
     }
   },
 
   computed: {
     formattedCurrentTime() {
       return this.formatDateTime(this.currentTime)
+    },
+
+    filteredNotifications() {
+      const notifications = Array.isArray(this.notifications) ? this.notifications : []
+      if (this.typeFilter === 'all') return notifications
+      return notifications.filter(notification => this.normalizeType(notification?.type) === this.typeFilter)
     },
   },
 
@@ -348,6 +373,30 @@ export default {
 .notification-center-count {
   color: #64748b;
   font-size: 12px;
+}
+
+.notification-center-toolbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.notification-center-filter {
+  width: 82px;
+  height: 24px;
+  padding: 0 6px;
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  border-radius: 6px;
+  outline: none;
+  background: rgba(255, 255, 255, 0.7);
+  color: #64748b;
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.notification-center-filter:focus {
+  border-color: rgba(100, 116, 139, 0.45);
 }
 
 .notification-center-clear {
