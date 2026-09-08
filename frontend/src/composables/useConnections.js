@@ -1,5 +1,5 @@
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { getConnectionRevisionStatus, listConnections, updateConnectionDeviceViewPrefs } from '../api/connectionsApi.js'
+import { getConnectionRevisionStatus, listConnections, updateConnectionDeviceViewPrefs, verifyHiddenDevicesPassword } from '../api/connectionsApi.js'
 import { assignMachineDeviceGroup, listDeviceGroups } from '../api/deviceGroupsApi.js'
 
 const LAST_SELECTED_MACHINE_STORAGE_KEY = 'rch:last_selected_machine_id'
@@ -460,9 +460,47 @@ export default {
             }
         },
 
-        toggleShowHiddenDevices() {
-            this.showHiddenDevices = !this.showHiddenDevices
-            this.ensureSelectedConnectionVisible()
+        // toggleShowHiddenDevices() {
+        //     this.showHiddenDevices = !this.showHiddenDevices
+        //     this.ensureSelectedConnectionVisible()
+        // },
+
+        async toggleShowHiddenDevices() {
+            if (this.showHiddenDevices) {
+                this.showHiddenDevices = false
+                this.ensureSelectedConnectionVisible()
+                return
+            }
+
+            try {
+                // 先询问服务端是否启用验证；关闭时保持原来的无缝 toggle 行为。
+                let verification = await verifyHiddenDevicesPassword()
+                if (verification?.required) {
+                    const { value } = await ElMessageBox.prompt(
+                        'Enter the password to show hidden devices.',
+                        'Show Hidden Devices',
+                        {
+                            confirmButtonText: 'Show',
+                            cancelButtonText: 'Cancel',
+                            inputType: 'password',
+                            inputPlaceholder: 'Password',
+                            inputValidator: value => String(value || '').length > 0 || 'Password is required',
+                        },
+                    )
+
+                    verification = await verifyHiddenDevicesPassword(value)
+                    if (!verification?.verified) {
+                        ElMessage.error('Invalid password')
+                        return
+                    }
+                }
+
+                this.showHiddenDevices = true
+                this.ensureSelectedConnectionVisible()
+            } catch (e) {
+                if (e === 'cancel' || e === 'close' || e?.toString?.().includes('cancel')) return
+                ElMessage.error(e.message || 'Failed to verify hidden devices password')
+            }
         },
 
         ensureSelectedConnectionVisible() {
