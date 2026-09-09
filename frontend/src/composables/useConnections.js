@@ -565,22 +565,24 @@ const passwordInput = h({
 },
 
         ensureSelectedConnectionVisible() {
+            const sidebarConnections = Array.isArray(this.deviceSidebarConnections)
+                ? this.deviceSidebarConnections
+                : []
             const selected = this.connections.find(item => item.client_id === this.selectedId)
-            if (
-                selected &&
-                this.isConnectionInSelectedDeviceGroup(selected) &&
-                (this.showHiddenDevices || !this.isConnectionHiddenByPrefs(selected))
-            ) {
-                this.rememberSelectedMachineId(this.getConnectionMachineId(selected))
+            const selectedVisible = sidebarConnections.find(item => item.client_id === this.selectedId)
+
+            if (selectedVisible) {
+                this.rememberSelectedMachineId(this.getConnectionMachineId(selectedVisible))
                 return
             }
 
             const preferredMachineId = this.getConnectionMachineId(selected) || this.getStoredSelectedMachineId()
-            const next = this.findPreferredConnectionForMachine(preferredMachineId)
+            const next = this.findPreferredConnectionForMachine(preferredMachineId, sidebarConnections)
             const previousSelectedId = this.selectedId
             this.selectedId = next?.client_id || ''
 
             if (next && next.client_id !== previousSelectedId) {
+                this.rememberSelectedMachineId(this.getConnectionMachineId(next))
                 this.ensureOutputBucket?.(next.client_id)
                 this.refreshClientRevisionStatus(next)
             }
@@ -689,16 +691,36 @@ const passwordInput = h({
             })
 
             const activeItems = []
-            const offlineItems = []
+            const activeMachineIds = new Set()
+            const latestOfflineByMachine = new Map()
+            const offlineWithoutMachine = []
 
             ordered.forEach((item) => {
-                if (this.getConnectionDisplayState(item) === 'offline') {
-                    offlineItems.push(item)
-                } else {
+                const state = this.getConnectionDisplayState(item)
+                const machineId = this.getConnectionMachineId(item)
+
+                if (state !== 'offline') {
                     activeItems.push(item)
+                    if (machineId) activeMachineIds.add(machineId)
+                    return
+                }
+
+                if (!machineId) {
+                    offlineWithoutMachine.push(item)
+                    return
+                }
+
+                const existing = latestOfflineByMachine.get(machineId)
+                if (!existing || this.getConnectionActivityTimeMs(item) >= this.getConnectionActivityTimeMs(existing)) {
+                    latestOfflineByMachine.set(machineId, item)
                 }
             })
 
+            const offlineItems = offlineWithoutMachine.concat(
+                Array.from(latestOfflineByMachine.entries())
+                    .filter(([machineId]) => !activeMachineIds.has(machineId))
+                    .map(([, item]) => item),
+            )
             offlineItems.sort(this.compareConnectionActivityDesc)
 
             return activeItems.concat(offlineItems)
