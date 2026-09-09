@@ -1141,7 +1141,7 @@ body.device-touch-callout-guard * {
   border: 0;
   background: transparent;
   color: var(--el-text-color-regular);
-  //font-size: var(--el-font-size-base);
+  font-size: var(--el-font-size-base);
   font-size: 14px;
   line-height: 22px;
   text-align: left;

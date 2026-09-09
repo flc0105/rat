@@ -77,6 +77,14 @@ class CommandHistoryOrchestrator:
             eof
         )
 
+    def discard_execution(self, conn, entry_id: str) -> bool:
+        """
+        丢弃尚未真正进入执行阶段的 history entry。
+        """
+        if conn is None or not entry_id:
+            return False
+        return self.history_store.write_service.delete_execution_entry_for_connection(conn, entry_id)
+
     def finalize_execution(self, conn, entry_id: str, ok: bool, cwd_end: str = ''):
         """
         统一结束一次执行历史。

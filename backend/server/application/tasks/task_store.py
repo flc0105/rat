@@ -44,6 +44,17 @@ class WebTaskStore:
             self._tasks[task_id] = task
         return task
 
+    def delete_task(self, task_id: str) -> bool:
+        """
+        删除尚未进入执行阶段的任务记录。
+        """
+        normalized_task_id = str(task_id or '').strip()
+        if not normalized_task_id:
+            return False
+
+        with self._lock:
+            return self._tasks.pop(normalized_task_id, None) is not None
+
     def request_cancel(self, task_id: str) -> dict | None:
         """
         请求取消任务

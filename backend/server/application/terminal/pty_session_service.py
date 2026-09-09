@@ -21,6 +21,7 @@ class PtySessionService:
         self.event_bus = event_bus
         self._lock = threading.RLock()
         self._sessions = {}
+        self._cleanup_timers = {}
         self.max_chunks = 500
 
     def create_session(self, client_id: str, cols: int = 120, rows: int = 32, shell: str = '', cwd: str = '') -> dict:
@@ -272,18 +273,37 @@ class PtySessionService:
             pass
 
     def _schedule_terminal_session_cleanup(self, pty_session_id: str):
+        session_id = str(pty_session_id)
+
         def cleanup():
             with self._lock:
-                item = self._sessions.get(str(pty_session_id))
+                if self._cleanup_timers.get(session_id) is not timer:
+                    return
+                self._cleanup_timers.pop(session_id, None)
+
+                item = self._sessions.get(session_id)
                 if not item:
                     return
                 if item.get('status') not in ('closing', 'closed', 'error'):
                     return
-                self._sessions.pop(str(pty_session_id), None)
+                self._sessions.pop(session_id, None)
 
-        timer = threading.Timer(self.TERMINAL_SESSION_RETENTION_SECONDS, cleanup)
-        timer.daemon = True
-        timer.start()
+        with self._lock:
+            existing_timer = self._cleanup_timers.get(session_id)
+            if existing_timer is not None and existing_timer.is_alive():
+                return
+
+            timer = threading.Timer(self.TERMINAL_SESSION_RETENTION_SECONDS, cleanup)
+            timer.daemon = True
+            self._cleanup_timers[session_id] = timer
+
+        try:
+            timer.start()
+        except Exception:
+            with self._lock:
+                if self._cleanup_timers.get(session_id) is timer:
+                    self._cleanup_timers.pop(session_id, None)
+            raise
 
     def _get_required(self, pty_session_id: str) -> dict:
         with self._lock:

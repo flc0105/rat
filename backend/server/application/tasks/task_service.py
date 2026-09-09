@@ -59,13 +59,35 @@ class WebTaskService:
             task_type=request.task_type,
         )
 
-        task = self.task_store.create_task(
-            request.client_id,
-            request.command,
-            tab_id=request.tab_id,
-        )
+        try:
+            task = self.task_store.create_task(
+                request.client_id,
+                request.command,
+                tab_id=request.tab_id,
+            )
+        except Exception:
+            if entry_id:
+                try:
+                    self.history_orchestrator.discard_execution(conn, entry_id)
+                except Exception:
+                    # Cleanup must not replace the original task creation failure.
+                    pass
+            raise
+
         task['history_entry_id'] = entry_id
         return task
+
+    def _discard_task_setup(self, conn, task: dict):
+        task_id = str(task.get('task_id') or '').strip()
+        history_entry_id = str(task.get('history_entry_id') or '').strip()
+        if task_id:
+            self.task_store.delete_task(task_id)
+        if history_entry_id:
+            try:
+                self.history_orchestrator.discard_execution(conn, history_entry_id)
+            except Exception:
+                # Cleanup must not replace the original submission failure.
+                pass
 
     def _build_task_context(self, conn, task: dict, request: WebExecutionTaskRequest) -> TaskExecutionContext:
         context = TaskExecutionContext.from_task(
@@ -144,13 +166,24 @@ class WebTaskService:
 
     def _submit_request(self, request: WebExecutionTaskRequest):
         conn = self.server.get_target_connection_by_client_id(request.client_id)
+        runner = self._resolve_runner(request.runner_name)
         task = self._create_task_with_history(conn, request)
         context = self._build_task_context(conn, task, request)
-        runner = self._resolve_runner(request.runner_name)
+        acquired = False
 
-        if request.use_foreground_guard:
-            self._acquire_task(context)
-        self._start_task_thread(runner, context)
+        try:
+            if request.use_foreground_guard:
+                self._acquire_task(context)
+                acquired = True
+            self._start_task_thread(runner, context)
+        except Exception:
+            if acquired:
+                context.session.release_foreground_task(
+                    task_id=context.task_id,
+                    command=context.command,
+                )
+            self._discard_task_setup(conn, task)
+            raise
 
         return {
             'task_id': context.task_id,

@@ -24,6 +24,9 @@
                 <span class="banner-transfer-symbol">⇅</span>
                 <span v-if="activeTransferCount" class="banner-transfer-count">{{ activeTransferCount }}</span>
               </button>
+
+
+
               <button
                 class="banner-notification-action"
                 type="button"
@@ -32,6 +35,7 @@
               >
                 <el-icon><Bell /></el-icon>
               </button>
+              <span class="tool-separator" style="margin-right: 12px;"></span>
               <button
                 class="banner-inline-action"
                 type="button"
