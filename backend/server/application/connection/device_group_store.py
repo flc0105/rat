@@ -1,11 +1,6 @@
-import json
-import os
-import tempfile
 import threading
 import uuid
 from datetime import datetime
-
-from core.utils.logger import logger
 
 
 class DeviceGroupStore:
@@ -16,14 +11,13 @@ class DeviceGroupStore:
     - Groups are user-defined and have stable IDs.
     - Membership is keyed by machine_id, never by client_id / connection.
     - Deleting a group keeps machines but clears their group assignment.
-    - Data is persisted under runtime as one small JSON document.
+    - Data is persisted in the shared runtime/rch.db database.
     """
 
     VERSION = 1
 
-    def __init__(self, file_path: str):
-        self.file_path = os.path.abspath(file_path)
-        os.makedirs(os.path.dirname(self.file_path), exist_ok=True)
+    def __init__(self, database):
+        self.database = database
         self._lock = threading.RLock()
 
     def _now_iso(self) -> str:
@@ -46,55 +40,24 @@ class DeviceGroupStore:
         }
 
     def _read_unlocked(self) -> dict:
-        if not os.path.isfile(self.file_path):
-            return self._empty_state()
-
-        try:
-            with open(self.file_path, 'r', encoding='utf-8') as fp:
-                raw = json.load(fp)
-        except Exception:
-            logger.error('DeviceGroupStore read failed: %s', self.file_path, exc_info=True)
-            return self._empty_state()
-
-        if not isinstance(raw, dict):
-            return self._empty_state()
-
-        groups = []
-        seen_ids = set()
-        seen_names = set()
-
-        for item in raw.get('groups') or []:
-            if not isinstance(item, dict):
-                continue
-
-            group_id = self._normalize_group_id(item.get('group_id') or item.get('id'))
-            name = self._normalize_group_name(item.get('name'))
-            if not group_id or not name:
-                continue
-
-            name_key = name.casefold()
-            if group_id in seen_ids or name_key in seen_names:
-                continue
-
-            seen_ids.add(group_id)
-            seen_names.add(name_key)
-            groups.append({
-                'group_id': group_id,
-                'name': name,
-                'created_at': str(item.get('created_at') or ''),
-                'updated_at': str(item.get('updated_at') or ''),
-            })
-
-        valid_group_ids = {item['group_id'] for item in groups}
-        machine_groups = {}
-        raw_machine_groups = raw.get('machine_groups') or {}
-        if isinstance(raw_machine_groups, dict):
-            for machine_id, group_id in raw_machine_groups.items():
-                machine_key = self._normalize_machine_id(machine_id)
-                normalized_group_id = self._normalize_group_id(group_id)
-                if machine_key and normalized_group_id in valid_group_ids:
-                    machine_groups[machine_key] = normalized_group_id
-
+        conn = self.database.connection()
+        groups = [
+            {
+                'group_id': row['group_id'],
+                'name': row['name'],
+                'created_at': row['created_at'],
+                'updated_at': row['updated_at'],
+            }
+            for row in conn.execute(
+                'SELECT group_id, name, created_at, updated_at FROM device_groups ORDER BY created_at ASC, group_id ASC'
+            ).fetchall()
+        ]
+        machine_groups = {
+            row['machine_id']: row['group_id']
+            for row in conn.execute(
+                'SELECT machine_id, group_id FROM device_group_members'
+            ).fetchall()
+        }
         return {
             'version': self.VERSION,
             'groups': groups,
@@ -102,23 +65,25 @@ class DeviceGroupStore:
         }
 
     def _write_unlocked(self, state: dict):
-        dir_name = os.path.dirname(self.file_path)
-        fd, temp_path = tempfile.mkstemp(
-            prefix='device_groups_',
-            suffix='.tmp',
-            dir=dir_name,
-        )
-
-        try:
-            with os.fdopen(fd, 'w', encoding='utf-8') as fp:
-                json.dump(state, fp, ensure_ascii=False, indent=2)
-            os.replace(temp_path, self.file_path)
-        finally:
-            try:
-                if os.path.exists(temp_path):
-                    os.remove(temp_path)
-            except Exception:
-                logger.warning('DeviceGroupStore temp cleanup failed: %s', temp_path, exc_info=True)
+        with self.database.transaction() as conn:
+            conn.execute('DELETE FROM device_group_members')
+            conn.execute('DELETE FROM device_groups')
+            for item in state.get('groups') or []:
+                conn.execute(
+                    'INSERT INTO device_groups(group_id, name, created_at, updated_at) VALUES (?, ?, ?, ?)',
+                    (
+                        item.get('group_id') or '', item.get('name') or '',
+                        item.get('created_at') or '', item.get('updated_at') or '',
+                    ),
+                )
+            valid_group_ids = {str(item.get('group_id') or '') for item in state.get('groups') or []}
+            for machine_id, group_id in (state.get('machine_groups') or {}).items():
+                if str(group_id or '') not in valid_group_ids:
+                    continue
+                conn.execute(
+                    'INSERT INTO device_group_members(machine_id, group_id) VALUES (?, ?)',
+                    (self._normalize_machine_id(machine_id), str(group_id or '').strip()),
+                )
 
     def _copy_state(self, state: dict) -> dict:
         return {

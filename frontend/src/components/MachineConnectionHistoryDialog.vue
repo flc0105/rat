@@ -43,19 +43,6 @@
       </div>
 
       <el-alert
-        v-if="history.legacy_command_session_count"
-        class="machine-history-alert"
-        type="info"
-        :closable="false"
-        show-icon
-      >
-        <template #title>
-          {{ history.legacy_command_session_count }} older session(s) were found only from existing command history.
-          Their real online/offline times were never recorded, so those rows are marked as command-history-only instead of inventing timestamps.
-        </template>
-      </el-alert>
-
-      <el-alert
         v-if="history.unassigned_command_count"
         class="machine-history-alert"
         type="warning"
@@ -111,15 +98,6 @@
                 <div class="machine-session-meta-item machine-session-meta-wide">
                   <span class="label">Current / last cwd</span>
                   <span class="value">{{ scope.row.cwd || '-' }}</span>
-                </div>
-                <div
-                  v-if="scope.row.tracking_source === 'command_history'"
-                  class="machine-session-meta-item machine-session-meta-wide"
-                >
-                  <span class="label">Known command activity</span>
-                  <span class="value">
-                    {{ formatDateTime(scope.row.first_command_at) }} → {{ formatDateTime(scope.row.last_command_at) }}
-                  </span>
                 </div>
               </div>
 
@@ -222,7 +200,7 @@
 
         <el-table-column label="Duration" width="108">
           <template #default="scope">
-            {{ scope.row.tracking_source === 'command_history' ? '-' : formatDuration(scope.row.duration_ms) }}
+            {{ formatDuration(scope.row.duration_ms) }}
           </template>
         </el-table-column>
 
@@ -238,8 +216,7 @@
       </div>
 
       <div v-if="history.tracking_started_at" class="machine-history-footer-note">
-        Precise connection lifecycle tracking started at {{ formatDateTime(history.tracking_started_at) }}.
-        Command details reuse the machine command history; tracked sessions also keep a lightweight command index so old counts survive normal history retention trimming.
+        Connection lifecycle and command executions are stored in rch.db. Command details are loaded from the permanent execution history for each client session.
       </div>
     </div>
   </el-dialog>
@@ -338,14 +315,12 @@ export default {
     },
 
     sessionStatusText(row) {
-      if (row?.tracking_source === 'command_history') return 'history only'
       if (row?.connection_state === 'online') return 'online'
       if (row?.connection_state === 'interrupted') return 'interrupted'
       return 'offline'
     },
 
     sessionStatusTagType(row) {
-      if (row?.tracking_source === 'command_history') return 'info'
       if (row?.connection_state === 'online') return 'success'
       if (row?.connection_state === 'interrupted') return 'warning'
       return 'info'

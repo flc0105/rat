@@ -457,6 +457,19 @@
                   </div>
                 </div>
               </el-card>
+
+              <div
+                v-if="commandExecutionHasMore"
+                class="execution-history-load-more"
+              >
+                <el-button
+                  plain
+                  :loading="commandExecutionLoadingMore"
+                  @click="loadMoreCommandExecutionHistory"
+                >
+                  Load More
+                </el-button>
+              </div>
             </div>
           </div>
         </el-tab-pane>
@@ -537,7 +550,11 @@ Star,
       commandHistoryItems: [],
       commandHistoryPinningCommand: '',
       commandExecutionHistoryLoading: false,
+      commandExecutionLoadingMore: false,
       commandExecutionItems: [],
+      commandExecutionNextCursor: '',
+      commandExecutionHasMore: false,
+      commandExecutionTotalCount: 0,
       commandExecutionDeletingEntryId: '',
       commandHistoryActiveTab: 'quick',
       commandHistorySearchText: '',
@@ -575,7 +592,7 @@ Star,
         quickVisible: this.filteredCommandHistoryItems.length,
         quickTotal: Array.isArray(this.commandHistoryItems) ? this.commandHistoryItems.length : 0,
         fullVisible: this.filteredCommandExecutionItems.length,
-        fullTotal: Array.isArray(this.commandExecutionItems) ? this.commandExecutionItems.length : 0,
+        fullTotal: Number(this.commandExecutionTotalCount || 0),
       }
     },
 
@@ -670,6 +687,9 @@ Star,
       if (!machineId) {
         this.commandHistoryItems = []
         this.commandExecutionItems = []
+        this.commandExecutionNextCursor = ''
+        this.commandExecutionHasMore = false
+        this.commandExecutionTotalCount = 0
 
         if (!silent) {
           ElMessage.warning('Current device identity is unavailable')
@@ -683,7 +703,7 @@ Star,
       try {
         const [quickRes, fullRes] = await Promise.all([
           fetch(`/api/machines/${encodeURIComponent(machineId)}/command-history`),
-          fetch(`/api/machines/${encodeURIComponent(machineId)}/command-history/full`),
+          fetch(`/api/machines/${encodeURIComponent(machineId)}/command-history/full?limit=50`),
         ])
 
         const quickJson = await quickRes.json()
@@ -698,7 +718,11 @@ Star,
         }
 
         this.commandHistoryItems = Array.isArray(quickJson.data) ? quickJson.data : []
-        this.commandExecutionItems = Array.isArray(fullJson.data) ? fullJson.data : []
+        const fullData = fullJson.data && typeof fullJson.data === 'object' ? fullJson.data : {}
+        this.commandExecutionItems = Array.isArray(fullData.items) ? fullData.items : []
+        this.commandExecutionNextCursor = String(fullData.next_cursor || '')
+        this.commandExecutionHasMore = fullData.has_more === true
+        this.commandExecutionTotalCount = Number(fullData.total_count || this.commandExecutionItems.length)
 
         if (
           this.selectedCommandExecutionEntryId
@@ -712,6 +736,9 @@ Star,
       } catch (e) {
         this.commandHistoryItems = []
         this.commandExecutionItems = []
+        this.commandExecutionNextCursor = ''
+        this.commandExecutionHasMore = false
+        this.commandExecutionTotalCount = 0
 
         if (!silent) {
           ElMessage.error(e.message || 'Failed to load command history')
@@ -719,6 +746,44 @@ Star,
       } finally {
         this.commandHistoryLoading = false
         this.commandExecutionHistoryLoading = false
+      }
+    },
+
+    async loadMoreCommandExecutionHistory() {
+      if (this.commandExecutionLoadingMore || !this.commandExecutionHasMore) return
+
+      const machineId = this.getSelectedHistoryMachineId()
+      if (!machineId) return
+
+      this.commandExecutionLoadingMore = true
+      try {
+        const params = new URLSearchParams({ limit: '50' })
+        if (this.commandExecutionNextCursor) {
+          params.set('cursor', this.commandExecutionNextCursor)
+        }
+        const res = await fetch(
+          `/api/machines/${encodeURIComponent(machineId)}/command-history/full?${params.toString()}`,
+        )
+        const json = await res.json()
+        if (!res.ok || json.code !== 0) {
+          throw new Error(json.message || 'Failed to load more execution history')
+        }
+
+        const data = json.data && typeof json.data === 'object' ? json.data : {}
+        const items = Array.isArray(data.items) ? data.items : []
+        const existingIds = new Set(this.commandExecutionItems.map(item => item?.entry_id).filter(Boolean))
+        for (const item of items) {
+          if (item?.entry_id && existingIds.has(item.entry_id)) continue
+          this.commandExecutionItems.push(item)
+          if (item?.entry_id) existingIds.add(item.entry_id)
+        }
+        this.commandExecutionNextCursor = String(data.next_cursor || '')
+        this.commandExecutionHasMore = data.has_more === true
+        this.commandExecutionTotalCount = Number(data.total_count || this.commandExecutionTotalCount || this.commandExecutionItems.length)
+      } catch (e) {
+        ElMessage.error(e.message || 'Failed to load more execution history')
+      } finally {
+        this.commandExecutionLoadingMore = false
       }
     },
 
@@ -1538,6 +1603,12 @@ Star,
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.execution-history-load-more {
+  display: flex;
+  justify-content: center;
+  padding: 12px 0 4px;
 }
 
 .execution-history-actions {

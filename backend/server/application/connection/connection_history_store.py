@@ -1,32 +1,31 @@
 import json
-import os
 import threading
 from datetime import datetime
 
-from core.utils.files import secure_filename
-
 
 class ConnectionHistoryStore:
-    """
-    服务端机器连接历史存储。
-
-    职责：
-    - 按 machine_id 持久化每个 client_id(session) 的连接生命周期
-    - 保存连接时的必要设备快照
-    - 记录上线、最后活动、下线和在线时长
-    """
+    """SQLite-backed machine/client connection lifecycle history."""
 
     SCHEMA_VERSION = 1
 
-    def __init__(self, root_dir: str):
-        self.root_dir = os.path.abspath(root_dir)
-        self._lock = threading.RLock()
-        os.makedirs(self.root_dir, exist_ok=True)
+    SNAPSHOT_FIELDS = (
+        'machine_id', 'client_id', 'hostname', 'addr', 'os_type', 'os_alias', 'os_ver',
+        'os_name', 'os_full', 'arch', 'manufacturer', 'model', 'integrity', 'cwd',
+        'build_version', 'python_ver', 'process_id', 'launch_command', 'username',
+        'process_name', 'http_transfer_mode', 'python_execution_mode',
+        'remote_watchdog_enabled', 'local_watchdog_enabled',
+    )
 
-    def _now_iso(self) -> str:
+    def __init__(self, database):
+        self.database = database
+        self._lock = threading.RLock()
+
+    @staticmethod
+    def _now_iso() -> str:
         return datetime.now().isoformat()
 
-    def _safe_parse_iso(self, value: str):
+    @staticmethod
+    def _safe_parse_iso(value: str):
         text = str(value or '').strip()
         if not text:
             return None
@@ -35,169 +34,106 @@ class ConnectionHistoryStore:
         except Exception:
             return None
 
-    def _normalize_machine_id(self, machine_id: str) -> str:
-        safe_name = secure_filename(str(machine_id or '').strip())
-        return safe_name or 'unknown_machine'
+    def _to_ms(self, value: str) -> int:
+        parsed = self._safe_parse_iso(value)
+        return int(parsed.timestamp() * 1000) if parsed is not None else 0
 
-    def _get_file_path(self, machine_id: str) -> str:
-        return os.path.join(self.root_dir, f'{self._normalize_machine_id(machine_id)}.json')
+    @staticmethod
+    def _json_dumps(value) -> str:
+        return json.dumps(value or {}, ensure_ascii=False, separators=(',', ':'))
 
-    def _empty_payload(self, machine_id: str) -> dict:
-        return {
-            'schema_version': self.SCHEMA_VERSION,
-            'machine_id': str(machine_id or '').strip(),
-            'tracking_started_at': '',
-            'sessions': [],
-        }
-
-    def _read_payload_unlocked(self, machine_id: str) -> dict:
-        file_path = self._get_file_path(machine_id)
-        if not os.path.isfile(file_path):
-            return self._empty_payload(machine_id)
-
+    @staticmethod
+    def _json_loads(value) -> dict:
         try:
-            with open(file_path, 'r', encoding='utf-8') as file_obj:
-                payload = json.load(file_obj)
-            if isinstance(payload, dict):
-                payload.setdefault('schema_version', self.SCHEMA_VERSION)
-                payload.setdefault('machine_id', str(machine_id or '').strip())
-                payload.setdefault('tracking_started_at', '')
-                payload.setdefault('sessions', [])
-                if not isinstance(payload.get('sessions'), list):
-                    payload['sessions'] = []
-                return payload
+            payload = json.loads(value or '{}')
+            return payload if isinstance(payload, dict) else {}
         except Exception:
-            pass
+            return {}
 
-        return self._empty_payload(machine_id)
-
-    def _write_payload_unlocked(self, machine_id: str, payload: dict):
-        file_path = self._get_file_path(machine_id)
-        os.makedirs(os.path.dirname(file_path), exist_ok=True)
-        with open(file_path, 'w', encoding='utf-8') as file_obj:
-            json.dump(payload, file_obj, ensure_ascii=False, indent=2)
-
-    def _find_session(self, sessions: list, client_id: str):
-        target_client_id = str(client_id or '').strip()
-        if not target_client_id:
-            return None
-
-        for item in reversed(sessions or []):
-            if not isinstance(item, dict):
-                continue
-            if str(item.get('client_id') or '').strip() == target_client_id:
-                return item
-        return None
-
-    def _update_duration(self, session: dict, now_value: str = ''):
-        connected_at = self._safe_parse_iso(session.get('connected_at'))
-        end_value = session.get('disconnected_at') or now_value
-        ended_at = self._safe_parse_iso(end_value)
-
-        if connected_at is None or ended_at is None:
-            session['duration_ms'] = 0
-            return
-
-        session['duration_ms'] = max(int((ended_at - connected_at).total_seconds() * 1000), 0)
-
-    def _apply_connection_snapshot(self, session: dict, connection: dict):
-        snapshot_fields = (
-            'machine_id',
-            'client_id',
-            'hostname',
-            'addr',
-            'os_type',
-            'os_alias',
-            'os_ver',
-            'os_name',
-            'os_full',
-            'arch',
-            'manufacturer',
-            'model',
-            'integrity',
-            'cwd',
-            'build_version',
-            'python_ver',
-            'process_id',
-            'launch_command',
-            'username',
-            'process_name',
-            'http_transfer_mode',
-            'python_execution_mode',
-            'remote_watchdog_enabled',
-            'local_watchdog_enabled',
-        )
-
-        for field in snapshot_fields:
+    def _build_snapshot(self, connection: dict, previous: dict | None = None) -> dict:
+        previous = previous if isinstance(previous, dict) else {}
+        result = dict(previous)
+        for field in self.SNAPSHOT_FIELDS:
             value = connection.get(field)
             if value is None:
                 continue
-            if isinstance(value, str) and not value and field in session:
+            if isinstance(value, str) and not value and field in result:
                 continue
-            session[field] = value
-
+            result[field] = value
         last_seen_at = str(connection.get('last_seen_at') or '').strip()
         if last_seen_at:
-            session['last_seen_at'] = last_seen_at
+            result['last_seen_at'] = last_seen_at
+        return result
 
-    def record_connected(self, connection: dict):
+    def _row_to_session(self, row, *, now_iso: str = '') -> dict:
+        snapshot = self._json_loads(row['snapshot_json'])
+        result = dict(snapshot)
+        result.update({
+            'machine_id': row['machine_id'],
+            'client_id': row['client_id'],
+            'connected_at': row['connected_at'],
+            'disconnected_at': row['disconnected_at'],
+            'last_seen_at': row['last_seen_at'],
+            'duration_ms': int(row['duration_ms'] or 0),
+            'connection_state': row['connection_state'],
+            'disconnect_reason': row['disconnect_reason'],
+            'tracking_source': row['tracking_source'] or 'connection_lifecycle',
+            'commands': [],
+        })
+        if not str(result.get('disconnected_at') or '').strip():
+            result['connection_state'] = 'online'
+            start = self._safe_parse_iso(result.get('connected_at'))
+            end = self._safe_parse_iso(now_iso or self._now_iso())
+            if start is not None and end is not None:
+                result['duration_ms'] = max(int((end - start).total_seconds() * 1000), 0)
+        return result
+
+    def _record_connected_tx(self, conn, connection: dict):
         machine_id = str((connection or {}).get('machine_id') or '').strip()
         client_id = str((connection or {}).get('client_id') or '').strip()
         if not machine_id or not client_id:
             return
 
         connected_at = str(connection.get('connected_at') or self._now_iso()).strip()
+        existing = conn.execute(
+            'SELECT * FROM connection_sessions WHERE machine_id = ? AND client_id = ?',
+            (machine_id, client_id),
+        ).fetchone()
+        previous_snapshot = self._json_loads(existing['snapshot_json']) if existing else {}
+        snapshot = self._build_snapshot(connection, previous_snapshot)
+        last_seen_at = str(connection.get('last_seen_at') or connected_at).strip()
 
-        with self._lock:
-            payload = self._read_payload_unlocked(machine_id)
-            sessions = payload.setdefault('sessions', [])
+        if existing is None:
+            conn.execute(
+                '''
+                INSERT INTO connection_sessions(
+                    machine_id, client_id, connected_at, connected_at_ms, disconnected_at,
+                    disconnected_at_ms, last_seen_at, duration_ms, connection_state,
+                    disconnect_reason, tracking_source, snapshot_json
+                ) VALUES (?, ?, ?, ?, '', 0, ?, 0, 'online', '', 'connection_lifecycle', ?)
+                ''',
+                (machine_id, client_id, connected_at, self._to_ms(connected_at), last_seen_at, self._json_dumps(snapshot)),
+            )
+            return
 
-            # 如果服务端上次异常退出，旧 session 可能没有收到正常 close。
-            # 新 session 建立时，用旧记录最后活动时间收口，避免永久显示在线。
-            for item in sessions:
-                if not isinstance(item, dict):
-                    continue
-                if str(item.get('client_id') or '').strip() == client_id:
-                    continue
-                if str(item.get('disconnected_at') or '').strip():
-                    continue
+        original_connected_at = str(existing['connected_at'] or connected_at).strip()
+        conn.execute(
+            '''
+            UPDATE connection_sessions SET
+                connected_at = ?, connected_at_ms = ?, disconnected_at = '', disconnected_at_ms = 0,
+                last_seen_at = ?, duration_ms = 0, connection_state = 'online', disconnect_reason = '',
+                snapshot_json = ?
+            WHERE machine_id = ? AND client_id = ?
+            ''',
+            (
+                original_connected_at, self._to_ms(original_connected_at), last_seen_at,
+                self._json_dumps(snapshot), machine_id, client_id,
+            ),
+        )
 
-                fallback_disconnected_at = str(item.get('last_seen_at') or item.get('connected_at') or connected_at).strip()
-                item['disconnected_at'] = fallback_disconnected_at
-                item['connection_state'] = 'interrupted'
-                item['disconnect_reason'] = 'server_interrupted'
-                self._update_duration(item)
-
-            session = self._find_session(sessions, client_id)
-            if session is None:
-                session = {
-                    'client_id': client_id,
-                    'machine_id': machine_id,
-                    'connected_at': connected_at,
-                    'disconnected_at': '',
-                    'last_seen_at': str(connection.get('last_seen_at') or connected_at).strip(),
-                    'duration_ms': 0,
-                    'connection_state': 'online',
-                    'disconnect_reason': '',
-                    'tracking_source': 'connection_lifecycle',
-                    'commands': [],
-                }
-                sessions.append(session)
-            else:
-                session['connected_at'] = str(session.get('connected_at') or connected_at).strip()
-                session['disconnected_at'] = ''
-                session['connection_state'] = 'online'
-                session['disconnect_reason'] = ''
-
-            session.setdefault('commands', [])
-            self._apply_connection_snapshot(session, connection)
-            self._update_duration(session, now_value=self._now_iso())
-
-            if not payload.get('tracking_started_at'):
-                payload['tracking_started_at'] = connected_at
-
-            payload['machine_id'] = machine_id
-            self._write_payload_unlocked(machine_id, payload)
+    def record_connected(self, connection: dict):
+        with self._lock, self.database.transaction() as conn:
+            self._record_connected_tx(conn, connection)
 
     def record_heartbeat(self, connection: dict):
         machine_id = str((connection or {}).get('machine_id') or '').strip()
@@ -205,55 +141,57 @@ class ConnectionHistoryStore:
         if not machine_id or not client_id:
             return
 
-        with self._lock:
-            payload = self._read_payload_unlocked(machine_id)
-            sessions = payload.setdefault('sessions', [])
-            session = self._find_session(sessions, client_id)
-
-            if session is None:
-                self.record_connected(connection)
+        with self._lock, self.database.transaction() as conn:
+            row = conn.execute(
+                'SELECT * FROM connection_sessions WHERE machine_id = ? AND client_id = ?',
+                (machine_id, client_id),
+            ).fetchone()
+            if row is None:
+                self._record_connected_tx(conn, connection)
                 return
 
-            self._apply_connection_snapshot(session, connection)
-            if not str(session.get('disconnected_at') or '').strip():
-                session['connection_state'] = 'online'
-                self._update_duration(session, now_value=self._now_iso())
+            snapshot = self._build_snapshot(connection, self._json_loads(row['snapshot_json']))
+            last_seen_at = str(connection.get('last_seen_at') or row['last_seen_at'] or '').strip()
+            disconnected_at = str(row['disconnected_at'] or '').strip()
+            duration_ms = int(row['duration_ms'] or 0)
+            state = row['connection_state']
+            if not disconnected_at:
+                state = 'online'
+                start = self._safe_parse_iso(row['connected_at'])
+                end = self._safe_parse_iso(self._now_iso())
+                if start is not None and end is not None:
+                    duration_ms = max(int((end - start).total_seconds() * 1000), 0)
 
-            self._write_payload_unlocked(machine_id, payload)
+            conn.execute(
+                '''UPDATE connection_sessions SET last_seen_at = ?, duration_ms = ?, connection_state = ?, snapshot_json = ?
+                   WHERE machine_id = ? AND client_id = ?''',
+                (last_seen_at, duration_ms, state, self._json_dumps(snapshot), machine_id, client_id),
+            )
 
     def reconcile_active_sessions(self, machine_id: str, active_client_ids: set[str]):
         machine_id_text = str(machine_id or '').strip()
         if not machine_id_text:
             return
+        active_ids = {str(value or '').strip() for value in active_client_ids or set() if str(value or '').strip()}
 
-        active_ids = {
-            str(client_id or '').strip()
-            for client_id in active_client_ids or set()
-            if str(client_id or '').strip()
-        }
-
-        with self._lock:
-            payload = self._read_payload_unlocked(machine_id_text)
-            changed = False
-
-            for item in payload.get('sessions') or []:
-                if not isinstance(item, dict):
+        with self._lock, self.database.transaction() as conn:
+            rows = conn.execute(
+                "SELECT * FROM connection_sessions WHERE machine_id = ? AND disconnected_at = ''",
+                (machine_id_text,),
+            ).fetchall()
+            for row in rows:
+                if str(row['client_id'] or '').strip() in active_ids:
                     continue
-                client_id = str(item.get('client_id') or '').strip()
-                if client_id in active_ids:
-                    continue
-                if str(item.get('disconnected_at') or '').strip():
-                    continue
-
-                # 内存中已经没有这个 session，说明服务端没能拿到正常 close 回调。
-                item['disconnected_at'] = str(item.get('last_seen_at') or item.get('connected_at') or self._now_iso()).strip()
-                item['connection_state'] = 'interrupted'
-                item['disconnect_reason'] = 'server_interrupted'
-                self._update_duration(item)
-                changed = True
-
-            if changed:
-                self._write_payload_unlocked(machine_id_text, payload)
+                disconnected_at = str(row['last_seen_at'] or row['connected_at'] or self._now_iso()).strip()
+                start = self._safe_parse_iso(row['connected_at'])
+                end = self._safe_parse_iso(disconnected_at)
+                duration_ms = max(int((end - start).total_seconds() * 1000), 0) if start and end else 0
+                conn.execute(
+                    '''UPDATE connection_sessions SET disconnected_at = ?, disconnected_at_ms = ?, duration_ms = ?,
+                       connection_state = 'interrupted', disconnect_reason = 'server_interrupted'
+                       WHERE machine_id = ? AND client_id = ?''',
+                    (disconnected_at, self._to_ms(disconnected_at), duration_ms, machine_id_text, row['client_id']),
+                )
 
     def record_disconnected(self, connection: dict):
         machine_id = str((connection or {}).get('machine_id') or '').strip()
@@ -262,160 +200,61 @@ class ConnectionHistoryStore:
             return
 
         disconnected_at = str(connection.get('disconnected_at') or self._now_iso()).strip()
+        with self._lock, self.database.transaction() as conn:
+            row = conn.execute(
+                'SELECT * FROM connection_sessions WHERE machine_id = ? AND client_id = ?',
+                (machine_id, client_id),
+            ).fetchone()
+            if row is None:
+                self._record_connected_tx(conn, connection)
+                row = conn.execute(
+                    'SELECT * FROM connection_sessions WHERE machine_id = ? AND client_id = ?',
+                    (machine_id, client_id),
+                ).fetchone()
 
-        with self._lock:
-            payload = self._read_payload_unlocked(machine_id)
-            sessions = payload.setdefault('sessions', [])
-            session = self._find_session(sessions, client_id)
-
-            if session is None:
-                session = {
-                    'client_id': client_id,
-                    'machine_id': machine_id,
-                    'connected_at': str(connection.get('connected_at') or '').strip(),
-                    'last_seen_at': str(connection.get('last_seen_at') or '').strip(),
-                    'tracking_source': 'connection_lifecycle',
-                    'commands': [],
-                }
-                sessions.append(session)
-
-            self._apply_connection_snapshot(session, connection)
-            session['disconnected_at'] = disconnected_at
-            session['connection_state'] = 'offline'
-            session['disconnect_reason'] = 'disconnected'
-            self._update_duration(session)
-
-            if not payload.get('tracking_started_at'):
-                payload['tracking_started_at'] = str(session.get('connected_at') or disconnected_at).strip()
-
-            payload['machine_id'] = machine_id
-            self._write_payload_unlocked(machine_id, payload)
-
-    def _build_command_snapshot(self, entry: dict) -> dict:
-        return {
-            'entry_id': str(entry.get('entry_id') or '').strip(),
-            'command': entry.get('command') or '',
-            'source': entry.get('source') or '',
-            'status': entry.get('status') or '',
-            'final_status': entry.get('final_status') or '',
-            'started_at': entry.get('started_at') or entry.get('time') or '',
-            'finished_at': entry.get('finished_at') or '',
-            'duration_ms': int(entry.get('duration_ms', 0) or 0),
-            'cwd_start': entry.get('cwd_start') or '',
-            'cwd_end': entry.get('cwd_end') or '',
-            'hostname': entry.get('hostname') or '',
-            'addr': entry.get('addr') or '',
-            'output_summary': entry.get('output_summary') or '',
-            'output_line_count': int(entry.get('output_line_count', 0) or 0),
-            'output_char_count': int(entry.get('output_char_count', 0) or 0),
-            'output_truncated': bool(entry.get('output_truncated', False)),
-            'file_count': int(entry.get('file_count', 0) or 0),
-        }
-
-    def record_command_snapshot(self, entry: dict) -> bool:
-        if not isinstance(entry, dict):
-            return False
-
-        machine_id = str(entry.get('machine_id') or '').strip()
-        client_id = str(entry.get('client_id') or '').strip()
-        entry_id = str(entry.get('entry_id') or '').strip()
-        if not machine_id or not client_id or not entry_id:
-            return False
-
-        with self._lock:
-            payload = self._read_payload_unlocked(machine_id)
-            session = self._find_session(payload.get('sessions') or [], client_id)
-            if session is None:
-                return False
-
-            commands = session.setdefault('commands', [])
-            command_snapshot = self._build_command_snapshot(entry)
-            replaced = False
-
-            for index, item in enumerate(commands):
-                if not isinstance(item, dict):
-                    continue
-                if str(item.get('entry_id') or '').strip() != entry_id:
-                    continue
-                commands[index] = command_snapshot
-                replaced = True
-                break
-
-            if not replaced:
-                commands.append(command_snapshot)
-
-            self._write_payload_unlocked(machine_id, payload)
-            return True
-
-    def remove_command_snapshot(self, machine_id: str, entry_id: str) -> bool:
-        machine_id_text = str(machine_id or '').strip()
-        entry_id_text = str(entry_id or '').strip()
-        if not machine_id_text or not entry_id_text:
-            return False
-
-        with self._lock:
-            payload = self._read_payload_unlocked(machine_id_text)
-            changed = False
-
-            for session in payload.get('sessions') or []:
-                if not isinstance(session, dict):
-                    continue
-                commands = session.get('commands') or []
-                filtered = [
-                    item for item in commands
-                    if not isinstance(item, dict) or str(item.get('entry_id') or '').strip() != entry_id_text
-                ]
-                if len(filtered) != len(commands):
-                    session['commands'] = filtered
-                    changed = True
-
-            if changed:
-                self._write_payload_unlocked(machine_id_text, payload)
-            return changed
-
-    def clear_command_snapshots(self, machine_id: str):
-        machine_id_text = str(machine_id or '').strip()
-        if not machine_id_text:
-            return
-
-        with self._lock:
-            payload = self._read_payload_unlocked(machine_id_text)
-            changed = False
-
-            for session in payload.get('sessions') or []:
-                if not isinstance(session, dict):
-                    continue
-                if session.get('commands'):
-                    session['commands'] = []
-                    changed = True
-
-            if changed:
-                self._write_payload_unlocked(machine_id_text, payload)
+            snapshot = self._build_snapshot(connection, self._json_loads(row['snapshot_json']))
+            start = self._safe_parse_iso(row['connected_at'])
+            end = self._safe_parse_iso(disconnected_at)
+            duration_ms = max(int((end - start).total_seconds() * 1000), 0) if start and end else 0
+            last_seen_at = str(connection.get('last_seen_at') or row['last_seen_at'] or '').strip()
+            conn.execute(
+                '''
+                UPDATE connection_sessions SET
+                    disconnected_at = ?, disconnected_at_ms = ?, last_seen_at = ?, duration_ms = ?,
+                    connection_state = 'offline', disconnect_reason = 'disconnected', snapshot_json = ?
+                WHERE machine_id = ? AND client_id = ?
+                ''',
+                (
+                    disconnected_at, self._to_ms(disconnected_at), last_seen_at, duration_ms,
+                    self._json_dumps(snapshot), machine_id, client_id,
+                ),
+            )
 
     def get_history(self, machine_id: str) -> dict:
         machine_id_text = str(machine_id or '').strip()
         if not machine_id_text:
-            return self._empty_payload('')
+            return {
+                'schema_version': self.SCHEMA_VERSION,
+                'machine_id': '',
+                'tracking_started_at': '',
+                'sessions': [],
+            }
 
         with self._lock:
-            payload = self._read_payload_unlocked(machine_id_text)
+            rows = self.database.connection().execute(
+                '''SELECT * FROM connection_sessions WHERE machine_id = ?
+                   ORDER BY connected_at_ms DESC, client_id DESC''',
+                (machine_id_text,),
+            ).fetchall()
             now_iso = self._now_iso()
-            sessions = []
-
-            for item in reversed(payload.get('sessions') or []):
-                if not isinstance(item, dict):
-                    continue
-                copied = dict(item)
-                if not str(copied.get('disconnected_at') or '').strip():
-                    copied['connection_state'] = 'online'
-                    self._update_duration(copied, now_value=now_iso)
-                else:
-                    self._update_duration(copied)
-                sessions.append(copied)
-
+            sessions = [self._row_to_session(row, now_iso=now_iso) for row in rows]
+            tracking_started_at = min(
+                (str(row['connected_at'] or '') for row in rows if str(row['connected_at'] or '')),
+                default='',
+            )
             return {
-                'schema_version': payload.get('schema_version', self.SCHEMA_VERSION),
-                'machine_id': payload.get('machine_id') or machine_id_text,
-                'tracking_started_at': payload.get('tracking_started_at') or '',
+                'schema_version': self.SCHEMA_VERSION,
+                'machine_id': machine_id_text,
+                'tracking_started_at': tracking_started_at,
                 'sessions': sessions,
             }

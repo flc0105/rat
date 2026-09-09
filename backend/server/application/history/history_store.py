@@ -1,109 +1,47 @@
 import json
-import os
 import threading
+import time
 import uuid
 from datetime import datetime
 
-from core.utils.files import secure_filename
 from server.application.history.history_view_service import HistoryViewService
 from server.application.history.history_write_service import HistoryWriteService
 from server.application.history.pinned_command_store import PinnedCommandStore
 from server.config.config import (
-    COMMAND_HISTORY_MAX_ENTRIES_PER_HOST,
     COMMAND_HISTORY_MAX_OUTPUT_RECORD_CHARS,
     COMMAND_HISTORY_MAX_OUTPUT_RECORDS,
     COMMAND_HISTORY_MAX_OUTPUT_SUMMARY_CHARS,
-    COMMAND_HISTORY_ROOT_DIR,
+    COMMAND_HISTORY_RECENT_LIMIT,
 )
 
 
 class CommandHistoryStore:
-    """
-    服务端命令历史存储。
-
-    职责：
-    - 按 machine_id 持久化命令历史
-    - 提供底层 entry 读写能力
-    - 将写入 / 展示逻辑委托给 write_service / view_service
-    """
+    """SQLite-backed command execution / recent / pinned history store."""
 
     MAX_OUTPUT_RECORD_CHARS = COMMAND_HISTORY_MAX_OUTPUT_RECORD_CHARS
     MAX_OUTPUT_SUMMARY_CHARS = COMMAND_HISTORY_MAX_OUTPUT_SUMMARY_CHARS
     MAX_OUTPUT_RECORDS = COMMAND_HISTORY_MAX_OUTPUT_RECORDS
+    RECENT_LIMIT = COMMAND_HISTORY_RECENT_LIMIT
     TIME_FORMAT = '%Y-%m-%d %H:%M:%S'
-    ENTRY_PIN_FIELDS = ('is_pinned', 'pinned_at', 'pin_order')
 
-    def __init__(self):
-        self.history_root_dir = COMMAND_HISTORY_ROOT_DIR
-        self.max_entries_per_host = COMMAND_HISTORY_MAX_ENTRIES_PER_HOST
+    def __init__(self, database):
+        self.database = database
         self._lock = threading.RLock()
         self.artifact_service = None
-        self.connection_history_store = None
-
-        self._prepare_dirs()
-        self.pinned_store = PinnedCommandStore(self.history_root_dir, self._now_text)
+        self.pinned_store = PinnedCommandStore(database, self._now_text)
         self.write_service = HistoryWriteService(self)
         self.view_service = HistoryViewService(self)
 
-    def _prepare_dirs(self):
-        os.makedirs(self.history_root_dir, exist_ok=True)
-
-    def _normalize_machine_id(self, machine_id: str) -> str:
-        safe_name = secure_filename((machine_id or '').strip())
-        return safe_name or 'unknown_machine'
-
-    def _get_history_file_path(self, machine_id: str) -> str:
-        normalized = self._normalize_machine_id(machine_id)
-        return os.path.join(self.history_root_dir, f'{normalized}.json')
-
-    def _read_entries(self, machine_id: str) -> list:
-        file_path = self._get_history_file_path(machine_id)
-        if not os.path.isfile(file_path):
-            return []
-
-        try:
-            with open(file_path, 'r', encoding='utf-8') as file_obj:
-                payload = json.load(file_obj)
-                if isinstance(payload, list):
-                    return payload
-        except Exception:
-            pass
-
-        return []
-
-    def _strip_entry_pin_fields(self, entry: dict) -> dict:
-        if not isinstance(entry, dict):
-            return {}
-
-        for field in self.ENTRY_PIN_FIELDS:
-            entry.pop(field, None)
-        return entry
-
-    def _strip_entries_pin_fields(self, entries: list) -> list:
-        return [self._strip_entry_pin_fields(item) for item in entries or [] if isinstance(item, dict)]
-
-    def _has_entry_pin_fields(self, entries: list) -> bool:
-        for item in entries or []:
-            if not isinstance(item, dict):
-                continue
-            if any(field in item for field in self.ENTRY_PIN_FIELDS):
-                return True
-        return False
-
-    def _write_entries(self, machine_id: str, entries: list):
-        file_path = self._get_history_file_path(machine_id)
-        clean_entries = self._strip_entries_pin_fields(entries)
-        with open(file_path, 'w', encoding='utf-8') as file_obj:
-            json.dump(clean_entries, file_obj, ensure_ascii=False, indent=2)
-
     def _now_text(self) -> str:
         return datetime.now().strftime(self.TIME_FORMAT)
+
+    def _now_ms(self) -> int:
+        return int(time.time() * 1000)
 
     def _parse_time_text(self, value: str):
         text = str(value or '').strip()
         if not text:
             return None
-
         try:
             return datetime.strptime(text, self.TIME_FORMAT)
         except Exception:
@@ -112,7 +50,6 @@ class CommandHistoryStore:
     def _build_entry(self, conn, command: str, source: str) -> dict:
         session_info = getattr(conn, 'session_info', None)
         started_text = self._now_text()
-
         return {
             'entry_id': uuid.uuid4().hex,
             'time': started_text,
@@ -144,50 +81,34 @@ class CommandHistoryStore:
             'files': [],
         }
 
-    def _trim_entries(self, entries: list) -> list:
-        if len(entries) > self.max_entries_per_host:
-            return entries[-self.max_entries_per_host:]
-        return entries
-
     def _get_machine_id_from_conn(self, conn) -> str:
         session_info = getattr(conn, 'session_info', None)
         return getattr(session_info, 'machine_id', '') or 'unknown_machine'
 
-    def _find_entry(self, entries: list, entry_id: str):
-        for item in reversed(entries):
-            if item.get('entry_id') == entry_id:
-                return item
-        return None
-
-    def _safe_text(self, text) -> str:
+    @staticmethod
+    def _safe_text(text) -> str:
         if text is None:
             return ''
         return str(text)
 
-    def _count_output_lines(self, text: str) -> int:
+    @staticmethod
+    def _count_output_lines(text: str) -> int:
         if not text:
             return 0
         return max(len(text.splitlines()), 1)
 
     def _build_output_summary(self, entry: dict) -> str:
         if entry.get('has_files'):
-            file_count = entry.get('file_count', 0)
+            file_count = int(entry.get('file_count', 0) or 0)
             if file_count > 0:
                 return f'Produced {file_count} file(s)'
 
-        records = entry.get('output_records') or []
-        for item in reversed(records):
-            text = self._safe_text(item.get('text'))
+        for item in reversed(entry.get('output_records') or []):
+            text = self._safe_text(item.get('text')).strip()
             if not text:
                 continue
-
-            text = text.strip()
-            if not text:
-                continue
-
             if '\n' not in text and '\r' not in text:
                 return text[:self.MAX_OUTPUT_SUMMARY_CHARS]
-
             break
 
         status = entry.get('status') or ''
@@ -198,22 +119,300 @@ class CommandHistoryStore:
         return 'No output'
 
     def _update_duration(self, entry: dict):
-        started_at = entry.get('started_at') or ''
-        finished_at = entry.get('finished_at') or ''
-        start_dt = self._parse_time_text(started_at)
-        end_dt = self._parse_time_text(finished_at)
-
+        start_dt = self._parse_time_text(entry.get('started_at') or '')
+        end_dt = self._parse_time_text(entry.get('finished_at') or '')
         if start_dt is None or end_dt is None:
             entry['duration_ms'] = 0
             return
-
         entry['duration_ms'] = max(int((end_dt - start_dt).total_seconds() * 1000), 0)
 
-    def _normalize_entry_flags(self, entry: dict) -> dict:
-        """
-        兼容旧调用名：execution history entry 不再承载 pin 字段。
-        """
-        return self._strip_entry_pin_fields(entry)
+    @staticmethod
+    def _json_dumps(value) -> str:
+        return json.dumps(value, ensure_ascii=False, separators=(',', ':'))
+
+    @staticmethod
+    def _json_loads(value, default):
+        try:
+            parsed = json.loads(value or '')
+            return parsed if isinstance(parsed, type(default)) else default
+        except Exception:
+            return default
+
+    def _row_to_entry(self, row) -> dict | None:
+        if row is None:
+            return None
+        return {
+            '_started_at_ms': int(row['started_at_ms'] or 0),
+            'entry_id': row['entry_id'],
+            'time': row['time_text'],
+            'started_at': row['started_at'],
+            'finished_at': row['finished_at'],
+            'duration_ms': int(row['duration_ms'] or 0),
+            'command': row['command'],
+            'raw_command': row['raw_command'],
+            'source': row['source'],
+            'status': row['status'],
+            'final_status': row['final_status'],
+            'hostname': row['hostname'],
+            'machine_id': row['machine_id'],
+            'client_id': row['client_id'],
+            'addr': row['addr'],
+            'cwd_start': row['cwd_start'],
+            'cwd_end': row['cwd_end'],
+            'has_output': bool(row['has_output']),
+            'output_summary': row['output_summary'],
+            'output_line_count': int(row['output_line_count'] or 0),
+            'output_chunk_count': int(row['output_chunk_count'] or 0),
+            'output_char_count': int(row['output_char_count'] or 0),
+            'output_stored_char_count': int(row['output_stored_char_count'] or 0),
+            'output_truncated': bool(row['output_truncated']),
+            'output_record_seq': int(row['output_record_seq'] or 0),
+            'output_records': self._json_loads(row['output_records_json'], []),
+            'has_files': bool(row['has_files']),
+            'file_count': int(row['file_count'] or 0),
+            'files': self._json_loads(row['files_json'], []),
+        }
+
+    def _insert_entry(self, entry: dict):
+        started_at_ms = self._now_ms()
+        self.database.connection().execute(
+            '''
+            INSERT INTO command_executions (
+                entry_id, machine_id, client_id, hostname, addr, command, raw_command,
+                source, status, final_status, time_text, started_at, started_at_ms,
+                finished_at, finished_at_ms, duration_ms, cwd_start, cwd_end,
+                has_output, output_summary, output_line_count, output_chunk_count,
+                output_char_count, output_stored_char_count, output_truncated,
+                output_record_seq, output_records_json, has_files, file_count, files_json
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '', 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ''',
+            (
+                entry['entry_id'], entry['machine_id'], entry['client_id'], entry['hostname'], entry['addr'],
+                entry['command'], entry['raw_command'], entry['source'], entry['status'], entry['final_status'],
+                entry['time'], entry['started_at'], started_at_ms, int(entry.get('duration_ms', 0) or 0),
+                entry['cwd_start'], entry['cwd_end'], int(bool(entry.get('has_output'))), entry['output_summary'],
+                int(entry.get('output_line_count', 0) or 0), int(entry.get('output_chunk_count', 0) or 0),
+                int(entry.get('output_char_count', 0) or 0), int(entry.get('output_stored_char_count', 0) or 0),
+                int(bool(entry.get('output_truncated'))), int(entry.get('output_record_seq', 0) or 0),
+                self._json_dumps(entry.get('output_records') or []), int(bool(entry.get('has_files'))),
+                int(entry.get('file_count', 0) or 0), self._json_dumps(entry.get('files') or []),
+            ),
+        )
+        entry['_started_at_ms'] = started_at_ms
+        return started_at_ms
+
+    def _get_entry(self, machine_id: str, entry_id: str) -> dict | None:
+        row = self.database.connection().execute(
+            'SELECT * FROM command_executions WHERE machine_id = ? AND entry_id = ?',
+            (machine_id, entry_id),
+        ).fetchone()
+        return self._row_to_entry(row)
+
+    def _update_entry(self, entry: dict):
+        finished_at = str(entry.get('finished_at') or '')
+        finished_dt = self._parse_time_text(finished_at) if finished_at else None
+        finished_at_ms = int(finished_dt.timestamp() * 1000) if finished_dt is not None else 0
+        self.database.connection().execute(
+            '''
+            UPDATE command_executions SET
+                client_id = ?, hostname = ?, addr = ?, command = ?, raw_command = ?, source = ?,
+                status = ?, final_status = ?, time_text = ?, started_at = ?, finished_at = ?,
+                finished_at_ms = ?, duration_ms = ?, cwd_start = ?, cwd_end = ?, has_output = ?,
+                output_summary = ?, output_line_count = ?, output_chunk_count = ?, output_char_count = ?,
+                output_stored_char_count = ?, output_truncated = ?, output_record_seq = ?,
+                output_records_json = ?, has_files = ?, file_count = ?, files_json = ?
+            WHERE machine_id = ? AND entry_id = ?
+            ''',
+            (
+                entry.get('client_id', ''), entry.get('hostname', ''), entry.get('addr', ''),
+                entry.get('command', ''), entry.get('raw_command', ''), entry.get('source', ''),
+                entry.get('status', ''), entry.get('final_status', ''), entry.get('time', ''),
+                entry.get('started_at', ''), finished_at, finished_at_ms, int(entry.get('duration_ms', 0) or 0),
+                entry.get('cwd_start', ''), entry.get('cwd_end', ''), int(bool(entry.get('has_output'))),
+                entry.get('output_summary', ''), int(entry.get('output_line_count', 0) or 0),
+                int(entry.get('output_chunk_count', 0) or 0), int(entry.get('output_char_count', 0) or 0),
+                int(entry.get('output_stored_char_count', 0) or 0), int(bool(entry.get('output_truncated'))),
+                int(entry.get('output_record_seq', 0) or 0), self._json_dumps(entry.get('output_records') or []),
+                int(bool(entry.get('has_files'))), int(entry.get('file_count', 0) or 0),
+                self._json_dumps(entry.get('files') or []), entry.get('machine_id', ''), entry.get('entry_id', ''),
+            ),
+        )
+
+    def _get_latest_entry_for_command(self, machine_id: str, command: str) -> dict | None:
+        row = self.database.connection().execute(
+            '''
+            SELECT * FROM command_executions
+            WHERE machine_id = ? AND command = ?
+            ORDER BY started_at_ms DESC, entry_id DESC
+            LIMIT 1
+            ''',
+            (machine_id, command),
+        ).fetchone()
+        return self._row_to_entry(row)
+
+    def _upsert_recent(self, entry: dict, *, increment_use: bool):
+        started_at_ms = int(entry.get('_started_at_ms', 0) or 0)
+        if started_at_ms <= 0:
+            row = self.database.connection().execute(
+                'SELECT started_at_ms FROM command_executions WHERE entry_id = ?',
+                (entry.get('entry_id', ''),),
+            ).fetchone()
+            started_at_ms = int(row['started_at_ms'] or 0) if row else self._now_ms()
+
+        snapshot = dict(entry)
+        snapshot.pop('output_records', None)
+        snapshot.pop('_started_at_ms', None)
+        conn = self.database.connection()
+        existing = conn.execute(
+            'SELECT use_count FROM command_recents WHERE machine_id = ? AND command = ?',
+            (entry.get('machine_id', ''), entry.get('command', '')),
+        ).fetchone()
+        use_count = 1 if existing is None else int(existing['use_count'] or 0) + (1 if increment_use else 0)
+
+        conn.execute(
+            '''
+            INSERT INTO command_recents(
+                machine_id, command, last_entry_id, last_used_at, last_used_at_ms, use_count, snapshot_json
+            ) VALUES (?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(machine_id, command) DO UPDATE SET
+                last_entry_id = excluded.last_entry_id,
+                last_used_at = excluded.last_used_at,
+                last_used_at_ms = excluded.last_used_at_ms,
+                use_count = excluded.use_count,
+                snapshot_json = excluded.snapshot_json
+            ''',
+            (
+                entry.get('machine_id', ''), entry.get('command', ''), entry.get('entry_id', ''),
+                entry.get('time') or entry.get('started_at') or self._now_text(), started_at_ms,
+                use_count, self._json_dumps(snapshot),
+            ),
+        )
+        self._trim_recents(entry.get('machine_id', ''))
+
+    def _trim_recents(self, machine_id: str):
+        self.database.connection().execute(
+            '''
+            DELETE FROM command_recents
+            WHERE rowid IN (
+                SELECT rowid FROM command_recents
+                WHERE machine_id = ?
+                ORDER BY last_used_at_ms DESC, command DESC
+                LIMIT -1 OFFSET ?
+            )
+            ''',
+            (str(machine_id or '').strip() or 'unknown_machine', self.RECENT_LIMIT),
+        )
+
+    def _update_recent_snapshot_if_present(self, entry: dict):
+        snapshot = dict(entry)
+        snapshot.pop('output_records', None)
+        snapshot.pop('_started_at_ms', None)
+        self.database.connection().execute(
+            '''UPDATE command_recents
+               SET last_entry_id = ?, last_used_at = ?, snapshot_json = ?
+               WHERE machine_id = ? AND command = ? AND last_entry_id = ?''',
+            (
+                entry.get('entry_id', ''), entry.get('time') or entry.get('started_at') or '',
+                self._json_dumps(snapshot), entry.get('machine_id', ''), entry.get('command', ''),
+                entry.get('entry_id', ''),
+            ),
+        )
+
+    def _rebuild_recent_for_command(self, machine_id: str, command: str):
+        conn = self.database.connection()
+        row = conn.execute(
+            '''SELECT * FROM command_executions WHERE machine_id = ? AND command = ?
+               ORDER BY started_at_ms DESC, entry_id DESC LIMIT 1''',
+            (machine_id, command),
+        ).fetchone()
+        if row is None:
+            conn.execute(
+                'DELETE FROM command_recents WHERE machine_id = ? AND command = ?',
+                (machine_id, command),
+            )
+            return
+
+        entry = self._row_to_entry(row)
+        count_row = conn.execute(
+            'SELECT COUNT(*) FROM command_executions WHERE machine_id = ? AND command = ?',
+            (machine_id, command),
+        ).fetchone()
+        snapshot = dict(entry)
+        snapshot.pop('output_records', None)
+        snapshot.pop('_started_at_ms', None)
+        conn.execute(
+            '''
+            INSERT INTO command_recents(
+                machine_id, command, last_entry_id, last_used_at, last_used_at_ms, use_count, snapshot_json
+            ) VALUES (?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(machine_id, command) DO UPDATE SET
+                last_entry_id = excluded.last_entry_id,
+                last_used_at = excluded.last_used_at,
+                last_used_at_ms = excluded.last_used_at_ms,
+                use_count = excluded.use_count,
+                snapshot_json = excluded.snapshot_json
+            ''',
+            (
+                machine_id, command, entry['entry_id'], entry.get('time') or entry.get('started_at') or '',
+                int(row['started_at_ms'] or 0), int(count_row[0] if count_row else 1), self._json_dumps(snapshot),
+            ),
+        )
+        self._trim_recents(machine_id)
+
+    def _list_recents(self, machine_id: str) -> list[dict]:
+        rows = self.database.connection().execute(
+            '''
+            SELECT command, last_entry_id, last_used_at, use_count, snapshot_json
+            FROM command_recents
+            WHERE machine_id = ?
+            ORDER BY last_used_at_ms DESC, command DESC
+            LIMIT ?
+            ''',
+            (machine_id, self.RECENT_LIMIT),
+        ).fetchall()
+        result = []
+        for row in rows:
+            snapshot = self._json_loads(row['snapshot_json'], {})
+            snapshot['command'] = row['command']
+            snapshot['last_entry_id'] = row['last_entry_id']
+            snapshot['time'] = snapshot.get('time') or row['last_used_at']
+            snapshot['use_count'] = int(row['use_count'] or 0)
+            result.append(snapshot)
+        return result
+
+    def _delete_execution(self, machine_id: str, entry_id: str) -> bool:
+        conn = self.database.connection()
+        row = conn.execute(
+            'SELECT command FROM command_executions WHERE machine_id = ? AND entry_id = ?',
+            (machine_id, entry_id),
+        ).fetchone()
+        if row is None:
+            return False
+        command = row['command']
+        conn.execute(
+            'DELETE FROM command_executions WHERE machine_id = ? AND entry_id = ?',
+            (machine_id, entry_id),
+        )
+        self._rebuild_recent_for_command(machine_id, command)
+        return True
+
+    def _clear_execution_history(self, machine_id: str):
+        with self.database.transaction() as conn:
+            conn.execute('DELETE FROM command_executions WHERE machine_id = ?', (machine_id,))
+            conn.execute('DELETE FROM command_recents WHERE machine_id = ?', (machine_id,))
+
+    def _list_execution_rows(self, machine_id: str, *, limit: int | None = None, cursor: tuple[int, str] | None = None):
+        params = [machine_id]
+        where = 'machine_id = ?'
+        if cursor is not None:
+            cursor_ms, cursor_entry_id = cursor
+            where += ' AND (started_at_ms < ? OR (started_at_ms = ? AND entry_id < ?))'
+            params.extend([int(cursor_ms), int(cursor_ms), str(cursor_entry_id)])
+        sql = f'SELECT * FROM command_executions WHERE {where} ORDER BY started_at_ms DESC, entry_id DESC'
+        if limit is not None:
+            sql += ' LIMIT ?'
+            params.append(int(limit))
+        return self.database.connection().execute(sql, tuple(params)).fetchall()
 
     def create_entry_for_connection(self, conn, command: str, source: str = 'cli'):
         return self.write_service.create_entry_for_connection(conn, command, source=source)
@@ -250,9 +449,6 @@ class CommandHistoryStore:
 
     def get_history_for_connection(self, conn) -> list:
         return self.view_service.get_history_for_connection(conn)
-
-    def get_execution_history_for_connection(self, conn) -> list:
-        return self.view_service.get_execution_history_for_connection(conn)
 
     def get_history_by_machine_id(self, machine_id: str) -> list:
         return self.view_service.get_history_by_machine_id(machine_id)

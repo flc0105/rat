@@ -58,13 +58,6 @@ from server.application.web.transfer_api import WebTransferApi
 from server.config.config import (
     EXTERNAL_TOOL_META_PATH,
     EXTERNAL_TOOL_PACKAGE_PATH,
-    EXTERNAL_TOOL_PARAM_PRESETS_ROOT_DIR,
-    CONNECTION_HISTORY_ROOT_DIR,
-    RECENT_DEVICES_JSON_PATH,
-    DEVICE_GROUPS_JSON_PATH,
-    TOOLBAR_PREFERENCES_JSON_PATH,
-    NOTIFICATION_PREFERENCES_JSON_PATH,
-    NOTIFICATION_CENTER_JSON_PATH,
     SERVER_CLEANUP_ITEMS,
     SERVER_CLEANUP_LOG_ROOT_DIR,
     SERVER_CLEANUP_START_DELAY_SECONDS,
@@ -118,18 +111,17 @@ class ServerApplicationAssembly:
             transfer_service=self.transfer_service,
         )
 
-        self.recent_device_store = RecentDeviceStore(RECENT_DEVICES_JSON_PATH)
-        self.device_group_store = DeviceGroupStore(DEVICE_GROUPS_JSON_PATH)
-        self.toolbar_preference_store = ToolbarPreferenceStore(TOOLBAR_PREFERENCES_JSON_PATH)
-        self.notification_preference_store = NotificationPreferenceStore(NOTIFICATION_PREFERENCES_JSON_PATH)
-        self.notification_history_store = NotificationHistoryStore(NOTIFICATION_CENTER_JSON_PATH)
+        self.recent_device_store = RecentDeviceStore(self.server.database)
+        self.device_group_store = DeviceGroupStore(self.server.database)
+        self.toolbar_preference_store = ToolbarPreferenceStore(self.server.database)
+        self.notification_preference_store = NotificationPreferenceStore(self.server.database)
+        self.notification_history_store = NotificationHistoryStore(self.server.database)
         self.notification_event_projector = NotificationEventProjector(
             history_store=self.notification_history_store,
             server=self.server,
         )
         self.event_bus.set_notification_recorder(self.notification_event_projector.record_event)
-        self.connection_history_store = ConnectionHistoryStore(CONNECTION_HISTORY_ROOT_DIR)
-        self.server.command_history.connection_history_store = self.connection_history_store
+        self.connection_history_store = ConnectionHistoryStore(self.server.database)
 
         self.connection_service = WebConnectionService(
             server=self.server,
@@ -163,9 +155,7 @@ class ServerApplicationAssembly:
             EXTERNAL_TOOL_META_PATH,
             EXTERNAL_TOOL_PACKAGE_PATH,
         )
-        self.external_tool_param_preset_store = ExternalToolParamPresetStore(
-            EXTERNAL_TOOL_PARAM_PRESETS_ROOT_DIR,
-        )
+        self.external_tool_param_preset_store = ExternalToolParamPresetStore(self.server.database)
 
         self.background_job_service = BackgroundJobService(
             event_bus=self.event_bus,
@@ -174,7 +164,7 @@ class ServerApplicationAssembly:
             job_catalog_service=self.job_catalog_service,
         )
 
-        self.pinned_path_store = PinnedPathStore()
+        self.pinned_path_store = PinnedPathStore(self.server.database)
         self.keychain_store = KeychainStore()
         self.agent_builder = AgentBuilder()
         self.agent_output_registry = AgentOutputRegistry(self.agent_builder.output_dir)

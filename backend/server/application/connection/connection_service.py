@@ -333,7 +333,7 @@ class WebConnectionService:
                 'sessions': [],
             }
 
-        execution_history = self.server.command_history.view_service.get_execution_history_by_machine_id(machine_id_text)
+        execution_history = self.server.command_history.view_service.get_connection_command_summaries_by_machine_id(machine_id_text)
         commands_by_client_id = {}
         unassigned_command_count = 0
 
@@ -364,56 +364,19 @@ class WebConnectionService:
             }
             commands_by_client_id.setdefault(client_id, []).append(command_item)
 
-        def _merge_commands(persisted_commands: list, current_commands: list) -> list:
-            merged_by_entry_id = {}
-            without_entry_id = []
-
-            for item in persisted_commands or []:
-                if not isinstance(item, dict):
-                    continue
-                entry_id = str(item.get('entry_id') or '').strip()
-                if entry_id:
-                    merged_by_entry_id[entry_id] = dict(item)
-                else:
-                    without_entry_id.append(dict(item))
-
-            # 当前 command history 的信息更新，优先覆盖轻量索引中的摘要。
-            for item in current_commands or []:
-                if not isinstance(item, dict):
-                    continue
-                entry_id = str(item.get('entry_id') or '').strip()
-                if entry_id:
-                    merged_by_entry_id[entry_id] = dict(item)
-                else:
-                    without_entry_id.append(dict(item))
-
-            merged = list(merged_by_entry_id.values()) + without_entry_id
-            merged.sort(
-                key=lambda item: self._safe_parse_iso(item.get('started_at') or '') or datetime.min,
-                reverse=True,
-            )
-            return merged
-
         sessions = []
-        tracked_client_ids = set()
         total_online_duration_ms = 0
         online_session_count = 0
 
         for session in lifecycle_payload.get('sessions') or []:
             copied = dict(session)
             client_id = str(copied.get('client_id') or '').strip()
-            tracked_client_ids.add(client_id)
-
-            commands = _merge_commands(
-                copied.get('commands') or [],
-                commands_by_client_id.get(client_id, []),
-            )
+            commands = list(commands_by_client_id.get(client_id, []))
             copied['commands'] = commands
             copied['command_count'] = len(commands)
             copied['command_success_count'] = sum(1 for item in commands if item.get('status') == 'success')
             copied['command_error_count'] = sum(1 for item in commands if item.get('status') == 'error')
             copied['command_running_count'] = sum(1 for item in commands if item.get('status') == 'running')
-            copied['tracking_source'] = copied.get('tracking_source') or 'connection_lifecycle'
 
             duration_ms = int(copied.get('duration_ms', 0) or 0)
             total_online_duration_ms += duration_ms
@@ -422,51 +385,8 @@ class WebConnectionService:
 
             sessions.append(copied)
 
-        # 功能上线前只有命令历史、没有连接生命周期的数据，单独作为 legacy session 展示。
-        legacy_session_count = 0
-        for client_id, commands in commands_by_client_id.items():
-            if client_id in tracked_client_ids:
-                continue
-
-            command_times = []
-            for item in commands:
-                started_at = str(item.get('started_at') or '').strip()
-                finished_at = str(item.get('finished_at') or '').strip()
-                if started_at:
-                    command_times.append(started_at)
-                if finished_at:
-                    command_times.append(finished_at)
-
-            sorted_times = sorted(
-                command_times,
-                key=lambda value: self._safe_parse_iso(value) or datetime.min,
-            )
-            first_entry = commands[0] if commands else {}
-
-            sessions.append({
-                'machine_id': machine_id_text,
-                'client_id': client_id,
-                'hostname': first_entry.get('hostname') or '',
-                'addr': first_entry.get('addr') or '',
-                'connected_at': '',
-                'disconnected_at': '',
-                'last_seen_at': '',
-                'duration_ms': 0,
-                'connection_state': 'legacy',
-                'disconnect_reason': '',
-                'tracking_source': 'command_history',
-                'first_command_at': sorted_times[0] if sorted_times else '',
-                'last_command_at': sorted_times[-1] if sorted_times else '',
-                'commands': commands,
-                'command_count': len(commands),
-                'command_success_count': sum(1 for item in commands if item.get('status') == 'success'),
-                'command_error_count': sum(1 for item in commands if item.get('status') == 'error'),
-                'command_running_count': sum(1 for item in commands if item.get('status') == 'running'),
-            })
-            legacy_session_count += 1
-
         def _session_sort_value(item):
-            value = item.get('connected_at') or item.get('first_command_at') or ''
+            value = item.get('connected_at') or ''
             return self._safe_parse_iso(value) or datetime.min
 
         sessions.sort(key=_session_sort_value, reverse=True)
@@ -475,8 +395,7 @@ class WebConnectionService:
             'machine_id': machine_id_text,
             'tracking_started_at': lifecycle_payload.get('tracking_started_at') or '',
             'known_session_count': len(sessions),
-            'tracked_connection_count': len(lifecycle_payload.get('sessions') or []),
-            'legacy_command_session_count': legacy_session_count,
+            'tracked_connection_count': len(sessions),
             'online_session_count': online_session_count,
             'total_online_duration_ms': total_online_duration_ms,
             'known_command_count': sum(int(item.get('command_count', 0) or 0) for item in sessions) + unassigned_command_count,

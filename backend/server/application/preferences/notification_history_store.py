@@ -1,188 +1,52 @@
 import json
-import os
-import tempfile
+import sqlite3
 import threading
+import time
 import uuid
-
-from core.utils.logger import logger
+from datetime import datetime
 
 
 class NotificationHistoryStore:
-    """
-    Server Notification Center 持久化。
-
-    通知在业务事件进入 SSE 之前由 Server 写入。
-    浏览器通知偏好只决定是否弹 Toast，不决定事件是否进入 Notification Center。
-    同一个 SSE event_id 只保留一条。
-    """
+    """Server-side durable Notification Center history in rch.db."""
 
     VERSION = 1
 
-    def __init__(self, file_path: str):
-        self.file_path = os.path.abspath(file_path)
-        os.makedirs(os.path.dirname(self.file_path), exist_ok=True)
+    def __init__(self, database):
+        self.database = database
         self._lock = threading.RLock()
-
-    def get_history(self) -> dict:
-        with self._lock:
-            notifications = self._read_notifications_unlocked()
-            return {
-                'version': self.VERSION,
-                'notifications': notifications,
-            }
-
-    def add_notification(self, payload: dict) -> tuple[dict, bool]:
-        notification = self._normalize_notification(payload)
-
-        with self._lock:
-            notifications = self._read_notifications_unlocked()
-            event_id = notification.get('event_id') or ''
-
-            if event_id:
-                for existing in notifications:
-                    if str(existing.get('event_id') or '') == event_id:
-                        return existing, False
-
-            notifications.insert(0, notification)
-            self._write_unlocked(notifications)
-
-        return notification, True
-
-    def delete_notification(self, notification_id: str) -> bool:
-        normalized_id = str(notification_id or '').strip()
-        if not normalized_id:
-            raise ValueError('Notification id is required')
-
-        with self._lock:
-            notifications = self._read_notifications_unlocked()
-            filtered = [
-                item for item in notifications
-                if str(item.get('id') or '') != normalized_id
-            ]
-
-            if len(filtered) == len(notifications):
-                return False
-
-            self._write_unlocked(filtered)
-            return True
-
-    def clear_history(self) -> int:
-        with self._lock:
-            notifications = self._read_notifications_unlocked()
-            removed_count = len(notifications)
-            self._write_unlocked([])
-            return removed_count
-
-    def delete_notifications(self, notification_ids) -> dict:
-        normalized_ids = {
-            str(value or '').strip()
-            for value in (notification_ids or [])
-            if str(value or '').strip()
-        }
-        if not normalized_ids:
-            return {'removed': [], 'remaining_count': len(self.get_history()['notifications'])}
-
-        with self._lock:
-            notifications = self._read_notifications_unlocked()
-            removed = [
-                item for item in notifications
-                if str(item.get('id') or '') in normalized_ids
-            ]
-            kept = [
-                item for item in notifications
-                if str(item.get('id') or '') not in normalized_ids
-            ]
-
-            if removed:
-                self._write_unlocked(kept)
-
-            return {
-                'removed': removed,
-                'remaining_count': len(kept),
-            }
-
-    def _read_notifications_unlocked(self) -> list:
-        if not os.path.isfile(self.file_path):
-            return []
-
-        try:
-            with open(self.file_path, 'r', encoding='utf-8') as file_obj:
-                payload = json.load(file_obj)
-        except Exception:
-            logger.error('NotificationHistoryStore read failed: %s', self.file_path, exc_info=True)
-            return []
-
-        if not isinstance(payload, dict):
-            return []
-
-        source = payload.get('notifications')
-        if not isinstance(source, list):
-            return []
-
-        notifications = []
-        seen_ids = set()
-        seen_event_ids = set()
-
-        for item in source:
-            if not isinstance(item, dict):
-                continue
-
-            try:
-                normalized = self._normalize_notification(item, allow_missing_event_id=True)
-            except ValueError:
-                continue
-
-            notification_id = normalized['id']
-            event_id = normalized.get('event_id') or ''
-
-            if notification_id in seen_ids:
-                continue
-            if event_id and event_id in seen_event_ids:
-                continue
-
-            seen_ids.add(notification_id)
-            if event_id:
-                seen_event_ids.add(event_id)
-            notifications.append(normalized)
-
-        return notifications
-
-    def _write_unlocked(self, notifications: list):
-        payload = {
-            'version': self.VERSION,
-            'notifications': notifications,
-        }
-
-        directory = os.path.dirname(self.file_path)
-        fd, temp_path = tempfile.mkstemp(
-            prefix='notification_center_',
-            suffix='.tmp',
-            dir=directory,
-        )
-        try:
-            with os.fdopen(fd, 'w', encoding='utf-8') as file_obj:
-                json.dump(payload, file_obj, ensure_ascii=False, indent=2)
-                file_obj.write('\n')
-            os.replace(temp_path, self.file_path)
-        finally:
-            try:
-                if os.path.exists(temp_path):
-                    os.remove(temp_path)
-            except Exception:
-                logger.warning('NotificationHistoryStore temp cleanup failed: %s', temp_path, exc_info=True)
 
     @staticmethod
     def _normalize_string(value, max_length: int = 0) -> str:
         text = str(value or '').strip()
-        if max_length > 0:
-            return text[:max_length]
-        return text
+        return text[:max_length] if max_length > 0 else text
+
+    @staticmethod
+    def _shown_at_ms(value: str) -> int:
+        text = str(value or '').strip()
+        if not text:
+            return int(time.time() * 1000)
+        try:
+            normalized = text[:-1] + '+00:00' if text.endswith('Z') else text
+            return int(datetime.fromisoformat(normalized).timestamp() * 1000)
+        except Exception:
+            return int(time.time() * 1000)
+
+    @staticmethod
+    def _json_dumps(value) -> str:
+        return json.dumps(value, ensure_ascii=False, separators=(',', ':'))
+
+    @staticmethod
+    def _json_loads(value, default):
+        try:
+            parsed = json.loads(value or '')
+            return parsed if isinstance(parsed, type(default)) else default
+        except Exception:
+            return default
 
     def _normalize_notification(self, payload: dict, *, allow_missing_event_id: bool = False) -> dict:
         source = payload if isinstance(payload, dict) else {}
         title = self._normalize_string(source.get('title'), 300)
         message = self._normalize_string(source.get('message'), 5000)
-
         if not title:
             raise ValueError('Notification title is required')
 
@@ -190,24 +54,20 @@ class NotificationHistoryStore:
         event_id = self._normalize_string(source.get('event_id'), 200)
         if not event_id and not allow_missing_event_id:
             event_id = ''
-
         notification_type = self._normalize_string(source.get('type'), 32).lower()
         if notification_type not in {'success', 'warning', 'error', 'info'}:
             notification_type = 'info'
 
         context = source.get('context') if isinstance(source.get('context'), dict) else {}
         actions = source.get('actions') if isinstance(source.get('actions'), list) else []
-
         normalized_actions = []
         for action in actions:
             if not isinstance(action, dict):
                 continue
-
             action_type = self._normalize_string(action.get('type'), 64)
             label = self._normalize_string(action.get('label'), 120)
             if not action_type or not label:
                 continue
-
             normalized_actions.append({
                 'id': self._normalize_string(action.get('id'), 120),
                 'type': action_type,
@@ -226,3 +86,115 @@ class NotificationHistoryStore:
             'context': context,
             'actions': normalized_actions,
         }
+
+    def _row_to_notification(self, row) -> dict:
+        return {
+            'id': row['id'],
+            'event_id': row['event_id'] or '',
+            'notification_key': row['notification_key'],
+            'type': row['type'],
+            'title': row['title'],
+            'message': row['message'],
+            'shown_at': row['shown_at'],
+            'context': self._json_loads(row['context_json'], {}),
+            'actions': self._json_loads(row['actions_json'], []),
+        }
+
+    def get_history(self) -> dict:
+        with self._lock:
+            rows = self.database.connection().execute(
+                'SELECT * FROM notifications ORDER BY shown_at_ms DESC, id DESC'
+            ).fetchall()
+            return {
+                'version': self.VERSION,
+                'notifications': [self._row_to_notification(row) for row in rows],
+            }
+
+    def add_notification(self, payload: dict) -> tuple[dict, bool]:
+        notification = self._normalize_notification(payload)
+        event_id = notification.get('event_id') or ''
+
+        with self._lock:
+            conn = self.database.connection()
+            if event_id:
+                existing = conn.execute(
+                    'SELECT * FROM notifications WHERE event_id = ?',
+                    (event_id,),
+                ).fetchone()
+                if existing is not None:
+                    return self._row_to_notification(existing), False
+
+            try:
+                conn.execute(
+                    '''
+                    INSERT INTO notifications(
+                        id, event_id, notification_key, type, title, message, shown_at, shown_at_ms,
+                        context_json, actions_json
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ''',
+                    (
+                        notification['id'], event_id or None, notification['notification_key'], notification['type'],
+                        notification['title'], notification['message'], notification['shown_at'],
+                        self._shown_at_ms(notification['shown_at']), self._json_dumps(notification['context']),
+                        self._json_dumps(notification['actions']),
+                    ),
+                )
+            except sqlite3.IntegrityError:
+                if event_id:
+                    existing = conn.execute(
+                        'SELECT * FROM notifications WHERE event_id = ?',
+                        (event_id,),
+                    ).fetchone()
+                    if existing is not None:
+                        return self._row_to_notification(existing), False
+                raise
+
+            return notification, True
+
+    def delete_notification(self, notification_id: str) -> bool:
+        normalized_id = str(notification_id or '').strip()
+        if not normalized_id:
+            raise ValueError('Notification id is required')
+        with self._lock:
+            cursor = self.database.connection().execute(
+                'DELETE FROM notifications WHERE id = ?',
+                (normalized_id,),
+            )
+            return cursor.rowcount > 0
+
+    def clear_history(self) -> int:
+        with self._lock, self.database.transaction() as conn:
+            row = conn.execute('SELECT COUNT(*) FROM notifications').fetchone()
+            removed_count = int(row[0] if row else 0)
+            conn.execute('DELETE FROM notifications')
+            return removed_count
+
+    def delete_notifications(self, notification_ids) -> dict:
+        normalized_ids = {
+            str(value or '').strip()
+            for value in (notification_ids or [])
+            if str(value or '').strip()
+        }
+        with self._lock:
+            conn = self.database.connection()
+            if not normalized_ids:
+                row = conn.execute('SELECT COUNT(*) FROM notifications').fetchone()
+                return {'removed': [], 'remaining_count': int(row[0] if row else 0)}
+
+            placeholders = ','.join('?' for _ in normalized_ids)
+            with self.database.transaction() as tx:
+                rows = tx.execute(
+                    f'SELECT * FROM notifications WHERE id IN ({placeholders})',
+                    tuple(normalized_ids),
+                ).fetchall()
+                removed = [self._row_to_notification(row) for row in rows]
+                if removed:
+                    tx.execute(
+                        f'DELETE FROM notifications WHERE id IN ({placeholders})',
+                        tuple(normalized_ids),
+                    )
+                remaining = tx.execute('SELECT COUNT(*) FROM notifications').fetchone()
+                return {
+                    'removed': removed,
+                    'remaining_count': int(remaining[0] if remaining else 0),
+                }

@@ -1,4 +1,4 @@
-from flask import Blueprint
+from flask import Blueprint, request
 
 from server.web.api_response import WebApiResponder
 from server.web.request_parsers import get_json_payload
@@ -16,7 +16,11 @@ def create_command_history_blueprint(server_instance):
     @blueprint.get('/api/machines/<machine_id>/command-history/full')
     def get_full_command_history(machine_id):
         return responder.json_endpoint(
-            lambda: command_history_api.get_command_execution_history(machine_id),
+            lambda: command_history_api.get_command_execution_history(
+                machine_id,
+                limit=request.args.get('limit'),
+                cursor=request.args.get('cursor', ''),
+            ),
             default_error_status=500,
         )
 

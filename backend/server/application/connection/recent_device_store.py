@@ -1,10 +1,6 @@
 import json
-import os
-import tempfile
 import threading
 from datetime import datetime
-
-from core.utils.logger import logger
 
 
 class RecentDeviceStore:
@@ -18,12 +14,10 @@ class RecentDeviceStore:
     - 下线时更新 offline 状态和时间
     """
 
-    def __init__(self, file_path: str):
-        self.file_path = os.path.abspath(file_path)
-        os.makedirs(os.path.dirname(self.file_path), exist_ok=True)
+    def __init__(self, database):
+        self.database = database
         self._lock = threading.RLock()
         self._forgotten_machine_keys = set()
-        self._ensure_persisted_machine_orders()
 
     def _normalize_machine_id_key(self, machine_id: str) -> str:
         value = str(machine_id or '').strip()
@@ -42,71 +36,109 @@ class RecentDeviceStore:
             return None
         return order if order >= 0 else None
 
-    def _next_machine_order_unlocked(self, current: dict) -> int:
-        orders = [
-            self._normalize_machine_order(record.get('machine_order'))
-            for record in current.values()
-            if isinstance(record, dict)
-        ]
-        valid_orders = [order for order in orders if order is not None]
-        return (max(valid_orders) + 1) if valid_orders else 0
-
-    def _ensure_persisted_machine_orders(self):
-        """
-        为旧 recent_devices.json 补一次稳定 machine 顺序。
-        已存在的 machine_order 永远保留，方便手工修改 JSON 调整顺序。
-        """
-        with self._lock:
-            current = self._read_all_unlocked()
-            if not current:
-                return
-
-            next_order = self._next_machine_order_unlocked(current)
-            changed = False
-
-            for record in current.values():
-                if not isinstance(record, dict):
-                    continue
-                if self._normalize_machine_order(record.get('machine_order')) is not None:
-                    continue
-                record['machine_order'] = next_order
-                next_order += 1
-                changed = True
-
-            if changed:
-                self._write_all_unlocked(current)
-
     def _read_all_unlocked(self) -> dict:
-        if not os.path.isfile(self.file_path):
-            return {}
-
-        try:
-            with open(self.file_path, 'r', encoding='utf-8') as fp:
-                data = json.load(fp)
-            if isinstance(data, dict):
-                return data
-        except Exception:
-            logger.error('RecentDeviceStore read failed: %s', self.file_path, exc_info=True)
-
-        return {}
-
-    def _write_all_unlocked(self, data: dict):
-        dir_name = os.path.dirname(self.file_path)
-        fd, temp_path = tempfile.mkstemp(
-            prefix='recent_devices_',
-            suffix='.tmp',
-            dir=dir_name,
-        )
-        try:
-            with os.fdopen(fd, 'w', encoding='utf-8') as fp:
-                json.dump(data, fp, ensure_ascii=False, indent=2)
-            os.replace(temp_path, self.file_path)
-        finally:
+        rows = self.database.connection().execute(
+            'SELECT * FROM recent_devices ORDER BY machine_order ASC, machine_key ASC'
+        ).fetchall()
+        result = {}
+        for row in rows:
             try:
-                if os.path.exists(temp_path):
-                    os.remove(temp_path)
+                record = json.loads(row['snapshot_json'] or '{}')
             except Exception:
-                logger.warning('RecentDeviceStore temp cleanup failed: %s', temp_path, exc_info=True)
+                record = {}
+            if not isinstance(record, dict):
+                record = {}
+            record.update({
+                'recent_device_key': row['machine_key'],
+                'machine_id': row['machine_id'],
+                'client_id': row['client_id'],
+                'machine_order': int(row['machine_order'] or 0),
+                'connection_state': row['connection_state'],
+                'last_seen_at': row['last_seen_at'],
+                'recent_updated_at': row['recent_updated_at'],
+                'machine_alias': row['machine_alias'],
+                'device_hidden_by_machine': bool(row['device_hidden_by_machine']),
+                'hidden_client_ids': json.loads(row['hidden_client_ids_json'] or '{}'),
+            })
+            result[row['machine_key']] = record
+        return result
+
+    def _read_record_unlocked(self, machine_key: str) -> dict | None:
+        row = self.database.connection().execute(
+            'SELECT * FROM recent_devices WHERE machine_key = ?',
+            (machine_key,),
+        ).fetchone()
+        if row is None:
+            return None
+        try:
+            record = json.loads(row['snapshot_json'] or '{}')
+        except Exception:
+            record = {}
+        if not isinstance(record, dict):
+            record = {}
+        try:
+            hidden_client_ids = json.loads(row['hidden_client_ids_json'] or '{}')
+        except Exception:
+            hidden_client_ids = {}
+        record.update({
+            'recent_device_key': row['machine_key'],
+            'machine_id': row['machine_id'],
+            'client_id': row['client_id'],
+            'machine_order': int(row['machine_order'] or 0),
+            'connection_state': row['connection_state'],
+            'last_seen_at': row['last_seen_at'],
+            'recent_updated_at': row['recent_updated_at'],
+            'machine_alias': row['machine_alias'],
+            'device_hidden_by_machine': bool(row['device_hidden_by_machine']),
+            'hidden_client_ids': self._normalize_bool_map(hidden_client_ids),
+        })
+        return record
+
+    def _write_record_unlocked(self, machine_key: str, record: dict):
+        machine_id = str(record.get('machine_id') or '').strip()
+        if not machine_key or not machine_id:
+            return
+        hidden_client_ids = self._normalize_bool_map(record.get('hidden_client_ids'))
+        snapshot = dict(record)
+        self.database.connection().execute(
+            '''
+            INSERT INTO recent_devices(
+                machine_key, machine_id, client_id, machine_order, connection_state,
+                last_seen_at, recent_updated_at, machine_alias, device_hidden_by_machine,
+                hidden_client_ids_json, snapshot_json
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(machine_key) DO UPDATE SET
+                machine_id = excluded.machine_id,
+                client_id = excluded.client_id,
+                machine_order = excluded.machine_order,
+                connection_state = excluded.connection_state,
+                last_seen_at = excluded.last_seen_at,
+                recent_updated_at = excluded.recent_updated_at,
+                machine_alias = excluded.machine_alias,
+                device_hidden_by_machine = excluded.device_hidden_by_machine,
+                hidden_client_ids_json = excluded.hidden_client_ids_json,
+                snapshot_json = excluded.snapshot_json
+            ''',
+            (
+                machine_key,
+                machine_id,
+                str(record.get('client_id') or ''),
+                int(self._normalize_machine_order(record.get('machine_order')) or 0),
+                str(record.get('connection_state') or 'offline'),
+                str(record.get('last_seen_at') or ''),
+                str(record.get('recent_updated_at') or ''),
+                str(record.get('machine_alias') or '').strip(),
+                int(bool(record.get('device_hidden_by_machine'))),
+                json.dumps(hidden_client_ids, ensure_ascii=False, separators=(',', ':')),
+                json.dumps(snapshot, ensure_ascii=False, separators=(',', ':')),
+            ),
+        )
+
+    def _next_machine_order_from_db_unlocked(self) -> int:
+        row = self.database.connection().execute(
+            'SELECT COALESCE(MAX(machine_order), -1) + 1 FROM recent_devices'
+        ).fetchone()
+        return int(row[0] if row else 0)
 
     def _normalize_bool_map(self, value) -> dict:
         if isinstance(value, dict):
@@ -198,11 +230,10 @@ class RecentDeviceStore:
                     return
                 self._forgotten_machine_keys.discard(key)
 
-            current = self._read_all_unlocked()
-            previous = current.get(key, {}) if isinstance(current.get(key), dict) else {}
+            previous = self._read_record_unlocked(key) or {}
             machine_order = self._normalize_machine_order(previous.get('machine_order'))
             if machine_order is None:
-                machine_order = self._next_machine_order_unlocked(current)
+                machine_order = self._next_machine_order_from_db_unlocked()
 
             record = {
                 'recent_device_key': key,
@@ -260,8 +291,7 @@ class RecentDeviceStore:
                 'recent_updated_at': self._now_iso(),
             }
 
-            current[key] = record
-            self._write_all_unlocked(current)
+            self._write_record_unlocked(key, record)
 
     def mark_offline(self, machine_id: str, disconnected_at: str = ''):
         key = self._normalize_machine_id_key(machine_id)
@@ -272,8 +302,7 @@ class RecentDeviceStore:
             if key in self._forgotten_machine_keys:
                 return
 
-            current = self._read_all_unlocked()
-            record = current.get(key)
+            record = self._read_record_unlocked(key)
             if not isinstance(record, dict):
                 return
 
@@ -282,8 +311,7 @@ class RecentDeviceStore:
             record['disconnected_at'] = str(disconnected_at or self._now_iso())
             record['recent_cached'] = True
             record['recent_updated_at'] = self._now_iso()
-            current[key] = record
-            self._write_all_unlocked(current)
+            self._write_record_unlocked(key, record)
 
     def remove_by_identity(self, client_id: str = '', machine_id: str = '') -> dict:
         target_client_id = str(client_id or '').strip()
@@ -308,13 +336,14 @@ class RecentDeviceStore:
             if target_machine_key:
                 forgotten_keys.add(target_machine_key)
 
-            for key in removed_keys:
-                current.pop(key, None)
-
             self._forgotten_machine_keys.update(forgotten_keys)
 
             if removed_keys:
-                self._write_all_unlocked(current)
+                placeholders = ','.join('?' for _ in removed_keys)
+                self.database.connection().execute(
+                    f'DELETE FROM recent_devices WHERE machine_key IN ({placeholders})',
+                    tuple(removed_keys),
+                )
 
         return {
             'removed_count': len(removed_keys),
@@ -373,7 +402,7 @@ class RecentDeviceStore:
                 record = {
                     'recent_device_key': record_key,
                     'machine_id': target_machine_id,
-                    'machine_order': self._next_machine_order_unlocked(current),
+                    'machine_order': self._next_machine_order_from_db_unlocked(),
                     'client_id': target_client_id,
                     'recent_cached': True,
                 }
@@ -408,8 +437,7 @@ class RecentDeviceStore:
             record['recent_device_key'] = record_key
             record['recent_cached'] = True
             record['device_view_prefs_updated_at'] = self._now_iso()
-            current[record_key] = record
-            self._write_all_unlocked(current)
+            self._write_record_unlocked(record_key, record)
 
             prefs = self._build_device_view_prefs(record, client_id=target_client_id)
 

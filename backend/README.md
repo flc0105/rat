@@ -855,7 +855,7 @@ The web app includes a lightweight auth layer designed for simple public deploym
 
 ## Runtime Data
 
-The project stores runtime data under `runtime/` rather than a database.
+The Server stores structured runtime state in the shared SQLite database `runtime/rch.db`, while file-oriented artifacts and configuration remain on the filesystem.
 
 Examples include:
 
@@ -870,17 +870,14 @@ Examples include:
 
 ### Recent devices cache
 
-A lightweight recent-device cache is maintained at:
-
-```text
-runtime/recent_devices.json
-```
+Recent-device state is stored in `runtime/rch.db` (`recent_devices`).
 
 Current behavior:
 
-- one record per hostname
-- online device updates overwrite prior cached state
-- offline devices remain visible as recent entries after refresh
+- one record per `machine_id`
+- online device updates refresh the current machine snapshot
+- offline devices remain available as recent entries
+- machine aliases, stable ordering, and hidden machine/client state are persisted with the recent-device record
 
 ---
 
@@ -1190,11 +1187,9 @@ Alias entries are also inserted into terminal autocomplete candidates.
 
 Quick History is not just a projection of raw execution history.
 
-Pinned commands are stored separately per `machine_id` under:
+Pinned commands are stored separately per `machine_id` in `runtime/rch.db` (`pinned_commands`).
 
-```text
-runtime/command_history/pinned_commands/
-```
+Execution history is permanent unless explicitly deleted/cleared. Quick History is backed by `command_recents` and retains the latest 100 unique commands per machine; pinned commands are independent of that limit.
 
 The pinned store keeps:
 
@@ -1220,11 +1215,7 @@ The history replay path rewrites the new execution entry to the actual resolved 
 
 ### `gopin` and pinned remote paths
 
-Pinned remote paths are machine-scoped workspace shortcuts stored under:
-
-```text
-runtime/pinned_paths/<machine_id>.json
-```
+Pinned remote paths are machine-scoped workspace shortcuts stored in `runtime/rch.db` (`pinned_paths`).
 
 Each entry contains:
 
@@ -1738,18 +1729,13 @@ A single machine may legitimately have multiple simultaneous `client_id` values.
 
 ### Stable machine ordering
 
-Recent devices persist a `machine_order` value in:
-
-```text
-runtime/recent_devices.json
-```
+Recent devices persist a `machine_order` value in `runtime/rch.db` (`recent_devices`).
 
 Behavior:
 
 - a new machine is assigned a position the first time it is seen
 - reconnecting or receiving a new `client_id` does not move that machine
 - existing `machine_order` is preserved
-- the JSON can be edited manually to change order
 - multiple Clients on the same machine are ordered internally by newest `connected_at`
 
 There is currently **no drag-to-reorder implementation**; the previous experiment was rolled back.
@@ -1784,11 +1770,7 @@ Capabilities:
 - preserve hidden-device behavior inside the active group
 - automatically group every Client belonging to that machine
 
-Runtime file:
-
-```text
-runtime/device_groups.json
-```
+Persistence: `runtime/rch.db` (`device_groups` and `device_group_members`).
 
 ### Machine alias / hide preferences
 
@@ -2574,19 +2556,11 @@ agent_build_completed
 agent_build_error
 ```
 
-Preferences are persisted at:
-
-```text
-runtime/notification_preferences.json
-```
+Preferences are persisted in `runtime/rch.db` (`settings`, namespace `notification_preferences`).
 
 ### Notification Center
 
-Displayed SSE notifications can be retained in:
-
-```text
-runtime/notification_center.json
-```
+Notification Center history is persisted in `runtime/rch.db` (`notifications`).
 
 Features:
 
@@ -2598,7 +2572,7 @@ Features:
 - clear all
 - deduplication by SSE `event_id` so multiple browser tabs do not create duplicate history entries
 
-The store intentionally saves notifications that passed the Frontend preference gate and were actually shown.
+Server notification events are persisted before SSE delivery; Frontend preferences control real-time Toast display rather than whether the history exists.
 
 ---
 
@@ -2632,11 +2606,7 @@ toolbar
 more
 ```
 
-and persist the layout in:
-
-```text
-runtime/toolbar_preferences.json
-```
+and persist the layout in `runtime/rch.db` (`settings`, namespace `toolbar_preferences`).
 
 ### One-liners
 
@@ -2688,20 +2658,12 @@ The Server does not need to continuously rebuild bundles just to detect Client s
 Current Server runtime state includes at least:
 
 ```text
-runtime/recent_devices.json
-runtime/device_groups.json
-runtime/toolbar_preferences.json
-runtime/notification_preferences.json
-runtime/notification_center.json
-
-runtime/command_history/
-runtime/command_history/pinned_commands/
-runtime/connection_history/
-runtime/pinned_paths/
+runtime/rch.db
 runtime/keychains/
-runtime/external_tool_param_presets/
 runtime/web_files/
 ```
+
+`runtime/rch.db` currently owns command executions/recents/pins, connection history, recent devices and hidden state, device groups, pinned remote paths, Notification Center history, Server UI preferences, and External Tool parameter presets. Keychains and file-oriented artifacts remain filesystem-backed.
 
 Important ownership:
 

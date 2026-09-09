@@ -35,7 +35,6 @@ SCRIPT_JOBS_PATH = os.path.join(SERVER_DIR, 'resources/jobs')
 EXTERNAL_TOOLS_ROOT = os.path.join(SERVER_DIR, 'resources/external_tools')
 EXTERNAL_TOOL_META_PATH = os.path.join(EXTERNAL_TOOLS_ROOT, 'metas')
 EXTERNAL_TOOL_PACKAGE_PATH = os.path.join(EXTERNAL_TOOLS_ROOT, 'packages')
-EXTERNAL_TOOL_PARAM_PRESETS_ROOT_DIR = os.path.abspath(os.path.join('runtime', 'external_tool_param_presets'))
 
 # ------------------ logging ------------------ #
 # session_messages.log 已移除，background message 不再单独落盘。
@@ -55,16 +54,16 @@ SERVER_CLEANUP_ITEMS = (
 )
 
 # ------------------ history ------------------ #
-COMMAND_HISTORY_ROOT_DIR = os.path.abspath(os.path.join('runtime', 'command_history'))
-CONNECTION_HISTORY_ROOT_DIR = os.path.abspath(os.path.join('runtime', 'connection_history'))
-COMMAND_HISTORY_MAX_ENTRIES_PER_HOST = 300
-COMMAND_HISTORY_MAX_OUTPUT_RECORD_CHARS = 8 * 1024
-COMMAND_HISTORY_MAX_OUTPUT_SUMMARY_CHARS = 240
-COMMAND_HISTORY_MAX_OUTPUT_RECORDS = 20
-# 一台机器最多 300 条命令历史；
-# 每条命令历史里，最多 20 段输出；
-# 每条命令历史总输出文本最多 8KB。
-PINNED_PATHS_ROOT_DIR = os.path.abspath(os.path.join('runtime', 'pinned_paths'))
+RCH_DB_PATH = os.path.abspath(os.path.join('runtime', 'rch.db'))
+COMMAND_HISTORY_RECENT_LIMIT = 100
+COMMAND_HISTORY_PAGE_SIZE = 50
+COMMAND_HISTORY_MAX_PAGE_SIZE = 200
+COMMAND_HISTORY_MAX_OUTPUT_RECORD_CHARS = 64 * 1024
+COMMAND_HISTORY_MAX_OUTPUT_SUMMARY_CHARS = 512
+COMMAND_HISTORY_MAX_OUTPUT_RECORDS = 256
+# Execution history 不做条数 / 时间裁剪。
+# Quick History 仅保留最近 100 个 unique command；Pinned 独立永久保存。
+# 单条 execution 最多保存 64KiB 输出文本和 256 段记录，避免极碎 chunk 的 metadata 膨胀。
 KEYCHAINS_ROOT_DIR = os.path.abspath(os.path.join('runtime', 'keychains'))
 
 # ------------------ web files ------------------ #
@@ -75,9 +74,3 @@ WEB_HTTP_UPLOAD_MAX_BYTES = 10 * 1024 * 1024 * 1024  # 10GB
 WEB_PUBLIC_BASE_URL = 'http://127.0.0.1:8085'
 
 HEARTBEAT_INTERVAL_SECONDS = 30
-
-RECENT_DEVICES_JSON_PATH = os.path.abspath(os.path.join('runtime', 'recent_devices.json'))
-DEVICE_GROUPS_JSON_PATH = os.path.abspath(os.path.join('runtime', 'device_groups.json'))
-TOOLBAR_PREFERENCES_JSON_PATH = os.path.abspath(os.path.join('runtime', 'toolbar_preferences.json'))
-NOTIFICATION_PREFERENCES_JSON_PATH = os.path.abspath(os.path.join('runtime', 'notification_preferences.json'))
-NOTIFICATION_CENTER_JSON_PATH = os.path.abspath(os.path.join('runtime', 'notification_center.json'))

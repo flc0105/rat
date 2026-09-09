@@ -1,187 +1,161 @@
 import json
-import os
-import tempfile
+import sqlite3
 import threading
 import uuid
 from datetime import datetime
 
-from core.utils.files import secure_filename
-from server.config.config import EXTERNAL_TOOL_PARAM_PRESETS_ROOT_DIR
-
 
 class ExternalToolParamPresetStore:
-    """ExternalTool module parameter preset storage."""
+    """External Tool parameter presets stored in shared rch.db."""
 
     TIME_FORMAT = '%Y-%m-%d %H:%M:%S'
 
-    def __init__(self, root_dir: str = EXTERNAL_TOOL_PARAM_PRESETS_ROOT_DIR):
-        self.root_dir = os.path.abspath(root_dir)
+    def __init__(self, database):
+        self.database = database
         self._lock = threading.RLock()
-        os.makedirs(self.root_dir, exist_ok=True)
 
     def _now_text(self) -> str:
         return datetime.now().strftime(self.TIME_FORMAT)
 
-    def _normalize_tool_id(self, tool_id: str) -> str:
+    @staticmethod
+    def _normalize_tool_id(tool_id: str) -> str:
         value = str(tool_id or '').strip()
         if not value:
             raise ValueError('tool_id is required')
         return value
 
-    def _file_path(self, tool_id: str) -> str:
-        normalized = self._normalize_tool_id(tool_id)
-        safe_name = secure_filename(normalized)
-        if not safe_name:
-            raise ValueError('invalid tool_id')
-        return os.path.join(self.root_dir, f'{safe_name}.json')
-
-    def _copy_params(self, params) -> dict:
+    @staticmethod
+    def _copy_params(params) -> dict:
         if not isinstance(params, dict):
             raise ValueError('params must be an object')
         try:
             return json.loads(json.dumps(params, ensure_ascii=False))
-        except Exception as e:
-            raise ValueError(f'params must be JSON serializable: {e}') from e
+        except Exception as exc:
+            raise ValueError(f'params must be JSON serializable: {exc}') from exc
 
-    def _normalize_entry(self, item) -> dict | None:
-        if not isinstance(item, dict):
-            return None
-
-        name = str(item.get('name') or '').strip()
-        if not name:
-            return None
-
-        preset_id = str(item.get('preset_id') or '').strip() or uuid.uuid4().hex
-        now_text = self._now_text()
-        created_at = str(item.get('created_at') or '').strip() or now_text
-        updated_at = str(item.get('updated_at') or '').strip() or created_at
-
-        return {
-            'preset_id': preset_id,
-            'name': name,
-            'params': self._copy_params(item.get('params') or {}),
-            'created_at': created_at,
-            'updated_at': updated_at,
-        }
-
-    def _read_payload(self, tool_id: str) -> list[dict]:
-        file_path = self._file_path(tool_id)
-        if not os.path.isfile(file_path):
-            return []
-
+    @staticmethod
+    def _decode_params(value: str) -> dict:
         try:
-            with open(file_path, 'r', encoding='utf-8') as file_obj:
-                payload = json.load(file_obj)
+            payload = json.loads(value or '{}')
+            return payload if isinstance(payload, dict) else {}
         except Exception:
-            return []
+            return {}
 
-        items = payload.get('items') if isinstance(payload, dict) else payload
-        if not isinstance(items, list):
-            return []
+    @staticmethod
+    def _encode_params(value: dict) -> str:
+        return json.dumps(value, ensure_ascii=False, separators=(',', ':'))
 
-        result = []
-        for item in items:
-            normalized = self._normalize_entry(item)
-            if normalized:
-                result.append(normalized)
-        return result
-
-    def _write_payload(self, tool_id: str, items: list[dict]):
-        normalized_tool_id = self._normalize_tool_id(tool_id)
-        file_path = self._file_path(normalized_tool_id)
-        payload = {
-            'tool_id': normalized_tool_id,
-            'items': items,
+    def _row_to_item(self, row) -> dict:
+        return {
+            'preset_id': row['preset_id'],
+            'name': row['name'],
+            'params': self._decode_params(row['params_json']),
+            'created_at': row['created_at'],
+            'updated_at': row['updated_at'],
         }
 
-        fd, temp_path = tempfile.mkstemp(
-            prefix='external_tool_param_presets_',
-            suffix='.tmp',
-            dir=self.root_dir,
-        )
-        try:
-            with os.fdopen(fd, 'w', encoding='utf-8') as file_obj:
-                json.dump(payload, file_obj, ensure_ascii=False, indent=2)
-            os.replace(temp_path, file_path)
-        finally:
-            try:
-                if os.path.exists(temp_path):
-                    os.remove(temp_path)
-            except Exception:
-                pass
-
-    def _ensure_unique_name(self, items: list[dict], name: str, skip_preset_id: str = ''):
+    def _assert_unique_name(self, conn, tool_id: str, name: str, *, exclude_preset_id: str = ''):
         target = str(name or '').strip().lower()
-        skip_id = str(skip_preset_id or '').strip()
-        for item in items:
-            if skip_id and str(item.get('preset_id') or '') == skip_id:
+        rows = conn.execute(
+            'SELECT preset_id, name FROM external_tool_presets WHERE tool_id = ?',
+            (tool_id,),
+        ).fetchall()
+        for row in rows:
+            if exclude_preset_id and str(row['preset_id'] or '') == exclude_preset_id:
                 continue
-            if str(item.get('name') or '').strip().lower() == target:
+            if str(row['name'] or '').strip().lower() == target:
                 raise ValueError(f'Preset already exists: {name}')
 
     def list_presets(self, tool_id: str) -> list[dict]:
+        tool_id_text = self._normalize_tool_id(tool_id)
         with self._lock:
-            items = self._read_payload(tool_id)
-        return sorted(items, key=lambda item: str(item.get('name') or '').lower())
+            rows = self.database.connection().execute(
+                '''SELECT * FROM external_tool_presets WHERE tool_id = ? ORDER BY name COLLATE NOCASE ASC''',
+                (tool_id_text,),
+            ).fetchall()
+            return [self._row_to_item(row) for row in rows]
 
     def create_preset(self, tool_id: str, name: str, params: dict) -> dict:
+        tool_id_text = self._normalize_tool_id(tool_id)
         name_text = str(name or '').strip()
         if not name_text:
             raise ValueError('preset name is required')
-
+        params_copy = self._copy_params(params)
+        now_text = self._now_text()
+        item = {
+            'preset_id': uuid.uuid4().hex,
+            'name': name_text,
+            'params': params_copy,
+            'created_at': now_text,
+            'updated_at': now_text,
+        }
         with self._lock:
-            items = self._read_payload(tool_id)
-            self._ensure_unique_name(items, name_text)
-            now_text = self._now_text()
-            item = {
-                'preset_id': uuid.uuid4().hex,
-                'name': name_text,
-                'params': self._copy_params(params),
-                'created_at': now_text,
-                'updated_at': now_text,
-            }
-            items.append(item)
-            self._write_payload(tool_id, items)
-            return dict(item)
+            conn = self.database.connection()
+            self._assert_unique_name(conn, tool_id_text, name_text)
+            try:
+                conn.execute(
+                    '''INSERT INTO external_tool_presets(preset_id, tool_id, name, params_json, created_at, updated_at)
+                       VALUES (?, ?, ?, ?, ?, ?)''',
+                    (
+                        item['preset_id'], tool_id_text, name_text, self._encode_params(params_copy),
+                        now_text, now_text,
+                    ),
+                )
+            except sqlite3.IntegrityError as exc:
+                raise ValueError(f'Preset already exists: {name_text}') from exc
+        return item
 
     def update_preset(self, tool_id: str, preset_id: str, *, name: str = '', params=None) -> dict:
+        tool_id_text = self._normalize_tool_id(tool_id)
         preset_id_text = str(preset_id or '').strip()
         if not preset_id_text:
             raise ValueError('preset_id is required')
 
-        with self._lock:
-            items = self._read_payload(tool_id)
-            matched = next((item for item in items if item.get('preset_id') == preset_id_text), None)
-            if matched is None:
+        with self._lock, self.database.transaction() as conn:
+            row = conn.execute(
+                'SELECT * FROM external_tool_presets WHERE tool_id = ? AND preset_id = ?',
+                (tool_id_text, preset_id_text),
+            ).fetchone()
+            if row is None:
                 raise FileNotFoundError(f'Preset not found: {preset_id_text}')
 
-            if name:
-                name_text = str(name).strip()
-                if not name_text:
-                    raise ValueError('preset name is required')
-                self._ensure_unique_name(items, name_text, skip_preset_id=preset_id_text)
-                matched['name'] = name_text
-            if params is not None:
-                matched['params'] = self._copy_params(params)
-            matched['updated_at'] = self._now_text()
-            self._write_payload(tool_id, items)
-            return dict(matched)
+            name_text = str(name).strip() if name else row['name']
+            if not name_text:
+                raise ValueError('preset name is required')
+            params_copy = self._copy_params(params) if params is not None else self._decode_params(row['params_json'])
+            self._assert_unique_name(conn, tool_id_text, name_text, exclude_preset_id=preset_id_text)
+            updated_at = self._now_text()
+            try:
+                conn.execute(
+                    '''UPDATE external_tool_presets SET name = ?, params_json = ?, updated_at = ?
+                       WHERE tool_id = ? AND preset_id = ?''',
+                    (name_text, self._encode_params(params_copy), updated_at, tool_id_text, preset_id_text),
+                )
+            except sqlite3.IntegrityError as exc:
+                raise ValueError(f'Preset already exists: {name_text}') from exc
+            return {
+                'preset_id': preset_id_text,
+                'name': name_text,
+                'params': params_copy,
+                'created_at': row['created_at'],
+                'updated_at': updated_at,
+            }
 
     def delete_preset(self, tool_id: str, preset_id: str) -> dict:
+        tool_id_text = self._normalize_tool_id(tool_id)
         preset_id_text = str(preset_id or '').strip()
         if not preset_id_text:
             raise ValueError('preset_id is required')
 
-        with self._lock:
-            items = self._read_payload(tool_id)
-            kept = []
-            removed = None
-            for item in items:
-                if removed is None and item.get('preset_id') == preset_id_text:
-                    removed = item
-                    continue
-                kept.append(item)
-            if removed is None:
+        with self._lock, self.database.transaction() as conn:
+            row = conn.execute(
+                'SELECT * FROM external_tool_presets WHERE tool_id = ? AND preset_id = ?',
+                (tool_id_text, preset_id_text),
+            ).fetchone()
+            if row is None:
                 raise FileNotFoundError(f'Preset not found: {preset_id_text}')
-            self._write_payload(tool_id, kept)
-            return dict(removed)
+            conn.execute(
+                'DELETE FROM external_tool_presets WHERE tool_id = ? AND preset_id = ?',
+                (tool_id_text, preset_id_text),
+            )
+            return self._row_to_item(row)

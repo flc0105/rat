@@ -13,8 +13,12 @@ class WebCommandHistoryApi:
     def get_command_history(self, machine_id: str):
         return self.server.command_history.view_service.get_history_by_machine_id(machine_id)
 
-    def get_command_execution_history(self, machine_id: str):
-        return self.server.command_history.view_service.get_execution_history_by_machine_id(machine_id)
+    def get_command_execution_history(self, machine_id: str, *, limit=None, cursor: str = ''):
+        return self.server.command_history.view_service.get_execution_history_page(
+            machine_id,
+            limit=limit,
+            cursor=cursor,
+        )
 
     def clear_command_history(self, machine_id: str):
         self.server.command_history.write_service.clear_history_by_machine_id(machine_id)

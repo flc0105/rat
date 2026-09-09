@@ -5,7 +5,8 @@ from server.application.app_facade import ServerWebService
 from server.application.command.alias_manager import AliasManager
 from server.application.history.history_orchestrator import CommandHistoryOrchestrator
 from server.application.history.history_store import CommandHistoryStore
-from server.config.config import SOCKET_ADDR
+from server.config.config import RCH_DB_PATH, SOCKET_ADDR
+from server.persistence.rch_database import RchDatabase
 from server.connection.client_session import ClientSession
 from server.connection.connection_manager import ConnectionManager
 from server.runtime.command_shell import ServerCommandShell
@@ -24,7 +25,8 @@ class Server:
         self.socket = RCHSocket()
         self.connections = ConnectionManager()
         self.alias_manager = AliasManager()
-        self.command_history = CommandHistoryStore()
+        self.database = RchDatabase(RCH_DB_PATH)
+        self.command_history = CommandHistoryStore(self.database)
         self.command_history_orchestrator = CommandHistoryOrchestrator(self.command_history)
 
         # composition root:
