@@ -28,6 +28,14 @@ class WebConnectionApi:
     def get_machine_connection_history(self, machine_id: str):
         return self.connection_service.get_machine_connection_history(machine_id)
 
+    def get_machine_connection_commands(self, machine_id: str, client_id: str, *, limit=None, cursor: str = ''):
+        return self.connection_service.get_machine_connection_commands(
+            machine_id,
+            client_id,
+            limit=limit,
+            cursor=cursor,
+        )
+
     def create_web_connection(self, transport, addr, info: dict):
         return self.connection_service.create_web_connection(transport, addr, info)
 

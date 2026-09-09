@@ -44,6 +44,18 @@ def create_connections_blueprint(server_instance):
             default_error_status=500,
         )
 
+    @blueprint.get('/api/machines/<machine_id>/connection-history/<client_id>/commands')
+    def get_machine_connection_commands(machine_id, client_id):
+        return responder.json_endpoint(
+            lambda: connection_api.get_machine_connection_commands(
+                machine_id,
+                client_id,
+                limit=request.args.get('limit'),
+                cursor=request.args.get('cursor', ''),
+            ),
+            default_error_status=500,
+        )
+
     @blueprint.get('/api/device-groups')
     def get_device_groups():
         return responder.ok(connection_api.get_device_groups())

@@ -561,6 +561,8 @@ Star,
       commandExecutionDetailDialogVisible: false,
       selectedCommandExecutionEntryId: '',
       commandExecutionOutputSortOrder: 'desc',
+      commandExecutionRequestGeneration: 0,
+      commandHistorySearchTimer: null,
     }
   },
 
@@ -621,6 +623,19 @@ Star,
         this.selectedCommandExecutionEntryId = ''
       }
     },
+
+    commandHistorySearchText() {
+      if (this.commandHistorySearchTimer) {
+        window.clearTimeout(this.commandHistorySearchTimer)
+      }
+
+      if (!this.visible) return
+
+      this.commandHistorySearchTimer = window.setTimeout(() => {
+        this.commandHistorySearchTimer = null
+        this.reloadCommandExecutionHistory({ silent: true })
+      }, 250)
+    },
   },
 
   methods: {
@@ -657,6 +672,11 @@ Star,
       this.visible = value
 
       if (!value) {
+        if (this.commandHistorySearchTimer) {
+          window.clearTimeout(this.commandHistorySearchTimer)
+          this.commandHistorySearchTimer = null
+        }
+        this.commandExecutionRequestGeneration += 1
         this.commandHistorySearchText = ''
         this.commandExecutionDetailDialogVisible = false
         this.selectedCommandExecutionEntryId = ''
@@ -669,6 +689,71 @@ Star,
       try {
         await this.reloadCommandCandidates(options)
       } catch (_error) {
+      }
+    },
+
+    getCommandExecutionSearchQuery() {
+      return String(this.commandHistorySearchText || '').trim()
+    },
+
+    async reloadCommandExecutionHistory(options = {}) {
+      const silent = !!options.silent
+      const machineId = this.getSelectedHistoryMachineId()
+      if (!machineId) return
+
+      const query = this.getCommandExecutionSearchQuery()
+      const generation = ++this.commandExecutionRequestGeneration
+      this.commandExecutionHistoryLoading = true
+
+      try {
+        const params = new URLSearchParams({ limit: '50' })
+        if (query) params.set('query', query)
+
+        const res = await fetch(
+          `/api/machines/${encodeURIComponent(machineId)}/command-history/full?${params.toString()}`,
+        )
+        const json = await res.json()
+
+        if (
+          generation !== this.commandExecutionRequestGeneration
+          || machineId !== this.getSelectedHistoryMachineId()
+          || query !== this.getCommandExecutionSearchQuery()
+        ) {
+          return
+        }
+
+        if (!res.ok || json.code !== 0) {
+          throw new Error(json.message || 'Failed to load full command history')
+        }
+
+        const data = json.data && typeof json.data === 'object' ? json.data : {}
+        this.commandExecutionItems = Array.isArray(data.items) ? data.items : []
+        this.commandExecutionNextCursor = String(data.next_cursor || '')
+        this.commandExecutionHasMore = data.has_more === true
+        this.commandExecutionTotalCount = Number(data.total_count || this.commandExecutionItems.length)
+
+        if (
+          this.selectedCommandExecutionEntryId
+          && !this.commandExecutionItems.some(item => item.entry_id === this.selectedCommandExecutionEntryId)
+        ) {
+          this.commandExecutionDetailDialogVisible = false
+          this.selectedCommandExecutionEntryId = ''
+        }
+      } catch (e) {
+        if (generation !== this.commandExecutionRequestGeneration) return
+
+        this.commandExecutionItems = []
+        this.commandExecutionNextCursor = ''
+        this.commandExecutionHasMore = false
+        this.commandExecutionTotalCount = 0
+
+        if (!silent) {
+          ElMessage.error(e.message || 'Failed to load full command history')
+        }
+      } finally {
+        if (generation === this.commandExecutionRequestGeneration) {
+          this.commandExecutionHistoryLoading = false
+        }
       }
     },
 
@@ -698,54 +783,26 @@ Star,
       }
 
       this.commandHistoryLoading = true
-      this.commandExecutionHistoryLoading = true
 
       try {
-        const [quickRes, fullRes] = await Promise.all([
-          fetch(`/api/machines/${encodeURIComponent(machineId)}/command-history`),
-          fetch(`/api/machines/${encodeURIComponent(machineId)}/command-history/full?limit=50`),
-        ])
-
+        const quickRes = await fetch(`/api/machines/${encodeURIComponent(machineId)}/command-history`)
         const quickJson = await quickRes.json()
-        const fullJson = await fullRes.json()
 
         if (!quickRes.ok || quickJson.code !== 0) {
           throw new Error(quickJson.message || 'Failed to load command history')
         }
 
-        if (!fullRes.ok || fullJson.code !== 0) {
-          throw new Error(fullJson.message || 'Failed to load full command history')
-        }
-
         this.commandHistoryItems = Array.isArray(quickJson.data) ? quickJson.data : []
-        const fullData = fullJson.data && typeof fullJson.data === 'object' ? fullJson.data : {}
-        this.commandExecutionItems = Array.isArray(fullData.items) ? fullData.items : []
-        this.commandExecutionNextCursor = String(fullData.next_cursor || '')
-        this.commandExecutionHasMore = fullData.has_more === true
-        this.commandExecutionTotalCount = Number(fullData.total_count || this.commandExecutionItems.length)
-
-        if (
-          this.selectedCommandExecutionEntryId
-          && !this.commandExecutionItems.some(item => item.entry_id === this.selectedCommandExecutionEntryId)
-        ) {
-          this.commandExecutionDetailDialogVisible = false
-          this.selectedCommandExecutionEntryId = ''
-        }
-
+        await this.reloadCommandExecutionHistory({ silent })
         await this.reloadCandidates()
       } catch (e) {
         this.commandHistoryItems = []
-        this.commandExecutionItems = []
-        this.commandExecutionNextCursor = ''
-        this.commandExecutionHasMore = false
-        this.commandExecutionTotalCount = 0
 
         if (!silent) {
           ElMessage.error(e.message || 'Failed to load command history')
         }
       } finally {
         this.commandHistoryLoading = false
-        this.commandExecutionHistoryLoading = false
       }
     },
 
@@ -755,11 +812,17 @@ Star,
       const machineId = this.getSelectedHistoryMachineId()
       if (!machineId) return
 
+      const generation = this.commandExecutionRequestGeneration
+      const query = this.getCommandExecutionSearchQuery()
+      const cursor = this.commandExecutionNextCursor
       this.commandExecutionLoadingMore = true
       try {
         const params = new URLSearchParams({ limit: '50' })
-        if (this.commandExecutionNextCursor) {
-          params.set('cursor', this.commandExecutionNextCursor)
+        if (cursor) {
+          params.set('cursor', cursor)
+        }
+        if (query) {
+          params.set('query', query)
         }
         const res = await fetch(
           `/api/machines/${encodeURIComponent(machineId)}/command-history/full?${params.toString()}`,
@@ -767,6 +830,15 @@ Star,
         const json = await res.json()
         if (!res.ok || json.code !== 0) {
           throw new Error(json.message || 'Failed to load more execution history')
+        }
+
+        if (
+          generation !== this.commandExecutionRequestGeneration
+          || machineId !== this.getSelectedHistoryMachineId()
+          || query !== this.getCommandExecutionSearchQuery()
+          || cursor !== this.commandExecutionNextCursor
+        ) {
+          return
         }
 
         const data = json.data && typeof json.data === 'object' ? json.data : {}

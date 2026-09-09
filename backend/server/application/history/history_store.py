@@ -401,9 +401,25 @@ class CommandHistoryStore:
             conn.execute('DELETE FROM command_executions WHERE machine_id = ?', (machine_id,))
             conn.execute('DELETE FROM command_recents WHERE machine_id = ?', (machine_id,))
 
-    def _list_execution_rows(self, machine_id: str, *, limit: int | None = None, cursor: tuple[int, str] | None = None):
+    def _list_execution_rows(
+        self,
+        machine_id: str,
+        *,
+        limit: int | None = None,
+        cursor: tuple[int, str] | None = None,
+        query: str = '',
+        client_id: str = '',
+    ):
         params = [machine_id]
         where = 'machine_id = ?'
+        client_id_text = str(client_id or '').strip()
+        if client_id_text:
+            where += ' AND client_id = ?'
+            params.append(client_id_text)
+        query_text = str(query or '').strip()
+        if query_text:
+            where += ' AND instr(LOWER(command), LOWER(?)) > 0'
+            params.append(query_text)
         if cursor is not None:
             cursor_ms, cursor_entry_id = cursor
             where += ' AND (started_at_ms < ? OR (started_at_ms = ? AND entry_id < ?))'

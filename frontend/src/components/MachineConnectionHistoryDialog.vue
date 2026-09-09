@@ -11,7 +11,7 @@
       <div class="machine-history-toolbar">
         <div class="machine-history-identity">
           <div class="machine-history-device-name">{{ deviceName || 'Unknown device' }}</div>
-          <div class="machine-history-machine-id">machine_id: {{ machineId || '-' }}</div>
+          <div class="machine-history-machine-id">machine_id: {{ shortenMachineId(machineId) }}</div>
         </div>
 
         <el-button size="small" @click="loadHistory">
@@ -21,23 +21,19 @@
 
       <div class="machine-history-stats">
         <div class="machine-history-stat">
-          <div class="machine-history-stat-label">Known sessions</div>
-          <div class="machine-history-stat-value">{{ history.known_session_count || 0 }}</div>
+          <div class="machine-history-stat-label">All Connections</div>
+          <div class="machine-history-stat-value">{{ history.connection_count || 0 }}</div>
         </div>
         <div class="machine-history-stat">
-          <div class="machine-history-stat-label">Tracked connections</div>
-          <div class="machine-history-stat-value">{{ history.tracked_connection_count || 0 }}</div>
+          <div class="machine-history-stat-label">Online Now</div>
+          <div class="machine-history-stat-value">{{ history.online_connection_count || 0 }}</div>
         </div>
         <div class="machine-history-stat">
-          <div class="machine-history-stat-label">Online now</div>
-          <div class="machine-history-stat-value">{{ history.online_session_count || 0 }}</div>
+          <div class="machine-history-stat-label">Total Commands</div>
+          <div class="machine-history-stat-value">{{ history.command_count || 0 }}</div>
         </div>
         <div class="machine-history-stat">
-          <div class="machine-history-stat-label">Known commands</div>
-          <div class="machine-history-stat-value">{{ history.known_command_count || 0 }}</div>
-        </div>
-        <div class="machine-history-stat">
-          <div class="machine-history-stat-label">Tracked online time</div>
+          <div class="machine-history-stat-label">Total Online Time</div>
           <div class="machine-history-stat-value">{{ formatDuration(history.total_online_duration_ms) }}</div>
         </div>
       </div>
@@ -58,8 +54,9 @@
         border
         stripe
         class="machine-history-table"
+        @expand-change="handleSessionExpand"
       >
-        <el-table-column type="expand" width="48">
+        <el-table-column type="expand" width="44">
           <template #default="scope">
             <div class="machine-session-detail">
               <div class="machine-session-meta-grid">
@@ -103,73 +100,80 @@
 
               <div class="machine-session-command-header">
                 <span>Commands ({{ scope.row.command_count || 0 }})</span>
-                <span class="machine-session-command-summary">
-                  success {{ scope.row.command_success_count || 0 }} ·
-                  error {{ scope.row.command_error_count || 0 }} ·
-                  running {{ scope.row.command_running_count || 0 }}
-                </span>
               </div>
 
-              <el-table
-                v-if="scope.row.commands && scope.row.commands.length"
-                :data="scope.row.commands"
-                size="small"
-                border
-                max-height="320"
-                class="machine-session-command-table"
+              <div
+                class="machine-session-command-section"
+                v-loading="scope.row.command_loading"
               >
-                <el-table-column label="Started" width="160">
-                  <template #default="commandScope">
-                    {{ formatDateTime(commandScope.row.started_at) }}
-                  </template>
-                </el-table-column>
-                <el-table-column label="Status" width="92">
-                  <template #default="commandScope">
-                    <el-tag
-                      size="small"
-                      :type="commandStatusTagType(commandScope.row.status)"
-                    >
-                      {{ commandScope.row.status || 'unknown' }}
-                    </el-tag>
-                  </template>
-                </el-table-column>
-                <el-table-column prop="source" label="Source" width="100" />
-                <el-table-column label="Command" min-width="280">
-                  <template #default="commandScope">
-                    <code class="machine-session-command-text">{{ commandScope.row.command || '-' }}</code>
-                  </template>
-                </el-table-column>
-                <el-table-column label="Duration" width="100">
-                  <template #default="commandScope">
-                    {{ formatDuration(commandScope.row.duration_ms) }}
-                  </template>
-                </el-table-column>
-                <el-table-column label="Output / files" min-width="200">
-                  <template #default="commandScope">
-                    <div class="machine-session-output-summary">
-                      {{ commandScope.row.output_summary || '-' }}
-                      <span v-if="commandScope.row.file_count">
-                        · {{ commandScope.row.file_count }} file(s)
-                      </span>
-                    </div>
-                  </template>
-                </el-table-column>
-              </el-table>
+                <el-table
+                  v-if="scope.row.commands && scope.row.commands.length"
+                  :data="scope.row.commands"
+                  size="small"
+                  border
+                  max-height="320"
+                  class="machine-session-command-table"
+                  table-layout="fixed"
+                >
+                  <el-table-column label="Time" width="160">
+                    <template #default="commandScope">
+                      {{ formatDateTime(commandScope.row.time) }}
+                    </template>
+                  </el-table-column>
+                  <el-table-column label="Status" width="90">
+                    <template #default="commandScope">
+                      <el-tag
+                        size="small"
+                        :type="commandStatusTagType(commandScope.row.status)"
+                      >
+                        {{ commandScope.row.status || 'unknown' }}
+                      </el-tag>
+                    </template>
+                  </el-table-column>
+                  <el-table-column label="Command" min-width="480" show-overflow-tooltip>
+                    <template #default="commandScope">
+                      <code class="machine-session-command-text">{{ commandScope.row.command || '-' }}</code>
+                    </template>
+                  </el-table-column>
+                  <el-table-column label="Duration" width="105">
+                    <template #default="commandScope">
+                      {{ formatDuration(commandScope.row.duration_ms) }}
+                    </template>
+                  </el-table-column>
+                </el-table>
 
-              <div v-else class="empty-state compact">
-                No retained command records for this session
+                <div
+                  v-else-if="scope.row.command_loaded && !scope.row.command_loading"
+                  class="empty-state compact"
+                >
+                  No command records for this connection
+                </div>
+
+                <div
+                  v-if="scope.row.command_has_more"
+                  class="machine-session-command-load-more"
+                >
+                  <el-button
+                    size="small"
+                    plain
+                    :loading="scope.row.command_loading"
+                    @click="loadSessionCommands(scope.row, true)"
+                  >
+                    Load More
+                  </el-button>
+                </div>
               </div>
             </div>
           </template>
         </el-table-column>
 
-        <el-table-column label="#" width="58">
+        <el-table-column label="#" width="52">
           <template #default="scope">
             {{ scope.$index + 1 }}
           </template>
         </el-table-column>
 
-        <el-table-column label="State" width="138">
+        <el-table-column label="State" width="96">
           <template #default="scope">
             <el-tag
               size="small"
@@ -180,19 +184,19 @@
           </template>
         </el-table-column>
 
-        <el-table-column label="client_id" min-width="210">
+        <el-table-column label="client_id" min-width="240">
           <template #default="scope">
             <code class="machine-session-client-id">{{ scope.row.client_id || '-' }}</code>
           </template>
         </el-table-column>
 
-        <el-table-column label="Online" width="170">
+        <el-table-column label="Online" width="160">
           <template #default="scope">
             {{ formatDateTime(scope.row.connected_at) }}
           </template>
         </el-table-column>
 
-        <el-table-column label="Offline" width="170">
+        <el-table-column label="Offline" width="160">
           <template #default="scope">
             {{ scope.row.connection_state === 'online' ? 'online' : formatDateTime(scope.row.disconnected_at) }}
           </template>
@@ -204,7 +208,7 @@
           </template>
         </el-table-column>
 
-        <el-table-column label="Commands" width="92" align="right">
+        <el-table-column label="Commands" width="118" align="right">
           <template #default="scope">
             {{ scope.row.command_count || 0 }}
           </template>
@@ -224,7 +228,7 @@
 
 <script>
 import { ElMessage } from 'element-plus'
-import { getMachineConnectionHistory } from '../api/connectionsApi.js'
+import { getMachineConnectionCommands, getMachineConnectionHistory } from '../api/connectionsApi.js'
 
 export default {
   name: 'MachineConnectionHistoryDialog',
@@ -269,12 +273,62 @@ export default {
 
       this.loading = true
       try {
-        this.history = await getMachineConnectionHistory(this.machineId)
+        const payload = await getMachineConnectionHistory(this.machineId)
+        this.history = {
+          ...(payload || {}),
+          sessions: (Array.isArray(payload?.sessions) ? payload.sessions : []).map(session => ({
+            ...session,
+            commands: [],
+            command_loaded: false,
+            command_loading: false,
+            command_has_more: false,
+            command_next_cursor: '',
+          })),
+        }
       } catch (e) {
         ElMessage.error(e.message || 'Failed to load connection history')
       } finally {
         this.loading = false
       }
+    },
+
+    handleSessionExpand(row, expandedRows) {
+      const expanded = Array.isArray(expandedRows)
+        && expandedRows.some(item => item?.client_id === row?.client_id)
+      if (!expanded || row?.command_loaded || row?.command_loading || !Number(row?.command_count || 0)) return
+      this.loadSessionCommands(row)
+    },
+
+    async loadSessionCommands(row, append = false) {
+      if (!this.machineId || !row?.client_id || row.command_loading) return
+
+      row.command_loading = true
+      try {
+        const data = await getMachineConnectionCommands(this.machineId, row.client_id, {
+          limit: 50,
+          cursor: append ? row.command_next_cursor : '',
+        })
+
+        if (!this.sessions.includes(row)) return
+
+        const items = Array.isArray(data?.items) ? data.items : []
+        row.commands = append ? [...(row.commands || []), ...items] : items
+        row.command_next_cursor = String(data?.next_cursor || '')
+        row.command_has_more = data?.has_more === true
+        row.command_loaded = true
+      } catch (e) {
+        ElMessage.error(e.message || 'Failed to load connection commands')
+      } finally {
+        if (this.sessions.includes(row)) {
+          row.command_loading = false
+        }
+      }
+    },
+
+    shortenMachineId(machineId) {
+      const value = String(machineId || '').trim()
+      if (!value) return '-'
+      return value.length > 12 ? value.slice(0, 12) : value
     },
 
     formatDateTime(value) {
@@ -369,7 +423,7 @@ export default {
 
 .machine-history-stats {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 10px;
   margin-bottom: 14px;
 }
@@ -446,10 +500,14 @@ export default {
   color: var(--el-text-color-primary);
 }
 
-.machine-session-command-summary {
-  color: var(--el-text-color-secondary);
-  font-size: 12px;
-  font-weight: 400;
+.machine-session-command-section {
+  min-height: 44px;
+}
+
+.machine-session-command-load-more {
+  display: flex;
+  justify-content: center;
+  margin-top: 10px;
 }
 
 .machine-session-command-text,
@@ -458,14 +516,16 @@ export default {
 }
 
 .machine-session-command-text {
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.machine-session-output-summary {
-  color: var(--el-text-color-secondary);
-  font-size: 12px;
-  overflow-wrap: anywhere;
+:deep(.machine-history-table .el-table__header .cell),
+:deep(.machine-session-command-table .el-table__header .cell) {
+  white-space: nowrap;
 }
 
 .machine-history-empty {

@@ -20,6 +20,7 @@ def create_command_history_blueprint(server_instance):
                 machine_id,
                 limit=request.args.get('limit'),
                 cursor=request.args.get('cursor', ''),
+                query=request.args.get('query', ''),
             ),
             default_error_status=500,
         )

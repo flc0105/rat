@@ -152,30 +152,77 @@ class HistoryViewService:
         with self.store._lock:
             return self._build_quick_history(machine_id_text)
 
-    def get_connection_command_summaries_by_machine_id(self, machine_id: str) -> list:
+    def get_connection_command_counts_by_machine_id(self, machine_id: str) -> dict[str, int]:
         machine_id_text = str(machine_id or '').strip() or 'unknown_machine'
         rows = self.store.database.connection().execute(
-            '''
-            SELECT entry_id, client_id, command, source, status, final_status,
-                   started_at, finished_at, duration_ms, cwd_start, cwd_end,
-                   hostname, addr, output_summary, output_line_count,
-                   output_char_count, output_truncated, file_count
+            """
+            SELECT client_id, COUNT(*) AS command_count
             FROM command_executions
             WHERE machine_id = ?
-            ORDER BY started_at_ms DESC, entry_id DESC
-            ''',
+            GROUP BY client_id
+            """,
             (machine_id_text,),
         ).fetchall()
-        return [dict(row) for row in rows]
+        return {str(row['client_id'] or ''): int(row['command_count'] or 0) for row in rows}
 
-    def get_execution_history_page(self, machine_id: str, *, limit=None, cursor: str = '') -> dict:
+    def get_connection_command_page(
+        self,
+        machine_id: str,
+        client_id: str,
+        *,
+        limit=None,
+        cursor: str = '',
+    ) -> dict:
         machine_id_text = str(machine_id or '').strip() or 'unknown_machine'
+        client_id_text = str(client_id or '').strip()
+        if not client_id_text:
+            raise ValueError('Invalid client id')
+
         page_limit = self._normalize_page_limit(limit)
         decoded_cursor = self._decode_cursor(cursor)
         rows = self.store._list_execution_rows(
             machine_id_text,
             limit=page_limit + 1,
             cursor=decoded_cursor,
+            client_id=client_id_text,
+        )
+        has_more = len(rows) > page_limit
+        page_rows = rows[:page_limit]
+        items = [
+            {
+                'time': row['started_at'] or '',
+                'status': row['status'] or '',
+                'command': row['command'] or '',
+                'duration_ms': int(row['duration_ms'] or 0),
+            }
+            for row in page_rows
+        ]
+        next_cursor = ''
+        if has_more and page_rows:
+            last = page_rows[-1]
+            next_cursor = self._encode_cursor(int(last['started_at_ms'] or 0), last['entry_id'])
+
+        total_row = self.store.database.connection().execute(
+            'SELECT COUNT(*) FROM command_executions WHERE machine_id = ? AND client_id = ?',
+            (machine_id_text, client_id_text),
+        ).fetchone()
+        return {
+            'items': items,
+            'next_cursor': next_cursor,
+            'has_more': has_more,
+            'total_count': int(total_row[0] if total_row else 0),
+        }
+
+    def get_execution_history_page(self, machine_id: str, *, limit=None, cursor: str = '', query: str = '') -> dict:
+        machine_id_text = str(machine_id or '').strip() or 'unknown_machine'
+        query_text = str(query or '').strip()
+        page_limit = self._normalize_page_limit(limit)
+        decoded_cursor = self._decode_cursor(cursor)
+        rows = self.store._list_execution_rows(
+            machine_id_text,
+            limit=page_limit + 1,
+            cursor=decoded_cursor,
+            query=query_text,
         )
         has_more = len(rows) > page_limit
         page_rows = rows[:page_limit]
@@ -187,10 +234,13 @@ class HistoryViewService:
         if has_more and page_rows:
             last = page_rows[-1]
             next_cursor = self._encode_cursor(int(last['started_at_ms'] or 0), last['entry_id'])
-        total_row = self.store.database.connection().execute(
-            'SELECT COUNT(*) FROM command_executions WHERE machine_id = ?',
-            (machine_id_text,),
-        ).fetchone()
+
+        count_sql = 'SELECT COUNT(*) FROM command_executions WHERE machine_id = ?'
+        count_params = [machine_id_text]
+        if query_text:
+            count_sql += ' AND instr(LOWER(command), LOWER(?)) > 0'
+            count_params.append(query_text)
+        total_row = self.store.database.connection().execute(count_sql, tuple(count_params)).fetchone()
         return {
             'items': items,
             'next_cursor': next_cursor,

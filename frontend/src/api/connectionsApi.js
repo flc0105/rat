@@ -67,3 +67,18 @@ export function getMachineConnectionHistory(machineId) {
   if (!machineId) return Promise.resolve({ sessions: [] })
   return apiData(`/api/machines/${encodeURIComponent(machineId)}/connection-history`, {}, { sessions: [] })
 }
+
+export function getMachineConnectionCommands(machineId, clientId, params = {}) {
+  if (!machineId || !clientId) {
+    return Promise.resolve({ items: [], next_cursor: '', has_more: false, total_count: 0 })
+  }
+
+  const query = new URLSearchParams({ limit: String(params.limit || 50) })
+  if (params.cursor) query.set('cursor', String(params.cursor))
+
+  return apiData(
+    `/api/machines/${encodeURIComponent(machineId)}/connection-history/${encodeURIComponent(clientId)}/commands?${query.toString()}`,
+    {},
+    { items: [], next_cursor: '', has_more: false, total_count: 0 },
+  )
+}

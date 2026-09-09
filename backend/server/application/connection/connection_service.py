@@ -333,36 +333,8 @@ class WebConnectionService:
                 'sessions': [],
             }
 
-        execution_history = self.server.command_history.view_service.get_connection_command_summaries_by_machine_id(machine_id_text)
-        commands_by_client_id = {}
-        unassigned_command_count = 0
-
-        for entry in execution_history:
-            client_id = str(entry.get('client_id') or '').strip()
-            if not client_id:
-                unassigned_command_count += 1
-                continue
-
-            command_item = {
-                'entry_id': entry.get('entry_id') or '',
-                'command': entry.get('command') or '',
-                'source': entry.get('source') or '',
-                'status': entry.get('status') or '',
-                'final_status': entry.get('final_status') or '',
-                'started_at': entry.get('started_at') or entry.get('time') or '',
-                'finished_at': entry.get('finished_at') or '',
-                'duration_ms': int(entry.get('duration_ms', 0) or 0),
-                'cwd_start': entry.get('cwd_start') or '',
-                'cwd_end': entry.get('cwd_end') or '',
-                'hostname': entry.get('hostname') or '',
-                'addr': entry.get('addr') or '',
-                'output_summary': entry.get('output_summary') or '',
-                'output_line_count': int(entry.get('output_line_count', 0) or 0),
-                'output_char_count': int(entry.get('output_char_count', 0) or 0),
-                'output_truncated': bool(entry.get('output_truncated', False)),
-                'file_count': int(entry.get('file_count', 0) or 0),
-            }
-            commands_by_client_id.setdefault(client_id, []).append(command_item)
+        command_counts = self.server.command_history.view_service.get_connection_command_counts_by_machine_id(machine_id_text)
+        unassigned_command_count = int(command_counts.get('', 0) or 0)
 
         sessions = []
         total_online_duration_ms = 0
@@ -371,12 +343,7 @@ class WebConnectionService:
         for session in lifecycle_payload.get('sessions') or []:
             copied = dict(session)
             client_id = str(copied.get('client_id') or '').strip()
-            commands = list(commands_by_client_id.get(client_id, []))
-            copied['commands'] = commands
-            copied['command_count'] = len(commands)
-            copied['command_success_count'] = sum(1 for item in commands if item.get('status') == 'success')
-            copied['command_error_count'] = sum(1 for item in commands if item.get('status') == 'error')
-            copied['command_running_count'] = sum(1 for item in commands if item.get('status') == 'running')
+            copied['command_count'] = int(command_counts.get(client_id, 0) or 0)
 
             duration_ms = int(copied.get('duration_ms', 0) or 0)
             total_online_duration_ms += duration_ms
@@ -394,14 +361,28 @@ class WebConnectionService:
         return {
             'machine_id': machine_id_text,
             'tracking_started_at': lifecycle_payload.get('tracking_started_at') or '',
-            'known_session_count': len(sessions),
-            'tracked_connection_count': len(sessions),
-            'online_session_count': online_session_count,
+            'connection_count': len(sessions),
+            'online_connection_count': online_session_count,
+            'command_count': sum(int(value or 0) for value in command_counts.values()),
             'total_online_duration_ms': total_online_duration_ms,
-            'known_command_count': sum(int(item.get('command_count', 0) or 0) for item in sessions) + unassigned_command_count,
             'unassigned_command_count': unassigned_command_count,
             'sessions': sessions,
         }
+
+    def get_machine_connection_commands(
+        self,
+        machine_id: str,
+        client_id: str,
+        *,
+        limit=None,
+        cursor: str = '',
+    ) -> dict:
+        return self.server.command_history.view_service.get_connection_command_page(
+            machine_id,
+            client_id,
+            limit=limit,
+            cursor=cursor,
+        )
 
     def remove_connection(self, client_id: str, machine_id: str = '') -> dict:
         target_client_id = str(client_id or '').strip()
