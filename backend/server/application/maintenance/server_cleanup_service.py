@@ -41,7 +41,7 @@ class ServerCleanupService:
         self._server_handlers = {
             'notifications': self._cleanup_notifications,
             'agent_build_temp': self._cleanup_agent_build_temp,
-            'agent_update_outputs': self._cleanup_agent_update_outputs,
+            'agent_transient_outputs': self._cleanup_agent_transient_outputs,
             'preview_cache': self._cleanup_preview_cache,
             'upload_tmp': self._cleanup_upload_tmp,
             'cleanup_logs': self._cleanup_logs,
@@ -148,7 +148,7 @@ class ServerCleanupService:
         capture_handlers = {
             'notifications': self._snapshot_notifications,
             'agent_build_temp': self._snapshot_agent_build_temp,
-            'agent_update_outputs': self._snapshot_agent_update_outputs,
+            'agent_transient_outputs': self._snapshot_agent_transient_outputs,
             'preview_cache': self._snapshot_preview_cache,
             'upload_tmp': self._snapshot_upload_tmp,
             'cleanup_logs': self._snapshot_cleanup_logs,
@@ -194,11 +194,11 @@ class ServerCleanupService:
             work_dirs.append(work_dir)
         return work_dirs
 
-    def _snapshot_agent_update_outputs(self) -> list[str]:
+    def _snapshot_agent_transient_outputs(self) -> list[str]:
         return [
             str(record.get('file_name') or '').strip()
             for record in self.agent_output_registry.list_outputs()
-            if str(record.get('source') or '').strip().lower() == 'update'
+            if str(record.get('source') or '').strip().lower() in ('update', 'bootstrap')
             and str(record.get('file_name') or '').strip()
         ]
 
@@ -253,8 +253,8 @@ class ServerCleanupService:
                 self._remove_path(path, result)
         return result
 
-    def _cleanup_agent_update_outputs(self, file_names) -> dict:
-        result = self._new_item_result('agent_update_outputs')
+    def _cleanup_agent_transient_outputs(self, file_names) -> dict:
+        result = self._new_item_result('agent_transient_outputs')
 
         for file_name in file_names or []:
             file_name = str(file_name or '').strip()
@@ -269,7 +269,7 @@ class ServerCleanupService:
                 result['errors'].append(f'{file_name}: {exc}')
                 continue
 
-            if str(record.get('source') or '').strip().lower() != 'update':
+            if str(record.get('source') or '').strip().lower() not in ('update', 'bootstrap'):
                 continue
 
             file_path = os.path.abspath(os.path.join(self.agent_output_registry.output_dir, file_name))
@@ -292,7 +292,7 @@ class ServerCleanupService:
                     'kind': 'file',
                     'path': file_path,
                     'size': output_size,
-                    'detail': 'agent update output',
+                    'detail': 'agent transient output',
                 })
             if metadata_size:
                 result['removed_files'] += 1
@@ -301,7 +301,7 @@ class ServerCleanupService:
                     'kind': 'file',
                     'path': metadata_path,
                     'size': metadata_size,
-                    'detail': 'agent update metadata',
+                    'detail': 'agent transient metadata',
                 })
 
         return result

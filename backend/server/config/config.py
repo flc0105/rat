@@ -48,7 +48,7 @@ SERVER_CLEANUP_LOG_ROOT_DIR = os.path.abspath(os.path.join('runtime', 'cleanup_l
 SERVER_CLEANUP_ITEMS = (
     'notifications',
     'agent_build_temp',
-    'agent_update_outputs',
+    'agent_transient_outputs',
     'preview_cache',
     'upload_tmp',
     'cleanup_logs',

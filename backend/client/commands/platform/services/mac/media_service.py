@@ -25,6 +25,7 @@ class MacMediaService:
                 suffix='.png',
             )
             os.close(temp_fd)
+            self.owner._send_info(f'Client Temp Path: {screenshot_path}', 0)
             capture_command = f'screencapture -x {shlex.quote(screenshot_path)}'
             self.owner._send_info(f'Capturing screen: {capture_command}', 0)
             result = self.owner._run_shell_command(capture_command, timeout=15)
@@ -62,6 +63,7 @@ class MacMediaService:
             )
             os.close(temp_fd)
             temp_file = temp_path
+            self.owner._send_info(f'Client Temp Path: {temp_file}', 0)
 
             subprocess.run(
                 ['imagesnap', '-w', '1', temp_file],

@@ -466,12 +466,6 @@ class CommandUpdateMixin:
         except Exception as e:
             return self._send_error(f'Failed to clean outdated releases: {e}', 1)
 
-    def _parse_clean_items(self, arg='') -> list[str]:
-        tokens = shlex.split(str(arg or ''))
-        if not tokens:
-            return list(ClientCleanupService.DEFAULT_ITEMS)
-        return tokens
-
     def _format_client_cleanup_result(self, result: dict) -> str:
         lines = [
             success('Client residue cleanup completed'),
@@ -502,25 +496,19 @@ class CommandUpdateMixin:
 
         return '\n'.join(lines)
 
-    @desc('Clean client-owned temporary residue and obsolete update bundle files', group='session')
+    @desc('Clean all client-owned temporary residue and obsolete update bundle files', group='session')
     @interruptible()
     def clean(self, arg=''):
-        """
-        清理当前 Client 所属的临时残留与旧 update bundle。
+        """Clean all supported client residue. Usage: clean"""
+        if str(arg or '').strip():
+            return 0, error('Usage: clean')
 
-        Usage:
-          clean
-          clean <item> [item ...]
-
-        不传 item 时执行全部默认清理项。
-        """
         try:
-            items = self._parse_clean_items(arg)
             service = ClientCleanupService(
                 ensure_not_interrupted=self._ensure_not_interrupted,
                 current_bundle_resolver=self._get_current_bundle_release_dir,
             )
-            result = service.clean(items)
+            result = service.clean()
             status = 0 if int(result.get('error_count') or 0) else 1
             return status, self._format_client_cleanup_result(result)
         except Exception as e:

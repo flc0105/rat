@@ -27,6 +27,7 @@ class WinMediaService:
             )
             os.close(temp_fd)
             temp_file = temp_path
+            self.owner._send_interim_result(1, f'Client Temp Path: {temp_file}', 0)
 
             # 截图
             screenshot = pyautogui.screenshot()

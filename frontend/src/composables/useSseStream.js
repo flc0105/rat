@@ -893,39 +893,27 @@ this.appendOutput(payload.client_id, `${TERMINAL_BACKGROUND_PREFIX} ${payload.te
 
                 if (!this.selectedId || payload.client_id === this.selectedId || !payload.client_id) {
                     const downloadUrl = payload.download_url || `/api/artifacts/${encodeURIComponent(payload.artifact_id)}/download`;
+                    const context = {
+                        client_id: payload.client_id || '',
+                        artifact_id: payload.artifact_id || '',
+                        artifact_type: payload.artifact_type || '',
+                        category: payload.category || '',
+                        original_name: payload.original_name || fileName,
+                    };
+                    const actions = [
+                        { id: 'download', type: 'artifact_download', label: 'Download', url: downloadUrl },
+                        { id: 'preview', type: 'artifact_preview', label: 'Preview' },
+                        { id: 'open-artifacts', type: 'open_artifacts', label: 'Open Artifacts' },
+                    ];
                     this.showSseNotification('artifact_created', {
                         title: 'File Ready',
-                        dangerouslyUseHTMLString: true,
-                        message: `
-        <div>
-          <div>${fileName} has been saved</div>
-          <div style="margin-top:6px;">
-            <a href="${downloadUrl}" target="_blank" style="color:#409eff;text-decoration:none;">
-              Download now
-            </a>
-          </div>
-        </div>
-    `,
+                        message: `${fileName} has been saved`,
                         type: 'success',
                         duration: 6000
                     }, {
                         eventId: event.lastEventId,
-                        message: `${fileName} has been saved`,
-                        context: {
-                            client_id: payload.client_id || '',
-                            artifact_id: payload.artifact_id || '',
-                            artifact_type: payload.artifact_type || '',
-                            category: payload.category || '',
-                            original_name: payload.original_name || fileName,
-                        },
-                        actions: [
-                            {
-                                id: 'download',
-                                type: 'artifact_download',
-                                label: 'Download now',
-                                url: downloadUrl,
-                            },
-                        ],
+                        context,
+                        actions,
                     });
                 }
 

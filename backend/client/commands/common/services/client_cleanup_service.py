@@ -15,7 +15,7 @@ from client.runtime.temp_workspace import (
 class ClientCleanupService:
     """Clean client-owned transient residue and obsolete update bundle files."""
 
-    DEFAULT_ITEMS = (
+    ITEMS = (
         'remote_job_temp',
         'preview_temp',
         'clipboard_temp',
@@ -43,10 +43,9 @@ class ClientCleanupService:
         self.ensure_not_interrupted = ensure_not_interrupted
         self.current_bundle_resolver = current_bundle_resolver
 
-    def clean(self, items=None) -> dict:
-        selected = self._normalize_items(items)
+    def clean(self) -> dict:
         item_results = []
-        for name in selected:
+        for name in self.ITEMS:
             self._ensure_not_interrupted()
             handler = getattr(self, f'_clean_{name}', None)
             if handler is None:
@@ -66,29 +65,6 @@ class ClientCleanupService:
             'error_count': sum(len(item['errors']) for item in item_results),
             'skipped_count': sum(1 for item in item_results if item.get('skipped')),
         }
-
-    def _normalize_items(self, items) -> list[str]:
-        if not items:
-            return list(self.DEFAULT_ITEMS)
-
-        normalized = []
-        seen = set()
-        for value in items:
-            name = str(value or '').strip().lower()
-            if not name:
-                continue
-            if name == 'all':
-                return list(self.DEFAULT_ITEMS)
-            if name not in self.DEFAULT_ITEMS:
-                raise ValueError(
-                    f'Unsupported cleanup item: {name}. '
-                    f'Available: {", ".join(self.DEFAULT_ITEMS)}'
-                )
-            if name in seen:
-                continue
-            seen.add(name)
-            normalized.append(name)
-        return normalized or list(self.DEFAULT_ITEMS)
 
     def _clean_remote_job_temp(self):
         return self._clean_temp_item('remote_job_temp')

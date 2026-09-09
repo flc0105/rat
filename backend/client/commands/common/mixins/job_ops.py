@@ -197,6 +197,7 @@ class CommandJobMixin:
             with open(temp_path, 'w', encoding='utf-8') as f:
                 f.write(script_content)
 
+            self._send_interim_result(1, f'Client Temp Path: {temp_path}', 0)
             self._send_interim_result(1, f'Preparing background job from remote job: {display_script_name}')
 
             runtime = job_manager.start_job(

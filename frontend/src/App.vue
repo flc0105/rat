@@ -24,9 +24,6 @@
                 <span class="banner-transfer-symbol">⇅</span>
                 <span v-if="activeTransferCount" class="banner-transfer-count">{{ activeTransferCount }}</span>
               </button>
-
-
-
               <button
                 class="banner-notification-action"
                 type="button"
@@ -35,7 +32,6 @@
               >
                 <el-icon><Bell /></el-icon>
               </button>
-              <span class="tool-separator" style="margin-right: 12px;"></span>
               <button
                 class="banner-inline-action"
                 type="button"
@@ -567,6 +563,14 @@ export default {
 
       if (actionType === 'view_external_tool_log') {
         return this.$refs.externalToolManagerDialogRef?.openFromNotification?.(context, { viewLog: true })
+      }
+
+      if (actionType === 'artifact_preview') {
+        return this.previewArtifact(context)
+      }
+
+      if (actionType === 'open_artifacts') {
+        return this.openArtifactDialog()
       }
 
       if (actionType === 'open_agents') {
