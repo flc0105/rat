@@ -647,12 +647,12 @@
 
   <RemoteZipPeekDialog
       ref="remoteZipPeekDialogRef"
-      :selected-id="selectedId"
+      :selected-id="remoteFilesClientId"
   />
 
   <RemotePinsDialog
       v-model="pinManagerVisible"
-      :selected-id="selectedId"
+      :selected-id="remoteFilesClientId"
       :items="remotePinnedJumpItems"
       @updated="handlePinnedQuickJumpsUpdated"
   />
@@ -700,6 +700,10 @@ export default {
       pinManagerVisible: false,
 
       remoteFilesLoading: false,
+      remoteFilesClientId: '',
+      remoteFilesContextSeq: 0,
+      remoteDirectoryRequestSeq: 0,
+      remoteDirectoryAbortController: null,
       remoteFilesCurrentPath: '',
       remoteFilesParentPath: '',
       remoteFilesEntries: [],
@@ -911,12 +915,39 @@ export default {
       }
     },
 
+    captureRemoteFilesContext() {
+      return {
+        clientId: String(this.remoteFilesClientId || '').trim(),
+        contextSeq: this.remoteFilesContextSeq,
+      }
+    },
+
+    isRemoteFilesContextActive(context) {
+      return !!(
+        context?.clientId &&
+        this.visible &&
+        context.contextSeq === this.remoteFilesContextSeq &&
+        context.clientId === this.remoteFilesClientId
+      )
+    },
+
+    abortRemoteDirectoryRequest() {
+      this.remoteDirectoryRequestSeq += 1
+      const controller = this.remoteDirectoryAbortController
+      this.remoteDirectoryAbortController = null
+      if (controller) controller.abort()
+    },
+
     async open() {
-      if (!this.selectedId) {
+      const clientId = String(this.selectedId || '').trim()
+      if (!clientId) {
         ElMessage.warning('Please select a device')
         return
       }
 
+      this.abortRemoteDirectoryRequest()
+      this.remoteFilesContextSeq += 1
+      this.remoteFilesClientId = clientId
       this.visible = true
       this.$emit('visible-change', true)
 
@@ -942,7 +973,7 @@ export default {
     },
 
     triggerRemoteUpload() {
-      if (!this.selectedId) {
+      if (!this.remoteFilesClientId) {
         ElMessage.warning('Please select a device')
         return
       }
@@ -993,7 +1024,8 @@ export default {
       const file = event.target.files && event.target.files[0]
       if (!file) return
 
-      if (!this.selectedId) {
+      const clientId = String(this.remoteFilesClientId || '').trim()
+      if (!clientId) {
         ElMessage.warning('Please select a device')
         return
       }
@@ -1003,7 +1035,6 @@ export default {
         return
       }
 
-      const clientId = this.selectedId
       const targetPath = this.remoteFilesCurrentPath
       const tabHeaders = this.getTabScopedHeaders()
       let transferId = ''
@@ -1077,16 +1108,21 @@ export default {
     },
 
     async loadRemoteDirectory(path = '', page = 1) {
-      if (!this.selectedId) {
+      const context = this.captureRemoteFilesContext()
+      if (!context.clientId) {
         ElMessage.warning('Please select a device')
         return
       }
 
+      this.abortRemoteDirectoryRequest()
+      const requestSeq = ++this.remoteDirectoryRequestSeq
+      const controller = new AbortController()
+      this.remoteDirectoryAbortController = controller
       this.remoteFilesLoading = true
 
       try {
         const url = new URL(
-            `/api/connections/${encodeURIComponent(this.selectedId)}/remote-files`,
+            `/api/connections/${encodeURIComponent(context.clientId)}/remote-files`,
             window.location.origin
         )
 
@@ -1102,9 +1138,10 @@ export default {
           url.searchParams.set('recursive', this.remoteSearchRecursive ? 'true' : 'false')
         }
 
-        const res = await fetch(url.pathname + url.search)
+        const res = await fetch(url.pathname + url.search, {signal: controller.signal})
         const json = await res.json()
 
+        if (!this.isRemoteFilesContextActive(context) || requestSeq !== this.remoteDirectoryRequestSeq) return
         if (!res.ok || json.code !== 0) {
           throw new Error(json.message || 'Failed to load remote directory')
         }
@@ -1128,9 +1165,13 @@ export default {
         this.clearTableSelection()
         this.scrollRemoteMobileFileListToTop() // 切换目录后，移动端文件列表回到顶部
       } catch (e) {
+        if (e?.name === 'AbortError' || !this.isRemoteFilesContextActive(context)) return
         ElMessage.error(e.message || 'Failed to load remote directory')
       } finally {
-        this.remoteFilesLoading = false
+        if (requestSeq === this.remoteDirectoryRequestSeq) {
+          this.remoteDirectoryAbortController = null
+          if (this.isRemoteFilesContextActive(context)) this.remoteFilesLoading = false
+        }
       }
     },
 
@@ -1367,7 +1408,9 @@ export default {
     },
 
     async pasteRemoteClipboard() {
-      if (!this.selectedId) {
+      const context = this.captureRemoteFilesContext()
+      const clientId = context.clientId
+      if (!clientId) {
         ElMessage.warning('Please select a device')
         return
       }
@@ -1385,7 +1428,7 @@ export default {
       }
 
       try {
-        const res = await fetch(`/api/connections/${encodeURIComponent(this.selectedId)}/remote-files/paste`, {
+        const res = await fetch(`/api/connections/${encodeURIComponent(clientId)}/remote-files/paste`, {
           method: 'POST',
           headers: {'Content-Type': 'application/json'},
           body: JSON.stringify({
@@ -1397,6 +1440,7 @@ export default {
 
         const json = await res.json()
 
+        if (!this.isRemoteFilesContextActive(context)) return
         if (!res.ok || json.code !== 0) {
           throw new Error(json.message || 'Paste failed')
         }
@@ -1415,6 +1459,7 @@ export default {
           ElMessage.info(message)
         }
       } catch (e) {
+        if (!this.isRemoteFilesContextActive(context)) return
         ElMessage.error(e.message || 'Paste failed')
       }
     },
@@ -1530,7 +1575,9 @@ export default {
     },
 
     async createSelectedRemoteZip() {
-      if (!this.selectedId) {
+      const context = this.captureRemoteFilesContext()
+      const clientId = context.clientId
+      if (!clientId) {
         ElMessage.warning('Please select a device')
         return
       }
@@ -1561,9 +1608,10 @@ export default {
         let archiveName = String(value || '').trim()
         if (!archiveName) return
         if (!archiveName.toLowerCase().endsWith('.zip')) archiveName += '.zip'
+        if (!this.isRemoteFilesContextActive(context)) return
 
         this.remoteZipCreating = true
-        const res = await fetch(`/api/connections/${encodeURIComponent(this.selectedId)}/remote-files/create-zip`, {
+        const res = await fetch(`/api/connections/${encodeURIComponent(clientId)}/remote-files/create-zip`, {
           method: 'POST',
           headers: {'Content-Type': 'application/json'},
           body: JSON.stringify({
@@ -1574,6 +1622,7 @@ export default {
         })
         const json = await res.json()
 
+        if (!this.isRemoteFilesContextActive(context)) return
         if (!res.ok || json.code !== 0) {
           throw new Error(json.message || 'Create ZIP failed')
         }
@@ -1582,14 +1631,21 @@ export default {
         ElMessage.success(`ZIP created: ${data.archive_name || archiveName}`)
         await this.refreshRemoteDirectory()
       } catch (e) {
+        if (!this.isRemoteFilesContextActive(context)) return
         if (this.isDialogCancel(e)) return
         ElMessage.error(e.message || 'Create ZIP failed')
       } finally {
-        this.remoteZipCreating = false
+        if (this.isRemoteFilesContextActive(context)) this.remoteZipCreating = false
       }
     },
 
     async extractRemoteZip(row) {
+      const context = this.captureRemoteFilesContext()
+      const clientId = context.clientId
+      if (!clientId) {
+        ElMessage.warning('Please select a device')
+        return
+      }
       if (!this.isZipEntry(row) || !row.path) {
         ElMessage.warning('Please select a ZIP file')
         return
@@ -1610,8 +1666,9 @@ export default {
             }
         )
 
+        if (!this.isRemoteFilesContextActive(context)) return
         this.remoteZipExtracting = true
-        const res = await fetch(`/api/connections/${encodeURIComponent(this.selectedId)}/remote-files/extract-zip`, {
+        const res = await fetch(`/api/connections/${encodeURIComponent(clientId)}/remote-files/extract-zip`, {
           method: 'POST',
           headers: {'Content-Type': 'application/json'},
           body: JSON.stringify({
@@ -1621,6 +1678,7 @@ export default {
         })
         const json = await res.json()
 
+        if (!this.isRemoteFilesContextActive(context)) return
         if (!res.ok || json.code !== 0) {
           throw new Error(json.message || 'Extract ZIP failed')
         }
@@ -1629,15 +1687,18 @@ export default {
         ElMessage.success(`Extracted to: ${data.extracted_to || this.remoteFilesCurrentPath}`)
         await this.refreshRemoteDirectory()
       } catch (e) {
+        if (!this.isRemoteFilesContextActive(context)) return
         if (this.isDialogCancel(e)) return
         ElMessage.error(e.message || 'Extract ZIP failed')
       } finally {
-        this.remoteZipExtracting = false
+        if (this.isRemoteFilesContextActive(context)) this.remoteZipExtracting = false
       }
     },
 
     async createRemoteDirectory() {
-      if (!this.selectedId) {
+      const context = this.captureRemoteFilesContext()
+      const clientId = context.clientId
+      if (!clientId) {
         ElMessage.warning('Please select a device')
         return
       }
@@ -1660,13 +1721,13 @@ export default {
         )
 
         const folderName = String(value || '').trim()
-        if (!folderName) return
+        if (!folderName || !this.isRemoteFilesContextActive(context)) return
 
         const base = this.remoteFilesCurrentPath.replace(/[\\/]+$/, '')
         const separator = base.includes('\\') ? '\\' : '/'
         const fullPath = `${base}${base ? separator : ''}${folderName}`
 
-        const res = await fetch(`/api/connections/${encodeURIComponent(this.selectedId)}/remote-files/mkdir`, {
+        const res = await fetch(`/api/connections/${encodeURIComponent(clientId)}/remote-files/mkdir`, {
           method: 'POST',
           headers: {'Content-Type': 'application/json'},
           body: JSON.stringify({path: fullPath}),
@@ -1674,6 +1735,7 @@ export default {
 
         const json = await res.json()
 
+        if (!this.isRemoteFilesContextActive(context)) return
         if (!res.ok || json.code !== 0) {
           throw new Error(json.message || 'Create directory failed')
         }
@@ -1681,12 +1743,19 @@ export default {
         ElMessage.success('Directory created')
         await this.refreshRemoteDirectory()
       } catch (e) {
+        if (!this.isRemoteFilesContextActive(context)) return
         if (this.isDialogCancel(e)) return
         ElMessage.error(e.message || 'Create directory failed')
       }
     },
 
     async renameRemoteEntry(row) {
+      const context = this.captureRemoteFilesContext()
+      const clientId = context.clientId
+      if (!clientId) {
+        ElMessage.warning('Please select a device')
+        return
+      }
       if (!row || !row.path || row.is_parent_entry) {
         ElMessage.warning('Invalid path')
         return
@@ -1706,9 +1775,9 @@ export default {
         )
 
         const newName = String(value || '').trim()
-        if (!newName || newName === row.name) return
+        if (!newName || newName === row.name || !this.isRemoteFilesContextActive(context)) return
 
-        const res = await fetch(`/api/connections/${encodeURIComponent(this.selectedId)}/remote-files/rename`, {
+        const res = await fetch(`/api/connections/${encodeURIComponent(clientId)}/remote-files/rename`, {
           method: 'POST',
           headers: {'Content-Type': 'application/json'},
           body: JSON.stringify({
@@ -1719,6 +1788,7 @@ export default {
 
         const json = await res.json()
 
+        if (!this.isRemoteFilesContextActive(context)) return
         if (!res.ok || json.code !== 0) {
           throw new Error(json.message || 'Rename failed')
         }
@@ -1726,12 +1796,19 @@ export default {
         ElMessage.success('Renamed')
         await this.refreshRemoteDirectory()
       } catch (e) {
+        if (!this.isRemoteFilesContextActive(context)) return
         if (this.isDialogCancel(e)) return
         ElMessage.error(e.message || 'Rename failed')
       }
     },
 
     async downloadRemoteEntry(row) {
+      const context = this.captureRemoteFilesContext()
+      const clientId = context.clientId
+      if (!clientId) {
+        ElMessage.warning('Please select a device')
+        return
+      }
       if (!row || !row.path || row.is_dir || row.is_parent_entry) {
         ElMessage.warning('Please select a file')
         return
@@ -1739,7 +1816,7 @@ export default {
 
       try {
         const url = new URL(
-            `/api/connections/${encodeURIComponent(this.selectedId)}/remote-files/download`,
+            `/api/connections/${encodeURIComponent(clientId)}/remote-files/download`,
             window.location.origin
         )
 
@@ -1756,6 +1833,7 @@ export default {
         })
         const json = await res.json()
 
+        if (!this.isRemoteFilesContextActive(context)) return
         if (!res.ok || json.code !== 0) {
           throw new Error(json.message || 'Download failed')
         }
@@ -1772,12 +1850,15 @@ export default {
         ElMessage.success(`Downloaded: ${row.name}`)
         this.$emit('artifacts-maybe-changed')
       } catch (e) {
+        if (!this.isRemoteFilesContextActive(context)) return
         ElMessage.error(e.message || 'Download failed')
       }
     },
 
     async downloadSelectedRemoteEntries() {
-      if (!this.selectedId) {
+      const context = this.captureRemoteFilesContext()
+      const clientId = context.clientId
+      if (!clientId) {
         ElMessage.warning('Please select a device')
         return
       }
@@ -1797,7 +1878,7 @@ export default {
           duration: 1800,
         })
 
-        const res = await fetch(`/api/connections/${encodeURIComponent(this.selectedId)}/remote-files/download-zip`, {
+        const res = await fetch(`/api/connections/${encodeURIComponent(clientId)}/remote-files/download-zip`, {
           method: 'POST',
           headers: {
             ...this.getTabScopedHeaders(),
@@ -1811,6 +1892,7 @@ export default {
 
         const json = await res.json()
 
+        if (!this.isRemoteFilesContextActive(context)) return
         if (!res.ok || json.code !== 0) {
           throw new Error(json.message || 'ZIP download failed')
         }
@@ -1827,13 +1909,20 @@ export default {
         ElMessage.success(`ZIP ready: ${file.original_name || file.stored_name}`)
         this.$emit('artifacts-maybe-changed')
       } catch (e) {
+        if (!this.isRemoteFilesContextActive(context)) return
         ElMessage.error(e.message || 'ZIP download failed')
       } finally {
-        this.remoteZipDownloading = false
+        if (this.isRemoteFilesContextActive(context)) this.remoteZipDownloading = false
       }
     },
 
     async deleteRemoteEntry(row) {
+      const context = this.captureRemoteFilesContext()
+      const clientId = context.clientId
+      if (!clientId) {
+        ElMessage.warning('Please select a device')
+        return
+      }
       if (!row || !row.path || row.is_parent_entry) {
         ElMessage.warning('Invalid path')
         return
@@ -1850,8 +1939,9 @@ export default {
             }
         )
 
+        if (!this.isRemoteFilesContextActive(context)) return
         const url = new URL(
-            `/api/connections/${encodeURIComponent(this.selectedId)}/remote-files`,
+            `/api/connections/${encodeURIComponent(clientId)}/remote-files`,
             window.location.origin
         )
 
@@ -1860,6 +1950,7 @@ export default {
         const res = await fetch(url.pathname + url.search, {method: 'DELETE'})
         const json = await res.json()
 
+        if (!this.isRemoteFilesContextActive(context)) return
         if (!res.ok || json.code !== 0) {
           throw new Error(json.message || 'Delete failed')
         }
@@ -1867,13 +1958,16 @@ export default {
         ElMessage.success('Deleted')
         await this.refreshRemoteDirectory()
       } catch (e) {
+        if (!this.isRemoteFilesContextActive(context)) return
         if (this.isDialogCancel(e)) return
         ElMessage.error(e.message || 'Delete failed')
       }
     },
 
     async deleteSelectedRemoteEntries() {
-      if (!this.selectedId) {
+      const context = this.captureRemoteFilesContext()
+      const clientId = context.clientId
+      if (!clientId) {
         ElMessage.warning('Please select a device')
         return
       }
@@ -1898,7 +1992,8 @@ export default {
             }
         )
 
-        const res = await fetch(`/api/connections/${encodeURIComponent(this.selectedId)}/remote-files/batch`, {
+        if (!this.isRemoteFilesContextActive(context)) return
+        const res = await fetch(`/api/connections/${encodeURIComponent(clientId)}/remote-files/batch`, {
           method: 'DELETE',
           headers: {'Content-Type': 'application/json'},
           body: JSON.stringify({paths}),
@@ -1906,6 +2001,7 @@ export default {
 
         const json = await res.json()
 
+        if (!this.isRemoteFilesContextActive(context)) return
         if (!res.ok || json.code !== 0) {
           throw new Error(json.message || 'Batch delete failed')
         }
@@ -1920,34 +2016,39 @@ export default {
           ElMessage.info(message)
         }
       } catch (e) {
+        if (!this.isRemoteFilesContextActive(context)) return
         if (this.isDialogCancel(e)) return
         ElMessage.error(e.message || 'Batch delete failed')
       }
     },
 
     async loadPinnedQuickJumps() {
-      if (!this.selectedId) return
+      const context = this.captureRemoteFilesContext()
+      if (!context.clientId) return
 
       this.remotePinnedJumpLoading = true
 
       try {
-        const res = await fetch(`/api/connections/${encodeURIComponent(this.selectedId)}/pinned_paths`)
+        const res = await fetch(`/api/connections/${encodeURIComponent(context.clientId)}/pinned_paths`)
         const json = await res.json()
 
+        if (!this.isRemoteFilesContextActive(context)) return
         if (res.ok && json.code === 0 && json.data) {
           this.remotePinnedJumpItems = Array.isArray(json.data.items)
               ? json.data.items
               : []
         }
       } catch (e) {
-        console.error('Failed to load pinned paths:', e)
+        if (this.isRemoteFilesContextActive(context)) console.error('Failed to load pinned paths:', e)
       } finally {
-        this.remotePinnedJumpLoading = false
+        if (this.isRemoteFilesContextActive(context)) this.remotePinnedJumpLoading = false
       }
     },
 
     async promptSavePinnedQuickJump() {
-      if (!this.selectedId) {
+      const context = this.captureRemoteFilesContext()
+      const clientId = context.clientId
+      if (!clientId) {
         ElMessage.warning('Please select a device')
         return
       }
@@ -1986,7 +2087,7 @@ export default {
         )
 
         const displayName = String(value || '').trim()
-        if (!displayName) return
+        if (!displayName || !this.isRemoteFilesContextActive(context)) return
 
         const exists = currentItems.find(item => {
           return (item?.display_name || '').trim() === displayName
@@ -2023,7 +2124,8 @@ export default {
               path: currentPath,
             }
 
-        const res = await fetch(`/api/connections/${encodeURIComponent(this.selectedId)}/pinned_paths`, {
+        if (!this.isRemoteFilesContextActive(context)) return
+        const res = await fetch(`/api/connections/${encodeURIComponent(clientId)}/pinned_paths`, {
           method,
           headers: {'Content-Type': 'application/json'},
           body: JSON.stringify(body),
@@ -2031,6 +2133,7 @@ export default {
 
         const json = await res.json()
 
+        if (!this.isRemoteFilesContextActive(context)) return
         if (!res.ok || json.code !== 0) {
           throw new Error(json.message || 'Failed to save pinned path')
         }
@@ -2041,13 +2144,16 @@ export default {
 
         ElMessage.success(json.data?.message || 'Pinned path saved')
       } catch (e) {
+        if (!this.isRemoteFilesContextActive(context)) return
         if (this.isDialogCancel(e)) return
         ElMessage.error(e.message || 'Failed to save pinned path')
       }
     },
 
     async deletePinnedQuickJump(item, options = {}) {
-      if (!this.selectedId || !item?.display_name) return false
+      const context = this.captureRemoteFilesContext()
+      const clientId = context.clientId
+      if (!clientId || !item?.display_name) return false
 
       const shouldConfirm = options.confirm !== false
 
@@ -2065,7 +2171,8 @@ export default {
           )
         }
 
-        const res = await fetch(`/api/connections/${encodeURIComponent(this.selectedId)}/pinned_paths`, {
+        if (!this.isRemoteFilesContextActive(context)) return false
+        const res = await fetch(`/api/connections/${encodeURIComponent(clientId)}/pinned_paths`, {
           method: 'DELETE',
           headers: {'Content-Type': 'application/json'},
           body: JSON.stringify({display_name: item.display_name}),
@@ -2073,6 +2180,7 @@ export default {
 
         const json = await res.json()
 
+        if (!this.isRemoteFilesContextActive(context)) return false
         if (!res.ok || json.code !== 0) {
           throw new Error(json.message || 'Failed to delete pinned path')
         }
@@ -2087,6 +2195,7 @@ export default {
 
         return true
       } catch (e) {
+        if (!this.isRemoteFilesContextActive(context)) return false
         if (this.isDialogCancel(e)) return false
         ElMessage.error(e.message || 'Failed to delete pinned path')
         return false
@@ -2114,21 +2223,23 @@ export default {
     },
 
     async loadQuickJumpPaths() {
-      if (!this.selectedId) return
+      const context = this.captureRemoteFilesContext()
+      if (!context.clientId) return
 
       this.quickJumpLoading = true
 
       try {
-        const res = await fetch(`/api/connections/${encodeURIComponent(this.selectedId)}/system-paths`)
+        const res = await fetch(`/api/connections/${encodeURIComponent(context.clientId)}/system-paths`)
         const json = await res.json()
 
+        if (!this.isRemoteFilesContextActive(context)) return
         if (res.ok && json.code === 0 && json.data) {
           this.quickJumpPaths = json.data
         }
       } catch (e) {
-        console.error('Failed to load system paths:', e)
+        if (this.isRemoteFilesContextActive(context)) console.error('Failed to load system paths:', e)
       } finally {
-        this.quickJumpLoading = false
+        if (this.isRemoteFilesContextActive(context)) this.quickJumpLoading = false
       }
     },
 
@@ -2246,7 +2357,10 @@ export default {
         this.$refs.remoteZipPeekDialogRef?.open(row)
         return
       }
-      this.$emit('preview', row)
+      this.$emit('preview', {
+        ...row,
+        client_id: this.remoteFilesClientId,
+      })
     },
 
     escapeRemoteHtml(text) {
@@ -2259,6 +2373,10 @@ export default {
     },
 
     resetRemoteFilesState() {
+      this.abortRemoteDirectoryRequest()
+      this.remoteFilesContextSeq += 1
+      this.remoteFilesClientId = ''
+      this.remoteFilesLoading = false
       this.remoteFilesCurrentPath = ''
       this.remoteFilesParentPath = ''
       this.remoteFilesEntries = []

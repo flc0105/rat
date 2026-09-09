@@ -335,6 +335,7 @@ export default {
       previewEditMode: false,  // 是否处于编辑模式
       previewSaving: false,    // 保存中状态
       previewFilePath: '',     // 当前编辑的文件路径
+      previewRemoteClientId: '',  // Remote Files 预览固定使用打开时的目标设备
       previewOriginalContent: '',  // 原始内容副本（用于取消编辑时恢复）
       previewTruncated: false,     // 是否被截断
       previewFileSize: '',         // 文件大小显示
@@ -712,12 +713,19 @@ export default {
         return
       }
 
-      // 记录文件路径
+      const clientId = String(row.client_id || this.selectedId || '').trim()
+      if (!clientId) {
+        ElMessage.warning('Please select a device')
+        return
+      }
+
+      // 记录文件路径和对应设备，避免全局选择变化后写到其他 Client。
       this.previewFilePath = row.path
+      this.previewRemoteClientId = clientId
       this.previewSource = 'remote_file'  // 标记来源
 
       await this.loadPreviewPayload(
-          () => fetch(`/api/connections/${encodeURIComponent(this.selectedId)}/remote-files/preview`, {
+          () => fetch(`/api/connections/${encodeURIComponent(clientId)}/remote-files/preview`, {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
             body: JSON.stringify({path: row.path}),
@@ -901,7 +909,8 @@ export default {
     },
 
     async saveToRemoteFile(content) {
-      if (!this.selectedId || !this.previewFilePath) {
+      const clientId = String(this.previewRemoteClientId || '').trim()
+      if (!clientId || !this.previewFilePath) {
         ElMessage.warning('Invalid file path')
         return
       }
@@ -909,7 +918,7 @@ export default {
       this.previewSaving = true
 
       try {
-        const res = await fetch(`/api/connections/${encodeURIComponent(this.selectedId)}/remote-files/save`, {
+        const res = await fetch(`/api/connections/${encodeURIComponent(clientId)}/remote-files/save`, {
           method: 'POST',
           headers: {'Content-Type': 'application/json'},
           body: JSON.stringify({
@@ -1710,11 +1719,12 @@ print(value)
 
     async fetchLatestPreviewTextPayload() {
       if (this.previewSource === 'remote_file') {
-        if (!this.selectedId || !this.previewFilePath) {
+        const clientId = String(this.previewRemoteClientId || '').trim()
+        if (!clientId || !this.previewFilePath) {
           throw new Error('Invalid remote file path')
         }
 
-        const res = await fetch(`/api/connections/${encodeURIComponent(this.selectedId)}/remote-files/preview`, {
+        const res = await fetch(`/api/connections/${encodeURIComponent(clientId)}/remote-files/preview`, {
           method: 'POST',
           headers: {'Content-Type': 'application/json'},
           body: JSON.stringify({path: this.previewFilePath}),
@@ -1873,6 +1883,7 @@ print(value)
       this.previewUrl = ''
       this.previewText = ''
       this.previewOriginalContent = ''
+      this.previewRemoteClientId = ''
       this.previewEditMode = false
       this.previewSaving = false
       this.previewArtifactInfo = null

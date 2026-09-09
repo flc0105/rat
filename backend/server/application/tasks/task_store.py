@@ -46,7 +46,7 @@ class WebTaskStore:
 
     def delete_task(self, task_id: str) -> bool:
         """
-        删除尚未进入执行阶段的任务记录。
+        删除任务记录。
         """
         normalized_task_id = str(task_id or '').strip()
         if not normalized_task_id:

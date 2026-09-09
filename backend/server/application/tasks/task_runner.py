@@ -189,8 +189,12 @@ class WebTaskRunner:
             final_status=final_status,
         )
 
-        self._finalize_history(context, final_status=final_status)
-        self._publish_task_complete(context)
+        try:
+            self._finalize_history(context, final_status=final_status)
+            self._publish_task_complete(context)
+        finally:
+            # 终态任务已通过 history/SSE 留痕，不再长期占用内存。
+            self.task_store.delete_task(context.task_id)
 
     def _run_task_events(self, context: TaskExecutionContext, event_iter):
         summary = TaskStreamSummary()

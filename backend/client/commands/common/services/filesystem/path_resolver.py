@@ -31,10 +31,9 @@ class PathResolver:
 
     def resolve_target_path(self, path: str) -> str:
         raw_path = (path or '').strip()
-        # if not raw_path:
-        #     raw_path = '..' 这儿应该是被AI改坏了
+        # 空路径保留“当前工作目录”语义，供浏览等非破坏性命令使用。
         if not raw_path:
-            raw_path = '.'  # TODO 后续再补一层命令级防御 现在很多地方传空会直接操作cwd
+            raw_path = '.'
 
         if os.path.isabs(raw_path):
             return os.path.abspath(raw_path)
@@ -62,6 +61,12 @@ class PathResolver:
         if not os.path.exists(target_path):
             raise FileNotFoundError(f'Path not found: {target_path}')
         return target_path
+
+    def require_existing_non_empty_path_from_arg(self, raw) -> str:
+        raw_path = self.codec.extract_path(raw)
+        if not raw_path:
+            raise ValueError('Path is required')
+        return self.require_existing_path_from_arg(raw_path)
 
     def require_existing_file_from_arg(self, raw) -> str:
         file_path = self.require_existing_path_from_arg(raw)

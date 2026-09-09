@@ -297,7 +297,7 @@ class CommandFileWebMixin:
     @interruptible()
     def delete_path(self, path=''):
         try:
-            target_path = self.path_resolver.require_existing_path_from_arg(path)
+            target_path = self.path_resolver.require_existing_non_empty_path_from_arg(path)
             return self.file_system_service.delete_target_path(target_path)
         except CommandCancelledError:
             return 0, 'Command cancelled'
@@ -357,7 +357,7 @@ class CommandFileWebMixin:
             if not isinstance(payload, dict):
                 return 0, 'Invalid rename payload'
 
-            old_path = self.path_resolver.resolve_target_path(payload.get('old_path', ''))
+            old_path = self.path_resolver.require_existing_non_empty_path_from_arg(payload.get('old_path', ''))
             new_name = (payload.get('new_name') or '').strip()
             new_path = (payload.get('new_path') or '').strip()
 
