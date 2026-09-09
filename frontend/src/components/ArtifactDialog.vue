@@ -260,6 +260,13 @@
                           Send to Current Device
                         </el-dropdown-item>
                         <el-dropdown-item
+                          v-if="isSharedFileItem(row)"
+                          command="send-current-device-clipboard"
+                          :disabled="!selectedId"
+                        >
+                          Send to Current Device Clipboard
+                        </el-dropdown-item>
+                        <el-dropdown-item
                           command="delete"
                           divided
                         >
@@ -395,6 +402,13 @@
                               Send
                             </el-dropdown-item>
                             <el-dropdown-item
+                              v-if="isSharedFileItem(row)"
+                              command="send-current-device-clipboard"
+                              :disabled="!selectedId"
+                            >
+                              Send to Current Device Clipboard
+                            </el-dropdown-item>
+                            <el-dropdown-item
                               command="delete"
                               divided
                             >
@@ -478,6 +492,7 @@
 
 <script>
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { setRemoteClipboardArtifactFile } from '../api/clipboardApi.js'
 import { formatBytes as formatBytesValue } from '../utils/formatters.js'
 import DragUploadDialog from './DragUploadDialog.vue'
 
@@ -1077,6 +1092,11 @@ export default {
         return
       }
 
+      if (command === 'send-current-device-clipboard') {
+        await this.sendArtifactToCurrentDeviceClipboard(row)
+        return
+      }
+
       if (command === 'delete') {
         await this.deleteArtifact(row)
       }
@@ -1125,6 +1145,26 @@ export default {
       } catch (e) {
         if (this.isDialogCancel(e)) return
         ElMessage.error(e.message || 'Rename failed')
+      }
+    },
+
+    async sendArtifactToCurrentDeviceClipboard(row) {
+      if (!row || !row.artifact_id || !this.isSharedFileItem(row)) {
+        ElMessage.warning('Invalid shared file')
+        return
+      }
+
+      const clientId = String(this.selectedId || this.currentConnection?.client_id || '').trim()
+      if (!clientId) {
+        ElMessage.warning('Please select a device')
+        return
+      }
+
+      try {
+        await setRemoteClipboardArtifactFile(clientId, row.artifact_id)
+        ElMessage.success(`Sent to clipboard: ${this.formatArtifactName(row)}`)
+      } catch (e) {
+        ElMessage.error(e.message || 'Failed to send file to target clipboard')
       }
     },
 

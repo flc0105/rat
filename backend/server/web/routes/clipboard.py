@@ -48,4 +48,15 @@ def create_clipboard_blueprint(server_instance):
             default_error_status=500,
         )
 
+    @blueprint.post('/api/connections/<client_id>/clipboard/set-artifact-file')
+    def set_clipboard_artifact_file(client_id):
+        def _execute():
+            payload = get_json_payload()
+            return clipboard_api.set_artifact_file(
+                client_id,
+                payload.get('artifact_id', ''),
+            )
+
+        return responder.json_endpoint(_execute, default_error_status=500)
+
     return blueprint

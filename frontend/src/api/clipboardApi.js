@@ -26,6 +26,14 @@ export function setRemoteClipboardImage(clientId, file) {
   return apiData(connectionPath(clientId, 'set-image'), { method: 'POST', body: form }, {})
 }
 
+export function setRemoteClipboardArtifactFile(clientId, artifactId) {
+  return apiData(
+    connectionPath(clientId, 'set-artifact-file'),
+    jsonRequestOptions('POST', { artifact_id: artifactId }),
+    {},
+  )
+}
+
 export function setRemoteClipboardFiles(clientId, items = []) {
   const form = new FormData()
   const uploads = []

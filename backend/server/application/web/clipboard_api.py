@@ -1,4 +1,6 @@
 import json
+import os
+
 
 class WebClipboardApi:
     def __init__(self, clipboard_session_service, artifact_service):
@@ -97,16 +99,58 @@ class WebClipboardApi:
             if not normalized_roots:
                 raise ValueError('clipboard file roots are empty')
 
-            return self.clipboard_session_service.set_clipboard(
+            return self._set_files_payload(client_id, items, normalized_roots)
+        finally:
+            self._cleanup_temp_paths(temp_paths)
+
+    def set_artifact_file(self, client_id: str, artifact_id: str) -> dict:
+        normalized_artifact_id = str(artifact_id or '').strip()
+        if not normalized_artifact_id:
+            raise ValueError('artifact_id is required')
+
+        capabilities = self.get_capabilities(client_id)
+        if not capabilities.get('files'):
+            raise RuntimeError('Target clipboard does not support files')
+
+        artifact = self.artifact_service.get_artifact_by_id(normalized_artifact_id)
+        if str(artifact.get('artifact_type') or '').strip() != 'shared_files':
+            raise ValueError('Only shared files can be sent to clipboard')
+
+        source_path = self.artifact_service.get_artifact_file_path(normalized_artifact_id)
+        display_name = str(
+            artifact.get('original_name')
+            or artifact.get('stored_name')
+            or ''
+        ).strip()
+        display_name = os.path.basename(display_name) or os.path.basename(source_path)
+
+        temp_paths = []
+        try:
+            temp_path, _safe_name = self.artifact_service.stage_local_file(source_path, display_name)
+            temp_paths.append(temp_path)
+            relative_url = self.artifact_service.build_upload_temp_download_relative_url(temp_path)
+            return self._set_files_payload(
                 client_id,
-                {
-                    'kind': 'files',
-                    'items': items,
-                    'roots': normalized_roots,
-                },
+                [{
+                    'type': 'file',
+                    'path': display_name,
+                    'name': display_name,
+                    'url': relative_url,
+                }],
+                [display_name],
             )
         finally:
             self._cleanup_temp_paths(temp_paths)
+
+    def _set_files_payload(self, client_id: str, items: list, roots: list) -> dict:
+        return self.clipboard_session_service.set_clipboard(
+            client_id,
+            {
+                'kind': 'files',
+                'items': items,
+                'roots': roots,
+            },
+        )
 
     def _stage_upload(self, upload) -> tuple[dict, str]:
         temp_path, safe_name = self.artifact_service.create_upload_temp_file(upload)
