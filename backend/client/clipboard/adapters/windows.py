@@ -3,10 +3,10 @@ import os
 import shutil
 import subprocess
 import sys
-import tempfile
 from contextlib import contextmanager
 
 from PIL import Image
+from client.runtime.temp_workspace import make_client_temp_file, cleanup_temp_path
 
 
 _PACKAGED_FILE_CLIPBOARD_HELPER_SOURCE = r'''import ctypes
@@ -211,10 +211,7 @@ class WindowsClipboardAdapter:
             raise RuntimeError('Windows file clipboard helper timed out') from exc
         finally:
             if remove_helper:
-                try:
-                    os.remove(helper_path)
-                except OSError:
-                    pass
+                cleanup_temp_path(helper_path)
 
         if result.returncode != 0:
             message = (result.stderr or result.stdout or '').strip()
@@ -243,8 +240,9 @@ class WindowsClipboardAdapter:
                 'Python 3 is required for Windows file clipboard in packaged mode'
             )
 
-        helper_fd, helper_path = tempfile.mkstemp(
-            prefix='rch_windows_clipboard_',
+        helper_fd, helper_path = make_client_temp_file(
+            'clipboard_helper_temp',
+            prefix='windows_',
             suffix='.py',
         )
         try:
@@ -252,7 +250,7 @@ class WindowsClipboardAdapter:
                 helper_file.write(_PACKAGED_FILE_CLIPBOARD_HELPER_SOURCE)
         except Exception:
             try:
-                os.remove(helper_path)
+                cleanup_temp_path(helper_path)
             except OSError:
                 pass
             raise

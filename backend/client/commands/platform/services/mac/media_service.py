@@ -1,9 +1,10 @@
 import os
 import subprocess
-import tempfile
+import shlex
 
 from client.commands.runtime.context import CommandCancelledError, CommandTimeoutError
-from core.utils.formatting import get_size, get_time
+from core.utils.formatting import get_size
+from client.runtime.temp_workspace import make_client_temp_file, cleanup_temp_path
 
 
 class MacMediaService:
@@ -15,18 +16,21 @@ class MacMediaService:
         self.owner = owner
 
     def capture_screenshot(self):
-        screenshot_path = f'screenshot_{get_time()}.png'
-        capture_command = f'screencapture -x {screenshot_path}'
+        screenshot_path = ''
 
         try:
+            temp_fd, screenshot_path = make_client_temp_file(
+                'media_temp',
+                prefix='screenshot_',
+                suffix='.png',
+            )
+            os.close(temp_fd)
+            capture_command = f'screencapture -x {shlex.quote(screenshot_path)}'
             self.owner._send_info(f'Capturing screen: {capture_command}', 0)
             result = self.owner._run_shell_command(capture_command, timeout=15)
             if result.returncode != 0:
                 self.owner._send_error(result.stderr or 'Failed to capture screenshot', eof=1)
                 return
-            # if result.returncode != 0:
-            #     return 0, result.stderr or 'Failed to capture screenshot'
-
             self.owner._send_success('Screenshot captured successfully', 0)
             return self.owner.http_file_transfer_service.upload_single_file_to_server_result(
                 screenshot_path,
@@ -39,11 +43,8 @@ class MacMediaService:
         except Exception as e:
             return 0, f'Failed to capture screenshot: {e}'
         finally:
-            if os.path.isfile(screenshot_path):
-                try:
-                    os.remove(screenshot_path)
-                except Exception:
-                    pass
+            if screenshot_path:
+                cleanup_temp_path(screenshot_path)
 
     def capture_webcam_photo(self):
         """拍照并上传到服务器"""
@@ -54,29 +55,31 @@ class MacMediaService:
             if result.returncode != 0:
                 return 0, '请安装 imagesnap: brew install imagesnap'
 
-            temp_file = tempfile.NamedTemporaryFile(suffix='.jpg', delete=False)
-            temp_file.close()
+            temp_fd, temp_path = make_client_temp_file(
+                'media_temp',
+                prefix='webcam_',
+                suffix='.jpg',
+            )
+            os.close(temp_fd)
+            temp_file = temp_path
 
             subprocess.run(
-                ['imagesnap', '-w', '1', temp_file.name],
+                ['imagesnap', '-w', '1', temp_file],
                 capture_output=True,
                 timeout=5
             )
 
-            if os.path.getsize(temp_file.name) > 0:
+            if os.path.getsize(temp_file) > 0:
                 self.owner.http_file_transfer_service.upload_single_file_to_server_result(
-                    temp_file.name,
+                    temp_file,
                     category='webcam',
                 )
-                file_size = get_size(os.path.getsize(temp_file.name))
-                return 1, f'Webcam photo captured: {temp_file.name} ({file_size})'
+                file_size = get_size(os.path.getsize(temp_file))
+                return 1, f'Webcam photo captured ({file_size})'
 
             return 0, 'Failed to capture webcam photo'
         except Exception as e:
             return 0, f'Webcam capture failed: {e}'
         finally:
-            if temp_file and os.path.exists(temp_file.name):
-                try:
-                    os.unlink(temp_file.name)
-                except Exception:
-                    pass
+            if temp_file:
+                cleanup_temp_path(temp_file)

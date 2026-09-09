@@ -7,10 +7,7 @@ import {
 import { openSseStream } from '../api/streamApi.js';
 import { loadNotificationPreferences } from '../api/notificationPreferencesApi.js';
 import { loadTransfers } from '../api/transferApi.js';
-import {
-    addNotificationHistory,
-    loadNotificationHistory,
-} from '../api/notificationHistoryApi.js';
+import { loadNotificationHistory } from '../api/notificationHistoryApi.js';
 import {
     DEFAULT_SSE_NOTIFICATION_PREFERENCES,
     cloneSseNotificationPreferences,
@@ -127,32 +124,6 @@ export default {
             }
         },
 
-        async recordSseNotification(notificationKey, options = {}, recordContext = {}) {
-            const fallbackMessage = options.dangerouslyUseHTMLString
-                ? ''
-                : String(options.message || '').trim();
-
-            const payload = {
-                event_id: String(recordContext.eventId || '').trim(),
-                notification_key: String(notificationKey || '').trim(),
-                type: String(options.type || 'info').trim().toLowerCase() || 'info',
-                title: String(options.title || 'Notification').trim() || 'Notification',
-                message: String(recordContext.message ?? fallbackMessage).trim(),
-                shown_at: new Date().toISOString(),
-                context: recordContext.context && typeof recordContext.context === 'object'
-                    ? recordContext.context
-                    : {},
-                actions: Array.isArray(recordContext.actions) ? recordContext.actions : [],
-            };
-
-            try {
-                const notification = await addNotificationHistory(payload);
-                this.upsertSseNotificationHistory(notification);
-            } catch (e) {
-                console.warn('Failed to persist SSE notification history', e);
-            }
-        },
-
         buildSseNotificationMessage(message, actions = [], context = {}) {
             const normalizedActions = Array.isArray(actions) ? actions.filter(action => action?.label) : [];
             if (!normalizedActions.length) return message;
@@ -223,7 +194,6 @@ export default {
             }
 
             ElementPlus.ElNotification(notificationOptions);
-            void this.recordSseNotification(notificationKey, options, recordContext);
         },
 
         initSSE() {

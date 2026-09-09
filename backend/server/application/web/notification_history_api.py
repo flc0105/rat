@@ -8,15 +8,6 @@ class WebNotificationHistoryApi:
     def get_history(self):
         return self.history_store.get_history()
 
-    def add_notification(self, payload: dict):
-        notification, created = self.history_store.add_notification(payload or {})
-        if created and self.event_bus is not None:
-            self.event_bus.publish('notification_center_updated', {
-                'action': 'added',
-                'notification': notification,
-            })
-        return notification
-
     def delete_notification(self, notification_id: str):
         deleted = self.history_store.delete_notification(notification_id)
         if deleted and self.event_bus is not None:

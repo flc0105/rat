@@ -3,6 +3,8 @@ import os
 import sys
 import tempfile
 
+from client.runtime.temp_workspace import register_temp_path, release_temp_path, cleanup_temp_path
+
 
 CONFIG_ENV_NAME = 'RUNTIME_CONFIG_PATH'
 CONFIG_FILE_NAME = 'runtime_config.json'
@@ -97,18 +99,18 @@ def save_runtime_overrides(overrides: dict):
     }
     payload.update(normalized)
 
-    fd, temp_path = tempfile.mkstemp(prefix='.runtime_config_', suffix='.json.tmp', dir=directory)
+    fd, temp_path = tempfile.mkstemp(prefix='.rch_runtime_config_', suffix='.json.tmp', dir=directory)
+    register_temp_path(temp_path)
     try:
         with os.fdopen(fd, 'w', encoding='utf-8') as file_obj:
             json.dump(payload, file_obj, ensure_ascii=False, indent=2, sort_keys=True)
             file_obj.write('\n')
         os.replace(temp_path, path)
     except Exception:
-        try:
-            os.remove(temp_path)
-        except Exception:
-            pass
+        cleanup_temp_path(temp_path)
         raise
+    finally:
+        release_temp_path(temp_path)
 
     return path
 

@@ -1,10 +1,9 @@
 import os
-import shutil
-import tempfile
 from dataclasses import dataclass
 
 from client.config import runtime_config
 from core.utils.logger import logger
+from client.runtime.temp_workspace import make_client_temp_dir, cleanup_temp_path
 
 
 @dataclass
@@ -91,7 +90,7 @@ class PreviewImageService:
             suffix = '.png' if output_format == 'PNG' else '.jpg'
             base_name = os.path.splitext(os.path.basename(file_path))[0] or 'preview'
 
-            temp_dir = tempfile.mkdtemp(prefix='rat_preview_')
+            temp_dir = make_client_temp_dir('preview_temp', prefix='preview_')
             output_path = os.path.join(temp_dir, f'{base_name}_preview{suffix}')
 
             self._save_compressed_image(image, output_path, output_format)
@@ -183,8 +182,4 @@ class PreviewImageService:
         return int(level)
 
     def _cleanup_dir(self, temp_dir: str):
-        try:
-            if temp_dir and os.path.isdir(temp_dir):
-                shutil.rmtree(temp_dir)
-        except Exception:
-            pass
+        cleanup_temp_path(temp_dir)

@@ -1,18 +1,10 @@
-import { apiData, jsonRequestOptions } from './http.js'
+import { apiData } from './http.js'
 
 export function loadNotificationHistory() {
   return apiData('/api/notifications/history', {}, {
     version: 1,
     notifications: [],
   })
-}
-
-export function addNotificationHistory(payload = {}) {
-  return apiData(
-    '/api/notifications/history',
-    jsonRequestOptions('POST', payload),
-    null,
-  )
 }
 
 export function deleteNotificationHistory(notificationId) {

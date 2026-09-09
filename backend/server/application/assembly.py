@@ -23,6 +23,7 @@ from server.application.pinned_paths.pinned_path_store import PinnedPathStore
 from server.application.preferences.toolbar_preference_store import ToolbarPreferenceStore
 from server.application.preferences.notification_preference_store import NotificationPreferenceStore
 from server.application.preferences.notification_history_store import NotificationHistoryStore
+from server.application.preferences.notification_event_projector import NotificationEventProjector
 from server.application.scripts.script_catalog_service import ScriptCatalogService
 from server.application.tasks.task_runner import WebTaskRunner
 from server.application.tasks.task_service import WebTaskService
@@ -122,6 +123,11 @@ class ServerApplicationAssembly:
         self.toolbar_preference_store = ToolbarPreferenceStore(TOOLBAR_PREFERENCES_JSON_PATH)
         self.notification_preference_store = NotificationPreferenceStore(NOTIFICATION_PREFERENCES_JSON_PATH)
         self.notification_history_store = NotificationHistoryStore(NOTIFICATION_CENTER_JSON_PATH)
+        self.notification_event_projector = NotificationEventProjector(
+            history_store=self.notification_history_store,
+            server=self.server,
+        )
+        self.event_bus.set_notification_recorder(self.notification_event_projector.record_event)
         self.connection_history_store = ConnectionHistoryStore(CONNECTION_HISTORY_ROOT_DIR)
         self.server.command_history.connection_history_store = self.connection_history_store
 

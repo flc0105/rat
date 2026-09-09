@@ -46,12 +46,12 @@ os.makedirs('runtime', exist_ok=True)
 SERVER_CLEANUP_START_DELAY_SECONDS = 20
 SERVER_CLEANUP_LOG_ROOT_DIR = os.path.abspath(os.path.join('runtime', 'cleanup_logs'))
 SERVER_CLEANUP_ITEMS = (
-    {'scope': 'server', 'name': 'notifications'},
-    {'scope': 'server', 'name': 'agent_build_temp'},
-    {'scope': 'server', 'name': 'agent_update_outputs'},
-    {'scope': 'server', 'name': 'preview_cache'},
-    {'scope': 'server', 'name': 'upload_tmp'},
-    {'scope': 'server', 'name': 'cleanup_logs'},
+    'notifications',
+    'agent_build_temp',
+    'agent_update_outputs',
+    'preview_cache',
+    'upload_tmp',
+    'cleanup_logs',
 )
 
 # ------------------ history ------------------ #

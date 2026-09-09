@@ -9,10 +9,11 @@ from core.utils.logger import logger
 
 class NotificationHistoryStore:
     """
-    SSE 通知中心持久化。
+    Server Notification Center 持久化。
 
-    只保存已经通过前端通知偏好判断、实际展示过的通知。
-    同一个 SSE event_id 只保留一条，避免多个浏览器页签重复写入。
+    通知在业务事件进入 SSE 之前由 Server 写入。
+    浏览器通知偏好只决定是否弹 Toast，不决定事件是否进入 Notification Center。
+    同一个 SSE event_id 只保留一条。
     """
 
     VERSION = 1

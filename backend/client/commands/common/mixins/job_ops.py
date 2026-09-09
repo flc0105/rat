@@ -1,9 +1,8 @@
 import os
-import tempfile
-import uuid
 
 from core.utils.decorator import desc
 from core.utils.formatting import format_dict
+from client.runtime.temp_workspace import make_client_temp_dir, cleanup_temp_path
 
 
 class CommandJobMixin:
@@ -186,29 +185,32 @@ class CommandJobMixin:
         """
         从脚本内容启动任务。
         """
+        temp_dir = ''
         temp_path = ''
         normalized_job_name = self._normalize_job_name(script_name)
         display_script_name = normalized_job_name + '.py' if normalized_job_name else 'remote_job.py'
 
         try:
-            temp_dir = tempfile.gettempdir()
-            temp_filename = f'rat_remote_{uuid.uuid4().hex[:8]}.py'
-            temp_path = os.path.join(temp_dir, temp_filename)
+            temp_dir = make_client_temp_dir('remote_job_temp', prefix='job_')
+            temp_path = os.path.join(temp_dir, 'remote_job.py')
 
             with open(temp_path, 'w', encoding='utf-8') as f:
                 f.write(script_content)
 
             self._send_interim_result(1, f'Preparing background job from remote job: {display_script_name}')
 
-            runtime = job_manager.start_job(temp_path, normalized_job_name, self.command_id, job_params=job_params)
+            runtime = job_manager.start_job(
+                temp_path,
+                normalized_job_name,
+                self.command_id,
+                job_params=job_params,
+                cleanup_path=temp_dir,
+            )
             self._attach_remote_runtime_metadata(runtime, temp_path, normalized_job_name)
             return runtime
         except Exception:
-            if temp_path and os.path.exists(temp_path):
-                try:
-                    os.remove(temp_path)
-                except Exception:
-                    pass
+            if temp_dir:
+                cleanup_temp_path(temp_dir)
             raise
 
     def _fetch_remote_job(self, job_name: str) -> str:

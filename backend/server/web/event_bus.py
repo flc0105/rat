@@ -3,6 +3,8 @@ import threading
 import uuid
 from typing import Dict, List
 
+from core.utils.logger import logger
+
 
 class WebEventBus:
     """
@@ -11,15 +13,21 @@ class WebEventBus:
     支持：
     - 全局广播事件
     - 按 tab_id 定向推送事件
+    - 在 SSE 投递前由 Server 持久化可通知事件
 
     设计原则：
     - 连接状态 / artifact / background job 等全局事件继续广播
     - 前台命令输出类事件可按 tab_id 定向，避免多个浏览器页签互相污染
+    - Notification Center 的持久化不依赖浏览器是否成功消费 SSE
     """
 
     def __init__(self):
         self._subscribers: List[dict] = []
         self._lock = threading.RLock()
+        self._notification_recorder = None
+
+    def set_notification_recorder(self, recorder):
+        self._notification_recorder = recorder
 
     def subscribe(self, tab_id: str = '') -> queue.Queue:
         q = queue.Queue()
@@ -54,6 +62,40 @@ class WebEventBus:
             'data': data,
         }
 
+        notification = self._record_notification(
+            event_type=event_type,
+            data=data,
+            event_id=event_id,
+            target_tab_id=target_tab_id,
+        )
+
+        self._deliver(event_item, target_tab_id=target_tab_id)
+
+        if notification:
+            self._deliver({
+                'id': uuid.uuid4().hex,
+                'event': 'notification_center_updated',
+                'data': {
+                    'action': 'added',
+                    'notification': notification,
+                },
+            })
+
+        return event_id
+
+    def _record_notification(self, *, event_type: str, data: Dict, event_id: str, target_tab_id: str):
+        recorder = self._notification_recorder
+        if recorder is None:
+            return None
+        if event_type in {'notification_center_updated', 'notification_preferences_updated'}:
+            return None
+        try:
+            return recorder(event_type, data, event_id, target_tab_id)
+        except Exception:
+            logger.error('Failed to persist notification for SSE event: %s', event_type, exc_info=True)
+            return None
+
+    def _deliver(self, event_item: dict, target_tab_id: str = ''):
         with self._lock:
             subscribers = list(self._subscribers)
 
@@ -69,5 +111,3 @@ class WebEventBus:
                 q.put_nowait(event_item)
             except Exception:
                 pass
-
-        return event_id

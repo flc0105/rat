@@ -1,7 +1,7 @@
 import os
-import tempfile
 
 from core.utils.formatting import get_time
+from client.runtime.temp_workspace import make_client_temp_file, cleanup_temp_path
 
 
 class WinMediaService:
@@ -20,20 +20,25 @@ class WinMediaService:
             self.owner._send_interim_result(1, 'Capturing screenshot...', 0)
 
             # 创建临时文件
-            temp_file = tempfile.NamedTemporaryFile(suffix='.png', delete=False)
-            temp_file.close()
+            temp_fd, temp_path = make_client_temp_file(
+                'media_temp',
+                prefix='screenshot_',
+                suffix='.png',
+            )
+            os.close(temp_fd)
+            temp_file = temp_path
 
             # 截图
             screenshot = pyautogui.screenshot()
-            screenshot.save(temp_file.name)
+            screenshot.save(temp_file)
 
-            file_size = os.path.getsize(temp_file.name)
+            file_size = os.path.getsize(temp_file)
             self.owner._send_interim_result(1, f'Screenshot captured ({file_size} bytes)', 0)
 
             # 上传文件
             filename = f'screenshot_{get_time()}.png'
             self.owner.http_file_transfer_service.upload_single_file_to_server_result(
-                temp_file.name,
+                temp_file,
                 category='screenshot',
             )
 
@@ -42,8 +47,5 @@ class WinMediaService:
         except Exception as e:
             self.owner._send_final_result(0, f'Screenshot failed: {e}')
         finally:
-            if temp_file and os.path.exists(temp_file.name):
-                try:
-                    os.unlink(temp_file.name)
-                except Exception:
-                    pass
+            if temp_file:
+                cleanup_temp_path(temp_file)

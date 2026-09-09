@@ -2,8 +2,8 @@ import json
 import os
 import shutil
 import sys
-import tempfile
 import uuid
+from client.runtime.temp_workspace import make_client_temp_dir, cleanup_temp_path
 from pathlib import Path
 
 import requests
@@ -244,8 +244,9 @@ class ClipboardManager:
         category: str,
         extra: dict,
     ) -> dict:
-        temp_dir = tempfile.mkdtemp(
-            prefix='rch_clipboard_upload_'
+        temp_dir = make_client_temp_dir(
+            'clipboard_temp',
+            prefix='upload_',
         )
 
         try:
@@ -265,10 +266,7 @@ class ClipboardManager:
             )
 
         finally:
-            shutil.rmtree(
-                temp_dir,
-                ignore_errors=True,
-            )
+            cleanup_temp_path(temp_dir)
 
     def _upload_file_artifact(
         self,

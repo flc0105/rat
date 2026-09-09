@@ -1,4 +1,4 @@
-from flask import Blueprint, request
+from flask import Blueprint
 
 from server.web.api_response import WebApiResponder
 
@@ -12,13 +12,6 @@ def create_notification_history_blueprint(server_instance):
     def get_notification_history():
         return responder.json_endpoint(
             notification_api.get_history,
-            default_error_status=500,
-        )
-
-    @blueprint.post('/api/notifications/history')
-    def add_notification_history():
-        return responder.json_endpoint(
-            lambda: notification_api.add_notification(request.get_json(silent=True) or {}),
             default_error_status=500,
         )
 

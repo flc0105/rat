@@ -76,15 +76,13 @@ class ServerCleanupService:
         started_at = self._iso_time(started_epoch)
         item_results = []
 
-        for raw_policy in self.cleanup_items:
+        for raw_item in self.cleanup_items:
             try:
-                policy = self._normalize_policy(raw_policy)
-                result = self._run_policy(policy)
+                item_name = self._normalize_item_name(raw_item)
+                result = self._run_item(item_name)
             except Exception as exc:
-                policy_name = ''
-                if isinstance(raw_policy, dict):
-                    policy_name = str(raw_policy.get('name') or '').strip()
-                result = self._new_item_result(policy_name or 'invalid_policy')
+                item_name = str(raw_item or '').strip()
+                result = self._new_item_result(item_name or 'invalid_item')
                 result['errors'].append(str(exc))
             item_results.append(result)
 
@@ -125,41 +123,24 @@ class ServerCleanupService:
             raise FileNotFoundError('cleanup log not found')
         return file_path
 
-    def _run_policy(self, policy: dict) -> dict:
-        name = policy['name']
-        scope = policy['scope']
-        if scope != 'server':
-            result = self._new_item_result(name)
-            result['skipped'] = True
-            result['skip_reason'] = f'Unsupported cleanup scope: {scope}'
-            return result
-
+    def _run_item(self, name: str) -> dict:
         handler = self._server_handlers.get(name)
         if handler is None:
             raise ValueError(f'Unknown server cleanup item: {name}')
 
         result = handler(self._startup_snapshot.get(name))
         result['name'] = name
-        result['scope'] = scope
         snapshot_error = self._startup_snapshot_errors.get(name)
         if snapshot_error:
             result['errors'].append(snapshot_error)
         return result
 
     @staticmethod
-    def _normalize_policy(raw_policy: dict) -> dict:
-        if not isinstance(raw_policy, dict):
-            raise ValueError('Cleanup policy must be an object')
-
-        name = str(raw_policy.get('name') or '').strip().lower()
-        scope = str(raw_policy.get('scope') or 'server').strip().lower() or 'server'
+    def _normalize_item_name(raw_item) -> str:
+        name = str(raw_item or '').strip().lower()
         if not name:
-            raise ValueError('Cleanup policy name is required')
-
-        return {
-            'name': name,
-            'scope': scope,
-        }
+            raise ValueError('Cleanup item name is required')
+        return name
 
     def _capture_startup_snapshot(self) -> tuple[dict, dict]:
         snapshot = {}
@@ -174,12 +155,8 @@ class ServerCleanupService:
         }
 
         names = set()
-        for raw_policy in self.cleanup_items:
-            if not isinstance(raw_policy, dict):
-                continue
-            if str(raw_policy.get('scope') or 'server').strip().lower() != 'server':
-                continue
-            name = str(raw_policy.get('name') or '').strip().lower()
+        for raw_item in self.cleanup_items:
+            name = str(raw_item or '').strip().lower()
             if name:
                 names.add(name)
 
@@ -463,7 +440,6 @@ class ServerCleanupService:
     def _new_item_result(name: str) -> dict:
         return {
             'name': name,
-            'scope': 'server',
             'removed_files': 0,
             'removed_dirs': 0,
             'removed_records': 0,
@@ -532,7 +508,6 @@ class ServerCleanupService:
             lines.extend([
                 '',
                 f'[{item.get("name", "")}]',
-                f'  Scope: {item.get("scope", "")}',
                 f'  Removed files: {item.get("removed_files", 0)}',
                 f'  Removed directories: {item.get("removed_dirs", 0)}',
                 f'  Removed records: {item.get("removed_records", 0)}',

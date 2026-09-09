@@ -4,6 +4,7 @@ import threading
 from typing import Dict, List
 
 from client.jobs.core.runtime import JobRuntime
+from client.runtime.temp_workspace import cleanup_temp_path
 from core.utils.job_metadata import read_job_metadata_from_file, resolve_job_params
 from core.utils.reflection import get_main_class
 
@@ -94,7 +95,7 @@ class JobManager:
             for job_key in finished_keys:
                 self._runtimes.pop(job_key, None)
 
-    def start_job(self, full_path: str, job_name: str, command_id: int, job_params=None) -> JobRuntime:
+    def start_job(self, full_path: str, job_name: str, command_id: int, job_params=None, cleanup_path: str = '') -> JobRuntime:
         self.cleanup_finished_jobs()
         self.validate_job_name(job_name)
 
@@ -103,8 +104,15 @@ class JobManager:
             raise RuntimeError(f'Job is already running: {job_key}')
 
         job_instance = self._load_job_instance_from_file(full_path, job_name, command_id, job_params=job_params)
+        def _run_job():
+            try:
+                job_instance.run()
+            finally:
+                if cleanup_path:
+                    cleanup_temp_path(cleanup_path)
+
         thread = threading.Thread(
-            target=job_instance.run,
+            target=_run_job,
             name=f'JobThread-{job_key}',
             daemon=True,
         )
