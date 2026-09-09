@@ -10,7 +10,7 @@ from core.utils.logger import logger
 
 
 class ServerCleanupService:
-    """Server-side cleanup runner for transient and cache data."""
+    """Server-side startup cleanup runner for transient and cache data."""
 
     LOG_PREFIX = 'server_cleanup_'
 
@@ -32,7 +32,6 @@ class ServerCleanupService:
         self.cleanup_items = tuple(cleanup_items or ())
         self.start_delay_seconds = max(0, int(start_delay_seconds or 0))
         self.log_root_dir = os.path.abspath(log_root_dir)
-        self.startup_epoch = time.time()
         self._lock = threading.RLock()
         self._startup_timer = None
         self._startup_scheduled = False
@@ -47,6 +46,7 @@ class ServerCleanupService:
             'upload_tmp': self._cleanup_upload_tmp,
             'cleanup_logs': self._cleanup_logs,
         }
+        self._startup_snapshot, self._startup_snapshot_errors = self._capture_startup_snapshot()
 
     def schedule_startup_cleanup(self) -> bool:
         with self._lock:
@@ -70,18 +70,16 @@ class ServerCleanupService:
             with self._lock:
                 self._startup_timer = None
 
-    def run_cleanup(self, trigger: str = 'manual') -> dict:
+    def run_cleanup(self, trigger: str = 'startup') -> dict:
         run_id = self._build_run_id()
         started_epoch = time.time()
         started_at = self._iso_time(started_epoch)
         item_results = []
 
-        reference_epoch = self.startup_epoch if str(trigger or '').strip().lower() == 'startup' else started_epoch
-
         for raw_policy in self.cleanup_items:
             try:
                 policy = self._normalize_policy(raw_policy)
-                result = self._run_policy(policy, reference_epoch)
+                result = self._run_policy(policy)
             except Exception as exc:
                 policy_name = ''
                 if isinstance(raw_policy, dict):
@@ -127,7 +125,7 @@ class ServerCleanupService:
             raise FileNotFoundError('cleanup log not found')
         return file_path
 
-    def _run_policy(self, policy: dict, reference_epoch: float) -> dict:
+    def _run_policy(self, policy: dict) -> dict:
         name = policy['name']
         scope = policy['scope']
         if scope != 'server':
@@ -140,12 +138,12 @@ class ServerCleanupService:
         if handler is None:
             raise ValueError(f'Unknown server cleanup item: {name}')
 
-        cutoff_epoch = float(reference_epoch) - policy['older_than_seconds']
-        result = handler(cutoff_epoch)
+        result = handler(self._startup_snapshot.get(name))
         result['name'] = name
         result['scope'] = scope
-        result['older_than_seconds'] = policy['older_than_seconds']
-        result['cutoff_at'] = self._iso_time(cutoff_epoch)
+        snapshot_error = self._startup_snapshot_errors.get(name)
+        if snapshot_error:
+            result['errors'].append(snapshot_error)
         return result
 
     @staticmethod
@@ -158,22 +156,101 @@ class ServerCleanupService:
         if not name:
             raise ValueError('Cleanup policy name is required')
 
-        try:
-            older_than_seconds = max(0, int(raw_policy.get('older_than_seconds') or 0))
-        except (TypeError, ValueError) as exc:
-            raise ValueError(f'Invalid older_than_seconds for cleanup item: {name}') from exc
-
         return {
             'name': name,
             'scope': scope,
-            'older_than_seconds': older_than_seconds,
         }
 
-    def _cleanup_notifications(self, cutoff_epoch: float) -> dict:
+    def _capture_startup_snapshot(self) -> tuple[dict, dict]:
+        snapshot = {}
+        errors = {}
+        capture_handlers = {
+            'notifications': self._snapshot_notifications,
+            'agent_build_temp': self._snapshot_agent_build_temp,
+            'agent_update_outputs': self._snapshot_agent_update_outputs,
+            'preview_cache': self._snapshot_preview_cache,
+            'upload_tmp': self._snapshot_upload_tmp,
+            'cleanup_logs': self._snapshot_cleanup_logs,
+        }
+
+        names = set()
+        for raw_policy in self.cleanup_items:
+            if not isinstance(raw_policy, dict):
+                continue
+            if str(raw_policy.get('scope') or 'server').strip().lower() != 'server':
+                continue
+            name = str(raw_policy.get('name') or '').strip().lower()
+            if name:
+                names.add(name)
+
+        for name in names:
+            handler = capture_handlers.get(name)
+            if handler is None:
+                continue
+            try:
+                snapshot[name] = handler()
+            except Exception as exc:
+                snapshot[name] = None
+                errors[name] = f'Failed to capture startup cleanup snapshot: {exc}'
+                logger.warning('Failed to capture startup cleanup snapshot for %s', name, exc_info=True)
+
+        return snapshot, errors
+
+    def _snapshot_notifications(self) -> list[str]:
+        payload = self.notification_history_api.get_history()
+        notifications = payload.get('notifications') if isinstance(payload, dict) else []
+        notifications = notifications if isinstance(notifications, list) else []
+        return [
+            str(item.get('id') or '').strip()
+            for item in notifications
+            if isinstance(item, dict) and str(item.get('id') or '').strip()
+        ]
+
+    def _snapshot_agent_build_temp(self) -> list[str]:
+        work_dirs = []
+        seen = set()
+        for record in self.agent_output_registry.list_outputs():
+            work_dir = os.path.abspath(str(record.get('work_dir') or '').strip()) if record.get('work_dir') else ''
+            if not work_dir or work_dir in seen or not self._is_owned_agent_work_dir(work_dir):
+                continue
+            seen.add(work_dir)
+            work_dirs.append(work_dir)
+        return work_dirs
+
+    def _snapshot_agent_update_outputs(self) -> list[str]:
+        return [
+            str(record.get('file_name') or '').strip()
+            for record in self.agent_output_registry.list_outputs()
+            if str(record.get('source') or '').strip().lower() == 'update'
+            and str(record.get('file_name') or '').strip()
+        ]
+
+    def _snapshot_preview_cache(self) -> list[str]:
+        return self._list_files_recursively(self.artifact_service.previews_dir)
+
+    def _snapshot_upload_tmp(self) -> list[str]:
+        root_dir = os.path.abspath(self.artifact_service.upload_tmp_dir)
+        if not os.path.isdir(root_dir):
+            return []
+        return [
+            os.path.abspath(os.path.join(root_dir, name))
+            for name in sorted(os.listdir(root_dir))
+        ]
+
+    def _snapshot_cleanup_logs(self) -> list[str]:
+        if not os.path.isdir(self.log_root_dir):
+            return []
+        return [
+            os.path.abspath(os.path.join(self.log_root_dir, name))
+            for name in sorted(os.listdir(self.log_root_dir))
+            if name.startswith(self.LOG_PREFIX) and name.endswith('.log')
+        ]
+
+    def _cleanup_notifications(self, notification_ids) -> dict:
         result = self._new_item_result('notifications')
         file_path = getattr(self.notification_history_api.history_store, 'file_path', '')
         before_size = self._safe_file_size(file_path)
-        cleanup_result = self.notification_history_api.cleanup_before_epoch(cutoff_epoch)
+        cleanup_result = self.notification_history_api.cleanup_notifications(notification_ids or [])
         after_size = self._safe_file_size(file_path)
 
         removed = cleanup_result.get('removed') if isinstance(cleanup_result, dict) else []
@@ -189,31 +266,33 @@ class ServerCleanupService:
             })
         return result
 
-    def _cleanup_agent_build_temp(self, cutoff_epoch: float) -> dict:
+    def _cleanup_agent_build_temp(self, work_dirs) -> dict:
         result = self._new_item_result('agent_build_temp')
-        seen = set()
-
-        for record in self.agent_output_registry.list_outputs():
-            work_dir = os.path.abspath(str(record.get('work_dir') or '').strip()) if record.get('work_dir') else ''
-            if not work_dir or work_dir in seen:
+        for work_dir in work_dirs or []:
+            path = os.path.abspath(str(work_dir or '').strip())
+            if not path or not self._is_owned_agent_work_dir(path):
                 continue
-            seen.add(work_dir)
-            if not self._is_owned_agent_work_dir(work_dir):
-                continue
-            if not os.path.isdir(work_dir) or not self._path_is_old_enough(work_dir, cutoff_epoch):
-                continue
-            self._remove_path(work_dir, result)
-
+            if os.path.isdir(path):
+                self._remove_path(path, result)
         return result
 
-    def _cleanup_agent_update_outputs(self, cutoff_epoch: float) -> dict:
+    def _cleanup_agent_update_outputs(self, file_names) -> dict:
         result = self._new_item_result('agent_update_outputs')
 
-        for record in list(self.agent_output_registry.list_outputs()):
-            if str(record.get('source') or '').strip().lower() != 'update':
-                continue
-            file_name = str(record.get('file_name') or '').strip()
+        for file_name in file_names or []:
+            file_name = str(file_name or '').strip()
             if not file_name:
+                continue
+
+            try:
+                record = self.agent_output_registry.get_output_record(file_name)
+            except FileNotFoundError:
+                continue
+            except Exception as exc:
+                result['errors'].append(f'{file_name}: {exc}')
+                continue
+
+            if str(record.get('source') or '').strip().lower() != 'update':
                 continue
 
             file_path = os.path.abspath(os.path.join(self.agent_output_registry.output_dir, file_name))
@@ -221,10 +300,6 @@ class ServerCleanupService:
                 self.agent_output_registry.metadata_dir,
                 f'{file_name}.json',
             ))
-            age_path = metadata_path if os.path.isfile(metadata_path) else file_path
-            if not self._path_is_old_enough(age_path, cutoff_epoch):
-                continue
-
             output_size = self._safe_file_size(file_path)
             metadata_size = self._safe_file_size(metadata_path)
             try:
@@ -254,55 +329,60 @@ class ServerCleanupService:
 
         return result
 
-    def _cleanup_preview_cache(self, cutoff_epoch: float) -> dict:
+    def _cleanup_preview_cache(self, file_paths) -> dict:
         result = self._new_item_result('preview_cache')
-        self._remove_old_files_recursively(self.artifact_service.previews_dir, cutoff_epoch, result)
+        root_dir = os.path.abspath(self.artifact_service.previews_dir)
+        for file_path in file_paths or []:
+            path = os.path.abspath(str(file_path or '').strip())
+            if not self._is_within_root(path, root_dir) or not os.path.isfile(path):
+                continue
+            self._remove_path(path, result)
         return result
 
-    def _cleanup_upload_tmp(self, cutoff_epoch: float) -> dict:
+    def _cleanup_upload_tmp(self, paths) -> dict:
         result = self._new_item_result('upload_tmp')
         root_dir = os.path.abspath(self.artifact_service.upload_tmp_dir)
-        if not os.path.isdir(root_dir):
-            return result
 
-        for name in sorted(os.listdir(root_dir)):
-            path = os.path.abspath(os.path.join(root_dir, name))
+        for raw_path in paths or []:
+            path = os.path.abspath(str(raw_path or '').strip())
             if os.path.normcase(os.path.dirname(path)) != os.path.normcase(root_dir):
                 continue
-            if not self._path_is_old_enough(path, cutoff_epoch):
-                continue
             self._remove_path(path, result)
 
         return result
 
-    def _cleanup_logs(self, cutoff_epoch: float) -> dict:
+    def _cleanup_logs(self, log_paths) -> dict:
         result = self._new_item_result('cleanup_logs')
-        if not os.path.isdir(self.log_root_dir):
-            return result
 
-        for name in sorted(os.listdir(self.log_root_dir)):
-            if not name.startswith(self.LOG_PREFIX) or not name.endswith('.log'):
-                continue
-            path = os.path.abspath(os.path.join(self.log_root_dir, name))
+        for raw_path in log_paths or []:
+            path = os.path.abspath(str(raw_path or '').strip())
             if os.path.normcase(os.path.dirname(path)) != os.path.normcase(self.log_root_dir):
                 continue
-            if not self._path_is_old_enough(path, cutoff_epoch):
+            name = os.path.basename(path)
+            if not name.startswith(self.LOG_PREFIX) or not name.endswith('.log'):
                 continue
             self._remove_path(path, result)
 
         return result
 
-    def _remove_old_files_recursively(self, root_dir: str, cutoff_epoch: float, result: dict):
+    @staticmethod
+    def _list_files_recursively(root_dir: str) -> list[str]:
         root_dir = os.path.abspath(root_dir)
         if not os.path.isdir(root_dir):
-            return
+            return []
 
-        for current_root, _, files in os.walk(root_dir, topdown=False):
+        paths = []
+        for current_root, _, files in os.walk(root_dir):
             for file_name in files:
-                file_path = os.path.abspath(os.path.join(current_root, file_name))
-                if not self._path_is_old_enough(file_path, cutoff_epoch):
-                    continue
-                self._remove_path(file_path, result)
+                paths.append(os.path.abspath(os.path.join(current_root, file_name)))
+        return paths
+
+    @staticmethod
+    def _is_within_root(path: str, root_dir: str) -> bool:
+        try:
+            return os.path.commonpath([os.path.abspath(path), os.path.abspath(root_dir)]) == os.path.abspath(root_dir)
+        except Exception:
+            return False
 
     def _remove_path(self, path: str, result: dict):
         abs_path = os.path.abspath(path)
@@ -373,13 +453,6 @@ class ServerCleanupService:
             return False
 
     @staticmethod
-    def _path_is_old_enough(path: str, cutoff_epoch: float) -> bool:
-        try:
-            return os.path.getmtime(path) <= float(cutoff_epoch)
-        except Exception:
-            return False
-
-    @staticmethod
     def _safe_file_size(path: str) -> int:
         try:
             return int(os.path.getsize(path)) if path and os.path.isfile(path) else 0
@@ -391,8 +464,6 @@ class ServerCleanupService:
         return {
             'name': name,
             'scope': 'server',
-            'older_than_seconds': 0,
-            'cutoff_at': '',
             'removed_files': 0,
             'removed_dirs': 0,
             'removed_records': 0,
@@ -427,7 +498,7 @@ class ServerCleanupService:
                        duration_ms: int, item_results: list[dict]) -> dict:
         return {
             'run_id': run_id,
-            'trigger': str(trigger or '').strip() or 'manual',
+            'trigger': str(trigger or '').strip() or 'startup',
             'started_at': started_at,
             'finished_at': finished_at,
             'duration_ms': int(duration_ms or 0),
@@ -462,8 +533,6 @@ class ServerCleanupService:
                 '',
                 f'[{item.get("name", "")}]',
                 f'  Scope: {item.get("scope", "")}',
-                f'  Cutoff: {item.get("cutoff_at", "")}',
-                f'  Older than: {item.get("older_than_seconds", 0)} seconds',
                 f'  Removed files: {item.get("removed_files", 0)}',
                 f'  Removed directories: {item.get("removed_dirs", 0)}',
                 f'  Removed records: {item.get("removed_records", 0)}',

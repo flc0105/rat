@@ -45,14 +45,13 @@ os.makedirs('runtime', exist_ok=True)
 # ------------------ cleanup ------------------ #
 SERVER_CLEANUP_START_DELAY_SECONDS = 20
 SERVER_CLEANUP_LOG_ROOT_DIR = os.path.abspath(os.path.join('runtime', 'cleanup_logs'))
-# 当前 startup cleanup 中，older_than_seconds=0 只清理本次 Server 启动前已经存在的数据。
 SERVER_CLEANUP_ITEMS = (
-    {'scope': 'server', 'name': 'notifications', 'older_than_seconds': 0},
-    {'scope': 'server', 'name': 'agent_build_temp', 'older_than_seconds': 0},
-    {'scope': 'server', 'name': 'agent_update_outputs', 'older_than_seconds': 0},
-    {'scope': 'server', 'name': 'preview_cache', 'older_than_seconds': 0},
-    {'scope': 'server', 'name': 'upload_tmp', 'older_than_seconds': 0},
-    {'scope': 'server', 'name': 'cleanup_logs', 'older_than_seconds': 30 * 24 * 60 * 60},
+    {'scope': 'server', 'name': 'notifications'},
+    {'scope': 'server', 'name': 'agent_build_temp'},
+    {'scope': 'server', 'name': 'agent_update_outputs'},
+    {'scope': 'server', 'name': 'preview_cache'},
+    {'scope': 'server', 'name': 'upload_tmp'},
+    {'scope': 'server', 'name': 'cleanup_logs'},
 )
 
 # ------------------ history ------------------ #
