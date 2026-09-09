@@ -1,11 +1,9 @@
 import os
-import shutil
-
 from server.application.artifact.artifact_preview_service import ArtifactPreviewService
 from server.application.artifact.artifact_registry_service import ArtifactRegistryService
 from server.application.artifact.artifact_temp_file_service import ArtifactTempFileService
 from server.application.artifact.command_output_artifact_service import CommandOutputArtifactService
-from server.config.config import WEB_CLEAR_PREVIEW_CACHE_ON_STARTUP, WEB_FILES_ROOT_DIR, WEB_PREVIEW_TEXT_MAX_BYTES
+from server.config.config import WEB_FILES_ROOT_DIR, WEB_PREVIEW_TEXT_MAX_BYTES
 
 
 class WebArtifactService:
@@ -32,9 +30,6 @@ class WebArtifactService:
         self.temp_file_service = ArtifactTempFileService(self)
         self.command_output_service = CommandOutputArtifactService(self)
 
-        if WEB_CLEAR_PREVIEW_CACHE_ON_STARTUP:
-            self._clear_preview_cache_on_startup()
-
     def _prepare_dirs(self):
         os.makedirs(self.artifacts_root_dir, exist_ok=True)
         os.makedirs(self.files_dir, exist_ok=True)
@@ -42,14 +37,6 @@ class WebArtifactService:
         os.makedirs(self.shared_files_dir, exist_ok=True)
         os.makedirs(self.command_output_dir, exist_ok=True)
         os.makedirs(self.upload_tmp_dir, exist_ok=True)
-
-    def _clear_preview_cache_on_startup(self):
-        try:
-            if os.path.isdir(self.previews_dir):
-                shutil.rmtree(self.previews_dir, ignore_errors=True)
-            os.makedirs(self.previews_dir, exist_ok=True)
-        except Exception:
-            pass
 
     def allocate_artifact_path(self, artifact_type: str, machine_id: str, original_name: str, category: str = '') -> dict:
         return self.registry_service.allocate_artifact_path(artifact_type, machine_id, original_name, category=category)

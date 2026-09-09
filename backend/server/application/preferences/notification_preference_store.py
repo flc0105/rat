@@ -34,6 +34,7 @@ DEFAULT_NOTIFICATION_PREFERENCES = {
         'external_tool_uninstall_failed': False,
         'agent_build_completed': True,
         'agent_build_error': True,
+        'server_cleanup_completed': True,
     },
 }
 

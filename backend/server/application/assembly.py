@@ -17,6 +17,7 @@ from server.application.external_tools.external_tool_param_preset_store import E
 from server.application.jobs.background_job_service import BackgroundJobService
 from server.application.jobs.background_job_store import BackgroundJobStore
 from server.application.jobs.job_catalog_service import JobCatalogService
+from server.application.maintenance.server_cleanup_service import ServerCleanupService
 from server.application.keychains.keychain_store import KeychainStore
 from server.application.pinned_paths.pinned_path_store import PinnedPathStore
 from server.application.preferences.toolbar_preference_store import ToolbarPreferenceStore
@@ -49,6 +50,7 @@ from server.application.web.toolbar_preferences_api import WebToolbarPreferences
 from server.application.web.notification_preferences_api import WebNotificationPreferencesApi
 from server.application.web.notification_history_api import WebNotificationHistoryApi
 from server.application.web.screen_view_api import WebScreenViewApi
+from server.application.web.server_cleanup_api import WebServerCleanupApi
 from server.application.web.clipboard_api import WebClipboardApi
 from server.application.web.device_monitor_api import WebDeviceMonitorApi
 from server.application.web.transfer_api import WebTransferApi
@@ -62,6 +64,9 @@ from server.config.config import (
     TOOLBAR_PREFERENCES_JSON_PATH,
     NOTIFICATION_PREFERENCES_JSON_PATH,
     NOTIFICATION_CENTER_JSON_PATH,
+    SERVER_CLEANUP_ITEMS,
+    SERVER_CLEANUP_LOG_ROOT_DIR,
+    SERVER_CLEANUP_START_DELAY_SECONDS,
     SCRIPT_JOBS_PATH,
     SCRIPT_PATH,
 )
@@ -199,6 +204,17 @@ class ServerApplicationAssembly:
             history_store=self.notification_history_store,
             event_bus=self.event_bus,
         )
+
+        self.server_cleanup_service = ServerCleanupService(
+            event_bus=self.event_bus,
+            notification_history_api=self.notification_history_api,
+            artifact_service=self.artifact_service,
+            agent_output_registry=self.agent_output_registry,
+            cleanup_items=SERVER_CLEANUP_ITEMS,
+            start_delay_seconds=SERVER_CLEANUP_START_DELAY_SECONDS,
+            log_root_dir=SERVER_CLEANUP_LOG_ROOT_DIR,
+        )
+        self.server_cleanup_api = WebServerCleanupApi(self.server_cleanup_service)
 
         self.command_catalog_api = WebCommandCatalogApi(
             server=self.server,

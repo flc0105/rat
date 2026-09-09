@@ -34,3 +34,19 @@ class WebNotificationHistoryApi:
                 'removed_count': removed_count,
             })
         return {'removed_count': removed_count}
+
+    def cleanup_before_epoch(self, cutoff_epoch: float):
+        result = self.history_store.cleanup_before_epoch(cutoff_epoch)
+        removed = result.get('removed') if isinstance(result, dict) else []
+        removed = removed if isinstance(removed, list) else []
+        removed_ids = [
+            str(item.get('id') or '').strip()
+            for item in removed
+            if str(item.get('id') or '').strip()
+        ]
+        if removed_ids and self.event_bus is not None:
+            self.event_bus.publish('notification_center_updated', {
+                'action': 'pruned',
+                'ids': removed_ids,
+            })
+        return result

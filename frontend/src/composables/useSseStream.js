@@ -111,6 +111,19 @@ export default {
 
             if (action === 'cleared') {
                 this.clearSseNotificationHistory();
+                return;
+            }
+
+            if (action === 'pruned') {
+                const removedIds = new Set(
+                    (Array.isArray(payload.ids) ? payload.ids : [])
+                        .map(value => String(value || '').trim())
+                        .filter(Boolean),
+                );
+                if (!removedIds.size) return;
+                this.sseNotificationHistory = (this.sseNotificationHistory || []).filter(
+                    item => !removedIds.has(String(item?.id || '').trim()),
+                );
             }
         },
 
@@ -238,6 +251,48 @@ export default {
             es.addEventListener('notification_center_updated', (event) => {
                 const payload = JSON.parse(event.data || '{}');
                 this.applySseNotificationCenterUpdate(payload);
+            });
+
+            es.addEventListener('server_cleanup_completed', (event) => {
+                const payload = JSON.parse(event.data || '{}');
+                const removedFiles = Number(payload.removed_files || 0);
+                const removedRecords = Number(payload.removed_records || 0);
+                const bytesFreed = Number(payload.bytes_freed || 0);
+                const errorCount = Number(payload.error_count || 0);
+                const logUrl = String(payload.log_url || '').trim();
+                const sizeLabel = typeof this.formatBytes === 'function'
+                    ? this.formatBytes(bytesFreed)
+                    : `${bytesFreed} B`;
+                const messageParts = [
+                    `${removedFiles} file${removedFiles === 1 ? '' : 's'}`,
+                    `${removedRecords} record${removedRecords === 1 ? '' : 's'}`,
+                    sizeLabel,
+                ];
+                if (errorCount) messageParts.push(`${errorCount} error${errorCount === 1 ? '' : 's'}`);
+
+                this.showSseNotification('server_cleanup_completed', {
+                    title: errorCount ? 'Server Cleanup Completed with Errors' : 'Server Cleanup Completed',
+                    message: messageParts.join(' · '),
+                    type: errorCount ? 'warning' : 'success',
+                    duration: errorCount ? 8000 : 5000,
+                }, {
+                    eventId: event.lastEventId,
+                    context: {
+                        run_id: payload.run_id || '',
+                        trigger: payload.trigger || '',
+                        removed_files: removedFiles,
+                        removed_dirs: Number(payload.removed_dirs || 0),
+                        removed_records: removedRecords,
+                        bytes_freed: bytesFreed,
+                        error_count: errorCount,
+                    },
+                    actions: logUrl ? [{
+                        id: 'view-cleanup-log',
+                        type: 'view_server_cleanup_log',
+                        label: 'View Cleanup Log',
+                        url: logUrl,
+                    }] : [],
+                });
             });
 
             es.addEventListener('external_tool_lifecycle', async (event) => {

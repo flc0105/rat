@@ -26,6 +26,7 @@ export const DEFAULT_SSE_NOTIFICATION_PREFERENCES = {
     external_tool_uninstall_failed: false,
     agent_build_completed: true,
     agent_build_error: true,
+    server_cleanup_completed: true,
   },
 }
 
@@ -87,6 +88,12 @@ export const SSE_NOTIFICATION_GROUPS = [
     items: [
       { key: 'agent_build_completed', label: 'Build completed' },
       { key: 'agent_build_error', label: 'Build error' },
+    ],
+  },
+  {
+    title: 'Maintenance',
+    items: [
+      { key: 'server_cleanup_completed', label: 'Server cleanup completed' },
     ],
   },
 ]

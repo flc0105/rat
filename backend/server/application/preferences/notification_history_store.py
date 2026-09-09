@@ -3,6 +3,7 @@ import os
 import tempfile
 import threading
 import uuid
+from datetime import datetime, timezone
 
 from core.utils.logger import logger
 
@@ -71,6 +72,28 @@ class NotificationHistoryStore:
             removed_count = len(notifications)
             self._write_unlocked([])
             return removed_count
+
+    def cleanup_before_epoch(self, cutoff_epoch: float) -> dict:
+        cutoff = float(cutoff_epoch)
+        with self._lock:
+            notifications = self._read_notifications_unlocked()
+            removed = []
+            kept = []
+
+            for notification in notifications:
+                shown_epoch = self._notification_epoch(notification.get('shown_at'))
+                if shown_epoch is not None and shown_epoch <= cutoff:
+                    removed.append(notification)
+                else:
+                    kept.append(notification)
+
+            if removed:
+                self._write_unlocked(kept)
+
+            return {
+                'removed': removed,
+                'remaining_count': len(kept),
+            }
 
     def _read_notifications_unlocked(self) -> list:
         if not os.path.isfile(self.file_path):
@@ -141,6 +164,20 @@ class NotificationHistoryStore:
                     os.remove(temp_path)
             except Exception:
                 logger.warning('NotificationHistoryStore temp cleanup failed: %s', temp_path, exc_info=True)
+
+    @staticmethod
+    def _notification_epoch(value):
+        text = str(value or '').strip()
+        if not text:
+            return None
+        try:
+            normalized = text[:-1] + '+00:00' if text.endswith('Z') else text
+            parsed = datetime.fromisoformat(normalized)
+            if parsed.tzinfo is None:
+                parsed = parsed.replace(tzinfo=timezone.utc)
+            return parsed.timestamp()
+        except Exception:
+            return None
 
     @staticmethod
     def _normalize_string(value, max_length: int = 0) -> str:

@@ -29,6 +29,7 @@ class ServerWebService:
         self.toolbar_preferences_api = self.assembly.toolbar_preferences_api
         self.notification_preferences_api = self.assembly.notification_preferences_api
         self.notification_history_api = self.assembly.notification_history_api
+        self.server_cleanup_api = self.assembly.server_cleanup_api
         self.command_catalog_api = self.assembly.command_catalog_api
         self.command_execution_api = self.assembly.command_execution_api
         self.command_history_api = self.assembly.command_history_api

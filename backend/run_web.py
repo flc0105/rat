@@ -30,6 +30,7 @@ def main():
 
     transfer_server = start_file_transfer_server(server)
     app = create_asgi_app(server)
+    server.schedule_startup_cleanup()
     try:
         uvicorn.run(app, host=WEB_HOST, port=WEB_PORT, log_level='info')
     finally:

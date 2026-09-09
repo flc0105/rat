@@ -59,6 +59,9 @@ class Server:
         """
         return self.heartbeat_runner.run()
 
+    def schedule_startup_cleanup(self):
+        return self.web_service.server_cleanup_api.schedule_startup_cleanup()
+
 
 if __name__ == "__main__":
     server = Server(SOCKET_ADDR)
@@ -71,4 +74,5 @@ if __name__ == "__main__":
     server_thread.daemon = True
     server_thread.start()
 
+    server.schedule_startup_cleanup()
     server.command_shell.serve_console_loop()

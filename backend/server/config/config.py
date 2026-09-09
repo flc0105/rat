@@ -42,6 +42,19 @@ EXTERNAL_TOOL_PARAM_PRESETS_ROOT_DIR = os.path.abspath(os.path.join('runtime', '
 # ------------------ runtime ------------------ #
 os.makedirs('runtime', exist_ok=True)
 
+# ------------------ cleanup ------------------ #
+SERVER_CLEANUP_START_DELAY_SECONDS = 20
+SERVER_CLEANUP_LOG_ROOT_DIR = os.path.abspath(os.path.join('runtime', 'cleanup_logs'))
+# 当前 startup cleanup 中，older_than_seconds=0 只清理本次 Server 启动前已经存在的数据。
+SERVER_CLEANUP_ITEMS = (
+    {'scope': 'server', 'name': 'notifications', 'older_than_seconds': 0},
+    {'scope': 'server', 'name': 'agent_build_temp', 'older_than_seconds': 0},
+    {'scope': 'server', 'name': 'agent_update_outputs', 'older_than_seconds': 0},
+    {'scope': 'server', 'name': 'preview_cache', 'older_than_seconds': 0},
+    {'scope': 'server', 'name': 'upload_tmp', 'older_than_seconds': 0},
+    {'scope': 'server', 'name': 'cleanup_logs', 'older_than_seconds': 30 * 24 * 60 * 60},
+)
+
 # ------------------ history ------------------ #
 COMMAND_HISTORY_ROOT_DIR = os.path.abspath(os.path.join('runtime', 'command_history'))
 CONNECTION_HISTORY_ROOT_DIR = os.path.abspath(os.path.join('runtime', 'connection_history'))
@@ -60,8 +73,6 @@ WEB_FILES_ROOT_DIR = os.path.abspath(os.path.join('runtime', 'web_files'))
 # WEB_PREVIEW_TEXT_MAX_BYTES = 200 * 1024
 WEB_PREVIEW_TEXT_MAX_BYTES = 200 * 1024
 WEB_HTTP_UPLOAD_MAX_BYTES = 10 * 1024 * 1024 * 1024  # 10GB
-WEB_CLEAR_PREVIEW_CACHE_ON_STARTUP = True
-
 WEB_PUBLIC_BASE_URL = 'http://127.0.0.1:8085'
 
 HEARTBEAT_INTERVAL_SECONDS = 30
